@@ -9,32 +9,54 @@ class UsuarioService:
         self.repository = UsuarioRepository()
     
     def autenticar(self, email: str, password: str) -> Optional[Usuario]:
-        """Autenticar usuario por email y contraseña"""
+        """Autenticar usuario por email y contraseña."""
         usuario = self.repository.obtener_por_email(email)
         
-        if usuario and usuario.check_password(password):
+        if usuario and usuario.activo and usuario.check_password(password):
+            # Opcional: Actualizar 'ultimo_login' al autenticar
+            # self.repository.update(usuario.id, {'ultimo_login': datetime.now()})
             return usuario
         
         return None
     
-    def crear_usuario(self, username: str, email: str, password: str, 
-                     nombre: str, apellido: str, rol: str) -> Usuario:
-        """Crear nuevo usuario"""
-        # Validar que no exista username
-        if self.repository.obtener_por_username(username):
-            raise ValueError("Username ya existe")
-        
+    def crear_usuario(self, email: str, password: str,
+                     nombre: str, apellido: str, rol: str, **kwargs) -> Usuario:
+        """
+        Crear un nuevo usuario con campos adicionales opcionales.
+        **Puede contener: numero_empleado, dni, telefono, direccion, etc.
+        """
+        if self.repository.obtener_por_email(email):
+            raise ValueError(f"El email '{email}' ya está en uso.")
+
         usuario = Usuario(
             id=None,
-            username=username,
             email=email,
-            password_hash='',
+            password_hash='', # Se generará con set_password
             nombre=nombre,
             apellido=apellido,
             rol=rol,
             activo=True,
-            created_at=datetime.now()
+            created_at=datetime.now(),
+            numero_empleado=kwargs.get('numero_empleado'),
+            dni=kwargs.get('dni'),
+            telefono=kwargs.get('telefono'),
+            direccion=kwargs.get('direccion'),
+            fecha_nacimiento=kwargs.get('fecha_nacimiento'),
+            fecha_ingreso=kwargs.get('fecha_ingreso'),
+            departamento=kwargs.get('departamento'),
+            puesto=kwargs.get('puesto'),
+            supervisor_id=kwargs.get('supervisor_id'),
+            turno=kwargs.get('turno')
         )
         
-        usuario.set_password(password) 
-        return self.repository.crear(usuario)
+        usuario.set_password(password)
+        
+        return self.repository.create(usuario)
+
+    def obtener_por_id(self, usuario_id: int) -> Optional[Usuario]:
+        """Obtener un usuario por su ID."""
+        return self.repository.get_by_id(usuario_id)
+
+    def obtener_todos(self):
+        """Obtener todos los usuarios (generalmente filtrando por activos)."""
+        return self.repository.get_all()

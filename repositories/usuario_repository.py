@@ -1,5 +1,5 @@
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, date
 from models.usuario import Usuario
 from .base_repository import BaseRepository
 
@@ -10,17 +10,35 @@ class UsuarioRepository(BaseRepository[Usuario]):
         return 'usuarios'
 
     def _dict_to_model(self, data: Dict[str, Any]) -> Usuario:
-        """Convierte un diccionario en una instancia del modelo Usuario."""
+        """Convierte un diccionario en una instancia del modelo Usuario v2."""
+        # Para convertir strings a date/datetime de forma segura
+        def to_datetime(val):
+            return datetime.fromisoformat(val) if val else None
+        
+        def to_date(val):
+            return date.fromisoformat(val) if val else None
+
         return Usuario(
-            id=data['id'],
-            username=data['username'],
-            email=data['email'],
-            password_hash=data['password_hash'],
-            nombre=data['nombre'],
-            apellido=data['apellido'],
-            rol=data['rol'],
-            activo=data['activo'],
-            created_at=datetime.fromisoformat(data['created_at']) if data.get('created_at') else None
+            id=data.get('id'),
+            email=data.get('email'),
+            password_hash=data.get('password_hash'),
+            nombre=data.get('nombre'),
+            apellido=data.get('apellido'),
+            rol=data.get('rol'),
+            activo=data.get('activo', True),
+            created_at=to_datetime(data.get('created_at')),
+            numero_empleado=data.get('numero_empleado'),
+            dni=data.get('dni'),
+            telefono=data.get('telefono'),
+            direccion=data.get('direccion'),
+            fecha_nacimiento=to_date(data.get('fecha_nacimiento')),
+            fecha_ingreso=to_date(data.get('fecha_ingreso')),
+            departamento=data.get('departamento'),
+            puesto=data.get('puesto'),
+            supervisor_id=data.get('supervisor_id'),
+            turno=data.get('turno'),
+            ultimo_login=to_datetime(data.get('ultimo_login')),
+            updated_at=to_datetime(data.get('updated_at'))
         )
 
     def create(self, usuario: Usuario) -> Usuario:
@@ -36,10 +54,6 @@ class UsuarioRepository(BaseRepository[Usuario]):
             raise Exception("Error al crear usuario")
 
         return self._dict_to_model(response.data[0])
-
-    def obtener_por_username(self, username: str) -> Optional[Usuario]:
-        """Recupera un usuario por su nombre de usuario."""
-        return self.get_by('username', username)
 
     def obtener_por_email(self, email: str) -> Optional[Usuario]:
         """Recupera un usuario por su dirección de correo electrónico."""
