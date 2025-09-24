@@ -16,38 +16,38 @@ inventario_controller = InventarioController()
 def crear_lote():
     """
     Crear un nuevo lote de inventario
-    ---
-    POST /api/inventario/lotes
-    Content-Type: application/json
-
-    Body:
-    {
-        "id_insumo": "uuid (required)",
-        "cantidad_inicial": "decimal (required)",
-        "precio_unitario": "decimal (optional)",
-        "f_vencimiento": "date (optional)",
-        "ubicacion_fisica": "string (optional)"
-    }
     """
     try:
+        if not request.is_json:
+            return jsonify({
+                'success': False,
+                'error': 'Content-Type debe ser application/json'
+            }), 415
+
         if not request.json:
             return jsonify({'success': False, 'error': 'Body JSON requerido'}), 400
 
+        # Obtener respuesta del controlador
         response, status = inventario_controller.crear_lote(request.json)
+
+        # ✅ CORREGIDO: Pasar solo el objeto de respuesta, no kwargs
         return jsonify(response), status
 
     except ValidationError as e:
-        return jsonify({
+        error_response = {
             'success': False,
             'error': 'Datos inválidos',
             'details': e.messages
-        }), 400
+        }
+        return jsonify(error_response), 400
+
     except Exception as e:
         logger.error(f"Error inesperado en crear_lote: {str(e)}")
-        return jsonify({
+        error_response = {
             'success': False,
             'error': 'Error interno del servidor'
-        }), 500
+        }
+        return jsonify(error_response), 500
 
 @inventario_bp.route('/insumo/<string:id_insumo>/lotes', methods=['GET'])
 def obtener_lotes_por_insumo(id_insumo):

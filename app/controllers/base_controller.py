@@ -10,23 +10,22 @@ class BaseController:
     def __init__(self):
         self.response_schema = ResponseSchema()
 
-    def success_response(self, data: Any = None, message: str = '', status_code: int = 200) -> tuple:
-        """Generar respuesta exitosa estandarizada"""
-        response_data = {
+    def success_response(self, data=None, message=None, status_code=200):
+        """Devuelve una respuesta exitosa"""
+        response = {
             'success': True,
             'data': data,
             'message': message
         }
-        return self.response_schema.dump(response_data), status_code
+        return response, status_code  # ✅ Tupla (dict, int)
 
-    def error_response(self, error: str, status_code: int = 400, details: Dict = None) -> tuple:
-        """Generar respuesta de error estandarizada"""
-        response_data = {
+    def error_response(self, error_message, status_code=400):
+        """Devuelve una respuesta de error"""
+        response = {
             'success': False,
-            'error': error,
-            'details': details
+            'error': str(error_message)
         }
-        return self.response_schema.dump(response_data), status_code
+        return response, status_code  # ✅ Tupla (dict, int)
 
     def paginate_results(self, data: list, page: int, page_size: int) -> Dict:
         """Paginar resultados"""

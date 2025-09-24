@@ -5,7 +5,7 @@ from app.services.alertas_service import AlertasService
 from app.schemas.insumo_schema import InsumosCatalogoSchema
 from typing import Dict, Optional
 import logging
-from app.utils.serializable import serialize_data
+from app.utils.serializable import safe_serialize
 
 
 logger = logging.getLogger(__name__)

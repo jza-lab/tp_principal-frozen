@@ -5,6 +5,8 @@ from app.services.stock_service import StockService
 from app.schemas.inventario_schema import InsumosInventarioSchema
 from typing import Dict, Optional
 import logging
+from decimal import Decimal
+
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,7 @@ class InventarioController(BaseController):
             validated_data = self.schema.load(data)
 
             # Verificar que el insumo existe
-            insumo_result = self.insumo_model.find_by_id(validated_data['id_insumo'], 'id_insumo')
+            insumo_result = self.insumo_model.find_by_id(str(validated_data['id_insumo']), 'id_insumo')
             if not insumo_result['success']:
                 return self.error_response('El insumo especificado no existe', 404)
 
@@ -55,11 +57,15 @@ class InventarioController(BaseController):
             if result['success']:
                 logger.info(f"Lote creado exitosamente: {result['data']['id_lote']}")
 
+                # ✅ Serializar los datos correctamente
+                serialized_data = self._serialize_data(result['data'])
+
                 # Evaluar alertas después de crear
-                self.stock_service.evaluar_alertas_insumo(validated_data['id_insumo'])
+                if hasattr(self, 'stock_service'):
+                    self.stock_service.evaluar_alertas_insumo(validated_data['id_insumo'])
 
                 return self.success_response(
-                    data=self.schema.dump(result['data']),
+                    data=serialized_data,
                     message='Lote creado exitosamente',
                     status_code=201
                 )
@@ -69,6 +75,47 @@ class InventarioController(BaseController):
         except Exception as e:
             logger.error(f"Error creando lote: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def _serialize_data(self, data):
+        """Convierte objetos no serializables a tipos compatibles con JSON"""
+        try:
+            if isinstance(data, dict):
+                return {key: self._serialize_data(value) for key, value in data.items()}
+            elif isinstance(data, list):
+                return [self._serialize_data(item) for item in data]
+            elif isinstance(data, (Decimal, float)):
+                return float(data)
+            elif isinstance(data, UUID):
+                return str(data)
+            elif isinstance(data, (date, datetime)):
+                # ✅ Asegurar que siempre devuelva string ISO
+                if hasattr(data, 'isoformat'):
+                    return data.isoformat()
+                return str(data)
+            elif data is None:
+                return None
+            else:
+                return str(data)  # ✅ Convertir cualquier otro tipo a string
+        except Exception as e:
+            logger.error(f"Error serializando dato: {data}, error: {e}")
+            return str(data)  # Fallback: convertir a string
+
+    def success_response(self, data=None, message=None, status_code=200):
+        """Override para asegurar serialización correcta"""
+        response = {
+            'success': True,
+            'data': data,
+            'message': message
+        }
+        return response, status_code
+
+    def error_response(self, error_message, status_code=400):
+        """Override para asegurar serialización correcta"""
+        response = {
+            'success': False,
+            'error': str(error_message)
+        }
+        return response, status_code
 
     def obtener_lotes_por_insumo(self, id_insumo: str, solo_disponibles: bool = True) -> tuple:
         """Obtener lotes de un insumo específico"""

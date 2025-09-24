@@ -1,16 +1,22 @@
-# Crea un archivo utils/serializers.py
 from decimal import Decimal
 from datetime import date, datetime
+from uuid import UUID
 
-def serialize_data(data):
-    """Convierte objetos Decimal y DateTime a tipos serializables por JSON"""
-    if isinstance(data, dict):
-        return {key: serialize_data(value) for key, value in data.items()}
-    elif isinstance(data, list):
-        return [serialize_data(item) for item in data]
-    elif isinstance(data, Decimal):
-        return float(data)
-    elif isinstance(data, (date, datetime)):
-        return data.isoformat()
+def safe_serialize(obj):
+    """Serializa de forma segura cualquier objeto a tipos JSON-compatibles"""
+    if obj is None:
+        return None
+    elif isinstance(obj, (dict)):
+        return {k: safe_serialize(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [safe_serialize(item) for item in obj]
+    elif isinstance(obj, (Decimal, float, int)):
+        return float(obj) if isinstance(obj, Decimal) else obj
+    elif isinstance(obj, (date, datetime)):
+        return obj.isoformat()
+    elif isinstance(obj, UUID):
+        return str(obj)
+    elif hasattr(obj, 'isoformat'):  # Para otros objetos con isoformat
+        return obj.isoformat()
     else:
-        return data
+        return str(obj)  # Fallback seguro

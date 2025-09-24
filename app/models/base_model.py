@@ -21,8 +21,10 @@ class BaseModel(ABC):
     def create(self, data: Dict) -> Dict:
         """Crear un nuevo registro"""
         try:
-            # ✅ SIMPLIFICADO: Insertar datos directamente sin limpieza adicional
-            result = self.db.table(self.table_name).insert(data).execute()
+            # ✅ Convertir objetos date/datetime a string ISO antes de insertar
+            clean_data = self._prepare_data_for_db(data)
+
+            result = self.db.table(self.table_name).insert(clean_data).execute()
 
             if result.data:
                 logger.info(f"Registro creado en {self.table_name}: {result.data[0]}")
@@ -33,6 +35,17 @@ class BaseModel(ABC):
         except Exception as e:
             logger.error(f"Error creando en {self.table_name}: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def _prepare_data_for_db(self, data: Dict) -> Dict:
+        """Preparar datos para la base de datos"""
+        clean_data = {}
+        for key, value in data.items():
+            if value is not None:
+                if isinstance(value, (date, datetime)):
+                    clean_data[key] = value.isoformat()
+                else:
+                    clean_data[key] = value
+        return clean_data
 
     def find_by_id(self, id_value: str, id_field: str = None) -> Dict:
         """Buscar por ID"""
