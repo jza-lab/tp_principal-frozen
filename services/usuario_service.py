@@ -8,25 +8,25 @@ class UsuarioService:
     def __init__(self):
         self.repository = UsuarioRepository()
     
-    def autenticar(self, email: str, password: str) -> Optional[Usuario]:
-        """Autenticar usuario por email y contraseña."""
-        usuario = self.repository.obtener_por_email(email)
-        
+    def autenticar(self, dni: str, password: str) -> Optional[Usuario]:
+        """Autenticar usuario por DNI y contraseña."""
+        usuario = self.repository.obtener_por_dni(dni)
+
         if usuario and usuario.activo and usuario.check_password(password):
             # Opcional: Actualizar 'ultimo_login' al autenticar
             # self.repository.update(usuario.id, {'ultimo_login': datetime.now()})
             return usuario
         
         return None
-    
-    def crear_usuario(self, email: str, password: str,
+
+    def crear_usuario(self, email: str, dni: str, password: str,
                      nombre: str, apellido: str, rol: str, **kwargs) -> Usuario:
         """
         Crear un nuevo usuario con campos adicionales opcionales.
         **Puede contener: numero_empleado, dni, telefono, direccion, etc.
         """
-        if self.repository.obtener_por_email(email):
-            raise ValueError(f"El email '{email}' ya está en uso.")
+        if self.repository.obtener_por_dni(dni):
+            raise ValueError(f"El DNI '{dni}' ya está en uso.")
 
         usuario = Usuario(
             id=None,

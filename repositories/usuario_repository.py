@@ -55,6 +55,6 @@ class UsuarioRepository(BaseRepository[Usuario]):
 
         return self._dict_to_model(response.data[0])
 
-    def obtener_por_email(self, email: str) -> Optional[Usuario]:
-        """Recupera un usuario por su dirección de correo electrónico."""
-        return self.get_by('email', email)
+    def obtener_por_dni(self, dni: str) -> Optional[Usuario]:
+        """Busca y recupera un usuario por su número de DNI."""
+        return self.get_by('dni', dni)
