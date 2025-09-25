@@ -67,7 +67,7 @@ def modificar(codigo):
             ##Falta hacer el codigo
 
             flash('Materia prima modificada exitosamente', 'success')
-            return redirect(url_for('materia_prima.listar')) ##Cambiar html del front
+            return redirect(url_for('insumo.listar')) ##Cambiar html del front
                 
         except ValueError as e:
             flash(str(e), 'error')
@@ -76,10 +76,9 @@ def modificar(codigo):
     return render_template('insumos/formulario.html', insumo=insumo) ##Cambiar html del front
 
 
-@insumo_bp.route('/eliminar', methods=['GET', 'POST'])
+@insumo_bp.route('/eliminar/<codigo>', methods=['GET', 'POST'])
 def eliminar(codigo):
     """Da de baja una materia prima"""
-
     insumo = insumo_repository.obtener_por_codigo(codigo)
 
     if request.method == 'POST':
@@ -87,14 +86,14 @@ def eliminar(codigo):
             ##Falta hacer el codigo
             
             flash('Materia prima eliminada exitosamente', 'success')
-            return redirect(url_for('materia_prima.listar')) ##Cambiar html del front
+            return redirect(url_for('insumo.listar')) ##Cambiar html del front
                 
         except ValueError as e:
             flash(str(e), 'error')
         except Exception as e:
             flash('Error al modifical materia prima', 'error')
 
-    return redirect(url_for('materia_prima.listar'))
+    return redirect(url_for('insumo.listar'))
 
 @insumo_bp.route('/<uuid:id>/stock', methods=['POST'])
 def actualizar_stock(id: UUID):
