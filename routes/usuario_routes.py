@@ -9,11 +9,11 @@ usuario_service = UsuarioService()
 def login():
     """Login de usuario"""
     if request.method == 'POST':
-        dni = request.form['dni']
+        legajo = request.form['legajo']
         password = request.form['password']
-        logging.warning(f"Login attempt for DNI: {dni}")
+        logging.warning(f"Login attempt for legajo: {legajo}")
 
-        usuario = usuario_service.autenticar(dni, password)
+        usuario = usuario_service.autenticar(legajo, password)
         if usuario:
             session['usuario_id'] = usuario.id
             session['usuario_rol'] = usuario.rol
@@ -23,11 +23,11 @@ def login():
             return redirect(url_for('dashboard.index')) #CAMBIAR HTML QUE PASE EL FRONT.
         else:
             # Logging mejorado para depuración
-            user_exists = usuario_service.repository.obtener_por_dni(dni)
+            user_exists = usuario_service.repository.obtener_por_legajo(legajo)
             if user_exists is None:
-                logging.warning(f"DEBUG: Fallo de login para '{dni}'. Razón: Usuario no encontrado o inactivo.")
+                logging.warning(f"DEBUG: Fallo de login para '{legajo}'. Razón: Usuario no encontrado o inactivo.")
             else:
-                logging.warning(f"DEBUG: Fallo de login para '{dni}'. Razón: Contraseña incorrecta.")
+                logging.warning(f"DEBUG: Fallo de login para '{legajo}'. Razón: Contraseña incorrecta.")
 
             flash('Credenciales incorrectas', 'error')
     

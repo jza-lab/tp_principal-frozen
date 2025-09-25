@@ -13,7 +13,7 @@ class Usuario:
     rol: str
     activo: bool = True
     created_at: Optional[datetime] = None
-    numero_empleado: Optional[str] = None
+    legajo: Optional[str] = None
     dni: Optional[str] = None
     telefono: Optional[str] = None
     direccion: Optional[str] = None
