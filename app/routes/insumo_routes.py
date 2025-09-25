@@ -64,7 +64,8 @@ def modificar(codigo):
 
     if request.method == 'POST':
         try:
-                
+            ##Falta hacer el codigo
+            
             flash('Materia prima modificada exitosamente', 'success')
             return redirect(url_for('materia_prima.listar')) ##Cambiar html del front
                 
