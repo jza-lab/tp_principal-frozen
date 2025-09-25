@@ -15,16 +15,24 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    {% if 'usuario_id' in session %}
+    
     <header>
         <!-- Navbar - Solo si hay sesión activa -->
         <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
             <div class="container-fluid">
+                {% if 'usuario_id' in session %}
                 <a class="navbar-brand d-flex align-items-center" href="{{ url_for('dashboard.index') }}">
                     <i class="bi bi-snow2 me-2 fs-4"></i>
                     FrozenProd
                 </a>
-                
+                {% else %}
+                <a class="navbar-brand d-flex align-items-center" >
+                    <i class="bi bi-snow2 me-2 fs-4"></i>
+                    FrozenProd
+                </a>
+                {% endif %}
+
+        {% if 'usuario_id' in session %}
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
                         style="border-color: rgba(255,255,255,0.3);">
                     <span class="navbar-toggler-icon" style="filter: invert(1);"></span>
@@ -77,7 +85,7 @@
                 </div>
             </div>
         </nav>
-    </header>
+    
 
     <div class="container-fluid">
         <div class="row">
@@ -88,6 +96,7 @@
         <!-- Sin navbar ni sidebar si no hay sesión -->
         <div class="container-fluid p-0">
     {% endif %}
+    </header>
 
                 <!-- Flash Messages -->
                 <div class="flash-messages">
