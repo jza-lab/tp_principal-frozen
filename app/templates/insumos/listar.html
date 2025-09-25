@@ -104,6 +104,11 @@
                                     class="btn btn-sm" title="Modificar insumo"> <i class="bi bi-pencil"></i> </a>
 
                             </button>
+                            <button class="btn btn-sm btn-outline-secondary" title="Editar">
+                                <a href="{{ url_for('insumo.eliminar', codigo=insumo.codigo_interno) }}"
+                                    class="btn btn-sm" title="Eliminar insumo"> <i class="bi bi-trash"></i> </a>
+
+                            </button>
 
                             <button class="btn btn-sm btn-outline-primary" title="Ver Detalle" disabled>
                                 <i class="bi bi-eye"></i>
