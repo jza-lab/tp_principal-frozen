@@ -52,7 +52,7 @@ def create_app():
     @app.route('/dev-login')
     def dev_login():
         """Ruta temporal para desarrollo que simula un inicio de sesión."""
-        session.clear()
+        
         session['usuario_id'] = 999  # ID de usuario de prueba
         session['usuario_rol'] = 'admin'
         session['usuario_nombre'] = 'Usuario de Prueba'
@@ -65,7 +65,8 @@ def create_app():
         # JULES: Cambiado para apuntar a dev-login para pruebas.
         # Cambiar de vuelta a 'usuario.login' para producción.
         #return redirect(url_for('dev_login'))
-         return redirect(url_for('usuario.login'))
+        session.clear()
+        return redirect(url_for('usuario.login'))
 
     # Ruta de health check
     @app.route('/api/health')
