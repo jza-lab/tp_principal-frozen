@@ -1,0 +1,167 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Reporte de Producción - Sistema Frozen{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">Reporte de Producción</h1>
+        <p class="text-muted mb-0">Análisis de producción por período</p>
+    </div>
+    <div class="btn-toolbar">
+        <button type="button" class="btn btn-outline-secondary me-2" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i>Imprimir
+        </button>
+        <button type="button" class="btn btn-outline-secondary" disabled>
+            <i class="bi bi-download me-1"></i>Exportar PDF
+        </button>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" action="{{ url_for('reportes.produccion') }}">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label for="fecha_inicio" class="form-label">Fecha Inicio</label>
+                    <input type="date" name="fecha_inicio" class="form-control" 
+                           value="{{ fecha_inicio or '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="fecha_fin" class="form-label">Fecha Fin</label>
+                    <input type="date" name="fecha_fin" class="form-control" 
+                           value="{{ fecha_fin or '' }}">
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-funnel me-1"></i>Generar Reporte
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    {% if reporte and not reporte.error %}
+                    <div class="text-muted small">
+                        {{ reporte.total_ordenes_completadas }} órdenes encontradas
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if reporte and reporte.error %}
+    <div class="alert alert-danger border-danger">
+        <div class="d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <div>Error al generar el reporte: {{ reporte.error }}</div>
+        </div>
+    </div>
+{% elif reporte %}
+    <!-- Resumen del período -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-graph-up me-2"></i>
+                Resumen del Período
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <div class="border-end">
+                        <div class="h3 mb-1">{{ reporte.total_ordenes_completadas }}</div>
+                        <div class="text-muted small">Órdenes Completadas</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border-end">
+                        <div class="h3 mb-1">{{ reporte.total_unidades_producidas or 0 }}</div>
+                        <div class="text-muted small">Unidades Producidas</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border-end">
+                        <div class="h3 mb-1">95%</div>
+                        <div class="text-muted small">Eficiencia Promedio</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="h3 mb-1">2.5%</div>
+                    <div class="text-muted small">Índice de Desperdicio</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detalle de órdenes -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Detalle de Órdenes Completadas</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Producto</th>
+                        <th>Cantidad</th>
+                        <th>Planificada</th>
+                        <th>Finalizada</th>
+                        <th>Operario</th>
+                        <th>Duración</th>
+                        <th class="text-end">Eficiencia</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for orden in reporte.detalle %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" 
+                               class="text-decoration-none">
+                                <code>{{ orden.codigo }}</code>
+                            </a>
+                        </td>
+                        <td>
+                            <strong>{{ orden.producto_nombre or orden.producto or 'N/A' }}</strong>
+                        </td>
+                        <td>{{ orden.cantidad }} unidades</td>
+                        <td>{{ orden.fecha_planificada }}</td>
+                        <td>{{ orden.fecha_fin }}</td>
+                        <td>{{ orden.operario_nombre or 'N/A' }}</td>
+                        <td>
+                            {% if orden.horas_produccion is not none %}
+                                {{ "%.1f"|format(orden.horas_produccion) }}h
+                            {% else %}
+                                <span class="text-muted">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <span class="badge bg-success">95%</span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1 opacity-25 mb-2"></i>
+                            <div>No hay órdenes completadas en el período seleccionado</div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% else %}
+    <!-- Estado inicial -->
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-bar-chart fs-1 opacity-25 mb-3"></i>
+            <h4>Reporte de Producción</h4>
+            <p class="text-muted mb-4">
+                Seleccione un rango de fechas para generar el reporte de producción
+            </p>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

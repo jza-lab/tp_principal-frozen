@@ -1,0 +1,124 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Insumos - Sistema Frozen{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Catálogo de Insumos</h1>
+    <div class="btn-toolbar">
+        <a href="{{ url_for('insumo.nuevo') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>Agregar Nuevo Insumo
+        </a>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" action="{{ url_for('insumo.listar') }}">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="busqueda" class="form-label">Buscar</label>
+                    <input type="text" name="busqueda" class="form-control" 
+                           placeholder="Nombre o código..." 
+                           value="{{ request.args.get('busqueda', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="categoria" class="form-label">Categoría</label>
+                    <select name="categoria" class="form-select">
+                        <option value="">Todas las categorías</option>
+                        {% for cat in categorias %}
+                        <option value="{{ cat }}" {% if request.args.get('categoria') == cat %}selected{% endif %}>
+                            {{ cat }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-search me-1"></i>Filtrar
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small">
+                        {{ insumos|length }} insumos encontrados
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Tabla de insumos -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-striped table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th>Categoría</th>
+                    <th>Stock Actual</th>
+                    <th>Stock Mínimo</th>
+                    <th>Estado</th>
+                    <th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for insumo in insumos %}
+                <tr>
+                    <td>
+                        <code class="text-muted">{{ insumo.codigo_interno }}</code>
+                    </td>
+                    <td>
+                        <strong>{{ insumo.nombre }}</strong>
+                        <small class="text-muted d-block">{{ insumo.unidad_medida }}</small>
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border">{{ insumo.categoria }}</span>
+                    </td>
+                    <td>
+                        <strong class="{{ 'text-danger' if insumo.esta_en_stock_minimo() else 'text-success' }}">
+                            {{ insumo.stock_actual }}
+                        </strong>
+                    </td>
+                    <td class="text-muted">{{ insumo.stock_min }}</td>
+                    <td>
+                        {% if insumo.esta_en_stock_minimo() %}
+                            <span class="badge bg-danger">
+                                <i class="bi bi-exclamation-triangle me-1"></i>Stock Crítico
+                            </span>
+                        {% else %}
+                            <span class="badge bg-success">
+                                <i class="bi bi-check-circle me-1"></i>Stock OK
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group" role="group">
+                            <a href="{{ url_for('insumo.registrar_lote', id=insumo.id_insumo) }}" 
+                               class="btn btn-sm btn-success" title="Registrar Lote">
+                                <i class="bi bi-plus-square"></i>
+                            </a>
+                            <button class="btn btn-sm btn-outline-secondary" title="Editar" disabled>
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary" title="Ver Detalle" disabled>
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
+                        No se encontraron insumos
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

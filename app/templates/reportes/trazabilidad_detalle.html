@@ -1,0 +1,49 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Trazabilidad {{ lote }} - Sistema Frozen{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">
+            Trazabilidad: <code class="text-primary">{{ lote }}</code>
+        </h1>
+        <p class="text-muted mb-0">Historial completo del lote</p>
+    </div>
+    <div class="btn-toolbar">
+        <a href="{{ url_for('reportes.trazabilidad') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Nueva Consulta
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if trazabilidad and trazabilidad.mensaje %}
+            <div class="alert alert-info border-info">
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-info-circle fs-4 me-3 mt-1"></i>
+                    <div>
+                        <h5 class="alert-heading">Funcionalidad en Desarrollo</h5>
+                        <p>{{ trazabilidad.mensaje }}</p>
+                        <hr>
+                        <p class="mb-0">
+                            Una vez implementada, esta vista mostrará el ciclo de vida completo del lote 
+                            <code>{{ lote }}</code>, incluyendo su ingreso, los movimientos de stock y 
+                            todas las órdenes de producción en las que fue utilizado.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-search fs-1 opacity-25 mb-3"></i>
+                <h5>Lote no encontrado</h5>
+                <p class="text-muted">
+                    No se encontró información para el lote <code>{{ lote }}</code>
+                </p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

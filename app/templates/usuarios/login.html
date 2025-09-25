@@ -1,0 +1,58 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Iniciar Sesión - Sistema Frozen{% endblock %}
+
+{% block content %}
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <i class="bi bi-snow2 fs-1 mb-3 d-block"></i>
+            <h2 class="mb-1">Sistema Frozen</h2>
+            <p class="mb-0 opacity-75">Gestión de Producción</p>
+        </div>
+
+        <div class="login-body">
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show mb-4">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <form method="POST">
+                <div class="form-floating mb-3">
+                    <input type="text" class="form-control" id="dni" name="dni"
+                           placeholder="Ingrese su dni" required>
+                    <label for="dni">
+                        <i class="bi bi-envelope me-1"></i>Dni
+                    </label>
+                </div>
+                
+                <div class="form-floating mb-4">
+                    <input type="password" class="form-control" id="password" name="password"
+                           placeholder="Contraseña" required>
+                    <label for="password">
+                        <i class="bi bi-lock me-1"></i>Contraseña
+                    </label>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-login w-100">
+                    <i class="bi bi-box-arrow-in-right me-2"></i>
+                    Iniciar Sesión
+                </button>
+            </form>
+
+            <div class="text-center mt-4">
+                <small class="text-muted">
+                    ¿Problemas para acceder? Contacta al administrador del sistema.
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

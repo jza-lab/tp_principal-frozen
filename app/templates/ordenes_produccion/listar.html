@@ -1,0 +1,158 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Órdenes de Producción - Sistema Frozen{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">Órdenes de Producción</h1>
+        <p class="text-muted mb-0">Gestión y seguimiento de órdenes de producción</p>
+    </div>
+    <div class="btn-toolbar">
+        <a href="{{ url_for('orden_produccion.nueva') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
+        </a>
+    </div>
+</div>
+
+<!-- Filtros por estado -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" action="{{ url_for('orden_produccion.listar') }}">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="estado" class="form-label">Filtrar por Estado</label>
+                    <select name="estado" class="form-select" onchange="this.form.submit()">
+                        <option value="">Todas las órdenes</option>
+                        <option value="PLANIFICADA" {% if request.args.get('estado') == 'PLANIFICADA' %}selected{% endif %}>
+                            Planificadas
+                        </option>
+                        <option value="EN_PROCESO" {% if request.args.get('estado') == 'EN_PROCESO' %}selected{% endif %}>
+                            En Proceso
+                        </option>
+                        <option value="PAUSADA" {% if request.args.get('estado') == 'PAUSADA' %}selected{% endif %}>
+                            Pausadas
+                        </option>
+                        <option value="COMPLETADA" {% if request.args.get('estado') == 'COMPLETADA' %}selected{% endif %}>
+                            Completadas
+                        </option>
+                        <option value="CANCELADA" {% if request.args.get('estado') == 'CANCELADA' %}selected{% endif %}>
+                            Canceladas
+                        </option>
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <div class="text-muted small">
+                        {{ ordenes|length }} órdenes encontradas
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Lista de órdenes -->
+<div class="row">
+    {% for orden in ordenes %}
+    <div class="col-lg-6 col-xl-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <code class="text-muted">{{ orden.codigo }}</code>
+                </h6>
+                {% set estado_config = {
+                    'PLANIFICADA': {'class': 'bg-secondary', 'icon': 'calendar'},
+                    'EN_PROCESO': {'class': 'bg-primary', 'icon': 'play-circle'},
+                    'PAUSADA': {'class': 'bg-warning text-dark', 'icon': 'pause-circle'},
+                    'COMPLETADA': {'class': 'bg-success', 'icon': 'check-circle'},
+                    'CANCELADA': {'class': 'bg-danger', 'icon': 'x-circle'}
+                } %}
+                {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                <span class="badge {{ config.class }}">
+                    <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado }}
+                </span>
+            </div>
+            <div class="card-body">
+                <h5 class="card-title">{{ orden.producto_nombre or orden.producto or 'Producto no definido' }}</h5>
+                
+                <div class="row g-2 text-sm">
+                    <div class="col-6">
+                        <div class="text-muted small">Cantidad</div>
+                        <div class="fw-bold">{{ orden.cantidad }} unidades</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-muted small">Planificada</div>
+                        <div class="fw-bold">{{ orden.fecha_planificada }}</div>
+                    </div>
+                    {% if orden.operario_nombre %}
+                    <div class="col-12">
+                        <div class="text-muted small">Operario</div>
+                        <div class="fw-bold">{{ orden.operario_nombre }}</div>
+                    </div>
+                    {% endif %}
+                    {% if orden.horas_produccion %}
+                    <div class="col-12">
+                        <div class="text-muted small">Tiempo de Producción</div>
+                        <div class="fw-bold">{{ "%.1f"|format(orden.horas_produccion) }} horas</div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if orden.prioridad and orden.prioridad != 'NORMAL' %}
+                <div class="mt-2">
+                    {% set prioridad_config = {
+                        'BAJA': {'class': 'bg-light text-dark', 'icon': 'arrow-down'},
+                        'ALTA': {'class': 'bg-warning text-dark', 'icon': 'arrow-up'},
+                        'URGENTE': {'class': 'bg-danger', 'icon': 'exclamation-triangle'}
+                    } %}
+                    {% set pconfig = prioridad_config.get(orden.prioridad, {'class': 'bg-secondary', 'icon': 'dash'}) %}
+                    <span class="badge {{ pconfig.class }}">
+                        <i class="bi bi-{{ pconfig.icon }} me-1"></i>{{ orden.prioridad }}
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+            <div class="card-footer bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" 
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-eye me-1"></i>Ver Detalle
+                    </a>
+                    
+                    <div class="btn-group">
+                        {% if orden.estado == 'PLANIFICADA' %}
+                        <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" 
+                              style="display: inline;" onsubmit="return confirm('¿Iniciar esta orden de producción?')">
+                            <button type="submit" class="btn btn-success btn-sm">
+                                <i class="bi bi-play-fill me-1"></i>Iniciar
+                            </button>
+                        </form>
+                        {% elif orden.estado == 'EN_PROCESO' %}
+                        <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" 
+                              style="display: inline;" onsubmit="return confirm('¿Marcar como completada?')">
+                            <button type="submit" class="btn btn-success btn-sm">
+                                <i class="bi bi-check-circle me-1"></i>Completar
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-gear fs-1 opacity-25 mb-3"></i>
+                <h4>No hay órdenes de producción</h4>
+                <p class="text-muted mb-4">Comienza creando una nueva orden de producción</p>
+                <a href="{{ url_for('orden_produccion.nueva') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i>Crear Primera Orden
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

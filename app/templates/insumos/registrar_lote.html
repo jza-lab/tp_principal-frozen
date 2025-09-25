@@ -1,0 +1,130 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Registrar Lote - {{ insumo.nombre }}{% endblock %}
+
+{% block page_title %}Registrar Nuevo Lote{% endblock %}
+{% block page_subtitle %}
+    <strong>{{ insumo.nombre }}</strong> 
+    <span class="text-muted">({{ insumo.codigo_interno }})</span>
+{% endblock %}
+{% block page_actions %}
+    <a href="{{ url_for('insumo.listar') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Volver a la lista
+    </a>
+{% endblock %}
+
+{% block content %}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Información del Lote</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="proveedor_id" class="form-label">Proveedor <span class="text-danger">*</span></label>
+                            <select class="form-select" id="proveedor_id" name="proveedor_id" required>
+                                <option value="">Seleccionar proveedor...</option>
+                                {% for p in proveedores %}
+                                    <option value="{{ p.id }}">{{ p.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="cantidad" class="form-label">Cantidad <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="number" step="0.01" class="form-control" id="cantidad" name="cantidad" required>
+                                <span class="input-group-text">{{ insumo.unidad_medida }}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="fecha_ingreso" class="form-label">Fecha de Ingreso <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="fecha_ingreso" name="fecha_ingreso" 
+                                   value="{{ today }}" required>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="fecha_vencimiento" class="form-label">Fecha de Vencimiento <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="fecha_vencimiento" name="fecha_vencimiento" required>
+                        </div>
+                        
+                        <div class="col-12">
+                            <hr class="my-4">
+                            <h6 class="mb-3">Información Adicional (Opcional)</h6>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="numero_factura" class="form-label">Número de Factura/Remito</label>
+                            <input type="text" class="form-control" id="numero_factura" name="numero_factura" 
+                                   placeholder="ej: FC-001-00000123">
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="precio_unitario" class="form-label">Precio Unitario</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" step="0.01" class="form-control" id="precio_unitario" name="precio_unitario">
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="temperatura_almacenamiento" class="form-label">Temperatura de Almacenamiento (°C)</label>
+                            <input type="number" step="0.1" class="form-control" id="temperatura_almacenamiento" name="temperatura_almacenamiento">
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{{ url_for('insumo.listar') }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Registrar Lote
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Información del Insumo</h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-6">
+                        <div class="text-muted small">Stock Actual</div>
+                        <div class="fw-bold">{{ insumo.stock_actual }} {{ insumo.unidad_medida }}</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="text-muted small">Stock Mínimo</div>
+                        <div class="fw-bold">{{ insumo.stock_min }} {{ insumo.unidad_medida }}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="text-muted small">Categoría</div>
+                        <div class="fw-bold">{{ insumo.categoria }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-body">
+                <div class="alert alert-light border mb-0">
+                    <div class="small">
+                        <i class="bi bi-info-circle me-1"></i>
+                        <strong>Nota:</strong> Al registrar este lote, se actualizará automáticamente el stock actual del insumo.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
