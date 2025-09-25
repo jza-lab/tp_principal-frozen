@@ -15,7 +15,7 @@ insumo_service = InsumoService(insumo_repository, lote_repository)
 @insumo_bp.route('/')
 def listar():
     usuario_id = session.get('usuario_id')
-    if usuario_id:
+    if not usuario_id:
         flash('Por favor, inicie sesión para continuar')
         return redirect(url_for('usuario.login'))
     
@@ -55,6 +55,25 @@ def nuevo():
             flash(f'Error al crear insumo: {e}', 'error')
     
     return render_template('insumos/formulario.html')
+
+@insumo_bp.route('/modificar/<codigo>', methods=['GET', 'POST'])
+def modificar(codigo):
+    """modifica una materia prima"""
+
+    insumo = insumo_repository.obtener_por_codigo(codigo)
+
+    if request.method == 'POST':
+        try:
+                
+            flash('Materia prima modificada exitosamente', 'success')
+            return redirect(url_for('materia_prima.listar')) ##Cambiar html del front
+                
+        except ValueError as e:
+            flash(str(e), 'error')
+        except Exception as e:
+            flash('Error al modifical materia prima', 'error')
+    return render_template('insumos/formulario.html', insumo=insumo) ##Cambiar html del front
+
 
 @insumo_bp.route('/<uuid:id>/stock', methods=['POST'])
 def actualizar_stock(id: UUID):

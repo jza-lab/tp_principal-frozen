@@ -38,7 +38,7 @@ class InsumoRepository(BaseRepository[Insumo]):
 
     def obtener_por_codigo(self, codigo: str) -> Optional[Insumo]:
         """Recupera un insumo por su código único."""
-        return self.get_by('codigo', codigo)
+        return self.get_by('codigo_interno', codigo)
 
     def obtener_por_filtros(self, categoria: str = None, busqueda: str = None) -> List[Insumo]:
         """Recupera insumos basándose en filtros opcionales."""
