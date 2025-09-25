@@ -31,15 +31,15 @@
         <div class="col-lg-6 mb-4">
             <div class="card border-warning">
                 <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                    <h6 class="mb-0">{{ alerta.titulo }}</h6>
-                    <span class="badge bg-warning text-dark">{{ alerta.nivel }}</span>
+                    <h6 class="mb-0">{{ alerta.nombre }}</h6>
+                    <span class="badge {{ 'bg-danger' if alerta.es_critico else 'bg-warning text-dark' }}">{{ "Critico" if alerta.es_critico else "Baja"}}</span>
                 </div>
                 <div class="card-body">
-                    <p class="card-text">{{ alerta.mensaje }}</p>
+                    <p class="card-text"> El stock del insumo está por debjo del umbral minimo </p> <!-- Cambiar cuando se implementen las alertas -->
                     <div class="d-flex justify-content-between align-items-center mt-3">
                         <small class="text-muted">
                             <i class="bi bi-clock me-1"></i>
-                            {{ alerta.fecha_creacion.strftime('%d/%m/%Y %H:%M') if alerta.fecha_creacion else 'Ahora' }}
+                            {{ alerta.updated_at.strftime('%d/%m/%Y %H:%M') if alerta.updated_at else 'Ahora' }}
                         </small>
                         <div>
                             <button class="btn btn-outline-success btn-sm me-2" onclick="marcarLeida('{{ alerta.id }}')">
