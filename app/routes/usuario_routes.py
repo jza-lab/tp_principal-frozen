@@ -43,6 +43,11 @@ def logout():
 
 @usuario_bp.route('/perfil')
 def perfil():
+    usuario_id = session.get('usuario_id', None)
+    if not usuario_id:
+        flash('Por favor, inicie sesión para continuar')
+        return redirect(url_for('usuario.login'))
+    
     """Muestra el perfil del usuario."""
     if 'usuario_id' not in session:
         return redirect(url_for('usuario.login'))

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
 from app.services.materia_prima_service import MateriaPrimaService
 from app.repositories.materia_prima_repository import MateriaPrimaRepository
 from app.repositories.movimiento_stock_repository import MovimientoStockRepository
@@ -15,6 +15,11 @@ materia_prima_service = MateriaPrimaService(materia_prima_repository, movimiento
 
 @materia_prima_bp.route('/')
 def listar():
+    usuario_id = session.get('usuario_id', None)
+    if not usuario_id:
+        flash('Por favor, inicie sesión para continuar')
+        return redirect(url_for('usuario.login'))
+    
     """Lista de materias primas"""
     categoria = request.args.get('categoria')
     busqueda = request.args.get('busqueda')

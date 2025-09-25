@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash,session
 from uuid import UUID
 from app.services.insumo_service import InsumoService
 from app.repositories.insumo_repository import InsumoRepository
@@ -14,6 +14,11 @@ insumo_service = InsumoService(insumo_repository, lote_repository)
 
 @insumo_bp.route('/')
 def listar():
+    usuario_id = session.get('usuario_id')
+    if usuario_id:
+        flash('Por favor, inicie sesión para continuar')
+        return redirect(url_for('usuario.login'))
+    
     """Lista de insumos"""
     categoria = request.args.get('categoria')
     busqueda = request.args.get('busqueda')
