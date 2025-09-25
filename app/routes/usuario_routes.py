@@ -9,11 +9,12 @@ usuario_service = UsuarioService()
 def login():
     """Login de usuario"""
     if request.method == 'POST':
-        email = request.form['dni']
+        email = request.form['email']
         password = request.form['password']
         logging.warning(f"Login attempt for email: {email}")
 
         usuario = usuario_service.autenticar(email, password)
+        
         if usuario:
             session['usuario_id'] = usuario.id
             session['usuario_rol'] = usuario.rol
