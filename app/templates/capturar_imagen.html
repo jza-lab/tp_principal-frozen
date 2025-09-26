@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Login - PyME Alimenticia</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #1c1c28;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Figuras geométricas */
+    .bg-shape { position: absolute; border-radius: 50%; z-index: 0; opacity: 0.45; }
+    /* Círculos */
+    .circle1 { width: 250px; height: 250px; background: #3a3aff; top: -80px; left: -80px; filter: blur(90px); }
+    .circle2 { width: 300px; height: 300px; background: #ff4081; bottom: -100px; right: -100px; filter: blur(120px); }
+    .circle3 { width: 180px; height: 180px; background: #00e5ff; top: 50px; right: 25%; filter: blur(70px); opacity: 0.35; }
+    .circle4 { width: 120px; height: 120px; background: #ff9100; bottom: 20%; left: 15%; filter: blur(40px); opacity: 0.5; }
+    /* Triángulos */
+    .triangle {
+      position: absolute; width: 0; height: 0;
+      border-left: 200px solid transparent; border-right: 200px solid transparent;
+      border-bottom: 200px solid #00e5ff; filter: blur(60px);
+      top: 20%; left: 70%; opacity: 0.3; transform: rotate(20deg);
+    }
+    .triangle2 {
+      position: absolute; width: 0; height: 0;
+      border-left: 120px solid transparent; border-right: 120px solid transparent;
+      border-bottom: 120px solid #ff4081; filter: blur(30px);
+      top: 70%; right: 60%; opacity: 0.25; transform: rotate(-15deg);
+    }
+    /* Cuadrados redondeados */
+    .square {
+      position: absolute; width: 180px; height: 180px; background: #3affd0; border-radius: 25px;
+      filter: blur(50px); top: 60px; left: 60%; opacity: 0.25; transform: rotate(25deg);
+    }
+    .square2 {
+      position: absolute; width: 100px; height: 100px; background: #e040fb; border-radius: 20px;
+      filter: blur(25px); bottom: 15%; right: 20%; opacity: 0.35; transform: rotate(-15deg);
+    }
+
+    .container { position: relative; z-index: 1; width: 380px; }
+    .tabs { display: flex; justify-content: space-around; margin-bottom: 20px; }
+    .tabs button { flex: 1; background: transparent; border: none; color: #aaa; font-size: 18px; padding: 10px; cursor: pointer; }
+    .tabs button.active { color: white; border-bottom: 2px solid #3a3aff; }
+
+    .form-box {
+      background: #2b2b3c; padding: 30px; border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5); text-align: center; transition: all 0.3s ease-in-out;
+    }
+
+    input {
+      width: 100%; padding: 10px; margin: 10px 0; border: none;
+      border-bottom: 2px solid #666; background: transparent; color: white; font-size: 16px;
+    }
+
+    button.submit-btn {
+      background: #3a3aff; color: white; border: none; padding: 12px 20px; margin-top: 15px;
+      width: 100%; border-radius: 6px; font-size: 16px; cursor: pointer;
+    }
+
+    .face-action { margin-top: 16px; display: flex; justify-content: center; gap: 12px; align-items: center; cursor: pointer; }
+    .face-action img { width: 54px; height: 54px; border-radius: 50%; border: 2px solid white; padding: 8px; }
+    .hint { font-size: 12px; color: #cfcfe6; opacity: 0.9; }
+
+    .preview { margin-top: 14px; max-width: 100%; border-radius: 8px; display: none; }
+  </style>
+</head>
+<body>
+  <!-- Fondos geométricos -->
+  <div class="bg-shape circle1"></div>
+  <div class="bg-shape circle2"></div>
+  <div class="bg-shape circle3"></div>
+  <div class="bg-shape circle4"></div>
+  <div class="triangle"></div>
+  <div class="triangle2"></div>
+  <div class="square"></div>
+  <div class="square2"></div>
+
+  <div class="container">
+    <!-- Tabs Login / Registro -->
+    <div class="tabs">
+      <button id="tabLogin" class="active">Login</button>
+      <button id="tabRegister">Registro</button>
+    </div>
+
+    <!-- Login -->
+    <div class="form-box" id="formLogin">
+      <h2>Iniciar Sesión</h2>
+      <form id="loginForm">
+        <input type="text" id="loginUser" placeholder="Usuario" required>
+        <input type="password" id="loginPassword" placeholder="Contraseña" required>
+        <button type="submit" class="submit-btn">Login</button>
+      </form>
+
+      <!-- Login con rostro -->
+      <div class="face-action" id="btnFaceLogin" title="Login con rostro">
+        <img src="https://img.icons8.com/ios/100/ffffff/happy--v1.png" alt="Face Login">
+        <span class="hint">Iniciar sesión con rostro</span>
+      </div>
+      <img id="capturedImage" class="preview" alt="Vista previa login" />
+    </div>
+
+    <!-- Registro -->
+    <div class="form-box" id="formRegister" style="display:none;">
+      <h2>Registro</h2>
+      <form id="registerForm">
+        <input type="text" id="regUser" placeholder="Usuario" required>
+        <input type="email" id="regEmail" placeholder="Correo electrónico" required>
+        <input type="password" id="regPassword" placeholder="Contraseña" required>
+
+        <!-- Captura facial para registro -->
+        <div class="face-action" id="btnFaceRegister" title="Capturar rostro para registro">
+          <img src="https://img.icons8.com/ios/100/ffffff/face-id.png" alt="Registrar Rostro">
+          <span class="hint">Capturar rostro para tu cuenta</span>
+        </div>
+        <img id="capturedRegisterImage" class="preview" alt="Vista previa registro" />
+
+        <button type="submit" class="submit-btn">Registrarse</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Tabs
+    const tabLogin = document.getElementById("tabLogin");
+    const tabRegister = document.getElementById("tabRegister");
+    const formLogin = document.getElementById("formLogin");
+    const formRegister = document.getElementById("formRegister");
+
+    tabLogin.addEventListener("click", () => {
+      tabLogin.classList.add("active");
+      tabRegister.classList.remove("active");
+      formLogin.style.display = "block";
+      formRegister.style.display = "none";
+    });
+
+    tabRegister.addEventListener("click", () => {
+      tabRegister.classList.add("active");
+      tabLogin.classList.remove("active");
+      formRegister.style.display = "block";
+      formLogin.style.display = "none";
+    });
+
+    // Login: captura facial
+    document.getElementById("btnFaceLogin").addEventListener("click", async () => {
+      try {
+        const response = await fetch("/capture_face");
+        if (!response.ok) { alert("Error al capturar rostro"); return; }
+        const blob = await response.blob();
+        const imgUrl = URL.createObjectURL(blob);
+        const img = document.getElementById("capturedImage");
+        img.src = imgUrl;
+        img.style.display = "block";
+      } catch (err) {
+        console.error(err);
+        alert("Error al conectar con el servidor");
+      }
+    });
+
+    // Registro: captura facial asociada al usuario
+    document.getElementById("btnFaceRegister").addEventListener("click", async () => {
+      const username = document.getElementById("regUser").value.trim();
+      if (!username) { alert("Ingresá el usuario antes de capturar el rostro."); return; }
+      try {
+        const response = await fetch(`/capture_face_register?username=${encodeURIComponent(username)}`);
+        if (!response.ok) { alert("Error al capturar rostro para registro"); return; }
+        const blob = await response.blob();
+        const imgUrl = URL.createObjectURL(blob);
+        const img = document.getElementById("capturedRegisterImage");
+        img.src = imgUrl;
+        img.style.display = "block";
+      } catch (err) {
+        console.error(err);
+        alert("Error al conectar con el servidor");
+      }
+    });
+
+    // (Opcional) Envío de formularios: acá integrarías tus endpoints reales
+    document.getElementById("registerForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      alert("Usuario registrado (pendiente backend de /guardar_usuario).");
+    });
+    document.getElementById("loginForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      alert("Login clásico enviado (pendiente backend de /login).");
+    });
+  </script>
+</body>
+</html>

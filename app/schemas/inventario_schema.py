@@ -77,6 +77,19 @@ class InsumosInventarioSchema(Schema):
 
         return data
 
+##    @post_load
+##    def validate_cantidades(self, data, **kwargs):
+##        """Validar que cantidad_actual no sea mayor que cantidad_inicial"""
+##        cantidad_actual = data.get('cantidad_actual')
+##        cantidad_inicial = data.get('cantidad_inicial')
+##
+##        # ✅ CORREGIDO: Solo validar si ambos campos están presentes
+##        if cantidad_actual is not None and cantidad_inicial is not None:
+##            if cantidad_actual > cantidad_inicial:
+##                raise ValidationError('La cantidad actual no puede ser mayor que la cantidad inicial')
+##
+##        return data
+
     @post_load
     def set_defaults(self, data, **kwargs):
         """Establecer valores por defecto"""

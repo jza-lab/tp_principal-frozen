@@ -6,6 +6,8 @@ from app.schemas.inventario_schema import InsumosInventarioSchema
 from typing import Dict, Optional
 import logging
 from decimal import Decimal
+from datetime import datetime, date
+from marshmallow import ValidationError
 
 
 logger = logging.getLogger(__name__)
@@ -131,27 +133,77 @@ class InventarioController(BaseController):
             logger.error(f"Error obteniendo lotes: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
-    def actualizar_cantidad_lote(self, id_lote: str, nueva_cantidad: float, motivo: str = '') -> tuple:
-        """Actualizar cantidad de un lote"""
+    def actualizar_lote_parcial(self, id_lote: str, data: Dict) -> tuple:
+        """Actualizar campos específicos de un lote (PATCH)"""
         try:
-            result = self.inventario_model.actualizar_cantidad(id_lote, nueva_cantidad, motivo)
+            # Validar que el lote existe
+            lote_existente = self.inventario_model.find_by_id(id_lote, 'id_lote')
+            if not lote_existente['success']:
+                return self.error_response('Lote no encontrado', 404)
+
+            # ✅ Obtener datos actuales del lote para validaciones
+            lote_actual = lote_existente['data']
+
+            # Validar datos parciales con el esquema
+            validated_data = self.schema.load(data, partial=True)
+
+            # Filtrar solo los campos permitidos para actualización
+            campos_permitidos = {
+                'cantidad_actual', 'ubicacion_fisica', 'precio_unitario',
+                'numero_lote_proveedor', 'f_vencimiento', 'observaciones'
+            }
+
+            datos_actualizacion = {}
+            for campo, valor in validated_data.items():
+                if campo in campos_permitidos and valor is not None:
+                    datos_actualizacion[campo] = valor
+
+            # Si no hay datos válidos para actualizar
+            if not datos_actualizacion:
+                return self.error_response('No se proporcionaron datos válidos para actualizar', 400)
+
+            # ✅ Validación manual de cantidad_actual vs cantidad_inicial
+            if 'cantidad_actual' in datos_actualizacion:
+                cantidad_actual_nueva = datos_actualizacion['cantidad_actual']
+                cantidad_inicial_actual = lote_actual.get('cantidad_inicial')
+
+                if cantidad_inicial_actual is not None and cantidad_actual_nueva > cantidad_inicial_actual:
+                    return self.error_response(
+                        f'La cantidad actual ({cantidad_actual_nueva}) no puede ser mayor que la cantidad inicial ({cantidad_inicial_actual})',
+                        400
+                    )
+
+            # ✅ AGREGAR timestamp de actualización (ahora con datetime importado)
+            datos_actualizacion['updated_at'] = datetime.now().isoformat()
+
+            # Actualizar el lote
+            result = self.inventario_model.update(id_lote, datos_actualizacion, 'id_lote')
 
             if result['success']:
-                logger.info(f"Cantidad de lote actualizada: {id_lote}")
+                logger.info(f"Lote {id_lote} actualizado: {list(datos_actualizacion.keys())}")
 
-                # Obtener ID del insumo para evaluar alertas
-                lote_data = result['data']
-                self.stock_service.evaluar_alertas_insumo(lote_data['id_insumo'])
+                # Si se actualizó la cantidad, evaluar alertas de stock
+                if 'cantidad_actual' in datos_actualizacion:
+                    if hasattr(self, 'stock_service') and self.stock_service:
+                        self.stock_service.evaluar_alertas_insumo(lote_actual['id_insumo'])
+
+                # Obtener el lote actualizado con todos los datos
+                lote_actualizado = self.inventario_model.find_by_id(id_lote, 'id_lote')
+
+                if lote_actualizado['success']:
+                    serialized_data = self._serialize_data(lote_actualizado['data'])
+                else:
+                    serialized_data = self._serialize_data(result['data'])
 
                 return self.success_response(
-                    data=self.schema.dump(result['data']),
-                    message='Cantidad actualizada exitosamente'
+                    data=serialized_data,
+                    message='Lote actualizado exitosamente'
                 )
             else:
                 return self.error_response(result['error'])
 
         except Exception as e:
-            logger.error(f"Error actualizando cantidad: {str(e)}")
+            logger.error(f"Error actualizando lote: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def obtener_stock_consolidado(self, filtros: Optional[Dict] = None) -> tuple:

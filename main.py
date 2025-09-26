@@ -35,6 +35,19 @@ if __name__ == "__main__":
     print("    POST /api/inventario/lotes")
     print("    POST /api/inventario/alertas")
 
+
+    print("🚀 Iniciando Sistema de Autenticación...")
+    print(f"🔧 Modo Debug: {Config.DEBUG}")
+    print(f"🔗 Supabase URL: {Config.SUPABASE_URL}")
+    print("📌 Endpoints disponibles:")
+    print("    GET  /auth/")
+    print("    POST /auth/login")
+    print("    POST /auth/login_face")
+    print("    GET  /auth/register")
+    print("    POST /auth/register_face")
+    print("    GET  /auth/dashboard")
+    print("    GET  /auth/logout")
+
     # 🧵 Iniciar servidor Modbus solo si no es reinicio por Flask
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         threading.Thread(target=iniciar_modbus, daemon=True).start()
