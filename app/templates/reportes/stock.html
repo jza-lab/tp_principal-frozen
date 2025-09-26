@@ -18,14 +18,14 @@
     </div>
 </div>
 
-{% if reporte and reporte.error %}
+<!-- {% if reporte and reporte.error %}
     <div class="alert alert-danger border-danger">
         <div class="d-flex align-items-center">
             <i class="bi bi-exclamation-triangle me-2"></i>
             <div>Error al generar el reporte: {{ reporte.error }}</div>
         </div>
     </div>
-{% else %}
+{% else %} -->
     <!-- Tarjetas de resumen -->
     <div class="row mb-4">
         <div class="col-lg-3 col-md-6 mb-4">
@@ -34,7 +34,8 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="stat-label mb-1">Valor Total</div>
-                            <div class="stat-value">${{ "%.2f"|format(reporte.total_valor_inventario) if reporte else '0.00' }}</div>
+                            <!-- <div class="stat-value">${{ "%.2f"|format(reporte.total_valor_inventario) if reporte else '0.00' }}</div> -->
+                            <div class="stat-value">$0</div>
                         </div>
                         <div class="text-muted">
                             <i class="bi bi-currency-dollar fs-1 opacity-25"></i>
@@ -50,7 +51,8 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="stat-label mb-1">Total Items</div>
-                            <div class="stat-value">{{ reporte.total_items if reporte else 0 }}</div>
+                            <!-- <div class="stat-value">{{ reporte.total_items if reporte else 0 }}</div> -->
+                            <div class="stat-value">0</div>
                         </div>
                         <div class="text-muted">
                             <i class="bi bi-box-seam fs-1 opacity-25"></i>
@@ -66,7 +68,8 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="stat-label mb-1">Stock Crítico</div>
-                            <div class="stat-value text-danger">{{ reporte.items_con_stock_bajo_o_critico if reporte else 0 }}</div>
+                            <!-- <div class="stat-value text-danger">{{ reporte.items_con_stock_bajo_o_critico if reporte else 0 }}</div> -->
+                            <div class="stat-value text-danger">0</div>
                         </div>
                         <div class="text-muted">
                             <i class="bi bi-exclamation-triangle fs-1 opacity-25"></i>
@@ -82,10 +85,11 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="stat-label mb-1">Stock Saludable</div>
-                            {% set total = reporte.total_items if reporte else 0 %}
+                            <!-- {% set total = reporte.total_items if reporte else 0 %}
                             {% set criticos = reporte.items_con_stock_bajo_o_critico if reporte else 0 %}
                             {% set porcentaje = ((total - criticos) / total * 100)|round(1) if reporte and total > 0 else 100 if not reporte else 0 %}
-                            <div class="stat-value text-success">{{ porcentaje }}%</div>
+                            <div class="stat-value text-success">{{ porcentaje }}%</div> -->
+                            <div class="stat-value text-success">0%</div>
                         </div>
                         <div class="text-muted">
                             <i class="bi bi-check-circle fs-1 opacity-25"></i>
@@ -138,51 +142,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for item in reporte.detalle if reporte %}
-                    <tr class="{{ 'table-danger' if item.estado_stock == 'CRITICO' else 'table-warning' if item.estado_stock == 'BAJO' else '' }}"
-                        data-estado="{{ 'critico' if item.estado_stock == 'CRITICO' else 'ok' }}">
-                        <td><code class="text-muted">{{ item.codigo }}</code></td>
-                        <td>
-                            <strong>{{ item.nombre }}</strong>
-                            <small class="text-muted d-block">{{ item.unidad }}</small>
-                        </td>
-                        <td>
-                            <span class="badge bg-light text-dark border">{{ item.categoria }}</span>
-                        </td>
-                        <td>
-                            <strong class="{{ 'text-danger' if item.estado_stock == 'CRITICO' else 'text-warning' if item.estado_stock == 'BAJO' else 'text-success' }}">
-                                {{ item.stock_actual }}
-                            </strong>
-                        </td>
-                        <td class="text-muted">{{ item.stock_minimo }}</td>
-                        <td>{{ item.proveedor_nombre or 'N/A' }}</td>
-                        <td>
-                            {% set estado_config = {
-                                'OK': {'class': 'bg-success', 'icon': 'check-circle'},
-                                'BAJO': {'class': 'bg-warning text-dark', 'icon': 'exclamation-triangle'},
-                                'CRITICO': {'class': 'bg-danger', 'icon': 'exclamation-triangle-fill'}
-                            } %}
-                            {% set config = estado_config.get(item.estado_stock, {'class': 'bg-secondary', 'icon': 'question-circle'}) %}
-                            <span class="badge {{ config.class }}">
-                                <i class="bi bi-{{ config.icon }} me-1"></i>{{ item.estado_stock }}
-                            </span>
-                        </td>
-                        <td class="text-end">
-                            {% if item.valor_stock %}
-                                <strong>${{ "%.2f"|format(item.valor_stock) }}</strong>
-                            {% else %}
-                                <span class="text-muted">N/A</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="8" class="text-center text-muted py-5">
-                            <i class="bi bi-inbox fs-1 opacity-25 mb-2"></i>
-                            <div>No hay datos de inventario disponibles</div>
-                        </td>
-                    </tr>
-                    {% endfor %}
+                  
                 </tbody>
             </table>
         </div>
