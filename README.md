@@ -31,19 +31,9 @@ pip install -r requirements.txt
 
 El proyecto utiliza un archivo `.env` para gestionar las variables de entorno, como las credenciales de la base de datos y las claves secretas.
 
-1.  Localiza el archivo `credenciales.env` en la raíz del proyecto. Este archivo sirve como plantilla.
-2.  **Crea una copia** de `credenciales.env` y renómbrala a `.env`.
-
-   - **En Windows (desde la terminal):**
-     ```bash
-     copy credenciales.env .env
-     ```
-   - **En macOS y Linux:**
-     ```bash
-     cp credenciales.env .env
-     ```
-
-3.  El archivo `.env` ya contiene las claves necesarias para ejecutar el proyecto en el entorno de desarrollo proporcionado. No necesitas modificarlo para empezar.
+1. Pedi el archivo .env (contiene las credenciales del supabase)
+2. Tiralo en la carpeta principal con el nombre credenciales.env
+3. El archivo `.env` ya contiene las claves necesarias para ejecutar el proyecto en el entorno de desarrollo proporcionado. No necesitas modificarlo para empezar.
 
 **Nota de Seguridad Importante:** El archivo `.env` contiene información sensible. Está excluido del control de versiones (en `.gitignore`) para prevenir que se suba accidentalmente a un repositorio. **Nunca compartas ni publiques el contenido de este archivo.**
 
