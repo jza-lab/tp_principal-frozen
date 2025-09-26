@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h1 class="card-title">Sistema de Gestión PyME Alimenticia</h1>
+                <p class="card-text">Bienvenido al sistema de análisis y visualización de datos para la PyME alimenticia.</p>
+                
+                <div class="row mt-4">
+                    <div class="col-md-3">
+                        <div class="card summary-card">
+                            <div class="card-body">
+                                <i class="bi bi-arrow-left-right text-primary" style="font-size: 2rem;"></i>
+                                <h3>Ingresos/Egresos</h3>
+                                <div class="summary-number">20</div>
+                                <p class="text-muted">Registros del día</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card summary-card">
+                            <div class="card-body">
+                                <i class="bi bi-box-seam text-success" style="font-size: 2rem;"></i>
+                                <h3>Productos</h3>
+                                <div class="summary-number">5</div>
+                                <p class="text-muted">Tipos diferentes</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card summary-card">
+                            <div class="card-body">
+                                <i class="bi bi-people text-info" style="font-size: 2rem;"></i>
+                                <h3>Empleados</h3>
+                                <div class="summary-number">8</div>
+                                <p class="text-muted">En plantilla</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card summary-card">
+                            <div class="card-body">
+                                <i class="bi bi-speedometer2 text-warning" style="font-size: 2rem;"></i>
+                                <h3>OEE</h3>
+                                <div class="summary-number">{{ oee_value }}%</div>
+                                <p class="text-muted">Eficiencia general</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Distribución de OEE por Turno</h5>
+                                <img src="data:image/png;base64,{{ oee_plot_url }}" class="img-fluid" alt="Gráfico OEE">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title">Resumen de OEE</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th>Turno</th>
+                                                <th>OEE</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for item in oee_data %}
+                                            <tr>
+                                                <td>{{ item.fecha.strftime('%d/%m/%Y') }}</td>
+                                                <td>{{ item.turno }}</td>
+                                                <td>{{ "%.1f"|format(item.OEE * 100) }}%</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <a href="/desperdicios" class="btn btn-primary btn-lg">
+                        <i class="bi bi-bar-chart"></i> Ver Análisis de Desperdicios
+                    </a>
+                    <a href="/oee" class="btn btn-warning btn-lg ms-2">
+                        <i class="bi bi-speedometer2"></i> Ver Detalle OEE
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

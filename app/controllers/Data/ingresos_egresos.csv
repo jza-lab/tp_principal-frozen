@@ -1,0 +1,2 @@
+id_registro,id_empleado,nombre,apellido,fecha,hora_ingreso,hora_egreso,area
+1,1,test,prueba,24/09/2025,22:28,,ADMINISTRACION

@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Control de Inventario y Stock</h1>
+            <div>
+                <span class="badge bg-primary fs-6">Total Stock: {{ "%.2f"|format(total_stock) }} KG</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tarjetas de resumen -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-white bg-primary mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Total Items</h5>
+                <p class="card-text fs-2">{{ tabla_stock|length }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-danger mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Productos Vencidos</h5>
+                <p class="card-text fs-2">{{ productos_vencidos }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-white bg-warning mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Por Vencer (≤30 días)</h5>
+                <p class="card-text fs-2">{{ productos_por_vencer }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h3 class="mb-4">Stock por Tipo de Producto</h3>
+            <img src="data:image/png;base64,{{ plot_url1 }}" alt="Stock por Tipo de Producto" class="img-fluid">
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h3 class="mb-4">Estado de Vencimiento</h3>
+            <img src="data:image/png;base64,{{ plot_url2 }}" alt="Estado de Vencimiento" class="img-fluid">
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="chart-container">
+            <h3 class="mb-4">Stock por Proveedor</h3>
+            <img src="data:image/png;base64,{{ plot_url3 }}" alt="Stock por Proveedor" class="img-fluid">
+        </div>
+    </div>
+</div>
+
+<!-- Tabla de productos próximos a vencer -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-warning">
+                <h3>⚠️ Productos Próximos a Vencer (30 días o menos)</h3>
+            </div>
+            <div class="card-body">
+                {% if tabla_proximos %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID Item</th>
+                                <th>Producto</th>
+                                <th>Cantidad (KG)</th>
+                                <th>Lote</th>
+                                <th>Fecha Vencimiento</th>
+                                <th>Días Restantes</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in tabla_proximos %}
+                            <tr>
+                                <td>{{ item['id_item'] }}</td>
+                                <td>{{ item['nombre_item'] }}</td>
+                                <td>{{ item['cantidad (KG)'] }}</td>
+                                <td>{{ item['lote'] }}</td>
+                                <td>{{ item['fecha_vencimiento'].strftime('%d/%m/%Y') }}</td>
+                                <td>
+                                    <span class="badge bg-{% if item['dias_hasta_vencer'] < 0 %}danger{% elif item['dias_hasta_vencer'] < 7 %}warning{% else %}info{% endif %}">
+                                        {{ item['dias_hasta_vencer'] }} días
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary">Revisar</button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-success">
+                    No hay productos próximos a vencer en los próximos 30 días.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabla completa de inventario -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3>Inventario Completo</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped" id="tablaInventario">
+                        <thead>
+                            <tr>
+                                <th>ID Item</th>
+                                <th>Producto</th>
+                                <th>Fecha Ingreso</th>
+                                <th>Lote</th>
+                                <th>Proveedor</th>
+                                <th>Cantidad (KG)</th>
+                                <th>Fecha Vencimiento</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in tabla_stock %}
+                            <tr>
+                                <td>{{ item['id_item'] }}</td>
+                                <td>{{ item['nombre_item'] }}</td>
+                                <td>{{ item['fecha_ingreso'].strftime('%d/%m/%Y') }}</td>
+                                <td>{{ item['lote'] }}</td>
+                                <td>{{ item['proveedor_id'] }}</td>
+                                <td>{{ item['cantidad (KG)'] }}</td>
+                                <td>{{ item['fecha_vencimiento'].strftime('%d/%m/%Y') }}</td>
+                                <td>
+                                    <span class="badge bg-{% if item['estado_vencimiento'] == 'Vencido' %}danger{% elif item['estado_vencimiento'] == 'Por vencer (≤30 días)' %}warning{% elif item['estado_vencimiento'] == 'Próximo a vencer (31-90 días)' %}info{% else %}success{% endif %}">
+                                        {{ item['estado_vencimiento'] }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Inicializar DataTables para la tabla de inventario
+    $(document).ready(function() {
+        $('#tablaInventario').DataTable({
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/es-ES.json'
+            },
+            pageLength: 10,
+            order: [[6, 'asc']] // Ordenar por fecha de vencimiento
+        });
+    });
+</script>
+{% endblock %}
