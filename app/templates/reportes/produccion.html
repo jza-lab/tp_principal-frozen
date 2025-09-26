@@ -20,7 +20,7 @@
 
 <!-- Filtros -->
 <div class="card mb-4">
-    <div class="card-body">
+    <div class="card-body card-filter">
         <form method="get" action="{{ url_for('reportes.produccion') }}">
             <div class="row g-3 align-items-end">
                 <div class="col-md-3">
@@ -34,14 +34,14 @@
                            value="{{ fecha_fin or '' }}">
                 </div>
                 <div class="col-md-3">
-                    <button type="submit" class="btn btn-primary w-100">
+                    <button type="submit" class="btn btn-outline-secondary w-100">
                         <i class="bi bi-funnel me-1"></i>Generar Reporte
                     </button>
                 </div>
                 <div class="col-md-3">
                     {% if reporte and not reporte.error %}
                     <div class="text-muted small">
-                        {{ reporte.total_ordenes_completadas }} órdenes encontradas
+                        <p>{{ reporte.total_ordenes_completadas }} órdenes encontradas</p>
                     </div>
                     {% endif %}
                 </div>

@@ -14,7 +14,7 @@
 
 <!-- Filtros -->
 <div class="card mb-4">
-    <div class="card-body">
+    <div class="card-body card-filter">
         <form method="get" action="{{ url_for('insumo.listar') }}">
             <div class="row g-3 align-items-end">
                 <div class="col-md-4">
@@ -40,7 +40,7 @@
                 </div>
                 <div class="col-md-3">
                     <div class="text-muted small">
-                        {{ insumos|length }} insumos encontrados
+                        <p>{{ insumos|length }} insumos encontrados</p>
                     </div>
                 </div>
             </div>

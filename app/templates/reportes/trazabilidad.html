@@ -18,7 +18,7 @@
             Buscar Trazabilidad
         </h5>
     </div>
-    <div class="card-body">
+    <div class="card-body card-filter">
         <form method="get" action="{{ url_for('reportes.trazabilidad') }}">
             <div class="row g-3">
                 <div class="col-md-6">
@@ -31,7 +31,7 @@
                                placeholder="ej: LT-CM001-20231120-A1B2" 
                                value="{{ request.args.get('lote', '') }}">
                     </div>
-                    <div class="form-text">Ingrese el código completo del lote a consultar</div>
+                    <div class="form-text"><p>Ingrese el código completo del lote a consultar</p></div>
                 </div>
                 
                 <div class="col-md-3">
