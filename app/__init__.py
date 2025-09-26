@@ -1,8 +1,6 @@
 from flask import Flask, redirect, url_for, session, flash
 from flask_cors import CORS
 from app.config import Config
-# from app.views.insumo import insumos_bp # JULES: Comentado para evitar conflicto con el nuevo blueprint de insumos
-# from app.views.inventario import inventario_bp # JULES: Comentado para evitar conflicto con el nuevo blueprint de insumos
 from app.routes.usuario_routes import usuario_bp
 from app.routes.insumo_routes import insumo_bp
 from app.routes.asistencia_routes import asistencia_bp
@@ -39,8 +37,6 @@ def create_app():
     })
 
     # Registrar blueprints
-    # app.register_blueprint(insumos_bp) # JULES: Comentado para evitar conflicto
-    # app.register_blueprint(inventario_bp) # JULES: Comentado para evitar conflicto
     app.register_blueprint(usuario_bp)
     app.register_blueprint(insumo_bp)
     app.register_blueprint(asistencia_bp)
@@ -62,9 +58,6 @@ def create_app():
     # Ruta raíz para redirigir al login (o al dev-login)
     @app.route('/')
     def index():
-        # JULES: Cambiado para apuntar a dev-login para pruebas.
-        # Cambiar de vuelta a 'usuario.login' para producción.
-        #return redirect(url_for('dev_login'))
         session.clear()
         return redirect(url_for('usuario.login'))
 

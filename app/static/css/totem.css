@@ -1,0 +1,63 @@
+body {
+    background-color: #f0f2f5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: sans-serif;
+}
+
+.totem-container {
+    width: 100%;
+    max-width: 400px;
+}
+
+.totem-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+.totem-header {
+    background-color: #343a40;
+    color: #fff;
+    padding: 20px;
+    text-align: center;
+}
+
+.totem-body {
+    padding: 30px;
+    text-align: center;
+}
+
+#guia {
+    color: #6c757d;
+    margin-bottom: 20px;
+}
+
+.camaraVideo {
+    margin-bottom: 20px;
+}
+
+#video {
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    color: #fff;
+    cursor: pointer;
+    margin: 0 10px;
+}
+
+.btn-success {
+    background-color: #28a745;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+}
