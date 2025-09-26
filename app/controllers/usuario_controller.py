@@ -35,9 +35,9 @@ class UsuarioController(BaseController):
         except Exception as e:
             return {'success': False, 'error': f'Error interno: {str(e)}'}
 
-    def autenticar_usuario(self, email: str, password: str) -> Optional[Dict]:
-        """Autentica a un usuario por email y contraseña."""
-        user_result = self.model.find_by_email(email)
+    def autenticar_usuario(self, legajo: str, password: str) -> Optional[Dict]:
+        """Autentica a un usuario por legajo y contraseña."""
+        user_result = self.model.find_by_legajo(legajo)
         if user_result.get('success') and user_result.get('data'):
             user_data = user_result['data']
             if check_password_hash(user_data['password_hash'], password):
