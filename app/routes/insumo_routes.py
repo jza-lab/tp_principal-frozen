@@ -39,18 +39,38 @@ def nuevo():
     """Crear nuevo insumo"""
     if request.method == 'POST':
         try:
+            codigo=request.form['codigo_interno']
+            nombre=request.form['nombre']
+            unidad_medida=request.form['unidad_medida']
+            categoria=request.form['categoria']
+            stock_min=float(request.form['stock_min'])
+            stock_max=float(request.form['stock_max'])
+            vida_util_dias= request.form['dias_vida_util']
+            tem_recomendada=float(request.form['temperatura_conservacion'])
+            descripcion=request.form['descripcion']
+            es_critico='es_critico' in request.form
+            requiere_certificacion='requiere_certificacion' in request.form 
+
             insumo_service.crear_insumo(
-                codigo=request.form['codigo'],
-                nombre=request.form['nombre'],
-                unidad_medida=request.form['unidad_medida'],
-                categoria=request.form['categoria'],
-                stock_minimo=float(request.form['stock_minimo'])
+                codigo,
+                nombre,
+                unidad_medida,
+                categoria,
+                stock_min,
+                stock_max,
+                vida_util_dias,
+                tem_recomendada,
+                descripcion,
+                es_critico,
+                requiere_certificacion
             )
             flash('Insumo creado exitosamente', 'success')
             return redirect(url_for('insumo.listar'))
-            
+        
+        except KeyError as e:
+            flash(f'Error de Formulario: Falta el campo {str(e)}.', 'error')
         except ValueError as e:
-            flash(str(e), 'error')
+            flash(f'Error de Validación: {str(e)}', 'error')
         except Exception as e:
             flash(f'Error al crear insumo: {e}', 'error')
     
@@ -64,11 +84,26 @@ def modificar(codigo):
 
     if request.method == 'POST':
         try:
-            ##Falta hacer el codigo
-
-            flash('Materia prima modificada exitosamente', 'success')
-            return redirect(url_for('insumo.listar')) ##Cambiar html del front
+            try:
+                insumo_service.modificar_insumo(
+                    nombre=request.form['nombre'],
+                    unidad_medida=request.form['unidad_medida'],
+                    categoria=request.form['categoria'],
+                    stock_minimo=float(request.form['stock_min']),
+                    vida_util_dias= request.form['dias_vida_util'],
+                    tem_recomendada=float(request.form['temperatura_conservacion']),
+                    descripcion=request.form['descripcion'],
+                    es_critico=request.form['es_critico'],
+                    requiere_certificacion=request.form['requiere_certificacion'],
+                )
+                flash('Insumo modificado exitosamente', 'success')
+                return redirect(url_for('insumo.listar'))
                 
+            except ValueError as e:
+                    flash(str(e), 'error')
+            except Exception as e:
+                    flash(f'Error al crear insumo: {e}', 'error')
+
         except ValueError as e:
             flash(str(e), 'error')
         except Exception as e:
@@ -132,7 +167,6 @@ def alertas():
 @insumo_bp.route('/<codigo>/lote/nuevo', methods=['GET', 'POST'])
 def registrar_lote(codigo):
     """Registrar un nuevo lote para un insumo."""
-    print(codigo)
     insumo = insumo_repository.obtener_por_codigo(codigo)
 
     if not insumo:

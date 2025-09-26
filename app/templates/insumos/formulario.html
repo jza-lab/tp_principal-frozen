@@ -49,7 +49,7 @@ Agregar nuevo insumo al catálogo
                         <div class="col-md-6">
                             <label for="categoria" class="form-label">Categoría <span
                                     class="text-danger">*</span></label>
-                            <select class="form-select" name="Categoria" id="categoria" required>
+                            <select class="form-select" name="categoria" id="categoria" required>
                                 <option value="">Seleccionar unidad...</option>
                                 <option value="carnes" {% if insumo and insumo.categoria=="Carnes" %}selected{% endif
                                     %}>
@@ -110,6 +110,12 @@ Agregar nuevo insumo al catálogo
                             <input type="number" step="1" class="form-control" name="stock_min" id="stock_min"
                                 value="{{ insumo.stock_min if insumo else '' }}" required>
                             <div class="form-text">Cantidad mínima que debe mantenerse</div>
+
+                            <label for="stock_max" class="form-label">Stock Máximo <span
+                                    class="text-danger">*</span></label>
+                            <input type="number" step="1" class="form-control" name="stock_max" id="stock_max"
+                                value="{{ insumo.stock_max if insumo else '' }}" required>
+                            <div class="form-text">Cantidad máxima que debe mantenerse</div>
                         </div>
 
                         <div class="col-md-6">
@@ -147,17 +153,17 @@ Agregar nuevo insumo al catálogo
 
                         <div class="col-12">
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="es_perecedero" id="es_perecedero"
-                                    value="true" {% if not insumo or insumo.es_perecedero %}checked{% endif %}>
-                                <label class="form-check-label" for="es_perecedero">
-                                    El insumo es perecedero
+                                <input class="form-check-input" type="checkbox" name="requiere_certificacion" id="requiere_certificacion"
+                                    value="false" {% if not insumo or insumo.requiere_certificacion %}checked{% endif %}>
+                                <label class="form-check-label" for="requiere_certificacion">
+                                    Requiere certificacion
                                 </label>
-                                <div class="form-text">Marcar si requiere control de fechas de vencimiento</div>
+                                <div class="form-text">Marcar si requiere certificacion adicional</div>
                             </div>
                         </div>
                         <div class="col-12">
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="es_critio" id="es_critico"
+                                <input class="form-check-input" type="checkbox" name="es_critico" id="es_critico"
                                     value="true" {% if not insumo or insumo.es_critico %}checked{% endif %}>
                                 <label class="form-check-label" for="es_critico">
                                     Es un insumo critico para la produccion

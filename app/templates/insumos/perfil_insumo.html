@@ -19,7 +19,20 @@
             </div>
             <div class="card-body">
                 {% if insumo %}
-
+                    {{ insumo.nombre }}
+                    {{ insumo.codigo_interno }}
+                    {{ insumo.unidad_medida }}
+                    {{ insumo.categoria }}
+                    {{ insumo.descripcion }}
+                    {{ insumo.temp_recomendada }}
+                    {{ insumo.stock_min }}
+                    {{ insumo.stock_max }}
+                    {{ insumo.vida_util_dias }}
+                    {{ insumo.es_critico }}
+                    {{ insumo.requiere_certificacion }}
+                    {{ insumo.created_at }}
+                    {{ insumo.updated_at }}
+                    {{ insumo.activo }}
                 {% endif %}
             </div>
         </div>

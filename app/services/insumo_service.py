@@ -12,8 +12,9 @@ class InsumoService:
         self.lote_repo = lote_repository
     
     def crear_insumo(self, codigo: str, nombre: str, unidad_medida: str,
-                          categoria: str, stock_min: float) -> Insumo:
-        
+                          categoria: str, stock_min: float, stock_max:float, vida_util_dias: int,
+                          tem_recomendada:float, descripcion:str, es_critico:bool, requiere_certificacion:bool) -> Insumo:
+        print("c")
         if self.insumo_repo.obtener_por_codigo(codigo):
             raise ValueError(f"Ya existe un insumo con código {codigo}")
         
@@ -21,18 +22,55 @@ class InsumoService:
             raise ValueError("Unidad de medida no válida")
         
         insumo = Insumo(
-            id_insumo=None, # La BD lo genera
-            codigo_interno=codigo,
             nombre=nombre,
             unidad_medida=unidad_medida,
+            codigo_interno=codigo,
+            codigo_ean= 'test',
             categoria=categoria,
+            descripcion=descripcion,
+            tem_recomendada=tem_recomendada,
             stock_min=stock_min,
+            stock_max= stock_max,
+            vida_util_dias=vida_util_dias,
+            es_critico= es_critico,
+            requiere_certificacion= requiere_certificacion,
             created_at=datetime.now(),
             updated_at=datetime.now(),
             activo=True
         )
         
         return self.insumo_repo.create(insumo)
+
+    def modificar_insumo(self, codigo: str, nombre: str, unidad_medida: str,
+                          categoria: str, stock_min: float, vida_util_dias: int,
+                          tem_recomendada:float, descripcion:str, es_critico:bool, requiere_certificacion:bool) -> Insumo:
+        insumo = self.insumo_repo.obtener_por_codigo(codigo)
+        if insumo:
+            insumoModificado = Insumo(
+                id_insumo=insumo.id_insumo,
+                nombre=nombre,
+                unidad_medida=unidad_medida,
+                codigo_interno=codigo,
+                codigo_ean= insumo.codigo_ean,
+                categoria=categoria,
+                descripcion=descripcion,
+                tem_recomendada=tem_recomendada,
+                stock_min=stock_min,
+                stock_max= insumo.stock_max,
+                vida_util_dias=vida_util_dias,
+                es_critico= es_critico,
+                requiere_certificacion= requiere_certificacion,
+                activo= insumo.activo,
+                created_at=insumo.created_at,
+                updated_at= datetime.now()
+            )
+
+        else:
+            raise ValueError(f"No existe un insumo con código {codigo}")
+        
+        return self.insumo_repo.update(insumo.id_insumo, insumoModificado)
+
+
 
     def registrar_ingreso_lote(self, insumo_id: int, proveedor_id: int, cantidad: float,
                                costo_por_unidad: float, fecha_vencimiento: Optional[datetime] = None,
