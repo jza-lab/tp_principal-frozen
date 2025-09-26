@@ -8,9 +8,10 @@ class UsuarioService:
     def __init__(self):
         self.repository = UsuarioRepository()
     
-    def autenticar(self, email: str, password: str) -> Optional[Usuario]:
-        """Autenticar usuario por email y contraseña."""
-        usuario = self.repository.obtener_por_email(email)
+    def autenticar(self, legajo: str, password: str) -> Optional[Usuario]:
+        """Autenticar usuario por legajo y contraseña."""
+        usuario = self.repository.obtener_por_legajo(legajo)
+
         if usuario and usuario.activo and usuario.check_password(password):
             # Opcional: Actualizar 'ultimo_login' al autenticar
             # self.repository.update(usuario.id, {'ultimo_login': datetime.now()})
@@ -18,14 +19,14 @@ class UsuarioService:
         
         return None
     
-    def crear_usuario(self, email: str, password: str,
+    def crear_usuario(self, email: str, legajo: str, password: str,
                      nombre: str, apellido: str, rol: str, **kwargs) -> Usuario:
         """
         Crear un nuevo usuario con campos adicionales opcionales.
         **Puede contener: numero_empleado, dni, telefono, direccion, etc.
         """
-        if self.repository.obtener_por_email(email):
-            raise ValueError(f"El email '{email}' ya está en uso.")
+        if self.repository.obtener_por_legajo(legajo):
+            raise ValueError(f"El legajo '{legajo}' ya está en uso.")
 
         usuario = Usuario(
             id=None,
@@ -36,7 +37,7 @@ class UsuarioService:
             rol=rol,
             activo=True,
             created_at=datetime.now(),
-            numero_empleado=kwargs.get('numero_empleado'),
+            legajo=kwargs.get('legajo'),
             dni=kwargs.get('dni'),
             telefono=kwargs.get('telefono'),
             direccion=kwargs.get('direccion'),

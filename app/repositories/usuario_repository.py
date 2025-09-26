@@ -27,7 +27,7 @@ class UsuarioRepository(BaseRepository[Usuario]):
             rol=data.get('rol'),
             activo=data.get('activo', True),
             created_at=to_datetime(data.get('created_at')),
-            numero_empleado=data.get('numero_empleado'),
+            legajo=data.get('legajo'),
             dni=data.get('dni'),
             telefono=data.get('telefono'),
             direccion=data.get('direccion'),
@@ -55,6 +55,10 @@ class UsuarioRepository(BaseRepository[Usuario]):
 
         return self._dict_to_model(response.data[0])
 
-    def obtener_por_email(self, email: str) -> Optional[Usuario]:
-        """Recupera un usuario por su dirección de correo electrónico."""
-        return self.get_by('email', email)
+    def obtener_por_legajo(self, legajo: str) -> Optional[Usuario]:
+        """Obtener un usuario por su número de empleado(legajo)."""
+        return self.get_by('legajo', legajo)
+    
+    def obtener_por_dni(self, legajo: str) -> Optional[Usuario]:
+        """Obtener un usuario por su número de empleado(legajo)."""
+        return self.get_by('legajo', legajo)
