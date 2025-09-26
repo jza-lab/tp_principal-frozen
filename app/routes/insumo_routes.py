@@ -129,10 +129,12 @@ def alertas():
     alertas_stock = insumo_service.obtener_alertas_stock_bajo()
     return render_template('insumos/alertas.html', alertas=alertas_stock)
 
-@insumo_bp.route('/<uuid:id>/lote/nuevo', methods=['GET', 'POST'])
-def registrar_lote(id: UUID):
+@insumo_bp.route('/<codigo>/lote/nuevo', methods=['GET', 'POST'])
+def registrar_lote(codigo):
     """Registrar un nuevo lote para un insumo."""
-    insumo = insumo_repository.get_by_id(id)
+    print(codigo)
+    insumo = insumo_repository.obtener_por_codigo(codigo)
+
     if not insumo:
         flash('Insumo no encontrado.', 'error')
         return redirect(url_for('insumo.listar'))
