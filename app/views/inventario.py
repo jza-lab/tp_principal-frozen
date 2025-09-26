@@ -114,18 +114,21 @@ def obtener_lotes():
             'error': 'Error interno del servidor'
         }), 500
 
-@inventario_bp.route('/lote/<string:id_lote>/cantidad', methods=['PATCH'])
-def actualizar_cantidad_lote(id_lote):
+@inventario_bp.route('/lote/<string:id_lote>', methods=['PATCH'])
+def actualizar_lote_parcial(id_lote):
     """
-    Actualizar cantidad de un lote específico
+    Actualizar campos específicos de un lote
     ---
-    PATCH /api/inventario/lote/{id_lote}/cantidad
+    PATCH /api/inventario/lote/{id_lote}
     Content-Type: application/json
 
-    Body:
+    Body (actualización parcial - enviar solo los campos a modificar):
     {
-        "nueva_cantidad": "decimal (required)",
-        "motivo": "string (optional)"
+        "cantidad_actual": 95.5,
+        "ubicacion_fisica": "Nueva ubicación",
+        "precio_unitario": 22.50,
+        "f_vencimiento": "2024-12-31",
+        "observaciones": "Lote reubicado"
     }
     """
     try:
@@ -138,28 +141,29 @@ def actualizar_cantidad_lote(id_lote):
         if not request.json:
             return jsonify({'success': False, 'error': 'Body JSON requerido'}), 400
 
-        nueva_cantidad = request.json.get('nueva_cantidad')
-        motivo = request.json.get('motivo', '')
+        # Validar que al menos un campo esté presente
+        campos_permitidos = ['cantidad_actual', 'ubicacion_fisica', 'precio_unitario',
+                           'numero_lote_proveedor', 'f_vencimiento', 'observaciones']
 
-        if nueva_cantidad is None:
+        campos_presentes = [campo for campo in campos_permitidos if campo in request.json]
+
+        if not campos_presentes:
             return jsonify({
                 'success': False,
-                'error': 'El campo nueva_cantidad es requerido'
+                'error': f'Debe proporcionar al menos uno de estos campos: {", ".join(campos_permitidos)}'
             }), 400
 
-        try:
-            nueva_cantidad = float(nueva_cantidad)
-        except (ValueError, TypeError):
-            return jsonify({
-                'success': False,
-                'error': 'nueva_cantidad debe ser un número válido'
-            }), 400
-
-        response, status = inventario_controller.actualizar_cantidad_lote(id_lote, nueva_cantidad, motivo)
+        response, status = inventario_controller.actualizar_lote_parcial(id_lote, request.json)
         return jsonify(response), status
 
+    except ValidationError as e:
+        return jsonify({
+            'success': False,
+            'error': 'Datos inválidos',
+            'details': e.messages
+        }), 400
     except Exception as e:
-        logger.error(f"Error inesperado en actualizar_cantidad_lote: {str(e)}")
+        logger.error(f"Error inesperado en actualizar_lote_parcial: {str(e)}")
         return jsonify({
             'success': False,
             'error': 'Error interno del servidor'

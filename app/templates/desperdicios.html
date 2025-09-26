@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Análisis de Desperdicios por Producto</h1>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h3 class="mb-4">Distribución Porcentual de Desperdicios</h3>
+            <img src="data:image/png;base64,{{ plot_url }}" alt="Gráfico de Desperdicios" class="img-fluid">
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="chart-container">
+            <h3 class="mb-4">Cantidad de Desperdicio por Producto (KG)</h3>
+            <img src="data:image/png;base64,{{ plot_url2 }}" alt="Gráfico de Barras de Desperdicios" class="img-fluid">
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3>Detalle de Desperdicios por Producto</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Desperdicio Total (KG)</th>
+                                <th>Porcentaje</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in tabla_datos %}
+                            <tr>
+                                <td>{{ item['producto'] }}</td>
+                                <td>{{ "%.2f"|format(item['desperdicio']) }} KG</td>
+                                <td>{{ "%.1f"|format((item['desperdicio'] / tabla_datos|sum(attribute='desperdicio')) * 100) }}%</td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="table-primary">
+                                <td><strong>Total</strong></td>
+                                <td><strong>{{ "%.2f"|format(tabla_datos|sum(attribute='desperdicio')) }} KG</strong></td>
+                                <td><strong>100%</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title">Interpretación de Resultados</h4>
+                <p class="card-text">
+                    El análisis de desperdicios permite identificar oportunidades de mejora en los procesos productivos.
+                    Los productos con mayor porcentaje de desperdicio representan las áreas con mayor potencial de optimización.
+                </p>
+                <p class="card-text">
+                    Se recomienda revisar los procesos de elaboración de los productos con mayor índice de desperdicio
+                    y considerar acciones correctivas como capacitación del personal, ajuste de fórmulas o mejora de equipos.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
