@@ -16,12 +16,13 @@
     --accent-orange: #fd7e14;
     --accent-purple: #6f42c1;
     --accent-red: #e74a3b;
+
 }
 
 body {
     font-family: 'Inter', sans-serif;
     background-color: var(--frozen-bg);
-    background-image: linear-gradient(180deg, hsl(210, 20%, 98%) 0%, var(--frozen-bg) 100%);
+    background-image: white;
     color: var(--frozen-text-primary);
     line-height: 1.6;
     padding-top: 50px;
