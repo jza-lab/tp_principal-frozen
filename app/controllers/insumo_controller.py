@@ -134,6 +134,25 @@ class InsumoController(BaseController):
             logger.error(f"Error eliminando insumo: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
+
+    def eliminar_insumo_logico(self, id_insumo: str) -> tuple:
+        """Eliminar un insumo del catálogo"""
+        try:
+            
+            data = {'activo': False}
+            result = self.insumo_model.update(id_insumo, data, 'id_insumo')
+
+            if result['success']:
+                logger.info(f"Insumo eliminado: {id_insumo}")
+                return self.success_response(message=result['message'])
+            else:
+                return self.error_response(result['error'])
+
+        except Exception as e:
+            logger.error(f"Error eliminando insumo: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
+
     def obtener_con_stock(self, filtros: Optional[Dict] = None) -> tuple:
         """Obtener insumos con información de stock consolidado"""
         try:

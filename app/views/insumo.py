@@ -150,12 +150,12 @@ def actualizar_insumo(id_insumo):
             'error': 'Error interno del servidor'
         }), 500
 
-@insumos_bp.route('/catalogo/<string:id_insumo>', methods=['DELETE'])
+@insumos_bp.route('/catalogo/eliminar/<string:id_insumo>', methods=['DELETE'])
 def eliminar_insumo(id_insumo):
     """
     Eliminar un insumo del catálogo
     ---
-    DELETE /api/insumos/catalogo/{id_insumo}?forzar=false
+    DELETE /api/insumos/catalogo/eliminar/{id_insumo}?forzar=false
     """
     try:
         if not validate_uuid(id_insumo):
@@ -166,7 +166,7 @@ def eliminar_insumo(id_insumo):
 
         forzar = request.args.get('forzar', 'false').lower() == 'true'
 
-        response, status = insumo_controller.eliminar_insumo(id_insumo, forzar)
+        response, status = insumo_controller.eliminar_insumo_logico(id_insumo)
         return jsonify(response), status
 
     except Exception as e:
