@@ -3,3 +3,7 @@ supabase==1.0.4
 python-dotenv==1.0.0
 flask-cors==4.0.0
 marshmallow==3.20.1
+opencv-python-headless==4.8.0.76
+numpy<2.0
+face_recognition
+rpyc
