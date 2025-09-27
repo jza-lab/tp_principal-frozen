@@ -125,7 +125,8 @@ class FacialController:
         """Registra el egreso de un usuario en un archivo CSV."""
         try:
             csv_path = os.path.join(self.save_dir, "ingresos_egresos.csv")
-            if not os.path.exists(csv_path): return
+            if not os.path.exists(csv_path):
+                return
 
             with open(csv_path, 'r', newline='', encoding='utf-8') as f:
                 reader = csv.DictReader(f)

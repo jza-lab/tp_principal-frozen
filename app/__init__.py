@@ -9,7 +9,6 @@ from app.views.insumo import insumos_bp
 from app.views.inventario import inventario_bp
 from app.views.auth_routes import auth_bp
 from app.views.admin_usuario_routes import admin_usuario_bp
-from app.views.facial_routes import facial_bp
 
 def create_app():
     """Factory para crear la aplicación Flask"""
@@ -40,7 +39,6 @@ def create_app():
     app.register_blueprint(inventario_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_usuario_bp)
-    app.register_blueprint(facial_bp)
 
     # Ruta de health check
     @app.route('/api/health')

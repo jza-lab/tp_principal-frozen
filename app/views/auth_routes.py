@@ -1,13 +1,13 @@
 from flask import Blueprint, session, request, redirect, url_for, flash, render_template
 from app.controllers.usuario_controller import UsuarioController
-from app.controllers.facial_controller import FacialLogicController
+from app.controllers.facial_controller import FacialController
 
 # Blueprint para la autenticación de usuarios
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 # Instanciar controladores
 usuario_controller = UsuarioController()
-facial_logic_controller = FacialLogicController()
+facial_controller = FacialController()
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -30,7 +30,7 @@ def login():
             session['user_data'] = usuario # Guardar para el registro de egreso
 
             # Registrar ingreso en CSV
-            facial_logic_controller.registrar_ingreso_csv(usuario)
+            facial_controller.registrar_ingreso_csv(usuario)
 
             # Limpiar sesión de rostro pendiente
             session.pop("pending_face_user", None)
@@ -48,7 +48,7 @@ def login():
 def logout():
     """Cierra la sesión del usuario actual."""
     if 'user_data' in session:
-        facial_logic_controller.registrar_egreso_csv(session['user_data'])
+        facial_controller.registrar_egreso_csv(session['user_data'])
         flash("Egreso registrado correctamente. Sesión cerrada.", "info")
     else:
         flash("Sesión cerrada.", "info")
