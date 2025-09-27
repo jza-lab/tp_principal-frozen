@@ -66,8 +66,8 @@ def obtener_insumos():
 
         # Limpiar filtros vacíos
         filtros = {k: v for k, v in filtros.items() if v is not None and v != ''}
-        response= insumo_controller.obtener_insumos(filtros)
-        return render_template('insumos/listar.html', response)
+        insumos= insumo_controller.obtener_insumos(filtros)
+        return render_template('insumos/listar.html', insumos=insumos)
 
     except Exception as e:
         logger.error(f"Error inesperado en obtener_insumos: {str(e)}")

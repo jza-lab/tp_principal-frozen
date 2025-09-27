@@ -7,7 +7,7 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Catálogo de Insumos</h1>
     <div class="btn-toolbar">
-        <a href="{{ url_for('insumo.nuevo') }}" class="btn btn-primary">
+        <a href="{{ url_for('insumos_api.crear_insumo') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Agregar Nuevo Insumo
         </a>
     </div>
@@ -16,7 +16,7 @@
 <!-- Filtros -->
 <div class="card mb-4">
     <div class="card-body card-filter">
-        <form method="get" action="{{ url_for('insumo.listar') }}">
+        <form method="get" action="{{ url_for('insumos_api.obtener_insumos') }}">
             <div class="row g-3 align-items-end">
                 <div class="col-md-4">
                     <label for="busqueda" class="form-label">Buscar</label>
@@ -69,13 +69,13 @@
                     <div class="d-flex justify-content-between align-items-center mb-3 stock-info">
                         <div>
                             <span class="stock-label">Stock</span>
-                            <span class="stock-value {{ 'text-danger' if insumo.esta_en_stock_minimo() else 'text-success' }}">
+                            <span class="stock-value">
                                 {{ insumo.stock_actual }}
                             </span>
                             <span class="stock-min text-muted">/ Min: {{ insumo.stock_min }}</span>
                         </div>
                         <div>
-                            {% if insumo.esta_en_stock_minimo() %}
+                            {% if True %}
                             <span class="badge bg-danger-soft text-danger">
                                 <i class="bi bi-exclamation-triangle me-1"></i>Crítico
                             </span>
@@ -88,19 +88,19 @@
                     </div>
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
-                        <a href="{{ url_for('insumo.registrar_lote', codigo=insumo.codigo_interno) }}"
+                        <a href=""
                            class="btn btn-sm btn-outline-success" title="Registrar Lote">
                             <i class="bi bi-plus-square"></i>
                         </a>
-                        <a href="{{ url_for('insumo.modificar', codigo=insumo.codigo_interno) }}"
+                        <a href="{{ url_for('insumos_api.actualizar_insumo', id_insumo=insumo.id_insumo) }}"
                            class="btn btn-sm btn-outline-primary" title="Modificar insumo">
                             <i class="bi bi-pencil"></i>
                         </a>
-                        <a href="{{ url_for('insumo.eliminar', codigo=insumo.codigo_interno) }}"
+                        <a href="{{ url_for('insumos_api.eliminar_insumo', id_insumo=insumo.id_insumo) }}"
                            class="btn btn-sm btn-outline-danger" title="Eliminar insumo">
                             <i class="bi bi-trash"></i>
                         </a>
-                        <a href="{{ url_for('insumo.detalle', codigo=insumo.codigo_interno) }}"
+                        <a href="{{ url_for('insumos_api.obtener_insumo_por_id', id_insumo=insumo.id_insumo) }}"
                            class="btn btn-sm btn-outline-primary" title="Detalle">
                             <i class="bi bi-eye"></i>
                         </a>
