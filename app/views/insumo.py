@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, render_template, request, jsonify
 from app.controllers.insumo_controller import InsumoController
 from app.utils.validators import validate_uuid, validate_pagination
 from marshmallow import ValidationError
@@ -66,9 +66,8 @@ def obtener_insumos():
 
         # Limpiar filtros vacíos
         filtros = {k: v for k, v in filtros.items() if v is not None and v != ''}
-
-        response, status = insumo_controller.obtener_insumos(filtros)
-        return jsonify(response), status
+        response= insumo_controller.obtener_insumos(filtros)
+        return render_template('insumos/listar.html', response)
 
     except Exception as e:
         logger.error(f"Error inesperado en obtener_insumos: {str(e)}")
