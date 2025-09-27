@@ -1,6 +1,6 @@
-from controllers.base_controller import BaseController
-from models.usuario import UsuarioModel
-from schemas.usuario_schema import UsuarioSchema
+from app.controllers.base_controller import BaseController
+from app.models.usuario import UsuarioModel
+from app.schemas.usuario_schema import UsuarioSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash

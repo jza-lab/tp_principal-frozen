@@ -2,7 +2,7 @@ from dataclasses import dataclass, asdict
 from typing import Optional, Dict
 from datetime import datetime, date
 from werkzeug.security import generate_password_hash, check_password_hash
-from models.base_model import BaseModel
+from app.models.base_model import BaseModel
 import logging
 
 logger = logging.getLogger(__name__)
