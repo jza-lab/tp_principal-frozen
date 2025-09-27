@@ -37,9 +37,8 @@ class InsumoController(BaseController):
             if result['success']:
                 logger.info(f"Insumo creado exitosamente: {result['data']['id_insumo']}")
 
-                # ✅ SIMPLIFICADO: El esquema ya maneja la serialización
                 return self.success_response(
-                    data=self.schema.dump(result['data']),  # Marshmallow se encarga
+                    data=self.schema.dump(result['data']),  
                     message='Insumo creado exitosamente',
                     status_code=201
                 )
