@@ -15,24 +15,28 @@
     <div class="col-lg-8 col-xl-9">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Detalles del Insumo: {{insumo.nombre}}</h5>
+                <h5 class="mb-0">Detalles del Insumo</h5>
             </div>
             <div class="card-body">
                 {% if insumo %}
-                    {{ insumo.nombre }}
-                    {{ insumo.codigo_interno }}
-                    {{ insumo.unidad_medida }}
-                    {{ insumo.categoria }}
-                    {{ insumo.descripcion }}
-                    {{ insumo.temp_recomendada }}
-                    {{ insumo.stock_min }}
-                    {{ insumo.stock_max }}
-                    {{ insumo.vida_util_dias }}
-                    {{ insumo.es_critico }}
-                    {{ insumo.requiere_certificacion }}
-                    {{ insumo.created_at }}
-                    {{ insumo.updated_at }}
-                    {{ insumo.activo }}
+                <h1 class="h2">{{ insumo.nombre }}</h1>
+                <h2 class="h3 subtitulo">{{ insumo.codigo_interno }} - {{ insumo.categoria }}</h2>
+                <div class="col-12">
+                    <div class=" subtitulo form-control-plaintext" name="descripcion" id="descripcion">
+                        {{ insumo.descripcion if insumo else 'No hay descripcion disponible' }}
+                    </div>
+                </div>
+
+                {{ insumo.unidad_medida }}
+                {{ insumo.temp_recomendada }}
+                {{ insumo.stock_min }}
+                {{ insumo.stock_max }}
+                {{ insumo.vida_util_dias }}
+                {{ insumo.es_critico }}
+                {{ insumo.requiere_certificacion }}
+                {{ insumo.created_at }}
+                {{ insumo.updated_at }}
+                {{ insumo.activo }}
                 {% endif %}
             </div>
         </div>
@@ -50,7 +54,8 @@
                 <div class="alert alert-light border">
                     <h6>Consejos importantes:</h6>
                     <ul class="mb-0 small">
-                        <li>En caso de algún problema crítico como contaminación, contactar a aquellos que recibieron productos</li>
+                        <li>En caso de algún problema crítico como contaminación, contactar a aquellos que recibieron
+                            productos</li>
                         <li>Las fechas de vencimiento son aproximadas según la vida util de la materia</li>
                         <li>Procure tener el stock por arriba de la cantidad minima fijada</li>
                     </ul>
