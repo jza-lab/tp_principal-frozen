@@ -86,8 +86,8 @@ def panel_totem():
     from datetime import datetime
     return render_template("panel_totem.html", now=datetime.now())
 
-# ====== RUTAS WEB (para acceso desde navegador) ======
 
+# ====== RUTAS WEB (para acceso desde navegador) ======
 @facial_bp.route("/facial/login_web_page")
 def login_web_page():
     """Página de login web"""

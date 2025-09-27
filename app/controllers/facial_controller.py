@@ -6,9 +6,8 @@ import re
 from datetime import datetime
 import face_recognition
 import json
-import csv
-from app.database import Database
 import logging
+from app.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +15,14 @@ class FacialController:
     """
     Controlador de lógica de negocio para todas las operaciones faciales y de registro de asistencia.
     """
+    
     def __init__(self):
         self.db = Database().client
-        # Asegurarse de que el directorio de datos exista
-        self.save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Data")
+        self.save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Data")
         os.makedirs(self.save_dir, exist_ok=True)
 
     def _get_image_from_data_url(self, image_data_url):
-        """Decodifica una imagen en formato data URL a un frame de OpenCV."""
+        """Convierte data URL a imagen OpenCV"""
         try:
             image_data = re.sub('^data:image/.+;base64,', '', image_data_url)
             image_bytes = base64.b64decode(image_data)
@@ -50,16 +49,21 @@ class FacialController:
         input_encoding = face_encodings[0]
 
         try:
-            response = self.db.table("usuarios").select("id, email, nombre, apellido, activo, rol, facial_encoding").not_.is_("facial_encoding", "null").eq("activo", True).execute()
+            response = self.db.table("usuarios").select(
+                "id, email, nombre, facial_encoding, rol, activo"
+            ).not_.is_("facial_encoding", "null").eq("activo", True).execute()
+            
             usuarios = response.data
 
             for usuario in usuarios:
                 if usuario.get('facial_encoding'):
                     try:
                         known_encoding = np.array(json.loads(usuario['facial_encoding']))
-                        if face_recognition.compare_faces([known_encoding], input_encoding, tolerance=0.6)[0]:
+                        match = face_recognition.compare_faces([known_encoding], input_encoding, tolerance=0.6)
+                        if match[0]:
                             return {'success': True, 'usuario': usuario}
-                    except (json.JSONDecodeError, TypeError):
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.error(f"Error decodificando encoding: {e}")
                         continue
 
             return {'success': False, 'message': 'Rostro no reconocido.'}
@@ -80,69 +84,121 @@ class FacialController:
         new_encoding_json = json.dumps(new_encodings[0].tolist())
 
         try:
-            self.db.table("usuarios").update({"facial_encoding": new_encoding_json}).eq("id", user_id).execute()
-            return {'success': True}
+            response = self.db.table("usuarios").update({
+                "facial_encoding": new_encoding_json,
+                "updated_at": datetime.now().isoformat()
+            }).eq("id", user_id).execute()
+            
+            if response.data:
+                return {'success': True, 'message': 'Rostro registrado correctamente.'}
+            else:
+                return {'success': False, 'message': 'Usuario no encontrado.'}
+                
         except Exception as e:
             logger.error(f"Error en la base de datos durante el registro facial: {e}")
             return {'success': False, 'message': 'Error del servidor al guardar el rostro.'}
 
-    def registrar_ingreso_csv(self, user_data):
-        """Registra el ingreso de un usuario en un archivo CSV."""
+    def registrar_acceso(self, usuario_id, tipo, metodo, dispositivo, observaciones=None):
+        """Registra entrada/salida en la base de datos"""
         try:
-            csv_path = os.path.join(self.save_dir, "ingresos_egresos.csv")
-            fieldnames = ['id_registro', 'id_empleado', 'nombre', 'apellido', 'fecha', 'hora_ingreso', 'hora_egreso', 'area']
+            registro_data = {
+                "usuario_id": usuario_id,
+                "fecha_hora": datetime.now().isoformat(),
+                "tipo": tipo,
+                "metodo": metodo,
+                "dispositivo": dispositivo,
+                "observaciones": observaciones
+            }
 
-            registros = []
-            if os.path.exists(csv_path):
-                with open(csv_path, 'r', newline='', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    if set(reader.fieldnames) == set(fieldnames):
-                        registros = list(reader)
+            logger.info(f"📝 Registrando acceso: usuario={usuario_id}, tipo={tipo}, metodo={metodo}")
 
-            ahora = datetime.now()
-            fecha_actual = ahora.strftime("%d/%m/%Y")
+            response = self.db.table("registros_acceso").insert(registro_data).execute()
 
-            if not any(str(r.get('id_empleado')) == str(user_data.get('id')) and r.get('fecha') == fecha_actual and not r.get('hora_egreso') for r in registros):
-                nuevo_id = len(registros) + 1
-                registros.append({
-                    'id_registro': str(nuevo_id),
-                    'id_empleado': str(user_data.get('id')),
-                    'nombre': user_data.get('nombre', ''),
-                    'apellido': user_data.get('apellido', ''),
-                    'fecha': fecha_actual,
-                    'hora_ingreso': ahora.strftime("%H:%M"),
-                    'hora_egreso': '',
-                    'area': user_data.get('departamento', 'Sistema')
-                })
-                with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-                    writer = csv.DictWriter(f, fieldnames=fieldnames)
-                    writer.writeheader()
-                    writer.writerows(registros)
+            if response.data:
+                logger.info(f"✅ Registro de {tipo} para usuario {usuario_id}")
+                return {'success': True, 'data': response.data[0]}
+            else:
+                logger.error("❌ No se pudo insertar el registro")
+                return {'success': False, 'error': 'Error registrando acceso'}
+                
         except Exception as e:
-            logger.error(f"Error registrando ingreso en CSV: {e}")
+            logger.error(f"❌ Error registrando acceso: {e}")
+            return {'success': False, 'error': str(e)}
 
-    def registrar_egreso_csv(self, user_data):
-        """Registra el egreso de un usuario en un archivo CSV."""
+    def procesar_login_facial(self, image_data_url):
+        """
+        Procesa el login facial completo: identificación + registro de entrada + activación de flags
+        """
         try:
-            csv_path = os.path.join(self.save_dir, "ingresos_egresos.csv")
-            if not os.path.exists(csv_path):
-                return
+            # 1. Identificar rostro
+            resultado_identificacion = self.identificar_rostro(image_data_url)
+            
+            if not resultado_identificacion.get('success'):
+                return resultado_identificacion
 
-            with open(csv_path, 'r', newline='', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
-                registros = list(reader)
+            usuario = resultado_identificacion['usuario']
+            usuario_id = usuario['id']
+            usuario_email = usuario['email']
+            usuario_nombre = usuario.get('nombre', '')
 
-            ahora = datetime.now()
-            fecha_actual = ahora.strftime("%d/%m/%Y")
+            # 2. Registrar entrada
+            resultado_registro = self.registrar_acceso(usuario_id, "ENTRADA", "FACIAL", "TOTEM")
+            if not resultado_registro.get('success'):
+                return resultado_registro
 
-            for registro in reversed(registros):
-                if str(registro.get('id_empleado')) == str(user_data.get('id')) and registro.get('fecha') == fecha_actual and not registro.get('hora_egreso'):
-                    registro['hora_egreso'] = ahora.strftime("%H:%M")
-                    break
+            # 3. Activar flags de acceso web (usando UsuarioController)
+            from app.controllers.usuario_controller import UsuarioController
+            usuario_controller = UsuarioController()
+            resultado_activacion = usuario_controller.activar_login_totem(usuario_id)
 
-            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=registros[0].keys())
-                writer.writeheader()
-                writer.writerows(registros)
+            if not resultado_activacion.get('success'):
+                logger.error(f"Error activando login tótem: {resultado_activacion.get('error')}")
+
+            return {
+                'success': True,
+                'message': '✅ Entrada registrada - Acceso web habilitado',
+                'usuario': {
+                    'id': usuario_id,
+                    'email': usuario_email,
+                    'nombre': usuario_nombre
+                }
+            }
+
         except Exception as e:
-            logger.error(f"Error registrando egreso en CSV: {e}")
+            logger.error(f"Error en procesar_login_facial: {str(e)}")
+            return {'success': False, 'message': f'Error en el servidor: {str(e)}'}
+
+    def procesar_logout_facial(self, usuario_id):
+        """
+        Procesa el logout facial completo: registro de salida + desactivación de flags
+        """
+        try:
+            logger.info(f"🚪 Procesando logout facial para usuario ID: {usuario_id}")
+
+            # 1. Registrar salida
+            resultado_registro = self.registrar_acceso(usuario_id, "SALIDA", "FACIAL", "TOTEM")
+            if not resultado_registro.get('success'):
+                logger.error(f"Error registrando salida: {resultado_registro.get('error')}")
+
+            # 2. Desactivar flags de acceso web
+            from app.controllers.usuario_controller import UsuarioController
+            usuario_controller = UsuarioController()
+            resultado_desactivacion = usuario_controller.desactivar_login_totem(usuario_id)
+
+            if not resultado_desactivacion.get('success'):
+                logger.error(f"Error desactivando flags: {resultado_desactivacion.get('error')}")
+
+            # 3. Verificación final
+            try:
+                response = self.db.table("usuarios").select("login_totem_activo").eq("id", usuario_id).execute()
+                if response.data:
+                    estado_final = response.data[0].get('login_totem_activo')
+                    logger.info(f"📊 Estado final después del logout: login_totem_activo={estado_final}")
+            except Exception as e:
+                logger.error(f"Error en verificación final: {e}")
+
+            return {'success': True, 'message': '✅ Salida registrada correctamente'}
+
+        except Exception as e:
+            logger.error(f"Error en procesar_logout_facial: {e}")
+            return {'success': False, 'message': 'Error al registrar salida'}
