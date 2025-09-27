@@ -23,27 +23,38 @@ document.addEventListener('DOMContentLoaded', function () {
         // 2. Enviar la imagen al backend (placeholder)
         console.log(`Enviando imagen para fichaje de ${tipo}`);
         
-        // Aquí se haría la llamada fetch al backend para el reconocimiento facial
-        // fetch('/totem/fichar', {
-        //     method: 'POST',
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify({ tipo: tipo, imagen: imageData })
-        // })
-        // .then(response => response.json())
-        // .then(data => {
-        //     if (data.success) {
-        //         alert(`Fichaje de ${tipo} exitoso para ${data.empleado}`);
-        //     } else {
-        //         alert(`Error en el fichaje: ${data.message}`);
-        //     }
-        // })
-        // .catch(error => {
-        //     console.error('Error en el fichaje:', error);
-        //     alert('Ocurrió un error al intentar fichar.');
-        // });
-
-        // Simulación para desarrollo sin backend real
-        alert(`(Simulación) Fichaje de ${tipo} realizado. La integración con el backend está pendiente.`);
+        // 2. Enviar la imagen al backend
+        console.log(`Enviando imagen para fichaje de ${tipo}`);
+        
+        fetch('/asistencia/fichar-totem', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tipo: tipo, imagen: imageData })
+        })
+        .then(response => response.json())
+        .then(data => {
+            const guia = document.getElementById("guia");
+            guia.textContent = data.message;
+            if (data.success) {
+                guia.style.color = 'green';
+            } else {
+                guia.style.color = 'red';
+            }
+            setTimeout(() => {
+                guia.textContent = 'Por favor, mire a la cámara para fichar.';
+                guia.style.color = '';
+            }, 5000);
+        })
+        .catch(error => {
+            console.error('Error en la llamada fetch:', error);
+            const guia = document.getElementById("guia");
+            guia.textContent = 'Error de conexión con el servidor.';
+            guia.style.color = 'red';
+            setTimeout(() => {
+                guia.textContent = 'Por favor, mire a la cámara para fichar.';
+                guia.style.color = '';
+            }, 5000);
+        });
     }
 
     botonEntrada.addEventListener('click', () => {
