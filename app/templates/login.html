@@ -1,166 +1,52 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <title>PyME Alimenticia - Login</title>
-  <style>
-    /* ... (tu CSS se mantiene igual) ... */
-  </style>
-</head>
-<body>
-  <div class="circle"></div>
-  <div class="small-circle"></div>
-  <div class="stripes">
-    <svg width="300" height="150">
-      <rect x="220" y="0" width="80" height="150" fill="#3d3df7" />
-      <rect x="170" y="0" width="30" height="150" fill="#3d3df7" />
-      <rect x="120" y="0" width="30" height="150" fill="#3d3df7" />
-      <rect x="70" y="0" width="30" height="150" fill="#3d3df7" />
-      <rect x="20" y="0" width="30" height="150" fill="#3d3df7" />
-    </svg>
-  </div>
-  <div class="login-container">
-    <div class="login-box">
-      <h1>PyME <span style="font-size:0.7em; color:#bdbdbd;">Alimenticia</span></h1>
+{% extends "base.html" %}
 
-      <!-- Fase 1: solo botón facial -->
-      <div id="face-login" style="display:block;">
-          <p style="color:#bdbdbd; margin-bottom:15px;">
-              Por favor, identificate con tu rostro, luego se te pedirá tu email y contraseña.
-          </p>
-          <div class="face-label">Login con reconocimiento facial:</div>
-          <button class="face-btn" onclick="captureFace()">
-              <div class="face-icon">
-                  <svg class="face-svg" viewBox="0 0 60 60">
-                      <circle cx="30" cy="30" r="28" stroke="#fff" stroke-width="2" fill="none"/>
-                      <circle cx="20" cy="25" r="4" fill="#fff"/>
-                      <circle cx="40" cy="25" r="4" fill="#fff"/>
-                      <line x1="30" y1="36" x2="30" y2="40" stroke="#fff" stroke-width="2"/>
-                      <path d="M20 40 Q30 50 40 40" stroke="#fff" stroke-width="2" fill="none"/>
-                  </svg>
-              </div>
-          </button>
-      </div>
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 text-center">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">🏢 Sistema de Control de Acceso</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5>📷 Acceso por Tótem</h5>
+                                <p class="text-muted">Reconocimiento facial para registro de entrada/salida</p>
+                                <a href="{{ url_for('auth.login_totem') }}" class="btn btn-primary btn-lg">
+                                    Ir al Tótem
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5>💻 Acceso Web</h5>
+                                <p class="text-muted">Acceso al sistema desde navegador</p>
+                                <a href="{{ url_for('auth.login_web_page') }}" class="btn btn-success btn-lg">
+                                    Acceder por Web
+                                </a>
+                                <small class="text-muted d-block mt-2">*Requiere entrada registrada en tótem</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-      <!-- Fase 2: formulario aparece tras reconocimiento -->
-      <div id="login-form" style="display:none;">
-          <h2 id="welcome-msg"></h2>
-          <form method="POST" action="{{ url_for('auth.login') }}">  <!-- ✅ CORREGIDO -->
-              <input type="email" name="email" placeholder="Email" required>  <!-- ✅ Cambiado a email -->
-              <input type="password" name="password" placeholder="Contraseña" required>
-              <div class="links">
-                  ¿Olvidaste tu contraseña? Hacé click <a href="#">acá</a>.<br>
-                  ¿No tenés cuenta? <a href="{{ url_for('auth.register') }}">Registrate acá</a>.
-              </div>
-              <button type="submit" class="login-btn">Login</button>
-          </form>
-      </div>
-
-      {% if error %}
-        <div style="color:#a259f7; margin-top:10px;">{{ error }}</div>
-      {% endif %}
-      {% if success %}
-        <div style="color:#3d3df7; margin-top:10px;">{{ success }}</div>
-      {% endif %}
-      
-      <video id="video" width="320" height="240" autoplay style="display:none; margin: 15px auto; border-radius: 10px; border: 2px solid #3d3df7;"></video>
-      <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
-
+                <div class="mt-4">
+                    <div class="card">
+                        <div class="card-body">
+                            <h6>🔍 Estado del Sistema</h6>
+                            <div id="systemStatus">
+                                <span class="badge bg-success">Conectado</span>
+                                <small class="text-muted">Sistema operativo</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
-  <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const context = canvas.getContext('2d');
-
-    function captureFace() {
-      navigator.mediaDevices.getUserMedia({ video: true })
-        .then(stream => {
-          video.srcObject = stream;
-          setTimeout(() => {
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageData = canvas.toDataURL('image/png');
-            
-            // ✅ CORREGIDO: Usar la URL correcta del blueprint
-            fetch("{{ url_for('auth.login_face') }}", {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ image: imageData })
-            })
-            .then(res => res.json())
-            .then(data => {
-              // 🔹 1. Borrar mensajes previos del frontend (facial recognition)
-              document.querySelectorAll("#login-msg").forEach(el => el.remove());
-
-              // 🔹 2. Borrar mensajes previos del backend (email/contraseña incorrectos)
-              const backendError = document.querySelector(".login-box div[style*='color:#a259f7']");
-              if (backendError) backendError.remove();
-
-              // Crear contenedor nuevo
-              const msgBox = document.createElement("div");
-              msgBox.id = "login-msg";
-              msgBox.style.marginTop = "10px";
-
-              if (data.success) {
-                document.getElementById("face-login").style.display = "none";
-                document.getElementById("login-form").style.display = "block";
-                document.getElementById("welcome-msg").innerText = 
-                  "¡Bienvenido! Por favor ingresá tu email y contraseña.";
-                
-                // ✅ Autocompletar el email si se identificó al usuario
-                const emailInput = document.querySelector('input[name="email"]');
-                if (emailInput && data.email) {
-                  emailInput.value = data.email;
-                }
-                
-                msgBox.style.color = "#3d3df7";
-                msgBox.innerText = data.message;
-              } else {
-                msgBox.style.color = "#a259f7";
-                msgBox.innerText = data.message || "Error en el reconocimiento facial";
-              }
-
-              document.querySelector(".login-box").appendChild(msgBox);
-            })
-            .catch(err => {
-              console.error('Error:', err);
-              const msgBox = document.createElement("div");
-              msgBox.id = "login-msg";
-              msgBox.style.color = "#a259f7";
-              msgBox.style.marginTop = "10px";
-              msgBox.innerText = "Error de conexión con el servidor";
-              document.querySelector(".login-box").appendChild(msgBox);
-            })
-            .finally(() => {
-              stream.getTracks().forEach(track => track.stop());
-              video.style.display = "none";
-            });
-          }, 1500);
-          video.style.display = "block";
-        })
-        .catch(err => {
-          alert("No se pudo acceder a la cámara: " + err.message);
-        });
-    }
-
-    // ✅ Función para mostrar/ocultar formulario manualmente
-    function showManualLogin() {
-      document.getElementById("face-login").style.display = "none";
-      document.getElementById("login-form").style.display = "block";
-      document.getElementById("welcome-msg").innerText = "Ingresá tus credenciales";
-    }
-  </script>
-  
-  <!-- ✅ Agregar botón de login manual como alternativa -->
-  <div style="position: absolute; bottom: 20px; right: 20px; z-index: 3;">
-    <button onclick="showManualLogin()" style="
-      background: #3d3df7; 
-      color: white; 
-      border: none; 
-      padding: 10px 15px; 
-      border-radius: 5px; 
-      cursor: pointer;
-    ">Login Manual</button>
-  </div>
-</body>
-</html>
+</div>
+{% endblock %}
