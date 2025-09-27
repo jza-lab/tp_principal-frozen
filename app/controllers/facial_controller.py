@@ -50,7 +50,7 @@ class FacialController:
         input_encoding = face_encodings[0]
 
         try:
-            response = self.db.table("usuarios").select("id, email, nombre, facial_encoding").not_.is_("facial_encoding", "null").eq("activo", True).execute()
+            response = self.db.table("usuarios").select("id, email, nombre, apellido, activo, rol, facial_encoding").not_.is_("facial_encoding", "null").eq("activo", True).execute()
             usuarios = response.data
 
             for usuario in usuarios:
