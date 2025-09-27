@@ -1,5 +1,5 @@
 import json
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, redirect, render_template, request, jsonify, url_for
 from app.controllers.insumo_controller import InsumoController
 from app.utils.validators import validate_uuid, validate_pagination
 from marshmallow import ValidationError
@@ -13,7 +13,7 @@ insumos_bp = Blueprint('insumos_api', __name__, url_prefix='/api/insumos')
 # Controlador
 insumo_controller = InsumoController()
 
-@insumos_bp.route('/catalogo', methods=['POST'])
+@insumos_bp.route('/catalogo/nuevo', methods=['GET','PUT' ,'POST'])
 def crear_insumo():
     """
     Crear un nuevo insumo en el catálogo
@@ -31,11 +31,19 @@ def crear_insumo():
     }
     """
     try:
-        if not request.json:
-            return jsonify({'success': False, 'error': 'Body JSON requerido'}), 400
 
-        response, status = insumo_controller.crear_insumo(request.json)
-        return jsonify(response), status
+        if(request.method == 'POST' or request.method == 'PUT'):
+            datos_json = request.get_json(silent=True) 
+            if(datos_json is None):
+                logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
+                return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos (verifique Content-Type)'}), 400
+    
+
+            response, status = insumo_controller.crear_insumo(request.json)
+            return jsonify(response), status
+        
+        insumo=None
+        return render_template('insumos/formulario.html', insumo=insumo)
 
     except ValidationError as e:
         return jsonify({
@@ -94,16 +102,14 @@ def obtener_insumo_por_id(id_insumo):
             }), 400
 
         response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
-        return jsonify(response), status
+        insumo = response['data']
+        return render_template('insumos/perfil_insumo.html', insumo=insumo)
 
     except Exception as e:
         logger.error(f"Error inesperado en obtener_insumo_por_id: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Error interno del servidor'
-        }), 500
+        return redirect(url_for('insumos_api.obtener_insumos'))
 
-@insumos_bp.route('/catalogo/<string:id_insumo>', methods=['PUT'])
+@insumos_bp.route('/catalogo/actualizar/<string:id_insumo>', methods=['GET', 'POST' , 'PUT'])
 def actualizar_insumo(id_insumo):
     """
     Actualizar un insumo del catálogo
@@ -117,12 +123,19 @@ def actualizar_insumo(id_insumo):
                 'success': False,
                 'error': 'ID de insumo inválido'
             }), 400
+        
+        if(request.method == 'POST' or request.method == 'PUT'):
+            datos_json = request.get_json(silent=True) 
+            if(datos_json is None):
+                logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
+                return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos (verifique Content-Type)'}), 400
+    
+            response, status = insumo_controller.actualizar_insumo(id_insumo, datos_json)
+            return jsonify(response), status
 
-        if not request.json:
-            return jsonify({'success': False, 'error': 'Body JSON requerido'}), 400
-
-        response, status = insumo_controller.actualizar_insumo(id_insumo, request.json)
-        return jsonify(response), status
+        response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
+        insumo = response['data']
+        return render_template('insumos/formulario.html', insumo=insumo)
 
     except ValidationError as e:
         return jsonify({

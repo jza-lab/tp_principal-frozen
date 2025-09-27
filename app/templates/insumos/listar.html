@@ -20,12 +20,12 @@
             <div class="row g-3 align-items-end">
                 <div class="col-md-4">
                     <label for="busqueda" class="form-label">Buscar</label>
-                    <input type="text" name="busqueda" class="form-control" placeholder="Nombre o código..."
+                    <input type="text" name="busqueda" id="busqueda" class="form-control" placeholder="Nombre o código..."
                         value="{{ request.args.get('busqueda', '') }}">
                 </div>
                 <div class="col-md-3">
                     <label for="categoria" class="form-label">Categoría</label>
-                    <select name="categoria" class="form-select">
+                    <select name="categoria" id="categoria" class="form-select">
                         <option value="">Todas las categorías</option>
                         {% for cat in categorias %}
                         <option value="{{ cat }}" {% if request.args.get('categoria')==cat %}selected{% endif %}>
