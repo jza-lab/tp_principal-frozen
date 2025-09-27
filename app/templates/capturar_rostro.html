@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capturar Rostro - Sistema de Control de Acceso</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .camera-container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        #video {
+            width: 100%;
+            max-width: 500px;
+            height: 375px;
+            border: 3px solid #007bff;
+            border-radius: 10px;
+            background-color: #000;
+        }
+        #canvas {
+            display: none;
+        }
+        .capture-btn {
+            margin: 20px 0;
+            padding: 10px 20px;
+            font-size: 1.1em;
+        }
+        .instructions {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        #photo {
+            max-width: 100%;
+            border: 3px solid #28a745;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container py-5">
+        <div class="camera-container">
+            <div class="text-center mb-4">
+                <h2 class="text-primary">📷 Capturar Rostro</h2>
+                <p class="text-muted">Complete el registro capturando su rostro</p>
+            </div>
+
+            <!-- Información del usuario -->
+            {% if usuario %}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5>Usuario a registrar:</h5>
+                    <p><strong>Nombre:</strong> {{ usuario.nombre }} {{ usuario.apellido }}</p>
+                    <p><strong>Email:</strong> {{ usuario.email }}</p>
+                    <p><strong>ID:</strong> {{ user_id }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="card">
+                <div class="card-body">
+                    <div class="instructions">
+                        <h5>📋 Instrucciones:</h5>
+                        <ul>
+                            <li>Permita el acceso a la cámara cuando el navegador lo solicite</li>
+                            <li>Asegúrese de tener buena iluminación</li>
+                            <li>Colóquese frente a la cámara</li>
+                            <li>Mire directamente a la cámara</li>
+                            <li>Haga clic en "Capturar Rostro" cuando esté listo</li>
+                        </ul>
+                    </div>
+
+                    <div class="text-center">
+                        <!-- Vista de la cámara -->
+                        <div id="camera-view">
+                            <video id="video" autoplay playsinline></video>
+                            <canvas id="canvas"></canvas>
+                        </div>
+                        
+                        <!-- Controles de captura -->
+                        <div id="capture-controls">
+                            <button id="capture-btn" class="btn btn-primary btn-lg capture-btn" disabled>
+                                📸 Capturar Rostro
+                            </button>
+                            <div id="status" class="alert alert-info mt-2">
+                                Preparando cámara...
+                            </div>
+                        </div>
+
+                        <!-- Vista previa -->
+                        <div id="preview" style="display: none;">
+                            <h5>Vista previa de la foto:</h5>
+                            <img id="photo" src="" alt="Foto capturada">
+                            <div class="mt-3">
+                                <button id="retake-btn" class="btn btn-secondary">🔄 Volver a Capturar</button>
+                                <button id="register-btn" class="btn btn-success">✅ Registrar Rostro</button>
+                            </div>
+                        </div>
+
+                        <!-- Procesando -->
+                        <div id="processing" style="display: none;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Procesando...</span>
+                            </div>
+                            <p class="mt-2">Procesando imagen y registrando rostro...</p>
+                        </div>
+
+                        <!-- Resultado -->
+                        <div id="result" style="display: none;"></div>
+                    </div>
+
+                    <!-- Botones de acción -->
+                    <div class="mt-4 text-center">
+                        <form action="{{ url_for('auth.register_face_reject') }}" method="POST" style="display: inline;">
+                            <input type="hidden" name="user_id" value="{{ user_id }}">
+                            <button type="submit" class="btn btn-outline-danger">
+                                ❌ Rechazar Registro Facial
+                            </button>
+                        </form>
+                        <a href="{{ url_for('auth.register') }}" class="btn btn-outline-secondary ms-2">
+                            ← Volver al Registro
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Elementos del DOM
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const photo = document.getElementById('photo');
+        const captureBtn = document.getElementById('capture-btn');
+        const retakeBtn = document.getElementById('retake-btn');
+        const registerBtn = document.getElementById('register-btn');
+        const cameraView = document.getElementById('camera-view');
+        const captureControls = document.getElementById('capture-controls');
+        const preview = document.getElementById('preview');
+        const processing = document.getElementById('processing');
+        const result = document.getElementById('result');
+        const statusDiv = document.getElementById('status');
+
+        // Variables globales
+        let stream = null;
+        let capturedImage = null;
+
+        // Inicializar cámara
+        async function initCamera() {
+            try {
+                statusDiv.innerHTML = '<div class="alert alert-warning">Solicitando acceso a la cámara...</div>';
+                
+                // Solicitar acceso a la cámara
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user'  // Usar cámara frontal
+                    }, 
+                    audio: false 
+                });
+                
+                // Conectar el stream al elemento video
+                video.srcObject = stream;
+                
+                // Esperar a que el video esté listo
+                video.onloadedmetadata = () => {
+                    statusDiv.innerHTML = '<div class="alert alert-success">✅ Cámara activa - Posiciónese frente a la cámara</div>';
+                    captureBtn.disabled = false;
+                    captureBtn.textContent = '📸 Capturar Rostro';
+                };
+                
+            } catch (error) {
+                console.error('Error al acceder a la cámara:', error);
+                let errorMessage = 'Error al acceder a la cámara. ';
+                
+                if (error.name === 'NotAllowedError') {
+                    errorMessage += 'Permiso denegado. Por favor, permita el acceso a la cámara.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage += 'No se encontró ninguna cámara.';
+                } else if (error.name === 'NotSupportedError') {
+                    errorMessage += 'El navegador no soporta el acceso a la cámara.';
+                } else {
+                    errorMessage += error.message;
+                }
+                
+                statusDiv.innerHTML = `<div class="alert alert-danger">${errorMessage}</div>`;
+                captureBtn.disabled = true;
+            }
+        }
+
+        // Capturar imagen
+        captureBtn.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            
+            // Configurar canvas con las dimensiones del video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Dibujar el frame actual del video en el canvas
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Convertir a base64 (formato JPEG con 80% de calidad)
+            capturedImage = canvas.toDataURL('image/jpeg', 0.8);
+            
+            // Mostrar la imagen capturada
+            photo.src = capturedImage;
+            
+            // Cambiar vistas
+            cameraView.style.display = 'none';
+            captureControls.style.display = 'none';
+            preview.style.display = 'block';
+            
+            // Detener la cámara
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+
+        // Volver a capturar
+        retakeBtn.addEventListener('click', () => {
+            preview.style.display = 'none';
+            cameraView.style.display = 'block';
+            captureControls.style.display = 'block';
+            
+            // Reiniciar la cámara
+            initCamera();
+        });
+
+        // Registrar rostro
+        registerBtn.addEventListener('click', async () => {
+            preview.style.display = 'none';
+            processing.style.display = 'block';
+            
+            try {
+                const response = await fetch('/auth/register_face/{{ user_id }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        image: capturedImage
+                    })
+                });
+                
+                const data = await response.json();
+                
+                processing.style.display = 'none';
+                
+                if (data.success) {
+                    result.innerHTML = `
+                        <div class="alert alert-success">
+                            <h4>✅ ¡Registro Exitoso!</h4>
+                            <p>${data.message}</p>
+                            <p>Su rostro ha sido registrado correctamente.</p>
+                            <a href="/auth/" class="btn btn-success">Ir al Login</a>
+                        </div>
+                    `;
+                } else {
+                    result.innerHTML = `
+                        <div class="alert alert-danger">
+                            <h4>❌ Error</h4>
+                            <p>${data.error}</p>
+                            <button onclick="location.reload()" class="btn btn-warning">Reintentar</button>
+                        </div>
+                    `;
+                }
+                
+                result.style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                processing.style.display = 'none';
+                result.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h4>❌ Error de Conexión</h4>
+                        <p>Error al comunicarse con el servidor: ${error.message}</p>
+                        <button onclick="location.reload()" class="btn btn-warning">Reintentar</button>
+                    </div>
+                `;
+                result.style.display = 'block';
+            }
+        });
+
+        // Detener cámara al salir de la página
+        window.addEventListener('beforeunload', () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        });
+
+        // Inicializar cámara cuando la página cargue
+        document.addEventListener('DOMContentLoaded', initCamera);
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

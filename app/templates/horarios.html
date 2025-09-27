@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h1>Horarios de Trabajo</h1>
+        <p class="lead">Análisis de horas trabajadas por empleado</p>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-8">
+        <div class="chart-container">
+            <img src="data:image/png;base64,{{ plot_url }}" alt="Horas Trabajadas por Empleado" class="img-fluid">
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h3>Resumen</h3>
+            </div>
+            <div class="card-body">
+                <p>Total de empleados: <strong>{{ datos|length }}</strong></p>
+                <p>Total de horas trabajadas: <strong>{{ "%.2f"|format(datos|sum(attribute='horas_trabajadas')) }} horas</strong></p>
+                <p>Promedio por empleado: <strong>{{ "%.2f"|format((datos|sum(attribute='horas_trabajadas')) / datos|length) }} horas</strong></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3>Detalle de Horas por Empleado</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>ID Empleado</th>
+                                <th>Nombre</th>
+                                <th>Horas Trabajadas</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in datos %}
+                            <tr>
+                                <td>{{ item['id_empleado'] }}</td>
+                                <td>{{ item['nombre'] }}</td>
+                                <td>{{ "%.2f"|format(item['horas_trabajadas']) }} horas</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+# Cache de Python
+__pycache__/
+*.pyc
+
+# Entornos virtuales
+.venv/
+venv/
+
+# Archivos de IDE y sistema operativo
+.idea/
+.vscode/
+.env
+.DS_Store
+
+# Archivos de log
+*.log
+
+# Carpetas de build
+build/
+dist/
