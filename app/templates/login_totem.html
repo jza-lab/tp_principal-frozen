@@ -28,7 +28,8 @@
                 <div id="result" class="mt-3"></div>
 
                 <div class="mt-4 border-top pt-3">
-                    <a href="{{ url_for('auth.index') }}" class="btn btn-outline-secondary">
+                    <!-- CORREGIDO: Usar facial.login_totem -->
+                    <a href="{{ url_for('facial.login_totem') }}" class="btn btn-outline-secondary">
                         ← Volver al Inicio
                     </a>
                 </div>
@@ -81,30 +82,30 @@ class FaceLogin {
     }
 
     async sendFaceData(imageData) {
-    try {
-        const response = await fetch('/auth/login_face', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: imageData })
-        });
+        try {
+            // CORREGIDO: Usar /auth/facial/login_face
+            const response = await fetch('/auth/facial/login_face', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imageData })
+            });
 
-        const result = await response.json();
-        
-        if (result.success) {
-            this.showResult(`✅ ${result.message}`, 'success');
+            const result = await response.json();
             
-            // Usar la URL de redirección proporcionada por el servidor
-            const redirectUrl = result.redirect_url || '/auth/panel_totem';
-            setTimeout(() => {
-                window.location.href = redirectUrl;
-            }, 1500);
-        } else {
-            this.showResult(`❌ ${result.message}`, 'error');
+            if (result.success) {
+                this.showResult(`✅ ${result.message}`, 'success');
+                setTimeout(() => {
+                    // CORREGIDO: Usar la URL de redirección del resultado o la predeterminada
+                    const redirectUrl = result.redirect_url || '/auth/facial/panel_totem';
+                    window.location.href = redirectUrl;
+                }, 1500);
+            } else {
+                this.showResult(`❌ ${result.message}`, 'error');
+            }
+        } catch (error) {
+            this.showResult('Error de conexión: ' + error.message, 'error');
         }
-    } catch (error) {
-        this.showResult('Error de conexión: ' + error.message, 'error');
     }
-}
 
     retryCapture() {
         this.resultDiv.innerHTML = '';

@@ -1,45 +1,99 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row justify-content-center login-container">
-    <div class="col-md-12">
+<div class="row">
+    <div class="col-md-10 mx-auto">
         <div class="card">
-            <div class="card-header bg-success text-white">
-                <h4 class="mb-0">💻 Acceso al Sistema Web</h4>
+            <div class="card-header bg-info text-white">
+                <h4 class="mb-0">💼 Panel Web - {{ session.user_nombre }}</h4>
             </div>
             <div class="card-body">
-                <div class="alert alert-warning">
-                    <small>🔒 <strong>Requisito:</strong> Debe haber registrado entrada en el tótem hoy</small>
+                <div class="alert alert-success">
+                    <h6>✅ Acceso Web Habilitado</h6>
+                    <small>Puede usar todas las funciones del sistema hasta registrar su salida en el tótem</small>
                 </div>
                 
-                <form method="POST" action="{{ url_for('auth.login_web') }}">
-                    <div class="mb-3">
-                        <label class="form-label">Legajo:</label>
-                        <input type="text" name="legajo" class="form-control" required 
-                               placeholder="Ingrese su legajo">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <h6>👤 Información</h6>
+                                <p class="mb-1"><strong>Usuario:</strong> {{ session.user_nombre }}</p>
+                                <p class="mb-1"><strong>Email:</strong> {{ session.user_email }}</p>
+                                <p class="mb-0"><strong>Estado:</strong> <span class="badge bg-success">Activo</span></p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Contraseña:</label>
-                        <input type="password" name="password" class="form-control" required 
-                               placeholder="Ingrese su contraseña">
+                    
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <h6>⏰ Control de Acceso</h6>
+                                <div id="accesoStatus" class="mb-2">
+                                    <span class="badge bg-success">Acceso Web Habilitado</span>
+                                </div>
+                                <small class="text-muted">Entrada registrada vía tótem</small>
+                            </div>
+                        </div>
                     </div>
-                    <button type="submit" class="btn btn-success w-100">Ingresar al Sistema</button>
-                </form>
-                
-                <div class="mt-3 text-center">
-                    <small class="text-muted">
-                        ¿No registró entrada en tótem?<br>
-                        <strong>Debe pasar por el tótem primero para habilitar el acceso web</strong>
-                    </small>
+                    
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-body text-center">
+                                <h6>📋 Acciones</h6>
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-outline-primary btn-sm" onclick="verRegistros()">
+                                        Ver Mis Registros
+                                    </button>
+                                    <button class="btn btn-outline-info btn-sm" onclick="verPerfil()">
+                                        Mi Perfil
+                                    </button>
+                                    <!-- CORREGIDO: Usar facial.logout_web -->
+                                    <a href="{{ url_for('facial.logout_web') }}" class="btn btn-outline-danger btn-sm">
+                                        Cerrar Sesión Web
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="mt-3 text-center">
-                    <a href="{{ url_for('auth.index') }}" class="btn btn-outline-secondary btn-sm">
-                        ← Volver al Inicio
-                    </a>
+
+                <div class="mt-4">
+                    <h6>📊 Información del Sistema</h6>
+                    <div class="card">
+                        <div class="card-body">
+                            <p>Este acceso web está vinculado a su entrada registrada en el tótem.</p>
+                            <p><strong>Nota:</strong> Para finalizar su jornada, debe registrar la salida en el tótem.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function verRegistros() {
+    alert('Funcionalidad de registros en desarrollo...');
+}
+
+function verPerfil() {
+    alert('Funcionalidad de perfil en desarrollo...');
+}
+
+// Verificar estado de acceso periódicamente
+setInterval(() => {
+    // CORREGIDO: Usar /auth/facial/verificar_acceso
+    fetch('/auth/facial/verificar_acceso')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                alert('Su acceso web ha expirado. Debe registrar entrada en el tótem.');
+                window.location.href = '/auth/facial/login_totem';
+            }
+        });
+}, 300000); // Cada 5 minutos
+</script>
 {% endblock %}

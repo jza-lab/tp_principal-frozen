@@ -12,7 +12,8 @@
                     <small>🔒 <strong>Requisito:</strong> Debe haber registrado entrada en el tótem hoy</small>
                 </div>
                 
-                <form method="POST" action="{{ url_for('auth.login_web') }}">
+                <!-- CORREGIDO: Usar facial.login_web -->
+                <form method="POST" action="{{ url_for('facial.login_web') }}">
                     <div class="mb-3">
                         <label class="form-label">Legajo:</label>
                         <input type="text" name="legajo" class="form-control" required 
@@ -34,7 +35,8 @@
                 </div>
                 
                 <div class="mt-3 text-center">
-                    <a href="{{ url_for('auth.index') }}" class="btn btn-outline-secondary btn-sm">
+                    <!-- CORREGIDO: Usar facial.login_totem -->
+                    <a href="{{ url_for('facial.login_totem') }}" class="btn btn-outline-secondary btn-sm">
                         ← Volver al Inicio
                     </a>
                 </div>

@@ -9,6 +9,7 @@ from app.views.insumo import insumos_bp
 from app.views.inventario import inventario_bp
 from app.views.auth_routes import auth_bp
 from app.views.admin_usuario_routes import admin_usuario_bp
+from app.views.facial_routes import facial_bp  # ← Usar facial_routes en lugar de facial_bp directo
 
 def create_app():
     """Factory para crear la aplicación Flask"""
@@ -22,13 +23,13 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-     # ✅ Configurar el encoder personalizado para Flask 2.3+
+    # ✅ Configurar el encoder personalizado para Flask 2.3+
     app.json = CustomJSONEncoder(app)
 
     # Configurar CORS
     CORS(app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:3000", "http://localhost:5173"],  # Frontend común
+            "origins": ["http://localhost:3000", "http://localhost:5173"],
             "methods": ["GET", "POST", "PUT", "DELETE", "PATCH"],
             "allow_headers": ["Content-Type", "Authorization"]
         }
@@ -39,6 +40,7 @@ def create_app():
     app.register_blueprint(inventario_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_usuario_bp)
+    app.register_blueprint(facial_bp, url_prefix='/auth')  # ← Prefijo para todas las rutas faciales
 
     # Ruta de health check
     @app.route('/api/health')
