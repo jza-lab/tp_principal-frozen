@@ -31,3 +31,7 @@ class UsuarioSchema(Schema):
     supervisor_id = fields.Int(allow_none=True)
     turno = fields.Str(allow_none=True)
     ultimo_login = fields.DateTime(dump_only=True, allow_none=True)
+    login_totem_activo = fields.Boolean(allow_none=True)
+    ultimo_login_totem = fields.DateTime(allow_none=True)
+    totem_session_id = fields.String(allow_none=True)
+    ultimo_login_web = fields.DateTime(allow_none=True)

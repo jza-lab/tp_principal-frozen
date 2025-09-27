@@ -6,6 +6,7 @@ from app.views.inventario import inventario_bp
 from app.views.auth_routes import auth_bp
 from app.views.admin_usuario_routes import admin_usuario_bp
 from app.views.orden_produccion_routes import orden_produccion_bp
+from app.views.facial_routes import facial_bp  # ← Usar facial_routes en lugar de facial_bp directo
 import logging
 from .json_encoder import CustomJSONEncoder
 
@@ -41,6 +42,7 @@ def create_app():
     # Registrar blueprints
     app.register_blueprint(auth_bp, url_prefix='/auth')  # Prefijo opcional
     app.register_blueprint(admin_usuario_bp)
+    app.register_blueprint(facial_bp, url_prefix='/auth/face')  # ← Prefijo para todas las rutas faciales
 
     # Ruta de health check
     @app.route('/api/health')
