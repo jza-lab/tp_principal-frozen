@@ -6,7 +6,7 @@ from app.views.inventario import inventario_bp
 import logging
 from .json_encoder import CustomJSONEncoder
 from app.controllers.facial_controller import auth_bp
-
+from app.views.orden_compra_routes import orden_compra_bp
 def create_app():
     """Factory para crear la aplicación Flask"""
 
@@ -36,6 +36,7 @@ def create_app():
     app.register_blueprint(inventario_bp)
     # Registrar blueprints
     app.register_blueprint(auth_bp, url_prefix='/auth')  # Prefijo opcional
+    app.register_blueprint(orden_compra_bp)
 
     # Ruta de health check
     @app.route('/api/health')
