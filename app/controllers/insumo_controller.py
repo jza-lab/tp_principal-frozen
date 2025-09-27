@@ -1,7 +1,7 @@
 from app.controllers.base_controller import BaseController
 from app.models.insumo import InsumoModel
 from app.models.inventario import InventarioModel
-from app.services.alertas_service import AlertasService
+##from app.services.alertas_service import AlertasService
 from app.schemas.insumo_schema import InsumosCatalogoSchema
 from typing import Dict, Optional
 import logging
@@ -17,7 +17,7 @@ class InsumoController(BaseController):
         super().__init__()
         self.insumo_model = InsumoModel()
         self.inventario_model = InventarioModel()
-        self.alertas_service = AlertasService()
+        ##self.alertas_service = AlertasService()
         self.schema = InsumosCatalogoSchema()
 
     def crear_insumo(self, data: Dict) -> tuple:
