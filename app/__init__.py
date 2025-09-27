@@ -37,6 +37,7 @@ def create_app():
     # Registrar blueprints
     app.register_blueprint(insumos_bp)
     app.register_blueprint(inventario_bp)
+    app.register_blueprint(orden_produccion_bp)
     # Registrar blueprints
     app.register_blueprint(auth_bp, url_prefix='/auth')  # Prefijo opcional
     app.register_blueprint(admin_usuario_bp)

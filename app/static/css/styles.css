@@ -427,6 +427,21 @@ body {
     color: #1cc88a !important;
 }
 
+.bg-primary-soft {
+    background-color: rgba(49, 49, 49, 0.1) !important;
+    color: #313131 !important;
+}
+
+.bg-warning-soft {
+    background-color: rgba(253, 126, 20, 0.1) !important;
+    color: #fd7e14 !important;
+}
+
+.bg-secondary-soft {
+    background-color: rgba(108, 117, 125, 0.1) !important;
+    color: #6c757d !important;
+}
+
 .subtitulo {
     color:#687077;
 }

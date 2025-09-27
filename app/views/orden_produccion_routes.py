@@ -18,8 +18,23 @@ def listar():
     """
     estado = request.args.get('estado')
     filtros = {'estado': estado} if estado else {}
-    ordenes = controller.obtener_ordenes(filtros)
-    return render_template('ordenes_produccion/listar.html', ordenes=ordenes)
+    
+    response, status_code = controller.obtener_ordenes(filtros)
+    
+    ordenes = []
+    if response.get('success'):
+        ordenes = response.get('data', [])
+    else:
+        flash(response.get('error', 'Error al cargar las órdenes de producción.'), 'error')
+        
+    # El título puede variar según el filtro para dar más contexto
+    titulo = f"Órdenes de Producción"
+    if estado:
+        titulo += f" (Estado: {estado.replace('_', ' ').title()})"
+    else:
+        titulo += " (Todas)"
+
+    return render_template('ordenes_produccion/listar.html', ordenes=ordenes, titulo=titulo)
 
 # @orden_produccion_bp.route('/nueva', methods=['GET', 'POST'])
 # def nueva():
@@ -82,8 +97,17 @@ def listar_pendientes():
     """
     Muestra las órdenes de producción pendientes de aprobación para el supervisor.
     """
-    ordenes = controller.obtener_ordenes({'estado': 'PENDIENTE'})
-    return render_template('ordenes_produccion/pendientes.html', ordenes=ordenes)
+    response, status_code = controller.obtener_ordenes({'estado': 'PENDIENTE'})
+
+    ordenes = []
+    if response.get('success'):
+        ordenes = response.get('data', [])
+    else:
+        flash(response.get('error', 'Error al cargar las órdenes pendientes.'), 'error')
+        
+    return render_template('ordenes_produccion/listar.html', 
+                           ordenes=ordenes, 
+                           titulo="Órdenes Pendientes de Aprobación")
 
 @orden_produccion_bp.route('/<int:id>/aprobar', methods=['POST'])
 @roles_required('SUPERVISOR', 'ADMIN', 'GERENTE')
