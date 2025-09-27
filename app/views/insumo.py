@@ -1,3 +1,4 @@
+import json
 from flask import Blueprint, render_template, request, jsonify
 from app.controllers.insumo_controller import InsumoController
 from app.utils.validators import validate_uuid, validate_pagination
@@ -66,7 +67,9 @@ def obtener_insumos():
 
         # Limpiar filtros vacíos
         filtros = {k: v for k, v in filtros.items() if v is not None and v != ''}
-        insumos= insumo_controller.obtener_insumos(filtros)
+        response, status= insumo_controller.obtener_insumos(filtros)
+        insumos=response['data']
+
         return render_template('insumos/listar.html', insumos=insumos)
 
     except Exception as e:

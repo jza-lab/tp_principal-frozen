@@ -55,12 +55,11 @@
     <div class="col-md-4 mb-4">
         <div class="card h-100 insumo-card">
             <div class="card-body d-flex flex-column">
-                <h5 class="card-title">{{ insumo.nombre }}</h5>
-                
+                <h5 class="card-title"> {{insumo['nombre'] }} </h5>
                 <div class="card-secondary-details mb-3">
-                    <span><i class="bi bi-tag-fill"></i> {{ insumo.categoria }}</span>
-                    <span><i class="bi bi-upc-scan"></i> <code>{{ insumo.codigo_interno }}</code></span>
-                    <span><i class="bi bi-rulers"></i> {{ insumo.unidad_medida }}</span>
+                    <span><i class="bi bi-tag-fill"></i> {{ insumo['categoria'] }}</span>
+                    <span><i class="bi bi-upc-scan"></i> <code>{{ insumo['codigo_interno'] }}</code></span>
+                    <span><i class="bi bi-rulers"></i> {{ insumo['unidad_medida'] }}</span>
                 </div>
 
                 <div class="mt-auto">
@@ -70,12 +69,12 @@
                         <div>
                             <span class="stock-label">Stock</span>
                             <span class="stock-value">
-                                {{ insumo.stock_actual }}
+                                {{ insumo['stock_actual'] }}
                             </span>
-                            <span class="stock-min text-muted">/ Min: {{ insumo.stock_min }}</span>
+                            <span class="stock-min text-muted">/ Min: {{ insumo['stock_min'] }}</span>
                         </div>
                         <div>
-                            {% if True %}
+                            {% if insumo['es_critico'] %}
                             <span class="badge bg-danger-soft text-danger">
                                 <i class="bi bi-exclamation-triangle me-1"></i>Crítico
                             </span>
