@@ -1,3 +1,4 @@
+from uuid import UUID
 from app.controllers.base_controller import BaseController
 from app.models.inventario import InventarioModel
 from app.models.insumo import InsumoModel

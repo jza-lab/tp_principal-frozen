@@ -47,6 +47,7 @@ def detalle(id):
     # etapas = etapa_controller.obtener_etapas_por_orden(id)
 
     # return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
+    etapas=None #Arreglar
     return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
 
 @orden_produccion_bp.route('/<int:id>/iniciar', methods=['POST'])
