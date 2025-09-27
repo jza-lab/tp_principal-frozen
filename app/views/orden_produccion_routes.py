@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-from controllers.orden_produccion_controller import OrdenProduccionController
+from app.controllers.orden_produccion_controller import OrdenProduccionController
 # from app.controllers.etapa_produccion_controller import EtapaProduccionController
-from utils.decorators import roles_required
+from app.utils.decorators import roles_required
 from datetime import date
 
 orden_produccion_bp = Blueprint('orden_produccion', __name__, url_prefix='/ordenes')

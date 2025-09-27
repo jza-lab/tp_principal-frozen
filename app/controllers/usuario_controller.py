@@ -1,6 +1,6 @@
-from controllers.base_controller import BaseController
-from models.usuario import UsuarioModel
-from schemas.usuario_schema import UsuarioSchema
+from app.controllers.base_controller import BaseController
+from app.models.usuario import UsuarioModel
+from app.schemas.usuario_schema import UsuarioSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -38,8 +38,12 @@ class UsuarioController(BaseController):
     def autenticar_usuario(self, legajo: str, password: str) -> Optional[Dict]:
         """Autentica a un usuario por legajo y contraseña."""
         user_result = self.model.find_by_legajo(legajo)
+        
         if user_result.get('success') and user_result.get('data'):
             user_data = user_result['data']
+            print(user_data['password_hash'])
+            print(password)
+            
             if check_password_hash(user_data['password_hash'], password):
                 return user_data
         return None

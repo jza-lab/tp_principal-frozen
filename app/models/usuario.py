@@ -2,7 +2,7 @@ from dataclasses import dataclass, asdict
 from typing import Optional, Dict
 from datetime import datetime, date
 from werkzeug.security import generate_password_hash, check_password_hash
-from models.base_model import BaseModel
+from app.models.base_model import BaseModel
 import logging
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ class UsuarioModel(BaseModel):
         Busca un usuario por su número de legajo.
         """
         try:
-            result = self.db.table(self.get_table_name()).select('*').eq('numero_empleado', legajo).execute()
+            result = self.db.table(self.get_table_name()).select('*').eq('legajo', legajo).execute()
             if result.data:
                 return {'success': True, 'data': result.data[0]}
             else:

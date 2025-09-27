@@ -3,9 +3,12 @@ from flask_cors import CORS
 from app.config import Config
 from app.views.insumo import insumos_bp
 from app.views.inventario import inventario_bp
+from app.views.auth_routes import auth_bp
+from app.views.admin_usuario_routes import admin_usuario_bp
+from app.views.orden_produccion_routes import orden_produccion_bp
 import logging
 from .json_encoder import CustomJSONEncoder
-# from app.controllers.facial_controller import auth_bp
+
 
 def create_app():
     """Factory para crear la aplicación Flask"""
@@ -35,7 +38,8 @@ def create_app():
     app.register_blueprint(insumos_bp)
     app.register_blueprint(inventario_bp)
     # Registrar blueprints
-    # app.register_blueprint(auth_bp, url_prefix='/auth')  # Prefijo opcional
+    app.register_blueprint(auth_bp, url_prefix='/auth')  # Prefijo opcional
+    app.register_blueprint(admin_usuario_bp)
 
     # Ruta de health check
     @app.route('/api/health')
@@ -74,7 +78,5 @@ def create_app():
     @app.route('/')
     def index():
         session.clear()
-        return redirect(url_for('usuario.login'))
-
-
+        return redirect(url_for('auth.login'))
     return app

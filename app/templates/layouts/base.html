@@ -21,7 +21,7 @@
         <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
             <div class="container-fluid">
                 {% if 'usuario_id' in session %}
-                <a class="navbar-brand d-flex align-items-center" href="{{ url_for('dashboard.index') }}">
+                <a class="navbar-brand d-flex align-items-center" href="{{ url_for('admin_usuario.index') }}">
                     <i class="bi bi-snow2 me-2 fs-4"></i>
                     FrozenProd
                 </a>
@@ -41,23 +41,23 @@
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         <li class="nav-item">
-                            <a class="nav-link {% if 'insumo' in request.endpoint %}active{% endif %}" href="{{ url_for('insumo.listar') }}">Insumos</a>
+                            <a class="nav-link {% if 'insumo' in request.endpoint %}active{% endif %}" href="{{ url_for('insumos_api.obtener_insumos') }}">Insumos</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if 'orden_produccion' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_produccion.listar') }}">Producción</a>
+                            <a class="nav-link {% if 'orden_produccion' in request.endpoint %}active{% endif %}" href="">Producción</a>
                         </li>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if 'reportes' in request.endpoint %}active{% endif %}" href="#" id="navbarDropdownReportes" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 Reportes
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownReportes">
-                                <li><a class="dropdown-item" href="{{ url_for('reportes.produccion') }}">Producción</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('reportes.inventario') }}">Inventario</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('reportes.trazabilidad') }}">Trazabilidad</a></li>
+                                <li><a class="dropdown-item" href="">Producción</a></li>
+                                <li><a class="dropdown-item" href="">Inventario</a></li>
+                                <li><a class="dropdown-item" href="">Trazabilidad</a></li>
                             </ul>
                         </li>
                          <li class="nav-item">
-                            <a class="nav-link {% if 'insumo.alertas' in request.endpoint %}active{% endif %}" href="{{ url_for('insumo.alertas') }}">Alertas</a>
+                            <a class="nav-link {% if 'insumo.alertas' in request.endpoint %}active{% endif %}" href="">Alertas</a>
                         </li>
                     </ul>
                     <ul class="navbar-nav ms-auto">
@@ -70,12 +70,12 @@
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownUser">
                                 <li>
                                     <h6 class="dropdown-header">
-                                        <small class="text-muted">{{ session.get('usuario_rol', '') }}</small>
+                                        <small class="text-muted">{{ session.get('rol', '') }}</small>
                                     </h6>
                                 </li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
-                                    <a class="dropdown-item" href="{{ url_for('usuario.logout') }}">
+                                    <a class="dropdown-item" href="{{ url_for('auth.logout') }}">
                                         <i class="bi bi-box-arrow-right me-2"></i>Cerrar Sesión
                                     </a>
                                 </li>

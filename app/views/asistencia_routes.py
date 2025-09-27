@@ -13,7 +13,7 @@ def registrar_entrada():
     usuario_id = session.get('usuario_id')
     if not usuario_id:
         flash("Error: Debes iniciar sesión para registrar tu asistencia.", "error")
-        return redirect(url_for('usuario.login'))
+        return redirect(url_for('auth.login'))
 
     # TODO: Implementar lógica de verificación facial aquí.
 
@@ -35,7 +35,7 @@ def registrar_salida():
     usuario_id = session.get('usuario_id')
     if not usuario_id:
         flash("Error: Debes iniciar sesión para registrar tu asistencia.", "error")
-        return redirect(url_for('usuario.login'))
+        return redirect(url_for('auth.login'))
 
     # TODO: Implementar lógica de verificación facial aquí.
 
@@ -46,4 +46,4 @@ def registrar_salida():
     else:
         flash(resultado.get('error', 'Ocurrió un error inesperado.'), 'error')
 
-    return redirect(url_for('dashboard.index'))
+    return redirect(url_for('admin_usuario.index'))

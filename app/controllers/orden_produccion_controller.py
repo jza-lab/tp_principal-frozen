@@ -1,11 +1,11 @@
-from controllers.base_controller import BaseController
-from models.orden_produccion import OrdenProduccionModel
-from schemas.orden_produccion_schema import OrdenProduccionSchema
+from app.controllers.base_controller import BaseController
+from app.models.orden_produccion import OrdenProduccionModel
+from app.schemas.orden_produccion_schema import OrdenProduccionSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
-from controllers.producto_controller import ProductoController
-from controllers.receta_controller import RecetaController
-from controllers.usuario_controller import UsuarioController
+from app.controllers.producto_controller import ProductoController
+from app.controllers.receta_controller import RecetaController
+from app.controllers.usuario_controller import UsuarioController
 
 class OrdenProduccionController(BaseController):
     """

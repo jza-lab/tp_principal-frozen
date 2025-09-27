@@ -1,4 +1,4 @@
-from models.base_model import BaseModel
+from app.models.base_model import BaseModel
 from typing import Dict, Any, Optional
 from datetime import datetime
 import logging
