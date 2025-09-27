@@ -77,3 +77,11 @@ def login_facial():
     
     flash('Funcionalidad de login facial no implementada.', 'info')
     return redirect(url_for('usuario.login'))
+
+@usuario_bp.route('/totem')
+def totem_redirect():
+    """
+    Redirige la URL antigua /usuarios/totem a la nueva y correcta /asistencia/totem.
+    Esto soluciona el problema de los enlaces rotos de forma permanente.
+    """
+    return redirect(url_for('asistencia.totem_page'), code=301)
