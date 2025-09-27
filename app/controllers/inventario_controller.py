@@ -1,7 +1,7 @@
 from app.controllers.base_controller import BaseController
 from app.models.inventario import InventarioModel
 from app.models.insumo import InsumoModel
-from app.services.stock_service import StockService
+##from app.services.stock_service import StockService
 from app.schemas.inventario_schema import InsumosInventarioSchema
 from typing import Dict, Optional
 import logging
@@ -19,7 +19,7 @@ class InventarioController(BaseController):
         super().__init__()
         self.inventario_model = InventarioModel()
         self.insumo_model = InsumoModel()
-        self.stock_service = StockService()
+        ##self.stock_service = StockService()
         self.schema = InsumosInventarioSchema()
 
     def obtener_lotes(self, filtros: Optional[Dict] = None) -> tuple:
