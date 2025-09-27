@@ -10,9 +10,9 @@
     </div>
     <div class="btn-toolbar">
         {# El botón de crear nueva orden está deshabilitado. Las órdenes se crean desde Planificación. #}
-        {# <a href="{{ url_for('orden_produccion.nueva') }}" class="btn btn-primary">
+         <a href="{{ url_for('orden_produccion.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
-        </a> #}
+        </a>
     </div>
 </div>
 
@@ -129,8 +129,7 @@
         </div>
     </div>
     <!-- FIN: EJEMPLOS ESTÁTICOS -->
-
-
+     
     {% for orden in ordenes %}
     <div class="col-md-4 mb-4">
         <div class="card h-100 insumo-card"> <!-- Reutilizamos la clase 'insumo-card' para consistencia -->

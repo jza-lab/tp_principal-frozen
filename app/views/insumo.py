@@ -1,5 +1,6 @@
 import json
-from flask import Blueprint, redirect, render_template, request, jsonify, url_for
+from flask import Blueprint, redirect, render_template, request, jsonify, session, url_for
+from app.controllers import usuario_controller
 from app.controllers.insumo_controller import InsumoController
 from app.utils.validators import validate_uuid, validate_pagination
 from marshmallow import ValidationError
@@ -60,6 +61,7 @@ def crear_insumo():
 
 @insumos_bp.route('/catalogo', methods=['GET'])
 def obtener_insumos():
+       
     """
     Obtener lista de insumos con filtros opcionales
     ---

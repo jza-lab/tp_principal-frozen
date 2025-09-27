@@ -25,15 +25,12 @@ def login():
             return redirect(url_for('auth.login'))
 
         usuario = usuario_controller.autenticar_usuario(legajo, password)
-
+        
         if usuario and usuario.get('activo'):
             session['usuario_id'] = usuario['id']
             session['rol'] = usuario['rol']
             session['usuario_nombre'] = f"{usuario['nombre']} {usuario['apellido']}"
             session['user_data'] = usuario # Guardar para el registro de egreso
-
-            # Registrar ingreso en CSV
-            facial_controller.registrar_ingreso_csv(usuario)
 
             # Limpiar sesión de rostro pendiente
             session.pop("pending_face_user", None)
@@ -51,7 +48,7 @@ def login():
 def identificar_rostro():
     data = request.get_json()
     image_data_url = data.get("image")
-    
+    #facial_controller.registrar_rostro(id, image_data_url)
     resultado = facial_controller.identificar_rostro(image_data_url)
     estado=resultado['success']
 

@@ -64,7 +64,6 @@ class InsumoController(BaseController):
                 result = self.insumo_model.find_all(filtros)
 
             if result['success']:
-                # ✅ CORREGIDO: Serializar los datos correctamente
                 serialized_data = self.schema.dump(result['data'], many=True)
                 return self.success_response(data=serialized_data)
             else:
@@ -137,15 +136,12 @@ class InsumoController(BaseController):
     def eliminar_insumo_logico(self, id_insumo: str) -> tuple:
         """Eliminar un insumo del catálogo"""
         try:
-            
             data = {'activo': False}
             result = self.insumo_model.update(id_insumo, data, 'id_insumo')
-
+            
             if result['success']:
                 logger.info(f"Insumo eliminado: {id_insumo}")
                 return self.success_response(message=result['message'])
-            else:
-                return self.error_response(result['error'])
 
         except Exception as e:
             logger.error(f"Error eliminando insumo: {str(e)}")

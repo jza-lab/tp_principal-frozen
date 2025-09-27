@@ -43,7 +43,7 @@ def create_app():
     app.register_blueprint(orden_produccion_bp)
     app.register_blueprint(auth_bp, url_prefix='/auth')  # Prefijo opcional
     app.register_blueprint(admin_usuario_bp)
-    app.register_blueprint(facial_bp, url_prefix='/auth/face')
+    app.register_blueprint(facial_bp, url_prefix='/totem')
 
     # Ruta de health check
     @app.route('/api/health')

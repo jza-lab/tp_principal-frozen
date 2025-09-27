@@ -20,7 +20,7 @@ function eliminarInsumo(id){
     .then(data => {
         if (data.success) {
             alert('Insumo desactivado correctamente.');
-            window.location.reload(); 
+            window.location.reload();
         } else {
             alert('Error al desactivar: ' + data.error);
         }

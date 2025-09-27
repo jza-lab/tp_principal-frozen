@@ -21,7 +21,6 @@ def facial_index():
     return redirect(url_for('facial.login_totem'))
 
 # ====== RUTAS FACIALES ======
-
 @facial_bp.route("/facial/login_face", methods=["POST"])
 def login_face():
     """Login con reconocimiento facial"""
@@ -74,7 +73,7 @@ def logout_face():
 @facial_bp.route("/facial/login_totem")
 def login_totem():
     """Página del tótem para reconocimiento facial"""
-    return render_template("login_totem.html")
+    return render_template("usuarios/login_totem.html")
 
 @facial_bp.route("/facial/panel_totem")
 def panel_totem():

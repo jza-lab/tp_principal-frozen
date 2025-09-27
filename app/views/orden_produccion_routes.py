@@ -48,7 +48,21 @@ def listar():
 #     flash('La creación directa de órdenes está deshabilitada. Use el módulo de Planificación.', 'info')
 #     return redirect(url_for('orden_produccion.listar'))
 
-@orden_produccion_bp.route('/<int:id>')
+@orden_produccion_bp.route('/nueva')
+def nueva():
+    """
+    Muestra la página de detalle de una orden de producción específica,
+    incluyendo sus etapas.
+    """
+
+    # etapas = etapa_controller.obtener_etapas_por_orden(id)
+
+    # return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
+    etapas=None #Arreglar
+    return render_template('ordenes_produccion/formulario.html', etapas=etapas)
+
+
+@orden_produccion_bp.route('/detalle/<int:id>')
 def detalle(id):
     """
     Muestra la página de detalle de una orden de producción específica,
