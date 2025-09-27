@@ -1,0 +1,98 @@
+html, body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+
+body {
+    background-color: #ffffff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+    color: #212529;
+}
+
+.totem-container {
+    width: 100%;
+    max-width: 650px;
+    padding: 2rem;
+}
+
+.totem-card {
+    background: #f8f9fa;
+    border-radius: 20px;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    text-align: center;
+    padding: 2rem 2.5rem;
+}
+
+.totem-header h2 {
+    font-size: 2.5rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}
+
+#guia {
+    font-size: 1.5rem;
+    color: #495057;
+    min-height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.3s ease;
+}
+
+.camaraVideo {
+    margin: 1.5rem 0;
+}
+
+#video {
+    border: 6px solid #ced4da;
+    border-radius: 50%;
+    width: 400px;
+    height: 400px;
+    object-fit: cover;
+    background-color: #e9ecef;
+}
+
+.d-flex {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.btn {
+    flex-grow: 1;
+    font-size: 1.5rem;
+    font-weight: 700;
+    padding: 1.2rem 1rem;
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.btn:active {
+    transform: scale(0.98);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+}
+
+.btn-success {
+    background-color: #28a745;
+}
+.btn-success:hover {
+    background-color: #218838;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+}
+.btn-danger:hover {
+    background-color: #c82333;
+}
