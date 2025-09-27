@@ -13,16 +13,16 @@ facial_controller = FacialController()
 def login():
     """Gestiona el inicio de sesión de los usuarios."""
     if request.method == 'POST':
-        email = request.form['email']
+        legajo = request.form['legajo']
         password = request.form['password']
 
         # Validar con rostro si está pendiente
         pending_user = session.get("pending_face_user")
-        if pending_user and email != pending_user:
-            flash("El email no coincide con el rostro detectado.", "error")
+        if pending_user and legajo != pending_user:
+            flash("El legajo no coincide con el rostro detectado.", "error")
             return redirect(url_for('auth.login'))
 
-        usuario = usuario_controller.autenticar_usuario(email, password)
+        usuario = usuario_controller.autenticar_usuario(legajo, password)
         if usuario and usuario.get('activo'):
             session['usuario_id'] = usuario['id']
             session['rol'] = usuario['rol']
