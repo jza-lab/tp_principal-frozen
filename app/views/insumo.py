@@ -98,7 +98,7 @@ def obtener_insumo_por_id(id_insumo):
         logger.error(f"Error inesperado en obtener_insumo_por_id: {str(e)}")
         return redirect(url_for('insumos_api.obtener_insumos'))
 
-@insumos_bp.route('/catalogo/actualizar/<string:id_insumo>', methods=['GET', 'POST'])
+@insumos_bp.route('/catalogo/actualizar/<string:id_insumo>', methods=['GET', 'POST', 'PUT'])
 def actualizar_insumo(id_insumo):
     """
     Actualizar un insumo del catálogo
@@ -106,6 +106,7 @@ def actualizar_insumo(id_insumo):
     POST /api/insumos/catalogo/actualizar/{id_insumo}
     Content-Type: application/json
     """
+
     try:
         if not validate_uuid(id_insumo):
             return jsonify({
@@ -113,7 +114,7 @@ def actualizar_insumo(id_insumo):
                 'error': 'ID de insumo inválido'
             }), 400
         
-        if request.method == 'POST':
+        if request.method == 'POST' or request.method == 'PUT':
             datos_json = request.get_json(silent=True) 
             if(datos_json is None):
                 logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
@@ -123,6 +124,7 @@ def actualizar_insumo(id_insumo):
             return jsonify(response), status
 
         response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
+
         insumo = response['data']
         return render_template('insumos/formulario.html', insumo=insumo)
 
@@ -198,8 +200,6 @@ def agregar_lote(id_insumo):
         insumo = response['data']
         ordenes_compra_resp, _ = ordenes_compra_controller.obtener_codigos_por_insumo(id_insumo)
         ordenes_compra_data = ordenes_compra_resp.get('data', []) if ordenes_compra_resp.get('success') else []
-
-        print(ordenes_compra_data)
 
         return render_template('insumos/registrar_lote.html', insumo=insumo, proveedores=proveedores, ordenes=ordenes_compra_data)
 

@@ -38,7 +38,6 @@ def login():
 def identificar_rostro():
    data = request.get_json()
    image_data_url = data.get("image")
-   #facial_controller.registrar_rostro(id, image_data_url)
    resultado = facial_controller.identificar_rostro(image_data_url)
    estado=resultado['success']
    
