@@ -6,6 +6,7 @@ from marshmallow import ValidationError
 from app.controllers.producto_controller import ProductoController
 from app.controllers.receta_controller import RecetaController
 from app.controllers.usuario_controller import UsuarioController
+from datetime import datetime
 
 class OrdenProduccionController(BaseController):
     """
@@ -50,13 +51,40 @@ class OrdenProduccionController(BaseController):
         Valida datos y crea una orden en estado PENDIENTE.
         La reserva de stock se hará en la aprobación.
         """
+        from app.models.receta import RecetaModel
+        receta_model = RecetaModel()
+        
         try:
+            # 1. Extraer producto_id y limpiar datos que gestiona el servidor
+            producto_id = form_data.get('producto_id')
+            if not producto_id:
+                return {'success': False, 'error': 'El campo producto_id es requerido.'}
+
+            # Quitar campos que no deben venir del cliente para la validación
+            form_data.pop('usuario_id', None)
+            form_data.pop('estado', None)
+            form_data.pop('receta_id', None)
+
+            # 2. Lógica de negocio: Encontrar la receta activa para el producto
+            receta_result = receta_model.find_all({
+                'producto_id': int(producto_id),
+                'activa': True
+            }, limit=1)
+
+            if not receta_result.get('success') or not receta_result.get('data'):
+                return {'success': False, 'error': f'No se encontró una receta activa para el producto seleccionado (ID: {producto_id}).'}
+            
+            # Añadir el ID de la receta encontrada a los datos del formulario
+            receta = receta_result['data'][0]
+            form_data['receta_id'] = receta['id']
+
+            # 3. Validar los datos (ahora enriquecidos) con el schema
             validated_data = self.schema.load(form_data)
 
             # Añadir datos que no vienen del formulario
-            validated_data['usuario_id'] = usuario_id
-            validated_data['estado'] = 'PENDIENTE' # Estado inicial 
-
+            validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            validated_data['usuario_creador_id'] = usuario_id
+            validated_data['estado'] = 'PENDIENTE'
             # Usar el método 'create' genérico del BaseModel
             return self.model.create(validated_data)
 

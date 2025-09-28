@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert(`Orden ${ES_EDICION ? 'actualizada' : 'creada'} exitosamente.`);
+                alert(`Operación exitosa.`);
                 window.location.href = LISTA_URL;
             } else {
                 // Manejo de errores de validación de Flask/Marshmallow

@@ -66,21 +66,28 @@ def nueva():
     return render_template('ordenes_produccion/formulario.html', etapas=etapas, productos=productos, operarios = operarios)
         
 
-@orden_produccion_bp.route('/nueva/crear', methods=['GET', 'POST', 'PUT'])
+@orden_produccion_bp.route('/nueva/crear', methods=['POST'])
 def crear():
     try:
-       
-        datos_json = request.get_json(silent=True) 
-        print(datos_json)
-        if(datos_json is None):
-            logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
-            return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos (verifique Content-Type)'}), 400
-        
-        usuario_id_creador = session.get('usuario_id') 
+        datos_json = request.get_json()
+        if not datos_json:
+            return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos.'}), 400
 
-        response, status = controller.crear_orden(request, usuario_id_creador)
+        usuario_id_creador = session.get('usuario_id')
+
+        if not usuario_id_creador:
+            return jsonify({'success': False, 'error': 'Usuario no autenticado.'}), 401
+
+        # Corregido: Pasar `datos_json` al controlador, no el objeto `request`.
+        resultado = controller.crear_orden(datos_json, usuario_id_creador)
         
-        return jsonify(response), status
+        if resultado.get('success'):
+            # Devolver el objeto creado con el código de estado 201 (Created)
+            return jsonify(resultado), 201
+        else:
+            # Devolver el error específico con el código de estado 400 (Bad Request)
+            return jsonify(resultado), 400
+        
     except ValidationError as e:
         return jsonify({
             'success': False,
@@ -141,10 +148,8 @@ def detalle(id):
     if not orden:
         flash('Orden no encontrada.', 'error')
         return redirect(url_for('orden_produccion.listar'))
-
-    # etapas = etapa_controller.obtener_etapas_por_orden(id)
-
-    # return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
+    
+    print(orden)
     etapas=None #Arreglar
     return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
 
