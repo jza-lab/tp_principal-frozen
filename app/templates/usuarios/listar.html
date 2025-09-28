@@ -63,79 +63,91 @@
         </div>
     </div>
 
-    <!-- Lista de usuarios en cards -->
-    {% if usuarios %}
-        <div class="row">
-            {% for usuario in usuarios %}
-            <div class="col-lg-6 col-xl-4 mb-4">
-                <div class="user-card">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="user-avatar me-3">
-                                {{ usuario.nombre[0]|upper }}{{ usuario.apellido[0]|upper }}
-                            </div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1">{{ usuario.nombre }} {{ usuario.apellido }}</h6>
-                                <small class="text-muted">{{ usuario.email }}</small>
-                            </div>
-                            <div class="text-end">
-                                {% if usuario.activo %}
-                                    <i class="bi bi-circle-fill text-success" title="Activo"></i>
-                                {% else %}
-                                    <i class="bi bi-circle text-muted" title="Inactivo"></i>
-                                {% endif %}
-                            </div>
-                        </div>
-                        
-                        <div class="row g-2 mb-3">
-                            <div class="col-6">
-                                <div class="text-muted small">Legajo</div>
-                                <div class="fw-bold"># {{ usuario.legajo }}</div>
-                            </div>
-                            <div class="col-6">
-                                <div class="text-muted small">Rol</div>
-                                <span class="rol-badge rol-{{ usuario.rol.lower() }}">
-                                    {{ usuario.rol }}
+    <!-- Tarjetas de Usuarios -->
+    <div class="row">
+        {% for usuario in usuarios %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 usuario-card {% if not usuario.activo %}usuario-inactivo{% endif %}">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">
+                        {{ usuario.nombre }} {{ usuario.apellido }}
+                        {% if not usuario.activo %}
+                            <span class="badge bg-secondary">Inactivo</span>
+                        {% endif %}
+                    </h5>
+                    
+                    <div class="card-secondary-details mb-3">
+                        <span><i class="bi bi-hash"></i> {{ usuario.legajo or 'N/A' }}</span>
+                        <span><i class="bi bi-envelope"></i> {{ usuario.email }}</span>
+                        <span><i class="bi bi-shield-check"></i> {{ usuario.rol }}</span>
+                    </div>
+
+                    <div class="mt-auto">
+                        <hr class="card-divider">
+
+                        <div class="d-flex justify-content-between align-items-center mb-3 user-info">
+                            <div>
+                                <span class="user-label">Estado</span>
+                                <span class="user-value">
+                                    {% if usuario.activo %}Activo{% else %}Inactivo{% endif %}
                                 </span>
                             </div>
-                        </div>
-                        
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="btn-group" role="group">
-                                <a href="{{ url_for('admin_usuario.editar_usuario', id=usuario.id) }}" 
-                                   class="btn btn-action btn-outline-primary btn-sm">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
+                            <div>
                                 {% if usuario.activo %}
-                                <form action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}" 
-                                      method="POST" style="display:inline;" 
-                                      onsubmit="return confirm('¿Está seguro de desactivar este usuario?');">
-                                    <button type="submit" class="btn btn-action btn-outline-danger btn-sm">
-                                        <i class="bi bi-person-x"></i>
-                                    </button>
-                                </form>
+                                    <span class="badge bg-success-soft text-success">
+                                        <i class="bi bi-check-circle me-1"></i>Activo
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-danger-soft text-danger">
+                                        <i class="bi bi-x-circle me-1"></i>Inactivo
+                                    </span>
                                 {% endif %}
                             </div>
-                            <small class="text-muted">
-                                Estado: {{ 'Activo' if usuario.activo else 'Inactivo' }}
-                            </small>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                            {% if usuario.activo %}
+                                <a href="{{ url_for('admin_usuario.editar_usuario', id=usuario.id) }}" 
+                                   class="btn btn-sm btn-outline-primary" title="Editar usuario">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+
+                                <a href="#" class="btn btn-sm btn-outline-primary" title="Ver detalle">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+
+                                <form action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}" 
+                                      onclick="eliminarUsuario('{{ usuario.id }}')">
+                                    <button type="button" class="btn btn-sm btn-outline-danger" title="Desactivar usuario">
+                                        <i class="bi bi-person-x"></i> Desactivar
+                                    </button>
+                                </form>
+                            {% else %}
+                                <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" 
+                                      onclick="habilitarUsuario('{{ usuario.id }}')">
+                                    <button type="button" class="btn btn-sm btn-outline-success" title="Activar usuario">
+                                        <i class="bi bi-person-check"></i> Activar
+                                    </button>
+                                </form>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
             </div>
-            {% endfor %}
         </div>
-    {% else %}
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <i class="bi bi-people fs-1 opacity-25 mb-3"></i>
+        {% else %}
+        <div class="col-12">
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-people fs-1 d-block mb-2 opacity-50"></i>
                 <h4>No hay usuarios registrados</h4>
-                <p class="text-muted mb-4">Comience agregando el primer usuario al sistema</p>
+                <p>Comience agregando el primer usuario al sistema</p>
                 <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary">
                     <i class="bi bi-person-plus me-1"></i>Crear Primer Usuario
                 </a>
             </div>
         </div>
-    {% endif %}
+        {% endfor %}
+    </div>
 </div>
+<script src="{{ url_for('static', filename='js/habilitarUsuario.js') }}"></script>
 {% endblock %}

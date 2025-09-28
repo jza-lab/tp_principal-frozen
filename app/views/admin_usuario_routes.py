@@ -1,12 +1,14 @@
 from flask import Blueprint, session, request, redirect, url_for, flash, render_template
 from app.controllers.usuario_controller import UsuarioController
+from app.controllers.facial_controller import FacialController
 from app.utils.decorators import roles_required
 
 # Blueprint para la administración de usuarios
 admin_usuario_bp = Blueprint('admin_usuario', __name__, url_prefix='/admin')
 
-# Instanciar controlador
+# Instanciar controladores
 usuario_controller = UsuarioController()
+facial_controller = FacialController()
 
 @admin_usuario_bp.route('/')
 @roles_required('ADMIN')
@@ -24,25 +26,31 @@ def listar_usuarios():
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
 @roles_required('ADMIN')
 def nuevo_usuario():
-    """Gestiona la creación de un nuevo usuario."""
+    """Gestiona la creación de un nuevo usuario, incluyendo el registro facial."""
     if request.method == 'POST':
         datos_usuario = request.form.to_dict()
+        face_data = datos_usuario.pop('face_data', None)
+
         resultado = usuario_controller.crear_usuario(datos_usuario)
         
         if resultado.get('success'):
             usuario_creado = resultado.get('data')
+            user_id = usuario_creado.get('id')
             
-            if usuario_creado and isinstance(usuario_creado, dict) and 'id' in usuario_creado:
-                session['pending_register_user_id'] = usuario_creado['id']
-                session['admin_creation_flow'] = True
-                flash('Usuario creado. Ahora proceda con el registro facial.', 'info')
-                # return redirect(url_for('auth.register_face_page'))
-                return redirect(url_for('admin_usuario.listar_usuarios'))
+            if user_id and face_data:
+                # Si hay datos faciales, intentar registrarlos
+                resultado_facial = facial_controller.registrar_rostro(user_id, face_data)
+                if resultado_facial.get('success'):
+                    flash('Usuario creado y rostro registrado exitosamente.', 'success')
+                else:
+                    flash(f"Usuario creado, pero falló el registro facial: {resultado_facial.get('message')}", 'warning')
             else:
-                # Handle case where user creation succeeded but data is not as expected
-                flash('Usuario creado, pero hubo un problema al obtener su ID para el siguiente paso.', 'warning')
-                return redirect(url_for('admin_usuario.listar_usuarios'))
+                # Si no hay datos faciales, solo informar de la creación del usuario
+                flash('Usuario creado exitosamente (sin registro facial).', 'success')
+
+            return redirect(url_for('admin_usuario.listar_usuarios'))
         else:
+            # Si la creación del usuario falla, mostrar el error
             flash(f"Error al crear el usuario: {resultado.get('error')}", 'error')
             return render_template('usuarios/formulario.html', usuario=datos_usuario, is_new=True)
             
@@ -83,4 +91,15 @@ def eliminar_usuario(id):
         flash('Usuario desactivado exitosamente.', 'success')
     else:
         flash(f"Error al desactivar el usuario: {resultado.get('error')}", 'error')
+    return redirect(url_for('admin_usuario.listar_usuarios'))
+
+@admin_usuario_bp.route('/usuarios/<int:id>/habilitar', methods=['POST'])
+@roles_required('ADMIN')
+def habilitar_usuario(id):
+    """Reactiva un usuario."""
+    resultado = usuario_controller.habilitar_usuario(id)
+    if resultado.get('success'):
+        flash('Usuario activado exitosamente.', 'success')
+    else:
+        flash(f"Error al activar el usuario: {resultado.get('error')}", 'error')
     return redirect(url_for('admin_usuario.listar_usuarios'))

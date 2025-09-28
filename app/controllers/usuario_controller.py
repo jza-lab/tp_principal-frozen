@@ -315,3 +315,9 @@ class UsuarioController(BaseController):
         No se elimina físicamente para mantener la integridad referencial.
         """
         return self.model.update(usuario_id, {'activo': False})
+
+    def habilitar_usuario(self, usuario_id: int) -> Dict:
+        """
+        Reactiva un usuario que fue desactivado lógicamente.
+        """
+        return self.model.update(usuario_id, {'activo': True})
