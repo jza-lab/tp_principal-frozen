@@ -1,14 +1,14 @@
 {% extends 'layouts/base.html' %}
 
 {% block title %}
-    {% if orden %}Editar{% else %}Nueva{% endif %} Orden de Compra - Sistema Frozen
+    {% if orden %}Editar Orden de Compra {{ orden.codigo_oc }}{% else %}Nueva Orden de Compra{% endif %}
 {% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">
-            {% if orden %}Editar{% else %}Nueva{% endif %} Orden de Compra
+            {% if orden %}Editar Orden de Compra{% else %}Nueva Orden de Compra{% endif %}
         </h1>
         <p class="text-muted mb-0">
             {% if orden %}
@@ -84,8 +84,8 @@
             </div>
             <div class="card-body">
                 <div id="itemsContainer">
-                    {% if orden and orden.items %}
-                        {% for item in orden.items %}
+                    {% if orden and orden['items'] %}
+                        {% for item in orden['items'] %}
                             <div class="row g-3 align-items-end item-row mb-2">
                                 <div class="col-md-4">
                                     <label class="form-label">Insumo</label>
@@ -171,6 +171,9 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+    const INSUMOS_DATA = {{ insumos | tojson | safe }};
+</script>
 <script src="{{ url_for('static', filename='js/formularioCompra.js') }}"></script>
 {% endblock extra_js %}
 
