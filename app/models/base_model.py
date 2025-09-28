@@ -104,13 +104,18 @@ class BaseModel(ABC):
             if not update_data:
                 return {'success': False, 'error': 'No hay datos para actualizar'}
 
-            result = self.db.table(self.table_name).update(update_data).eq(id_field, id_value).execute()
+            # ✅ Usar el helper para convertir fechas/datetimes a string
+            clean_data = self._prepare_data_for_db(update_data)
+
+            result = self.db.table(self.table_name).update(clean_data).eq(id_field, id_value).execute()
 
             if result.data:
                 logger.info(f"Registro actualizado en {self.table_name}: {id_value}")
                 return {'success': True, 'data': result.data[0]}
             else:
-                return {'success': False, 'error': 'No se pudo actualizar el registro'}
+                # Si la actualización no devuelve datos, puede que el registro no existiera.
+                # Opcionalmente, se podría verificar aquí.
+                return {'success': False, 'error': 'No se pudo actualizar el registro o no se encontró.'}
 
         except Exception as e:
             logger.error(f"Error actualizando en {self.table_name}: {str(e)}")
