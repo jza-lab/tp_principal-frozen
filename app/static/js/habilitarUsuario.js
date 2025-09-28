@@ -41,7 +41,7 @@ function eliminarUsuario(id) {
         const url = `/admin/usuarios/${id}/eliminar`;
 
         fetch(url, {
-            method: 'DELETE',
+            method: 'POST',
         })
         .then(response => {
             if (!response.ok) {

@@ -1,4 +1,4 @@
-from flask import Blueprint, session, request, redirect, url_for, flash, render_template
+from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
 from app.utils.decorators import roles_required
@@ -81,12 +81,17 @@ def editar_usuario(id):
 @admin_usuario_bp.route('/usuarios/<int:id>/eliminar', methods=['POST'])
 @roles_required('ADMIN')
 def eliminar_usuario(id):
-    """Desactiva un usuario (eliminación lógica)."""
     if session.get('usuario_id') == id:
-        flash('No puedes desactivar tu propia cuenta.', 'error')
+        msg = 'No puedes desactivar tu propia cuenta.'
+        if request.is_json:  # viene desde fetch
+            return jsonify(success=False, error=msg)
+        flash(msg, 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
 
     resultado = usuario_controller.eliminar_usuario(id)
+    if request.is_json:
+        return jsonify(resultado)
+    
     if resultado.get('success'):
         flash('Usuario desactivado exitosamente.', 'success')
     else:

@@ -116,16 +116,15 @@
                                     <i class="bi bi-eye"></i>
                                 </a>
 
-                                <form action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}" 
-                                      onclick="eliminarUsuario('{{ usuario.id }}')">
-                                    <button type="button" class="btn btn-sm btn-outline-danger" title="Desactivar usuario">
+                                <form method="POST" action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
                                         <i class="bi bi-person-x"></i> Desactivar
                                     </button>
                                 </form>
+
                             {% else %}
-                                <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" 
-                                      onclick="habilitarUsuario('{{ usuario.id }}')">
-                                    <button type="button" class="btn btn-sm btn-outline-success" title="Activar usuario">
+                                <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
                                         <i class="bi bi-person-check"></i> Activar
                                     </button>
                                 </form>
