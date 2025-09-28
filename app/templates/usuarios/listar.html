@@ -16,24 +16,7 @@
         </div>
     </div>
 
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <div class="alert-container mb-4">
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
-                        {% if category == 'error' %}
-                            <i class="bi bi-exclamation-triangle me-2"></i>
-                        {% elif category == 'success' %}
-                            <i class="bi bi-check-circle me-2"></i>
-                        {% endif %}
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
+
 
     <!-- Estadísticas rápidas -->
     <div class="row mb-4">
