@@ -22,7 +22,7 @@ def login():
         if respuesta.get('success') and usuario and usuario.get('activo'):
             session['usuario_id'] = usuario['id']
             session['rol'] = usuario['rol']
-            session['usuario_nombre'] = f"{usuario['nombre']} {usuario['apellido']}"
+            session['usuario_nombre'] = f"{usuario['nombre']}"
             session['user_data'] = usuario # Guardar para el registro de egreso
 
             flash(f"Bienvenido {usuario['nombre']}", 'success')

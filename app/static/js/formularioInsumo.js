@@ -5,7 +5,9 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
         console.log(IS_EDIT)
         let url;
-        if (IS_EDIT === 'True') {
+        let method;
+
+        if (IS_EDIT === 'true') {
             const id_insumo = ID_INSUMO;
             url = `/api/insumos/catalogo/actualizar/${id_insumo}`;
         } else {
@@ -27,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
             requiere_certificacion: document.getElementById('requiere_certificacion').checked
         };
 
-        const method = (IS_EDIT === 'True') ? 'PUT' : 'POST';
+        method = (IS_EDIT === 'True') ? 'PUT' : 'POST';
 
         fetch(url, {
             method: method,
