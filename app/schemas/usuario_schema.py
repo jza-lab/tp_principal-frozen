@@ -20,7 +20,7 @@ class UsuarioSchema(Schema):
     activo = fields.Bool(dump_only=True)
     creado_en = fields.DateTime(dump_only=True)
     actualizado_en = fields.DateTime(dump_only=True)
-    numero_empleado = fields.Str(allow_none=True)
+    legajo = fields.Str(allow_none=True)
     dni = fields.Str(allow_none=True)
     telefono = fields.Str(allow_none=True)
     direccion = fields.Str(allow_none=True)

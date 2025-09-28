@@ -1,20 +1,43 @@
-# Cache de Python
+# Environments
+credenciales.env
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 
-# Entornos virtuales
-.venv/
-venv/
-
-# Archivos de IDE y sistema operativo
-.idea/
+# Distribution / packaging
 .vscode/
-.env
-.DS_Store
-
-# Archivos de log
-*.log
-
-# Carpetas de build
+.pytest_cache/
+.Python
 build/
+develop-eggs/
 dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Flask
+instance/
+.webassets-cache
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak
+venv.bak

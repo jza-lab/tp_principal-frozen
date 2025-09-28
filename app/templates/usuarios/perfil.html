@@ -1,0 +1,39 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Perfil de Usuario{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Perfil de Usuario</h1>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {% if usuario %}
+    <div class="card">
+        <div class="card-header">
+            Información del Usuario
+        </div>
+        <div class="card-body">
+            <p><strong>Legajo:</strong> {{ usuario.legajo }}</p>
+            <p><strong>Nombre:</strong> {{ usuario.nombre }}</p>
+            <p><strong>Apellido:</strong> {{ usuario.apellido }}</p>
+            <p><strong>Rol:</strong> {{ usuario.rol }}</p>
+            <p><strong>Activo:</strong> {{ 'Sí' if usuario.activo else 'No' }}</p>
+        </div>
+        <div class="card-footer">
+            <a href="{{ url_for('admin_usuario.index') }}" class="btn btn-secondary">Volver al Dashboard</a>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-warning">
+        No se pudo cargar la información del usuario.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

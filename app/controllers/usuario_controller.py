@@ -56,7 +56,8 @@ class UsuarioController(BaseController):
         Autentica a un usuario por legajo y contraseña.
         VERIFICA que tenga login activo en tótem.
         """
-        user_result = self.model.find_by_legajo_v2(legajo)
+        
+        user_result = self.model.find_by_legajo(legajo)
 
         if not user_result.get('success') or not user_result.get('data'):
             return {'success': False, 'error': 'Credenciales inválidas'}
@@ -73,7 +74,7 @@ class UsuarioController(BaseController):
             return {'success': False, 'error': 'Usuario desactivado'}
 
         # 3. DEBUG: Mostrar estado actual del usuario
-        logger.info(f"📊 Estado del usuario:")
+        logger.info("📊 Estado del usuario:")
         logger.info(f"   - login_totem_activo: {user_data.get('login_totem_activo')}")
         logger.info(f"   - ultimo_login_totem: {user_data.get('ultimo_login_totem')}")
         logger.info(f"   - activo: {user_data.get('activo')}")
@@ -175,7 +176,7 @@ class UsuarioController(BaseController):
                 user_updated = self.model.find_by_id(usuario_id)
                 if user_updated.get('success') and user_updated.get('data'):
                     user_data = user_updated['data']
-                    logger.info(f"✅ Usuario actualizado:")
+                    logger.info("✅ Usuario actualizado:")
                     logger.info(f"   - login_totem_activo: {user_data.get('login_totem_activo')}")
                     logger.info(f"   - ultimo_login_totem: {user_data.get('ultimo_login_totem')}")
 
@@ -314,3 +315,9 @@ class UsuarioController(BaseController):
         No se elimina físicamente para mantener la integridad referencial.
         """
         return self.model.update(usuario_id, {'activo': False})
+
+    def habilitar_usuario(self, usuario_id: int) -> Dict:
+        """
+        Reactiva un usuario que fue desactivado lógicamente.
+        """
+        return self.model.update(usuario_id, {'activo': True})

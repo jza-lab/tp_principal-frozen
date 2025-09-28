@@ -1,4 +1,4 @@
-from models.base_model import BaseModel
+from app.models.base_model import BaseModel
 from typing import Dict, Any, Optional
 from datetime import datetime
 import logging
@@ -30,4 +30,87 @@ class OrdenProduccionModel(BaseModel):
             return self.update(id_value=orden_id, data=update_data, id_field='id')
         except Exception as e:
             logger.error(f"Error cambiando estado de la orden {orden_id}: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def get_all_enriched(self, filtros: Optional[Dict] = None) -> Dict:
+        """
+        Obtiene todas las órdenes de producción con datos enriquecidos de tablas relacionadas
+        (productos, usuarios, etc.) utilizando el cliente de Supabase.
+        """
+        try:
+            # El string de select indica que queremos todos los campos de ordenes_produccion,
+            # y de las tablas relacionadas 'productos' y 'usuarios', traemos el campo 'nombre'.
+            # Supabase infiere las relaciones por las Foreign Keys.
+            query = self.db.table(self.table_name).select(
+                "*, productos(nombre), usuarios(nombre)"
+            )
+            
+            # Aplicar filtros
+            if filtros:
+                for key, value in filtros.items():
+                    if value is not None:
+                        query = query.eq(key, value)
+            
+            # Ordenar
+            query = query.order("fecha_planificada", desc=True).order("id", desc=True)
+
+            result = query.execute()
+
+            if result.data:
+                # Aplanar la respuesta para que coincida con lo que espera la vista/template
+                processed_data = []
+                for item in result.data:
+                    if item.get('productos'):
+                        item['producto_nombre'] = item.pop('productos')['nombre']
+                    else:
+                        item['producto_nombre'] = 'N/A'
+                    
+                    if item.get('usuarios'):
+                        item['operario_nombre'] = item.pop('usuarios')['nombre']
+                    else:
+                        item['operario_nombre'] = 'No asignado'
+                    
+                    processed_data.append(item)
+                return {'success': True, 'data': processed_data}
+            else:
+                # Si no hay datos, devolvemos una lista vacía, lo cual no es un error.
+                return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error al obtener órdenes enriquecidas: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def get_one_enriched(self, orden_id: int) -> Dict:
+        """
+        Obtiene una orden de producción específica con datos enriquecidos.
+        """
+        try:
+            # .maybe_single() ejecuta la consulta y devuelve un solo dict o None
+            response = self.db.table(self.table_name).select(
+                "*, productos(nombre, descripcion), recetas(id, descripcion, rendimiento, activa), usuarios(nombre)"
+            ).eq("id", orden_id).maybe_single().execute()
+           
+            item = response.data
+           
+            if item:
+                # Aplanar la respuesta
+                if item.get('productos'):
+                    item['producto_nombre'] = item['productos'].get('nombre', 'N/A')
+                    item['producto_descripcion'] = item['productos'].get('descripcion', 'N/A')
+                    item.pop('productos')
+                
+                if item.get('recetas'):
+                    item['receta_codigo'] = item['recetas'].get('codigo', 'N/A')
+                    item.pop('recetas')
+
+                if item.get('usuarios'):
+                    item['operario_nombre'] = item['usuarios'].get('nombre', 'No asignado')
+                    item.pop('usuarios')
+                
+                return {'success': True, 'data': item}
+            else:
+                return {'success': False, 'error': f'Orden con id {orden_id} no encontrada.'}
+
+        except Exception as e:
+            logger.error(f"Error al obtener la orden enriquecida {orden_id}: {str(e)}")
             return {'success': False, 'error': str(e)}
