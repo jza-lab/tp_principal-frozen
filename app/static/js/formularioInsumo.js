@@ -3,16 +3,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     formulario.addEventListener('submit', function (event) {
         event.preventDefault();
+        console.log(IS_EDIT)
 
-
-        if (IS_EDIT) {
-            const id_insumo = ID_INSUMO
-            url = `/api/insumos/catalogo/actualizar/${id_insumo}`;
-        }
-        else {
+        if (IS_EDIT === true) { // 💡 Aseguramos la comparación estricta con true
+            // Si es edición, usamos el ID global (ID_INSUMO)
+            url = `/api/insumos/catalogo/actualizar/${ID_INSUMO}`;
+            method = 'POST'; // Puedes usar 'PUT' o 'POST' para actualizar
+        } else {
+            // Si es creación
             url = `/api/insumos/catalogo/nuevo`;
+            method = 'POST';
         }
-        
+
         const data = {
             codigo_interno: document.getElementById('codigo_interno').value,
             nombre: document.getElementById('nombre').value,

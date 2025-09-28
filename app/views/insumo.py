@@ -22,8 +22,8 @@ def crear_insumo():
                 logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
                 return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos (verifique Content-Type)'}), 400
     
-
             response, status = insumo_controller.crear_insumo(request.json)
+
             return jsonify(response), status
         
         insumo=None
