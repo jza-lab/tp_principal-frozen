@@ -1,5 +1,6 @@
 from flask import Blueprint, redirect, render_template, request, jsonify, url_for
 from app.controllers.insumo_controller import InsumoController
+from app.controllers.inventario_controller import InventarioController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.orden_compra_controller import OrdenCompraController
 from app.utils.validators import validate_uuid
@@ -15,6 +16,9 @@ insumos_bp = Blueprint('insumos_api', __name__, url_prefix='/api/insumos')
 insumo_controller = InsumoController()
 proveedor_controller = ProveedorController()
 ordenes_compra_controller = OrdenCompraController()
+inventario_controller= InventarioController()
+
+
 
 @insumos_bp.route('/catalogo/nuevo', methods=['GET', 'POST'])
 def crear_insumo():
@@ -192,10 +196,37 @@ def agregar_lote(id_insumo):
         
         response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
         insumo = response['data']
+        ordenes_compra_resp, _ = ordenes_compra_controller.obtener_codigos_por_insumo(id_insumo)
+        ordenes_compra_data = ordenes_compra_resp.get('data', []) if ordenes_compra_resp.get('success') else []
 
-        return render_template('insumos/registrar_lote.html', insumo=insumo, proveedores=proveedores)
+        print(ordenes_compra_data)
 
+        return render_template('insumos/registrar_lote.html', insumo=insumo, proveedores=proveedores, ordenes=ordenes_compra_data)
 
+@insumos_bp.route('/catalogo/lote/nuevo/<string:id_insumo>/crear', methods = ['GET', 'POST'])
+def crear_lote(id_insumo):
+    try:
+        if request.method == 'POST':
+            datos_json = request.get_json()
+            if not datos_json:
+                logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
+                return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos (verifique Content-Type)'}), 400
+
+            response, status = inventario_controller.crear_lote(datos_json)
+            return jsonify(response), status
+
+    except ValidationError as e:
+        return jsonify({
+            'success': False,
+            'error': 'Datos inválidos',
+            'details': e.messages
+        }), 400
+    except Exception as e:
+        logger.error(f"Error inesperado en crear_lote: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Error interno del servidor'
+        }), 500
 
 @insumos_bp.route('/stock', methods=['GET'])
 def obtener_stock_consolidado():

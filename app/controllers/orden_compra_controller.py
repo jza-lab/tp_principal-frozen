@@ -154,8 +154,21 @@ class OrdenCompraController:
                 return jsonify({'success': False, 'error': result['error']}), 404
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
-
-
+    
+    def obtener_codigos_por_insumo(self, insumo_id):
+        """
+        Obtiene los códigos de OC asociados a un insumo.
+        """
+        try:
+            result = self.model.find_codigos_by_insumo_id(insumo_id)
+            if result.get('success'):
+                return result, 200
+            else:
+                return result, 400
+        except Exception as e:
+            logger.error(f"Error en controlador al obtener códigos de OC por insumo: {e}")
+            return {'success': False, 'error': str(e)}, 500
+          
     def cancelar_orden(self, orden_id):
         """Endpoint específico para cancelar órdenes de compra"""
         try:
