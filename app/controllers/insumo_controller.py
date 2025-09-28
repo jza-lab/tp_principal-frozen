@@ -37,8 +37,9 @@ class InsumoController(BaseController):
             if result['success']:
                 logger.info(f"Insumo creado exitosamente: {result['data']['id_insumo']}")
 
+                # ✅ SIMPLIFICADO: El esquema ya maneja la serialización
                 return self.success_response(
-                    data=self.schema.dump(result['data']),  
+                    data=self.schema.dump(result['data']),  # Marshmallow se encarga
                     message='Insumo creado exitosamente',
                     status_code=201
                 )
@@ -54,20 +55,25 @@ class InsumoController(BaseController):
         try:
             # Aplicar filtros por defecto
             filtros = filtros or {}
-            if 'activo' not in filtros:
-                filtros['activo'] = True
+           
 
-            # Buscar en base de datos
+            # Determinar la fuente de los datos
             if filtros.get('busqueda'):
                 result = self.insumo_model.buscar_texto(filtros['busqueda'])
             else:
                 result = self.insumo_model.find_all(filtros)
 
-            if result['success']:
-                serialized_data = self.schema.dump(result['data'], many=True)
-                return self.success_response(data=serialized_data)
-            else:
+            # Procesar el resultado
+            if not result['success']:
                 return self.error_response(result['error'])
+
+            # Ordenar la lista: activos primero, luego inactivos
+            datos = result['data']
+            sorted_data = sorted(datos, key=lambda x: x.get('activo', False), reverse=True)
+            
+            # Serializar y responder
+            serialized_data = self.schema.dump(sorted_data, many=True)
+            return self.success_response(data=serialized_data)
 
         except Exception as e:
             logger.error(f"Error obteniendo insumos: {str(e)}")
@@ -124,7 +130,7 @@ class InsumoController(BaseController):
 
             if result['success']:
                 logger.info(f"Insumo eliminado: {id_insumo}")
-                return self.success_response(message=result['message'])
+                return self.success_response(message="Insumo desactivado correctamente.")
             else:
                 return self.error_response(result['error'])
 
@@ -136,15 +142,37 @@ class InsumoController(BaseController):
     def eliminar_insumo_logico(self, id_insumo: str) -> tuple:
         """Eliminar un insumo del catálogo"""
         try:
+            
             data = {'activo': False}
             result = self.insumo_model.update(id_insumo, data, 'id_insumo')
-            
+
             if result['success']:
                 logger.info(f"Insumo eliminado: {id_insumo}")
-                return self.success_response(message=result['message'])
+                return self.success_response(message="Insumo desactivado correctamente.")
+            else:
+                return self.error_response(result['error'])
 
         except Exception as e:
             logger.error(f"Error eliminando insumo: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def habilitar_insumo(self, id_insumo: str) -> tuple:
+        """Habilitar un insumo del catálogo"""
+        try:
+            
+            data = {'activo': True}
+            result = self.insumo_model.update(id_insumo, data, 'id_insumo')
+
+            if result['success']:
+                logger.info(f"Insumo habilitado: {id_insumo}")
+                return self.success_response(message="Insumo habilitado correctamente.")
+            else:
+                # Proporcionar un mensaje de error más específico si la actualización falla
+                error_message = result.get('error', 'No se pudo habilitar el insumo.')
+                return self.error_response(error_message)
+
+        except Exception as e:
+            logger.error(f"Error habilitando insumo: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
 

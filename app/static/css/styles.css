@@ -416,6 +416,17 @@ body {
     transition: background-color 0.2s ease-in-out;
 }
 
+.insumo-inactivo {
+    opacity: 0.6;
+    background-color: #f8f9fa;
+    pointer-events: none; /* Evita que se pueda hacer hover o click en la tarjeta */
+}
+
+.insumo-inactivo .action-buttons {
+    pointer-events: auto; /* Permite que los botones dentro de la tarjeta inactiva sí sean clickeables */
+}
+
+
 .bg-danger-soft {
     background-color: rgba(231, 74, 59, 0.1) !important;
     color: #e74a3b !important;

@@ -52,11 +52,10 @@
 <!-- Tarjetas de Insumos -->
 <div class="row">
     {% for insumo in insumos %}
-    {% if insumo.activo %}
     <div class="col-md-4 mb-4">
-        <div class="card h-100 insumo-card">
+        <div class="card h-100 insumo-card {% if not insumo.activo %}insumo-inactivo{% endif %}">
             <div class="card-body d-flex flex-column">
-                <h5 class="card-title"> {{insumo['nombre'] }} </h5>
+                <h5 class="card-title"> {{insumo['nombre'] }} {% if not insumo.activo %}<span class="badge bg-secondary">Inactivo</span>{% endif %}</h5>
                 <div class="card-secondary-details mb-3">
                     <span><i class="bi bi-tag-fill"></i> {{ insumo['categoria'] }}</span>
                     <span><i class="bi bi-upc-scan"></i> <code>{{ insumo['codigo_interno'] }}</code></span>
@@ -88,6 +87,7 @@
                     </div>
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                        {% if insumo.activo %}
                         <a href="" class="btn btn-sm btn-outline-success" title="Registrar Lote">
                             <i class="bi bi-plus-square"></i>
                         </a>
@@ -96,21 +96,27 @@
                             <i class="bi bi-pencil"></i>
                         </a>
 
-                        <a class="btn btn-sm btn-outline-danger" title="Eliminar insumo"
-                            onClick="eliminarInsumo('{{ insumo.id_insumo }}')">
-                            <i class="bi bi-trash"></i>
-                        </a>
-
                         <a href="{{ url_for('insumos_api.obtener_insumo_por_id', id_insumo=insumo.id_insumo) }}"
                             class="btn btn-sm btn-outline-primary" title="Detalle">
                             <i class="bi bi-eye"></i>
                         </a>
+
+                        <a class="btn btn-sm btn-outline-danger" title="Inhabilitar insumo"
+                            onClick="eliminarInsumo('{{ insumo.id_insumo }}')">
+                            <i class="bi bi-slash-circle"></i> Inhabilitar
+                        </a>
+
+                        {% else %}
+                        <a class="btn btn-sm btn-outline-success" title="Habilitar insumo"
+                            onClick="habilitarInsumo('{{ insumo.id_insumo }}')">
+                            <i class="bi bi-check-circle"></i> Habilitar
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    {% endif %}
     {% else %}
     <div class="col-12">
         <div class="text-center text-muted py-5">
@@ -121,5 +127,6 @@
     </div>
     {% endfor %}
 </div>
-<script src="../../static/js/scriptEliminarInsumo.js"></script>
+<script src="{{ url_for('static', filename='js/scriptEliminarInsumo.js') }}"></script>
+<script src="{{ url_for('static', filename='js/habilitarInsumo.js') }}"></script>
 {% endblock %}
