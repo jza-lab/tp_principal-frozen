@@ -1,11 +1,12 @@
 from collections import defaultdict
 from typing import Dict, List, Any
-from app.models.pedido import PedidoModel, Pedido
+from app.models.pedido import PedidoModel
 from app.models.producto import ProductoModel
 
 class PlanificacionController:
     """
     Controlador para la lógica de negocio del módulo de planificación de producción.
+    CORREGIDO: Ahora opera sobre pedido_items individuales.
     """
 
     def __init__(self):
@@ -14,36 +15,41 @@ class PlanificacionController:
 
     def obtener_pedidos_para_planificar(self) -> Dict[int, Dict[str, Any]]:
         """
-        Obtiene todos los pedidos pendientes, los agrupa por producto y retorna
-        un diccionario de diccionarios para ser usado en la vista.
+        Obtiene todos los ítems de pedidos con estado 'PENDIENTE', los agrupa por
+        producto y retorna un diccionario consolidado para ser usado en la vista.
         """
-        # 1. Obtener todos los pedidos con estado 'PENDIENTE'
-        resultado = self.pedido_model.find_all(filters={'estado': 'PENDIENTE'})
-        pedidos_pendientes: List[Pedido] = resultado.get('data', [])
+        # 1. Obtener todos los ítems de pedido pendientes directamente
+        resultado = self.pedido_model.find_all_items(filters={'estado': 'PENDIENTE'})
+        items_pendientes: List[Dict] = resultado.get('data', [])
 
-        if not pedidos_pendientes:
+        if not items_pendientes:
             return {}
 
-        # 2. Agrupar los pedidos por producto_id
-        pedidos_agrupados = defaultdict(lambda: {
+        # 2. Agrupar los ítems por producto_id
+        items_agrupados = defaultdict(lambda: {
             'producto_info': None,
-            'pedidos': [],
-            'cantidad_total': 0
+            'items': [],
+            'cantidad_total': 0.0,
+            'pedido_ids': set() 
         })
 
-        for pedido in pedidos_pendientes:
-            producto_id = pedido.producto_id
-            # Se convierte el objeto a diccionario para mantener la consistencia
-            pedidos_agrupados[producto_id]['pedidos'].append(pedido.to_dict())
-            pedidos_agrupados[producto_id]['cantidad_total'] += pedido.cantidad
+        for item in items_pendientes:
+            producto_id = item['producto_id']
+            items_agrupados[producto_id]['items'].append(item)
+            items_agrupados[producto_id]['cantidad_total'] += item['cantidad']
+            items_agrupados[producto_id]['pedido_ids'].add(item['pedido_id'])
 
-        # 3. Obtener la información de cada producto
-        producto_ids = list(pedidos_agrupados.keys())
+        # 3. Obtener la información de cada producto en una sola consulta
+        producto_ids = list(items_agrupados.keys())
+        if not producto_ids:
+            return {}
+            
         productos_result = self.producto_model.find_all(filters={'id': ('in', producto_ids)})
-        productos = {p['id']: p for p in productos_result.get('data', [])}
+        productos_map = {p['id']: p for p in productos_result.get('data', [])}
 
-        for producto_id, data in pedidos_agrupados.items():
-            # La información del producto ya es un diccionario, así que está bien
-            data['producto_info'] = productos.get(producto_id)
+        # 4. Enriquecer los datos agrupados con la info del producto
+        for producto_id, data in items_agrupados.items():
+            data['producto_info'] = productos_map.get(producto_id)
+            data['pedido_ids'] = sorted(list(data['pedido_ids']))
 
-        return dict(pedidos_agrupados)
+        return dict(items_agrupados)

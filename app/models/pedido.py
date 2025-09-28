@@ -14,6 +14,10 @@ class PedidoItem:
     pedido_id: Optional[int] = None
     producto_id: int
     cantidad: float
+    estado: str = 'PENDIENTE'
+    orden_produccion_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 @dataclass
 class Pedido:
@@ -23,7 +27,6 @@ class Pedido:
     fecha_solicitud: date
     items: List[PedidoItem]
     estado: str = 'PENDIENTE'
-    orden_produccion_id: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -134,12 +137,67 @@ class PedidoModel(BaseModel):
             logger.error(f"Error obteniendo todos los pedidos: {e}")
             return {'success': False, 'error': str(e)}
 
+    def find_all_items(self, filters: Optional[Dict] = None) -> Dict:
+        """
+        Busca todos los ítems de pedido, opcionalmente con filtros.
+        A diferencia de find_all, esta función opera directamente sobre pedido_items.
+        """
+        try:
+            query = self.db.table(self._get_items_table_name()).select('*, producto:productos(nombre)')
+
+            if filters:
+                for key, value in filters.items():
+                    if isinstance(value, tuple) and len(value) == 2:
+                        operator, filter_value = value
+                        if operator.lower() == 'in':
+                            query = query.in_(key, filter_value)
+                    else:
+                        query = query.eq(key, value)
+            
+            result = query.execute()
+
+            if result.data:
+                # Devuelve una lista de diccionarios para que el controlador los procese.
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error obteniendo todos los pedido_items: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def update_items(self, item_ids: List[int], data: Dict) -> Dict:
+        """
+        Actualiza múltiples ítems de pedido a la vez.
+        """
+        if not item_ids:
+            return {'success': True, 'data': []}
+
+        try:
+            result = self.db.table(self._get_items_table_name())\
+                .update(data)\
+                .in_('id', item_ids)\
+                .execute()
+
+            return {'success': True, 'data': getattr(result, 'data', [])}
+        
+        except Exception as e:
+            logger.error(f"Error actualizando pedido_items: {e}")
+            return {'success': False, 'error': str(e)}
+
     def _create_item_from_dict(self, data: dict) -> PedidoItem:
         """Crea un objeto PedidoItem a partir de un diccionario."""
         if not data:
             return None
         item_fields = {f.name for f in fields(PedidoItem)}
         filtered_data = {k: v for k, v in data.items() if k in item_fields}
+
+        # Manejo de fechas que vienen como string
+        if 'created_at' in filtered_data and filtered_data['created_at'] and isinstance(filtered_data['created_at'], str):
+            filtered_data['created_at'] = datetime.fromisoformat(filtered_data['created_at'])
+        if 'updated_at' in filtered_data and filtered_data['updated_at'] and isinstance(filtered_data['updated_at'], str):
+            filtered_data['updated_at'] = datetime.fromisoformat(filtered_data['updated_at'])
+
         return PedidoItem(**filtered_data)
 
     def _create_pedido_from_dict(self, data: dict) -> Pedido:
