@@ -1,0 +1,225 @@
+{% extends 'layouts/base.html' %}
+
+{% set is_edit = insumo is defined %}
+{% set form_title = 'Editar Insumo' if is_edit else 'Agregar Nuevo Insumo' %}
+
+{% block title %}{{ form_title }} - Sistema Frozen{% endblock %}
+
+{% block page_title %}{{ form_title }}{% endblock %}
+{% block page_subtitle %}
+{% if is_edit %}
+Modificar información de {{ insumo.nombre }}
+{% else %}
+Agregar nuevo insumo al catálogo
+{% endif %}
+{% endblock %}
+{% block page_actions %}
+<a href="{{ url_for('insumos_api.obtener_insumos') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Volver a la lista
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 col-xl-9">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Información del Insumo</h5>
+            </div>
+            <div class="card-body">
+                <form id="formulario-insumo" method="POST">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="codigo_interno" class="form-label">Código Interno <span
+                                    class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="codigo_interno" id="codigo_interno"
+                                value="{{ insumo.codigo_interno if insumo else '' }}" required {% if insumo %}readonly{%
+                                endif %}>
+                            {% if not insumo %}
+                            <div class="form-text">Código único para identificar el insumo</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="nombre" class="form-label">Nombre <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="nombre" id="nombre"
+                                value="{{ insumo.nombre if insumo else '' }}" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="categoria" class="form-label">Categoría <span
+                                    class="text-danger">*</span></label>
+                            <select class="form-select" name="categoria" id="categoria" required>
+                                <option value="">Seleccionar unidad...</option>
+                                <option value="Carnes" {% if insumo and insumo.categoria=="Carnes" %}selected{% endif
+                                    %}>
+                                    Carnes (Pollo, Cerdo, etc...)
+                                </option>
+                                <option value="Verduras" {% if insumo and insumo.categoria=='Verduras' %}selected{%
+                                    endif %}>
+                                    Verduras (Choclo, patata, etc...)
+                                </option>
+                                <option value="Harinas" {% if insumo and insumo.categoria=='Harinas' %}selected{% endif
+                                    %}>
+                                    Harinas (Pan rallado, harina, derivados de cereal, etc...)
+                                </option>
+                                <option value="Aditivos" {% if insumo and insumo.unidad_medida=='Aditivos' %}selected{%
+                                    endif %}>
+                                    Aditivos autorizados (Conservantes, Antioxidantes, etc...)
+                                </option>
+                                <option value="Complementarios" {% if insumo and insumo.unidad_medida=='Complementarios'
+                                    %}selected{% endif %}>
+                                    Complementarios (Condimentos, aceites, huevos, etc...)
+                                </option>
+                                <option value="Envases" {% if insumo and insumo.unidad_medida=='Envases' %}selected{%
+                                    endif %}>
+                                    Envases (Bandejas, bolsas, etc...)
+                                </option>
+                                <option value="Otros" {% if insumo and insumo.unidad_medida=='Otros' %}selected{% endif
+                                    %}>
+                                    Otros
+                                </option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="unidad_medida" class="form-label">Unidad de Medida <span
+                                    class="text-danger">*</span></label>
+                            <select class="form-select" name="unidad_medida" id="unidad_medida" required>
+                                <option value="">Seleccionar unidad...</option>
+                                <option value="kg" {% if insumo and insumo.unidad_medida=='kg' %}selected{% endif %}>
+                                    Kilogramos (kg)
+                                </option>
+                                <option value="g" {% if insumo and insumo.unidad_medida=='g' %}selected{% endif %}>
+                                    Gramos (g)
+                                </option>
+                                <option value="litros" {% if insumo and insumo.unidad_medida=='litros' %}selected{%
+                                    endif %}>
+                                    Litros
+                                </option>
+                                <option value="unidades" {% if insumo and insumo.unidad_medida=='unidades' %}selected{%
+                                    endif %}>
+                                    Unidades
+                                </option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="stock_min" class="form-label">Stock Mínimo <span
+                                    class="text-danger">*</span></label>
+                            <input type="number" step="1" class="form-control" name="stock_min" id="stock_min"
+                                value="{{ insumo.stock_min if insumo else '' }}" required>
+                            <div class="form-text">Cantidad mínima que debe mantenerse</div>
+
+                            <label for="stock_max" class="form-label">Stock Máximo <span
+                                    class="text-danger">*</span></label>
+                            <input type="number" step="1" class="form-control" name="stock_max" id="stock_max"
+                                value="{{ insumo.stock_max if insumo else '' }}" required>
+                            <div class="form-text">Cantidad máxima que debe mantenerse</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="precio_unitario" class="form-label">Precio Unitario</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" step="0.01" class="form-control" name="precio_unitario"
+                                    id="precio_unitario" value="{{ insumo.precio_unitario if insumo else '' }}">
+                            </div>
+                            <div class="form-text">Opcional - para cálculos de costos</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="dias_vida_util" class="form-label">Días de Vida Útil</label>
+                            <input type="number" class="form-control" name="dias_vida_util" id="dias_vida_util"
+                                value="{{ insumo.vida_util_dias if insumo else '' }}">
+                            <div class="form-text">Duración promedio antes del vencimiento</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="temperatura_conservacion" class="form-label">Temperatura de Conservación
+                                (°C)</label>
+                            <input type="number" step="0.1" class="form-control" name="temperatura_conservacion"
+                                id="temperatura_conservacion" value="{{ insumo.tem_recomendada if insumo else '' }}">
+                        </div>
+                        <div>
+
+                            <div class="col-md-8 mx-auto">
+                                <label for="descripcion" class="form-label">Descripcion</label>
+                                <input type="text" class="form-control" name="descripcion" id="descripcion"
+                                    value="{{ insumo.descripcion if insumo else '' }}">
+                                <div class="form-text">Opcional - Ingrese una descipción del insumo</div>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="requiere_certificacion" id="requiere_certificacion"
+                                    value="false" {% if not insumo or insumo.requiere_certificacion %}checked{% endif %}>
+                                <label class="form-check-label" for="requiere_certificacion">
+                                    Requiere certificacion
+                                </label>
+                                <div class="form-text">Marcar si requiere certificacion adicional</div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="es_critico" id="es_critico"
+                                    value="true" {% if not insumo or insumo.es_critico %}checked{% endif %}>
+                                <label class="form-check-label" for="es_critico">
+                                    Es un insumo critico para la produccion
+                                </label>
+                                <div class="form-text">Marcar si es de necesidad critica en la produccion</div>
+                            </div>
+                        </div>
+
+                    </div>
+
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{{ url_for('insumos_api.obtener_insumos') }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle me-1"></i>
+                            {% if insumo %}Actualizar{% else %}Crear{% endif %} Insumo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 col-xl-3">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Ayuda
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-light border">
+                    <h6>Consejos importantes:</h6>
+                    <ul class="mb-0 small">
+                        <li>Consulte con el proveedor la unidad minima</li>
+                        <li>Use códigos cortos y descriptivos</li>
+                        <li>El stock mínimo debe considerar el tiempo de reposición</li>
+                        <li>Categorice correctamente para facilitar los filtros</li>
+                        <li>Configure la temperatura si requiere almacenamiento especial</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    // Crea una variable global de JS con la URL generada por Flask/Jinja
+    const INSUMOS_LISTA_URL = "{{ url_for('insumos_api.obtener_insumos') }}";
+    const ID_INSUMO= "{{ insumo.id_insumo }}"
+    const IS_EDIT = "{{ insumo is defined }}"; 
+    
+    
+</script>
+
+<script src="{{ url_for('static', filename='js/formularioInsumo.js') }}"></script>
+{% endblock %}
