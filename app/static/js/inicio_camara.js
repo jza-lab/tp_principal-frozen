@@ -1,22 +1,24 @@
 document.addEventListener('DOMContentLoaded', function () {
     video = document.getElementById("video");
+    boton_inicioSesionCamara = document.getElementById("botonCamara");
+    formulario_inicioSesion = document.getElementById("credenciales");
+    area_reconocimientoFacial = document.getElementById("areaRecoFacial");
+    boton_verificarRostro = document.getElementById("botonVerificarRostro");
+    mensajeGuia = this.getElementById("guia");
 
-    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        .then(function (stream) {
+    if(area_reconocimientoFacial.style.display == "none"){
+        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+            .then(function (stream) {
 
-            video.srcObject = stream;
-            video.setPointerCapture(0);
-            video.play();
-        })
-        .catch(function (err) {
-            console.log("An error occurred! " + err);
-        });
+                video.srcObject = stream;
+                //video.setPointerCapture(0);
+                video.play();
 
-    const boton_inicioSesionCamara = document.getElementById("botonCamara")
-    const formulario_inicioSesion = document.getElementById("credenciales")
-    const area_reconocimientoFacial = document.getElementById("areaRecoFacial")
-    const boton_verificarRostro = document.getElementById("botonVerificarRostro")
-    const mensajeGuia = this.getElementById("guia")
+            })
+            .catch(function (err) {
+                console.log("An error occurred! " + err);
+            });
+    }
 
     boton_inicioSesionCamara.addEventListener('click', () => {
         boton_inicioSesionCamara.style.display = 'none';
@@ -53,10 +55,6 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(err => {
                 console.error("Error:", err);
             });
-
-            
-
-        
 
 
     })

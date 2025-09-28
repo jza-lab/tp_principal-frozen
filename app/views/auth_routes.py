@@ -12,28 +12,18 @@ facial_controller = FacialController()
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     """Gestiona el inicio de sesión de los usuarios."""
-    session.clear()
     if request.method == 'POST':
+        
         legajo = request.form['legajo']
         password = request.form['password']
+        respuesta = usuario_controller.autenticar_usuario_V2(legajo, password)
+        usuario= respuesta.get('data')
 
-        # Validar con rostro si está pendiente
-        pending_user = session.get("pending_face_user")
-
-        if pending_user and legajo != pending_user:
-            flash("El legajo no coincide con el rostro detectado.", "error")
-            return redirect(url_for('auth.login'))
-
-        usuario = usuario_controller.autenticar_usuario(legajo, password)
-        
-        if usuario and usuario.get('activo'):
+        if respuesta.get('success') and usuario and usuario.get('activo'):
             session['usuario_id'] = usuario['id']
             session['rol'] = usuario['rol']
             session['usuario_nombre'] = f"{usuario['nombre']} {usuario['apellido']}"
             session['user_data'] = usuario # Guardar para el registro de egreso
-
-            # Limpiar sesión de rostro pendiente
-            session.pop("pending_face_user", None)
 
             flash(f"Bienvenido {usuario['nombre']}", 'success')
             return redirect(url_for('admin_usuario.index'))
@@ -51,14 +41,15 @@ def identificar_rostro():
     #facial_controller.registrar_rostro(id, image_data_url)
     resultado = facial_controller.identificar_rostro(image_data_url)
     estado=resultado['success']
-
+    
     if(estado):
         usuario= resultado['usuario']
         if(usuario and usuario.get('id') and usuario.get('activo')):
             session['usuario_id'] = usuario['id']
             session['rol'] = usuario['rol']
-            session['usuario_nombre'] = f"{usuario['nombre']} {usuario['apellido']}"
+            session['usuario_nombre'] = f"{usuario.get('nombre')} {usuario.get('apellido')}"
             session['user_data'] = usuario
+            print(usuario)
             return jsonify({
                     'success': True, 
                     'message': 'Rostro identificado correctamente.',
@@ -74,7 +65,6 @@ def identificar_rostro():
 def logout():
     """Cierra la sesión del usuario actual."""
     if 'user_data' in session:
-        facial_controller.registrar_egreso_csv(session['user_data'])
         flash("Egreso registrado correctamente. Sesión cerrada.", "info")
     else:
         flash("Sesión cerrada.", "info")
