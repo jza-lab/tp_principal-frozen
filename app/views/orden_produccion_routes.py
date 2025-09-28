@@ -5,6 +5,7 @@ from app.controllers.orden_produccion_controller import OrdenProduccionControlle
 from app.controllers.producto_controller import ProductoController
 from app.controllers.etapa_produccion_controller import EtapaProduccionController
 from app.controllers.usuario_controller import UsuarioController
+from app.controllers.receta_controller import RecetaController
 from app.utils.decorators import roles_required
 from datetime import date
 
@@ -15,6 +16,7 @@ controller = OrdenProduccionController()
 producto_controller = ProductoController()
 etapa_controller = EtapaProduccionController()
 usuario_controller = UsuarioController()
+receta_controller = RecetaController()
 
 @orden_produccion_bp.route('/')
 def listar():
@@ -100,6 +102,7 @@ def crear():
             'success': False,
             'error': 'Error interno del servidor'
         }), 500
+    
 
 @orden_produccion_bp.route('/modificar/<int:id>', methods=['GET', 'POST', 'PUT'])
 def modificar(id):
@@ -151,8 +154,17 @@ def detalle(id):
     
     orden=respuesta.get('data')
     etapas=None #Arreglar
-    print(orden)
-    return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
+
+    ingredientes = []
+    if orden and orden.get('receta_id'):
+        ingredientes_response = receta_controller.obtener_ingredientes_para_receta(orden.get('receta_id'))
+        if ingredientes_response.get('success'):
+            ingredientes = ingredientes_response.get('data', [])
+            print(ingredientes)
+        else:
+            flash(ingredientes_response.get('error', 'No se pudieron cargar los ingredientes.'), 'warning')
+
+    return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas, ingredientes=ingredientes)
 
 @orden_produccion_bp.route('/<int:id>/iniciar', methods=['POST'])
 def iniciar(id):
