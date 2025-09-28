@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from app.controllers.orden_produccion_controller import OrdenProduccionController
-from app.controllers.etapa_produccion_controller import EtapaProduccionController
+# from app.controllers.etapa_produccion_controller import EtapaProduccionController
 from app.utils.decorators import roles_required
 from datetime import date
 
@@ -8,7 +8,7 @@ orden_produccion_bp = Blueprint('orden_produccion', __name__, url_prefix='/orden
 
 # Se instancian los controladores necesarios
 controller = OrdenProduccionController()
-etapa_controller = EtapaProduccionController()
+# etapa_controller = EtapaProduccionController()
 
 @orden_produccion_bp.route('/')
 def listar():
@@ -18,8 +18,23 @@ def listar():
     """
     estado = request.args.get('estado')
     filtros = {'estado': estado} if estado else {}
-    ordenes = controller.obtener_ordenes(filtros)
-    return render_template('ordenes_produccion/listar.html', ordenes=ordenes)
+    
+    response, status_code = controller.obtener_ordenes(filtros)
+    
+    ordenes = []
+    if response.get('success'):
+        ordenes = response.get('data', [])
+    else:
+        flash(response.get('error', 'Error al cargar las órdenes de producción.'), 'error')
+        
+    # El título puede variar según el filtro para dar más contexto
+    titulo = f"Órdenes de Producción"
+    if estado:
+        titulo += f" (Estado: {estado.replace('_', ' ').title()})"
+    else:
+        titulo += " (Todas)"
+
+    return render_template('ordenes_produccion/listar.html', ordenes=ordenes, titulo=titulo)
 
 # @orden_produccion_bp.route('/nueva', methods=['GET', 'POST'])
 # def nueva():
@@ -33,7 +48,21 @@ def listar():
 #     flash('La creación directa de órdenes está deshabilitada. Use el módulo de Planificación.', 'info')
 #     return redirect(url_for('orden_produccion.listar'))
 
-@orden_produccion_bp.route('/<int:id>')
+@orden_produccion_bp.route('/nueva')
+def nueva():
+    """
+    Muestra la página de detalle de una orden de producción específica,
+    incluyendo sus etapas.
+    """
+
+    # etapas = etapa_controller.obtener_etapas_por_orden(id)
+
+    # return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
+    etapas=None #Arreglar
+    return render_template('ordenes_produccion/formulario.html', etapas=etapas)
+
+
+@orden_produccion_bp.route('/detalle/<int:id>')
 def detalle(id):
     """
     Muestra la página de detalle de una orden de producción específica,
@@ -44,8 +73,10 @@ def detalle(id):
         flash('Orden no encontrada.', 'error')
         return redirect(url_for('orden_produccion.listar'))
 
-    etapas = etapa_controller.obtener_etapas_por_orden(id)
+    # etapas = etapa_controller.obtener_etapas_por_orden(id)
 
+    # return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
+    etapas=None #Arreglar
     return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
 
 @orden_produccion_bp.route('/<int:id>/iniciar', methods=['POST'])
@@ -80,8 +111,17 @@ def listar_pendientes():
     """
     Muestra las órdenes de producción pendientes de aprobación para el supervisor.
     """
-    ordenes = controller.obtener_ordenes({'estado': 'PENDIENTE'})
-    return render_template('ordenes_produccion/pendientes.html', ordenes=ordenes)
+    response, status_code = controller.obtener_ordenes({'estado': 'PENDIENTE'})
+
+    ordenes = []
+    if response.get('success'):
+        ordenes = response.get('data', [])
+    else:
+        flash(response.get('error', 'Error al cargar las órdenes pendientes.'), 'error')
+        
+    return render_template('ordenes_produccion/listar.html', 
+                           ordenes=ordenes, 
+                           titulo="Órdenes Pendientes de Aprobación")
 
 @orden_produccion_bp.route('/<int:id>/aprobar', methods=['POST'])
 @roles_required('SUPERVISOR', 'ADMIN', 'GERENTE')

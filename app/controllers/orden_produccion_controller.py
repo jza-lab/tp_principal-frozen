@@ -1,11 +1,11 @@
-from controllers.base_controller import BaseController
-from models.orden_produccion import OrdenProduccionModel
-from schemas.orden_produccion_schema import OrdenProduccionSchema
+from app.controllers.base_controller import BaseController
+from app.models.orden_produccion import OrdenProduccionModel
+from app.schemas.orden_produccion_schema import OrdenProduccionSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
-from controllers.producto_controller import ProductoController
-from controllers.receta_controller import RecetaController
-from controllers.usuario_controller import UsuarioController
+from app.controllers.producto_controller import ProductoController
+from app.controllers.receta_controller import RecetaController
+from app.controllers.usuario_controller import UsuarioController
 
 class OrdenProduccionController(BaseController):
     """
@@ -21,12 +21,24 @@ class OrdenProduccionController(BaseController):
         self.receta_controller = RecetaController()
         self.usuario_controller = UsuarioController()
 
-    def obtener_ordenes(self, filtros: Optional[Dict] = None) -> List[Dict]:
+    def obtener_ordenes(self, filtros: Optional[Dict] = None) -> tuple:
         """
-        Obtiene una lista de órdenes de producción enriquecidas desde la vista.
+        Obtiene una lista de órdenes de producción, aplicando filtros.
+        Devuelve una tupla en formato (datos, http_status_code).
         """
-        result = self.model.get_all_enriched(filtros)
-        return result.get('data', [])
+        try:
+            result = self.model.get_all_enriched(filtros)
+
+            if result.get('success'):
+                return self.success_response(data=result.get('data', []))
+            else:
+                # Si el modelo devuelve un error, lo propagamos
+                error_msg = result.get('error', 'Error desconocido al obtener órdenes.')
+                status_code = 404 if "no encontradas" in str(error_msg).lower() else 500
+                return self.error_response(error_msg, status_code)
+        except Exception as e:
+            # Aquí capturamos cualquier excepción no esperada
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
     def obtener_orden_por_id(self, orden_id: int) -> Optional[Dict]:
         """

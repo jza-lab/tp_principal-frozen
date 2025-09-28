@@ -11,3 +11,4 @@ class EtapaProduccionModel(BaseModel):
         Retorna el nombre de la tabla específica para este modelo.
         """
         return "etapas_produccion"
+    

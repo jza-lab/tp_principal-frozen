@@ -1,6 +1,6 @@
-from controllers.base_controller import BaseController
-from models.receta import RecetaModel, RecetaIngredienteModel
-from schemas.receta_schema import RecetaSchema
+from app.controllers.base_controller import BaseController
+from app.models.receta import RecetaModel, RecetaIngrediente
+from app.schemas.receta_schema import RecetaSchema
 from typing import Dict, List, Optional
 from marshmallow import ValidationError
 
@@ -11,7 +11,7 @@ class RecetaController(BaseController):
     def __init__(self):
         super().__init__()
         self.model = RecetaModel()
-        self.ingrediente_model = RecetaIngredienteModel()
+        self.ingrediente_model = RecetaIngrediente
         self.schema = RecetaSchema()
 
     def obtener_recetas(self, filtros: Optional[Dict] = None) -> List[Dict]:

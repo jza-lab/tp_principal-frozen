@@ -1,7 +1,6 @@
 from app.controllers.base_controller import BaseController
 from app.models.insumo import InsumoModel
 from app.models.inventario import InventarioModel
-##from app.services.alertas_service import AlertasService
 from app.schemas.insumo_schema import InsumosCatalogoSchema
 from typing import Dict, Optional
 import logging
@@ -17,7 +16,7 @@ class InsumoController(BaseController):
         super().__init__()
         self.insumo_model = InsumoModel()
         self.inventario_model = InventarioModel()
-        ##self.alertas_service = AlertasService()
+        #self.alertas_service = AlertasService()
         self.schema = InsumosCatalogoSchema()
 
     def crear_insumo(self, data: Dict) -> tuple:
@@ -38,9 +37,8 @@ class InsumoController(BaseController):
             if result['success']:
                 logger.info(f"Insumo creado exitosamente: {result['data']['id_insumo']}")
 
-                # ✅ SIMPLIFICADO: El esquema ya maneja la serialización
                 return self.success_response(
-                    data=self.schema.dump(result['data']),  # Marshmallow se encarga
+                    data=self.schema.dump(result['data']),  
                     message='Insumo creado exitosamente',
                     status_code=201
                 )
@@ -66,7 +64,6 @@ class InsumoController(BaseController):
                 result = self.insumo_model.find_all(filtros)
 
             if result['success']:
-                # ✅ CORREGIDO: Serializar los datos correctamente
                 serialized_data = self.schema.dump(result['data'], many=True)
                 return self.success_response(data=serialized_data)
             else:
@@ -134,6 +131,22 @@ class InsumoController(BaseController):
         except Exception as e:
             logger.error(f"Error eliminando insumo: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+
+
+    def eliminar_insumo_logico(self, id_insumo: str) -> tuple:
+        """Eliminar un insumo del catálogo"""
+        try:
+            data = {'activo': False}
+            result = self.insumo_model.update(id_insumo, data, 'id_insumo')
+            
+            if result['success']:
+                logger.info(f"Insumo eliminado: {id_insumo}")
+                return self.success_response(message=result['message'])
+
+        except Exception as e:
+            logger.error(f"Error eliminando insumo: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
 
     def obtener_con_stock(self, filtros: Optional[Dict] = None) -> tuple:
         """Obtener insumos con información de stock consolidado"""

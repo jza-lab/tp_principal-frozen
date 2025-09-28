@@ -21,7 +21,10 @@ def facial_index():
     return redirect(url_for('facial.login_totem'))
 
 # ====== RUTAS FACIALES ======
+<<<<<<< HEAD
 
+=======
+>>>>>>> cadb92e4817194a111efcd7965c508705d264123
 @facial_bp.route("/facial/login_face", methods=["POST"])
 def login_face():
     """Login con reconocimiento facial"""
@@ -74,7 +77,11 @@ def logout_face():
 @facial_bp.route("/facial/login_totem")
 def login_totem():
     """Página del tótem para reconocimiento facial"""
+<<<<<<< HEAD
     return render_template("login_totem.html")
+=======
+    return render_template("usuarios/login_totem.html")
+>>>>>>> cadb92e4817194a111efcd7965c508705d264123
 
 @facial_bp.route("/facial/panel_totem")
 def panel_totem():
@@ -86,8 +93,13 @@ def panel_totem():
     from datetime import datetime
     return render_template("panel_totem.html", now=datetime.now())
 
+<<<<<<< HEAD
 # ====== RUTAS WEB (para acceso desde navegador) ======
 
+=======
+
+# ====== RUTAS WEB (para acceso desde navegador) ======
+>>>>>>> cadb92e4817194a111efcd7965c508705d264123
 @facial_bp.route("/facial/login_web_page")
 def login_web_page():
     """Página de login web"""
