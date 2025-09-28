@@ -2,22 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 from app.config import Config
 import logging
-<<<<<<< HEAD
-from .json_encoder import CustomJSONEncoder
-<<<<<<< HEAD
-
-# --- Blueprints ---
-from app.views.insumo import insumos_bp
-from app.views.inventario import inventario_bp
-from app.views.auth_routes import auth_bp
-from flask import Flask
-from flask_cors import CORS
-from app.config import Config
-import logging
-from .json_encoder import CustomJSONEncoder
-=======
 from app.json_encoder import CustomJSONEncoder
->>>>>>> d55bac8 (manejo de rutas fix)
 
 # --- Blueprints ---
 from app.views.insumo import insumos_bp
@@ -25,7 +10,7 @@ from app.views.inventario import inventario_bp
 from app.views.auth_routes import auth_bp
 from app.views.admin_usuario_routes import admin_usuario_bp
 from app.views.facial_routes import facial_bp
-from app.views.orden_compra_routes import orden_compra_bp  # ✅ Tu nuevo blueprint
+from app.views.orden_compra_routes import orden_compra_bp
 
 def create_app():
     """Factory para crear la aplicación Flask"""
@@ -67,7 +52,7 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_usuario_bp)
     app.register_blueprint(facial_bp, url_prefix='/auth')
-    app.register_blueprint(orden_compra_bp)  # ✅ Tu nuevo blueprint
+    app.register_blueprint(orden_compra_bp)
 
     # Ruta de health check
     @app.route('/api/health')
