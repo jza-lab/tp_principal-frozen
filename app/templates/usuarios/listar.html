@@ -1,0 +1,55 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Lista de Usuarios{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>Lista de Usuarios</h1>
+        <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary">Crear Nuevo Usuario</a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <table class="table table-striped table-hover">
+        <thead class="thead-dark">
+            <tr>
+                <th>Legajo</th>
+                <th>Nombre</th>
+                <th>Apellido</th>
+                <th>Rol</th>
+                <th>Activo</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for usuario in usuarios %}
+            <tr>
+                <td>{{ usuario.legajo }}</td>
+                <td>{{ usuario.nombre }}</td>
+                <td>{{ usuario.apellido }}</td>
+                <td>{{ usuario.rol }}</td>
+                <td>{{ 'Sí' if usuario.activo else 'No' }}</td>
+                <td>
+                    <a href="{{ url_for('admin_usuario.editar_usuario', id=usuario.id) }}" class="btn btn-sm btn-warning">Editar</a>
+                    <!-- Formulario para desactivar -->
+                    <form action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}" method="POST" style="display:inline;">
+                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('¿Está seguro de que desea desactivar este usuario?');">Desactivar</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="text-center">No hay usuarios registrados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

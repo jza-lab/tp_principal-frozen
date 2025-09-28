@@ -54,8 +54,6 @@ class InsumoController(BaseController):
         try:
             # Aplicar filtros por defecto
             filtros = filtros or {}
-            if 'activo' not in filtros:
-                filtros['activo'] = True
 
             # Buscar en base de datos
             if filtros.get('busqueda'):
@@ -124,7 +122,7 @@ class InsumoController(BaseController):
 
             if result['success']:
                 logger.info(f"Insumo eliminado: {id_insumo}")
-                return self.success_response(message=result['message'])
+                return self.success_response(message='Insumo eliminado exitosamente.')
             else:
                 return self.error_response(result['error'])
 
@@ -141,10 +139,27 @@ class InsumoController(BaseController):
             
             if result['success']:
                 logger.info(f"Insumo eliminado: {id_insumo}")
-                return self.success_response(message=result['message'])
+                return self.success_response(message='Insumo desactivado exitosamente.')
 
         except Exception as e:
             logger.error(f"Error eliminando insumo: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def habilitar_insumo(self, id_insumo: str) -> tuple:
+        """Habilita un insumo del catálogo que fue desactivado."""
+        try:
+            data = {'activo': True}
+            result = self.insumo_model.update(id_insumo, data, 'id_insumo')
+            
+            if result.get('success'):
+                logger.info(f"Insumo habilitado: {id_insumo}")
+                return self.success_response(message='Insumo habilitado exitosamente.')
+            else:
+                logger.error(f"Fallo al habilitar insumo {id_insumo}: {result.get('error')}")
+                return self.error_response(result.get('error', 'Error desconocido al habilitar el insumo.'))
+
+        except Exception as e:
+            logger.error(f"Error habilitando insumo: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
 
