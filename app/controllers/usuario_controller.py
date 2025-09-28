@@ -56,8 +56,7 @@ class UsuarioController(BaseController):
         Autentica a un usuario por legajo y contraseña.
         VERIFICA que tenga login activo en tótem.
         """
-        
-        user_result = self.model.find_by_legajo(legajo)
+        user_result = self.model.find_by_legajo_v2(legajo)
 
         if not user_result.get('success') or not user_result.get('data'):
             return {'success': False, 'error': 'Credenciales inválidas'}

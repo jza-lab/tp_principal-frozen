@@ -125,7 +125,7 @@ class FacialController:
             logger.error(f"❌ Error registrando acceso: {e}")
             return {'success': False, 'error': str(e)}
 
-    def procesar_login_facial_totem(self, image_data_url):
+    def procesar_login_facial(self, image_data_url):
         """
         Procesa el login facial completo: identificación + registro de entrada + activación de flags
         """
@@ -168,7 +168,7 @@ class FacialController:
             logger.error(f"Error en procesar_login_facial: {str(e)}")
             return {'success': False, 'message': f'Error en el servidor: {str(e)}'}
 
-    def procesar_logout_facial_totem(self, usuario_id):
+    def procesar_logout_facial(self, usuario_id):
         """
         Procesa el logout facial completo: registro de salida + desactivación de flags
         """
