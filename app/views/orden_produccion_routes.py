@@ -144,13 +144,14 @@ def detalle(id):
     Muestra la página de detalle de una orden de producción específica,
     incluyendo sus etapas.
     """
-    orden = controller.obtener_orden_por_id(id)
-    if not orden:
+    respuesta = controller.obtener_orden_por_id(id)
+    if not respuesta or not respuesta.get('success'):
         flash('Orden no encontrada.', 'error')
         return redirect(url_for('orden_produccion.listar'))
     
-    print(orden)
+    orden=respuesta.get('data')
     etapas=None #Arreglar
+    print(orden)
     return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
 
 @orden_produccion_bp.route('/<int:id>/iniciar', methods=['POST'])
@@ -209,7 +210,7 @@ def aprobar(id):
         flash('Orden aprobada y stock reservado.', 'success')
     else:
         flash(f"Error al aprobar: {resultado.get('error', 'Error desconocido')}", 'error')
-    return redirect(url_for('orden_produccion.listar_pendientes'))
+    return redirect(url_for('orden_produccion.listar'))
 
 @orden_produccion_bp.route('/<int:id>/rechazar', methods=['POST'])
 @roles_required('SUPERVISOR', 'ADMIN', 'GERENTE')
@@ -223,4 +224,4 @@ def rechazar(id):
         flash('Orden rechazada exitosamente.', 'warning')
     else:
         flash(f"Error al rechazar: {resultado.get('error', 'Error desconocido')}", 'error')
-    return redirect(url_for('orden_produccion.listar_pendientes'))
+    return redirect(url_for('orden_produccion.listar'))

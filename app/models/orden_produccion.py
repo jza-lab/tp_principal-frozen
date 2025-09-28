@@ -88,7 +88,7 @@ class OrdenProduccionModel(BaseModel):
             # .maybe_single() ejecuta la consulta y devuelve un solo dict o None
             response = self.db.table(self.table_name).select(
                 "*, productos(nombre, descripcion), recetas(id, descripcion, rendimiento, activa), usuarios(nombre)"
-            ).eq("id", orden_id).limit(1)
+            ).eq("id", orden_id).maybe_single().execute()
            
             item = response.data
            

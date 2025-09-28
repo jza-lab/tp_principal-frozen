@@ -10,7 +10,7 @@
     </div>
     <div class="btn-toolbar">
         {# El botón de crear nueva orden está deshabilitado. Las órdenes se crean desde Planificación. #}
-         <a href="{{ url_for('orden_produccion.nueva') }}" class="btn btn-primary">
+        <a href="{{ url_for('orden_produccion.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
         </a>
     </div>
@@ -25,19 +25,20 @@
                     <label for="estado" class="form-label">Filtrar por Estado</label>
                     <select name="estado" class="form-select" onchange="this.form.submit()">
                         <option value="">Todas las órdenes</option>
-                        <option value="PLANIFICADA" {% if request.args.get('estado') == 'PLANIFICADA' %}selected{% endif %}>
+                        <option value="PLANIFICADA" {% if request.args.get('estado')=='PLANIFICADA' %}selected{% endif
+                            %}>
                             Planificadas
                         </option>
-                        <option value="EN_PROCESO" {% if request.args.get('estado') == 'EN_PROCESO' %}selected{% endif %}>
+                        <option value="EN_PROCESO" {% if request.args.get('estado')=='EN_PROCESO' %}selected{% endif %}>
                             En Proceso
                         </option>
-                        <option value="PAUSADA" {% if request.args.get('estado') == 'PAUSADA' %}selected{% endif %}>
+                        <option value="PAUSADA" {% if request.args.get('estado')=='PAUSADA' %}selected{% endif %}>
                             Pausadas
                         </option>
-                        <option value="COMPLETADA" {% if request.args.get('estado') == 'COMPLETADA' %}selected{% endif %}>
+                        <option value="COMPLETADA" {% if request.args.get('estado')=='COMPLETADA' %}selected{% endif %}>
                             Completadas
                         </option>
-                        <option value="CANCELADA" {% if request.args.get('estado') == 'CANCELADA' %}selected{% endif %}>
+                        <option value="CANCELADA" {% if request.args.get('estado')=='CANCELADA' %}selected{% endif %}>
                             Canceladas
                         </option>
                     </select>
@@ -57,7 +58,7 @@
 
     <!-- INICIO: EJEMPLOS ESTÁTICOS PARA DESARROLLO VISUAL -->
     <!-- Estos ejemplos están aquí para que puedas ver el estilo de las tarjetas. -->
-    
+
     <!-- Ejemplo 1: Orden Planificada -->
     <!-- <div class="col-md-4 mb-4">
         <div class="card h-100 insumo-card">
@@ -137,13 +138,14 @@
                 <div class="d-flex justify-content-between">
                     <h5 class="card-title">{{ orden.producto_nombre or 'Producto no definido' }}</h5>
                     {% set estado_config = {
-                        'PLANIFICADA': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
-                        'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                        'PAUSADA': {'class': 'bg-warning-soft text-warning', 'icon': 'pause-circle'},
-                        'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
-                        'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
+                    'PLANIFICADA': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
+                    'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
+                    'PAUSADA': {'class': 'bg-warning-soft text-warning', 'icon': 'pause-circle'},
+                    'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
+                    'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
-                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':
+                    'question-circle'}) %}
                     <span class="badge {{ config.class }}">
                         <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado.replace('_', ' ') }}
                     </span>
@@ -151,7 +153,7 @@
 
                 <div class="card-secondary-details mb-3">
                     <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
-                    <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_panificada }}</b> unidades</span>
+                    <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b> unidades</span>
                     <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
                 </div>
 
@@ -159,55 +161,72 @@
                     <hr class="card-divider">
 
                     <div class="d-flex justify-content-between align-items-center mb-3 stock-info">
-                         <div>
+                        <div>
                             <span class="stock-label">Operario</span>
                             <span class="stock-value">{{ orden.operario_nombre or 'No asignado' }}</span>
                         </div>
                         <div>
                             {% if orden.prioridad and orden.prioridad != 'NORMAL' %}
-                                {% set prioridad_config = {
-                                    'BAJA': {'class': 'bg-light text-dark', 'icon': 'arrow-down'},
-                                    'ALTA': {'class': 'bg-warning-soft text-warning', 'icon': 'arrow-up'},
-                                    'URGENTE': {'class': 'bg-danger-soft text-danger', 'icon': 'exclamation-triangle'}
-                                } %}
-                                {% set pconfig = prioridad_config.get(orden.prioridad, {'class': 'bg-secondary', 'icon': 'dash'}) %}
-                                <span class="badge {{ pconfig.class }}">
-                                    <i class="bi bi-{{ pconfig.icon }} me-1"></i>{{ orden.prioridad }}
-                                </span>
+                            {% set prioridad_config = {
+                            'BAJA': {'class': 'bg-light text-dark', 'icon': 'arrow-down'},
+                            'ALTA': {'class': 'bg-warning-soft text-warning', 'icon': 'arrow-up'},
+                            'URGENTE': {'class': 'bg-danger-soft text-danger', 'icon': 'exclamation-triangle'}
+                            } %}
+                            {% set pconfig = prioridad_config.get(orden.prioridad, {'class': 'bg-secondary', 'icon':
+                            'dash'}) %}
+                            <span class="badge {{ pconfig.class }}">
+                                <i class="bi bi-{{ pconfig.icon }} me-1"></i>{{ orden.prioridad }}
+                            </span>
                             {% endif %}
                         </div>
                     </div>
 
                     <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}"
-                    class="btn btn-sm btn-outline-primary" title="Ver Detalle">
+                        class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                         <i class="bi bi-eye"></i>
                     </a>
-                        {% if orden.estado == 'PLANIFICADA' %}
-                        <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" 
-                              style="display: inline;" onsubmit="return confirm('¿Iniciar esta orden de producción?')">
-                            <button type="submit" class="btn btn-sm btn-outline-success" title="Iniciar Orden">
-                                <i class="bi bi-play-fill"></i>
-                            </button>
-                        </form>
-                        {% endif %}
-                    </div>
+                    {% if orden.estado == 'PLANIFICADA' or orden.estado == 'APROBADA' %}
+                    <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}"
+                        style="display: inline;" onsubmit="return confirm('¿Iniciar esta orden de producción?')">
+                        <button type="submit" class="btn btn-sm btn-outline-success" title="Iniciar Orden">
+                            <i class="bi bi-play-fill"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                    {% if orden.estado == 'PENDIENTE' %}
+                    <form method="POST" action="{{ url_for('orden_produccion.aprobar', id=orden.id) }}"
+                        style="display: inline;" onsubmit="return confirm('¿Aprobar esta orden de producción?')">
+                        <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
+                            <i class="bi bi-play-fill"></i>
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('orden_produccion.rechazar', id=orden.id) }}"
+                        style="display: inline;" onsubmit="return confirm('¿Rechazar esta orden de producción?')">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Rechazar Orden">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </form>
+
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
-    {% else %}
-    <div class="col-12">
-        <div class="card bg-light border-0">
-            <div class="card-body text-center py-5">
-                <i class="bi bi-info-circle fs-1 opacity-25 mb-3"></i>
-                <h4 class="card-title">No se encontraron órdenes de producción</h4>
-                <p class="text-muted mb-0">
-                    No hay órdenes que coincidan con los filtros seleccionados.
-                    Pruebe a cambiar el filtro de estado o verifique si se han creado nuevas órdenes desde el módulo de planificación.
-                </p>
-            </div>
+</div>
+{% else %}
+<div class="col-12">
+    <div class="card bg-light border-0">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-info-circle fs-1 opacity-25 mb-3"></i>
+            <h4 class="card-title">No se encontraron órdenes de producción</h4>
+            <p class="text-muted mb-0">
+                No hay órdenes que coincidan con los filtros seleccionados.
+                Pruebe a cambiar el filtro de estado o verifique si se han creado nuevas órdenes desde el módulo de
+                planificación.
+            </p>
         </div>
     </div>
-    {% endfor %}
+</div>
+{% endfor %}
 </div>
 {% endblock %}
