@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', function () {
    
         const data = {
             producto_id: parseInt(document.getElementById('producto_id').value),
-            receta_id:1,
             cantidad_planificada: parseFloat(document.getElementById('cantidad').value),
             fecha_planificada: document.getElementById('fecha_planificada').value,
             usuario_id: parseInt(document.getElementById('operario_asignado').value),

@@ -131,9 +131,6 @@ def modificar(id):
             'error': 'Error interno del servidor'
         }), 500
 
-    
-
-
 @orden_produccion_bp.route('/<int:id>/detalle')
 def detalle(id):
     """

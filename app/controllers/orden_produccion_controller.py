@@ -43,7 +43,7 @@ class OrdenProduccionController(BaseController):
         Obtiene el detalle de una orden de producción específica.
         """
         result = self.model.get_one_enriched(orden_id)
-        return result.get('data')
+        return result
 
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """
@@ -55,7 +55,7 @@ class OrdenProduccionController(BaseController):
 
             # Añadir datos que no vienen del formulario
             validated_data['usuario_id'] = usuario_id
-            validated_data['estado'] = 'PLANIFICADA' # Estado inicial 
+            validated_data['estado'] = 'PENDIENTE' # Estado inicial 
 
             # Usar el método 'create' genérico del BaseModel
             return self.model.create(validated_data)
@@ -140,6 +140,7 @@ class OrdenProduccionController(BaseController):
 
         except Exception as e:
             return {'success': False, 'error': f'Error en el proceso de consolidación: {str(e)}'}
+
 
     def obtener_datos_para_formulario(self) -> Dict:
         """
