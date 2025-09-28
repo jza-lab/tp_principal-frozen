@@ -55,7 +55,6 @@ class InsumoController(BaseController):
         try:
             # Aplicar filtros por defecto
             filtros = filtros or {}
-           
 
             # Determinar la fuente de los datos
             if filtros.get('busqueda'):
@@ -157,19 +156,17 @@ class InsumoController(BaseController):
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def habilitar_insumo(self, id_insumo: str) -> tuple:
-        """Habilitar un insumo del catálogo"""
+        """Habilita un insumo del catálogo que fue desactivado."""
         try:
-            
             data = {'activo': True}
             result = self.insumo_model.update(id_insumo, data, 'id_insumo')
-
-            if result['success']:
+            
+            if result.get('success'):
                 logger.info(f"Insumo habilitado: {id_insumo}")
-                return self.success_response(message="Insumo habilitado correctamente.")
+                return self.success_response(message='Insumo habilitado exitosamente.')
             else:
-                # Proporcionar un mensaje de error más específico si la actualización falla
-                error_message = result.get('error', 'No se pudo habilitar el insumo.')
-                return self.error_response(error_message)
+                logger.error(f"Fallo al habilitar insumo {id_insumo}: {result.get('error')}")
+                return self.error_response(result.get('error', 'Error desconocido al habilitar el insumo.'))
 
         except Exception as e:
             logger.error(f"Error habilitando insumo: {str(e)}")

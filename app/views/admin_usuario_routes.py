@@ -28,18 +28,25 @@ def nuevo_usuario():
     if request.method == 'POST':
         datos_usuario = request.form.to_dict()
         resultado = usuario_controller.crear_usuario(datos_usuario)
+        
         if resultado.get('success'):
-            usuario_creado = resultado.get('usuario')
-            # Guardar el ID del nuevo usuario y una bandera para el flujo de registro facial
-            session['pending_register_user_id'] = usuario_creado['id']
-            session['admin_creation_flow'] = True  # Bandera para redirigir de vuelta al admin
+            usuario_creado = resultado.get('data')
             
-            flash('Usuario creado. Ahora proceda con el registro facial.', 'info')
-            return redirect(url_for('auth.register_face_page'))
+            if usuario_creado and isinstance(usuario_creado, dict) and 'id' in usuario_creado:
+                session['pending_register_user_id'] = usuario_creado['id']
+                session['admin_creation_flow'] = True
+                flash('Usuario creado. Ahora proceda con el registro facial.', 'info')
+                # return redirect(url_for('auth.register_face_page'))
+                return redirect(url_for('admin_usuario.listar_usuarios'))
+            else:
+                # Handle case where user creation succeeded but data is not as expected
+                flash('Usuario creado, pero hubo un problema al obtener su ID para el siguiente paso.', 'warning')
+                return redirect(url_for('admin_usuario.listar_usuarios'))
         else:
             flash(f"Error al crear el usuario: {resultado.get('error')}", 'error')
-            return render_template('admin/usuarios/formulario.html', usuario=datos_usuario, is_new=True)
-    return render_template('admin/usuarios/formulario.html', usuario={}, is_new=True)
+            return render_template('usuarios/formulario.html', usuario=datos_usuario, is_new=True)
+            
+    return render_template('usuarios/formulario.html', usuario={}, is_new=True)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/editar', methods=['GET', 'POST'])
 @roles_required('ADMIN')
@@ -55,13 +62,13 @@ def editar_usuario(id):
             flash(f"Error al actualizar el usuario: {resultado.get('error')}", 'error')
             usuario = request.form.to_dict()
             usuario['id'] = id
-            return render_template('admin/usuarios/formulario.html', usuario=usuario, is_new=False)
+            return render_template('usuarios/formulario.html', usuario=usuario, is_new=False)
 
     usuario = usuario_controller.obtener_usuario_por_id(id)
     if not usuario:
         flash('Usuario no encontrado.', 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
-    return render_template('admin/usuarios/formulario.html', usuario=usuario, is_new=False)
+    return render_template('usuarios/formulario.html', usuario=usuario, is_new=False)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/eliminar', methods=['POST'])
 @roles_required('ADMIN')

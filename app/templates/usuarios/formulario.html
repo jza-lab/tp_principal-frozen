@@ -1,50 +1,72 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <title>Nuevo Usuario</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin:20px; }
-    .form-group { margin-bottom:12px; }
-    label { display:block; margin-bottom:4px; font-weight:bold; }
-    input, select { width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; }
-    button { padding:10px 16px; background:#1976d2; color:white; border:none; border-radius:4px; cursor:pointer; }
-    button:hover { background:#145ca8; }
-  </style>
-</head>
-<body>
-  <h1>{% if is_new %}Registrar nuevo usuario{% else %}Editar usuario{% endif %}</h1>
+{% extends "layouts/base.html" %}
 
-  <form action="{{ url_for('auth.admin_nuevo_usuario') }}" method="post">
-    <div class="form-group">
-      <label for="nombre">Nombre</label>
-      <input type="text" id="nombre" name="nombre" value="{{ usuario.get('nombre','') }}" required>
-    </div>
+{% block title %}
+    {% if is_new %}
+        Crear Nuevo Usuario
+    {% else %}
+        Editar Usuario
+    {% endif %}
+{% endblock %}
 
-    <div class="form-group">
-      <label for="apellido">Apellido</label>
-      <input type="text" id="apellido" name="apellido" value="{{ usuario.get('apellido','') }}" required>
-    </div>
+{% block content %}
+<div class="container mt-4">
+    <h1>
+        {% if is_new %}
+            Crear Nuevo Usuario
+        {% else %}
+            Editar Usuario
+        {% endif %}
+    </h1>
 
-    <div class="form-group">
-      <label for="email">Correo electrónico</label>
-      <input type="email" id="email" name="email" value="{{ usuario.get('email','') }}" required>
-    </div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
-    <div class="form-group">
-      <label for="password">Contraseña</label>
-      <input type="password" id="password" name="password" required>
-    </div>
+    <form method="POST" action="{{ url_for('admin_usuario.nuevo_usuario') if is_new else url_for('admin_usuario.editar_usuario', id=usuario.id) }}">
+        <div class="form-group">
+            <label for="legajo">Legajo</label>
+            <input type="text" class="form-control" id="legajo" name="legajo" value="{{ usuario.legajo or '' }}" required>
+        </div>
+        <div class="form-group">
+            <label for="nombre">Nombre</label>
+            <input type="text" class="form-control" id="nombre" name="nombre" value="{{ usuario.nombre or '' }}" required>
+        </div>
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" class="form-control" id="email" name="email" value="{{ usuario.email or '' }}" required>
+        </div>
+        <div class="form-group">
+            <label for="apellido">Apellido</label>
+            <input type="text" class="form-control" id="apellido" name="apellido" value="{{ usuario.apellido or '' }}" required>
+        </div>
+        <div class="form-group">
+            <label for="rol">Rol</label>
+            <select class="form-control" id="rol" name="rol" required>
+                <option value="OPERARIO" {% if usuario.rol == 'OPERARIO' %}selected{% endif %}>Operario</option>
+                <option value="SUPERVISOR" {% if usuario.rol == 'SUPERVISOR' %}selected{% endif %}>Supervisor</option>
+                <option value="ADMIN" {% if usuario.rol == 'ADMIN' %}selected{% endif %}>Admin</option>
+            </select>
+        </div>
 
-    <div class="form-group">
-      <label for="role">Rol</label>
-      <select id="role" name="role" required>
-        <option value="operador" {% if usuario.get('role') == 'operador' %}selected{% endif %}>Operador</option>
-        <option value="admin" {% if usuario.get('role') == 'admin' %}selected{% endif %}>Administrador</option>
-      </select>
-    </div>
+        {% if is_new %}
+        <div class="form-group">
+            <label for="password">Contraseña (mínimo 8 caracteres)</label>
+            <input type="password" class="form-control" id="password" name="password" required minlength="8">
+        </div>
+        {% endif %}
 
-    <button type="submit">Registrar</button>
-  </form>
-</body>
-</html>
+        <button type="submit" class="btn btn-primary mt-3">
+            {% if is_new %}
+                Crear Usuario
+            {% else %}
+                Guardar Cambios
+            {% endif %}
+        </button>
+        <a href="{{ url_for('admin_usuario.listar_usuarios') }}" class="btn btn-secondary mt-3">Cancelar</a>
+    </form>
+</div>
+{% endblock %}

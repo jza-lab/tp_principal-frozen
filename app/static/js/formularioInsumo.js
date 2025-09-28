@@ -4,13 +4,11 @@ document.addEventListener('DOMContentLoaded', () => {
     formulario.addEventListener('submit', function (event) {
         event.preventDefault();
         console.log(IS_EDIT)
-
-        if (IS_EDIT === true) { // 💡 Aseguramos la comparación estricta con true
-            // Si es edición, usamos el ID global (ID_INSUMO)
-            url = `/api/insumos/catalogo/actualizar/${ID_INSUMO}`;
-            method = 'POST'; // Puedes usar 'PUT' o 'POST' para actualizar
+        let url;
+        if (IS_EDIT === 'True') {
+            const id_insumo = ID_INSUMO;
+            url = `/api/insumos/catalogo/actualizar/${id_insumo}`;
         } else {
-            // Si es creación
             url = `/api/insumos/catalogo/nuevo`;
             method = 'POST';
         }
@@ -29,8 +27,10 @@ document.addEventListener('DOMContentLoaded', () => {
             requiere_certificacion: document.getElementById('requiere_certificacion').checked
         };
 
+        const method = (IS_EDIT === 'True') ? 'PUT' : 'POST';
+
         fetch(url, {
-            method: 'POST',
+            method: method,
             headers: {
                 'Content-Type': 'application/json',
             },

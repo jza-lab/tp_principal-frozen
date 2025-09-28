@@ -74,7 +74,7 @@ class UsuarioController(BaseController):
             return {'success': False, 'error': 'Usuario desactivado'}
 
         # 3. DEBUG: Mostrar estado actual del usuario
-        logger.info(f"📊 Estado del usuario:")
+        logger.info("📊 Estado del usuario:")
         logger.info(f"   - login_totem_activo: {user_data.get('login_totem_activo')}")
         logger.info(f"   - ultimo_login_totem: {user_data.get('ultimo_login_totem')}")
         logger.info(f"   - activo: {user_data.get('activo')}")
@@ -176,7 +176,7 @@ class UsuarioController(BaseController):
                 user_updated = self.model.find_by_id(usuario_id)
                 if user_updated.get('success') and user_updated.get('data'):
                     user_data = user_updated['data']
-                    logger.info(f"✅ Usuario actualizado:")
+                    logger.info("✅ Usuario actualizado:")
                     logger.info(f"   - login_totem_activo: {user_data.get('login_totem_activo')}")
                     logger.info(f"   - ultimo_login_totem: {user_data.get('ultimo_login_totem')}")
 

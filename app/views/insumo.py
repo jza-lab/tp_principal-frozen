@@ -1,7 +1,6 @@
-import json
 from flask import Blueprint, redirect, render_template, request, jsonify, url_for
 from app.controllers.insumo_controller import InsumoController
-from app.utils.validators import validate_uuid, validate_pagination
+from app.utils.validators import validate_uuid
 from marshmallow import ValidationError
 import logging
 
@@ -13,17 +12,16 @@ insumos_bp = Blueprint('insumos_api', __name__, url_prefix='/api/insumos')
 # Controlador
 insumo_controller = InsumoController()
 
-@insumos_bp.route('/catalogo/nuevo', methods=['GET','PUT' ,'POST'])
+@insumos_bp.route('/catalogo/nuevo', methods=['GET', 'POST'])
 def crear_insumo():
     try:
-        if(request.method == 'POST' or request.method == 'PUT'):
-            datos_json = request.get_json(silent=True) 
-            if(datos_json is None):
+        if request.method == 'POST':
+            datos_json = request.get_json()
+            if not datos_json:
                 logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
                 return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos (verifique Content-Type)'}), 400
-    
-            response, status = insumo_controller.crear_insumo(request.json)
 
+            response, status = insumo_controller.crear_insumo(datos_json)
             return jsonify(response), status
         
         insumo=None
@@ -93,12 +91,12 @@ def obtener_insumo_por_id(id_insumo):
         logger.error(f"Error inesperado en obtener_insumo_por_id: {str(e)}")
         return redirect(url_for('insumos_api.obtener_insumos'))
 
-@insumos_bp.route('/catalogo/actualizar/<string:id_insumo>', methods=['GET', 'POST' , 'PUT'])
+@insumos_bp.route('/catalogo/actualizar/<string:id_insumo>', methods=['GET', 'POST'])
 def actualizar_insumo(id_insumo):
     """
     Actualizar un insumo del catálogo
     ---
-    PUT /api/insumos/catalogo/{id_insumo}
+    POST /api/insumos/catalogo/actualizar/{id_insumo}
     Content-Type: application/json
     """
     try:
@@ -108,7 +106,7 @@ def actualizar_insumo(id_insumo):
                 'error': 'ID de insumo inválido'
             }), 400
         
-        if(request.method == 'POST' or request.method == 'PUT'):
+        if request.method == 'POST':
             datos_json = request.get_json(silent=True) 
             if(datos_json is None):
                 logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
