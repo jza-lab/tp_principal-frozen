@@ -70,25 +70,28 @@ class OrdenCompraController:
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    def get_all_ordenes(self, filtros=None):
+    def get_all_ordenes(self):
         try:
-            filters = filtros or {}
-            # Si filtros no incluye ciertos campos, tomar de request.args
-            if 'estado' not in filters and request.args.get('estado'):
+            # Soporte para filtros por query parameters
+            filters = {}
+            if request.args.get('estado'):
                 filters['estado'] = request.args.get('estado')
-            if 'proveedor_id' not in filters and request.args.get('proveedor_id'):
+            if request.args.get('proveedor_id'):
                 filters['proveedor_id'] = int(request.args.get('proveedor_id'))
-            if 'prioridad' not in filters and request.args.get('prioridad'):
+            if request.args.get('prioridad'):
                 filters['prioridad'] = request.args.get('prioridad')
 
             result = self.model.get_all(filters)
             if result['success']:
-                return {'success': True, 'data': result['data'], 'count': len(result['data']) if result['data'] else 0}, 200
+                return jsonify({
+                    'success': True,
+                    'data': result['data'],
+                    'count': len(result['data']) if result['data'] else 0
+                })
             else:
-                return {'success': False, 'error': result['error']}, 400
+                return jsonify({'success': False, 'error': result['error']}), 400
         except Exception as e:
-            return {'success': False, 'error': str(e)}, 500
-
+            return jsonify({'success': False, 'error': str(e)}), 500
 
     def update_orden(self, orden_id):
         try:
@@ -153,5 +156,3 @@ class OrdenCompraController:
 
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
-    def obtener_orden_por_id(self, orden_id):
-        return self.get_orden(orden_id)

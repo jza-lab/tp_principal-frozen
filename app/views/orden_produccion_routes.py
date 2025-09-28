@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from app.controllers.orden_produccion_controller import OrdenProduccionController
-# from app.controllers.etapa_produccion_controller import EtapaProduccionController
+from app.controllers.etapa_produccion_controller import EtapaProduccionController
 from app.utils.decorators import roles_required
 from datetime import date
 
@@ -8,7 +8,7 @@ orden_produccion_bp = Blueprint('orden_produccion', __name__, url_prefix='/orden
 
 # Se instancian los controladores necesarios
 controller = OrdenProduccionController()
-# etapa_controller = EtapaProduccionController()
+etapa_controller = EtapaProduccionController()
 
 @orden_produccion_bp.route('/')
 def listar():
@@ -64,19 +64,19 @@ def nueva():
 
 @orden_produccion_bp.route('/<int:id>/detalle')
 def detalle(id):
+    
     """
     Muestra la página de detalle de una orden de producción específica,
     incluyendo sus etapas.
     """
     orden = controller.obtener_orden_por_id(id)
+    print(orden)
     if not orden:
         flash('Orden no encontrada.', 'error')
         return redirect(url_for('orden_produccion.listar'))
-
-    # etapas = etapa_controller.obtener_etapas_por_orden(id)
-
-    # return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
-    etapas=None #Arreglar
+    
+    etapas=etapa_controller.obtener_etapas_por_orden(id)
+    
     return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
 
 @orden_produccion_bp.route('/<int:id>/iniciar', methods=['POST'])

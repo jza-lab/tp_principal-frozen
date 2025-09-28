@@ -12,7 +12,11 @@ usuario_controller = UsuarioController()
 @roles_required('ADMIN')
 def index():
     """Página principal del panel de administración."""
+<<<<<<< HEAD
+    return render_template('admin/index.html')
+=======
     return render_template('dashboard/index.html')
+>>>>>>> cadb92e4817194a111efcd7965c508705d264123
 
 @admin_usuario_bp.route('/usuarios')
 @roles_required('ADMIN')
