@@ -2,7 +2,7 @@ from flask import Flask
 from flask_cors import CORS
 from app.config import Config
 import logging
-from .json_encoder import CustomJSONEncoder
+from app.json_encoder import CustomJSONEncoder
 
 # --- Blueprints ---
 from app.views.insumo import insumos_bp
