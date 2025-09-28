@@ -1,5 +1,7 @@
+from typing import Dict
 from flask import request, jsonify
-from app.models.orden_compra_model import OrdenCompraModel
+from app.models.orden_compra_model import OrdenCompraItemModel, OrdenCompraModel
+from app.models.orden_compra_model import OrdenCompra
 from datetime import datetime, date
 import logging
 
@@ -8,6 +10,7 @@ logger = logging.getLogger(__name__)
 class OrdenCompraController:
     def __init__(self):
         self.model = OrdenCompraModel()
+
 
     def _parse_form_data(self, form_data):
         """
@@ -135,7 +138,6 @@ class OrdenCompraController:
         except Exception as e:
             logger.error(f"Error en el controlador al obtener todas las órdenes: {e}")
             return {'success': False, 'error': str(e)}, 500
-
 
     def update_orden(self, orden_id):
         try:

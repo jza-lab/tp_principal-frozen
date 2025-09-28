@@ -1,5 +1,7 @@
 from flask import Blueprint, redirect, render_template, request, jsonify, url_for
 from app.controllers.insumo_controller import InsumoController
+from app.controllers.proveedor_controller import ProveedorController
+from app.controllers.orden_compra_controller import OrdenCompraController
 from app.utils.validators import validate_uuid
 from marshmallow import ValidationError
 import logging
@@ -11,6 +13,8 @@ insumos_bp = Blueprint('insumos_api', __name__, url_prefix='/api/insumos')
 
 # Controlador
 insumo_controller = InsumoController()
+proveedor_controller = ProveedorController()
+ordenes_compra_controller = OrdenCompraController()
 
 @insumos_bp.route('/catalogo/nuevo', methods=['GET', 'POST'])
 def crear_insumo():
@@ -39,7 +43,6 @@ def crear_insumo():
             'success': False,
             'error': 'Error interno del servidor'
         }), 500
-
 
 @insumos_bp.route('/catalogo', methods=['GET'])
 def obtener_insumos():
@@ -181,6 +184,18 @@ def habilitar_insumo(id_insumo):
             'success': False,
             'error': 'Error interno del servidor'
         }), 500
+
+@insumos_bp.route('/catalogo/lote/nuevo/<string:id_insumo>', methods = ['GET', 'POST'])
+def agregar_lote(id_insumo):
+        proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
+        proveedores = proveedores_resp.get('data', []) if proveedores_resp.get('success') else []
+        
+        response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
+        insumo = response['data']
+
+        return render_template('insumos/registrar_lote.html', insumo=insumo, proveedores=proveedores)
+
+
 
 @insumos_bp.route('/stock', methods=['GET'])
 def obtener_stock_consolidado():

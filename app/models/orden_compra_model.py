@@ -56,6 +56,7 @@ class OrdenCompraModel(BaseModel):
     def __init__(self):
         super().__init__()
         self.item_model = OrdenCompraItemModel()
+        self.item_model2 = OrdenCompraItemModel
 
     def get_table_name(self) -> str:
         return 'ordenes_compra'
