@@ -5,11 +5,11 @@ document.addEventListener('DOMContentLoaded', () => {
         event.preventDefault();
 
 
-        if (IS_EDIT) {
-            const id_insumo = ID_INSUMO
+        let url;
+        if (IS_EDIT === 'True') {
+            const id_insumo = ID_INSUMO;
             url = `/api/insumos/catalogo/actualizar/${id_insumo}`;
-        }
-        else {
+        } else {
             url = `/api/insumos/catalogo/nuevo`;
         }
         
@@ -27,8 +27,10 @@ document.addEventListener('DOMContentLoaded', () => {
             requiere_certificacion: document.getElementById('requiere_certificacion').checked
         };
 
+        const method = (IS_EDIT === 'True') ? 'PUT' : 'POST';
+
         fetch(url, {
-            method: 'POST',
+            method: method,
             headers: {
                 'Content-Type': 'application/json',
             },
