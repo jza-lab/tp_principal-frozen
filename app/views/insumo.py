@@ -40,6 +40,7 @@ def crear_insumo():
             'error': 'Error interno del servidor'
         }), 500
 
+
 @insumos_bp.route('/catalogo', methods=['GET'])
 def obtener_insumos():
     """

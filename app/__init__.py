@@ -2,7 +2,6 @@ from flask import Flask, redirect, session, url_for
 from flask_cors import CORS
 from app.config import Config
 import logging
-from app.json_encoder import CustomJSONEncoder
 from .json_encoder import CustomJSONEncoder
 
 
@@ -11,10 +10,10 @@ from app.views.insumo import insumos_bp
 from app.views.inventario import inventario_bp
 from app.views.auth_routes import auth_bp
 from app.views.admin_usuario_routes import admin_usuario_bp
-from app.views.facial_routes import facial_bp
-from app.views.orden_compra_routes import orden_compra_bp
 from app.views.orden_produccion_routes import orden_produccion_bp
-
+from app.views.orden_compra_routes import orden_compra_bp
+from app.views.facial_routes import facial_bp
+from app.views.pedido_routes import orden_venta_bp
 def create_app():
     """Factory para crear la aplicación Flask"""
 
@@ -27,7 +26,7 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
-    # ✅ Configurar el encoder personalizado para Flask 2.3+
+     # ✅ Configurar el encoder personalizado para Flask 2.3+
     app.json = CustomJSONEncoder(app)
 
     # Configurar CORS
@@ -39,7 +38,7 @@ def create_app():
         }
     })
 
-    # --- Registrar blueprints ---
+    # Registrar blueprints
     app.register_blueprint(insumos_bp)
     app.register_blueprint(inventario_bp)
     app.register_blueprint(orden_produccion_bp)
@@ -47,22 +46,13 @@ def create_app():
     app.register_blueprint(auth_bp, url_prefix='/auth')  # Prefijo opcional
     app.register_blueprint(admin_usuario_bp)
     app.register_blueprint(facial_bp, url_prefix='/totem')
-
+    app.register_blueprint(orden_venta_bp)
     # Ruta de health check
     @app.route('/api/health')
     def health_check():
         return {
             'status': 'ok',
             'message': 'API de Trazabilidad de Insumos funcionando correctamente',
-            'version': '1.0.0'
-        }
-
-    # Ruta de health check específica para auth
-    @app.route('/auth/health')
-    def auth_health_check():
-        return {
-            'status': 'ok',
-            'message': 'Módulo de Autenticación funcionando correctamente',
             'version': '1.0.0'
         }
 

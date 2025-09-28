@@ -1,225 +1,176 @@
-from dataclasses import dataclass, asdict, fields
-from typing import Optional, List, Dict
-from datetime import date, datetime
-import json
 from app.models.base_model import BaseModel
+from typing import Dict, Any, List, Optional
 import logging
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class PedidoItem:
-    """Representa un ítem de producto dentro de un pedido."""
-    id: Optional[int] = None
-    pedido_id: Optional[int] = None
-    producto_id: int
-    cantidad: float
-    estado: str = 'PENDIENTE'
-    orden_produccion_id: Optional[int] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-@dataclass
-class Pedido:
-    """Representa un pedido de un cliente que puede contener múltiples productos."""
-    id: Optional[int] = None
-    nombre_cliente: str
-    fecha_solicitud: date
-    items: List[PedidoItem]
-    estado: str = 'PENDIENTE'
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    def to_dict(self) -> dict:
-        """Convierte la instancia del modelo a un diccionario, incluyendo los items."""
-        d = asdict(self)
-        d['items'] = [asdict(item) for item in self.items]
-        for key, value in d.items():
-            if isinstance(value, (datetime, date)):
-                d[key] = value.isoformat() if value else None
-        return d
-
 class PedidoModel(BaseModel):
     """
-    Modelo para interactuar con la tabla de pedidos y sus ítems en la base de datos.
-    Utiliza el cliente de Supabase para realizar las operaciones.
+    Modelo para gestionar las operaciones de las tablas `pedidos` y `pedido_items`.
     """
+
     def get_table_name(self) -> str:
-        """Retorna el nombre de la tabla principal de pedidos."""
-        return "pedidos"
+        """Devuelve el nombre de la tabla principal."""
+        return 'pedidos'
 
-    def _get_items_table_name(self) -> str:
-        """Retorna el nombre de la tabla de ítems de pedido."""
-        return "pedido_items"
-
-    def create(self, pedido: Pedido) -> dict:
+    def create_with_items(self, pedido_data: Dict, items_data: List[Dict]) -> Dict:
         """
-        Crea un nuevo pedido con sus ítems llamando a una función de la base de datos.
-        """
-        if not isinstance(pedido, Pedido) or not pedido.items:
-            return {'success': False, 'error': 'Datos de pedido inválidos o sin ítems.'}
-
-        try:
-            # Preparamos los datos para la función de la BD
-            items_json = json.dumps([{'producto_id': item.producto_id, 'cantidad': item.cantidad} for item in pedido.items])
-
-            # Llamamos a la función RPC de Supabase
-            result = self.db.rpc('crear_pedido_con_items', {
-                'p_nombre_cliente': pedido.nombre_cliente,
-                'p_fecha_solicitud': pedido.fecha_solicitud.isoformat(),
-                'p_items': items_json
-            }).execute()
-
-            if result.data:
-                new_pedido_id = result.data
-                # Devolvemos el pedido completo buscándolo por el nuevo ID
-                return self.find_by_id(new_pedido_id)
-            else:
-                # El error puede estar en la respuesta de Supabase o en la ejecución
-                error_msg = 'No se pudo crear el pedido. La función no retornó un ID.'
-                logger.error(error_msg)
-                return {'success': False, 'error': error_msg}
-
-        except Exception as e:
-            logger.error(f"Error de base de datos al crear pedido: {e}")
-            return {'success': False, 'error': f"Error de base de datos: {e}"}
-
-    def find_by_id(self, pedido_id: int) -> dict:
-        """
-        Busca un pedido por su ID y carga todos sus ítems asociados usando una consulta anidada.
+        Crea un nuevo pedido junto con sus items.
+        Simula una transacción ejecutando las operaciones secuencialmente.
         """
         try:
-            # Supabase permite seleccionar de tablas relacionadas
-            result = self.db.table(self.get_table_name())\
-                .select('*, pedido_items(*)').eq('id', pedido_id).execute()
-
-            if result.data:
-                pedido_data = result.data[0]
-                pedido_obj = self._create_pedido_from_dict(pedido_data)
-                return {'success': True, 'data': pedido_obj}
-            else:
-                return {'success': False, 'error': 'Pedido no encontrado'}
-        except Exception as e:
-            logger.error(f"Error buscando pedido por ID {pedido_id}: {e}")
-            return {'success': False, 'error': str(e)}
-
-    def find_all(self, filters: Optional[Dict] = None, order_by: str = 'created_at', limit: Optional[int] = None) -> Dict:
-        """
-        Busca todos los pedidos y carga sus ítems para evitar el problema N+1.
-        """
-        try:
-            query = self.db.table(self.get_table_name()).select('*, pedido_items(*)')
-
-            # Aplicar filtros si existen
-            if filters:
-                for key, value in filters.items():
-                    if isinstance(value, tuple) and len(value) == 2:
-                        operator, filter_value = value
-                        if operator.lower() == 'in':
-                            query = query.in_(key, filter_value)
-                    else:
-                        query = query.eq(key, value)
-
-            query = query.order(order_by, desc=True)
-
-            if limit:
-                query = query.limit(limit)
-
-            result = query.execute()
-
-            if result.data:
-                pedidos_list = [self._create_pedido_from_dict(p) for p in result.data]
-                return {'success': True, 'data': pedidos_list}
-            else:
-                return {'success': True, 'data': []} # No es un error si no hay pedidos
-
-        except Exception as e:
-            logger.error(f"Error obteniendo todos los pedidos: {e}")
-            return {'success': False, 'error': str(e)}
-
-    def find_all_items(self, filters: Optional[Dict] = None) -> Dict:
-        """
-        Busca todos los ítems de pedido, opcionalmente con filtros.
-        A diferencia de find_all, esta función opera directamente sobre pedido_items.
-        """
-        try:
-            query = self.db.table(self._get_items_table_name()).select('*, producto:productos(nombre)')
-
-            if filters:
-                for key, value in filters.items():
-                    if isinstance(value, tuple) and len(value) == 2:
-                        operator, filter_value = value
-                        if operator.lower() == 'in':
-                            query = query.in_(key, filter_value)
-                    else:
-                        query = query.eq(key, value)
+            # --- INICIO DE LA CORRECCIÓN CLAVE ---
+            # PROBLEMA: El error 23505 (duplicate key) ocurre si se intenta insertar 
+            # un ID que ya existe. Esto a menudo pasa si el diccionario 'pedido_data'
+            # ya contiene un 'id' (ej. id=1) que se arrastra del formulario o de 
+            # un objeto pre-existente. 
             
+            # SOLUCIÓN: Eliminamos la clave 'id' para forzar a la base de datos 
+            # (Supabase/PostgreSQL) a usar su secuencia de auto-incremento.
+            if 'id' in pedido_data:
+                pedido_data.pop('id')
+            # --- FIN DE LA CORRECCIÓN CLAVE ---
+
+            # 1. Crear el pedido principal
+            # self.create() ahora recibirá 'pedido_data' sin la clave 'id'.
+            pedido_result = self.create(pedido_data)
+            if not pedido_result['success']:
+                # Aquí se capturará el error si ocurre por otras razones (ej. campos nulos).
+                raise Exception(f"Error al crear el pedido principal: {pedido_result.get('error')}")
+            
+            new_pedido = pedido_result['data']
+            # NOTA: Supabase debería devolver el nuevo ID automáticamente aquí.
+            new_pedido_id = new_pedido['id']
+
+            # 2. Crear los items del pedido
+            try:
+                for item in items_data:
+                    item_data = {
+                        'pedido_id': new_pedido_id,
+                        'producto_id': item['producto_id'],
+                        'cantidad': item['cantidad'],
+                        # FIX: Asegurar que el estado se incluye
+                        'estado': item.get('estado', 'PENDIENTE')
+                    }
+                    # Usamos el cliente de Supabase directamente para insertar en pedido_items
+                    item_insert_result = self.db.table('pedido_items').insert(item_data).execute()
+                    if not item_insert_result.data:
+                        # Si un item falla, intentamos deshacer el pedido principal.
+                        logger.error(f"Error creando item para el pedido {new_pedido_id}. Intentando rollback...")
+                        self.delete(id_value=new_pedido_id, id_field='id')
+                        raise Exception("Error al crear uno de los items del pedido. Se ha deshecho el pedido.")
+            except Exception as e:
+                # Si la creación de items falla, eliminamos el pedido que acabamos de crear.
+                logger.error(f"Error en la creación de items para el pedido {new_pedido_id}. Deshaciendo... Error: {e}")
+                self.delete(id_value=new_pedido_id, id_field='id')
+                return {'success': False, 'error': str(e)}
+
+            logger.info(f"Pedido y {len(items_data)} items creados con éxito. Pedido ID: {new_pedido_id}")
+            return self.get_one_with_items(new_pedido_id)
+
+        except Exception as e:
+            logger.error(f"Error crítico creando pedido con items: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def get_all_with_items(self, filtros: Optional[Dict] = None) -> Dict:
+        """
+        Obtiene todos los pedidos, cada uno con una lista de sus items.
+        """
+        try:
+            query = self.db.table(self.table_name).select("*, items:pedido_items(*, productos(nombre))")
+
+            if filtros:
+                for key, value in filtros.items():
+                    if value is not None:
+                        query = query.eq(key, value)
+
+            query = query.order("fecha_solicitud", desc=True).order("id", desc=True)
             result = query.execute()
 
-            if result.data:
-                # Devuelve una lista de diccionarios para que el controlador los procese.
-                return {'success': True, 'data': result.data}
-            else:
-                return {'success': True, 'data': []}
+            return {'success': True, 'data': result.data}
 
         except Exception as e:
-            logger.error(f"Error obteniendo todos los pedido_items: {e}")
+            logger.error(f"Error al obtener pedidos con items: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    def update_items(self, item_ids: List[int], data: Dict) -> Dict:
+    def get_one_with_items(self, pedido_id: int) -> Dict:
         """
-        Actualiza múltiples ítems de pedido a la vez.
+        Obtiene un pedido específico con todos sus items y datos relacionados.
         """
-        if not item_ids:
-            return {'success': True, 'data': []}
-
         try:
-            result = self.db.table(self._get_items_table_name())\
-                .update(data)\
-                .in_('id', item_ids)\
-                .execute()
+            # .maybe_single() prepara la consulta para devolver una o cero filas.
+            # .execute() ejecuta la consulta.
+            response = self.db.table(self.table_name).select(
+                "*, items:pedido_items(*, producto_nombre:productos(nombre))"
+            ).eq("id", pedido_id).maybe_single().execute()
+            
+            result = response.data
 
-            return {'success': True, 'data': getattr(result, 'data', [])}
-        
+            if result:
+                for item in result.get('items', []):
+                    if item.get('producto_nombre'):
+                        # El resultado de la subconsulta es un dict, necesitamos extraer el valor.
+                        item['producto_nombre'] = item['producto_nombre']['nombre']
+                    else:
+                        item['producto_nombre'] = 'N/A'
+                return {'success': True, 'data': result}
+            else:
+                return {'success': False, 'error': f"Pedido con id {pedido_id} no encontrado."}
+
         except Exception as e:
-            logger.error(f"Error actualizando pedido_items: {e}")
+            logger.error(f"Error al obtener el pedido {pedido_id} con items: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    def _create_item_from_dict(self, data: dict) -> PedidoItem:
-        """Crea un objeto PedidoItem a partir de un diccionario."""
-        if not data:
-            return None
-        item_fields = {f.name for f in fields(PedidoItem)}
-        filtered_data = {k: v for k, v in data.items() if k in item_fields}
+    def update_with_items(self, pedido_id: int, pedido_data: Dict, items_data: List[Dict]) -> Dict:
+        """
+        Actualiza un pedido y sus items.
+        """
+        try:
+            # 1. Actualizar el pedido principal
+            # Eliminamos el 'id' del payload del pedido principal si está presente, 
+            # ya que ya lo usamos en el método self.update como filtro.
+            if 'id' in pedido_data:
+                pedido_data.pop('id')
+                
+            update_result = self.update(id_value=pedido_id, data=pedido_data, id_field='id')
+            if not update_result['success']:
+                raise Exception(f"Error al actualizar el pedido principal: {update_result.get('error')}")
 
-        # Manejo de fechas que vienen como string
-        if 'created_at' in filtered_data and filtered_data['created_at'] and isinstance(filtered_data['created_at'], str):
-            filtered_data['created_at'] = datetime.fromisoformat(filtered_data['created_at'])
-        if 'updated_at' in filtered_data and filtered_data['updated_at'] and isinstance(filtered_data['updated_at'], str):
-            filtered_data['updated_at'] = datetime.fromisoformat(filtered_data['updated_at'])
+            # 2. Eliminar los items antiguos (Estrategia de eliminación y reinserción)
+            delete_result = self.db.table('pedido_items').delete().eq('pedido_id', pedido_id).execute()
+            # No es necesario revisar delete_result a menos que se quiera manejar una falla crítica de DB.
 
-        return PedidoItem(**filtered_data)
+            # 3. Insertar los nuevos items
+            for item in items_data:
+                item_data = {
+                    'pedido_id': pedido_id,
+                    'producto_id': item['producto_id'],
+                    'cantidad': item['cantidad'],
+                    # FIX CRÍTICO: Incluir el ESTADO del ítem que vino del formulario.
+                    # Si no se incluye, Supabase inserta el valor por defecto ('PENDIENTE').
+                    'estado': item['estado'] # <-- ¡LA LÍNEA QUE FALTABA!
+                }
+                
+                item_insert_result = self.db.table('pedido_items').insert(item_data).execute()
+                if not item_insert_result.data:
+                    # Si un item falla, una solución real requeriría una transacción a nivel de base de datos.
+                    logger.error(f"Error al insertar un nuevo item para el pedido {pedido_id} durante la actualización.")
+                    # En este punto, los items antiguos ya se borraron, se debe manejar el error.
+                    raise Exception(f"Error al insertar un nuevo item para el pedido {pedido_id} durante la actualización.")
 
-    def _create_pedido_from_dict(self, data: dict) -> Pedido:
-        """Crea un objeto Pedido a partir de un diccionario, incluyendo sus ítems."""
-        if not data:
-            return None
+            logger.info(f"Pedido {pedido_id} y sus items actualizados correctamente.")
+            return self.get_one_with_items(pedido_id)
 
-        # Supabase devuelve la tabla relacionada con su nombre ('pedido_items')
-        item_dicts = data.get('pedido_items', [])
-        items = [self._create_item_from_dict(item_data) for item_data in item_dicts]
+        except Exception as e:
+            logger.error(f"Error actualizando pedido {pedido_id} con items: {str(e)}")
+            return {'success': False, 'error': str(e)}
 
-        pedido_fields = {f.name for f in fields(Pedido)}
-        filtered_data = {k: v for k, v in data.items() if k in pedido_fields}
-
-        # Manejo de fechas que vienen como string
-        if 'fecha_solicitud' in filtered_data and isinstance(filtered_data['fecha_solicitud'], str):
-            filtered_data['fecha_solicitud'] = date.fromisoformat(filtered_data['fecha_solicitud'])
-        if 'created_at' in filtered_data and isinstance(filtered_data['created_at'], str):
-            filtered_data['created_at'] = datetime.fromisoformat(filtered_data['created_at'])
-        if 'updated_at' in filtered_data and filtered_data['updated_at'] and isinstance(filtered_data['updated_at'], str):
-            filtered_data['updated_at'] = datetime.fromisoformat(filtered_data['updated_at'])
-
-        filtered_data['items'] = items
-
-        return Pedido(**filtered_data)
+    def cambiar_estado(self, pedido_id: int, nuevo_estado: str) -> Dict:
+        """
+        Cambia el estado de un pedido.
+        """
+        try:
+            return self.update(id_value=pedido_id, data={'estado': nuevo_estado}, id_field='id')
+        except Exception as e:
+            logger.error(f"Error cambiando estado del pedido {pedido_id}: {str(e)}")
+            return {'success': False, 'error': str(e)}

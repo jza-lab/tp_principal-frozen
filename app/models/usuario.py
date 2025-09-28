@@ -91,7 +91,7 @@ class UsuarioModel(BaseModel):
         """Busca un usuario por su legajo"""
         try:
             response = self.db.table("usuarios").select("*").eq("legajo", legajo).execute()
-
+            
             if response.data:
                 return {'success': True, 'data': response.data[0]}
             else:
