@@ -44,6 +44,9 @@
                             <a class="nav-link {% if 'insumo' in request.endpoint %}active{% endif %}" href="{{ url_for('insumos_api.obtener_insumos') }}">Insumos</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link {% if 'orden_compra' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_compra.listar') }}">Compras</a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link {% if 'orden_produccion' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_produccion.listar') }}">Producción</a>
                         </li>
                         <li class="nav-item dropdown">

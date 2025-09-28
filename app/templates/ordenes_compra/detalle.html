@@ -1,0 +1,152 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Orden de Compra {{ orden.codigo_oc }} - Sistema Frozen{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">
+            Orden de Compra <code class="text-muted">{{ orden.codigo_oc }}</code>
+        </h1>
+        <p class="text-muted mb-0">Proveedor: {{ orden.proveedor_nombre or 'No definido' }}</p>
+    </div>
+    <div class="btn-toolbar">
+        <a href="{{ url_for('orden_compra.listar') }}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left me-1"></i>Volver
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Información General</h5>
+                <div>
+                    {% set estado_config = {
+                        'PENDIENTE': {'class': 'bg-secondary', 'icon': 'clock'},
+                        'APROBADA': {'class': 'bg-success', 'icon': 'check-circle'},
+                        'EN_TRANSITO': {'class': 'bg-primary', 'icon': 'truck'},
+                        'RECIBIDA': {'class': 'bg-info', 'icon': 'box-seam'},
+                        'RECHAZADA': {'class': 'bg-danger', 'icon': 'x-circle'}
+                    } %}
+                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                    <span class="badge {{ config.class }} fs-6 me-2">
+                        <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado.replace('_', ' ') }}
+                    </span>
+                    
+                    {% if orden.prioridad and orden.prioridad != 'NORMAL' %}
+                    {% set prioridad_config = {
+                        'BAJA': {'class': 'bg-light text-dark', 'icon': 'arrow-down'},
+                        'ALTA': {'class': 'bg-warning text-dark', 'icon': 'arrow-up'},
+                        'URGENTE': {'class': 'bg-danger', 'icon': 'exclamation-triangle'}
+                    } %}
+                    {% set pconfig = prioridad_config.get(orden.prioridad, {'class': 'bg-secondary', 'icon': 'dash'}) %}
+                    <span class="badge {{ pconfig.class }} fs-6">
+                        <i class="bi bi-{{ pconfig.icon }} me-1"></i>{{ orden.prioridad }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Detalles de la Compra</h6>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="border-start border-3 border-primary ps-3">
+                                    <div class="small text-muted">Proveedor</div>
+                                    <div class="fw-bold">{{ orden.proveedor_nombre or 'N/A' }}</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">Subtotal</div>
+                                <div class="fw-bold">$ {{ "%.2f"|format(orden.subtotal|float) }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">IVA</div>
+                                <div class="fw-bold">$ {{ "%.2f"|format(orden.iva|float) }}</div>
+                            </div>
+                            <div class="col-12">
+                                <div class="small text-muted">Total</div>
+                                <div class="fw-bold h5">$ {{ "%.2f"|format(orden.total|float) }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Fechas y Personal</h6>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="border-start border-3 border-success ps-3">
+                                    <div class="small text-muted">Creado por</div>
+                                    <div class="fw-bold">{{ orden.usuario_creador_nombre or 'Sistema' }}</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">Aprobado por</div>
+                                <div class="fw-bold">{{ orden.usuario_aprobador_nombre or 'Pendiente' }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">Fecha de Emisión</div>
+                                <div class="fw-bold">{{ orden.fecha_emision }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12">
+                        <h6 class="text-muted mb-3">Timeline de Entrega</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-calendar-event text-muted me-2"></i>
+                                    <div>
+                                        <div class="small text-muted">Fecha Estimada</div>
+                                        <div class="fw-bold">{{ orden.fecha_estimada_entrega }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-check-circle text-{{ 'success' if orden.fecha_real_entrega else 'muted' }} me-2"></i>
+                                    <div>
+                                        <div class="small text-muted">Entrega Real</div>
+                                        <div class="fw-bold">{{ orden.fecha_real_entrega or 'No recibido' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if orden.observaciones %}
+                    <div class="col-12">
+                        <h6 class="text-muted mb-2">Observaciones</h6>
+                        <div class="border-start border-3 border-warning ps-3">
+                            <p class="mb-0">{{ orden.observaciones }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-gear me-1"></i>
+                    Acciones Rápidas
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-secondary" disabled>
+                        <i class="bi bi-printer me-2"></i>Imprimir Orden
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
