@@ -15,23 +15,7 @@ insumo_controller = InsumoController()
 
 @insumos_bp.route('/catalogo/nuevo', methods=['GET','PUT' ,'POST'])
 def crear_insumo():
-    """
-    Crear un nuevo insumo en el catálogo
-    ---
-    POST /api/insumos/catalogo
-    Content-Type: application/json
-
-    Body:
-    {
-        "nombre": "string (required)",
-        "codigo_interno": "string (optional)",
-        "unidad_medida": "string (required)",
-        "categoria": "string (optional)",
-        "stock_min": "integer (default: 0)"
-    }
-    """
     try:
-
         if(request.method == 'POST' or request.method == 'PUT'):
             datos_json = request.get_json(silent=True) 
             if(datos_json is None):
@@ -57,6 +41,7 @@ def crear_insumo():
             'success': False,
             'error': 'Error interno del servidor'
         }), 500
+
 
 @insumos_bp.route('/catalogo', methods=['GET'])
 def obtener_insumos():
