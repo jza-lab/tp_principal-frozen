@@ -14,8 +14,6 @@ from app.views.admin_usuario_routes import admin_usuario_bp
 from app.views.facial_routes import facial_bp
 from app.views.orden_compra_routes import orden_compra_bp
 from app.views.orden_produccion_routes import orden_produccion_bp
-from app.views.orden_compra_routes import orden_compra_bp
-from app.views.facial_routes import facial_bp
 
 def create_app():
     """Factory para crear la aplicación Flask"""
