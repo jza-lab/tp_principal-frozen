@@ -1,9 +1,25 @@
+# Framework
 Flask==2.3.3
-supabase==1.0.4
-python-dotenv==1.0.0
 flask-cors==4.0.0
+<<<<<<< HEAD
+python-dotenv==1.0.0
+marshmallow==3.20.1
+
+# Supabase y dependencias
+supabase==2.20.0
+supabase-auth==2.20.0
+supabase-functions==2.20.0
+storage3==2.20.0
+postgrest==2.20.0
+httpx[http2]>=0.26,<0.29
+
+# OpenCV y numpy compatibles
+numpy>=1.24.0,<2.3.0
+opencv-python
+=======
 marshmallow==3.20.1
 opencv-python-headless==4.8.0.76
 numpy<2.0
 face_recognition
 rpyc
+>>>>>>> cadb92e4817194a111efcd7965c508705d264123
