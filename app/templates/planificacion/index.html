@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Planificación de Producción{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Planificación de Producción</h1>
+    <p class="text-muted">
+        Aquí se muestran todos los ítems de pedidos de clientes que están pendientes de producción.
+        Agrúpelos para crear órdenes de producción consolidadas.
+    </p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% if not pedidos_agrupados %}
+        <div class="alert alert-info mt-4" role="alert">
+            No hay ítems de pedidos pendientes para planificar.
+        </div>
+    {% else %}
+        {% for producto_id, grupo in pedidos_agrupados.items() %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        Producto: <strong>{{ grupo.producto_info.nombre }}</strong>
+                        <span class="badge bg-primary float-end mt-1">
+                            Cantidad Total Pendiente: {{ "%.2f"|format(grupo.cantidad_total) }} kg
+                        </span>
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('planificacion.crear_orden') }}" method="POST">
+                        <input type="hidden" name="producto_id" value="{{ producto_id }}">
+                        
+                        <h5 class="card-title">Ítems Pendientes</h5>
+                        <p class="card-text">Seleccione los ítems que desea consolidar en una nueva orden de producción.</p>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 5%;"><input type="checkbox" class="form-check-input" onclick="toggleAll(this, '{{ producto_id }}')" checked></th>
+                                        <th style="width: 15%;">ID Ítem</th>
+                                        <th style="width: 15%;">ID Pedido</th>
+                                        <th>Cantidad</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in grupo.items %}
+                                        <tr>
+                                            <td>
+                                                <input type="checkbox" class="form-check-input item-checkbox-{{ producto_id }}" name="item_ids" value="{{ item.id }}" checked>
+                                            </td>
+                                            <td>{{ item.id }}</td>
+                                            <td>{{ item.pedido_id }}</td>
+                                            <td>{{ "%.2f"|format(item.cantidad) }} kg</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success mt-3">
+                            <i class="bi bi-plus-circle"></i> Crear Orden de Producción Consolidada
+                        </button>
+                    </form>
+                </div>
+            </div>
+        {% endfor %}
+    {% endif %}
+</div>
+
+<script>
+function toggleAll(source, producto_id) {
+    const checkboxes = document.querySelectorAll('.item-checkbox-' + producto_id);
+    for (let i = 0; i < checkboxes.length; i++) {
+        checkboxes[i].checked = source.checked;
+    }
+}
+</script>
+
+{% endblock %}

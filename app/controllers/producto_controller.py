@@ -1,6 +1,6 @@
-from controllers.base_controller import BaseController
-from models.producto import ProductoModel
-from schemas.producto_schema import ProductoSchema
+from app.controllers.base_controller import BaseController
+from app.models.producto import ProductoModel
+from app.schemas.producto_schema import ProductoSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
 

@@ -1,0 +1,26 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Panel de Control Web</h4>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">¡Bienvenido/a, {{ session.get('user_nombre', 'Usuario') }}!</h5>
+                    <p class="card-text">
+                        Ha iniciado sesión correctamente a través del sistema web.
+                    </p>
+                    <p>
+                        Su acceso fue validado gracias a su registro previo en el tótem.
+                    </p>
+                    <hr>
+                    <a href="{{ url_for('facial.logout_web') }}" class="btn btn-danger">Cerrar Sesión Web</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

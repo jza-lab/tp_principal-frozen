@@ -1,0 +1,227 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Orden {{ orden.codigo }} - Sistema Frozen{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">
+            Orden <code class="text-muted">{{ orden.codigo }}</code>
+        </h1>
+        <p class="text-muted mb-0">{{ orden.producto_nombre or orden.producto or 'Producto no definido' }}</p>
+    </div>
+    <div class="btn-toolbar">
+        <a href="{{ url_for('orden_produccion.listar') }}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left me-1"></i>Volver
+        </a>
+        {% if orden.estado == 'PLANIFICADA' %}
+        <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" 
+              style="display: inline;" onsubmit="return confirm('¿Iniciar esta orden de producción?')">
+            <button type="submit" class="btn btn-success">
+                <i class="bi bi-play-fill me-1"></i>Iniciar Producción
+            </button>
+        </form>
+        {% elif orden.estado == 'EN_PROCESO' %}
+        <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" 
+              style="display: inline;" onsubmit="return confirm('¿Marcar como completada?')">
+            <button type="submit" class="btn btn-success">
+                <i class="bi bi-check-circle me-1"></i>Completar Orden
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Información General</h5>
+                <div>
+                    {% set estado_config = {
+                        'PLANIFICADA': {'class': 'bg-secondary', 'icon': 'calendar'},
+                        'EN_PROCESO': {'class': 'bg-primary', 'icon': 'play-circle'},
+                        'PAUSADA': {'class': 'bg-warning text-dark', 'icon': 'pause-circle'},
+                        'COMPLETADA': {'class': 'bg-success', 'icon': 'check-circle'},
+                        'CANCELADA': {'class': 'bg-danger', 'icon': 'x-circle'}
+                    } %}
+                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                    <span class="badge {{ config.class }} fs-6 me-2">
+                        <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado }}
+                    </span>
+                    
+                    {% if orden.prioridad and orden.prioridad != 'NORMAL' %}
+                    {% set prioridad_config = {
+                        'BAJA': {'class': 'bg-light text-dark', 'icon': 'arrow-down'},
+                        'ALTA': {'class': 'bg-warning text-dark', 'icon': 'arrow-up'},
+                        'URGENTE': {'class': 'bg-danger', 'icon': 'exclamation-triangle'}
+                    } %}
+                    {% set pconfig = prioridad_config.get(orden.prioridad, {'class': 'bg-secondary', 'icon': 'dash'}) %}
+                    <span class="badge {{ pconfig.class }} fs-6">
+                        <i class="bi bi-{{ pconfig.icon }} me-1"></i>{{ orden.prioridad }}
+                    </span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-4">
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Detalles de Producción</h6>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="border-start border-3 border-primary ps-3">
+                                    <div class="small text-muted">Producto</div>
+                                    <div class="fw-bold">{{ orden.producto_nombre or orden.producto or 'N/A' }}</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">Cantidad Planificada</div>
+                                <div class="fw-bold">{{ orden.cantidad }} unidades</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">Receta</div>
+                                <div class="fw-bold">{{ orden.receta_nombre or 'N/A' }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Personal y Fechas</h6>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="border-start border-3 border-success ps-3">
+                                    <div class="small text-muted">Operario Asignado</div>
+                                    <div class="fw-bold">{{ orden.operario_nombre or 'Sin asignar' }}</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">Creado por</div>
+                                <div class="fw-bold">{{ orden.creador_nombre or 'Sistema' }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">Fecha Planificada</div>
+                                <div class="fw-bold">{{ orden.fecha_planificada }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12">
+                        <h6 class="text-muted mb-3">Timeline de Producción</h6>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-calendar-event text-muted me-2"></i>
+                                    <div>
+                                        <div class="small text-muted">Fecha Planificada</div>
+                                        <div class="fw-bold">{{ orden.fecha_planificada }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-play-circle text-{{ 'success' if orden.fecha_inicio else 'muted' }} me-2"></i>
+                                    <div>
+                                        <div class="small text-muted">Inicio Real</div>
+                                        <div class="fw-bold">{{ orden.fecha_inicio or 'No iniciado' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-check-circle text-{{ 'success' if orden.fecha_fin else 'muted' }} me-2"></i>
+                                    <div>
+                                        <div class="small text-muted">Finalización</div>
+                                        <div class="fw-bold">{{ orden.fecha_fin or 'No finalizado' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if orden.horas_produccion %}
+                    <div class="col-12">
+                        <div class="alert alert-light border">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-clock text-primary me-2"></i>
+                                <div>
+                                    <strong>Tiempo Total de Producción:</strong> 
+                                    {{ "%.2f"|format(orden.horas_produccion) }} horas
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if orden.observaciones %}
+                    <div class="col-12">
+                        <h6 class="text-muted mb-2">Observaciones</h6>
+                        <div class="border-start border-3 border-warning ps-3">
+                            <p class="mb-0">{{ orden.observaciones }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-gear me-1"></i>
+                    Acciones Rápidas
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    {% if orden.estado == 'PLANIFICADA' %}
+                    <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" 
+                          onsubmit="return confirm('¿Iniciar esta orden de producción?')">
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="bi bi-play-fill me-2"></i>Iniciar Producción
+                        </button>
+                    </form>
+                    {% elif orden.estado == 'EN_PROCESO' %}
+                    <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" 
+                          onsubmit="return confirm('¿Marcar como completada?')">
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="bi bi-check-circle me-2"></i>Completar Orden
+                        </button>
+                    </form>
+                    {% endif %}
+                    
+                    <button class="btn btn-outline-primary" disabled>
+                        <i class="bi bi-clipboard-check me-2"></i>Control de Calidad
+                    </button>
+                    
+                    <button class="btn btn-outline-secondary" disabled>
+                        <i class="bi bi-printer me-2"></i>Imprimir Orden
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        {% if orden.estado in ['EN_PROCESO', 'COMPLETADA'] %}
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-bar-chart me-1"></i>
+                    Métricas
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 text-center">
+                    <div class="col-6">
+                        <div class="border-end">
+                            <div class="h5 mb-0">{{ orden.cantidad_producida or 0 }}</div>
+            
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+

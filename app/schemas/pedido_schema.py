@@ -6,8 +6,15 @@ class PedidoItemSchema(Schema):
     """
     Schema para validar cada ítem dentro de un pedido.
     """
+    id = fields.Int(dump_only=True)
     producto_id = fields.Int(required=True)
     cantidad = fields.Float(required=True, validate=validate.Range(min=0.01))
+
+    # Campos gestionados por el sistema, no por el usuario en la creación.
+    estado = fields.Str(dump_only=True)
+    orden_produccion_id = fields.Int(dump_only=True, allow_none=True)
+    created_at = fields.DateTime(dump_only=True)
+    updated_at = fields.DateTime(dump_only=True)
 
     @post_load
     def make_item(self, data, **kwargs):
@@ -31,7 +38,6 @@ class PedidoSchema(Schema):
     )
 
     estado = fields.Str(dump_only=True, load_default='PENDIENTE')
-    orden_produccion_id = fields.Int(dump_only=True, allow_none=True)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
 

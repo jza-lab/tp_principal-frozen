@@ -1,7 +1,7 @@
 from dataclasses import dataclass, asdict
 from typing import Optional
 from datetime import datetime
-from models.base_model import BaseModel
+from app.models.base_model import BaseModel
 
 
 @dataclass
