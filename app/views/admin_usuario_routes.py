@@ -19,7 +19,7 @@ def index():
 def listar_usuarios():
     """Muestra la lista de todos los usuarios del sistema."""
     usuarios = usuario_controller.obtener_todos_los_usuarios()
-    return render_template('admin/usuarios/listar.html', usuarios=usuarios)
+    return render_template('usuarios/listar.html', usuarios=usuarios)
 
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
 @roles_required('ADMIN')

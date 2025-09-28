@@ -1,6 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from venv import logger
+from flask import Blueprint, jsonify, render_template, request, redirect, url_for, flash, session
+from marshmallow import ValidationError
 from app.controllers.orden_produccion_controller import OrdenProduccionController
-# from app.controllers.etapa_produccion_controller import EtapaProduccionController
+from app.controllers.producto_controller import ProductoController
+from app.controllers.etapa_produccion_controller import EtapaProduccionController
+from app.controllers.usuario_controller import UsuarioController
+from app.controllers.receta_controller import RecetaController
 from app.utils.decorators import roles_required
 from datetime import date
 
@@ -8,7 +13,10 @@ orden_produccion_bp = Blueprint('orden_produccion', __name__, url_prefix='/orden
 
 # Se instancian los controladores necesarios
 controller = OrdenProduccionController()
-# etapa_controller = EtapaProduccionController()
+producto_controller = ProductoController()
+etapa_controller = EtapaProduccionController()
+usuario_controller = UsuarioController()
+receta_controller = RecetaController()
 
 @orden_produccion_bp.route('/')
 def listar():
@@ -48,36 +56,115 @@ def listar():
 #     flash('La creación directa de órdenes está deshabilitada. Use el módulo de Planificación.', 'info')
 #     return redirect(url_for('orden_produccion.listar'))
 
-@orden_produccion_bp.route('/nueva')
+@orden_produccion_bp.route('/nueva', methods=['GET', 'POST', 'PUT'])
 def nueva():
     """
     Muestra la página de detalle de una orden de producción específica,
     incluyendo sus etapas.
     """
+    etapas=None 
+    productos =  producto_controller.obtener_todos_los_productos()
+    operarios = usuario_controller.obtener_todos_los_usuarios()
+    return render_template('ordenes_produccion/formulario.html', etapas=etapas, productos=productos, operarios = operarios)
+        
 
-    # etapas = etapa_controller.obtener_etapas_por_orden(id)
+@orden_produccion_bp.route('/nueva/crear', methods=['POST'])
+def crear():
+    try:
+        datos_json = request.get_json()
+        if not datos_json:
+            return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos.'}), 400
 
-    # return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
-    etapas=None #Arreglar
-    return render_template('ordenes_produccion/formulario.html', etapas=etapas)
+        usuario_id_creador = session.get('usuario_id')
 
+        if not usuario_id_creador:
+            return jsonify({'success': False, 'error': 'Usuario no autenticado.'}), 401
 
-@orden_produccion_bp.route('/detalle/<int:id>')
+        # Corregido: Pasar `datos_json` al controlador, no el objeto `request`.
+        resultado = controller.crear_orden(datos_json, usuario_id_creador)
+        
+        if resultado.get('success'):
+            # Devolver el objeto creado con el código de estado 201 (Created)
+            return jsonify(resultado), 201
+        else:
+            # Devolver el error específico con el código de estado 400 (Bad Request)
+            return jsonify(resultado), 400
+        
+    except ValidationError as e:
+        return jsonify({
+            'success': False,
+            'error': 'Datos inválidos',
+            'details': e.messages
+        }), 400
+    except Exception as e:
+        logger.error(f"Error inesperado en crear_insumo: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Error interno del servidor'
+        }), 500
+    
+
+@orden_produccion_bp.route('/modificar/<int:id>', methods=['GET', 'POST', 'PUT'])
+def modificar(id):
+    """
+    Muestra la página de detalle de una orden de producción específica,
+    incluyendo sus etapas.
+    """
+    try:
+        if(request.method == 'POST' or request.method == 'PUT'):
+            datos_json = request.get_json(silent=True) 
+            print(datos_json)
+            if(datos_json is None):
+                logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
+                return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos (verifique Content-Type)'}), 400
+            id = session['usuario_id']
+            print(id)
+            response, status = controller.crear_orden(request , 23)
+            return jsonify(response), status
+
+        orden = controller.obtener_orden_por_id(id)
+        etapas=None 
+        productos =  producto_controller.obtener_todos_los_productos()
+        operarios = usuario_controller.obtener_todos_los_usuarios()
+        return render_template('ordenes_produccion/formulario.html',orden_m=orden, etapas=etapas, productos=productos, operarios = operarios)
+        
+    except ValidationError as e:
+        return jsonify({
+            'success': False,
+            'error': 'Datos inválidos',
+            'details': e.messages
+        }), 400
+    except Exception as e:
+        logger.error(f"Error inesperado en crear_insumo: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Error interno del servidor'
+        }), 500
+
+@orden_produccion_bp.route('/<int:id>/detalle')
 def detalle(id):
     """
     Muestra la página de detalle de una orden de producción específica,
     incluyendo sus etapas.
     """
-    orden = controller.obtener_orden_por_id(id)
-    if not orden:
+    respuesta = controller.obtener_orden_por_id(id)
+    if not respuesta or not respuesta.get('success'):
         flash('Orden no encontrada.', 'error')
         return redirect(url_for('orden_produccion.listar'))
-
-    # etapas = etapa_controller.obtener_etapas_por_orden(id)
-
-    # return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
+    
+    orden=respuesta.get('data')
     etapas=None #Arreglar
-    return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas)
+
+    ingredientes = []
+    if orden and orden.get('receta_id'):
+        ingredientes_response = receta_controller.obtener_ingredientes_para_receta(orden.get('receta_id'))
+        if ingredientes_response.get('success'):
+            ingredientes = ingredientes_response.get('data', [])
+            print(ingredientes)
+        else:
+            flash(ingredientes_response.get('error', 'No se pudieron cargar los ingredientes.'), 'warning')
+
+    return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas, ingredientes=ingredientes)
 
 @orden_produccion_bp.route('/<int:id>/iniciar', methods=['POST'])
 def iniciar(id):
@@ -135,7 +222,7 @@ def aprobar(id):
         flash('Orden aprobada y stock reservado.', 'success')
     else:
         flash(f"Error al aprobar: {resultado.get('error', 'Error desconocido')}", 'error')
-    return redirect(url_for('orden_produccion.listar_pendientes'))
+    return redirect(url_for('orden_produccion.listar'))
 
 @orden_produccion_bp.route('/<int:id>/rechazar', methods=['POST'])
 @roles_required('SUPERVISOR', 'ADMIN', 'GERENTE')
@@ -149,4 +236,4 @@ def rechazar(id):
         flash('Orden rechazada exitosamente.', 'warning')
     else:
         flash(f"Error al rechazar: {resultado.get('error', 'Error desconocido')}", 'error')
-    return redirect(url_for('orden_produccion.listar_pendientes'))
+    return redirect(url_for('orden_produccion.listar'))
