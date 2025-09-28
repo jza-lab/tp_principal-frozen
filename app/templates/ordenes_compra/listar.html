@@ -1,0 +1,149 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Órdenes de Compra - Sistema Frozen{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">{{ titulo | default('Órdenes de Compra') }}</h1>
+        <p class="text-muted mb-0">Gestión y seguimiento de órdenes de compra a proveedores</p>
+    </div>
+    <div class="btn-toolbar">
+        <a href="{{ url_for('orden_compra.nueva') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
+        </a>
+    </div>
+</div>
+
+<!-- Filtros por estado -->
+<div class="card mb-4">
+    <div class="card-body card-filter">
+        <form method="get" action="{{ url_for('orden_compra.listar') }}">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="estado" class="form-label">Filtrar por Estado</label>
+                    <select name="estado" class="form-select" onchange="this.form.submit()">
+                        <option value="">Todas las órdenes</option>
+                        <option value="PENDIENTE" {% if request.args.get('estado') == 'PENDIENTE' %}selected{% endif %}>Pendientes</option>
+                        <option value="APROBADA" {% if request.args.get('estado') == 'APROBADA' %}selected{% endif %}>Aprobadas</option>
+                        <option value="EN_TRANSITO" {% if request.args.get('estado') == 'EN_TRANSITO' %}selected{% endif %}>En Tránsito</option>
+                        <option value="RECIBIDA" {% if request.args.get('estado') == 'RECIBIDA' %}selected{% endif %}>Recibidas</option>
+                        <option value="RECHAZADA" {% if request.args.get('estado') == 'RECHAZADA' %}selected{% endif %}>Rechazadas</option>
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <div class="text-muted small">
+                        <p>{{ ordenes|length }} órdenes encontradas</p>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Lista de órdenes -->
+<div class="row">
+    {% for orden in ordenes %}
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 insumo-card">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between">
+                    <h5 class="card-title">{{ orden.proveedor_nombre or 'Proveedor no definido' }}</h5>
+                    {% set estado_config = {
+                        'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
+                        'APROBADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
+                        'EN_TRANSITO': {'class': 'bg-primary-soft text-primary', 'icon': 'truck'},
+                        'RECIBIDA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
+                        'RECHAZADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
+                    } %}
+                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                    <span class="badge {{ config.class }}">
+                        <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado.replace('_', ' ') }}
+                    </span>
+                </div>
+
+                <div class="card-secondary-details mb-3">
+                    <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo_oc }}</code></span>
+                    <span><i class="bi bi-currency-dollar"></i> <b>{{ "%.2f"|format(orden.total|float) }}</b></span>
+                    <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_emision }}</span>
+                </div>
+
+                <div class="mt-auto">
+                    <hr class="card-divider">
+                    <div class="d-flex justify-content-between align-items-center mb-3 stock-info">
+                        <div>
+                            <span class="stock-label">Creado por</span>
+                            <span class="stock-value">{{ orden.usuario_creador_nombre or 'N/A' }}</span>
+                        </div>
+                        <div>
+                            {% if orden.prioridad and orden.prioridad != 'NORMAL' %}
+                                {% set prioridad_config = {
+                                    'BAJA': {'class': 'bg-light text-dark', 'icon': 'arrow-down'},
+                                    'ALTA': {'class': 'bg-warning-soft text-warning', 'icon': 'arrow-up'},
+                                    'URGENTE': {'class': 'bg-danger-soft text-danger', 'icon': 'exclamation-triangle'}
+                                } %}
+                                {% set pconfig = prioridad_config.get(orden.prioridad, {'class': 'bg-secondary', 'icon': 'dash'}) %}
+                                <span class="badge {{ pconfig.class }}">
+                                    <i class="bi bi-{{ pconfig.icon }} me-1"></i>{{ orden.prioridad }}
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                        <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}"
+                           class="btn btn-sm btn-outline-primary" title="Ver Detalle">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        {% if orden.estado == 'PENDIENTE' and ('SUPERVISOR' in session['rol'] or 'ADMIN' in session['rol']) %}
+                        <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id) }}" style="display: inline;" onsubmit="return confirm('¿Aprobar esta orden de compra?')">
+                            <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
+                                <i class="bi bi-check-lg"></i>
+                            </button>
+                        </form>
+                        <button type="button" class="btn btn-sm btn-outline-danger" title="Rechazar Orden" data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Rechazo -->
+    <div class="modal fade" id="rechazarModal-{{ orden.id }}" tabindex="-1" aria-labelledby="rechazarModalLabel-{{ orden.id }}" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="rechazarModalLabel-{{ orden.id }}">Rechazar Orden de Compra</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <form method="POST" action="{{ url_for('orden_compra.rechazar', id=orden.id) }}">
+              <div class="modal-body">
+                <p>¿Está seguro de que desea rechazar la orden de compra <strong>{{ orden.codigo_oc }}</strong>?</p>
+                <div class="mb-3">
+                  <label for="motivo-{{ orden.id }}" class="form-label">Motivo del rechazo (opcional)</label>
+                  <textarea class="form-control" id="motivo-{{ orden.id }}" name="motivo" rows="3"></textarea>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-danger">Rechazar Orden</button>
+              </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="card bg-light border-0">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-info-circle fs-1 opacity-25 mb-3"></i>
+                <h4 class="card-title">No se encontraron órdenes de compra</h4>
+                <p class="text-muted mb-0">No hay órdenes que coincidan con los filtros seleccionados.</p>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

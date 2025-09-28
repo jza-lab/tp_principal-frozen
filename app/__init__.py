@@ -11,6 +11,7 @@ from app.views.inventario import inventario_bp
 from app.views.auth_routes import auth_bp
 from app.views.admin_usuario_routes import admin_usuario_bp
 from app.views.orden_produccion_routes import orden_produccion_bp
+from app.views.orden_compra_routes import orden_compra_bp
 from app.views.facial_routes import facial_bp
 
 def create_app():
@@ -41,6 +42,7 @@ def create_app():
     app.register_blueprint(insumos_bp)
     app.register_blueprint(inventario_bp)
     app.register_blueprint(orden_produccion_bp)
+    app.register_blueprint(orden_compra_bp)
     app.register_blueprint(auth_bp, url_prefix='/auth')  # Prefijo opcional
     app.register_blueprint(admin_usuario_bp)
     app.register_blueprint(facial_bp, url_prefix='/totem')
