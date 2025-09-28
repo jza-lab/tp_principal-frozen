@@ -1,6 +1,6 @@
 from flask import Blueprint, session, request, redirect, url_for, flash, render_template
 from app.controllers.usuario_controller import UsuarioController
-from app.controllers.facial_controller import FacialController
+from app.views.facial_routes import FacialController
 
 # Blueprint para la autenticación de usuarios
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')

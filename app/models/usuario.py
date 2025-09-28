@@ -82,3 +82,47 @@ class UsuarioModel(BaseModel):
         except Exception as e:
             logger.error(f"Error buscando usuario por legajo: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+
+    ##GONZA
+
+    def find_by_id(self, usuario_id: int) -> Dict:
+        """Busca un usuario por su ID"""
+        try:
+            # CORREGIR: usar 'id' en lugar de 'id_usuario'
+            response = self.db.table("usuarios").select("*").eq("id", usuario_id).execute()
+
+            if response.data:
+                return {'success': True, 'data': response.data[0]}
+            else:
+                return {'success': False, 'error': 'Usuario no encontrado'}
+
+        except Exception as e:
+            logger.error(f"Error buscando por ID: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def find_by_legajo_v2(self, legajo: str) -> Dict:
+        """Busca un usuario por su legajo"""
+        try:
+            response = self.db.table("usuarios").select("*").eq("legajo", legajo).execute()
+
+            if response.data:
+                return {'success': True, 'data': response.data[0]}
+            else:
+                return {'success': False, 'error': 'Usuario no encontrado'}
+
+        except Exception as e:
+            logger.error(f"Error buscando por legajo: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def update(self, usuario_id: int, data: Dict) -> Dict:
+        try:
+            # Usar 'id' en lugar de 'id_usuario'
+            response = self.db.table("usuarios").update(data).eq("id", usuario_id).execute()
+            if response.data:
+                return {'success': True, 'data': response.data[0]}
+            else:
+                return {'success': False, 'error': 'Usuario no encontrado'}
+        except Exception as e:
+            logger.error(f"Error actualizando en usuarios: {e}")
+            return {'success': False, 'error': str(e)}

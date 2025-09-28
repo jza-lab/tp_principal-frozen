@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0">✅ Acceso Concedido - Tótem</h4>
+            </div>
+            <div class="card-body text-center">
+                <div class="alert alert-success">
+                    <h5>👋 Bienvenido/a {{ session.user_nombre }}</h5>
+                    <p class="mb-0">Entrada registrada: {{ now.strftime('%H:%M - %d/%m/%Y') }}</p>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-md-6">
+                        <div class="card status-card">
+                            <div class="card-body">
+                                <h6>📊 Estado de Acceso</h6>
+                                <div class="mb-2">
+                                    <span class="badge bg-success">ENTRADA REGISTRADA</span>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="badge bg-info">ACCESO WEB HABILITADO</span>
+                                </div>
+                                <small class="text-muted">{{ now.strftime('%H:%M - %d/%m/%Y') }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6>🔗 Acceso Rápido</h6>
+                                <p>Ahora puede acceder al sistema web desde cualquier dispositivo:</p>
+                                <!-- CORREGIDO: Usar facial.login_web_page -->
+                                <a href="{{ url_for('facial.login_web_page') }}" target="_blank" class="btn btn-info btn-sm">
+                                    Abrir Sistema Web
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <button id="logoutBtn" class="btn btn-danger btn-lg">
+                        🚪 Registrar Salida
+                    </button>
+                    <!-- CORREGIDO: Usar facial.login_totem -->
+                    <a href="{{ url_for('facial.login_totem') }}" class="btn btn-outline-secondary ms-2">
+                        Volver al Inicio
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('logoutBtn').addEventListener('click', async function() {
+        if (confirm('¿Estás seguro de registrar tu salida? Esto deshabilitará el acceso web.')) {
+            // Mostrar loading
+            this.innerHTML = '⏳ Procesando...';
+            this.disabled = true;
+            
+            try {
+                // CORREGIDO: Usar /auth/facial/logout_face
+                const response = await fetch('/auth/facial/logout_face', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ Salida registrada correctamente');
+                    window.location.href = '/auth/facial/login_totem';
+                } else {
+                    alert('❌ Error: ' + result.message);
+                    // Restaurar botón
+                    this.innerHTML = '🚪 Registrar Salida';
+                    this.disabled = false;
+                }
+            } catch (error) {
+                alert('❌ Error de conexión: ' + error.message);
+                // Restaurar botón
+                this.innerHTML = '🚪 Registrar Salida';
+                this.disabled = false;
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
