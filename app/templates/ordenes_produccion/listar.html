@@ -178,13 +178,10 @@
                         </div>
                     </div>
 
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
                     <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}"
                     class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                         <i class="bi bi-eye"></i>
                     </a>
-
-
                         {% if orden.estado == 'PLANIFICADA' %}
                         <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" 
                               style="display: inline;" onsubmit="return confirm('¿Iniciar esta orden de producción?')">

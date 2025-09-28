@@ -89,7 +89,7 @@ class OrdenProduccionModel(BaseModel):
             item = self.db.table(self.table_name).select(
                 "*, productos(nombre, descripcion), recetas(codigo), usuarios(nombre)"
             ).eq("id", orden_id).maybe_single()
-
+            
             if item:
                 # Aplanar la respuesta
                 if item.get('productos'):
