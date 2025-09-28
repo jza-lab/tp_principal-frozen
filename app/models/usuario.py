@@ -69,20 +69,6 @@ class UsuarioModel(BaseModel):
             logger.error(f"Error buscando usuario por email: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    def find_by_legajo(self, legajo: str) -> Dict:
-        """
-        Busca un usuario por su número de legajo.
-        """
-        try:
-            result = self.db.table(self.get_table_name()).select('*').eq('numero_empleado', legajo).execute()
-            if result.data:
-                return {'success': True, 'data': result.data[0]}
-            else:
-                return {'success': False, 'error': 'Usuario no encontrado'}
-        except Exception as e:
-            logger.error(f"Error buscando usuario por legajo: {str(e)}")
-            return {'success': False, 'error': str(e)}
-
 
     ##GONZA
 
@@ -101,7 +87,7 @@ class UsuarioModel(BaseModel):
             logger.error(f"Error buscando por ID: {e}")
             return {'success': False, 'error': str(e)}
 
-    def find_by_legajo_v2(self, legajo: str) -> Dict:
+    def find_by_legajo(self, legajo: str) -> Dict:
         """Busca un usuario por su legajo"""
         try:
             response = self.db.table("usuarios").select("*").eq("legajo", legajo).execute()

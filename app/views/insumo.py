@@ -1,6 +1,5 @@
 import json
-from flask import Blueprint, redirect, render_template, request, jsonify, session, url_for
-from app.controllers import usuario_controller
+from flask import Blueprint, redirect, render_template, request, jsonify, url_for
 from app.controllers.insumo_controller import InsumoController
 from app.utils.validators import validate_uuid, validate_pagination
 from marshmallow import ValidationError
@@ -16,23 +15,7 @@ insumo_controller = InsumoController()
 
 @insumos_bp.route('/catalogo/nuevo', methods=['GET','PUT' ,'POST'])
 def crear_insumo():
-    """
-    Crear un nuevo insumo en el catálogo
-    ---
-    POST /api/insumos/catalogo
-    Content-Type: application/json
-
-    Body:
-    {
-        "nombre": "string (required)",
-        "codigo_interno": "string (optional)",
-        "unidad_medida": "string (required)",
-        "categoria": "string (optional)",
-        "stock_min": "integer (default: 0)"
-    }
-    """
     try:
-
         if(request.method == 'POST' or request.method == 'PUT'):
             datos_json = request.get_json(silent=True) 
             if(datos_json is None):
@@ -61,7 +44,6 @@ def crear_insumo():
 
 @insumos_bp.route('/catalogo', methods=['GET'])
 def obtener_insumos():
-       
     """
     Obtener lista de insumos con filtros opcionales
     ---
@@ -69,7 +51,6 @@ def obtener_insumos():
     """
     try:
         filtros = {
-            'activo': request.args.get('activo', 'true').lower() == 'true',
             'categoria': request.args.get('categoria'),
             'es_critico': request.args.get('es_critico', '').lower() == 'true' if request.args.get('es_critico') else None,
             'busqueda': request.args.get('busqueda')
@@ -173,6 +154,30 @@ def eliminar_insumo(id_insumo):
 
     except Exception as e:
         logger.error(f"Error inesperado en eliminar_insumo: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Error interno del servidor'
+        }), 500
+
+@insumos_bp.route('/catalogo/habilitar/<string:id_insumo>', methods=['POST'])
+def habilitar_insumo(id_insumo):
+    """
+    Habilitar un insumo del catálogo
+    ---
+    POST /api/insumos/catalogo/habilitar/{id_insumo}
+    """
+    try:
+        if not validate_uuid(id_insumo):
+            return jsonify({
+                'success': False,
+                'error': 'ID de insumo inválido'
+            }), 400
+
+        response, status = insumo_controller.habilitar_insumo(id_insumo)
+        return jsonify(response), status
+
+    except Exception as e:
+        logger.error(f"Error inesperado en habilitar_insumo: {str(e)}")
         return jsonify({
             'success': False,
             'error': 'Error interno del servidor'
