@@ -71,7 +71,7 @@ class FaceLogin {
     async sendFaceData(imageData) {
         try {
             // CORREGIDO: Usar /auth/facial/login_face
-            const response = await fetch('/auth/facial/login_face', {
+            const response = await fetch('/totem/login_face', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ image: imageData })
@@ -83,7 +83,7 @@ class FaceLogin {
                 this.showResult(`✅ ${result.message}`, 'success');
                 setTimeout(() => {
                     // CORREGIDO: Usar la URL de redirección del resultado o la predeterminada
-                    const redirectUrl = result.redirect_url || '/auth/facial/panel_totem';
+                    const redirectUrl = result.redirect_url || '/totem/panel_totem';
                     window.location.href = redirectUrl;
                 }, 1500);
             } else {

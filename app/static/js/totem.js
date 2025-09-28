@@ -20,13 +20,8 @@ document.addEventListener('DOMContentLoaded', function () {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         const imageData = canvas.toDataURL('image/jpeg');
 
-        // 2. Enviar la imagen al backend (placeholder)
-        console.log(`Enviando imagen para fichaje de ${tipo}`);
-        
-        // 2. Enviar la imagen al backend
-        console.log(`Enviando imagen para fichaje de ${tipo}`);
-        
-        fetch('/asistencia/fichar-totem', {
+        url = `/totem/login_face`
+        fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tipo: tipo, imagen: imageData })

@@ -32,12 +32,6 @@
                     <div class="col-md-6">
                         <div class="card">
                             <div class="card-body">
-                                <h6>🔗 Acceso Rápido</h6>
-                                <p>Ahora puede acceder al sistema web desde cualquier dispositivo:</p>
-                                <!-- CORREGIDO: Usar facial.login_web_page -->
-                                <a href="{{ url_for('facial.login_web_page') }}" target="_blank" class="btn btn-info btn-sm">
-                                    Abrir Sistema Web
-                                </a>
                             </div>
                         </div>
                     </div>
@@ -48,7 +42,7 @@
                         🚪 Registrar Salida
                     </button>
                     <!-- CORREGIDO: Usar facial.login_totem -->
-                    <a href="{{ url_for('facial.login_totem') }}" class="btn btn-outline-secondary ms-2">
+                    <a href="{{ url_for('facial.index') }}" class="btn btn-outline-secondary ms-2">
                         Volver al Inicio
                     </a>
                 </div>
@@ -69,7 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             try {
                 // CORREGIDO: Usar /auth/facial/logout_face
-                const response = await fetch('/auth/facial/logout_face', {
+                const response = await fetch('/totem/logout_face', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -78,7 +72,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (result.success) {
                     alert('✅ Salida registrada correctamente');
-                    window.location.href = '/auth/facial/login_totem';
+                    window.location.href = '/totem/';
                 } else {
                     alert('❌ Error: ' + result.message);
                     // Restaurar botón
