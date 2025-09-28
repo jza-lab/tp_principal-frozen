@@ -62,7 +62,7 @@ def nueva():
     return render_template('ordenes_produccion/formulario.html', etapas=etapas)
 
 
-@orden_produccion_bp.route('/detalle/<int:id>')
+@orden_produccion_bp.route('/<int:id>/detalle')
 def detalle(id):
     """
     Muestra la página de detalle de una orden de producción específica,

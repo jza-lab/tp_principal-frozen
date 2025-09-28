@@ -44,8 +44,8 @@ class OrdenProduccionController(BaseController):
         """
         Obtiene el detalle de una orden de producción específica.
         """
-        result = self.model.get_one_enriched(orden_id)
-        return result.get('data')
+        orden = self.model.get_one_enriched(orden_id)  # ya es un dict o None
+        return orden
 
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """

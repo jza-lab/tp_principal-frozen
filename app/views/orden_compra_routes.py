@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-from app.controllers.orden_compra_controller import OrdenCompraController, safe_serialize_simple
+from app.controllers.orden_compra_controller import OrdenCompraController
 from app.utils.decorators import roles_required
 
 orden_compra_bp = Blueprint('orden_compra', __name__, url_prefix='/compras')
@@ -15,11 +15,7 @@ def listar():
     estado = request.args.get('estado')
     filtros = {'estado': estado} if estado else {}
     
-    # CORRECCIÓN: Se cambió 'obtener_ordenes' por el nombre correcto del método 'get_all_ordenes'
-    # NOTA IMPORTANTE: Para que esta línea funcione correctamente, debes asegurarte de que el método
-    # 'get_all_ordenes' en tu controlador acepte 'filtros' como argumento y devuelva un
-    # diccionario de respuesta y el código de estado (response, status_code).
-    response, status_code = controller.get_all_ordenes(filtros)
+    response, status_code = controller.obtener_ordenes(filtros)
     
     ordenes = []
     if response.get('success'):
@@ -50,16 +46,15 @@ def nueva():
 
 @orden_compra_bp.route('/detalle/<int:id>')
 def detalle(id):
-    response = controller.get_orden(id) 
-    data = response.get_json()          
-    orden = data.get('data') if data else None
-    
+    """
+    Muestra la página de detalle de una orden de compra específica.
+    """
+    orden = controller.obtener_orden_por_id(id)
     if not orden:
-        flash(data.get('error', 'Orden de compra no encontrada.'), 'error')
+        flash('Orden de compra no encontrada.', 'error')
         return redirect(url_for('orden_compra.listar'))
 
     return render_template('ordenes_compra/detalle.html', orden=orden)
-
 
 @orden_compra_bp.route('/<int:id>/aprobar', methods=['POST'])
 @roles_required('SUPERVISOR', 'ADMIN', 'GERENTE')
