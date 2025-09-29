@@ -53,6 +53,7 @@
                                     <th>Fecha Ingreso</th>
                                     <th>Fecha Vencimiento</th>
                                     <th>Estado</th>
+                                    <th>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -68,6 +69,16 @@
                                             {{ lote.estado | capitalize }}
                                         </span>
                                     </td>
+                                    <td>
+                                        <a href="{{ url_for('insumos_api.editar_lote', id_insumo=insumo.id_insumo, id_lote=lote.id_lote) }}"
+                                            class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-pencil-square"></i> Editar
+                                        </a>
+                                        <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
+                                            data-bs-target="#confirmDeleteModal-{{ lote.id_lote }}">
+                                            <i class="bi bi-trash"></i> Eliminar
+                                        </button>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -80,6 +91,30 @@
                     {% endif %}
                 </div>
             </div>
+
+            <!-- Modal de Confirmación de Eliminación -->
+            {% for lote in lotes %}
+            <div class="modal fade" id="confirmDeleteModal-{{ lote.id_lote }}" tabindex="-1"
+                aria-labelledby="confirmDeleteModalLabel-{{ lote.id_lote }}" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="confirmDeleteModalLabel-{{ lote.id_lote }}">Confirmar Eliminación</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            ¿Estás seguro de que deseas eliminar el lote {{ lote.numero_lote_proveedor or 'N/A' }}? Esta acción no se puede deshacer.
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <form action="{{ url_for('insumos_api.eliminar_lote', id_insumo=insumo.id_insumo, id_lote=lote.id_lote) }}" method="POST" style="display: inline;">
+                                <button type="submit" class="btn btn-danger">Eliminar</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
             
         </div>
         </div>

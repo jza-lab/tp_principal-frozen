@@ -252,3 +252,24 @@ class InventarioController(BaseController):
         except Exception as e:
             logger.error(f"Error obteniendo alertas: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def eliminar_lote(self, id_lote: str) -> tuple:
+        """Eliminar un lote de inventario"""
+        try:
+            # Verificar que el lote existe
+            lote_existente = self.inventario_model.find_by_id(id_lote, 'id_lote')
+            if not lote_existente['success']:
+                return self.error_response('Lote no encontrado', 404)
+
+            # Eliminar el lote
+            result = self.inventario_model.delete(id_lote, 'id_lote')
+
+            if result['success']:
+                logger.info(f"Lote {id_lote} eliminado exitosamente")
+                return self.success_response(message='Lote eliminado exitosamente')
+            else:
+                return self.error_response(result['error'])
+
+        except Exception as e:
+            logger.error(f"Error eliminando lote: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
