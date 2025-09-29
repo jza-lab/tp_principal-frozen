@@ -20,28 +20,72 @@
 
     <!-- Estadísticas rápidas -->
     <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="stats-card">
-                <div class="stats-number">{{ usuarios|length }}</div>
-                <div class="stats-label">Total Usuarios</div>
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                                <i class="bi bi-people-fill fs-5"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h5 class="card-title fs-2 mb-0">{{ usuarios|length }}</h5>
+                            <p class="card-text text-muted mb-0">Total Usuarios</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="stats-card">
-                <div class="stats-number">{{ usuarios|selectattr('activo')|list|length }}</div>
-                <div class="stats-label">Usuarios Activos</div>
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-success text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                                <i class="bi bi-person-check-fill fs-5"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h5 class="card-title fs-2 mb-0">{{ usuarios|selectattr('activo')|list|length }}</h5>
+                            <p class="card-text text-muted mb-0">Usuarios Activos</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="stats-card">
-                <div class="stats-number">{{ usuarios|selectattr('rol', 'equalto', 'ADMIN')|list|length }}</div>
-                <div class="stats-label">Administradores</div>
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-warning text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                                <i class="bi bi-shield-lock-fill fs-5"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h5 class="card-title fs-2 mb-0">{{ usuarios|selectattr('rol', 'equalto', 'ADMIN')|list|length }}</h5>
+                            <p class="card-text text-muted mb-0">Administradores</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="stats-card">
-                <div class="stats-number">{{ usuarios|selectattr('rol', 'equalto', 'OPERARIO')|list|length }}</div>
-                <div class="stats-label">Operarios</div>
+        <div class="col-lg-3 col-md-6 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <div class="bg-info text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                                <i class="bi bi-person-workspace fs-5"></i>
+                            </div>
+                        </div>
+                        <div class="flex-grow-1 ms-3">
+                            <h5 class="card-title fs-2 mb-0">{{ usuarios|selectattr('rol', 'equalto', 'OPERARIO')|list|length }}</h5>
+                            <p class="card-text text-muted mb-0">Operarios</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -50,65 +94,55 @@
     <div class="row">
         {% for usuario in usuarios %}
         <div class="col-md-4 mb-4">
-            <div class="card h-100 usuario-card {% if not usuario.activo %}usuario-inactivo{% endif %}">
+            <div class="card h-100 border-0 shadow-sm usuario-card {% if not usuario.activo %}usuario-inactivo{% endif %}">
                 <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">
-                        {{ usuario.nombre }} {{ usuario.apellido }}
-                        {% if not usuario.activo %}
-                            <span class="badge bg-secondary">Inactivo</span>
-                        {% endif %}
-                    </h5>
-                    
-                    <div class="card-secondary-details mb-3">
-                        <span><i class="bi bi-hash"></i> {{ usuario.legajo or 'N/A' }}</span>
-                        <span><i class="bi bi-envelope"></i> {{ usuario.email }}</span>
-                        <span><i class="bi bi-shield-check"></i> {{ usuario.rol }}</span>
+                    <div class="text-center mb-3">
+                        <h5 class="card-title mb-0">{{ usuario.nombre }} {{ usuario.apellido or '' }}</h5>
+                        <small class="text-muted">{{ usuario.rol }}</small>
                     </div>
 
-                    <div class="mt-auto">
-                        <hr class="card-divider">
-
-                        <div class="d-flex justify-content-between align-items-center mb-3 user-info">
-                            <div>
-                                <span class="user-label">Estado</span>
-                                <span class="user-value">
-                                    {% if usuario.activo %}Activo{% else %}Inactivo{% endif %}
-                                </span>
-                            </div>
-                            <div>
-                                {% if usuario.activo %}
-                                    <span class="badge bg-success-soft text-success">
-                                        <i class="bi bi-check-circle me-1"></i>Activo
-                                    </span>
-                                {% else %}
-                                    <span class="badge bg-danger-soft text-danger">
-                                        <i class="bi bi-x-circle me-1"></i>Inactivo
-                                    </span>
-                                {% endif %}
-                            </div>
+                    <div class="list-group list-group-flush mb-4">
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <span class="text-muted"><i class="bi bi-hash me-2"></i>Legajo</span>
+                            <span class="fw-bold">{{ usuario.legajo or 'N/A' }}</span>
                         </div>
-
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <span class="text-muted"><i class="bi bi-envelope-at-fill me-2"></i>Email</span>
+                            <span class="fw-bold">{{ usuario.email }}</span>
+                        </div>
+                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                            <span class="text-muted"><i class="bi bi-person-fill-check me-2"></i>Estado</span>
                             {% if usuario.activo %}
-                                <a href="{{ url_for('admin_usuario.editar_usuario', id=usuario.id) }}" 
-                                   class="btn btn-sm btn-outline-primary" title="Editar usuario">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-
-                                <a href="{{ url_for('admin_usuario.ver_perfil', id=usuario.id) }}" class="btn btn-sm btn-outline-primary" title="Ver detalle">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-
-                                <form method="POST" action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">
-                                        <i class="bi bi-person-x"></i> Desactivar
-                                    </button>
-                                </form>
-
+                                <span class="badge bg-success-soft text-success">
+                                    <i class="bi bi-check-circle me-1"></i>Activo
+                                </span>
                             {% else %}
-                                <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-success">
-                                        <i class="bi bi-person-check"></i> Activar
+                                <span class="badge bg-danger-soft text-danger">
+                                    <i class="bi bi-x-circle me-1"></i>Inactivo
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mt-auto d-grid gap-2">
+                         <div class="btn-group w-100">
+                            {% if usuario.activo %}
+                                <a href="{{ url_for('admin_usuario.ver_perfil', id=usuario.id) }}" class="btn btn-outline-secondary btn-sm" title="Ver detalle">
+                                    <i class="bi bi-eye"></i> Ver
+                                </a>
+                                <a href="{{ url_for('admin_usuario.editar_usuario', id=usuario.id) }}" class="btn btn-outline-primary btn-sm" title="Editar usuario">
+                                    <i class="bi bi-pencil"></i> Editar
+                                </a>
+                                <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#confirmarDesactivarModal" data-action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}" data-username="{{ usuario.nombre }} {{ usuario.apellido }}">
+                                    <i class="bi bi-person-x"></i> Desactivar
+                                </button>
+                            {% else %}
+                                <a href="{{ url_for('admin_usuario.ver_perfil', id=usuario.id) }}" class="btn btn-outline-secondary btn-sm w-100" title="Ver detalle">
+                                    <i class="bi bi-eye"></i> Ver Perfil
+                                </a>
+                                <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="d-grid">
+                                    <button type="submit" class="btn btn-outline-success btn-sm">
+                                        <i class="bi bi-person-check"></i> Activar Usuario
                                     </button>
                                 </form>
                             {% endif %}
@@ -131,5 +165,27 @@
         {% endfor %}
     </div>
 </div>
+
+<!-- Modal de Confirmación para Desactivar -->
+<div class="modal fade" id="confirmarDesactivarModal" tabindex="-1" aria-labelledby="confirmarDesactivarModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="confirmarDesactivarModalLabel">Confirmar Desactivación</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        ¿Estás seguro de que deseas desactivar al usuario <strong id="username-modal"></strong>?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form id="desactivarForm" method="POST" action="">
+          <button type="submit" class="btn btn-danger">Desactivar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="{{ url_for('static', filename='js/habilitarUsuario.js') }}"></script>
 {% endblock %}
