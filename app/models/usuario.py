@@ -90,7 +90,10 @@ class UsuarioModel(BaseModel):
     def find_by_legajo(self, legajo: str) -> Dict:
         """Busca un usuario por su legajo"""
         try:
-            response = self.db.table("usuarios").select("*").eq("legajo", legajo).execute()
+            # Seleccionar explícitamente las columnas necesarias para asegurar que se traigan todas.
+            response = self.db.table("usuarios").select(
+                "id, email, nombre, apellido, password_hash, rol, activo, legajo, login_totem_activo, ultimo_login_totem"
+            ).eq("legajo", legajo).execute()
             
             if response.data:
                 return {'success': True, 'data': response.data[0]}

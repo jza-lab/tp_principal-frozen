@@ -54,7 +54,7 @@ class FacialController:
 
         try:
             response = self.db.table("usuarios").select(
-                "id, email, nombre, apellido, facial_encoding, rol, activo, login_totem_activo"
+                "id, email, nombre, apellido, facial_encoding, rol, activo, login_totem_activo, ultimo_login_totem"
             ).not_.is_("facial_encoding", "null").eq("activo", True).execute()
             
             usuarios = response.data
@@ -172,19 +172,19 @@ class FacialController:
             # 2. Determinar si es ENTRADA o SALIDA
             if not login_activo:
                 # --- Lógica de ENTRADA ---
-                logger.info(f"▶️  Procesando ENTRADA para {usuario_nombre}")
+                logger.info(f"Procesando ENTRADA para {usuario_nombre}")
                 self.registrar_acceso(usuario_id, "ENTRADA", "FACIAL", "TOTEM")
                 usuario_controller.activar_login_totem(usuario_id)
                 
                 return {
                     'success': True,
                     'tipo_acceso': 'ENTRADA',
-                    'message': f"👋 ¡Bienvenido, {usuario_nombre}!",
+                    'message': f"¡Bienvenido, {usuario_nombre}!",
                     'usuario': usuario
                 }
             else:
                 # --- Lógica de SALIDA ---
-                logger.info(f"◀️  Procesando SALIDA para {usuario_nombre}")
+                logger.info(f"Procesando SALIDA para {usuario_nombre}")
                 self.registrar_acceso(usuario_id, "SALIDA", "FACIAL", "TOTEM")
                 usuario_controller.desactivar_login_totem(usuario_id)
 
@@ -225,25 +225,25 @@ class FacialController:
             
             # 2. Determinar si es ENTRADA o SALIDA
             if not login_activo:
-                logger.info(f"▶️  Procesando ENTRADA MANUAL para {usuario_nombre}")
+                logger.info(f"Procesando ENTRADA MANUAL para {usuario_nombre}")
                 self.registrar_acceso(usuario_id, "ENTRADA", "MANUAL", "TOTEM")
                 usuario_controller.activar_login_totem(usuario_id)
                 
                 return {
                     'success': True,
                     'tipo_acceso': 'ENTRADA',
-                    'message': f"👋 ¡Bienvenido, {usuario_nombre}!",
+                    'message': f"¡Bienvenido, {usuario_nombre}!",
                     'usuario': usuario
                 }
             else:
-                logger.info(f"◀️  Procesando SALIDA MANUAL para {usuario_nombre}")
+                logger.info(f"  Procesando SALIDA MANUAL para {usuario_nombre}")
                 self.registrar_acceso(usuario_id, "SALIDA", "MANUAL", "TOTEM")
                 usuario_controller.desactivar_login_totem(usuario_id)
 
                 return {
                     'success': True,
                     'tipo_acceso': 'SALIDA',
-                    'message': f"👋 ¡Hasta luego, {usuario_nombre}!",
+                    'message': f"¡Hasta luego, {usuario_nombre}!",
                     'usuario': usuario
                 }
 

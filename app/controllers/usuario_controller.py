@@ -89,7 +89,6 @@ class UsuarioController(BaseController):
                 'error': 'Debe registrar su entrada en el tótem primero para acceder por web'
             }
 
-        # 5. Actualizar último acceso web
         update_result = self.model.update(user_data['id'], {
             'ultimo_login_web': datetime.now().isoformat()
         })
@@ -103,8 +102,37 @@ class UsuarioController(BaseController):
             'message': 'Autenticación exitosa'
         }
 
+    def autenticar_usuario_facial_web(self, image_data_url: str) -> Dict:
+        """
+        Autentica a un usuario por rostro para el login web.
+        VERIFICA que tenga login activo en tótem.
+        """
+        from app.controllers.facial_controller import FacialController
+        facial_controller = FacialController()        
+        resultado_identificacion = facial_controller.identificar_rostro(image_data_url)
+        if not resultado_identificacion.get('success'):
+            return resultado_identificacion
+        
+        user_data = resultado_identificacion['usuario']
+        if not user_data.get('activo', True):
+            return {'success': False, 'message': 'Este usuario se encuentra desactivado.'}
+        verificacion_totem = self._verificar_login_totem_activo(user_data)
+        if not verificacion_totem:
+            return {
+                'success': False,
+                'message': 'Acceso Web denegado. Por favor, registre su ingreso en el tótem antes de continuar.'
+            }
+        self.model.update(user_data['id'], {'ultimo_login_web': datetime.now().isoformat()})
+        return {
+            'success': True,
+            'data': user_data,
+            'message': 'Autenticación exitosa'
+        }
+
     def _verificar_login_totem_activo(self, user_data: Dict) -> bool:
-        """Verifica si el usuario tiene login activo en tómet para hoy"""
+        """
+        Verifica de forma robusta si el usuario tiene un login activo en el tótem para el día de hoy.
+        """
         login_totem_activo = user_data.get('login_totem_activo')
         ultimo_login_totem = user_data.get('ultimo_login_totem')
 
@@ -115,45 +143,26 @@ class UsuarioController(BaseController):
             return False
 
         try:
-            # Múltiples formatos de fecha posibles
+            login_date = None
             if isinstance(ultimo_login_totem, str):
-                # Intentar diferentes formatos
-                formats_to_try = [
-                    '%Y-%m-%d %H:%M:%S',
-                    '%Y-%m-%dT%H:%M:%S',
-                    '%Y-%m-%dT%H:%M:%S.%f',
-                    '%Y-%m-%dT%H:%M:%S.%fZ',
-                    '%Y-%m-%d %H:%M:%S.%f'
-                ]
+                if ultimo_login_totem.endswith('Z'):
+                    ultimo_login_totem = ultimo_login_totem[:-1] + "+00:00"
+                
+                login_datetime = datetime.fromisoformat(ultimo_login_totem)
+                login_date = login_datetime.date()
 
-                login_date = None
-                for fmt in formats_to_try:
-                    try:
-                        if fmt.endswith('Z') and 'Z' in ultimo_login_totem:
-                            login_date = datetime.strptime(ultimo_login_totem, fmt).date()
-                        else:
-                            login_date = datetime.strptime(ultimo_login_totem.split('.')[0], fmt).date()
-                        break
-                    except ValueError:
-                        continue
-
-                if not login_date:
-                    # Último intento con fromisoformat
-                    try:
-                        if 'Z' in ultimo_login_totem:
-                            login_date = datetime.fromisoformat(ultimo_login_totem.replace('Z', '+00:00')).date()
-                        else:
-                            login_date = datetime.fromisoformat(ultimo_login_totem).date()
-                    except ValueError:
-                        return False
-            else:
+            # Como fallback, si ya es un objeto datetime.
+            elif isinstance(ultimo_login_totem, datetime):
                 login_date = ultimo_login_totem.date()
 
-            hoy = date.today()
-            return login_date == hoy
+            # Si pudimos obtener una fecha, la comparamos con la fecha de hoy.
+            if login_date:
+                return login_date == date.today()
 
-        except (ValueError, AttributeError, TypeError) as e:
-            logger.error(f"Error parseando fecha '{ultimo_login_totem}': {e}")
+            return False
+
+        except (ValueError, TypeError) as e:
+            logger.error(f"Error al parsear la fecha del tótem '{ultimo_login_totem}': {e}")
             return False
 
     def activar_login_totem(self, usuario_id: int) -> Dict:

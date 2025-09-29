@@ -2,6 +2,10 @@
 
 {% block title %}Iniciar Sesión - Sistema Frozen{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="login-container">
     <div class="login-card">
@@ -12,53 +16,78 @@
         </div>
 
         <div class="login-body">
-            <!-- Flash Messages 
+            <!-- Flash Messages -->
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
-                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show mb-4">
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show mb-3">
                             {{ message }}
                             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                         </div>
                     {% endfor %}
                 {% endif %}
             {% endwith %}
-            -->
-            <div id="areaReconocimiento" class="reconocimiento_facial"> <!-- Pasar esto al css-->
-                <p id="guia" style="color:#bdbdbd; margin-bottom:15px;">
 
-                    <button id="botonCamara" class="btn btn-primary btn-login w-100">
-                        <i class="bi bi-person-bounding-box fs-5"> </i>
-                        Inicio de sesión con rostro
-                    </button>
-                    Por favor, identificate con tu rostro, luego se te pedirá tu usuario y contraseña.
+            <!-- Reconocimiento Facial -->
+            <div id="areaReconocimientoFacial" class="facial-recognition-section">
+                <p id="guiaFacial" class="guidance-text">
+                    Posiciona tu rostro en el centro para iniciar sesión
                 </p>
-                <div id="areaRecoFacial" style="display: none;"><div class="camaraVideo">
-                    <video id="video" width="320" height="320" style="border-radius: 50%; object-fit: cover;"
-                        autoplay></video>
-                    <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
-                </div>
-                <div class="d-flex justify-content-center mt-3">
-                    <button id="botonVerificarRostro" class="btn btn-login">
-                        <i class="bi bi-camera fs-1"></i>
-                    </button>
-                </div></div>
-                
 
+                <div class="camera-container">
+                    <div class="camera-frame">
+                        <video id="video" autoplay playsinline></video>
+                        <canvas id="canvas" style="display:none;"></canvas>
+                        <div class="camera-overlay">
+                            <div class="face-guide"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="facialResult" class="result-area"></div>
+
+                <div class="camera-controls">
+                    <button id="botonVerificarRostro" class="btn btn-success btn-login">
+                        <i class="bi bi-camera me-2"></i>
+                        Iniciar Sesión
+                    </button>
+                </div>
+
+                <!-- Opciones alternativas (ocultas inicialmente) -->
+                <div id="alternativeOptions" class="alternative-options" style="display: none;">
+                    <div class="divider-text">
+                        <span>¿Problemas con la cámara?</span>
+                    </div>
+                    <div class="d-flex gap-2 mt-3">
+                        <button id="retryFacialBtn" class="btn btn-outline-primary btn-login flex-fill">
+                            <i class="bi bi-arrow-repeat me-2"></i>
+                            Reintentar
+                        </button>
+                        <button id="manualLoginBtn" class="btn btn-outline-secondary btn-login flex-fill">
+                            <i class="bi bi-keyboard me-2"></i>
+                            Acceso Manual
+                        </button>
+                    </div>
+                </div>
             </div>
+
+            <!-- Login Manual con Credenciales -->
             <div id="credenciales" style="display: none;">
-                <form method="POST">
+                <div class="text-center mb-4">
+                    <h5 class="text-muted">Acceso Manual</h5>
+                    <p class="small text-muted">Ingrese sus credenciales</p>
+                </div>
+
+                <form id="loginForm" method="POST" action="{{ url_for('auth.login') }}">
                     <div class="form-floating mb-3">
-                        <input type="text" class="form-control" id="legajo" name="legajo" placeholder="Ingrese su legajo"
-                            required>
+                        <input type="text" class="form-control" id="legajo" name="legajo" placeholder="Ingrese su legajo" required>
                         <label for="legajo">
-                            <i class="bi bi-envelope me-1"></i>Legajo
+                            <i class="bi bi-person me-1"></i>Legajo
                         </label>
                     </div>
 
                     <div class="form-floating mb-4">
-                        <input type="password" class="form-control" id="password" name="password"
-                            placeholder="Contraseña" required>
+                        <input type="password" class="form-control" id="password" name="password" placeholder="Contraseña" required>
                         <label for="password">
                             <i class="bi bi-lock me-1"></i>Contraseña
                         </label>
@@ -70,6 +99,13 @@
                     </button>
                 </form>
 
+                <div class="text-center mt-3">
+                    <button id="backToFacialBtn" class="btn btn-link text-muted">
+                        <i class="bi bi-arrow-left me-1"></i>
+                        Volver al reconocimiento facial
+                    </button>
+                </div>
+
                 <div class="text-center mt-4">
                     <small class="text-muted">
                         ¿Problemas para acceder? Contacta al administrador del sistema.
@@ -79,5 +115,187 @@
         </div>
     </div>
 </div>
-<script src="../../static/js/inicio_camara.js"></script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+class ModernLogin {
+    constructor() {
+        this.video = document.getElementById('video');
+        this.canvas = document.getElementById('canvas');
+        this.botonVerificarRostro = document.getElementById('botonVerificarRostro');
+        this.areaReconocimientoFacial = document.getElementById('areaReconocimientoFacial');
+        this.credenciales = document.getElementById('credenciales');
+        this.manualLoginBtn = document.getElementById('manualLoginBtn');
+        this.retryFacialBtn = document.getElementById('retryFacialBtn');
+        this.backToFacialBtn = document.getElementById('backToFacialBtn');
+        this.facialResultDiv = document.getElementById('facialResult');
+        this.alternativeOptions = document.getElementById('alternativeOptions');
+        this.stream = null;
+        this.failedAttempts = 0;
+        this.maxAttempts = 2;
+
+        this.init();
+    }
+
+    async init() {
+        // Iniciar cámara automáticamente al cargar
+        await this.activarCamara();
+
+        // Event listeners
+        this.botonVerificarRostro.addEventListener('click', () => this.iniciarSesionFacial());
+        this.manualLoginBtn.addEventListener('click', () => this.mostrarCredenciales());
+        this.retryFacialBtn.addEventListener('click', () => this.reintentar());
+        this.backToFacialBtn.addEventListener('click', () => this.volverAFacial());
+    }
+
+    async activarCamara() {
+        try {
+            this.stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    width: { ideal: 640 }, 
+                    height: { ideal: 480 },
+                    facingMode: 'user'
+                } 
+            });
+            this.video.srcObject = this.stream;
+        } catch (err) {
+            console.error('Error al acceder a la cámara:', err);
+            this.mostrarMensajeFacial('No se pudo acceder a la cámara. Use el acceso manual.', 'warning');
+            this.mostrarOpcionesAlternativas();
+        }
+    }
+
+    async iniciarSesionFacial() {
+        if (!this.stream) {
+            this.mostrarMensajeFacial('Cámara no disponible', 'error');
+            this.mostrarOpcionesAlternativas();
+            return;
+        }
+
+        this.canvas.width = this.video.videoWidth;
+        this.canvas.height = this.video.videoHeight;
+        const ctx = this.canvas.getContext('2d');
+        ctx.drawImage(this.video, 0, 0);
+        
+        const imageData = this.canvas.toDataURL('image/jpeg', 0.8);
+        
+        this.botonVerificarRostro.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Verificando...';
+        this.botonVerificarRostro.disabled = true;
+        
+        try {
+            const response = await fetch('/auth/identificar_rostro', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ image: imageData })
+            });
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || `Error del servidor: ${response.status}`);
+            }
+
+            // Si la respuesta HTTP fue exitosa, verificamos el éxito a nivel de aplicación.
+            if (result.success) {
+                this.mostrarMensajeFacial(`${result.message || 'Acceso concedido'}`, 'success');
+                
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                }
+                
+                setTimeout(() => {
+                    window.location.href = result.redirect;
+                }, 1500);
+            } else {
+                // Este caso es para respuestas 200 OK pero con `success: false`.
+                throw new Error(result.message || 'No se pudo verificar el rostro.');
+            }
+        } catch (error) {
+            this.failedAttempts++;
+            // El `error.message` ahora contendrá el mensaje específico del servidor o un error genérico.
+            console.error('Error en reconocimiento facial:', error.message);
+            this.mostrarMensajeFacial(error.message, 'error');
+            
+            if (this.failedAttempts >= this.maxAttempts) {
+                this.mostrarOpcionesAlternativas();
+            }
+        } finally {
+            this.botonVerificarRostro.innerHTML = '<i class="bi bi-camera me-2"></i>Iniciar Sesión';
+            this.botonVerificarRostro.disabled = false;
+        }
+    }
+
+    mostrarOpcionesAlternativas() {
+        this.alternativeOptions.style.display = 'block';
+        document.getElementById('guiaFacial').innerHTML = '<span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>No se pudo verificar el rostro</span>';
+    }
+
+    reintentar() {
+        this.failedAttempts = 0;
+        this.alternativeOptions.style.display = 'none';
+        this.facialResultDiv.innerHTML = '';
+        document.getElementById('guiaFacial').textContent = 'Posiciona tu rostro en el centro para iniciar sesión';
+        
+        // Reiniciar cámara si está detenida
+        if (!this.stream) {
+            this.activarCamara();
+        }
+    }
+
+    mostrarCredenciales() {
+        // Detener cámara si está activa
+        if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
+            this.stream = null;
+        }
+        
+        this.areaReconocimientoFacial.style.display = 'none';
+        this.credenciales.style.display = 'block';
+    }
+
+    volverAFacial() {
+        this.credenciales.style.display = 'none';
+        this.areaReconocimientoFacial.style.display = 'block';
+        
+        // Resetear estado
+        this.reintentar();
+        
+        // Reiniciar cámara
+        this.activarCamara();
+    }
+
+    mostrarMensajeFacial(message, type) {
+        const alertClass = type === 'success' ? 'alert-success' : 
+                          type === 'error' ? 'alert-danger' : 
+                          type === 'warning' ? 'alert-warning' : 'alert-info';
+        
+        this.facialResultDiv.innerHTML = `
+            <div class="alert ${alertClass} alert-dismissible fade show">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+
+        if (type === 'error' || type === 'warning') {
+            setTimeout(() => {
+                const alert = this.facialResultDiv.querySelector('.alert');
+                if (alert) {
+                    alert.classList.remove('show');
+                    setTimeout(() => {
+                        this.facialResultDiv.innerHTML = '';
+                    }, 150);
+                }
+            }, 5000);
+        }
+    }
+}
+
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', () => {
+    new ModernLogin();
+});
+</script>
 {% endblock %}
