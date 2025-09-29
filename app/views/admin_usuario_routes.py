@@ -149,3 +149,29 @@ def validar_campo():
 
     resultado = usuario_controller.validar_campo_unico(field, value)
     return jsonify(resultado)
+
+@admin_usuario_bp.route('/usuarios/validar_rostro', methods=['POST'])
+@roles_required('ADMIN')
+def validar_rostro():
+    """
+    Valida si el rostro en la imagen es válido y no está duplicado.
+    """
+    data = request.get_json()
+    image_data = data.get('image')
+    
+    if not image_data:
+        return jsonify({
+            'valid': False, 
+            'message': 'No se proporcionó imagen.'
+        }), 400
+    resultado = facial_controller.validar_y_codificar_rostro(image_data)
+    if resultado.get('success'):
+        return jsonify({
+            'valid': True,
+            'message': 'Rostro válido y disponible para registro.'
+        })
+    else:
+        return jsonify({
+            'valid': False,
+            'message': resultado.get('message', 'Error al validar el rostro.')
+        })

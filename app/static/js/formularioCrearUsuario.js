@@ -383,7 +383,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (capturePhotoBtn) {
-        capturePhotoBtn.addEventListener('click', function () {
+        capturePhotoBtn.addEventListener('click', async function () {
             if (photoConfirmed) {
                 console.log('Foto ya confirmada, no se puede capturar nuevamente');
                 return;
@@ -400,16 +400,94 @@ document.addEventListener('DOMContentLoaded', function () {
             context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
             
             const imageData = canvasElement.toDataURL('image/jpeg', 0.8);
-            capturedImage.src = imageData;
-            faceDataInput.value = imageData;
             
-            const cameraActive = document.getElementById('cameraActive');
-            const photoPreview = document.getElementById('photoPreview');
+            // Mostrar estado de carga
+            this.disabled = true;
+            this.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Verificando rostro...';
             
-            if (cameraActive) cameraActive.style.display = 'none';
-            if (photoPreview) photoPreview.style.display = 'block';
+            // Bloquear botón de volver después de capturar foto
+            if (prevStepBtn) {
+                prevStepBtn.disabled = true;
+                prevStepBtn.title = 'No puede volver después de capturar una foto';
+            }
             
-            photoTaken = true;
+            try {
+                // Validar el rostro con el backend
+                const response = await fetch('/admin/usuarios/validar_rostro', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: imageData })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Error al validar el rostro');
+                }
+
+                const result = await response.json();
+                
+                if (!result.valid) {
+                    // Mostrar error específico
+                    const errorMessage = result.message || 'Error al validar el rostro';
+                    alert(errorMessage);
+                    
+                    // Mostrar error visual en la interfaz
+                    const photoPreview = document.getElementById('photoPreview');
+                    if (photoPreview) {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'alert alert-danger mt-3';
+                        errorDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${errorMessage}`;
+                        photoPreview.appendChild(errorDiv);
+                        
+                        // Remover el error después de 5 segundos
+                        setTimeout(() => errorDiv.remove(), 5000);
+                    }
+                    
+                    // Permitir retomar foto
+                    this.disabled = false;
+                    this.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar Foto';
+                    
+                    // Desbloquear botón de volver
+                    if (prevStepBtn) {
+                        prevStepBtn.disabled = false;
+                        prevStepBtn.title = '';
+                    }
+                    
+                    // Limpiar la foto capturada
+                    faceDataInput.value = '';
+                    
+                    return;
+                }
+                
+                // Si la validación es exitosa, mostrar la foto
+                capturedImage.src = imageData;
+                faceDataInput.value = imageData;
+                
+                const cameraActive = document.getElementById('cameraActive');
+                const photoPreview = document.getElementById('photoPreview');
+                
+                if (cameraActive) cameraActive.style.display = 'none';
+                if (photoPreview) photoPreview.style.display = 'block';
+                
+                photoTaken = true;
+                
+                // Restaurar botón
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar Foto';
+                
+            } catch (error) {
+                console.error('Error al validar rostro:', error);
+                alert('Error de conexión al validar el rostro. Intente nuevamente.');
+                
+                // Permitir retomar foto
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar Foto';
+                
+                // Desbloquear botón de volver
+                if (prevStepBtn) {
+                    prevStepBtn.disabled = false;
+                    prevStepBtn.title = '';
+                }
+            }
         });
     }
 
@@ -471,6 +549,12 @@ document.addEventListener('DOMContentLoaded', function () {
         
         photoTaken = false;
         faceDataInput.value = '';
+        
+        // Habilitar botón de volver de nuevo al retomar
+        if (prevStepBtn) {
+            prevStepBtn.disabled = false;
+            prevStepBtn.title = '';
+        }
         
         // Reiniciar cámara si no está activa
         if (!videoStream || !videoStream.active) {
