@@ -174,3 +174,64 @@ class PedidoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error cambiando estado del pedido {pedido_id}: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def find_all_items(self, filters: Optional[Dict] = None) -> Dict:
+        """
+        Obtiene todos los items de pedido que coinciden con los filtros,
+        enriquecidos con el nombre del producto y el cliente.
+        """
+        try:
+            # Seleccionamos campos de pedido_items, el nombre del producto y el nombre del cliente del pedido.
+            query = self.db.table('pedido_items').select(
+                "*, producto_nombre:productos(nombre), pedido:pedidos(nombre_cliente)"
+            )
+
+            if filters:
+                for key, value in filters.items():
+                    if isinstance(value, tuple) and len(value) == 2:
+                        operator, filter_value = value
+                        if operator == 'eq':
+                            query = query.eq(key, filter_value)
+                        elif operator == 'in':
+                            query = query.in_(key, filter_value)
+                        elif operator == 'is':
+                            query = query.is_(key, filter_value)
+                    else:
+                        query = query.eq(key, value)
+
+            result = query.order("id", desc=True).execute()
+            
+            # Limpiar y aplanar los datos anidados para un uso más fácil en la plantilla
+            for item in result.data:
+                # Extraer el nombre del producto
+                prod_nombre_data = item.get('producto_nombre')
+                if isinstance(prod_nombre_data, dict):
+                    item['producto_nombre'] = prod_nombre_data.get('nombre') or 'N/A'
+                elif not prod_nombre_data:
+                    item['producto_nombre'] = 'N/A'
+                
+                # Extraer el nombre del cliente
+                pedido_data = item.get('pedido')
+                if isinstance(pedido_data, dict):
+                    item['cliente'] = pedido_data.get('nombre_cliente') or 'N/A'
+                else:
+                    item['cliente'] = 'N/A'
+                # Eliminar el objeto 'pedido' anidado después de extraer el cliente
+                item.pop('pedido', None)
+
+            return {'success': True, 'data': result.data}
+
+        except Exception as e:
+            logger.error(f"Error al obtener items de pedido: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def update_items(self, item_ids: List[int], data: Dict) -> Dict:
+        """
+        Actualiza múltiples items de pedido en un solo lote.
+        """
+        try:
+            result = self.db.table('pedido_items').update(data).in_('id', item_ids).execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error al actualizar items de pedido: {str(e)}")
+            return {'success': False, 'error': str(e)}

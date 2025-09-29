@@ -3,8 +3,6 @@ from app.controllers.pedido_controller import PedidoController
 import re
 from datetime import datetime
 
-# The user is using 'orden_venta' and 'pedido' interchangeably.
-# We'll use 'orden_venta' for the blueprint name and URL prefix for clarity.
 orden_venta_bp = Blueprint('orden_venta', __name__, url_prefix='/orden-venta')
 
 controller = PedidoController()
@@ -67,6 +65,7 @@ def nueva():
         
         if response.get('success'):
             flash(response.get('message', 'Pedido creado con éxito.'), 'success')
+            flash('Ahora puede planificar la producción desde la sección de Planificación.', 'info')
             return redirect(url_for('orden_venta.listar'))
         else:
             flash(response.get('error', 'Error al crear el pedido.'), 'error')

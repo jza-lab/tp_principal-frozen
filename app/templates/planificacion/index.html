@@ -1,90 +1,93 @@
-{% extends "base.html" %}
+{% extends 'layouts/base.html' %}
 
 {% block title %}Planificación de Producción{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4">Planificación de Producción</h1>
-    <p class="text-muted">
-        Aquí se muestran todos los ítems de pedidos de clientes que están pendientes de producción.
-        Agrúpelos para crear órdenes de producción consolidadas.
-    </p>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>Planificación de Producción</h1>
+    </div>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-
-    {% if not pedidos_agrupados %}
-        <div class="alert alert-info mt-4" role="alert">
-            No hay ítems de pedidos pendientes para planificar.
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h5 class="mb-0">Items de Pedidos Pendientes</h5>
         </div>
-    {% else %}
-        {% for producto_id, grupo in pedidos_agrupados.items() %}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h4 class="mb-0">
-                        Producto: <strong>{{ grupo.producto_info.nombre }}</strong>
-                        <span class="badge bg-primary float-end mt-1">
-                            Cantidad Total Pendiente: {{ "%.2f"|format(grupo.cantidad_total) }} kg
-                        </span>
-                    </h4>
+        <div class="card-body">
+            {% if items %}
+            <form action="{{ url_for('planificacion.crear_orden') }}" method="POST" id="planificacion-form">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col" style="width: 5%;">
+                                    <input class="form-check-input" type="checkbox" id="select-all-items">
+                                </th>
+                                <th scope="col">Producto</th>
+                                <th scope="col">Cliente</th>
+                                <th scope="col" class="text-center">Pedido ID</th>
+                                <th scope="col" class="text-center">Cantidad</th>
+                                <th scope="col">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td>
+                                    <input class="form-check-input item-checkbox" type="checkbox" name="item_ids" value="{{ item.id }}">
+                                </td>
+                                <td>{{ item.producto_nombre | default('N/A') }}</td>
+                                <td>{{ item.cliente | default('N/A') }}</td>
+                                <td class="text-center">{{ item.pedido_id }}</td>
+                                <td class="text-center">{{ item.cantidad }}</td>
+                                <td>
+                                    <span class="badge bg-warning text-dark">{{ item.estado | replace('_', ' ') | title }}</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
-                <div class="card-body">
-                    <form action="{{ url_for('planificacion.crear_orden') }}" method="POST">
-                        <input type="hidden" name="producto_id" value="{{ producto_id }}">
-                        
-                        <h5 class="card-title">Ítems Pendientes</h5>
-                        <p class="card-text">Seleccione los ítems que desea consolidar en una nueva orden de producción.</p>
-
-                        <div class="table-responsive">
-                            <table class="table table-sm table-striped table-hover">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th style="width: 5%;"><input type="checkbox" class="form-check-input" onclick="toggleAll(this, '{{ producto_id }}')" checked></th>
-                                        <th style="width: 15%;">ID Ítem</th>
-                                        <th style="width: 15%;">ID Pedido</th>
-                                        <th>Cantidad</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for item in grupo.items %}
-                                        <tr>
-                                            <td>
-                                                <input type="checkbox" class="form-check-input item-checkbox-{{ producto_id }}" name="item_ids" value="{{ item.id }}" checked>
-                                            </td>
-                                            <td>{{ item.id }}</td>
-                                            <td>{{ item.pedido_id }}</td>
-                                            <td>{{ "%.2f"|format(item.cantidad) }} kg</td>
-                                        </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-success mt-3">
-                            <i class="bi bi-plus-circle"></i> Crear Orden de Producción Consolidada
-                        </button>
-                    </form>
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-cogs me-2"></i>Crear Órdenes de Producción
+                    </button>
                 </div>
+            </form>
+            {% else %}
+            <div class="alert alert-info" role="alert">
+                <i class="fas fa-info-circle me-2"></i>No hay ítems pendientes para planificar en este momento.
             </div>
-        {% endfor %}
-    {% endif %}
+            {% endif %}
+        </div>
+    </div>
 </div>
 
 <script>
-function toggleAll(source, producto_id) {
-    const checkboxes = document.querySelectorAll('.item-checkbox-' + producto_id);
-    for (let i = 0; i < checkboxes.length; i++) {
-        checkboxes[i].checked = source.checked;
-    }
-}
-</script>
+document.addEventListener('DOMContentLoaded', function () {
+    const selectAllCheckbox = document.getElementById('select-all-items');
+    const itemCheckboxes = document.querySelectorAll('.item-checkbox');
 
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function () {
+            itemCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+        });
+    }
+
+    itemCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function () {
+            if (!this.checked) {
+                selectAllCheckbox.checked = false;
+            } else {
+                // Si todos los checkboxes de items están marcados, marcar también el 'select-all'
+                const allChecked = Array.from(itemCheckboxes).every(c => c.checked);
+                if (allChecked) {
+                    selectAllCheckbox.checked = true;
+                }
+            }
+        });
+    });
+});
+</script>
 {% endblock %}
