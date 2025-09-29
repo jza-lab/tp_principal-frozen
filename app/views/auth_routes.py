@@ -16,8 +16,9 @@ def login():
         
         legajo = request.form['legajo']
         password = request.form['password']
+        
         respuesta = usuario_controller.autenticar_usuario_V2(legajo, password)
-        usuario= respuesta.get('data')
+        usuario = respuesta.get('data')
 
         if respuesta.get('success') and usuario and usuario.get('activo'):
             session['usuario_id'] = usuario['id']
@@ -26,39 +27,62 @@ def login():
             session['user_data'] = usuario # Guardar para el registro de egreso
 
             flash(f"Bienvenido {usuario['nombre']}", 'success')
-            return redirect(url_for('admin_usuario.index'))
+            
+            # Redirección basada en rol
+            if usuario['rol'] == 'SUPERVISOR':
+                return redirect(url_for('orden_produccion.ordenes_pendientes'))
+            elif usuario['rol'] == 'ADMIN':
+                return redirect(url_for('admin_usuario.index'))
+            else:
+                return redirect(url_for('admin_usuario.index')) # Fallback
         else:
-            flash('Credenciales incorrectas o usuario inactivo.', 'error')
+            # Usar el mensaje de error específico del controlador, que incluye el aviso del tótem
+            error_message = respuesta.get('error', 'Credenciales incorrectas o usuario inactivo.')
+            flash(error_message, 'error')
             return redirect(url_for('auth.login'))
 
     # Para peticiones GET, simplemente renderizar la plantilla
     return render_template('usuarios/login.html')
 
-@auth_bp.route("/identificar_rostro", methods=["GET","POST"])
+@auth_bp.route("/identificar_rostro", methods=["POST"])
 def identificar_rostro():
-   data = request.get_json()
-   image_data_url = data.get("image")
-   #facial_controller.registrar_rostro(id, image_data_url)
-   resultado = facial_controller.identificar_rostro(image_data_url)
-   estado=resultado['success']
-   
-   if(estado):
-       usuario= resultado['usuario']
-       if(usuario and usuario.get('id') and usuario.get('activo')):
-           session['usuario_id'] = usuario['id']
-           session['rol'] = usuario['rol']
-           session['usuario_nombre'] = f"{usuario.get('nombre')} {usuario.get('apellido')}"
-           session['user_data'] = usuario
-           print(usuario)
-           return jsonify({
-                   'success': True, 
-                   'message': 'Rostro identificado correctamente.',
-                   'redirect': url_for('admin_usuario.index') # Redirigir a la página principal
-               }), 200
-   else:
+    """
+    Gestiona el inicio de sesión web mediante reconocimiento facial.
+    Utiliza el nuevo método del controlador que incluye la validación del tótem.
+    """
+    data = request.get_json()
+    if not data or "image" not in data:
+        return jsonify({"success": False, "message": "No se proporcionó imagen."}), 400
+
+    image_data_url = data.get("image")
+    
+    # Llamar al nuevo método seguro que verifica el acceso por tótem
+    respuesta = usuario_controller.autenticar_usuario_facial_web(image_data_url)
+    usuario = respuesta.get('data')
+
+    if respuesta.get('success') and usuario:
+        # Configurar la sesión del usuario
+        session['usuario_id'] = usuario['id']
+        session['rol'] = usuario['rol']
+        session['usuario_nombre'] = f"{usuario.get('nombre')} {usuario.get('apellido')}"
+        session['user_data'] = usuario
+
+        # Determinar a dónde redirigir según el rol
+        redirect_url = url_for('admin_usuario.index') # Fallback
+        if usuario['rol'] == 'SUPERVISOR':
+            redirect_url = url_for('orden_produccion.ordenes_pendientes')
+
+        return jsonify({
+            'success': True, 
+            'message': 'Rostro identificado correctamente.',
+            'redirect': redirect_url
+        }), 200
+    else:
+        # Devolver el mensaje de error específico (incluyendo el del tótem)
+        error_message = respuesta.get('message', 'Rostro no reconocido o usuario inactivo.')
         return jsonify({
            'success': False, 
-           'message': 'Rostro no reconocido o usuario inactivo. Por favor, ingrese mediante sus credenciales.'
+           'message': error_message
        }), 401
 
 @auth_bp.route('/logout')
