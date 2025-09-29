@@ -44,34 +44,26 @@ def login():
 
 @auth_bp.route("/identificar_rostro", methods=["GET","POST"])
 def identificar_rostro():
-    data = request.get_json()
-    image_data_url = data.get("image")
-    resultado = facial_controller.identificar_rostro(image_data_url)
-    estado = resultado['success']
-    
-    if estado:
-        usuario = resultado['usuario']
-        if usuario and usuario.get('id') and usuario.get('activo'):
-            session['usuario_id'] = usuario['id']
-            session['rol'] = usuario['rol']
-            
-            # Lógica corregida para construir el nombre completo
-            nombre = usuario.get('nombre', '')
-            apellido = usuario.get('apellido', '')
-            nombre_completo = nombre
-            if apellido:
-                nombre_completo += f" {apellido}"
-            session['usuario_nombre'] = nombre_completo
-            
-            session['user_data'] = usuario
-            
-            print(usuario)
-            return jsonify({
-                'success': True, 
-                'message': 'Rostro identificado correctamente.',
-                'redirect': url_for('admin_usuario.index')
-            }), 200
-    else:
+   data = request.get_json()
+   image_data_url = data.get("image")
+   #facial_controller.registrar_rostro(id, image_data_url)
+   resultado = facial_controller.identificar_rostro(image_data_url)
+   estado=resultado['success']
+   
+   if(estado):
+       usuario= resultado['usuario']
+       if(usuario and usuario.get('id') and usuario.get('activo')):
+           session['usuario_id'] = usuario['id']
+           session['rol'] = usuario['rol']
+           session['usuario_nombre'] = f"{usuario.get('nombre')} {usuario.get('apellido')}"
+           session['user_data'] = usuario
+           print(usuario)
+           return jsonify({
+                   'success': True, 
+                   'message': 'Rostro identificado correctamente.',
+                   'redirect': url_for('admin_usuario.index') # Redirigir a la página principal
+               }), 200
+   else:
         return jsonify({
             'success': False, 
             'message': 'Rostro no reconocido o usuario inactivo. Por favor, ingrese mediante sus credenciales.'
