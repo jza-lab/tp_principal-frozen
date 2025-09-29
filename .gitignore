@@ -7,6 +7,8 @@ __pycache__/
 *$py.class
 
 # Distribution / packaging
+.vscode/
+.pytest_cache/
 .Python
 build/
 develop-eggs/

@@ -17,8 +17,21 @@
                 endif %}
             </p>
         </div>
-
         <div class="form-body">
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="alert-container mb-4">
+                {% for category, message in messages %}
+                <div
+                    class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
             <!-- Indicador de pasos (solo para usuarios nuevos) -->
             {% if is_new %}
             <div class="step-indicator">

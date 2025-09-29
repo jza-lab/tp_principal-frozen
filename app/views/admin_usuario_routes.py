@@ -66,9 +66,7 @@ def nuevo_usuario():
                 flash('El legajo ingresado ya está en uso. Por favor, verifique los datos.', 'error')
             else:
                 flash(f"Error al crear el usuario: {error_msg}", 'error')
-            
-            return render_template('usuarios/formulario.html', usuario=datos_usuario, is_new=True)
-            
+                       
     return render_template('usuarios/formulario.html', usuario={}, is_new=True)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/editar', methods=['GET', 'POST'])
