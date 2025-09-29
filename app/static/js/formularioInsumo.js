@@ -3,13 +3,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     formulario.addEventListener('submit', function (event) {
         event.preventDefault();
-        console.log(IS_EDIT)
+
         let url;
         let method;
 
-        if (IS_EDIT === 'true') {
+        console.log(isEditBoolean)
+        if (isEditBoolean) {
             const id_insumo = ID_INSUMO;
             url = `/api/insumos/catalogo/actualizar/${id_insumo}`;
+            method = 'PUT'
         } else {
             url = `/api/insumos/catalogo/nuevo`;
             method = 'POST';
@@ -28,8 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
             es_critico: document.getElementById('es_critico').checked,
             requiere_certificacion: document.getElementById('requiere_certificacion').checked
         };
-
-        method = (IS_EDIT === 'True') ? 'PUT' : 'POST';
 
         fetch(url, {
             method: method,

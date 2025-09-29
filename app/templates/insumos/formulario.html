@@ -216,7 +216,8 @@ Agregar nuevo insumo al catálogo
     // Crea una variable global de JS con la URL generada por Flask/Jinja
     const INSUMOS_LISTA_URL = "{{ url_for('insumos_api.obtener_insumos') }}";
     const ID_INSUMO= "{{ insumo.id_insumo }}"
-    const IS_EDIT = "{{ 'true' if insumo is defined else 'false' }}";
+    const IS_EDIT = '{{ insumo is defined }}';
+    const isEditBoolean = IS_EDIT === 'True';
 
 </script>
 

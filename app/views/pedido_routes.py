@@ -50,7 +50,9 @@ def listar():
     
     pedidos = []
     if response.get('success'):
-        pedidos = response.get('data', [])
+        # Ordenar para que los pedidos CANCELADOS aparezcan al final
+        todos_los_pedidos = response.get('data', [])
+        pedidos = sorted(todos_los_pedidos, key=lambda p: p.get('estado') == 'CANCELADO')
     else:
         flash(response.get('error', 'Error al cargar los pedidos.'), 'error')
         

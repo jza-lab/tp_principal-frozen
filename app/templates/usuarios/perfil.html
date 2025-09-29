@@ -27,7 +27,7 @@
             <p><strong>Activo:</strong> {{ 'Sí' if usuario.activo else 'No' }}</p>
         </div>
         <div class="card-footer">
-            <a href="{{ url_for('admin_usuario.index') }}" class="btn btn-secondary">Volver al Dashboard</a>
+            <a href="{{ url_for('admin_usuario.listar_usuarios') }}" class="btn btn-secondary">Volver al Listado</a>
         </div>
     </div>
     {% else %}

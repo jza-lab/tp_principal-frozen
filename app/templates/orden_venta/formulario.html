@@ -66,60 +66,62 @@
                     </button>
                 </div>
                 <div class="card-body p-0">
-                    <table class="table table-sm align-middle mb-0">
-                        <thead class="bg-light">
-                            <tr>
-                                <th style="width: 30%;">Producto <span class="text-danger">*</span></th>
-                                <th style="width: 15%;">Cantidad <span class="text-danger">*</span></th>
-                                <th style="width: 30%;">Estado Ítem</th> 
-                                <th style="width: 15%;">Stock</th>
-                                <th style="width: 10%;" class="text-center">Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="items-container">
-                            <!-- Cálculo de TOTAL_FORMS, vital para formsets. Usa notación de diccionario para robustez. -->
-                            <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS" 
-                                   value="{{ pedido['items'] | length if pedido and pedido['items'] else 0 }}">
-
-                            {% if pedido and pedido['items'] %}
-                                {% for item in pedido['items'] %}
-                                <tr class="item-row">
-                                    <td>
-                                        <!-- ESTE CAMPO 'id' es el que debe ser añadido a tu esquema de validación Python. -->
-                                        <input type="hidden" name="items-{{ loop.index0 }}-id" value="{{ item.id if item.id else '' }}">
-                                        <select class="form-select form-select-sm" name="items-{{ loop.index0 }}-producto_id" required>
-                                            <option value="">Seleccione...</option>
-                                            {% for producto in productos %}
-                                                <option value="{{ producto.id }}" data-stock="{{ producto.stock_disponible or 0 }}" {% if item.producto_id == producto.id %}selected{% endif %}>
-                                                    {{ producto.nombre }}
-                                                </option>
-                                            {% endfor %}
-                                        </select>
-                                    </td>
-                                    <td>
-                                        <input type="number" class="form-control form-control-sm" name="items-{{ loop.index0 }}-cantidad" 
-                                               placeholder="Ej: 10" min="0.1" step="0.1" value="{{ item.cantidad }}" required>
-                                    </td>
-                                    <!-- NUEVO CAMPO: Estado del Ítem -->
-                                    <td>
-                                        <select class="form-select form-select-sm" name="items-{{ loop.index0 }}-estado">
-                                            <option value="PENDIENTE" {% if item.estado == 'PENDIENTE' %}selected{% endif %}>Pendiente</option>
-                                            <option value="EN_PRODUCCION" {% if item.estado == 'EN_PRODUCCION' %}selected{% endif %}>En Producción</option>
-                                            <option value="ALISTADO" {% if item.estado == 'ALISTADO' %}selected{% endif %}>Alistado</option>
-                                            <option value="CANCELADO_ITEM" {% if item.estado == 'CANCELADO_ITEM' %}selected{% endif %}>Cancelado (Ítem)</option>
-                                        </select>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-secondary text-white stock-display">--</span>
-                                    </td>
-                                    <td class="text-center">
-                                        <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem"><i class="bi bi-trash"></i></button>
-                                    </td>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th style="width: 30%;">Producto <span class="text-danger">*</span></th>
+                                    <th style="width: 15%;">Cantidad <span class="text-danger">*</span></th>
+                                    <th style="width: 30%;">Estado Ítem</th> 
+                                    <th style="width: 15%;">Stock</th>
+                                    <th style="width: 10%;" class="text-center">Acción</th>
                                 </tr>
-                                {% endfor %}
-                            {% endif %}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody id="items-container">
+                                <!-- Cálculo de TOTAL_FORMS, vital para formsets. Usa notación de diccionario para robustez. -->
+                                <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS" 
+                                       value="{{ pedido['items'] | length if pedido and pedido['items'] else 0 }}">
+
+                                {% if pedido and pedido['items'] %}
+                                    {% for item in pedido['items'] %}
+                                    <tr class="item-row">
+                                        <td>
+                                            <!-- ESTE CAMPO 'id' es el que debe ser añadido a tu esquema de validación Python. -->
+                                            <input type="hidden" name="items-{{ loop.index0 }}-id" value="{{ item.id if item.id else '' }}">
+                                            <select class="form-select form-select-sm" name="items-{{ loop.index0 }}-producto_id" required>
+                                                <option value="">Seleccione...</option>
+                                                {% for producto in productos %}
+                                                    <option value="{{ producto.id }}" data-stock="{{ producto.stock_disponible or 0 }}" {% if item.producto_id == producto.id %}selected{% endif %}>
+                                                        {{ producto.nombre }}
+                                                    </option>
+                                                {% endfor %}
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <input type="number" step="1" min="0" class="form-control form-control-sm" name="items-{{ loop.index0 }}-cantidad" 
+                                                   placeholder="Ej: 10" min="0.1" step="0.1" value="{{ item.cantidad }}" required>
+                                        </td>
+                                        <!-- NUEVO CAMPO: Estado del Ítem -->
+                                        <td>
+                                            <select class="form-select form-select-sm" name="items-{{ loop.index0 }}-estado">
+                                                <option value="PENDIENTE" {% if item.estado == 'PENDIENTE' %}selected{% endif %}>Pendiente</option>
+                                                <option value="EN_PRODUCCION" {% if item.estado == 'EN_PRODUCCION' %}selected{% endif %}>En Producción</option>
+                                                <option value="ALISTADO" {% if item.estado == 'ALISTADO' %}selected{% endif %}>Alistado</option>
+                                                <option value="CANCELADO_ITEM" {% if item.estado == 'CANCELADO_ITEM' %}selected{% endif %}>Cancelado (Ítem)</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary text-white stock-display">--</span>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem"><i class="bi bi-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
                     <!-- FIX para usar la notación de diccionario para consistencia. -->
                     <div id="no-items-msg" class="text-center text-muted py-3 border-top" {% if pedido and pedido['items'] | length > 0 %}style="display: none;"{% endif %}>
                         <i class="bi bi-box-seam fs-3"></i>
