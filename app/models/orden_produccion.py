@@ -66,9 +66,9 @@ class OrdenProduccionModel(BaseModel):
                         item['producto_nombre'] = 'N/A'
                     
                     if item.get('usuarios'):
-                        item['operario_nombre'] = item.pop('usuarios')['nombre']
+                        item['creador_nombre'] = item.pop('usuarios')['nombre']
                     else:
-                        item['operario_nombre'] = 'No asignado'
+                        item['creador_nombre'] = 'No asignado'
                     
                     processed_data.append(item)
                 return {'success': True, 'data': processed_data}
@@ -104,7 +104,7 @@ class OrdenProduccionModel(BaseModel):
                     item.pop('recetas')
 
                 if item.get('usuarios'):
-                    item['operario_nombre'] = item['usuarios'].get('nombre', 'No asignado')
+                    item['creador_nombre'] = item['usuarios'].get('nombre', 'No asignado')
                     item.pop('usuarios')
                 
                 return {'success': True, 'data': item}

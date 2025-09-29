@@ -97,7 +97,7 @@
                                         </select>
                                     </td>
                                     <td>
-                                        <input type="number" class="form-control form-control-sm" name="items-{{ loop.index0 }}-cantidad" 
+                                        <input type="number" step="1" min="0" class="form-control form-control-sm" name="items-{{ loop.index0 }}-cantidad" 
                                                placeholder="Ej: 10" min="0.1" step="0.1" value="{{ item.cantidad }}" required>
                                     </td>
                                     <!-- NUEVO CAMPO: Estado del Ítem -->

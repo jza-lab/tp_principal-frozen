@@ -65,21 +65,6 @@
                         </div>
 
                         <div class="col-md-6">
-                            <label for="operario_asignado" class="form-label">Operario Asignado</label>
-                            <select class="form-select" id="operario_asignado" name="operario_asignado">
-                                <option value="">Sin asignar</option>
-                                {% for op in operarios %}
-                                {% if op.puesto == 'Operador' %}
-                                <option value="{{ op.id }}" {% if orden and orden.operario_asignado==op.id %}selected{%
-                                    endif %}>
-                                    {{ op.nombre }} {{ op.apellido }}
-                                </option>
-                                {% endif %}
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="col-md-6">
                             <label for="prioridad" class="form-label">Prioridad</label>
                             <select class="form-select" id="prioridad" name="prioridad">
                                 <option value="NORMAL" {% if not orden or orden.prioridad=='NORMAL' %}selected{% endif

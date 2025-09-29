@@ -1,5 +1,9 @@
-from flask import Blueprint, redirect, render_template, request, jsonify, url_for
+from flask import Blueprint, redirect, render_template, request, jsonify, session, url_for
 from app.controllers.insumo_controller import InsumoController
+from app.controllers.inventario_controller import InventarioController
+from app.controllers.proveedor_controller import ProveedorController
+from app.controllers.orden_compra_controller import OrdenCompraController
+from app.controllers.usuario_controller import UsuarioController
 from app.utils.validators import validate_uuid
 from marshmallow import ValidationError
 import logging
@@ -11,6 +15,12 @@ insumos_bp = Blueprint('insumos_api', __name__, url_prefix='/api/insumos')
 
 # Controlador
 insumo_controller = InsumoController()
+proveedor_controller = ProveedorController()
+ordenes_compra_controller = OrdenCompraController()
+inventario_controller= InventarioController()
+usuario_controller = UsuarioController()
+
+
 
 @insumos_bp.route('/catalogo/nuevo', methods=['GET', 'POST'])
 def crear_insumo():
@@ -39,7 +49,6 @@ def crear_insumo():
             'success': False,
             'error': 'Error interno del servidor'
         }), 500
-
 
 @insumos_bp.route('/catalogo', methods=['GET'])
 def obtener_insumos():
@@ -82,16 +91,20 @@ def obtener_insumo_por_id(id_insumo):
                 'success': False,
                 'error': 'ID de insumo inválido'
             }), 400
-
+        
         response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
+
         insumo = response['data']
-        return render_template('insumos/perfil_insumo.html', insumo=insumo)
+        print(insumo)
+        lotes_response, lotes_status = inventario_controller.obtener_lotes_por_insumo(id_insumo, solo_disponibles=False)
+        lotes = lotes_response.get('data', []) if lotes_status == 200 else []
+        return render_template('insumos/perfil_insumo.html', insumo=insumo, lotes=lotes)
 
     except Exception as e:
         logger.error(f"Error inesperado en obtener_insumo_por_id: {str(e)}")
         return redirect(url_for('insumos_api.obtener_insumos'))
 
-@insumos_bp.route('/catalogo/actualizar/<string:id_insumo>', methods=['GET', 'POST'])
+@insumos_bp.route('/catalogo/actualizar/<string:id_insumo>', methods=['GET', 'POST', 'PUT'])
 def actualizar_insumo(id_insumo):
     """
     Actualizar un insumo del catálogo
@@ -99,6 +112,7 @@ def actualizar_insumo(id_insumo):
     POST /api/insumos/catalogo/actualizar/{id_insumo}
     Content-Type: application/json
     """
+
     try:
         if not validate_uuid(id_insumo):
             return jsonify({
@@ -106,7 +120,7 @@ def actualizar_insumo(id_insumo):
                 'error': 'ID de insumo inválido'
             }), 400
         
-        if request.method == 'POST':
+        if request.method == 'POST' or request.method == 'PUT':
             datos_json = request.get_json(silent=True) 
             if(datos_json is None):
                 logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
@@ -116,6 +130,7 @@ def actualizar_insumo(id_insumo):
             return jsonify(response), status
 
         response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
+
         insumo = response['data']
         return render_template('insumos/formulario.html', insumo=insumo)
 
@@ -177,6 +192,45 @@ def habilitar_insumo(id_insumo):
 
     except Exception as e:
         logger.error(f"Error inesperado en habilitar_insumo: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Error interno del servidor'
+        }), 500
+
+@insumos_bp.route('/catalogo/lote/nuevo/<string:id_insumo>', methods = ['GET', 'POST'])
+def agregar_lote(id_insumo):
+        proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
+        proveedores = proveedores_resp.get('data', []) if proveedores_resp.get('success') else []
+        
+        response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
+        insumo = response['data']
+        
+        ordenes_compra_resp, _ = ordenes_compra_controller.obtener_codigos_por_insumo(id_insumo)
+        ordenes_compra_data = ordenes_compra_resp.get('data', []) if ordenes_compra_resp.get('success') else []
+
+        return render_template('insumos/registrar_lote.html', insumo=insumo, proveedores=proveedores, ordenes=ordenes_compra_data)
+
+@insumos_bp.route('/catalogo/lote/nuevo/<string:id_insumo>/crear', methods = ['GET','POST'])
+def crear_lote(id_insumo):
+    try:
+        datos_json = request.get_json()
+        if not datos_json:
+            logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
+            return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos (verifique Content-Type)'}), 400
+        
+        id = session['usuario_id']
+        response, status = inventario_controller.crear_lote(datos_json, id)
+        print(response, status)
+        return jsonify(response), status
+
+    except ValidationError as e:
+        return jsonify({
+            'success': False,
+            'error': 'Datos inválidos',
+            'details': e.messages
+        }), 400
+    except Exception as e:
+        logger.error(f"Error inesperado en crear_lote: {str(e)}")
         return jsonify({
             'success': False,
             'error': 'Error interno del servidor'

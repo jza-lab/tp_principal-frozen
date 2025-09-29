@@ -272,6 +272,36 @@ class OrdenCompraModel(BaseModel):
             logger.error(f"Error actualizando orden {orden_id} con items: {str(e)}")
             return {'success': False, 'error': str(e)}
 
+    def find_codigos_by_insumo_id(self, insumo_id: str) -> Dict:
+        """
+        Encuentra los códigos de las órdenes de compra y el precio unitario 
+        que contienen un insumo específico.
+        """
+        try:
+            # Usamos un join para obtener el codigo_oc de la tabla de órdenes
+            query = self.db.table('orden_compra_items').select(
+                'precio_unitario, orden:ordenes_compra!orden_compra_id(codigo_oc)'
+            ).eq('insumo_id', insumo_id)
+            
+            response = query.execute()
+
+            if not response.data:
+                return {'success': True, 'data': []}
+
+            # Procesar la respuesta para aplanarla y que sea más fácil de usar
+            processed_data = []
+            for item in response.data:
+                if item.get('orden') and item['orden'].get('codigo_oc'):
+                    processed_data.append({
+                        'codigo_oc': item['orden']['codigo_oc'],
+                        'precio_unitario': item['precio_unitario']
+                    })
+            
+            return {'success': True, 'data': processed_data}
+
+        except Exception as e:
+            logger.error(f"Error buscando códigos de OC y precios por insumo_id: {e}")
+            return {'success': False, 'error': str(e)}
 
 @dataclass
 class OrdenCompraItem:

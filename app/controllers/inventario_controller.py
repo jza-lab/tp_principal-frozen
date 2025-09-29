@@ -43,16 +43,23 @@ class InventarioController(BaseController):
             logger.error(f"Error obteniendo lotes: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
-    def crear_lote(self, data: Dict) -> tuple:
+    def crear_lote(self, data: Dict, id_usuario:int) -> tuple:
         """Crear un nuevo lote de inventario"""
         try:
             # Validar datos
             validated_data = self.schema.load(data)
+            validated_data['usuario_ingreso_id'] = id_usuario
 
             # Verificar que el insumo existe
             insumo_result = self.insumo_model.find_by_id(str(validated_data['id_insumo']), 'id_insumo')
             if not insumo_result['success']:
                 return self.error_response('El insumo especificado no existe', 404)
+
+             # Generar código de lote único
+            codigo_insumo = insumo_result['data'].get('codigo_interno', 'INS')
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            codigo_lote = f"{codigo_insumo}-{timestamp}"
+            validated_data['numero_lote_proveedor'] = codigo_lote
 
             # Crear lote
             result = self.inventario_model.create(validated_data)

@@ -4,13 +4,13 @@
 
 {% block page_title %}Registrar Nuevo Lote{% endblock %}
 {% block page_subtitle %}
-    <strong>{{ insumo.nombre }}</strong> 
-    <span class="text-muted">({{ insumo.codigo_interno }})</span>
+<strong>{{ insumo.nombre }}</strong>
+<span class="text-muted">({{ insumo.codigo_interno }})</span>
 {% endblock %}
 {% block page_actions %}
-    <a href="{{ url_for('insumo.listar') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left me-1"></i>Volver a la lista
-    </a>
+<a href="{{ url_for('insumos_api.obtener_insumos') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Volver a la lista
+</a>
 {% endblock %}
 
 {% block content %}
@@ -22,67 +22,78 @@
                 <h5 class="mb-0">Información del Lote</h5>
             </div>
             <div class="card-body">
-                <form method="post">
+                 <form id="form-registrar-lote" method="post" data-action="{{ url_for('insumos_api.crear_lote', id_insumo=insumo.id_insumo) }}" data-redirect-url="{{ url_for('insumos_api.obtener_insumos') }}">
+                    <input type="hidden" id="id_insumo" name="id_insumo" value="{{ insumo.id_insumo }}">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label for="proveedor_id" class="form-label">Proveedor <span class="text-danger">*</span></label>
+                            <label for="proveedor_id" class="form-label">Proveedor <span
+                                    class="text-danger">*</span></label>
                             <select class="form-select" id="proveedor_id" name="proveedor_id" required>
                                 <option value="">Seleccionar proveedor...</option>
                                 {% for p in proveedores %}
-                                    <option value="{{ p.id }}">{{ p.nombre }}</option>
+                                <option value="{{ p.id_proveedor }}">{{ p.nombre }}
                                 {% endfor %}
                             </select>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <label for="cantidad" class="form-label">Cantidad <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <input type="number" step="0.01" class="form-control" id="cantidad" name="cantidad" required>
+                                <input type="number" step="0.01" class="form-control" id="cantidad" name="cantidad"
+                                    required>
                                 <span class="input-group-text">{{ insumo.unidad_medida }}</span>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6">
-                            <label for="fecha_ingreso" class="form-label">Fecha de Ingreso <span class="text-danger">*</span></label>
-                            <input type="date" class="form-control" id="fecha_ingreso" name="fecha_ingreso" 
-                                   value="{{ today }}" required>
+                            <label for="fecha_ingreso" class="form-label">Fecha de Ingreso <span
+                                    class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="fecha_ingreso" name="fecha_ingreso"
+                                value="{{ today }}" required>
                         </div>
-                        
+
                         <div class="col-md-6">
-                            <label for="fecha_vencimiento" class="form-label">Fecha de Vencimiento <span class="text-danger">*</span></label>
-                            <input type="date" class="form-control" id="fecha_vencimiento" name="fecha_vencimiento" required>
+                            <label for="fecha_vencimiento" class="form-label">Fecha de Vencimiento <span
+                                    class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="fecha_vencimiento" name="fecha_vencimiento"
+                                required>
                         </div>
-                        
+
                         <div class="col-12">
                             <hr class="my-4">
                             <h6 class="mb-3">Información Adicional (Opcional)</h6>
                         </div>
-                        
-                        <div class="col-md-6">
-                            <label for="numero_factura" class="form-label">Número de Factura/Remito</label>
-                            <input type="text" class="form-control" id="numero_factura" name="numero_factura" 
-                                   placeholder="ej: FC-001-00000123">
-                        </div>
-                        
+
+                        <select class="form-select" id="numero_factura" name="numero_factura">
+                            <option value="">Seleccionar Orden de Compra...</option>
+                            {% for item in ordenes %}
+                            <option value="{{ item.codigo_oc }}" data-precio="{{ item.precio_unitario }}"> {{
+                                item.codigo_oc}} - {{item.precio_unitario }} </option>
+                            {% endfor %}
+                        </select>
+
                         <div class="col-md-6">
                             <label for="precio_unitario" class="form-label">Precio Unitario</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
-                                <input type="number" step="0.01" class="form-control" id="precio_unitario" name="precio_unitario">
+                                <input type="number" step="0.01" class="form-control" id="precio_unitario"
+                                    name="precio_unitario">
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6">
-                            <label for="temperatura_almacenamiento" class="form-label">Temperatura de Almacenamiento (°C)</label>
-                            <input type="number" step="0.1" class="form-control" id="temperatura_almacenamiento" name="temperatura_almacenamiento">
+                            <label for="temperatura_almacenamiento" class="form-label">Temperatura de Almacenamiento
+                                (°C)</label>
+                            <input type="number" step="0.1" class="form-control" id="temperatura_almacenamiento"
+                                name="temperatura_almacenamiento">
                         </div>
                     </div>
-                    
+
                     <div class="d-flex justify-content-end gap-2 mt-4">
-                        <a href="{{ url_for('insumo.listar') }}" class="btn btn-outline-secondary">
+                        <a href="{{ url_for('insumos_api.obtener_insumos') }}" class="btn btn-outline-secondary">
                             Cancelar
                         </a>
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" id="crear_lote">
                             <i class="bi bi-check-circle me-1"></i>
                             Registrar Lote
                         </button>
@@ -91,7 +102,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-lg-4">
         <div class="card">
             <div class="card-header">
@@ -114,17 +125,53 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="card mt-3">
             <div class="card-body">
                 <div class="alert alert-light border mb-0">
                     <div class="small">
                         <i class="bi bi-info-circle me-1"></i>
-                        <strong>Nota:</strong> Al registrar este lote, se actualizará automáticamente el stock actual del insumo.
+                        <strong>Nota:</strong> Al registrar este lote, se actualizará automáticamente el stock actual
+                        del insumo.
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+  // 1. Obtener referencias a los elementos
+        const ordenCompraSelect = document.getElementById("numero_factura");
+        const precioUnitarioInput = document.getElementById("precio_unitario");
+
+        // 2. Agregar el event listener para detectar el cambio en la selección
+        ordenCompraSelect.addEventListener('change', function () {
+            
+            // Obtener el elemento <option> actualmente seleccionado
+            const selectedOption = this.options[this.selectedIndex];
+
+            // Obtener el valor del atributo data-precio.
+            // Si no hay opción seleccionada o el atributo no existe, será null.
+            const precio = selectedOption.getAttribute('data-precio');
+
+            // 3. Actualizar el campo de Precio Unitario
+            if (precio !== null) {
+                // Establecer el valor, asegurando que sea un número flotante para el input
+                precioUnitarioInput.value = parseFloat(precio).toFixed(2);
+            } else {
+                // Limpiar el campo si no se selecciona una opción válida (ej. "Seleccionar Orden...")
+                precioUnitarioInput.value = "";
+            }
+        });
+        
+        // Opcional: Ejecutar la lógica al cargar la página si ya hay una opción seleccionada (útil para errores de formulario)
+        ordenCompraSelect.dispatchEvent(new Event('change'));
+    });
+
+</script>
+<script src="{{ url_for('static', filename='js/formularioLote.js') }}" defer></script>
+{% endblock %}
+
 {% endblock %}
