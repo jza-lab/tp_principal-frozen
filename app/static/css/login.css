@@ -207,6 +207,11 @@
 }
 
 .alternative-options .btn-login {
+    font-size: 0.9rem;
+    padding: 0.6rem 1rem;
+}
+
+.btn-link {
     color: #6c757d;
     text-decoration: none;
     font-size: 0.875rem;
@@ -298,18 +303,31 @@
     cursor: not-allowed;
 }
 
-/* Responsive adjustments */
+/* Responsive  */
 @media (max-width: 768px) {
+    html, body {
+        overflow: auto;
+    }
+
     .login-container {
         padding: 1rem;
+        display: block;
+        min-height: auto;
+        height: auto;
     }
     
     .login-card {
         max-width: 100%;
+        margin-top: 2rem;
+        margin-bottom: 2rem;
     }
     
     .login-body {
         padding: 1.5rem;
+    }
+
+    .login-header h2 {
+        font-size: 1.6rem;
     }
     
     .camera-frame {
@@ -331,21 +349,98 @@
     
     .btn-login {
         width: 100%;
-        max-width: 250px;
+        max-width: 220px;
+        font-size: 0.95rem;
+        padding: 0.7rem 1.2rem;
+    }
+
+    .alternative-options .d-flex {
+        flex-direction: column;
+    }
+
+    .alternative-options .btn-login {
+        max-width: 100%;
     }
 }
 
 @media (max-width: 480px) {
+    
+    .login-container {
+        padding: 0.5rem;
+    }
+
+    .login-card {
+        border-radius: 8px;
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+    }
+
     .login-header {
-        padding: 1.5rem;
+        padding: 1.5rem 1rem;
     }
     
     .login-header h2 {
-        font-size: 1.5rem;
+        font-size: 1.4rem;
+    }
+
+    .login-body {
+        padding: 1rem;
     }
     
     .camera-frame {
-        width: 240px;
-        height: 240px;
+        width: 220px;
+        height: 220px;
+    }
+
+    .face-guide {
+        width: 130px;
+        height: 160px;
+        margin-left: -65px;
+        margin-top: -80px;
+    }
+
+    .guidance-text {
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+
+    .form-floating > label {
+        font-size: 0.9rem;
+    }
+
+    .btn-login {
+        font-size: 0.9rem;
+        padding: 0.65rem 1rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .camera-frame {
+        width: 180px;
+        height: 180px;
+    }
+
+    .face-guide {
+        width: 100px;
+        height: 120px;
+        margin-left: -50px;
+        margin-top: -60px;
+    }
+
+    .login-header h2 {
+        font-size: 1.2rem;
+    }
+
+    .guidance-text {
+        font-size: 0.85rem;
+    }
+
+    .alternative-options .divider-text span {
+        font-size: 0.8rem;
+    }
+
+    .btn-login {
+        font-size: 0.85rem;
+        padding: 0.6rem 0.9rem;
     }
 }

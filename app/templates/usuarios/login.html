@@ -186,44 +186,38 @@ class ModernLogin {
         try {
             const response = await fetch('/auth/identificar_rostro', {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
                 body: JSON.stringify({ image: imageData })
             });
+            const result = await response.json();
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                throw new Error(result.message || `Error del servidor: ${response.status}`);
             }
 
-            const result = await response.json();
-            
+            // Si la respuesta HTTP fue exitosa, verificamos el éxito a nivel de aplicación.
             if (result.success) {
                 this.mostrarMensajeFacial(`${result.message || 'Acceso concedido'}`, 'success');
                 
-                // Detener cámara
                 if (this.stream) {
                     this.stream.getTracks().forEach(track => track.stop());
                 }
                 
-                // Redirigir
                 setTimeout(() => {
                     window.location.href = result.redirect;
                 }, 1500);
             } else {
-                this.failedAttempts++;
-                this.mostrarMensajeFacial(`${result.message || 'No se pudo verificar el rostro'}`, 'error');
-                
-                // Mostrar opciones después de intentos fallidos
-                if (this.failedAttempts >= this.maxAttempts) {
-                    this.mostrarOpcionesAlternativas();
-                }
+                // Este caso es para respuestas 200 OK pero con `success: false`.
+                throw new Error(result.message || 'No se pudo verificar el rostro.');
             }
         } catch (error) {
             this.failedAttempts++;
-            console.error('Error en reconocimiento facial:', error);
-            this.mostrarMensajeFacial('Error de conexión: ' + error.message, 'error');
+            // El `error.message` ahora contendrá el mensaje específico del servidor o un error genérico.
+            console.error('Error en reconocimiento facial:', error.message);
+            this.mostrarMensajeFacial(error.message, 'error');
             
             if (this.failedAttempts >= this.maxAttempts) {
                 this.mostrarOpcionesAlternativas();
