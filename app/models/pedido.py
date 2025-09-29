@@ -130,7 +130,8 @@ class PedidoModel(BaseModel):
                     'pedido_id': pedido_id,
                     'producto_id': item['producto_id'],
                     'cantidad': item['cantidad'],
-                    'estado': item['estado'] 
+                    # FIX: El estado no vendrá del formulario, se asigna por defecto.
+                    'estado': item.get('estado', 'PENDIENTE')
                 }
                 
                 item_insert_result = self.db.table('pedido_items').insert(item_data).execute()
@@ -155,6 +156,43 @@ class PedidoModel(BaseModel):
             return self.update(id_value=pedido_id, data={'estado': nuevo_estado}, id_field='id')
         except Exception as e:
             logger.error(f"Error cambiando estado del pedido {pedido_id}: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def actualizar_estado_agregado(self, pedido_id: int) -> Dict:
+        """
+        Recalcula y actualiza el estado de un pedido principal basado en el estado
+        de todos sus items.
+        """
+        try:
+            # 1. Obtener todos los items para el pedido_id dado
+            items_result = self.db.table('pedido_items').select('estado').eq('pedido_id', pedido_id).execute()
+            
+            if not items_result.data:
+                logger.warning(f"No se encontraron items para el pedido {pedido_id} al actualizar estado agregado.")
+                return {'success': True, 'message': 'No items found.'}
+
+            # 2. Determinar el estado agregado
+            estados_items = {item['estado'] for item in items_result.data}
+            
+            nuevo_estado_pedido = None
+            
+            # Lógica de estados:
+            # Si TODOS los items están 'ALISTADO', el pedido está listo para entrega.
+            if all(estado == 'ALISTADO' for estado in estados_items):
+                nuevo_estado_pedido = 'LISTO_PARA_ENTREGA'
+            # Si AL MENOS UNO está 'EN_PRODUCCION', el pedido está en proceso.
+            elif 'EN_PRODUCCION' in estados_items:
+                nuevo_estado_pedido = 'EN_PROCESO'
+            
+            # 3. Actualizar el estado del pedido si se determinó uno nuevo
+            if nuevo_estado_pedido:
+                logger.info(f"Actualizando estado del pedido {pedido_id} a '{nuevo_estado_pedido}'.")
+                return self.cambiar_estado(pedido_id, nuevo_estado_pedido)
+            
+            return {'success': True, 'message': 'No state change required.'}
+
+        except Exception as e:
+            logger.error(f"Error al actualizar estado agregado para el pedido {pedido_id}: {str(e)}")
             return {'success': False, 'error': str(e)}
 
     def find_all_items(self, filters: Optional[Dict] = None) -> Dict:

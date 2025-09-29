@@ -51,30 +51,15 @@ class PedidoController(BaseController):
         Valida y crea un nuevo pedido con sus items.
         """
         try:
-            # ----------------------------------------------------------------------
-            # !!! CORRECCIÓN CRÍTICA PARA EL ERROR DE 'Unknown field' !!!
-            # El campo 'items-TOTAL_FORMS' es un campo de gestión de formularios 
-            # dinámicos de WTForms/JS. Marshmallow no lo conoce y lo rechaza.
-            # Lo eliminamos antes de pasar los datos al schema.
             if 'items-TOTAL_FORMS' in form_data:
-                # Usamos .pop() para eliminar la clave del diccionario antes de la carga.
                 form_data.pop('items-TOTAL_FORMS')
-            # ----------------------------------------------------------------------
-
-            # 1. Validar el payload completo
-            # Nota: Si estás usando Flask-WTF, es posible que el error ocurra antes de esta línea.
-            # Asumimos que form_data ya es un diccionario simple (dict) con los datos del formulario.
+        
             validated_data = self.schema.load(form_data)
-            
-            # 2. Separar datos del pedido y datos de los items
             items_data = validated_data.pop('items')
             pedido_data = validated_data
             
-            # Establecer estado inicial si no se proporciona
             if 'estado' not in pedido_data:
                 pedido_data['estado'] = 'PENDIENTE'
-
-            # 3. Llamar al método del modelo
             result = self.model.create_with_items(pedido_data, items_data)
 
             if result.get('success'):
@@ -83,8 +68,12 @@ class PedidoController(BaseController):
                 return self.error_response(result.get('error', 'No se pudo crear el pedido.'), 400)
 
         except ValidationError as e:
-            # Si el error es de Marshmallow, se captura aquí.
-            return self.error_response(f"Datos inválidos: {e.messages}", 400)
+            if 'items' in e.messages and isinstance(e.messages['items'], list):
+                error_message = e.messages['items'][0]
+            else:
+                error_message = "Por favor, revise los campos del formulario. Se encontraron errores de validación."
+            
+            return self.error_response(error_message, 400)
         except Exception as e:
             return self.error_response(f'Error interno: {str(e)}', 500)
 
@@ -93,20 +82,12 @@ class PedidoController(BaseController):
         Valida y actualiza un pedido existente y sus items.
         """
         try:
-            # ----------------------------------------------------------------------
-            # !!! CORRECCIÓN CRÍTICA PARA EL ERROR DE 'Unknown field' en actualización !!!
             if 'items-TOTAL_FORMS' in form_data:
                 form_data.pop('items-TOTAL_FORMS')
-            # ----------------------------------------------------------------------
             
-            # 1. Validar el payload completo
             validated_data = self.schema.load(form_data)
-
-            # 2. Separar datos del pedido y datos de los items
             items_data = validated_data.pop('items')
             pedido_data = validated_data
-
-            # 3. Llamar al método del modelo
             result = self.model.update_with_items(pedido_id, pedido_data, items_data)
 
             if result.get('success'):
@@ -115,7 +96,12 @@ class PedidoController(BaseController):
                 return self.error_response(result.get('error', 'No se pudo actualizar el pedido.'), 400)
             
         except ValidationError as e:
-            return self.error_response(f"Datos inválidos: {e.messages}", 400)
+            if 'items' in e.messages and isinstance(e.messages['items'], list):
+                error_message = e.messages['items'][0]
+            else:
+                error_message = "Por favor, revise los campos del formulario. Se encontraron errores de validación."
+            
+            return self.error_response(error_message, 400)
         except Exception as e:
             return self.error_response(f'Error interno: {str(e)}', 500)
             
@@ -143,12 +129,9 @@ class PedidoController(BaseController):
         en el formulario de creación/edición de pedidos.
         """
         try:
-            # Usamos el modelo de producto para obtener todos los productos.
-            # El modelo de producto devuelve un dict, accedemos a la clave 'data'.
             productos_result = self.producto_model.find_all(order_by='nombre')
             if productos_result.get('success'):
                 productos = productos_result.get('data', [])
-                # Devolvemos solo los datos necesarios, no toda la respuesta del controlador.
                 return self.success_response(data={'productos': productos})
             else:
                 return self.error_response("Error al obtener la lista de productos.", 500)

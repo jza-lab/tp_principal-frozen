@@ -2,6 +2,8 @@ from app.models.base_model import BaseModel
 from typing import Dict, Any, Optional
 from datetime import datetime
 import logging
+# Importamos el modelo de Pedido para poder invocar su lógica
+from app.models.pedido import PedidoModel
 
 logger = logging.getLogger(__name__)
 
@@ -15,9 +17,11 @@ class OrdenProduccionModel(BaseModel):
 
     def cambiar_estado(self, orden_id: int, nuevo_estado: str, observaciones: Optional[str] = None) -> Dict:
         """
-        Cambia el estado de una orden de producción y actualiza fechas si es necesario.
+        Cambia el estado de una orden de producción y actualiza en cascada el estado
+        de los items de pedido asociados y el estado agregado del pedido principal.
         """
         try:
+            # 1. Actualizar la orden de producción
             update_data = {'estado': nuevo_estado}
             if observaciones:
                 update_data['observaciones'] = observaciones
@@ -27,7 +31,34 @@ class OrdenProduccionModel(BaseModel):
             elif nuevo_estado == 'COMPLETADA':
                 update_data['fecha_fin'] = datetime.now().isoformat()
 
-            return self.update(id_value=orden_id, data=update_data, id_field='id')
+            update_result = self.update(id_value=orden_id, data=update_data, id_field='id')
+            if not update_result.get('success'):
+                return update_result
+
+            # 2. Lógica de actualización en cascada para los pedidos de venta
+            nuevo_estado_item = None
+            if nuevo_estado == 'EN_PROCESO':
+                nuevo_estado_item = 'EN_PRODUCCION'
+            elif nuevo_estado == 'COMPLETADA':
+                nuevo_estado_item = 'ALISTADO'
+            
+            if nuevo_estado_item:
+                # Encontrar todos los items de pedido asociados a esta orden
+                items_result = self.db.table('pedido_items').select('id, pedido_id').eq('orden_produccion_id', orden_id).execute()
+                
+                if items_result.data:
+                    # Actualizar el estado de todos los items encontrados
+                    self.db.table('pedido_items').update({'estado': nuevo_estado_item}).eq('orden_produccion_id', orden_id).execute()
+                    
+                    # Obtener los IDs únicos de los pedidos principales para recalcular su estado
+                    pedidos_ids_afectados = {item['pedido_id'] for item in items_result.data}
+                    
+                    pedido_model = PedidoModel()
+                    for pedido_id in pedidos_ids_afectados:
+                        # Llamar al método que recalculará el estado agregado del pedido
+                        pedido_model.actualizar_estado_agregado(pedido_id)
+
+            return update_result
         except Exception as e:
             logger.error(f"Error cambiando estado de la orden {orden_id}: {str(e)}")
             return {'success': False, 'error': str(e)}
@@ -113,4 +144,29 @@ class OrdenProduccionModel(BaseModel):
 
         except Exception as e:
             logger.error(f"Error al obtener la orden enriquecida {orden_id}: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def obtener_desglose_origen(self, orden_id: int) -> Dict:
+        """
+        Obtiene los items de pedido que componen una orden de producción,
+        incluyendo el nombre del cliente y la cantidad de cada pedido.
+        """
+        try:
+            result = self.db.table('pedido_items').select(
+                '*, pedido:pedidos(id, nombre_cliente)'
+            ).eq('orden_produccion_id', orden_id).execute()
+
+            if result.data:
+                desglose = []
+                for item in result.data:
+                    pedido_info = item.pop('pedido', {})
+                    item['cliente_nombre'] = pedido_info.get('nombre_cliente', 'N/A')
+                    item['pedido_id'] = pedido_info.get('id', 'N/A')
+                    desglose.append(item)
+                return {'success': True, 'data': desglose}
+            else:
+                return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error obteniendo el desglose de origen para la orden {orden_id}: {str(e)}")
             return {'success': False, 'error': str(e)}
