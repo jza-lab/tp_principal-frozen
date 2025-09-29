@@ -217,10 +217,12 @@ Agregar nuevo insumo al catálogo
     const INSUMOS_LISTA_URL = "{{ url_for('insumos_api.obtener_insumos') }}";
     const ID_INSUMO= "{{ insumo.id_insumo }}"
     const IS_EDIT = '{{ insumo is defined }}';
-    const isEditBoolean = IS_EDIT === 'True';
-
+    const isEditBoolean = IS_EDIT == 'True';
 </script>
 
+{% if insumo %}
+<script src="{{ url_for('static', filename='js/formularioModInsumo.js') }}"></script>
+{% else %}
 <script src="{{ url_for('static', filename='js/formularioInsumo.js') }}"></script>
-
+{% endif %}
 {% endblock %}
