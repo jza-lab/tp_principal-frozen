@@ -26,14 +26,19 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('addItemBtn').addEventListener('click', function () {
         const row = document.createElement('div');
         row.className = 'row g-3 align-items-end item-row mb-2';
+
+        let optionsHtml = '<option value="">Seleccione un insumo...</option>';
+        if (typeof INSUMOS_DATA !== 'undefined' && Array.isArray(INSUMOS_DATA)) {
+            INSUMOS_DATA.forEach(insumo => {
+                optionsHtml += `<option value="${insumo.id}">${insumo.nombre}</option>`;
+            });
+        }
+
         row.innerHTML = `
             <div class="col-md-4">
                 <label class="form-label">Insumo</label>
                 <select class="form-select" name="insumo_id[]">
-                    <option value="">Seleccione un insumo...</option>
-                    {% for insumo in insumos %}
-                        <option value="{{ insumo.id }}">{{ insumo.nombre }}</option>
-                    {% endfor %}
+                    ${optionsHtml}
                 </select>
             </div>
             <div class="col-md-2">
