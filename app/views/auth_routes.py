@@ -17,21 +17,16 @@ def login():
         legajo = request.form['legajo']
         password = request.form['password']
         respuesta = usuario_controller.autenticar_usuario_V2(legajo, password)
-        usuario= respuesta.get('data')
+        usuario = respuesta.get('data')
 
         if respuesta.get('success') and usuario and usuario.get('activo'):
             session['usuario_id'] = usuario['id']
-            session['rol'] = usuario['rol']
-            session['usuario_nombre'] = f"{usuario['nombre']}"
-            session['user_data'] = usuario # Guardar para el registro de egreso
-
             flash(f"Bienvenido {usuario['nombre']}", 'success')
-            return redirect(url_for('admin_usuario.index'))
         else:
-            flash('Credenciales incorrectas o usuario inactivo.', 'error')
+            error_message = respuesta.get('error', 'Credenciales incorrectas o usuario inactivo.')
+            flash(error_message, 'error')
             return redirect(url_for('auth.login'))
 
-    # Para peticiones GET, simplemente renderizar la plantilla
     return render_template('usuarios/login.html')
 
 @auth_bp.route("/identificar_rostro", methods=["GET","POST"])

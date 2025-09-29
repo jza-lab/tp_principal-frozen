@@ -382,16 +382,31 @@ html, body {
 
 /* Responsive */
 @media (max-width: 768px) {
+    /* Allow scrolling on smaller screens if content overflows */
+    html, body {
+        overflow: auto;
+    }
+
     .totem-login-container {
         padding: 1rem;
+        /* Remove alignment to allow scrolling */
+        display: block;
+        min-height: auto;
+        height: auto;
     }
     
     .totem-login-card {
         max-width: 100%;
+        margin-top: 2rem;
+        margin-bottom: 2rem;
     }
     
     .totem-login-body {
         padding: 1.5rem;
+    }
+
+    .totem-login-header h2 {
+        font-size: 1.6rem;
     }
     
     .camera-frame {
@@ -413,21 +428,77 @@ html, body {
     
     .btn-totem {
         width: 100%;
-        max-width: 200px;
+        max-width: 220px;
+        font-size: 0.95rem;
+        padding: 0.7rem 1.2rem;
     }
+
 }
 
 @media (max-width: 480px) {
+    
+    .totem-login-container {
+        padding: 0.5rem;
+    }
+
+    .totem-login-card {
+        border-radius: 8px;
+        margin-top: 1rem;
+        margin-bottom: 1rem;
+    }
+
     .totem-login-header {
-        padding: 1.5rem;
+        padding: 1.5rem 1rem;
     }
     
     .totem-login-header h2 {
-        font-size: 1.5rem;
+        font-size: 1.4rem;
+    }
+
+    .totem-login-body {
+        padding: 1rem;
     }
     
     .camera-frame {
-        width: 240px;
-        height: 240px;
+        width: 220px;
+        height: 220px;
+    }
+
+    .face-guide {
+        width: 130px;
+        height: 160px;
+        margin-left: -65px;
+        margin-top: -80px;
+    }
+
+    .guidance-text {
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+
+    .form-floating > label {
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 360px) {
+    .camera-frame {
+        width: 180px;
+        height: 180px;
+    }
+
+    .face-guide {
+        width: 100px;
+        height: 120px;
+        margin-left: -50px;
+        margin-top: -60px;
+    }
+
+    .totem-login-header h2 {
+        font-size: 1.2rem;
+    }
+
+    .guidance-text, .alternative-login .btn-link {
+        font-size: 0.85rem;
     }
 }
