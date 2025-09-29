@@ -1,52 +1,23 @@
 {% extends "layouts/base.html" %}
 
-{% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header bg-success text-white">
-                <h4 class="mb-0">✅ Acceso Concedido - Tótem</h4>
-            </div>
-            <div class="card-body text-center">
-                <div class="alert alert-success">
-                    <h5>👋 Bienvenido/a {{ session.user_nombre }}</h5>
-                    <p class="mb-0">Entrada registrada: {{ now.strftime('%H:%M - %d/%m/%Y') }}</p>
-                </div>
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/totem.css') }}">
+{% endblock %}
 
-                <div class="row mt-4">
-                    <div class="col-md-6">
-                        <div class="card status-card">
-                            <div class="card-body">
-                                <h6>📊 Estado de Acceso</h6>
-                                <div class="mb-2">
-                                    <span class="badge bg-success">ENTRADA REGISTRADA</span>
-                                </div>
-                                <div class="mb-2">
-                                    <span class="badge bg-info">ACCESO WEB HABILITADO</span>
-                                </div>
-                                <small class="text-muted">{{ now.strftime('%H:%M - %d/%m/%Y') }}</small>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-body">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="mt-4">
-                    <button id="logoutBtn" class="btn btn-danger btn-lg">
-                        🚪 Registrar Salida
-                    </button>
-                    <!-- CORREGIDO: Usar facial.login_totem -->
-                    <a href="{{ url_for('facial.index') }}" class="btn btn-outline-secondary ms-2">
-                        Volver al Inicio
-                    </a>
-                </div>
+{% block content %}
+<div class="totem-login-container">
+    <div class="totem-login-card totem-confirmation-card">
+        <div class="totem-login-body text-center">
+            <div id="confirmation-icon" class="confirmation-icon mb-3">
             </div>
+            <h3 id="confirmation-message" class="mb-4">
+                Procesando...
+            </h3>
+            <p class="text-muted">Serás redirigido en unos segundos.</p>
+            <a href="{{ url_for('facial.index') }}" class="btn btn-primary btn-totem">
+                <i class="bi bi-house-door me-2"></i>
+                Volver al Inicio
+            </a>
         </div>
     </div>
 </div>
@@ -55,38 +26,29 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('logoutBtn').addEventListener('click', async function() {
-        if (confirm('¿Estás seguro de registrar tu salida? Esto deshabilitará el acceso web.')) {
-            // Mostrar loading
-            this.innerHTML = '⏳ Procesando...';
-            this.disabled = true;
-            
-            try {
-                // CORREGIDO: Usar /auth/facial/logout_face
-                const response = await fetch('/totem/logout_face', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    alert('✅ Salida registrada correctamente');
-                    window.location.href = '/totem/';
-                } else {
-                    alert('❌ Error: ' + result.message);
-                    // Restaurar botón
-                    this.innerHTML = '🚪 Registrar Salida';
-                    this.disabled = false;
-                }
-            } catch (error) {
-                alert('❌ Error de conexión: ' + error.message);
-                // Restaurar botón
-                this.innerHTML = '🚪 Registrar Salida';
-                this.disabled = false;
-            }
+    const message = sessionStorage.getItem('totemMessage');
+    const messageElement = document.getElementById('confirmation-message');
+    const iconElement = document.getElementById('confirmation-icon');
+
+    if (message) {
+        messageElement.textContent = message;
+        if (message.toLowerCase().includes('bienvenido')) {
+            iconElement.innerHTML = '<i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>';
+        } else if (message.toLowerCase().includes('hasta luego')) {
+            iconElement.innerHTML = '<i class="bi bi-box-arrow-right text-info" style="font-size: 4rem;"></i>';
+        } else {
+            iconElement.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 4rem;"></i>';
         }
-    });
+        
+        sessionStorage.removeItem('totemMessage');
+    } else {
+        messageElement.textContent = "No hay información de acceso.";
+        iconElement.innerHTML = '<i class="bi bi-question-circle-fill text-warning" style="font-size: 4rem;"></i>';
+    }
+
+    setTimeout(() => {
+        window.location.href = "{{ url_for('facial.index') }}";
+    }, 5000);
 });
 </script>
 {% endblock %}
