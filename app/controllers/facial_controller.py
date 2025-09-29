@@ -36,13 +36,17 @@ class FacialController:
     def identificar_rostro(self, image_data_url):
         """
         Intenta identificar un usuario a partir de una imagen facial.
-        Devuelve los datos del usuario si se encuentra una coincidencia.
+        Encuentra el rostro que mejor coincide (menor distancia) en lugar del primero.
+        Devuelve los datos del usuario si se encuentra una coincidencia clara.
         """
         frame = self._get_image_from_data_url(image_data_url)
         if frame is None:
             return {'success': False, 'message': 'Error al procesar la imagen.'}
 
-        face_encodings = face_recognition.face_encodings(frame)
+        # Asegurarse de que el frame es RGB para face_recognition
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        face_encodings = face_recognition.face_encodings(rgb_frame)
+
         if not face_encodings:
             return {'success': False, 'message': 'No se detectó rostro en la imagen'}
 
@@ -50,23 +54,44 @@ class FacialController:
 
         try:
             response = self.db.table("usuarios").select(
-                "id, email, nombre, facial_encoding, rol, activo"
+                "id, email, nombre, apellido, facial_encoding, rol, activo"
             ).not_.is_("facial_encoding", "null").eq("activo", True).execute()
             
             usuarios = response.data
+            if not usuarios:
+                return {'success': False, 'message': 'No hay usuarios con rostros registrados.'}
 
+            known_encodings = []
+            usuarios_con_encoding = []
+
+            # 2. Decodificar y recopilar los encodings válidos
             for usuario in usuarios:
                 if usuario.get('facial_encoding'):
                     try:
-                        known_encoding = np.array(json.loads(usuario['facial_encoding']))
-                        match = face_recognition.compare_faces([known_encoding], input_encoding, tolerance=0.6)
-                        if match[0]:
-                            return {'success': True, 'usuario': usuario}
-                    except (json.JSONDecodeError, TypeError) as e:
-                        logger.error(f"Error decodificando encoding: {e}")
+                        encoding = np.array(json.loads(usuario['facial_encoding']))
+                        known_encodings.append(encoding)
+                        usuarios_con_encoding.append(usuario)
+                    except (json.JSONDecodeError, TypeError):
+                        logger.warning(f"No se pudo decodificar el encoding para el usuario ID: {usuario.get('id')}")
                         continue
+            
+            if not known_encodings:
+                return {'success': False, 'message': 'No se encontraron codificaciones faciales válidas.'}
 
-            return {'success': False, 'message': 'Rostro no reconocido.'}
+            face_distances = face_recognition.face_distance(known_encodings, input_encoding)
+
+            best_match_index = np.argmin(face_distances)
+            min_distance = face_distances[best_match_index]
+
+            logger.info(f"Distancia mínima encontrada: {min_distance} para el usuario: {usuarios_con_encoding[best_match_index].get('email')}")
+
+            TOLERANCE = 0.6
+            if min_distance <= TOLERANCE:
+                best_match_user = usuarios_con_encoding[best_match_index]
+                return {'success': True, 'usuario': best_match_user}
+            else:
+                return {'success': False, 'message': 'Rostro no reconocido.'}
+
         except Exception as e:
             logger.error(f"Error en la base de datos durante la identificación facial: {e}")
             return {'success': False, 'message': 'Error del servidor.'}
