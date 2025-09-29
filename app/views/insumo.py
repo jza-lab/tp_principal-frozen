@@ -1,4 +1,4 @@
-from flask import Blueprint, redirect, render_template, request, jsonify, session, url_for
+from flask import Blueprint, redirect, render_template, request, jsonify, session, url_for, flash
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.proveedor_controller import ProveedorController
@@ -320,23 +320,24 @@ def actualizar_lote_api(id_insumo, id_lote):
 @insumos_bp.route('/catalogo/lote/eliminar/<string:id_insumo>/<string:id_lote>', methods=['POST'])
 def eliminar_lote(id_insumo, id_lote):
     try:
-        if not validate_uuid(id_lote):
-            return jsonify({'success': False, 'error': 'ID de lote inválido'}), 400
+        if not validate_uuid(id_lote) or not validate_uuid(id_insumo):
+            flash('ID de lote o insumo inválido.', 'error')
+            return redirect(url_for('insumos_api.obtener_insumos'))
 
         response, status = inventario_controller.eliminar_lote(id_lote)
         
-        # Se elimina la redirección forzada. Ahora el endpoint devuelve una respuesta JSON (éxito o error).
-        # El frontend (JavaScript) debe manejar esta respuesta para cerrar el modal y redirigir/actualizar la página.
-        return jsonify(response), status
+        if status == 200:
+            flash('Lote eliminado correctamente.', 'success')
+        else:
+            error_message = response.get('error', 'Ocurrió un error al eliminar el lote.')
+            flash(error_message, 'error')
+
+        return redirect(url_for('insumos_api.obtener_insumo_por_id', id_insumo=id_insumo))
 
     except Exception as e:
         logger.error(f"Error inesperado en eliminar_lote: {e}")
-        # Retorna un error JSON en caso de fallo
-        return jsonify({
-            'success': False, 
-            'error': 'Error interno del servidor',
-            'details': str(e)
-        }), 500
+        flash('Error interno del servidor al intentar eliminar el lote.', 'error')
+        return redirect(url_for('insumos_api.obtener_insumo_por_id', id_insumo=id_insumo))
 
 
 @insumos_bp.route('/stock', methods=['GET'])

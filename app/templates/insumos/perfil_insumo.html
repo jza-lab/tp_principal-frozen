@@ -22,22 +22,59 @@
                 <h1 class="h2">{{ insumo.nombre }}</h1>
                 <h2 class="h3 subtitulo">{{ insumo.codigo_interno }} - {{ insumo.categoria }}</h2>
                 <div class="col-12">
-                    <div class=" subtitulo form-control-plaintext" name="descripcion" id="descripcion">
-                        {{ insumo.descripcion if insumo else 'No hay descripcion disponible' }}
-                    </div>
+                    <p class="text-muted">{{ insumo.descripcion or 'No hay descripción disponible.' }}</p>
                 </div>
 
-                {{ insumo.unidad_medida }}
-                {{ insumo.temp_recomendada }}
-                {{ insumo.stock_min }}
-                {{ insumo.stock_max }}
-                {{ insumo.vida_util_dias }}
-                {{ insumo.es_critico }}
-                {{ insumo.requiere_certificacion }}
-                {{ insumo.created_at }}
-                {{ insumo.updated_at }}
-                {{ insumo.activo }}
+                <hr>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label-sm">Unidad de Medida</label>
+                        <p class="form-control-plaintext">{{ insumo.unidad_medida }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-sm">Temperatura Recomendada</label>
+                        <p class="form-control-plaintext">{{ insumo.tem_recomendada or 'N/A' }} °C</p>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-sm">Vida Útil</label>
+                        <p class="form-control-plaintext">{{ insumo.vida_util_dias or 'N/A' }} días</p>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-sm">Stock Mínimo</label>
+                        <p class="form-control-plaintext">{{ insumo.stock_min }} {{ insumo.unidad_medida }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-sm">Stock Máximo</label>
+                        <p class="form-control-plaintext">{{ insumo.stock_max or 'N/A' }} {{ insumo.unidad_medida }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-sm">¿Es Crítico?</label>
+                        <p class="form-control-plaintext">
+                            <span class="badge bg-{{ 'danger' if insumo.es_critico else 'secondary' }}">
+                                {{ 'Sí' if insumo.es_critico else 'No' }}
+                            </span>
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-sm">¿Requiere Certificación?</label>
+                        <p class="form-control-plaintext">
+                            <span class="badge bg-{{ 'info' if insumo.requiere_certificacion else 'secondary' }}">
+                                {{ 'Sí' if insumo.requiere_certificacion else 'No' }}
+                            </span>
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-sm">Fecha de Creación</label>
+                        <p class="form-control-plaintext">{{ insumo.created_at.split('T')[0] if insumo.created_at else 'N/A' }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label-sm">Última Actualización</label>
+                        <p class="form-control-plaintext">{{ insumo.updated_at.split('T')[0] if insumo.updated_at else 'N/A' }}</p>
+                    </div>
+                </div>
                 {% endif %}
+            </div>
             <div class="card mt-4">
                 <div class="card-header">
                     <h5 class="mb-0">Lotes de Inventario</h5>
@@ -74,8 +111,11 @@
                                             class="btn btn-sm btn-outline-primary">
                                             <i class="bi bi-pencil-square"></i> Editar
                                         </a>
-                                        <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
-                                            data-bs-target="#confirmDeleteModal-{{ lote.id_lote }}">
+                                        <button class="btn btn-sm btn-outline-danger" 
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#confirmationModal"
+                                                data-url="{{ url_for('insumos_api.eliminar_lote', id_insumo=insumo.id_insumo, id_lote=lote.id_lote) }}"
+                                                data-message="¿Estás seguro de que deseas eliminar el lote <strong>{{ lote.numero_lote_proveedor or 'N/A' }}</strong>? Esta acción no se puede deshacer.">
                                             <i class="bi bi-trash"></i> Eliminar
                                         </button>
                                     </td>
@@ -91,32 +131,6 @@
                     {% endif %}
                 </div>
             </div>
-
-            <!-- Modal de Confirmación de Eliminación -->
-            {% for lote in lotes %}
-            <div class="modal fade" id="confirmDeleteModal-{{ lote.id_lote }}" tabindex="-1"
-                aria-labelledby="confirmDeleteModalLabel-{{ lote.id_lote }}" aria-hidden="true">
-                <div class="modal-dialog">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="confirmDeleteModalLabel-{{ lote.id_lote }}">Confirmar Eliminación</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            ¿Estás seguro de que deseas eliminar el lote {{ lote.numero_lote_proveedor or 'N/A' }}? Esta acción no se puede deshacer.
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <form action="{{ url_for('insumos_api.eliminar_lote', id_insumo=insumo.id_insumo, id_lote=lote.id_lote) }}" method="POST" style="display: inline;">
-                                <button type="submit" class="btn btn-danger">Eliminar</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-            
-        </div>
         </div>
 
     </div>

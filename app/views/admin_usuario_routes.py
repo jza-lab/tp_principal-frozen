@@ -23,6 +23,16 @@ def listar_usuarios():
     usuarios = usuario_controller.obtener_todos_los_usuarios()
     return render_template('usuarios/listar.html', usuarios=usuarios)
 
+@admin_usuario_bp.route('/usuarios/<int:id>')
+@roles_required('ADMIN')
+def ver_perfil(id):
+    """Muestra el perfil de un usuario específico."""
+    usuario = usuario_controller.obtener_usuario_por_id(id)
+    if not usuario:
+        flash('Usuario no encontrado.', 'error')
+        return redirect(url_for('admin_usuario.listar_usuarios'))
+    return render_template('usuarios/perfil.html', usuario=usuario)
+
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
 @roles_required('ADMIN')
 def nuevo_usuario():
@@ -50,8 +60,13 @@ def nuevo_usuario():
 
             return redirect(url_for('admin_usuario.listar_usuarios'))
         else:
-            # Si la creación del usuario falla, mostrar el error
-            flash(f"Error al crear el usuario: {resultado.get('error')}", 'error')
+            # Si la creación del usuario falla, mostrar un error específico
+            error_msg = resultado.get('error', 'Ocurrió un error desconocido.')
+            if 'legajo' in error_msg and 'duplicate key' in error_msg:
+                flash('El legajo ingresado ya está en uso. Por favor, verifique los datos.', 'error')
+            else:
+                flash(f"Error al crear el usuario: {error_msg}", 'error')
+            
             return render_template('usuarios/formulario.html', usuario=datos_usuario, is_new=True)
             
     return render_template('usuarios/formulario.html', usuario={}, is_new=True)
