@@ -143,7 +143,7 @@ def detalle(id):
         return redirect(url_for('orden_produccion.listar'))
     
     orden = respuesta.get('data')
-    etapas = None 
+    etapas = None
 
     # Obtener desglose de origen de los pedidos
     desglose_origen = []

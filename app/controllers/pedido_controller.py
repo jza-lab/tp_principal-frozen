@@ -17,6 +17,38 @@ class PedidoController(BaseController):
         # Necesitamos el modelo de producto para obtener la lista de productos para el formulario.
         self.producto_model = ProductoModel()
 
+    def _consolidar_items(self, items_data: list) -> list:
+        """
+        Consolida una lista de items de pedido, sumando las cantidades de productos duplicados.
+        """
+        if not items_data:
+            return []
+
+        consolidados = {}
+        for item in items_data:
+            producto_id = item.get('producto_id')
+            if not producto_id:
+                continue
+            
+            try:
+                # Las cantidades del formulario vienen como strings.
+                cantidad = int(item.get('cantidad', 0))
+            except (ValueError, TypeError):
+                continue # Ignorar si la cantidad no es un número válido.
+            
+            if cantidad <= 0:
+                continue # Ignorar items sin cantidad.
+
+            if producto_id in consolidados:
+                consolidados[producto_id]['cantidad'] += cantidad
+            else:
+                consolidados[producto_id] = {
+                    'producto_id': producto_id,
+                    'cantidad': cantidad
+                }
+        
+        return list(consolidados.values())
+
     def obtener_pedidos(self, filtros: Optional[Dict] = None) -> tuple:
         """
         Obtiene una lista de pedidos, aplicando filtros.
@@ -53,8 +85,11 @@ class PedidoController(BaseController):
         try:
             if 'items-TOTAL_FORMS' in form_data:
                 form_data.pop('items-TOTAL_FORMS')
-        
-            validated_data = self.schema.load(form_data)
+
+            if 'items' in form_data:
+                form_data['items'] = self._consolidar_items(form_data['items'])
+
+            validated_data = self.schema.load(form_data)         
             items_data = validated_data.pop('items')
             pedido_data = validated_data
             
@@ -81,10 +116,11 @@ class PedidoController(BaseController):
         """
         Valida y actualiza un pedido existente y sus items.
         """
-        try:
+        try:            
             if 'items-TOTAL_FORMS' in form_data:
                 form_data.pop('items-TOTAL_FORMS')
-            
+            if 'items' in form_data:
+                form_data['items'] = self._consolidar_items(form_data['items'])
             validated_data = self.schema.load(form_data)
             items_data = validated_data.pop('items')
             pedido_data = validated_data
