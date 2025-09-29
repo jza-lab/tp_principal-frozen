@@ -1,20 +1,25 @@
 {% extends 'layouts/base.html' %}
 
-{% block title %}Registrar Lote - {{ insumo.nombre }}{% endblock %}
+{% set is_edit = lote and lote.id_lote %}
+{% set form_title = 'Editar Lote' if is_edit else 'Registrar Nuevo Lote' %}
 
-{% block page_title %}Registrar Nuevo Lote{% endblock %}
+{% block title %}{{ form_title }} - {{ insumo.nombre }}{% endblock %}
+
+{% block page_title %}{{ form_title }}{% endblock %}
 {% block page_subtitle %}
-<strong>{{ insumo.nombre }}</strong>
+<strong>Insumo:</strong> {{ insumo.nombre }}
 <span class="text-muted">({{ insumo.codigo_interno }})</span>
+{% if is_edit and lote %}
+<br><small class="text-muted">Lote: {{ lote.numero_lote_proveedor }}</small>
+{% endif %}
 {% endblock %}
 {% block page_actions %}
-<a href="{{ url_for('insumos_api.obtener_insumos') }}" class="btn btn-outline-secondary">
-    <i class="bi bi-arrow-left me-1"></i>Volver a la lista
+<a href="{{ url_for('insumos_api.obtener_insumo_por_id', id_insumo=insumo.id_insumo) }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Volver al Insumo
 </a>
 {% endblock %}
 
 {% block content %}
-
 <div class="row">
     <div class="col-lg-8">
         <div class="card">
@@ -22,80 +27,109 @@
                 <h5 class="mb-0">Información del Lote</h5>
             </div>
             <div class="card-body">
-                 <form id="form-registrar-lote" method="post" data-action="{{ url_for('insumos_api.crear_lote', id_insumo=insumo.id_insumo) }}" data-redirect-url="{{ url_for('insumos_api.obtener_insumos') }}">
+                <form id="form-lote" method="post"
+                      data-is-edit="{{ 'true' if is_edit else 'false' }}"
+                      data-create-url="{{ url_for('insumos_api.crear_lote', id_insumo=insumo.id_insumo) }}"
+                      data-edit-url="{{ url_for('insumos_api.actualizar_lote_api', id_insumo=insumo.id_insumo, id_lote=lote.id_lote) if is_edit }}"
+                      data-redirect-url="{{ url_for('insumos_api.obtener_insumo_por_id', id_insumo=insumo.id_insumo) }}">
+
                     <input type="hidden" id="id_insumo" name="id_insumo" value="{{ insumo.id_insumo }}">
+                    {% if is_edit %}
+                    <input type="hidden" id="id_lote" name="id_lote" value="{{ lote.id_lote }}">
+                    {% endif %}
+
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label for="proveedor_id" class="form-label">Proveedor <span
-                                    class="text-danger">*</span></label>
-                            <select class="form-select" id="proveedor_id" name="proveedor_id" required>
+                            <label for="proveedor_id" class="form-label">Proveedor <span class="text-danger">*</span></label>
+                            <select class="form-select" id="proveedor_id" name="proveedor_id" required {{ 'disabled' if is_edit }}>
                                 <option value="">Seleccionar proveedor...</option>
                                 {% for p in proveedores %}
-                                <option value="{{ p.id_proveedor }}">{{ p.nombre }}
+                                <option value="{{ p.id_proveedor }}" {{ 'selected' if is_edit and lote.id_proveedor == p.id_proveedor }}>
+                                    {{ p.nombre }}
+                                </option>
                                 {% endfor %}
                             </select>
                         </div>
-
+                        
                         <div class="col-md-6">
-                            <label for="cantidad" class="form-label">Cantidad <span class="text-danger">*</span></label>
+                            <label for="fecha_ingreso" class="form-label">Fecha de Ingreso <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="fecha_ingreso" name="fecha_ingreso"
+                                   value="{{ lote.f_ingreso if is_edit else today }}" required {{ 'readonly' if is_edit }}>
+                        </div>
+
+                        {% if is_edit %}
+                        <div class="col-md-6">
+                            <label for="cantidad_inicial" class="form-label">Cantidad Inicial</label>
                             <div class="input-group">
-                                <input type="number" step="0.01" class="form-control" id="cantidad" name="cantidad"
-                                    required>
+                                <input type="number" class="form-control" id="cantidad_inicial" name="cantidad_inicial"
+                                       value="{{ lote.get('cantidad_inicial', '') }}" readonly>
                                 <span class="input-group-text">{{ insumo.unidad_medida }}</span>
                             </div>
                         </div>
-
                         <div class="col-md-6">
-                            <label for="fecha_ingreso" class="form-label">Fecha de Ingreso <span
-                                    class="text-danger">*</span></label>
-                            <input type="date" class="form-control" id="fecha_ingreso" name="fecha_ingreso"
-                                value="{{ today }}" required>
+                            <label for="cantidad_actual" class="form-label">Cantidad Actual <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="number" step="0.01" class="form-control" id="cantidad_actual" name="cantidad_actual"
+                                       value="{{ lote.get('cantidad_actual', '') }}" required>
+                                <span class="input-group-text">{{ insumo.unidad_medida }}</span>
+                            </div>
                         </div>
+                        {% else %}
+                        <div class="col-md-6">
+                            <label for="cantidad_inicial" class="form-label">Cantidad Inicial <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <input type="number" step="0.01" class="form-control" id="cantidad_inicial" name="cantidad_inicial" required>
+                                <span class="input-group-text">{{ insumo.unidad_medida }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
 
                         <div class="col-md-6">
-                            <label for="fecha_vencimiento" class="form-label">Fecha de Vencimiento <span
-                                    class="text-danger">*</span></label>
+                            <label for="fecha_vencimiento" class="form-label">Fecha de Vencimiento <span class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_vencimiento" name="fecha_vencimiento"
-                                required>
+                                   value="{{ lote.f_vencimiento if is_edit else '' }}" required>
                         </div>
-
+                        
                         <div class="col-12">
                             <hr class="my-4">
                             <h6 class="mb-3">Información Adicional (Opcional)</h6>
                         </div>
 
-                        <select class="form-select" id="numero_factura" name="numero_factura">
-                            <option value="">Seleccionar Orden de Compra...</option>
-                            {% for item in ordenes %}
-                            <option value="{{ item.codigo_oc }}" data-precio="{{ item.precio_unitario }}"> {{
-                                item.codigo_oc}} - {{item.precio_unitario }} </option>
-                            {% endfor %}
-                        </select>
+                        <div class="col-md-6">
+                            <label for="documento_ingreso" class="form-label">Orden de Compra</label>
+                            <select class="form-select" id="documento_ingreso" name="documento_ingreso" {{ 'disabled' if is_edit }}>
+                                <option value="">Seleccionar Orden de Compra...</option>
+                                {% for item in ordenes %}
+                                <option value="{{ item.codigo_oc }}" data-precio="{{ item.precio_unitario }}"
+                                        {{ 'selected' if is_edit and lote.documento_ingreso == item.codigo_oc }}>
+                                    {{ item.codigo_oc }} - {{ item.precio_unitario }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
 
                         <div class="col-md-6">
                             <label for="precio_unitario" class="form-label">Precio Unitario</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
-                                <input type="number" step="0.01" class="form-control" id="precio_unitario"
-                                    name="precio_unitario">
+                                <input type="number" step="0.01" class="form-control" id="precio_unitario" name="precio_unitario"
+                                       value="{{ lote.get('precio_unitario', '') }}">
                             </div>
                         </div>
 
-                        <div class="col-md-6">
-                            <label for="temperatura_almacenamiento" class="form-label">Temperatura de Almacenamiento
-                                (°C)</label>
-                            <input type="number" step="0.1" class="form-control" id="temperatura_almacenamiento"
-                                name="temperatura_almacenamiento">
+                        <div class="col-12">
+                            <label for="observaciones" class="form-label">Observaciones</label>
+                            <textarea class="form-control" id="observaciones" name="observaciones" rows="3">{{ lote.get('observaciones', '') }}</textarea>
                         </div>
                     </div>
 
                     <div class="d-flex justify-content-end gap-2 mt-4">
-                        <a href="{{ url_for('insumos_api.obtener_insumos') }}" class="btn btn-outline-secondary">
+                        <a href="{{ url_for('insumos_api.obtener_insumo_por_id', id_insumo=insumo.id_insumo) }}" class="btn btn-outline-secondary">
                             Cancelar
                         </a>
-                        <button type="submit" class="btn btn-primary" id="crear_lote">
+                        <button type="submit" class="btn btn-primary" id="submit-lote">
                             <i class="bi bi-check-circle me-1"></i>
-                            Registrar Lote
+                            {% if is_edit %}Guardar Cambios{% else %}Registrar Lote{% endif %}
                         </button>
                     </div>
                 </form>

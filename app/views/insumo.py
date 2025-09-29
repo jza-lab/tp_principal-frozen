@@ -125,7 +125,7 @@ def actualizar_insumo(id_insumo):
             if(datos_json is None):
                 logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
                 return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos (verifique Content-Type)'}), 400
-        
+            
             response, status = insumo_controller.actualizar_insumo(id_insumo, datos_json)
             return jsonify(response), status
 
@@ -199,17 +199,27 @@ def habilitar_insumo(id_insumo):
 
 @insumos_bp.route('/catalogo/lote/nuevo/<string:id_insumo>', methods = ['GET', 'POST'])
 def agregar_lote(id_insumo):
-        proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
-        proveedores = proveedores_resp.get('data', []) if proveedores_resp.get('success') else []
-        
-        response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
-        insumo = response['data']
-        
-        ordenes_compra_resp, _ = ordenes_compra_controller.obtener_codigos_por_insumo(id_insumo)
-        ordenes_compra_data = ordenes_compra_resp.get('data', []) if ordenes_compra_resp.get('success') else []
+    proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
+    proveedores = proveedores_resp.get('data', []) if proveedores_resp.get('success') else []
+    
+    response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
+    insumo = response['data']
+    
+    ordenes_compra_resp, _ = ordenes_compra_controller.obtener_codigos_por_insumo(id_insumo)
+    ordenes_compra_data = ordenes_compra_resp.get('data', []) if ordenes_compra_resp.get('success') else []
 
-        # Se pasa is_edit=False para registrar un nuevo lote
-        return render_template('insumos/registrar_lote.html', insumo=insumo, proveedores=proveedores, ordenes=ordenes_compra_data, is_edit=False)
+    # FIX: Definir 'today' y pasar 'lote={}' para evitar UndefinedError en el template
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    return render_template(
+        'insumos/registrar_lote.html', 
+        insumo=insumo, 
+        proveedores=proveedores, 
+        ordenes=ordenes_compra_data, 
+        is_edit=False,
+        lote={}, # <-- Solución: Pasamos un diccionario vacío
+        today=today # <-- Solución: Pasamos la fecha de hoy
+    )
 
 @insumos_bp.route('/catalogo/lote/nuevo/<string:id_insumo>/crear', methods = ['GET','POST'])
 def crear_lote(id_insumo):
@@ -237,94 +247,75 @@ def crear_lote(id_insumo):
             'error': 'Error interno del servidor'
         }), 500
 
-@insumos_bp.route('/catalogo/lote/editar/<string:id_insumo>/<string:id_lote>', methods=['GET', 'POST'])
+@insumos_bp.route('/catalogo/lote/editar/<string:id_insumo>/<string:id_lote>', methods=['GET'])
 def editar_lote(id_insumo, id_lote):
-    # Función de ayuda para parsear cadenas ISO a objetos date
+    """Renderiza el formulario para editar un lote existente."""
     def parse_date_for_template(date_str):
-        if not date_str:
-            return None
+        if not date_str: return None
         try:
-            # Las fechas de Supabase pueden venir con milisegundos y Z.
-            # Convertimos a objeto datetime y extraemos solo la fecha.
             return datetime.fromisoformat(date_str.replace('Z', '+00:00')).date()
-        except Exception as e:
-            logger.warning(f"Error al parsear fecha '{date_str}': {e}")
-            return date_str # Devuelve la cadena original si falla el parseo
+        except Exception:
+            return date_str
 
     try:
         if not validate_uuid(id_insumo) or not validate_uuid(id_lote):
-            return jsonify({'success': False, 'error': 'IDs de insumo o lote inválidos'}), 400
+            return "ID de insumo o lote inválido", 400
 
-        # Obtener datos de proveedores y órdenes de compra, necesarios para el formulario
+        # Obtener datos para el formulario
         proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
-        proveedores = proveedores_resp.get('data', []) if proveedores_resp.get('success') else []
+        proveedores = proveedores_resp.get('data', [])
         ordenes_compra_resp, _ = ordenes_compra_controller.obtener_codigos_por_insumo(id_insumo)
-        ordenes_compra_data = ordenes_compra_resp.get('data', []) if ordenes_compra_resp.get('success') else []
+        ordenes_compra_data = ordenes_compra_resp.get('data', [])
 
-        # --- LÓGICA POST ---
-        if request.method == 'POST':
-            datos_formulario = request.form.to_dict()
-            response, status = inventario_controller.actualizar_lote(id_lote, datos_formulario)
-            
-            if status == 200:
-                return redirect(url_for('insumos_api.obtener_insumo_por_id', id_insumo=id_insumo))
-            
-            # Si hay un error, lo registramos para debugging
-            logger.error(f"Fallo al actualizar lote {id_lote} (Status: {status}). Respuesta: {response}")
-            
-            # Si hay un error al actualizar, recargamos los datos para renderizar el formulario
-            insumo_resp, _ = insumo_controller.obtener_insumo_por_id(id_insumo)
-            lote_resp, _ = inventario_controller.obtener_lote_por_id(id_lote)
+        # Obtener datos del insumo y del lote
+        insumo_resp, insumo_status = insumo_controller.obtener_insumo_por_id(id_insumo)
+        lote_resp, lote_status = inventario_controller.obtener_lote_por_id(id_lote)
 
-            insumo_data = insumo_resp.get('data')
-            lote_data = lote_resp.get('data')
-
-            if not insumo_resp.get('success') or not lote_resp.get('success') or not insumo_data or not lote_data:
-                logger.error(f"Fallo al re-obtener datos para renderizar formulario de edición (POST error) para insumo={id_insumo}, lote={id_lote}.")
-                return "Insumo o lote no encontrado (Error POST)", 404
-            
-            # Conversión de fechas para evitar error strftime en caso de re-renderizado por error
-            if lote_data:
-                lote_data['f_ingreso'] = parse_date_for_template(lote_data.get('f_ingreso'))
-                lote_data['f_vencimiento'] = parse_date_for_template(lote_data.get('f_vencimiento'))
-
-            # Se pasa is_edit=True y los posibles errores para mostrar en el formulario
-            return render_template('insumos/registrar_lote.html', 
-                                   insumo=insumo_data, 
-                                   lote=lote_data, 
-                                   proveedores=proveedores, 
-                                   ordenes=ordenes_compra_data, 
-                                   errors=response.get('error'),
-                                   is_edit=True) # <--- Variable is_edit añadida aquí
-
-        # --- LÓGICA GET ---
-        # Método GET: obtenemos los datos para rellenar el formulario
-        insumo_resp, _ = insumo_controller.obtener_insumo_por_id(id_insumo)
-        lote_resp, _ = inventario_controller.obtener_lote_por_id(id_lote)
+        if insumo_status != 200 or lote_status != 200:
+            logger.error(f"Datos no encontrados para insumo ({id_insumo}) o lote ({id_lote}).")
+            return "Insumo o lote no encontrado", 404
 
         insumo_data = insumo_resp.get('data')
         lote_data = lote_resp.get('data')
-        
-        if not insumo_resp.get('success') or not lote_resp.get('success') or not insumo_data or not lote_data:
-             logger.error(f"Datos no encontrados para insumo ({id_insumo}) o lote ({id_lote}).")
-             return "Insumo o lote no encontrado", 404
 
-        # Conversión de fechas para evitar error strftime
+        # Formatear fechas para el template
         if lote_data:
             lote_data['f_ingreso'] = parse_date_for_template(lote_data.get('f_ingreso'))
             lote_data['f_vencimiento'] = parse_date_for_template(lote_data.get('f_vencimiento'))
-        
-        # Se pasa is_edit=True para renderizar el formulario en modo edición
-        return render_template('insumos/registrar_lote.html', 
-                               insumo=insumo_data, 
-                               lote=lote_data,
-                               proveedores=proveedores, 
-                               ordenes=ordenes_compra_data,
-                               is_edit=True) # <--- Variable is_edit añadida aquí
+
+        return render_template(
+            'insumos/registrar_lote.html',
+            insumo=insumo_data,
+            lote=lote_data,
+            proveedores=proveedores,
+            ordenes=ordenes_compra_data,
+            is_edit=True
+        )
 
     except Exception as e:
-        logger.exception(f"Error CRÍTICO en editar_lote para insumo={id_insumo}, lote={id_lote}.")
+        logger.exception(f"Error CRÍTICO en editar_lote (GET) para insumo={id_insumo}, lote={id_lote}.")
         return "Error interno del servidor", 500
+
+
+@insumos_bp.route('/catalogo/lote/editar/<string:id_insumo>/<string:id_lote>', methods=['PUT'])
+def actualizar_lote_api(id_insumo, id_lote):
+    """API endpoint para actualizar un lote."""
+    try:
+        if not validate_uuid(id_lote):
+            return jsonify({'success': False, 'error': 'ID de lote inválido'}), 400
+        
+        datos_json = request.get_json()
+        if not datos_json:
+            return jsonify({'success': False, 'error': 'Cuerpo JSON requerido'}), 400
+
+        response, status = inventario_controller.actualizar_lote_parcial(id_lote, datos_json)
+        return jsonify(response), status
+
+    except ValidationError as e:
+        return jsonify({'success': False, 'error': 'Datos inválidos', 'details': e.messages}), 400
+    except Exception as e:
+        logger.error(f"Error inesperado en actualizar_lote_api: {e}")
+        return jsonify({'success': False, 'error': 'Error interno del servidor'}), 500
 
 @insumos_bp.route('/catalogo/lote/eliminar/<string:id_insumo>/<string:id_lote>', methods=['POST'])
 def eliminar_lote(id_insumo, id_lote):
@@ -334,13 +325,18 @@ def eliminar_lote(id_insumo, id_lote):
 
         response, status = inventario_controller.eliminar_lote(id_lote)
         
-        # Redirigir siempre a la página del insumo
-        return redirect(url_for('insumos_api.obtener_insumo_por_id', id_insumo=id_insumo))
+        # Se elimina la redirección forzada. Ahora el endpoint devuelve una respuesta JSON (éxito o error).
+        # El frontend (JavaScript) debe manejar esta respuesta para cerrar el modal y redirigir/actualizar la página.
+        return jsonify(response), status
 
     except Exception as e:
         logger.error(f"Error inesperado en eliminar_lote: {e}")
-        # Considerar mostrar un mensaje de error en la página del insumo
-        return redirect(url_for('insumos_api.obtener_insumo_por_id', id_insumo=id_insumo))
+        # Retorna un error JSON en caso de fallo
+        return jsonify({
+            'success': False, 
+            'error': 'Error interno del servidor',
+            'details': str(e)
+        }), 500
 
 
 @insumos_bp.route('/stock', methods=['GET'])

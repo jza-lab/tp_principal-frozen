@@ -141,6 +141,24 @@ class InventarioController(BaseController):
             logger.error(f"Error obteniendo lotes: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
+    def obtener_lote_por_id(self, id_lote: str) -> tuple:
+        """Obtener un lote específico por su ID."""
+        try:
+            result = self.inventario_model.find_by_id(id_lote, 'id_lote')
+
+            if result['success']:
+                if result['data']:
+                    serialized_data = self._serialize_data(result['data'])
+                    return self.success_response(data=serialized_data)
+                else:
+                    return self.error_response('Lote no encontrado', 404)
+            else:
+                return self.error_response(result['error'])
+
+        except Exception as e:
+            logger.error(f"Error obteniendo lote por ID: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
     def actualizar_lote_parcial(self, id_lote: str, data: Dict) -> tuple:
         """Actualizar campos específicos de un lote (PATCH)"""
         try:
@@ -272,4 +290,5 @@ class InventarioController(BaseController):
 
         except Exception as e:
             logger.error(f"Error eliminando lote: {str(e)}")
+            
             return self.error_response(f'Error interno: {str(e)}', 500)
