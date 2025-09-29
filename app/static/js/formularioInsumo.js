@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     formulario.addEventListener('submit', function (event) {
         event.preventDefault();
-        console.log(isEditBoolean)
+
         let url;
         let method;
 

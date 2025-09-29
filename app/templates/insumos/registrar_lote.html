@@ -22,7 +22,8 @@
                 <h5 class="mb-0">Información del Lote</h5>
             </div>
             <div class="card-body">
-                <form method="post">
+                 <form id="form-registrar-lote" method="post" data-action="{{ url_for('insumos_api.crear_lote', id_insumo=insumo.id_insumo) }}" data-redirect-url="{{ url_for('insumos_api.obtener_insumos') }}">
+                    <input type="hidden" id="id_insumo" name="id_insumo" value="{{ insumo.id_insumo }}">
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label for="proveedor_id" class="form-label">Proveedor <span
@@ -30,7 +31,7 @@
                             <select class="form-select" id="proveedor_id" name="proveedor_id" required>
                                 <option value="">Seleccionar proveedor...</option>
                                 {% for p in proveedores %}
-                                <option value="{{ p.id }}">{{ p.nombre }}</option>
+                                <option value="{{ p.id_proveedor }}">{{ p.nombre }}
                                 {% endfor %}
                             </select>
                         </div>
@@ -63,7 +64,7 @@
                             <h6 class="mb-3">Información Adicional (Opcional)</h6>
                         </div>
 
-                        <select class="form-select" id="numero_factura" name="numero_factura" required>
+                        <select class="form-select" id="numero_factura" name="numero_factura">
                             <option value="">Seleccionar Orden de Compra...</option>
                             {% for item in ordenes %}
                             <option value="{{ item.codigo_oc }}" data-precio="{{ item.precio_unitario }}"> {{
@@ -170,6 +171,7 @@
     });
 
 </script>
+<script src="{{ url_for('static', filename='js/formularioLote.js') }}" defer></script>
 {% endblock %}
 
 {% endblock %}
