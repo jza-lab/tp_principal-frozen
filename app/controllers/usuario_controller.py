@@ -103,6 +103,33 @@ class UsuarioController(BaseController):
             'message': 'Autenticación exitosa'
         }
 
+    def autenticar_usuario_facial_web(self, image_data_url: str) -> Dict:
+        """
+        Autentica a un usuario por rostro para el login web.
+        VERIFICA que tenga login activo en tótem.
+        """
+        from app.controllers.facial_controller import FacialController
+        facial_controller = FacialController()        
+        resultado_identificacion = facial_controller.identificar_rostro(image_data_url)
+        if not resultado_identificacion.get('success'):
+            return resultado_identificacion
+        
+        user_data = resultado_identificacion['usuario']
+        if not user_data.get('activo', True):
+            return {'success': False, 'error': 'Usuario desactivado'}
+        verificacion_totem = self._verificar_login_totem_activo(user_data)
+        if not verificacion_totem:
+            return {
+                'success': False,
+                'error': 'Debe registrar su entrada en el tótem primero para acceder por web'
+            }
+        self.model.update(user_data['id'], {'ultimo_login_web': datetime.now().isoformat()})
+        return {
+            'success': True,
+            'data': user_data,
+            'message': 'Autenticación exitosa'
+        }
+
     def _verificar_login_totem_activo(self, user_data: Dict) -> bool:
         """Verifica si el usuario tiene login activo en tómet para hoy"""
         login_totem_activo = user_data.get('login_totem_activo')

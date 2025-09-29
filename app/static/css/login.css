@@ -1,0 +1,351 @@
+/* Login Container */
+.login-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.login-card {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border: 1px solid #dee2e6;
+    overflow: hidden;
+    max-width: 500px;
+    width: 100%;
+    animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.login-header {
+    background-color: #343a40;
+    color: white;
+    padding: 2rem;
+    text-align: center;
+}
+
+.login-header h2 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.login-header p {
+    font-size: 0.95rem;
+    margin-bottom: 0;
+}
+
+.login-body {
+    padding: 2rem;
+}
+
+/* Sección de reconocimiento facial */
+.facial-recognition-section {
+    text-align: center;
+}
+
+.guidance-text {
+    font-size: 1rem;
+    color: #6c757d;
+    margin-bottom: 1.5rem;
+    line-height: 1.5;
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+/* Container de la cámara */
+.camera-container {
+    position: relative;
+    margin: 1.5rem 0;
+    display: flex;
+    justify-content: center;
+}
+
+.camera-frame {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 4px solid #dee2e6;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: border-color 0.3s ease;
+}
+
+.camera-frame:hover {
+    border-color: #343a40;
+}
+
+#video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background-color: #f8f9fa;
+}
+
+.camera-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+}
+
+.face-guide {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 200px;
+    height: 240px;
+    margin-left: -100px;
+    margin-top: -120px;
+    border: 2px dashed rgba(255, 255, 255, 0.7);
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 0.3; }
+}
+
+/* Área de resultados */
+.result-area {
+    margin: 1rem 0;
+    min-height: 60px;
+}
+
+/* Controles de cámara */
+.camera-controls {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 1.5rem;
+}
+
+.btn-login {
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.25s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-login:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-primary.btn-login {
+    background-color: #343a40;
+    border-color: #343a40;
+    color: white;
+}
+
+.btn-primary.btn-login:hover {
+    background-color: #495057;
+    border-color: #495057;
+}
+
+.btn-success.btn-login {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: white;
+}
+
+.btn-success.btn-login:hover {
+    background-color: #218838;
+    border-color: #218838;
+}
+
+.btn-outline-secondary.btn-login {
+    background-color: transparent;
+    color: #6c757d;
+    border: 1px solid #6c757d;
+}
+
+.btn-outline-secondary.btn-login:hover {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* Opción de login alternativo */
+.alternative-options {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #dee2e6;
+}
+
+.divider-text {
+    text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.divider-text span {
+    color: #6c757d;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.alternative-options .btn-login {
+    color: #6c757d;
+    text-decoration: none;
+    font-size: 0.875rem;
+    padding: 0.5rem;
+    transition: color 0.2s ease;
+}
+
+.alternative-login .btn-link:hover {
+    color: #343a40;
+}
+
+/* Sección de credenciales */
+#credenciales {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+#credenciales h5 {
+    color: #495057;
+    font-weight: 600;
+}
+
+/* Form styles - Consistente con el sistema */
+.form-floating {
+    margin-bottom: 1rem;
+}
+
+.form-control:focus {
+    border-color: #343a40;
+    box-shadow: 0 0 0 0.2rem rgba(52, 58, 64, 0.25);
+}
+
+.form-floating > label {
+    padding: 1rem 0.75rem;
+    color: #6c757d;
+}
+
+.form-floating > .form-control:focus ~ label,
+.form-floating > .form-control:not(:placeholder-shown) ~ label {
+    transform: scale(0.85) translateY(-0.5rem) translateX(0.15rem);
+    color: #343a40;
+}
+
+/* Alerts - Mismo estilo que el sistema */
+.alert {
+    border-radius: 6px;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 1rem;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-left: 4px solid #dc3545;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border-left: 4px solid #ffc107;
+}
+
+.alert-success {
+    background-color: #d1eddf;
+    color: #155724;
+    border-left: 4px solid #28a745;
+}
+
+.alert-info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border-left: 4px solid #17a2b8;
+}
+
+/* Estados de loading */
+.btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .login-container {
+        padding: 1rem;
+    }
+    
+    .login-card {
+        max-width: 100%;
+    }
+    
+    .login-body {
+        padding: 1.5rem;
+    }
+    
+    .camera-frame {
+        width: 280px;
+        height: 280px;
+    }
+    
+    .face-guide {
+        width: 160px;
+        height: 200px;
+        margin-left: -80px;
+        margin-top: -100px;
+    }
+    
+    .camera-controls {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .btn-login {
+        width: 100%;
+        max-width: 250px;
+    }
+}
+
+@media (max-width: 480px) {
+    .login-header {
+        padding: 1.5rem;
+    }
+    
+    .login-header h2 {
+        font-size: 1.5rem;
+    }
+    
+    .camera-frame {
+        width: 240px;
+        height: 240px;
+    }
+}
