@@ -54,7 +54,7 @@ class FacialController:
 
         try:
             response = self.db.table("usuarios").select(
-                "id, email, nombre, apellido, facial_encoding, rol, activo"
+                "id, email, nombre, apellido, facial_encoding, rol, activo, login_totem_activo"
             ).not_.is_("facial_encoding", "null").eq("activo", True).execute()
             
             usuarios = response.data
@@ -150,80 +150,103 @@ class FacialController:
             logger.error(f"❌ Error registrando acceso: {e}")
             return {'success': False, 'error': str(e)}
 
-    def procesar_login_facial_totem(self, image_data_url):
+    def procesar_acceso_unificado_totem(self, image_data_url):
         """
-        Procesa el login facial completo: identificación + registro de entrada + activación de flags
+        Procesa un acceso desde el tótem de forma unificada.
+        Detecta si es una entrada o una salida y actúa en consecuencia.
         """
         try:
-            # 1. Identificar rostro
+            # 1. Identificar al usuario
             resultado_identificacion = self.identificar_rostro(image_data_url)
-            
             if not resultado_identificacion.get('success'):
                 return resultado_identificacion
 
             usuario = resultado_identificacion['usuario']
             usuario_id = usuario['id']
-            usuario_email = usuario['email']
-            usuario_nombre = usuario.get('nombre', '')
+            usuario_nombre = usuario.get('nombre', 'Usuario')
+            login_activo = usuario.get('login_totem_activo', False)
 
-            # 2. Registrar entrada
-            resultado_registro = self.registrar_acceso(usuario_id, "ENTRADA", "FACIAL", "TOTEM")
-            if not resultado_registro.get('success'):
-                return resultado_registro
-
-            # 3. Activar flags de acceso web (usando UsuarioController)
             from app.controllers.usuario_controller import UsuarioController
             usuario_controller = UsuarioController()
-            resultado_activacion = usuario_controller.activar_login_totem(usuario_id)
 
-            if not resultado_activacion.get('success'):
-                logger.error(f"Error activando login tótem: {resultado_activacion.get('error')}")
-
-            return {
-                'success': True,
-                'message': '✅ Entrada registrada - Acceso web habilitado',
-                'usuario': {
-                    'id': usuario_id,
-                    'email': usuario_email,
-                    'nombre': usuario_nombre
+            # 2. Determinar si es ENTRADA o SALIDA
+            if not login_activo:
+                # --- Lógica de ENTRADA ---
+                logger.info(f"▶️  Procesando ENTRADA para {usuario_nombre}")
+                self.registrar_acceso(usuario_id, "ENTRADA", "FACIAL", "TOTEM")
+                usuario_controller.activar_login_totem(usuario_id)
+                
+                return {
+                    'success': True,
+                    'tipo_acceso': 'ENTRADA',
+                    'message': f"👋 ¡Bienvenido, {usuario_nombre}!",
+                    'usuario': usuario
                 }
-            }
+            else:
+                # --- Lógica de SALIDA ---
+                logger.info(f"◀️  Procesando SALIDA para {usuario_nombre}")
+                self.registrar_acceso(usuario_id, "SALIDA", "FACIAL", "TOTEM")
+                usuario_controller.desactivar_login_totem(usuario_id)
+
+                return {
+                    'success': True,
+                    'tipo_acceso': 'SALIDA',
+                    'message': f"👋 ¡Hasta luego, {usuario_nombre}!",
+                    'usuario': usuario
+                }
 
         except Exception as e:
-            logger.error(f"Error en procesar_login_facial: {str(e)}")
+            logger.error(f"Error en procesar_acceso_unificado_totem: {str(e)}")
             return {'success': False, 'message': f'Error en el servidor: {str(e)}'}
 
-    def procesar_logout_facial_totem(self, usuario_id):
+    def procesar_acceso_manual_totem(self, legajo, password):
         """
-        Procesa el logout facial completo: registro de salida + desactivación de flags
+        Procesa un acceso manual desde el tótem.
+        Autentica y luego detecta si es entrada o salida.
         """
         try:
-            logger.info(f"🚪 Procesando logout facial para usuario ID: {usuario_id}")
-
-            # 1. Registrar salida
-            resultado_registro = self.registrar_acceso(usuario_id, "SALIDA", "FACIAL", "TOTEM")
-            if not resultado_registro.get('success'):
-                logger.error(f"Error registrando salida: {resultado_registro.get('error')}")
-
-            # 2. Desactivar flags de acceso web
+            # 1. Autenticar al usuario
             from app.controllers.usuario_controller import UsuarioController
             usuario_controller = UsuarioController()
-            resultado_desactivacion = usuario_controller.desactivar_login_totem(usuario_id)
+            
+            usuario_autenticado = usuario_controller.autenticar_usuario(legajo, password)
 
-            if not resultado_desactivacion.get('success'):
-                logger.error(f"Error desactivando flags: {resultado_desactivacion.get('error')}")
+            if not usuario_autenticado:
+                return {'success': False, 'message': 'Credenciales inválidas.'}
+            
+            # Refrescar datos para obtener el estado más reciente
+            usuario = usuario_controller.obtener_usuario_por_id(usuario_autenticado['id'])
+            if not usuario:
+                 return {'success': False, 'message': 'No se pudo encontrar al usuario después de la autenticación.'}
 
-            # 3. Verificación final
-            try:
-                response = self.db.table("usuarios").select("login_totem_activo").eq("id", usuario_id).execute()
-                if response.data:
-                    estado_final = response.data[0].get('login_totem_activo')
-                    logger.info(f"📊 Estado final después del logout: login_totem_activo={estado_final}")
-            except Exception as e:
-                logger.error(f"Error en verificación final: {e}")
+            usuario_id = usuario['id']
+            usuario_nombre = usuario.get('nombre', 'Usuario')
+            login_activo = usuario.get('login_totem_activo', False)
+            
+            # 2. Determinar si es ENTRADA o SALIDA
+            if not login_activo:
+                logger.info(f"▶️  Procesando ENTRADA MANUAL para {usuario_nombre}")
+                self.registrar_acceso(usuario_id, "ENTRADA", "MANUAL", "TOTEM")
+                usuario_controller.activar_login_totem(usuario_id)
+                
+                return {
+                    'success': True,
+                    'tipo_acceso': 'ENTRADA',
+                    'message': f"👋 ¡Bienvenido, {usuario_nombre}!",
+                    'usuario': usuario
+                }
+            else:
+                logger.info(f"◀️  Procesando SALIDA MANUAL para {usuario_nombre}")
+                self.registrar_acceso(usuario_id, "SALIDA", "MANUAL", "TOTEM")
+                usuario_controller.desactivar_login_totem(usuario_id)
 
-            return {'success': True, 'message': '✅ Salida registrada correctamente'}
+                return {
+                    'success': True,
+                    'tipo_acceso': 'SALIDA',
+                    'message': f"👋 ¡Hasta luego, {usuario_nombre}!",
+                    'usuario': usuario
+                }
 
         except Exception as e:
-            logger.error(f"Error en procesar_logout_facial: {e}")
-            return {'success': False, 'message': 'Error al registrar salida'}
+            logger.error(f"Error en procesar_acceso_manual_totem: {str(e)}")
+            return {'success': False, 'message': f'Error en el servidor: {str(e)}'}

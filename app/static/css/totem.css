@@ -375,6 +375,11 @@ html, body {
     cursor: not-allowed;
 }
 
+/* Forzar cursor por defecto para todos los botones del totem */
+.totem-login-body button {
+    cursor: default;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .totem-login-container {
