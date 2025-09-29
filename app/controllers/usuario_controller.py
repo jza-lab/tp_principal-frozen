@@ -330,3 +330,20 @@ class UsuarioController(BaseController):
         Reactiva un usuario que fue desactivado lógicamente.
         """
         return self.model.update(usuario_id, {'activo': True})
+
+    def validar_campo_unico(self, field: str, value: str) -> Dict:
+        """
+        Verifica si un valor para un campo específico (legajo o email) ya existe.
+        """
+        if field not in ['legajo', 'email']:
+            return {'valid': False, 'error': 'Campo de validación no soportado.'}
+
+        filters = {field: value}
+        existing_user_result = self.model.find_all(filters, limit=1)
+
+        if existing_user_result.get('success') and existing_user_result.get('data'):
+            return {'valid': False, 'message': f'El {field} ya está en uso.'}
+        elif not existing_user_result.get('success'):
+            return {'valid': False, 'error': 'Error al realizar la validación.'}
+        else:
+            return {'valid': True}

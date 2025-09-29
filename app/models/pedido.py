@@ -19,27 +19,14 @@ class PedidoModel(BaseModel):
         Simula una transacción ejecutando las operaciones secuencialmente.
         """
         try:
-            # --- INICIO DE LA CORRECCIÓN CLAVE ---
-            # PROBLEMA: El error 23505 (duplicate key) ocurre si se intenta insertar 
-            # un ID que ya existe. Esto a menudo pasa si el diccionario 'pedido_data'
-            # ya contiene un 'id' (ej. id=1) que se arrastra del formulario o de 
-            # un objeto pre-existente. 
-            
-            # SOLUCIÓN: Eliminamos la clave 'id' para forzar a la base de datos 
-            # (Supabase/PostgreSQL) a usar su secuencia de auto-incremento.
             if 'id' in pedido_data:
                 pedido_data.pop('id')
-            # --- FIN DE LA CORRECCIÓN CLAVE ---
-
             # 1. Crear el pedido principal
-            # self.create() ahora recibirá 'pedido_data' sin la clave 'id'.
             pedido_result = self.create(pedido_data)
             if not pedido_result['success']:
-                # Aquí se capturará el error si ocurre por otras razones (ej. campos nulos).
                 raise Exception(f"Error al crear el pedido principal: {pedido_result.get('error')}")
             
             new_pedido = pedido_result['data']
-            # NOTA: Supabase debería devolver el nuevo ID automáticamente aquí.
             new_pedido_id = new_pedido['id']
 
             # 2. Crear los items del pedido
@@ -98,8 +85,6 @@ class PedidoModel(BaseModel):
         Obtiene un pedido específico con todos sus items y datos relacionados.
         """
         try:
-            # .maybe_single() prepara la consulta para devolver una o cero filas.
-            # .execute() ejecuta la consulta.
             response = self.db.table(self.table_name).select(
                 "*, items:pedido_items(*, producto_nombre:productos(nombre))"
             ).eq("id", pedido_id).maybe_single().execute()
@@ -127,8 +112,7 @@ class PedidoModel(BaseModel):
         """
         try:
             # 1. Actualizar el pedido principal
-            # Eliminamos el 'id' del payload del pedido principal si está presente, 
-            # ya que ya lo usamos en el método self.update como filtro.
+
             if 'id' in pedido_data:
                 pedido_data.pop('id')
                 
@@ -146,9 +130,7 @@ class PedidoModel(BaseModel):
                     'pedido_id': pedido_id,
                     'producto_id': item['producto_id'],
                     'cantidad': item['cantidad'],
-                    # FIX CRÍTICO: Incluir el ESTADO del ítem que vino del formulario.
-                    # Si no se incluye, Supabase inserta el valor por defecto ('PENDIENTE').
-                    'estado': item['estado'] # <-- ¡LA LÍNEA QUE FALTABA!
+                    'estado': item['estado'] 
                 }
                 
                 item_insert_result = self.db.table('pedido_items').insert(item_data).execute()

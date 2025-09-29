@@ -74,8 +74,7 @@ def crear_orden():
         if resultado.get('success'):
             ordenes_creadas += 1
         else:
-            # Intentamos obtener el nombre del producto para un mensaje de error más claro
-            nombre_producto = items_del_producto[0].get('producto_nombre', {}).get('nombre', f"ID {producto_id}")
+            nombre_producto = items_del_producto[0].get('producto_nombre', f"ID {producto_id}")
             errores.append(f"Error al crear OP para '{nombre_producto}': {resultado.get('error')}")
 
     if ordenes_creadas > 0:
