@@ -133,7 +133,7 @@
 
     {% for orden in ordenes %}
     <div class="col-md-4 mb-4">
-        <div class="card h-100 insumo-card"> <!-- Reutilizamos la clase 'insumo-card' para consistencia -->
+        <div class="card h-100 insumo-card {% if orden.estado == 'CANCELADA' %}orden-rechazada{% endif %}"> <!-- Reutilizamos la clase 'insumo-card' para consistencia -->
             <div class="card-body d-flex flex-column">
                 <div class="d-flex justify-content-between">
                     <h5 class="card-title">{{ orden.producto_nombre or 'Producto no definido' }}</h5>
@@ -162,8 +162,8 @@
 
                     <div class="d-flex justify-content-between align-items-center mb-3 stock-info">
                         <div>
-                            <span class="stock-label">Operario</span>
-                            <span class="stock-value">{{ orden.operario_nombre or 'No asignado' }}</span>
+                            <span class="stock-label">Creado por</span>
+                            <span class="stock-value">{{ orden.creador_nombre or 'No asignado' }}</span>
                         </div>
                         <div>
                             {% if orden.prioridad and orden.prioridad != 'NORMAL' %}
@@ -212,7 +212,6 @@
             </div>
         </div>
     </div>
-</div>
 {% else %}
 <div class="col-12">
     <div class="card bg-light border-0">

@@ -8,9 +8,10 @@ document.addEventListener('DOMContentLoaded', () => {
         let method;
 
 
-        url = `/api/insumos/catalogo/nuevo`;
-        method = 'POST';
-
+        const id_insumo = ID_INSUMO;
+        url = `/api/insumos/catalogo/actualizar/${id_insumo}`;
+        method = 'PUT'
+       
 
         const data = {
             codigo_interno: document.getElementById('codigo_interno').value,

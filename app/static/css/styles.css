@@ -456,6 +456,18 @@ body {
     color:#687077;
 }
 
+/* Estilo para órdenes rechazadas */
+.orden-rechazada {
+    opacity: 0.65;
+    background-color: #f8f9fa; /* Un gris muy claro */
+    border-color: #dee2e6;
+}
+
+.orden-rechazada .card-title {
+    color: #6c757d; /* Un gris más oscuro para el texto */
+}
+
+
 /* Listar Usuarios */
 .usuarios-container {
     padding: 2rem 0;
@@ -558,7 +570,6 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
-
 
 /* Crear Usuario Usuarios */
     .form-container {
@@ -674,3 +685,61 @@ body {
         border-color: #28a745;
         color: white;
     }
+
+/* Responsive para botones de insumo en mobile */
+@media (max-width: 768px) {
+    .insumo-card .action-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: center;
+    }
+
+    .insumo-card .action-buttons .btn {
+        flex: 1 1 100%;  
+    }
+}
+
+/* Responsive para tablets */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .insumo-card .action-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        justify-content: center;
+    }
+
+    /* En tablet, dos columnas */
+    .insumo-card .action-buttons .btn {
+        flex: 1 1 calc(50% - 0.5rem); 
+        min-width: 120px;           
+    }
+}
+
+/* Mobile y tablets chicas: elementos apilados uno debajo del otro */
+@media (max-width: 992px) {
+    .justify-content-between {
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 0.75rem; /* espacio entre elementos */
+    }
+}
+
+/* Tablets grandes y desktop chico: fila con más espacio */
+@media (min-width: 993px) and (max-width: 1200px) {
+    .justify-content-between {
+        flex-direction: row !important;
+        justify-content: space-around !important;
+        align-items: center !important;
+        gap: 1rem;
+    }
+}
+
+/* Desktop grande (igual que Bootstrap por defecto) */
+@media (min-width: 1201px) {
+    .justify-content-between {
+        flex-direction: row !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+    }
+}

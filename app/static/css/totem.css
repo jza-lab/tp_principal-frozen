@@ -2,7 +2,8 @@ html, body {
     height: 100%;
     width: 100%;
     margin: 0;
-    overflow: hidden;
+    overflow-x: hidden; /* oculta scroll horizontal */
+    overflow-y: auto;   /* permite scroll vertical */
 }
 
 /* Container principal */
@@ -254,6 +255,185 @@ html, body {
     background-color: #343a40;
     border-color: #343a40;
     color: white;
+}
+
+.btn-primary.btn-totem:hover {
+    background-color: #495057;
+    border-color: #495057;
+}
+
+.btn-outline-secondary.btn-totem {
+    background-color: transparent;
+    color: #6c757d;
+    border: 1px solid #6c757d;
+}
+
+.btn-outline-secondary.btn-totem:hover {
+    background-color: #6c757d;
+    color: white;
+}
+
+/* Opción de login alternativo */
+.alternative-login {
+    border-top: 1px solid #dee2e6;
+    padding-top: 1rem;
+}
+
+.alternative-login .btn-link {
+    color: #6c757d;
+    text-decoration: none;
+    font-size: 0.875rem;
+    padding: 0.5rem;
+    transition: color 0.2s ease;
+}
+
+.alternative-login .btn-link:hover {
+    color: #343a40;
+}
+
+/* Sección de login manual */
+.manual-login-section {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.manual-login-section h5 {
+    color: #495057;
+    font-weight: 600;
+}
+
+/* Form styles */
+.form-floating {
+    margin-bottom: 1rem;
+}
+
+.manual-result-area {
+    margin: 1rem 0;
+    min-height: 40px;
+}
+
+.form-control:focus {
+    border-color: #343a40;
+    box-shadow: 0 0 0 0.2rem rgba(52, 58, 64, 0.25);
+}
+
+.form-floating > label {
+    padding: 1rem 0.75rem;
+    color: #6c757d;
+}
+
+.form-floating > .form-control:focus ~ label,
+.form-floating > .form-control:not(:placeholder-shown) ~ label {
+    transform: scale(0.85) translateY(-0.5rem) translateX(0.15rem);
+    color: #343a40;
+}
+
+/* Alerts */
+.alert {
+    border-radius: 6px;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-bottom: 0;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-left: 4px solid #dc3545;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border-left: 4px solid #ffc107;
+}
+
+.alert-success {
+    background-color: #d1eddf;
+    color: #155724;
+    border-left: 4px solid #28a745;
+}
+
+.alert-info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border-left: 4px solid #17a2b8;
+}
+
+/* Estados de loading */
+.btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* Forzar cursor por defecto para todos los botones del totem */
+.totem-login-body button {
+    cursor: default;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    /* Allow scrolling on smaller screens if content overflows */
+    html, body {
+        overflow: auto;
+    }
+
+    .totem-login-container {
+        padding: 1rem;
+        /* Remove alignment to allow scrolling */
+        display: block;
+        min-height: auto;
+        height: auto;
+    }
+    
+    .totem-login-card {
+        max-width: 100%;
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .totem-login-body {
+        padding: 1.5rem;
+    }
+
+    .totem-login-header h2 {
+        font-size: 1.6rem;
+    }
+    
+    .camera-frame {
+        width: 280px;
+        height: 280px;
+    }
+    
+    .face-guide {
+        width: 160px;
+        height: 200px;
+        margin-left: -80px;
+        margin-top: -100px;
+    }
+    
+    .camera-controls {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .btn-totem {
+        width: 100%;
+        max-width: 220px;
+        font-size: 0.95rem;
+        padding: 0.7rem 1.2rem;
+    }
+
 }
 
 .btn-primary.btn-totem:hover {

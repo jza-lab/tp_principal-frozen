@@ -40,7 +40,6 @@ CREATE TABLE public.insumos_catalogo (
 CREATE TABLE public.insumos_inventario (
   id_lote uuid NOT NULL DEFAULT gen_random_uuid(),
   id_insumo uuid NOT NULL,
-  id_proveedor uuid,
   numero_lote_proveedor character varying,
   cantidad_inicial numeric NOT NULL,
   cantidad_actual numeric NOT NULL,
@@ -51,12 +50,15 @@ CREATE TABLE public.insumos_inventario (
   ubicacion_fisica character varying,
   documento_ingreso character varying,
   observaciones text,
-  usuario_ingreso uuid,
   estado character varying DEFAULT 'disponible'::character varying CHECK (estado::text = ANY (ARRAY['disponible'::character varying, 'reservado'::character varying, 'agotado'::character varying, 'vencido'::character varying]::text[])),
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  usuario_ingreso_id integer,
+  id_proveedor integer,
   CONSTRAINT insumos_inventario_pkey PRIMARY KEY (id_lote),
-  CONSTRAINT insumos_inventario_id_insumo_fkey FOREIGN KEY (id_insumo) REFERENCES public.insumos_catalogo(id_insumo)
+  CONSTRAINT insumos_inventario_id_insumo_fkey FOREIGN KEY (id_insumo) REFERENCES public.insumos_catalogo(id_insumo),
+  CONSTRAINT fk_usuario_ingreso FOREIGN KEY (usuario_ingreso_id) REFERENCES public.usuarios(id),
+  CONSTRAINT fk_preveedor_ingreso FOREIGN KEY (id_proveedor) REFERENCES public.proveedores(id)
 );
 CREATE TABLE public.movimientos_stock (
   id integer NOT NULL DEFAULT nextval('movimientos_stock_id_seq'::regclass),
@@ -260,7 +262,7 @@ CREATE TABLE public.usuarios (
   rol character varying NOT NULL CHECK (rol::text = ANY (ARRAY['ADMIN'::character varying::text, 'SUPERVISOR'::character varying::text, 'OPERARIO'::character varying::text, 'LECTURA'::character varying::text])),
   activo boolean DEFAULT true,
   created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-  legajo character varying UNIQUE,
+  legajo character varying NOT NULL UNIQUE,
   dni character varying UNIQUE,
   telefono character varying,
   direccion text,

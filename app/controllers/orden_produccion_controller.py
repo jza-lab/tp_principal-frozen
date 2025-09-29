@@ -46,26 +46,35 @@ class OrdenProduccionController(BaseController):
         result = self.model.get_one_enriched(orden_id)
         return result
 
+# app/controllers/orden_produccion_controller.py
+
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """
-        Valida datos y crea una orden en estado PENDIENTE.
-        La reserva de stock se hará en la aprobación.
+        Valida datos y crea una orden en estado PENDIENTE,
+        guardando el ID del operario en el campo usuario_creador_id si está asignado.
         """
         from app.models.receta import RecetaModel
         receta_model = RecetaModel()
-        
+
         try:
-            # 1. Extraer producto_id y limpiar datos que gestiona el servidor
+            # Extraer producto_id y limpiar datos que gestiona el servidor
             producto_id = form_data.get('producto_id')
             if not producto_id:
                 return {'success': False, 'error': 'El campo producto_id es requerido.'}
 
+            # Mapear 'cantidad' del formulario a 'cantidad_planificada' del esquema
+            if 'cantidad' in form_data:
+                form_data['cantidad_planificada'] = form_data.pop('cantidad')
+            
+            # Obtener el ID del operario del formulario
+            operario_asignado_id = form_data.pop('operario_asignado', None)
             # Quitar campos que no deben venir del cliente para la validación
+            # Este paso es importante para evitar el error 'Unknown field'
             form_data.pop('usuario_id', None)
             form_data.pop('estado', None)
             form_data.pop('receta_id', None)
 
-            # 2. Lógica de negocio: Encontrar la receta activa para el producto
+            # Lógica de negocio: Encontrar la receta activa para el producto
             receta_result = receta_model.find_all({
                 'producto_id': int(producto_id),
                 'activa': True
@@ -74,18 +83,22 @@ class OrdenProduccionController(BaseController):
             if not receta_result.get('success') or not receta_result.get('data'):
                 return {'success': False, 'error': f'No se encontró una receta activa para el producto seleccionado (ID: {producto_id}).'}
             
-            # Añadir el ID de la receta encontrada a los datos del formulario
             receta = receta_result['data'][0]
             form_data['receta_id'] = receta['id']
 
-            # 3. Validar los datos (ahora enriquecidos) con el schema
+            # Validar los datos (ahora limpios) con el esquema
             validated_data = self.schema.load(form_data)
-
-            # Añadir datos que no vienen del formulario
+            
+            # Añadir datos que no vienen del formulario.
             validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            validated_data['usuario_creador_id'] = usuario_id
             validated_data['estado'] = 'PENDIENTE'
-            # Usar el método 'create' genérico del BaseModel
+            
+            # LÓGICA CLAVE: Asignar el ID del operario al campo 'usuario_creador_id'
+            if operario_asignado_id:
+                validated_data['usuario_creador_id'] = int(operario_asignado_id)
+            else:
+                validated_data['usuario_creador_id'] = usuario_id # Si no se asigna, usa el tuyo
+
             return self.model.create(validated_data)
 
         except ValidationError as e:
