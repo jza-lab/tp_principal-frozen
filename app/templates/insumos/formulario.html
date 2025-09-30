@@ -107,7 +107,7 @@ Agregar nuevo insumo al catálogo
                         <div class="col-md-6">
                             <label for="stock_min" class="form-label">Stock Mínimo <span
                                     class="text-danger">*</span></label>
-                            <input type="number" step="1" class="form-control" name="stock_min" id="stock_min"
+                            <input type="number" step="1" min= "0" class="form-control" name="stock_min" id="stock_min"
                                 value="{{ insumo.stock_min if insumo else '' }}" required>
                             <div class="form-text">Cantidad mínima que debe mantenerse</div>
 

@@ -61,7 +61,7 @@
                         <div class="col-md-6">
                             <label for="cantidad_inicial" class="form-label">Cantidad Inicial</label>
                             <div class="input-group">
-                                <input type="number" class="form-control" id="cantidad_inicial" name="cantidad_inicial"
+                                <input type="number" min="0" step="1" class="form-control" id="cantidad_inicial" name="cantidad_inicial"
                                        value="{{ lote.get('cantidad_inicial', '') }}" readonly>
                                 <span class="input-group-text">{{ insumo.unidad_medida }}</span>
                             </div>
@@ -69,7 +69,7 @@
                         <div class="col-md-6">
                             <label for="cantidad_actual" class="form-label">Cantidad Actual <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <input type="number" step="0.01" class="form-control" id="cantidad_actual" name="cantidad_actual"
+                                <input type="number" min="0" step="1"class="form-control" id="cantidad_actual" name="cantidad_actual"
                                        value="{{ lote.get('cantidad_actual', '') }}" required>
                                 <span class="input-group-text">{{ insumo.unidad_medida }}</span>
                             </div>
@@ -78,7 +78,7 @@
                         <div class="col-md-6">
                             <label for="cantidad_inicial" class="form-label">Cantidad Inicial <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <input type="number" step="0.01" class="form-control" id="cantidad_inicial" name="cantidad_inicial" required>
+                                <input type="number" min="0" step="1" class="form-control" id="cantidad_inicial" name="cantidad_inicial" required>
                                 <span class="input-group-text">{{ insumo.unidad_medida }}</span>
                             </div>
                         </div>
