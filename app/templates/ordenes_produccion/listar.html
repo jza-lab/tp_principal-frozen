@@ -25,23 +25,11 @@
                     <label for="estado" class="form-label">Filtrar por Estado</label>
                     <select name="estado" class="form-select" onchange="this.form.submit()">
                         <option value="">Todas las órdenes</option>
-                        <option value="PLANIFICADA" {% if request.args.get('estado')=='PLANIFICADA' %}selected{% endif
-                            %}>
-                            Planificadas
-                        </option>
-                        <option value="EN_PROCESO" {% if request.args.get('estado')=='EN_PROCESO' %}selected{% endif %}>
-                            En Proceso
-                        </option>
-                        <option value="PAUSADA" {% if request.args.get('estado')=='PAUSADA' %}selected{% endif %}>
-                            Pausadas
-                        </option>
-                        <option value="COMPLETADA" {% if request.args.get('estado')=='COMPLETADA' %}selected{% endif %}>
-                            Completadas
-                        </option>
-                        <option value="CANCELADA" {% if request.args.get('estado')=='CANCELADA' %}selected{% endif %}>
-                            Canceladas
-                        </option>
+                        <option value="PENDIENTE" {% if request.args.get('estado') == 'PENDIENTE' %}selected{% endif %}>Pendientes</option>
+                        <option value="APROBADA" {% if request.args.get('estado') == 'APROBADA' %}selected{% endif %}>Aprobadas</option>
+                        <option value="CANCELADA" {% if request.args.get('estado') == 'CANCELADA' %}selected{% endif %}>Canceladas</option>
                     </select>
+                    
                 </div>
                 <div class="col-md-8">
                     <div class="text-muted small">

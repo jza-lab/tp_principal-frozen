@@ -82,6 +82,10 @@ class InventarioController(BaseController):
             else:
                 return self.error_response(result['error'])
 
+        except ValidationError as e:
+            # Re-lanzar la excepción de validación para que la vista la maneje
+            # y devuelva un JSON con los detalles del error.
+            raise e
         except Exception as e:
             logger.error(f"Error creando lote: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
@@ -227,7 +231,10 @@ class InventarioController(BaseController):
                 )
             else:
                 return self.error_response(result['error'])
-
+        except ValidationError as e:
+            # Re-lanzar la excepción de validación para que la vista la maneje
+            # y devuelva un JSON con los detalles del error.
+            raise e
         except Exception as e:
             logger.error(f"Error actualizando lote: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)

@@ -1,16 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const formulario = document.getElementById('formulario-insumo')
+    const formulario = document.getElementById('formulario-insumo');
 
     formulario.addEventListener('submit', function (event) {
         event.preventDefault();
 
-        let url;
-        let method;
-
-
-        url = `/api/insumos/catalogo/nuevo`;
-        method = 'POST';
-
+        const url = `/api/insumos/catalogo/nuevo`;
+        const method = 'POST';
 
         const data = {
             codigo_interno: document.getElementById('codigo_interno').value,
@@ -33,20 +28,43 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             body: JSON.stringify(data)
         })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Operacion exitosa');
+        .then(async response => {
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                setTimeout(() => {
                     window.location.href = INSUMOS_LISTA_URL;
-                }
-                else {
-                    alert('Operacion fallida: ' + data.error);
-                }
-            })
-            .catch((error) => {
-                console.error('Error:', error);
-                alert('Ocurrio un error');
-            });
-        return false;
+                }, 1500);
+            } else {
+                mostrarModalError(result.error || 'Ocurrió un error al guardar el insumo.', result.details);
+            }
+        })
+        .catch(err => {
+            mostrarModalError('Error de conexión o del servidor.');
+            console.error('Error en fetch:', err);
+        });
     });
+
+    function mostrarModalError(mensaje, detalles = null) {
+        let errorMsg = mensaje;
+        if (detalles) {
+            const detailsFormatted = Object.entries(detalles)
+                .map(([field, messages]) => `<strong>${field}:</strong> ${messages.join(', ')}`)
+                .join('<br>');
+            errorMsg += `<br><br><div class="text-start small">${detailsFormatted}</div>`;
+        }
+
+        const notificationModal = new bootstrap.Modal(document.getElementById('notificationModal'));
+        const modalTitle = document.getElementById('notificationModalTitle');
+        const modalBody = document.getElementById('notificationModalBody');
+
+        modalTitle.textContent = 'Error al crear insumo';
+        modalBody.innerHTML = errorMsg;
+
+        // Header en rojo
+        modalTitle.parentElement.classList.remove('bg-success', 'bg-primary');
+        modalTitle.parentElement.classList.add('bg-danger', 'text-white');
+
+        notificationModal.show();
+    }
 });
