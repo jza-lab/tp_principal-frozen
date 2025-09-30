@@ -1,0 +1,122 @@
+/* Estilos para planificación */
+.page-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #343a40;
+}
+
+.modern-card {
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+
+.modern-card .card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.table-controls {
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+}
+
+.modern-table {
+    margin-bottom: 0;
+}
+
+.modern-table thead {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.modern-table thead th {
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #495057;
+    padding: 1rem;
+    border-bottom: none;
+}
+
+.modern-table tbody tr {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.modern-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.modern-table tbody tr.selected {
+    background-color: #e7f3ff;
+}
+
+.modern-table tbody td {
+    padding: 1rem;
+    vertical-align: middle;
+}
+
+.pedido-id {
+    background-color: #f8f9fa;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    color: #495057;
+}
+
+.action-footer {
+    padding-top: 1.5rem;
+    border-top: 1px solid #dee2e6;
+}
+
+#create-orders-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#selected-count {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.empty-state i {
+    opacity: 0.3;
+}
+
+/* Checkbox */
+.form-check-input {
+    width: 1.25rem;
+    height: 1.25rem;
+    cursor: pointer;
+}
+
+.form-check-input:checked {
+    background-color: #343a40;
+    border-color: #343a40;
+}
+
+/* Badges */
+.bg-primary-soft {
+    background-color: rgba(52, 58, 64, 0.1) !important;
+    color: #343a40 !important;
+    font-weight: 600;
+}
+
+.bg-warning-soft {
+    background-color: rgba(255, 193, 7, 0.2) !important;
+    color: #856404 !important;
+    font-weight: 500;
+}
+
+/* Animación de carga en el botón */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.btn-loading .bi-gear-fill {
+    animation: spin 1s linear infinite;
+}

@@ -132,7 +132,9 @@ class FacialController:
         if frame is None:
             return {'success': False, 'message': 'Error al procesar la imagen.'}
 
-        face_encodings = face_recognition.face_encodings(frame)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        face_encodings = face_recognition.face_encodings(rgb_frame)
+
         if not face_encodings:
             return {'success': False, 'message': 'No se pudo detectar un rostro en la imagen. Asegúrese de que la cara esté bien iluminada y centrada.'}
         

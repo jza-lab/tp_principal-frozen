@@ -89,7 +89,8 @@ class PedidoController(BaseController):
             if 'items' in form_data:
                 form_data['items'] = self._consolidar_items(form_data['items'])
 
-            validated_data = self.schema.load(form_data)         
+            validated_data = self.schema.load(form_data)
+            
             items_data = validated_data.pop('items')
             pedido_data = validated_data
             
@@ -116,7 +117,7 @@ class PedidoController(BaseController):
         """
         Valida y actualiza un pedido existente y sus items.
         """
-        try:            
+        try:
             if 'items-TOTAL_FORMS' in form_data:
                 form_data.pop('items-TOTAL_FORMS')
             if 'items' in form_data:
