@@ -1,28 +1,48 @@
-from marshmallow import Schema, fields, validate, post_load
-from datetime import date
+from marshmallow import Schema, fields, validate
+
+ITEM_ESTADOS_VALIDOS = [
+    'PENDIENTE',      # Recién agregado al pedido
+    'EN_PRODUCCION',  # El producto está siendo fabricado/preparado
+    'ALISTADO',       # Listo para ser empacado
+    'CANCELADO_ITEM'  # El ítem específico fue cancelado
+]
+
+class PedidoItemSchema(Schema):
+    """
+    Schema para la validación de un item dentro de un pedido.
+    """
+    id = fields.Int(required=False, allow_none=True)
+    producto_id = fields.Int(required=True, error_messages={"required": "El ID del producto es obligatorio."})
+    cantidad = fields.Int(
+        required=True, 
+        validate=validate.Range(min=1, error="La cantidad debe ser un número entero mayor que cero."),
+        error_messages={"invalid": "La cantidad debe ser un número entero válido."}
+    )
+    
+    estado = fields.Str(
+        validate=validate.OneOf(ITEM_ESTADOS_VALIDOS),
+        dump_only=True
+    )
+
+    producto_nombre = fields.Str(dump_only=True)
+
 
 class PedidoSchema(Schema):
     """
-    Schema para la validación de datos de pedidos de clientes.
+    Schema para la validación y serialización de un pedido completo,
+    incluyendo sus items.
     """
+    nombre_cliente = fields.Str(required=True, validate=validate.Length(min=1, error="El nombre del cliente no puede estar vacío."))
+    fecha_solicitud = fields.Date(required=True, error_messages={"required": "La fecha de solicitud es obligatoria."})
+
+    estado = fields.Str(validate=validate.OneOf(['PENDIENTE', 'EN_PROCESO', 'LISTO_PARA_ENTREGA', 'COMPLETADO', 'CANCELADO']))
+
+    items = fields.List(
+        fields.Nested(PedidoItemSchema),
+        required=True,
+        validate=validate.Length(min=1, error="El pedido debe contener al menos un producto.")
+    )
+
     id = fields.Int(dump_only=True)
-    producto_id = fields.Int(required=True)
-    cantidad = fields.Float(required=True, validate=validate.Range(min=0.01))
-    nombre_cliente = fields.Str(required=True, validate=validate.Length(min=1))
-    fecha_solicitud = fields.Date(required=True)
-
-    # El estado no es enviado por el cliente, se gestiona internamente.
-    estado = fields.Str(dump_only=True, load_default='PENDIENTE')
-
-    # Campo para la trazabilidad con la orden de producción
-    orden_produccion_id = fields.Int(dump_only=True, allow_none=True)
-
-    creado_en = fields.DateTime(dump_only=True)
-    actualizado_en = fields.DateTime(dump_only=True)
-
-    @post_load
-    def make_pedido(self, data, **kwargs):
-        # Asegura que la fecha sea un objeto date y no un string
-        if isinstance(data.get('fecha_solicitud'), str):
-            data['fecha_solicitud'] = date.fromisoformat(data['fecha_solicitud'])
-        return data
+    created_at = fields.DateTime(dump_only=True)
+    updated_at = fields.DateTime(dump_only=True)

@@ -1,7 +1,6 @@
 from app.controllers.base_controller import BaseController
 from app.models.insumo import InsumoModel
 from app.models.inventario import InventarioModel
-##from app.services.alertas_service import AlertasService
 from app.schemas.insumo_schema import InsumosCatalogoSchema
 from typing import Dict, Optional
 import logging
@@ -17,7 +16,7 @@ class InsumoController(BaseController):
         super().__init__()
         self.insumo_model = InsumoModel()
         self.inventario_model = InventarioModel()
-        ##self.alertas_service = AlertasService()
+        #self.alertas_service = AlertasService()
         self.schema = InsumosCatalogoSchema()
 
     def crear_insumo(self, data: Dict) -> tuple:
@@ -56,21 +55,24 @@ class InsumoController(BaseController):
         try:
             # Aplicar filtros por defecto
             filtros = filtros or {}
-            if 'activo' not in filtros:
-                filtros['activo'] = True
 
-            # Buscar en base de datos
+            # Determinar la fuente de los datos
             if filtros.get('busqueda'):
                 result = self.insumo_model.buscar_texto(filtros['busqueda'])
             else:
                 result = self.insumo_model.find_all(filtros)
 
-            if result['success']:
-                # ✅ CORREGIDO: Serializar los datos correctamente
-                serialized_data = self.schema.dump(result['data'], many=True)
-                return self.success_response(data=serialized_data)
-            else:
+            # Procesar el resultado
+            if not result['success']:
                 return self.error_response(result['error'])
+
+            # Ordenar la lista: activos primero, luego inactivos
+            datos = result['data']
+            sorted_data = sorted(datos, key=lambda x: x.get('activo', False), reverse=True)
+            
+            # Serializar y responder
+            serialized_data = self.schema.dump(sorted_data, many=True)
+            return self.success_response(data=serialized_data)
 
         except Exception as e:
             logger.error(f"Error obteniendo insumos: {str(e)}")
@@ -127,13 +129,49 @@ class InsumoController(BaseController):
 
             if result['success']:
                 logger.info(f"Insumo eliminado: {id_insumo}")
-                return self.success_response(message=result['message'])
+                return self.success_response(message="Insumo desactivado correctamente.")
             else:
                 return self.error_response(result['error'])
 
         except Exception as e:
             logger.error(f"Error eliminando insumo: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+
+
+    def eliminar_insumo_logico(self, id_insumo: str) -> tuple:
+        """Eliminar un insumo del catálogo"""
+        try:
+            
+            data = {'activo': False}
+            result = self.insumo_model.update(id_insumo, data, 'id_insumo')
+
+            if result['success']:
+                logger.info(f"Insumo eliminado: {id_insumo}")
+                return self.success_response(message="Insumo desactivado correctamente.")
+            else:
+                return self.error_response(result['error'])
+
+        except Exception as e:
+            logger.error(f"Error eliminando insumo: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def habilitar_insumo(self, id_insumo: str) -> tuple:
+        """Habilita un insumo del catálogo que fue desactivado."""
+        try:
+            data = {'activo': True}
+            result = self.insumo_model.update(id_insumo, data, 'id_insumo')
+            
+            if result.get('success'):
+                logger.info(f"Insumo habilitado: {id_insumo}")
+                return self.success_response(message='Insumo habilitado exitosamente.')
+            else:
+                logger.error(f"Fallo al habilitar insumo {id_insumo}: {result.get('error')}")
+                return self.error_response(result.get('error', 'Error desconocido al habilitar el insumo.'))
+
+        except Exception as e:
+            logger.error(f"Error habilitando insumo: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
 
     def obtener_con_stock(self, filtros: Optional[Dict] = None) -> tuple:
         """Obtener insumos con información de stock consolidado"""

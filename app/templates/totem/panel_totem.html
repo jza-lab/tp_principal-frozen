@@ -1,0 +1,54 @@
+{% extends "layouts/base.html" %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/totem.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="totem-login-container">
+    <div class="totem-login-card totem-confirmation-card">
+        <div class="totem-login-body text-center">
+            <div id="confirmation-icon" class="confirmation-icon mb-3">
+            </div>
+            <h3 id="confirmation-message" class="mb-4">
+                Procesando...
+            </h3>
+            <p class="text-muted">Serás redirigido en unos segundos.</p>
+            <a href="{{ url_for('facial.index') }}" class="btn btn-primary btn-totem">
+                <i class="bi bi-house-door me-2"></i>
+                Volver al Inicio
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const message = sessionStorage.getItem('totemMessage');
+    const messageElement = document.getElementById('confirmation-message');
+    const iconElement = document.getElementById('confirmation-icon');
+
+    if (message) {
+        messageElement.textContent = message;
+        if (message.toLowerCase().includes('bienvenido')) {
+            iconElement.innerHTML = '<i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>';
+        } else if (message.toLowerCase().includes('hasta luego')) {
+            iconElement.innerHTML = '<i class="bi bi-box-arrow-right text-info" style="font-size: 4rem;"></i>';
+        } else {
+            iconElement.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 4rem;"></i>';
+        }
+        
+        sessionStorage.removeItem('totemMessage');
+    } else {
+        messageElement.textContent = "No hay información de acceso.";
+        iconElement.innerHTML = '<i class="bi bi-question-circle-fill text-warning" style="font-size: 4rem;"></i>';
+    }
+
+    setTimeout(() => {
+        window.location.href = "{{ url_for('facial.index') }}";
+    }, 5000);
+});
+</script>
+{% endblock %}

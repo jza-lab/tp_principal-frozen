@@ -1,5 +1,5 @@
 from app.models.base_model import BaseModel
-from typing import Dict, Optional
+from typing import Dict
 import logging
 
 logger = logging.getLogger(__name__)
