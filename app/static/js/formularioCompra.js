@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     const itemsContainer = document.getElementById('itemsContainer');
     const subtotalInput = document.getElementById('subtotal');
-    const ivaInput = document.getElementById('iva');
+    const ivaCheckbox = document.getElementById('iva'); // ahora es checkbox
     const totalInput = document.getElementById('total');
 
     function calcularSubtotales() {
@@ -14,31 +14,41 @@ document.addEventListener('DOMContentLoaded', function () {
             subtotalTotal += subtotal;
         });
         subtotalInput.value = subtotalTotal.toFixed(2);
-        const iva = parseFloat(ivaInput.value) || 0;
-        totalInput.value = (subtotalTotal + iva).toFixed(2);
+
+        // IVA al 21% si está tildado
+        let total = subtotalTotal;
+        if (ivaCheckbox.checked) {
+            total += subtotalTotal * 0.21;
+        }
+        totalInput.value = total.toFixed(2);
     }
 
     // Eventos para inputs existentes
     itemsContainer.addEventListener('input', calcularSubtotales);
-    ivaInput.addEventListener('input', calcularSubtotales);
+    ivaCheckbox.addEventListener('change', calcularSubtotales); // cambio de input a checkbox
 
     // Añadir ítem
     document.getElementById('addItemBtn').addEventListener('click', function () {
         const row = document.createElement('div');
         row.className = 'row g-3 align-items-end item-row mb-2';
+
+        let optionsHtml = '<option value="">Seleccione un insumo...</option>';
+        if (typeof INSUMOS_DATA !== 'undefined' && Array.isArray(INSUMOS_DATA)) {
+            INSUMOS_DATA.forEach(insumo => {
+                optionsHtml += `<option value="${insumo.id}">${insumo.nombre}</option>`;
+            });
+        }
+
         row.innerHTML = `
             <div class="col-md-4">
                 <label class="form-label">Insumo</label>
                 <select class="form-select" name="insumo_id[]">
-                    <option value="">Seleccione un insumo...</option>
-                    {% for insumo in insumos %}
-                        <option value="{{ insumo.id }}">{{ insumo.nombre }}</option>
-                    {% endfor %}
+                    ${optionsHtml}
                 </select>
             </div>
             <div class="col-md-2">
                 <label class="form-label">Cantidad</label>
-                <input type="number" step="0.01" class="form-control cantidad" name="cantidad_solicitada[]" value="0">
+                <input type="number" min="1" step="0.1" class="form-control cantidad" name="cantidad_solicitada[]" value="0">
             </div>
             <div class="col-md-2">
                 <label class="form-label">Precio Unitario</label>

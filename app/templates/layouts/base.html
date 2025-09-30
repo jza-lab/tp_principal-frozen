@@ -50,9 +50,15 @@
                             <a class="nav-link {% if 'orden_venta' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_venta.listar') }}">Ventas</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link {% if 'planificacion' in request.endpoint %}active{% endif %}" href="{{ url_for('planificacion.index') }}">Planificación</a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link {% if 'orden_produccion' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_produccion.listar') }}">Producción</a>
                         </li>
-                        <li class="nav-item dropdown">
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'listar_usuarios' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_usuario.listar_usuarios') }}"> Lista Empleados</a>
+                        </li>
+                        <!-- <li class="nav-item dropdown"> -->
                             <!-- <a class="nav-link dropdown-toggle {% if 'reportes' in request.endpoint %}active{% endif %}" href="#" id="navbarDropdownReportes" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 Reportes
                             </a>
@@ -71,7 +77,7 @@
                             <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="navbarDropdownUser" 
                                role="button" data-bs-toggle="dropdown">
                                 <i class="bi bi-person-circle me-2"></i>
-                                {{ session.get('usuario_nombre', 'Usuario') }}
+                                {{ session.get('usuario_nombre') }}
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownUser">
                                 <li>

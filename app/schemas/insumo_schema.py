@@ -4,6 +4,7 @@ class InsumosCatalogoSchema(Schema):
     """Esquema para validación de insumos del catálogo"""
 
     id_insumo = fields.UUID(dump_only=True)
+    id = fields.Str(attribute="id_insumo", dump_only=True)
     nombre = fields.Str(
         required=True,
         validate=validate.Length(min=1, max=255),

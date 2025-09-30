@@ -35,6 +35,14 @@ class RecetaController(BaseController):
         receta['ingredientes'] = ingredientes_result.get('data', [])
 
         return receta
+    
+    def obtener_ingredientes_para_receta(self, receta_id: int) -> Dict:
+        """
+        Obtiene la lista de ingredientes enriquecidos para una receta específica.
+        Utiliza el nuevo método del modelo que hace el join con insumos.
+        """
+        return self.model.get_ingredientes(receta_id)
+
 
     def crear_receta_con_ingredientes(self, data: Dict) -> Dict:
         """

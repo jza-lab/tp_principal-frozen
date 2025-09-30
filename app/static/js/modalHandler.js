@@ -39,6 +39,65 @@ function showConfirmationModal(title, body, confirmCallback, buttonType = 'prima
     modal.show();
 }
 
+
+document.addEventListener('DOMContentLoaded', function () {
+    const confirmationModal = document.getElementById('confirmationModal');
+    if (confirmationModal) {
+        let form = null; 
+
+        confirmationModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const url = button.getAttribute('data-url');
+            const message = button.getAttribute('data-message');
+            const title = button.getAttribute('data-title');
+
+            const modalTitle = confirmationModal.querySelector('#modalTitle');
+            const modalBody = confirmationModal.querySelector('#modalBody');
+            const modalConfirmButton = confirmationModal.querySelector('#modalConfirmButton');
+
+            // Set title and message
+            modalTitle.textContent = title || 'Confirmación';
+            modalBody.innerHTML = message || '¿Estás seguro de que quieres realizar esta acción?';
+
+            if (url) {
+                // Create a form for the action
+                form = document.createElement('form');
+                form.method = 'POST';
+                form.action = url;
+                form.style.display = 'inline';
+
+                // Move the original confirm button inside the form
+                const confirmButtonClone = modalConfirmButton.cloneNode(true);
+                confirmButtonClone.type = 'submit';
+                confirmButtonClone.classList.remove('btn-primary');
+                confirmButtonClone.classList.add('btn-danger');
+                confirmButtonClone.textContent = 'Eliminar';
+
+
+                form.appendChild(confirmButtonClone);
+                
+                modalConfirmButton.style.display = 'none';
+                modalConfirmButton.parentElement.insertBefore(form, modalConfirmButton.nextSibling);
+
+            } else {
+                modalConfirmButton.style.display = 'inline-block';
+            }
+        });
+
+        confirmationModal.addEventListener('hide.bs.modal', function() {
+            // Cleanup: remove the dynamically created form
+            if (form) {
+                form.remove();
+                form = null;
+            }
+             const modalConfirmButton = confirmationModal.querySelector('#modalConfirmButton');
+            if(modalConfirmButton) {
+                modalConfirmButton.style.display = 'inline-block';
+            }
+        });
+    }
+});
+
 /**
  * Muestra un modal de notificación con un solo botón (OK).
  * @param {string} title - El título del modal.

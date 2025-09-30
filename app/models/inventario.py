@@ -10,13 +10,34 @@ class InventarioModel(BaseModel):
 
     def get_table_name(self) -> str:
         return 'insumos_inventario'
+    
+    # --- Métodos de utilidad para la base de datos ---
+    
+    def _sanitize_dates_for_db(self, data: Dict) -> Dict:
+        """
+        Convierte objetos date/datetime de Python a strings ISO 8601
+        antes de enviarlos a Supabase, lo cual es necesario para evitar
+        errores de serialización en el método update genérico.
+        """
+        sanitized_data = data.copy()
+        for key, value in sanitized_data.items():
+            # Si el valor es una instancia de date o datetime (pero no un string ya formateado)
+            if isinstance(value, (date, datetime)) and not isinstance(value, str):
+                try:
+                    # ✅ Conversión a string ISO, la clave de la corrección
+                    sanitized_data[key] = value.isoformat()
+                except AttributeError:
+                    sanitized_data[key] = str(value)
+        return sanitized_data
+    
+    # --- Métodos de consulta y manipulación de datos ---
 
     def find_by_insumo(self, id_insumo: str, solo_disponibles: bool = True) -> Dict:
         """Obtener todos los lotes de un insumo"""
         try:
             query = (self.db.table(self.table_name)
-                    .select('*, insumos_catalogo(nombre, unidad_medida, categoria)')
-                    .eq('id_insumo', id_insumo))
+                     .select('*, insumos_catalogo(nombre, unidad_medida, categoria)')
+                     .eq('id_insumo', id_insumo))
 
             if solo_disponibles:
                 query = query.in_('estado', ['disponible', 'reservado'])
@@ -28,6 +49,20 @@ class InventarioModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo lotes por insumo: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    # ✅ SOBRESCRIBE: Sobrescribimos el método 'update' para asegurar la sanitización de datos.
+    # Esto asegura que f_vencimiento se convierta a string antes de la DB.
+    def update(self, id_value: str, data: Dict, key_name: str) -> Dict:
+        """
+        Envuelve la llamada al método update de BaseModel para aplicar la sanitización
+        de datos (especialmente fechas) antes de la operación de base de datos.
+        """
+        # Sanitizar los datos (la corrección clave)
+        sanitized_data = self._sanitize_dates_for_db(data)
+        
+        # Llamada al método update de BaseModel (usando super() para llamar a la implementación base)
+        return super().update(id_value, sanitized_data, key_name)
+
 
     def actualizar_cantidad(self, id_lote: str, nueva_cantidad: float, motivo: str = '') -> Dict:
         """Actualizar cantidad de un lote específico"""
@@ -71,7 +106,7 @@ class InventarioModel(BaseModel):
                 else:
                     update_data['observaciones'] = nueva_observacion
 
-            # Actualizar
+            # Actualizar. Llama a self.update, que ahora incluye sanitización.
             result = self.update(id_lote, update_data, 'id_lote')
 
             if result['success']:

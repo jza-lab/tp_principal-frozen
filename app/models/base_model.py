@@ -24,8 +24,8 @@ class BaseModel(ABC):
             # ✅ Convertir objetos date/datetime a string ISO antes de insertar
             clean_data = self._prepare_data_for_db(data)
 
-            result = self.db.table(self.table_name).insert(clean_data).execute()
-
+            result = self.db.table(self.table_name).insert(clean_data, returning="representation").execute()
+            
             if result.data:
                 logger.info(f"Registro creado en {self.table_name}: {result.data[0]}")
                 return {'success': True, 'data': result.data[0]}

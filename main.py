@@ -5,7 +5,7 @@ from app.config import Config
 
 # 🔧 IMPORTACIÓN DEL SERVIDOR MODBUS
 # Si usás rpyc:
-from rpyc.utils.server import ThreadedServer as SimpleServer
+#from rpyc.utils.server import ThreadedServer as SimpleServer
 
 # 🧱 INICIALIZAR FLASK
 app = create_app()

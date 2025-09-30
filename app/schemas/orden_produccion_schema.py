@@ -2,8 +2,7 @@ from marshmallow import Schema, fields, validate
 
 class OrdenProduccionSchema(Schema):
     """
-    Schema para la validación de datos de creación de órdenes de producción,
-    alineado con la tabla 'ordenes_produccion' de db_setup.sql.
+    Schema para la validación de datos de creación de órdenes de producción.
     """
     # Campos obligatorios para la creación
     producto_id = fields.Int(required=True)
@@ -14,6 +13,8 @@ class OrdenProduccionSchema(Schema):
     # Campos opcionales
     prioridad = fields.Str(validate=validate.OneOf(['BAJA', 'NORMAL', 'ALTA', 'URGENTE']), load_default='NORMAL')
     observaciones = fields.Str(allow_none=True)
+    
+    # ¡Elimina esta línea! --> operario_responsable_id = fields.Int(required=False, allow_none=True)
 
     # Campos de solo lectura (generados por el sistema)
     id = fields.Int(dump_only=True)

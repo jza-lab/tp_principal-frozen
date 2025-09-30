@@ -22,68 +22,83 @@ def facial_index():
     session.clear()
     return redirect(url_for('facial.login_totem'))
 
-# ====== RUTAS FACIALES ======
-@facial_bp.route("/login_face", methods=["POST", "GET", "PUT"])
-def login_face():
-    """Login con reconocimiento facial"""
+# ====== RUTA FACIAL UNIFICADA ======
+@facial_bp.route("/process_access", methods=["POST"])
+def process_access():
+    """
+    Punto de entrada único para el tótem.
+    Procesa la imagen, determina si es entrada o salida y devuelve el resultado.
+    """
     facial_controller = FacialController()
+    data = request.get_json()
 
-    if(request.method == 'POST' or request.method == 'PUT'):
-        data = request.get_json()
-        if not data or 'image' not in data:
-            return jsonify({"success": False, "message": "❌ No se recibió imagen"})
+    if not data or 'image' not in data:
+        return jsonify({"success": False, "message": "No se recibió imagen"})
 
-        resultado = facial_controller.procesar_login_facial_totem(data['image'])
+    resultado = facial_controller.procesar_acceso_unificado_totem(data['image'])
 
-        if resultado.get('success'):
-            usuario = resultado['usuario']
+    if resultado.get('success'):
+        tipo_acceso = resultado.get('tipo_acceso')
+        usuario = resultado.get('usuario')
 
-            # Configurar sesión
+        if tipo_acceso == 'ENTRADA':
+            # Configurar sesión para la entrada
             session["user_id"] = usuario['id']
-            session["user_email"] = usuario['email']
             session["user_nombre"] = usuario['nombre']
             session["es_totem"] = True
+            session["message"] = resultado.get('message')
+        
+        elif tipo_acceso == 'SALIDA':
+            # Limpiar la sesión para la salida
+            session.clear()
 
-            return jsonify({
-                "success": True,
-                "message": resultado['message'],
-                "email": usuario['email'],
-                "nombre": usuario['nombre'],
-                "redirect_url": url_for("facial.panel_totem")
-            })
-        else:
-            return jsonify({
-                "success": False,
-                "message": resultado.get('message', 'Error desconocido')
-            })
-    
-    return render_template("totem/login_totem.html")
+        # Devolvemos el resultado al frontend para que decida qué hacer
+        return jsonify({
+            "success": True,
+            "message": resultado.get('message'),
+            "tipo_acceso": tipo_acceso,
+            "redirect_url": url_for("facial.panel_totem")
+        })
+    else:
+        # Si la identificación o el proceso falla
+        return jsonify({
+            "success": False,
+            "message": resultado.get('message', 'Error desconocido en el servidor.')
+        })
 
-@facial_bp.route("/logout_face", methods=["POST"])
-def logout_face():
-    """Logout desde tótem + desactivar acceso web"""
+@facial_bp.route("/manual_access", methods=["POST"])
+def manual_access():
+    """Punto de entrada para el acceso manual desde el tótem."""
     facial_controller = FacialController()
+    data = request.get_json()
+    legajo = data.get('legajo')
+    password = data.get('password')
 
-    user_id = session.get("user_id")
-    if not user_id:
-        return jsonify({"success": False, "message": "❌ No hay sesión activa"})
+    if not legajo or not password:
+        return jsonify({"success": False, "message": "Legajo y contraseña son requeridos"})
 
-    resultado = facial_controller.procesar_logout_facial_totem(user_id)
+    resultado = facial_controller.procesar_acceso_manual_totem(legajo, password)
 
-    # Limpiar sesión siempre
-    session.clear()
-
-    return jsonify(resultado)
+    if resultado.get('success'):
+        return jsonify({
+            "success": True,
+            "message": resultado.get('message'),
+            "tipo_acceso": resultado.get('tipo_acceso'),
+            "redirect_url": url_for("facial.panel_totem")
+        })
+    else:
+        return jsonify({
+            "success": False,
+            "message": resultado.get('message', 'Error desconocido en el servidor.')
+        })
 
 @facial_bp.route("/panel_totem")
 def panel_totem():
-    """Panel después de login exitoso en tótem"""
-    if not session.get('es_totem'):
-        flash("Acceso no autorizado", "error")
-        return redirect(url_for("facial.login_face"))
-    
-    from datetime import datetime
-    return render_template("totem/panel_totem.html", now=datetime.now())
+    """
+    Página de confirmación para entrada/salida del tótem.
+    Ya no necesita lógica de sesión, ya que el mensaje se pasa por sessionStorage.
+    """
+    return render_template("totem/panel_totem.html")
 
 # ====== RUTAS ADICIONALES ======
 

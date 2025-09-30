@@ -12,13 +12,13 @@ def roles_required(*roles):
             # Asumimos que el rol se guarda en la sesión al iniciar sesión
             if 'rol' not in session:
                 flash('Acceso no autorizado. Por favor, inicie sesión.', 'error')
-                return redirect(url_for('usuario.login'))
+                return redirect(url_for('auth.login'))
 
             user_role = session['rol']
             if user_role not in roles:
                 flash('No tiene permiso para acceder a esta página.', 'error')
                 # Redirigir al dashboard o a una página de 'acceso denegado'
-                return redirect(url_for('dashboard.index'))
+                return redirect(url_for('admin_usuario.index'))
 
             return f(*args, **kwargs)
         return decorated_function
