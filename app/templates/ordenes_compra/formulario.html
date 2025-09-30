@@ -104,11 +104,11 @@
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label">Precio Unitario</label>
-                                    <input type="number" step="0.01" class="form-control precio_unitario" name="precio_unitario[]" value="{{ item.precio_unitario }}">
+                                    <input type="number" step="0.01" min="1" class="form-control precio_unitario" name="precio_unitario[]" value="{{ item.precio_unitario }}">
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label">Subtotal</label>
-                                    <input type="number" step="0.01" class="form-control subtotal-item" value="{{ item.subtotal }}" readonly>
+                                    <input type="number" step="0.01" min="1" class="form-control subtotal-item" value="{{ item.subtotal }}" readonly>
                                 </div>
                                 <div class="col-md-2">
                                     <button type="button" class="btn btn-outline-danger removeItemBtn">Eliminar</button>
