@@ -113,7 +113,7 @@ Agregar nuevo insumo al catálogo
 
                             <label for="stock_max" class="form-label">Stock Máximo <span
                                     class="text-danger">*</span></label>
-                            <input type="number" step="1" class="form-control" name="stock_max" id="stock_max"
+                            <input type="number" step="1" min= "0" class="form-control" name="stock_max" id="stock_max"
                                 value="{{ insumo.stock_max if insumo else '' }}" required>
                             <div class="form-text">Cantidad máxima que debe mantenerse</div>
                         </div>
@@ -122,7 +122,7 @@ Agregar nuevo insumo al catálogo
                             <label for="precio_unitario" class="form-label">Precio Unitario</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
-                                <input type="number" step="0.01" class="form-control" name="precio_unitario"
+                                <input type="number" step="0.01" min= "0" class="form-control" name="precio_unitario"
                                     id="precio_unitario" value="{{ insumo.precio_unitario if insumo else '' }}">
                             </div>
                             <div class="form-text">Opcional - para cálculos de costos</div>
@@ -130,7 +130,7 @@ Agregar nuevo insumo al catálogo
 
                         <div class="col-md-6">
                             <label for="dias_vida_util" class="form-label">Días de Vida Útil</label>
-                            <input type="number" class="form-control" name="dias_vida_util" id="dias_vida_util"
+                            <input type="number" step="1" min= "0" class="form-control" name="dias_vida_util" id="dias_vida_util"
                                 value="{{ insumo.vida_util_dias if insumo else '' }}">
                             <div class="form-text">Duración promedio antes del vencimiento</div>
                         </div>
@@ -138,7 +138,7 @@ Agregar nuevo insumo al catálogo
                         <div class="col-md-6">
                             <label for="temperatura_conservacion" class="form-label">Temperatura de Conservación
                                 (°C)</label>
-                            <input type="number" step="0.1" class="form-control" name="temperatura_conservacion"
+                            <input type="number" step="0.1" min= "0" class="form-control" name="temperatura_conservacion"
                                 id="temperatura_conservacion" value="{{ insumo.tem_recomendada if insumo else '' }}">
                         </div>
                         <div>

@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
             <div class="col-md-2">
                 <label class="form-label">Cantidad</label>
-                <input type="number" min="1" step="1" class="form-control cantidad" name="cantidad_solicitada[]" value="0">
+                <input type="number" min="1" step="0.1" class="form-control cantidad" name="cantidad_solicitada[]" value="0">
             </div>
             <div class="col-md-2">
                 <label class="form-label">Precio Unitario</label>
