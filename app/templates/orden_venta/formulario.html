@@ -70,9 +70,10 @@
                         <table class="table table-sm align-middle mb-0">
                             <thead class="bg-light">
                                 <tr>
-                                    <th style="width: 45%;">Producto <span class="text-danger">*</span></th>
-                                    <th style="width: 20%;">Cantidad <span class="text-danger">*</span></th>
-                                    <th style="width: 20%;">Stock</th>
+                                    <th style="width: 40%;">Producto <span class="text-danger">*</span></th>
+                                    <th style="width: 15%;">Cantidad <span class="text-danger">*</span></th>
+                                    <th style="width: 15%;">Estado</th>
+                                    <th style="width: 15%;">Stock</th>
                                     <th style="width: 15%;" class="text-center">Acción</th>
                                 </tr>
                             </thead>
@@ -82,10 +83,11 @@
 
                                 {% if pedido and pedido['items'] %}
                                     {% for item in pedido['items'] %}
-                                    <tr class="item-row">
+                                    {% set is_editable = item.estado == 'PENDIENTE' %}
+                                    <tr class="item-row {% if not is_editable %}table-light text-muted{% endif %}">
                                         <td>
                                             <input type="hidden" name="items-{{ loop.index0 }}-id" value="{{ item.id if item.id else '' }}">
-                                            <select class="form-select form-select-sm" name="items-{{ loop.index0 }}-producto_id" required>
+                                            <select class="form-select form-select-sm" name="items-{{ loop.index0 }}-producto_id" required {% if not is_editable %}disabled{% endif %}>
                                                 <option value="">Seleccione...</option>
                                                 {% for producto in productos %}
                                                     <option value="{{ producto.id }}" data-stock="{{ producto.stock_disponible or 0 }}" {% if item.producto_id == producto.id %}selected{% endif %}>
@@ -95,14 +97,18 @@
                                             </select>
                                         </td>
                                         <td>
-                                            <input type="number" min="1" max="5000" step="1"class="form-control form-control-sm" name="items-{{ loop.index0 }}-cantidad" 
-                                                   placeholder="Ej: 10"   value="{{ item.cantidad }}" required>
+                                            <input type="number" class="form-control form-control-sm" name="items-{{ loop.index0 }}-cantidad" 
+                                                   placeholder="Ej: 10" min="1" max="5000" step="1" value="{{ item.cantidad }}" required {% if not is_editable %}disabled{% endif %}>
+                                        </td>
+                                        <td>
+                                            {% set status_map = {'PENDIENTE': 'bg-secondary', 'EN_PRODUCCION': 'bg-warning text-dark', 'ALISTADO': 'bg-success', 'CANCELADO': 'bg-danger'} %}
+                                            <span class="badge {{ status_map.get(item.estado, 'bg-light text-dark') }}">{{ item.estado | replace('_', ' ') | title }}</span>
                                         </td>
                                         <!-- <td>
                                             <span class="badge bg-secondary text-white stock-display">--</span>
                                         </td> -->
                                         <td class="text-center">
-                                            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem"><i class="bi bi-trash"></i></button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem" {% if not is_editable %}disabled{% endif %}><i class="bi bi-trash"></i></button>
                                         </td>
                                     </tr>
                                     {% endfor %}

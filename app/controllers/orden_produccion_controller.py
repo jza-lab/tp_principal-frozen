@@ -94,9 +94,7 @@ class OrdenProduccionController(BaseController):
 
             # Validar los datos (ahora limpios) con el esquema
             validated_data = self.schema.load(form_data)
-            
-            # Añadir datos que no vienen del formulario.
-            validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
             validated_data['estado'] = 'PENDIENTE'
             
             # LÓGICA CLAVE: Asignar el ID del operario al campo 'usuario_creador_id'

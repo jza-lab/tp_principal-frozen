@@ -128,15 +128,18 @@
                     <button class="btn btn-outline-secondary" disabled>
                         <i class="bi bi-printer me-1"></i>Imprimir Pedido
                     </button>
+                    {% if pedido.estado != 'CANCELADO' %}
                     <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#confirm-cancel-modal">
                         <i class="bi bi-x-circle me-1"></i>Cancelar Pedido
                     </button>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+{% if pedido.estado != 'CANCELADO' %}
 <!-- Modal de Confirmación de Cancelación -->
 <div class="modal fade" id="confirm-cancel-modal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -157,4 +160,5 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}

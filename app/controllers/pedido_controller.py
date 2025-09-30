@@ -146,10 +146,14 @@ class PedidoController(BaseController):
         Cambia el estado de un pedido a 'CANCELADO'.
         """
         try:
-            # Verificar que el pedido existe antes de intentar cambiar el estado
-            pedido_existente = self.model.get_one_with_items(pedido_id)
-            if not pedido_existente.get('success'):
+            # Verificar que el pedido existe y obtener su estado actual.
+            pedido_existente_resp = self.model.get_one_with_items(pedido_id)
+            if not pedido_existente_resp.get('success'):
                  return self.error_response(f"Pedido con ID {pedido_id} no encontrado.", 404)
+
+            pedido_actual = pedido_existente_resp.get('data')
+            if pedido_actual and pedido_actual.get('estado') == 'CANCELADO':
+                return self.error_response("Este pedido ya ha sido cancelado y no puede ser modificado.", 400)
             
             result = self.model.cambiar_estado(pedido_id, 'CANCELADO')
             if result.get('success'):
