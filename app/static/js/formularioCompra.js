@@ -48,15 +48,15 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
             <div class="col-md-2">
                 <label class="form-label">Cantidad</label>
-                <input type="number" min="1" step="0.1" class="form-control cantidad" name="cantidad_solicitada[]" value="0">
+                <input type="number" min="1" max="5000" step="0.1" class="form-control cantidad" name="cantidad_solicitada[]" value="0">
             </div>
             <div class="col-md-2">
                 <label class="form-label">Precio Unitario</label>
-                <input type="number" step="0.01" class="form-control precio_unitario" name="precio_unitario[]" value="0">
+                <input type="number" step="0.01" min="1" class="form-control precio_unitario" name="precio_unitario[]" value="0">
             </div>
             <div class="col-md-2">
                 <label class="form-label">Subtotal</label>
-                <input type="number" step="0.01" class="form-control subtotal-item" value="0.00" readonly>
+                <input type="number" step="0.01" min="1" class="form-control subtotal-item" value="0.00" readonly>
             </div>
             <div class="col-md-2">
                 <button type="button" class="btn btn-outline-danger removeItemBtn">Eliminar</button>

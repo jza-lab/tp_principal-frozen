@@ -55,7 +55,6 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .then(result => {
                 if (result.success) {
-                    alert(result.message || `Lote ${isEdit ? 'actualizado' : 'creado'} con éxito`);
                     window.location.href = redirectUrl;
                 } else {
                     // Este bloque podría no alcanzarse si el error se maneja en el .catch
@@ -71,10 +70,29 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(error => {
                 console.error('Error en fetch:', error);
                 let errorMsg = error.error || 'Error de conexión o del servidor.';
-                 if (error.details) {
-                        errorMsg += ': ' + JSON.stringify(error.details);
-                    }
-                alert(`Error: ${errorMsg}`);
+                if (error.details) {
+                    // Formatear los detalles para una mejor legibilidad
+                    const details = Object.entries(error.details).map(([field, messages]) => 
+                        `<strong>${field}:</strong> ${messages.join(', ')}`
+                    ).join('<br>');
+                    errorMsg += `<br><br><div class="text-start small">${details}</div>`;
+                }
+
+                // Usar el modal de notificación en lugar de alert()
+                const notificationModal = new bootstrap.Modal(document.getElementById('notificationModal'));
+                const modalTitle = document.getElementById('notificationModalTitle');
+                const modalBody = document.getElementById('notificationModalBody');
+
+                modalTitle.textContent = `Error al ${isEdit ? 'Actualizar' : 'Crear'} Lote`;
+                modalBody.innerHTML = errorMsg;
+                
+                // Cambiar el color del header a rojo para errores
+                modalTitle.parentElement.classList.remove('bg-success', 'bg-primary');
+                modalTitle.parentElement.classList.add('bg-danger', 'text-white');
+
+
+                notificationModal.show();
+
                 submitButton.disabled = false;
                 submitButton.innerHTML = originalButtonText;
             });

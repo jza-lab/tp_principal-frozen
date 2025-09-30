@@ -25,23 +25,11 @@
                     <label for="estado" class="form-label">Filtrar por Estado</label>
                     <select name="estado" class="form-select" onchange="this.form.submit()">
                         <option value="">Todas las órdenes</option>
-                        <option value="PLANIFICADA" {% if request.args.get('estado')=='PLANIFICADA' %}selected{% endif
-                            %}>
-                            Planificadas
-                        </option>
-                        <option value="EN_PROCESO" {% if request.args.get('estado')=='EN_PROCESO' %}selected{% endif %}>
-                            En Proceso
-                        </option>
-                        <option value="PAUSADA" {% if request.args.get('estado')=='PAUSADA' %}selected{% endif %}>
-                            Pausadas
-                        </option>
-                        <option value="COMPLETADA" {% if request.args.get('estado')=='COMPLETADA' %}selected{% endif %}>
-                            Completadas
-                        </option>
-                        <option value="CANCELADA" {% if request.args.get('estado')=='CANCELADA' %}selected{% endif %}>
-                            Canceladas
-                        </option>
+                        <option value="PENDIENTE" {% if request.args.get('estado') == 'PENDIENTE' %}selected{% endif %}>Pendientes</option>
+                        <option value="APROBADA" {% if request.args.get('estado') == 'APROBADA' %}selected{% endif %}>Aprobadas</option>
+                        <option value="CANCELADA" {% if request.args.get('estado') == 'CANCELADA' %}selected{% endif %}>Canceladas</option>
                     </select>
+                    
                 </div>
                 <div class="col-md-8">
                     <div class="text-muted small">
@@ -138,10 +126,8 @@
                 <div class="d-flex justify-content-between">
                     <h5 class="card-title">{{ orden.producto_nombre or 'Producto no definido' }}</h5>
                     {% set estado_config = {
-                    'PLANIFICADA': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
-                    'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                    'PAUSADA': {'class': 'bg-warning-soft text-warning', 'icon': 'pause-circle'},
-                    'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
+                    'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
+                    'APROBADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
                     'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
                     {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':

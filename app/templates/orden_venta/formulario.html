@@ -98,15 +98,15 @@
                                         </td>
                                         <td>
                                             <input type="number" class="form-control form-control-sm" name="items-{{ loop.index0 }}-cantidad" 
-                                                   placeholder="Ej: 10" min="1" step="1" value="{{ item.cantidad }}" required {% if not is_editable %}disabled{% endif %}>
+                                                   placeholder="Ej: 10" min="1" max="5000" step="1" value="{{ item.cantidad }}" required {% if not is_editable %}disabled{% endif %}>
                                         </td>
                                         <td>
                                             {% set status_map = {'PENDIENTE': 'bg-secondary', 'EN_PRODUCCION': 'bg-warning text-dark', 'ALISTADO': 'bg-success', 'CANCELADO': 'bg-danger'} %}
                                             <span class="badge {{ status_map.get(item.estado, 'bg-light text-dark') }}">{{ item.estado | replace('_', ' ') | title }}</span>
                                         </td>
-                                        <td>
+                                        <!-- <td>
                                             <span class="badge bg-secondary text-white stock-display">--</span>
-                                        </td>
+                                        </td> -->
                                         <td class="text-center">
                                             <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem" {% if not is_editable %}disabled{% endif %}><i class="bi bi-trash"></i></button>
                                         </td>

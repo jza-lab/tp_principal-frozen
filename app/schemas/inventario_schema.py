@@ -16,11 +16,18 @@ class InsumosInventarioSchema(Schema):
     )
     cantidad_inicial = fields.Float(
         required=True,
-        validate=validate.Range(min=0.001),
-        error_messages={"required": "La cantidad inicial es obligatoria"}
+        validate=validate.Range(min=0.001, error="La cantidad inicial debe ser un valor mayor a 0."),
+        error_messages={
+            "required": "La cantidad inicial es obligatoria.",
+            "invalid": "La cantidad debe ser un número válido."
+        }
     )
     cantidad_actual = fields.Float(
-        validate=validate.Range(min=0),
+        validate=validate.Range(min=0.001, error="La cantidad actual debe ser un valor mayor a 0."),
+        error_messages={
+            "required": "La cantidad inicial es obligatoria.",
+            "invalid": "La cantidad debe ser un número válido."
+        },
         allow_none=True,
         load_default=0.0
     )
@@ -31,7 +38,6 @@ class InsumosInventarioSchema(Schema):
     )
     costo_total = fields.Float(dump_only=True)
 
-    # ✅ Cambiar a fields.Str y manejar la conversión en post_load
     f_ingreso = fields.Str(allow_none=True)
     f_vencimiento = fields.Str(allow_none=True, load_default=None)
 
