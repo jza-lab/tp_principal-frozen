@@ -126,10 +126,8 @@
                 <div class="d-flex justify-content-between">
                     <h5 class="card-title">{{ orden.producto_nombre or 'Producto no definido' }}</h5>
                     {% set estado_config = {
-                    'PLANIFICADA': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
-                    'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                    'PAUSADA': {'class': 'bg-warning-soft text-warning', 'icon': 'pause-circle'},
-                    'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
+                    'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
+                    'APROBADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
                     'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
                     {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':
