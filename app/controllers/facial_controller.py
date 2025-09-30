@@ -97,18 +97,18 @@ class FacialController:
             return {'success': False, 'message': 'Error del servidor.'}
 
     def registrar_rostro(self, user_id, image_data_url):
-        """Registra un rostro para un usuario específico."""
-        frame = self._get_image_from_data_url(image_data_url)
-        if frame is None:
-            return {'success': False, 'message': 'Error al procesar la imagen.'}
+        """
+        Registra un rostro para un usuario específico, previniendo duplicados y fotos sin rostro.
+        """
+        # Primero, validar que la imagen contiene un rostro y que es único.
+        validacion_rostro = self.validar_y_codificar_rostro(image_data_url)
+        if not validacion_rostro.get('success'):
+            return validacion_rostro
 
-        new_encodings = face_recognition.face_encodings(frame)
-        if not new_encodings:
-            return {'success': False, 'message': 'No se detectó rostro en la imagen.'}
-
-        new_encoding_json = json.dumps(new_encodings[0].tolist())
+        new_encoding_json = validacion_rostro.get('encoding')
 
         try:
+            # Si la validación es exitosa, actualizar el usuario con el nuevo encoding.
             response = self.db.table("usuarios").update({
                 "facial_encoding": new_encoding_json,
                 "updated_at": datetime.now().isoformat()
@@ -117,11 +117,34 @@ class FacialController:
             if response.data:
                 return {'success': True, 'message': 'Rostro registrado correctamente.'}
             else:
-                return {'success': False, 'message': 'Usuario no encontrado.'}
+                return {'success': False, 'message': 'Usuario no encontrado al intentar guardar el rostro.'}
                 
         except Exception as e:
             logger.error(f"Error en la base de datos durante el registro facial: {e}")
             return {'success': False, 'message': 'Error del servidor al guardar el rostro.'}
+
+    def validar_y_codificar_rostro(self, image_data_url):
+        """
+        Valida que una imagen contenga un único rostro y que no esté ya registrado.
+        Devuelve el encoding si la validación es exitosa.
+        """
+        frame = self._get_image_from_data_url(image_data_url)
+        if frame is None:
+            return {'success': False, 'message': 'Error al procesar la imagen.'}
+
+        face_encodings = face_recognition.face_encodings(frame)
+        if not face_encodings:
+            return {'success': False, 'message': 'No se pudo detectar un rostro en la imagen. Asegúrese de que la cara esté bien iluminada y centrada.'}
+        
+        if len(face_encodings) > 1:
+            return {'success': False, 'message': 'Se detectaron múltiples rostros en la imagen. Por favor, tome una foto solo con su cara.'}
+
+        identificacion_previa = self.identificar_rostro(image_data_url)
+        if identificacion_previa.get('success'):
+            return {'success': False, 'message': 'Este rostro ya ha sido registrado por otro usuario.'}
+            
+        new_encoding_json = json.dumps(face_encodings[0].tolist())
+        return {'success': True, 'encoding': new_encoding_json}
 
     def registrar_acceso(self, usuario_id, tipo, metodo, dispositivo, observaciones=None):
         """Registra entrada/salida en la base de datos"""

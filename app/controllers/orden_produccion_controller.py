@@ -46,6 +46,12 @@ class OrdenProduccionController(BaseController):
         result = self.model.get_one_enriched(orden_id)
         return result
 
+    def obtener_desglose_origen(self, orden_id: int) -> Dict:
+        """
+        Obtiene los items de pedido que componen una orden de producción.
+        """
+        return self.model.obtener_desglose_origen(orden_id)
+
 # app/controllers/orden_produccion_controller.py
 
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:

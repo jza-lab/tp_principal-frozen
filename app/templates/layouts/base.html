@@ -50,6 +50,9 @@
                             <a class="nav-link {% if 'orden_venta' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_venta.listar') }}">Ventas</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link {% if 'planificacion' in request.endpoint %}active{% endif %}" href="{{ url_for('planificacion.index') }}">Planificación</a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link {% if 'orden_produccion' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_produccion.listar') }}">Producción</a>
                         </li>
                         <li class="nav-item">

@@ -36,37 +36,49 @@ def ver_perfil(id):
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
 @roles_required('ADMIN')
 def nuevo_usuario():
-    """Gestiona la creación de un nuevo usuario, incluyendo el registro facial."""
+    """
+    Gestiona la creación de un nuevo usuario con una lógica de validación facial robusta.
+    El rostro se valida ANTES de crear el usuario para asegurar la atomicidad.
+    """
     if request.method == 'POST':
         datos_usuario = request.form.to_dict()
         face_data = datos_usuario.pop('face_data', None)
 
-        resultado = usuario_controller.crear_usuario(datos_usuario)
-        
-        if resultado.get('success'):
-            usuario_creado = resultado.get('data')
-            user_id = usuario_creado.get('id')
-            
-            if user_id and face_data:
-                # Si hay datos faciales, intentar registrarlos
-                resultado_facial = facial_controller.registrar_rostro(user_id, face_data)
-                if resultado_facial.get('success'):
-                    flash('Usuario creado y rostro registrado exitosamente.', 'success')
-                else:
-                    flash(f"Usuario creado, pero falló el registro facial: {resultado_facial.get('message')}", 'warning')
-            else:
-                # Si no hay datos faciales, solo informar de la creación del usuario
-                flash('Usuario creado exitosamente (sin registro facial).', 'success')
+        # 1. Si se adjuntó una foto, validarla primero.
+        if face_data:
+            validacion_facial = facial_controller.validar_y_codificar_rostro(face_data)
+            if not validacion_facial.get('success'):
+                flash(f"Error en el registro facial: {validacion_facial.get('message')}", 'error')
+                return render_template('usuarios/formulario.html', usuario=datos_usuario, is_new=True)
 
-            return redirect(url_for('admin_usuario.listar_usuarios'))
-        else:
-            # Si la creación del usuario falla, mostrar un error específico
-            error_msg = resultado.get('error', 'Ocurrió un error desconocido.')
-            if 'legajo' in error_msg and 'duplicate key' in error_msg:
-                flash('El legajo ingresado ya está en uso. Por favor, verifique los datos.', 'error')
+        # 2. Si no hubo foto o la validación facial fue exitosa, proceder a crear el usuario.
+        resultado_creacion = usuario_controller.crear_usuario(datos_usuario)
+        
+        if not resultado_creacion.get('success'):
+            # Si la creación del usuario falla (p. ej. email/legajo duplicado), mostrar error.
+            flash(f"Error al crear el usuario: {resultado_creacion.get('error')}", 'error')
+            return render_template('usuarios/formulario.html', usuario=datos_usuario, is_new=True)
+
+        # 3. Si el usuario se creó correctamente, registrar el rostro (si aplica).
+        usuario_creado = resultado_creacion.get('data')
+        user_id = usuario_creado.get('id')
+
+        if user_id and face_data:
+            # Llamamos a registrar_rostro, que ahora solo actualiza el encoding.
+            # La validación costosa ya se hizo.
+            resultado_facial = facial_controller.registrar_rostro(user_id, face_data)
+            if resultado_facial.get('success'):
+                flash('Usuario creado y rostro registrado exitosamente.', 'success')
             else:
-                flash(f"Error al crear el usuario: {error_msg}", 'error')
-                       
+                # Este es un caso raro donde la validación inicial pasó pero el guardado final falló.
+                # Se informa al admin que el usuario se creó pero sin rostro.
+                flash(f"Usuario creado, pero falló el registro facial final: {resultado_facial.get('message')}", 'warning')
+        else:
+            flash('Usuario creado exitosamente (sin registro facial).', 'success')
+
+        return redirect(url_for('admin_usuario.listar_usuarios'))
+
+    # Para el método GET, simplemente mostrar el formulario vacío.
     return render_template('usuarios/formulario.html', usuario={}, is_new=True)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/editar', methods=['GET', 'POST'])
@@ -121,3 +133,45 @@ def habilitar_usuario(id):
     else:
         flash(f"Error al activar el usuario: {resultado.get('error')}", 'error')
     return redirect(url_for('admin_usuario.listar_usuarios'))
+
+@admin_usuario_bp.route('/usuarios/validar', methods=['POST'])
+@roles_required('ADMIN')
+def validar_campo():
+    """
+    Valida de forma asíncrona si un campo (legajo o email) ya existe.
+    """
+    data = request.get_json()
+    field = data.get('field')
+    value = data.get('value')
+    
+    if not field or not value:
+        return jsonify({'valid': False, 'error': 'Campo o valor no proporcionado.'}), 400
+
+    resultado = usuario_controller.validar_campo_unico(field, value)
+    return jsonify(resultado)
+
+@admin_usuario_bp.route('/usuarios/validar_rostro', methods=['POST'])
+@roles_required('ADMIN')
+def validar_rostro():
+    """
+    Valida si el rostro en la imagen es válido y no está duplicado.
+    """
+    data = request.get_json()
+    image_data = data.get('image')
+    
+    if not image_data:
+        return jsonify({
+            'valid': False, 
+            'message': 'No se proporcionó imagen.'
+        }), 400
+    resultado = facial_controller.validar_y_codificar_rostro(image_data)
+    if resultado.get('success'):
+        return jsonify({
+            'valid': True,
+            'message': 'Rostro válido y disponible para registro.'
+        })
+    else:
+        return jsonify({
+            'valid': False,
+            'message': resultado.get('message', 'Error al validar el rostro.')
+        })
