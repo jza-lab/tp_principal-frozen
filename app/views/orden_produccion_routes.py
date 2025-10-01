@@ -31,7 +31,9 @@ def listar():
     
     ordenes = []
     if response.get('success'):
-        ordenes = response.get('data', [])
+        ordenes_data = response.get('data', [])
+        # Ordenar: no canceladas primero, luego canceladas
+        ordenes = sorted(ordenes_data, key=lambda x: x.get('estado') == 'CANCELADA')
     else:
         flash(response.get('error', 'Error al cargar las órdenes de producción.'), 'error')
         
@@ -43,18 +45,6 @@ def listar():
         titulo += " (Todas)"
 
     return render_template('ordenes_produccion/listar.html', ordenes=ordenes, titulo=titulo)
-
-# @orden_produccion_bp.route('/nueva', methods=['GET', 'POST'])
-# def nueva():
-#     """
-#     Gestiona la creación de una nueva orden de producción a través de un formulario.
-#     DESHABILITADO: Las órdenes de producción ahora se deben generar desde el
-#     módulo de planificación, consolidando los pedidos de clientes.
-#     """
-#
-#     # Redirigir siempre a la lista con un mensaje informativo.
-#     flash('La creación directa de órdenes está deshabilitada. Use el módulo de Planificación.', 'info')
-#     return redirect(url_for('orden_produccion.listar'))
 
 @orden_produccion_bp.route('/nueva', methods=['GET', 'POST', 'PUT'])
 def nueva():
@@ -145,26 +135,37 @@ def modificar(id):
 def detalle(id):
     """
     Muestra la página de detalle de una orden de producción específica,
-    incluyendo sus etapas.
+    incluyendo sus etapas y el desglose de pedidos de cliente que la componen.
     """
     respuesta = controller.obtener_orden_por_id(id)
     if not respuesta or not respuesta.get('success'):
         flash('Orden no encontrada.', 'error')
         return redirect(url_for('orden_produccion.listar'))
     
-    orden=respuesta.get('data')
-    etapas=None #Arreglar
+    orden = respuesta.get('data')
+    etapas = None
+
+    # Obtener desglose de origen de los pedidos
+    desglose_origen = []
+    desglose_response = controller.obtener_desglose_origen(id)
+    if desglose_response.get('success'):
+        desglose_origen = desglose_response.get('data', [])
+    else:
+        flash('No se pudo cargar el desglose de origen de los pedidos.', 'warning')
 
     ingredientes = []
     if orden and orden.get('receta_id'):
         ingredientes_response = receta_controller.obtener_ingredientes_para_receta(orden.get('receta_id'))
         if ingredientes_response.get('success'):
             ingredientes = ingredientes_response.get('data', [])
-            print(ingredientes)
         else:
             flash(ingredientes_response.get('error', 'No se pudieron cargar los ingredientes.'), 'warning')
 
-    return render_template('ordenes_produccion/detalle.html', orden=orden, etapas=etapas, ingredientes=ingredientes)
+    return render_template('ordenes_produccion/detalle.html', 
+                           orden=orden, 
+                           etapas=etapas, 
+                           ingredientes=ingredientes,
+                           desglose_origen=desglose_origen)
 
 @orden_produccion_bp.route('/<int:id>/iniciar', methods=['POST'])
 def iniciar(id):

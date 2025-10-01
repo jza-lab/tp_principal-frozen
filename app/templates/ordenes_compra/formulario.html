@@ -49,13 +49,16 @@
                     <div class="col-md-3">
                         <label for="fecha_emision" class="form-label">Fecha Emisión <span class="text-danger">*</span></label>
                         <input type="date" class="form-control" id="fecha_emision" name="fecha_emision"
-                               value="{{ orden.fecha_emision if orden else '' }}" required>
+                               value="{{ orden.fecha_emision if orden else '' }}" required {{ 'readonly' if is_edit }}
+                                min="2025-01-01" 
+                                max="{{ today }}">
                     </div>
 
                     <div class="col-md-3">
                         <label for="fecha_estimada_entrega" class="form-label">Fecha Estimada Entrega <span class="text-danger">*</span></label>
                         <input type="date" class="form-control" id="fecha_estimada_entrega" name="fecha_estimada_entrega"
-                               value="{{ orden.fecha_estimada_entrega if orden else '' }}" required>
+                               value="{{ orden.fecha_estimada_entrega if orden else '' }}" required {{ 'readonly' if is_edit }}
+                                min="{{ today }}">
                     </div>
 
                     <div class="col-md-6">
@@ -82,42 +85,47 @@
                 <h5 class="mb-0">Ítems de la Orden</h5>
                 <button type="button" class="btn btn-sm btn-outline-primary" id="addItemBtn">Añadir Ítem</button>
             </div>
-            <div class="card-body">
-                <div id="itemsContainer">
-                    {% if orden and orden['items'] %}
-                        {% for item in orden['items'] %}
-                            <div class="row g-3 align-items-end item-row mb-2">
-                                <div class="col-md-4">
-                                    <label class="form-label">Insumo</label>
-                                    <select class="form-select" name="insumo_id[]">
-                                        <option value="">Seleccione un insumo...</option>
-                                        {% for insumo in insumos %}
-                                            <option value="{{ insumo.id }}" {% if item.insumo_id == insumo.id %}selected{% endif %}>
-                                                {{ insumo.nombre }}
-                                            </option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label">Cantidad</label>
-                                    <input type="number" step="0.01" class="form-control cantidad" name="cantidad_solicitada[]" value="{{ item.cantidad_solicitada }}">
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label">Precio Unitario</label>
-                                    <input type="number" step="0.01" class="form-control precio_unitario" name="precio_unitario[]" value="{{ item.precio_unitario }}">
-                                </div>
-                                <div class="col-md-2">
-                                    <label class="form-label">Subtotal</label>
-                                    <input type="number" step="0.01" class="form-control subtotal-item" value="{{ item.subtotal }}" readonly>
-                                </div>
-                                <div class="col-md-2">
-                                    <button type="button" class="btn btn-outline-danger removeItemBtn">Eliminar</button>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
+<div class="card-body">
+    <div id="itemsContainer">
+        {% if orden and orden['items'] %}
+            {% for item in orden['items'] %}
+                <div class="row g-3 align-items-end item-row mb-2">
+                    
+                    <div class="col-md-4">
+                        <label class="form-label">Insumo</label>
+                        <select class="form-select insumo-selector" name="insumo_id[]">
+                            <option value="" data-id="">Seleccione un insumo...</option>
+                            {% for insumo in insumos %}
+                                <option value="{{ insumo.id }}" data-id="{{ insumo.id }}" {% if item.insumo_id == insumo.id %}selected{% endif %}>
+                                    {{ insumo.nombre }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="form-label">Cantidad</label>
+                        <input type="number" step="0.1" min="1" max="5000" class="form-control cantidad" name="cantidad_solicitada[]" value="{{ item.cantidad_solicitada }}">
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="form-label">Precio Unitario</label>
+                        <input type="number" step="0.01" min="1" class="form-control precio_unitario" name="precio_unitario[]" value="{{ item.precio_unitario }}">
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <label class="form-label">Subtotal</label>
+                        <input type="number" step="0.01" min="1" class="form-control subtotal-item" value="{{ item.cantidad_solicitada * item.precio_unitario }}" readonly>
+                    </div>
+                    
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-outline-danger removeItemBtn">Eliminar</button>
+                    </div>
                 </div>
-            </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+</div>
         </div>
 
         <!-- TOTAL GENERAL -->
@@ -127,16 +135,24 @@
                     <label class="form-label">Subtotal</label>
                     <input type="number" step="0.01" class="form-control" id="subtotal" name="subtotal" value="{{ orden.subtotal if orden else 0 }}" readonly>
                 </div>
-                <div class="w-25">
-                    <label class="form-label">IVA</label>
-                    <input type="number" step="0.01" class="form-control" id="iva" name="iva" value="{{ orden.iva if orden else 0 }}">
+
+                <div class="w-25 d-flex flex-column justify-content-center">
+                    <div class="form-check mt-4">
+                        <input class="form-check-input" type="checkbox" id="iva" name="iva" 
+                            {% if orden and orden.iva > 0 %}checked{% endif %}>
+                        <label class="form-check-label" for="iva">
+                            Aplicar IVA 21%
+                        </label>
+                    </div>
                 </div>
+
                 <div class="w-25">
                     <label class="form-label">Total</label>
                     <input type="number" step="0.01" class="form-control" id="total" name="total" value="{{ orden.total if orden else 0 }}" readonly>
                 </div>
             </div>
         </div>
+
 
         <div class="d-flex justify-content-end gap-2 mb-4">
             <a href="{{ url_for('orden_compra.listar') }}" class="btn btn-outline-secondary">Cancelar</a>
@@ -172,7 +188,10 @@
 
 {% block extra_js %}
 <script>
-    const INSUMOS_DATA = {{ insumos | tojson | safe }};
+    // Opción 2: Forzar un JSON minificado (sin espacios ni saltos de línea)
+    // Esto generalmente se logra pasando indent=None al serializador en Python, 
+    // pero si no puedes cambiar el Python, este es el fix directo:
+    const INSUMOS_DATA = JSON.parse('{{ insumos | tojson | safe | replace("\n", "") | replace("\r", "") }}');
 </script>
 <script src="{{ url_for('static', filename='js/formularioCompra.js') }}"></script>
 {% endblock extra_js %}

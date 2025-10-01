@@ -4,7 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
     formulario.addEventListener('submit', function (event) {
         event.preventDefault();
 
-        // Recopilar datos
+        const id_insumo = ID_INSUMO;
+        const url = `/api/insumos/catalogo/actualizar/${id_insumo}`;
+        const method = 'PUT';
+
         const data = {
             codigo_interno: document.getElementById('codigo_interno').value,
             nombre: document.getElementById('nombre').value,
@@ -18,16 +21,6 @@ document.addEventListener('DOMContentLoaded', () => {
             es_critico: document.getElementById('es_critico').checked,
             requiere_certificacion: document.getElementById('requiere_certificacion').checked
         };
-        
-        // --- VALIDACIÓN AGREGADA ---
-        if (data.stock_max <= data.stock_min) {
-            mostrarModalError('El stock máximo debe ser mayor que el stock mínimo.');
-            return; // Detiene la función aquí
-        }
-        // --- FIN DE LA VALIDACIÓN AGREGADA ---
-
-        const url = `/api/insumos/catalogo/nuevo`;
-        const method = 'POST';
 
         fetch(url, {
             method: method,
@@ -40,9 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await response.json();
 
             if (response.ok && result.success) {
-                setTimeout(() => {
-                    window.location.href = INSUMOS_LISTA_URL;
-                }, 1500);
+                window.location.href = INSUMOS_LISTA_URL;
             } else {
                 mostrarModalError(result.error || 'Ocurrió un error al guardar el insumo.', result.details);
             }
@@ -59,14 +50,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const detailsFormatted = Object.entries(detalles)
                 .map(([field, messages]) => `<strong>${field}:</strong> ${messages.join(', ')}`)
                 .join('<br>');
-            errorMsg = `${mensaje}<br><br><div class="text-start small">${detailsFormatted}</div>`;
+            errorMsg += `<br><br><div class="text-start small">${detailsFormatted}</div>`;
         }
 
         const notificationModal = new bootstrap.Modal(document.getElementById('notificationModal'));
         const modalTitle = document.getElementById('notificationModalTitle');
         const modalBody = document.getElementById('notificationModalBody');
 
-        modalTitle.textContent = 'Error al crear insumo';
+        modalTitle.textContent = 'Error al actualizar insumo';
         modalBody.innerHTML = errorMsg;
 
         // Header en rojo

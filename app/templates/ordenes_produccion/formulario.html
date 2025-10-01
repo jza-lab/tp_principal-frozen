@@ -51,7 +51,7 @@
                         <div class="col-md-6">
                             <label for="cantidad" class="form-label">Cantidad <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <input type="number" step="1" class="form-control" id="cantidad" name="cantidad"
+                                <input type="number" step="0.1" min="1" max="5000" class="form-control" id="cantidad" name="cantidad"
                                     value="{{ orden.cantidad if orden else '' }}" required min="1">
                                 <span class="input-group-text">unidades</span>
                             </div>
@@ -62,21 +62,6 @@
                                     class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_planificada" name="fecha_planificada"
                                 value="{{ orden.fecha_planificada if orden else '' }}" required>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label for="operario_asignado" class="form-label">Operario Asignado</label>
-                            <select class="form-select" id="operario_asignado" name="operario_asignado">
-                                <option value="">Sin asignar</option>
-                                {% for op in operarios %}
-                                {% if op.puesto == 'Operador' %}
-                                <option value="{{ op.id }}" {% if orden and orden.operario_asignado==op.id %}selected{%
-                                    endif %}>
-                                    {{ op.nombre }} {{ op.apellido }}
-                                </option>
-                                {% endif %}
-                                {% endfor %}
-                            </select>
                         </div>
 
                         <div class="col-md-6">

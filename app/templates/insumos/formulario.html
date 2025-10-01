@@ -90,12 +90,16 @@ Agregar nuevo insumo al catálogo
                                 <option value="kg" {% if insumo and insumo.unidad_medida=='kg' %}selected{% endif %}>
                                     Kilogramos (kg)
                                 </option>
+                                <option value="t" {% if insumo and insumo.unidad_medida=='t' %}selected{%
+                                    endif %}>
+                                    Toneladas (t)
+                                </option>
                                 <option value="g" {% if insumo and insumo.unidad_medida=='g' %}selected{% endif %}>
                                     Gramos (g)
                                 </option>
                                 <option value="litros" {% if insumo and insumo.unidad_medida=='litros' %}selected{%
                                     endif %}>
-                                    Litros
+                                    Litros (g)
                                 </option>
                                 <option value="unidades" {% if insumo and insumo.unidad_medida=='unidades' %}selected{%
                                     endif %}>
@@ -107,13 +111,13 @@ Agregar nuevo insumo al catálogo
                         <div class="col-md-6">
                             <label for="stock_min" class="form-label">Stock Mínimo <span
                                     class="text-danger">*</span></label>
-                            <input type="number" step="1" class="form-control" name="stock_min" id="stock_min"
+                            <input type="number" step="1" min= "0" max="5000" class="form-control" name="stock_min" id="stock_min"
                                 value="{{ insumo.stock_min if insumo else '' }}" required>
                             <div class="form-text">Cantidad mínima que debe mantenerse</div>
 
                             <label for="stock_max" class="form-label">Stock Máximo <span
                                     class="text-danger">*</span></label>
-                            <input type="number" step="1" class="form-control" name="stock_max" id="stock_max"
+                            <input type="number" step="1" min= "0" max="5000" class="form-control" name="stock_max" id="stock_max"
                                 value="{{ insumo.stock_max if insumo else '' }}" required>
                             <div class="form-text">Cantidad máxima que debe mantenerse</div>
                         </div>
@@ -122,7 +126,7 @@ Agregar nuevo insumo al catálogo
                             <label for="precio_unitario" class="form-label">Precio Unitario</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
-                                <input type="number" step="0.01" class="form-control" name="precio_unitario"
+                                <input type="number" step="0.01" min= "1" class="form-control" name="precio_unitario"
                                     id="precio_unitario" value="{{ insumo.precio_unitario if insumo else '' }}">
                             </div>
                             <div class="form-text">Opcional - para cálculos de costos</div>
@@ -130,7 +134,7 @@ Agregar nuevo insumo al catálogo
 
                         <div class="col-md-6">
                             <label for="dias_vida_util" class="form-label">Días de Vida Útil</label>
-                            <input type="number" class="form-control" name="dias_vida_util" id="dias_vida_util"
+                            <input type="number" step="1" min= "1" max="10000" class="form-control" name="dias_vida_util" id="dias_vida_util"
                                 value="{{ insumo.vida_util_dias if insumo else '' }}">
                             <div class="form-text">Duración promedio antes del vencimiento</div>
                         </div>
@@ -138,7 +142,7 @@ Agregar nuevo insumo al catálogo
                         <div class="col-md-6">
                             <label for="temperatura_conservacion" class="form-label">Temperatura de Conservación
                                 (°C)</label>
-                            <input type="number" step="0.1" class="form-control" name="temperatura_conservacion"
+                            <input type="number" step="0.1" min= "-100" max="100" class="form-control" name="temperatura_conservacion"
                                 id="temperatura_conservacion" value="{{ insumo.tem_recomendada if insumo else '' }}">
                         </div>
                         <div>
@@ -166,9 +170,9 @@ Agregar nuevo insumo al catálogo
                                 <input class="form-check-input" type="checkbox" name="es_critico" id="es_critico"
                                     value="true" {% if not insumo or insumo.es_critico %}checked{% endif %}>
                                 <label class="form-check-label" for="es_critico">
-                                    Es un insumo critico para la produccion
+                                    Es un insumo delicado para la produccion
                                 </label>
-                                <div class="form-text">Marcar si es de necesidad critica en la produccion</div>
+                                <div class="form-text">Marcar si tiene cuidados especiales para mantener su estado de conservación optima.</div>
                             </div>
                         </div>
 
@@ -216,10 +220,13 @@ Agregar nuevo insumo al catálogo
     // Crea una variable global de JS con la URL generada por Flask/Jinja
     const INSUMOS_LISTA_URL = "{{ url_for('insumos_api.obtener_insumos') }}";
     const ID_INSUMO= "{{ insumo.id_insumo }}"
-    const IS_EDIT = "{{ 'true' if insumo is defined else 'false' }}";
-
+    const IS_EDIT = '{{ insumo is defined }}';
+    const isEditBoolean = IS_EDIT == 'True';
 </script>
 
+{% if insumo %}
+<script src="{{ url_for('static', filename='js/formularioModInsumo.js') }}"></script>
+{% else %}
 <script src="{{ url_for('static', filename='js/formularioInsumo.js') }}"></script>
-
+{% endif %}
 {% endblock %}

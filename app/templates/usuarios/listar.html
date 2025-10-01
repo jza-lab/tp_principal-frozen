@@ -16,8 +16,6 @@
         </div>
     </div>
 
-
-
     <!-- Estadísticas rápidas -->
     <div class="row mb-4">
         <div class="col-md-3">
@@ -95,7 +93,7 @@
                                     <i class="bi bi-pencil"></i>
                                 </a>
 
-                                <a href="#" class="btn btn-sm btn-outline-primary" title="Ver detalle">
+                                <a href="{{ url_for('admin_usuario.ver_perfil', id=usuario.id) }}" class="btn btn-sm btn-outline-primary" title="Ver detalle">
                                     <i class="bi bi-eye"></i>
                                 </a>
 

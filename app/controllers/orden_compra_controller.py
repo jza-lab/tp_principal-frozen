@@ -1,5 +1,7 @@
+from typing import Dict
 from flask import request, jsonify
-from app.models.orden_compra_model import OrdenCompraModel
+from app.models.orden_compra_model import OrdenCompraItemModel, OrdenCompraModel
+from app.models.orden_compra_model import OrdenCompra
 from datetime import datetime, date
 import logging
 
@@ -8,6 +10,7 @@ logger = logging.getLogger(__name__)
 class OrdenCompraController:
     def __init__(self):
         self.model = OrdenCompraModel()
+
 
     def _parse_form_data(self, form_data):
         """
@@ -136,7 +139,6 @@ class OrdenCompraController:
             logger.error(f"Error en el controlador al obtener todas las órdenes: {e}")
             return {'success': False, 'error': str(e)}, 500
 
-
     def update_orden(self, orden_id):
         try:
             data = request.get_json()
@@ -152,8 +154,21 @@ class OrdenCompraController:
                 return jsonify({'success': False, 'error': result['error']}), 404
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
-
-
+    
+    def obtener_codigos_por_insumo(self, insumo_id):
+        """
+        Obtiene los códigos de OC asociados a un insumo.
+        """
+        try:
+            result = self.model.find_codigos_by_insumo_id(insumo_id)
+            if result.get('success'):
+                return result, 200
+            else:
+                return result, 400
+        except Exception as e:
+            logger.error(f"Error en controlador al obtener códigos de OC por insumo: {e}")
+            return {'success': False, 'error': str(e)}, 500
+          
     def cancelar_orden(self, orden_id):
         """Endpoint específico para cancelar órdenes de compra"""
         try:

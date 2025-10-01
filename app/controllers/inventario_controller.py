@@ -43,16 +43,23 @@ class InventarioController(BaseController):
             logger.error(f"Error obteniendo lotes: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
-    def crear_lote(self, data: Dict) -> tuple:
+    def crear_lote(self, data: Dict, id_usuario:int) -> tuple:
         """Crear un nuevo lote de inventario"""
         try:
             # Validar datos
             validated_data = self.schema.load(data)
+            validated_data['usuario_ingreso_id'] = id_usuario
 
             # Verificar que el insumo existe
             insumo_result = self.insumo_model.find_by_id(str(validated_data['id_insumo']), 'id_insumo')
             if not insumo_result['success']:
                 return self.error_response('El insumo especificado no existe', 404)
+
+             # Generar código de lote único
+            codigo_insumo = insumo_result['data'].get('codigo_interno', 'INS')
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            codigo_lote = f"{codigo_insumo}-{timestamp}"
+            validated_data['numero_lote_proveedor'] = codigo_lote
 
             # Crear lote
             result = self.inventario_model.create(validated_data)
@@ -75,6 +82,10 @@ class InventarioController(BaseController):
             else:
                 return self.error_response(result['error'])
 
+        except ValidationError as e:
+            # Re-lanzar la excepción de validación para que la vista la maneje
+            # y devuelva un JSON con los detalles del error.
+            raise e
         except Exception as e:
             logger.error(f"Error creando lote: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
@@ -132,6 +143,24 @@ class InventarioController(BaseController):
 
         except Exception as e:
             logger.error(f"Error obteniendo lotes: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def obtener_lote_por_id(self, id_lote: str) -> tuple:
+        """Obtener un lote específico por su ID."""
+        try:
+            result = self.inventario_model.find_by_id(id_lote, 'id_lote')
+
+            if result['success']:
+                if result['data']:
+                    serialized_data = self._serialize_data(result['data'])
+                    return self.success_response(data=serialized_data)
+                else:
+                    return self.error_response('Lote no encontrado', 404)
+            else:
+                return self.error_response(result['error'])
+
+        except Exception as e:
+            logger.error(f"Error obteniendo lote por ID: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def actualizar_lote_parcial(self, id_lote: str, data: Dict) -> tuple:
@@ -202,7 +231,10 @@ class InventarioController(BaseController):
                 )
             else:
                 return self.error_response(result['error'])
-
+        except ValidationError as e:
+            # Re-lanzar la excepción de validación para que la vista la maneje
+            # y devuelva un JSON con los detalles del error.
+            raise e
         except Exception as e:
             logger.error(f"Error actualizando lote: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
@@ -244,4 +276,26 @@ class InventarioController(BaseController):
 
         except Exception as e:
             logger.error(f"Error obteniendo alertas: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def eliminar_lote(self, id_lote: str) -> tuple:
+        """Eliminar un lote de inventario"""
+        try:
+            # Verificar que el lote existe
+            lote_existente = self.inventario_model.find_by_id(id_lote, 'id_lote')
+            if not lote_existente['success']:
+                return self.error_response('Lote no encontrado', 404)
+
+            # Eliminar el lote
+            result = self.inventario_model.delete(id_lote, 'id_lote')
+
+            if result['success']:
+                logger.info(f"Lote {id_lote} eliminado exitosamente")
+                return self.success_response(message='Lote eliminado exitosamente')
+            else:
+                return self.error_response(result['error'])
+
+        except Exception as e:
+            logger.error(f"Error eliminando lote: {str(e)}")
+            
             return self.error_response(f'Error interno: {str(e)}', 500)

@@ -5,6 +5,7 @@ from app.schemas.insumo_schema import InsumosCatalogoSchema
 from typing import Dict, Optional
 import logging
 from app.utils.serializable import safe_serialize
+from marshmallow import ValidationError
 
 
 logger = logging.getLogger(__name__)
@@ -117,7 +118,11 @@ class InsumoController(BaseController):
                 )
             else:
                 return self.error_response(result['error'])
-
+            
+        except ValidationError as e:
+            # Re-lanzar la excepción de validación para que la vista la maneje
+            # y devuelva un JSON con los detalles del error.
+            raise e
         except Exception as e:
             logger.error(f"Error actualizando insumo: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)

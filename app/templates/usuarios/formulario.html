@@ -17,7 +17,6 @@
                 endif %}
             </p>
         </div>
-
         <div class="form-body">
             <!-- Flash Messages -->
             {% with messages = get_flashed_messages(with_categories=true) %}
@@ -33,7 +32,6 @@
             </div>
             {% endif %}
             {% endwith %}
-
             <!-- Indicador de pasos (solo para usuarios nuevos) -->
             {% if is_new %}
             <div class="step-indicator">
@@ -62,6 +60,7 @@
                                     <i class="bi bi-hash me-1"></i>Legajo
                                 </label>
                             </div>
+                            <div class="invalid-feedback"></div>
                         </div>
 
                         <div class="col-md-6">
@@ -112,17 +111,19 @@
                                     <i class="bi bi-envelope me-1"></i>Correo Electrónico
                                 </label>
                             </div>
+                            <div class="invalid-feedback"></div>
                         </div>
 
                         {% if is_new %}
                         <div class="col-12">
                             <div class="form-floating">
                                 <input type="password" class="form-control" id="password" name="password" required
-                                    minlength="8" placeholder="Contraseña">
+                                    placeholder="Contraseña">
                                 <label for="password">
                                     <i class="bi bi-key me-1"></i>Contraseña (mínimo 8 caracteres)
                                 </label>
                             </div>
+                            <div class="invalid-feedback"></div>
                         </div>
                         {% endif %}
                     </div>
@@ -187,13 +188,18 @@
 
                 <!-- Botones de acción -->
                 <div class="d-flex justify-content-between mt-4">
-                    <a href="{{ url_for('admin_usuario.listar_usuarios') }}" class="btn btn-outline-secondary">
-                        <i class="bi bi-arrow-left me-1"></i>Cancelar
-                    </a>
+                    <div>
+                        <button type="button" class="btn btn-secondary" id="prevStep" style="display: none;">
+                            <i class="bi bi-arrow-left me-1"></i>Volver
+                        </button>
+                        <a href="{{ url_for('admin_usuario.listar_usuarios') }}" class="btn btn-outline-secondary" id="cancelBtn">
+                            <i class="bi bi-x-lg me-1"></i>Cancelar
+                        </a>
+                    </div>
 
                     <div>
                         {% if is_new %}
-                        <button type="button" class="btn btn-primary" id="nextStep">
+                        <button type="button" class="btn btn-primary" id="nextStep" disabled>
                             Siguiente <i class="bi bi-arrow-right ms-1"></i>
                         </button>
                         <button type="submit" class="btn btn-success" id="submitForm" style="display: none;">

@@ -89,15 +89,9 @@
                     <div class="col-md-6">
                         <h6 class="text-muted mb-3">Personal y Fechas</h6>
                         <div class="row g-3">
-                            <div class="col-12">
-                                <div class="border-start border-3 border-success ps-3">
-                                    <div class="small text-muted">Operario Asignado</div>
-                                    <div class="fw-bold">{{ orden.operario_nombre or 'Sin asignar' }}</div>
-                                </div>
-                            </div>
                             <div class="col-6">
                                 <div class="small text-muted">Creado por</div>
-                                <div class="fw-bold">{{ orden.creador_nombre or 'Sistema' }}</div>
+                                <div class="fw-bold">{{ orden.creador_nombre or 'No asignado' }}</div>
                             </div>
                             <div class="col-6">
                                 <div class="small text-muted">Fecha Planificada</div>
@@ -166,11 +160,49 @@
                 </div>
             </div>
         </div>
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Ingredientes de la Receta</h5>
-                </div>
-                <div class="card-body p-0">
+
+        <!-- Card para el Desglose de Origen -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Origen de la Orden</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Pedido de Cliente</th>
+                            <th>Cliente</th>
+                            <th class="text-end">Cantidad Solicitada</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in desglose_origen %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('orden_venta.detalle', id=item.pedido_id) }}" class="fw-bold">
+                                    PED-{{ item.pedido_id }}
+                                </a>
+                            </td>
+                            <td>{{ item.cliente_nombre }}</td>
+                            <td class="text-end">{{ item.cantidad }} unidades</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted py-4">
+                                Esta orden no se originó a partir de un pedido de cliente o el origen no pudo ser rastreado.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Ingredientes de la Receta</h5>
+            </div>
+                <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead class="table-light">
                             <tr>

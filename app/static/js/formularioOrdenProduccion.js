@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', function () {
             producto_id: parseInt(document.getElementById('producto_id').value),
             cantidad_planificada: parseFloat(document.getElementById('cantidad').value),
             fecha_planificada: document.getElementById('fecha_planificada').value,
-            usuario_id: parseInt(document.getElementById('operario_asignado').value),
             prioridad: document.getElementById('prioridad').value,
             observaciones: document.getElementById('observaciones').value, // Asumiendo que existe este campo
             estado: 'PENDIENTE',
@@ -28,7 +27,6 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert(`Operación exitosa.`);
                 window.location.href = LISTA_URL;
             } else {
                 // Manejo de errores de validación de Flask/Marshmallow

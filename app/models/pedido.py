@@ -19,27 +19,14 @@ class PedidoModel(BaseModel):
         Simula una transacción ejecutando las operaciones secuencialmente.
         """
         try:
-            # --- INICIO DE LA CORRECCIÓN CLAVE ---
-            # PROBLEMA: El error 23505 (duplicate key) ocurre si se intenta insertar 
-            # un ID que ya existe. Esto a menudo pasa si el diccionario 'pedido_data'
-            # ya contiene un 'id' (ej. id=1) que se arrastra del formulario o de 
-            # un objeto pre-existente. 
-            
-            # SOLUCIÓN: Eliminamos la clave 'id' para forzar a la base de datos 
-            # (Supabase/PostgreSQL) a usar su secuencia de auto-incremento.
             if 'id' in pedido_data:
                 pedido_data.pop('id')
-            # --- FIN DE LA CORRECCIÓN CLAVE ---
-
             # 1. Crear el pedido principal
-            # self.create() ahora recibirá 'pedido_data' sin la clave 'id'.
             pedido_result = self.create(pedido_data)
             if not pedido_result['success']:
-                # Aquí se capturará el error si ocurre por otras razones (ej. campos nulos).
                 raise Exception(f"Error al crear el pedido principal: {pedido_result.get('error')}")
             
             new_pedido = pedido_result['data']
-            # NOTA: Supabase debería devolver el nuevo ID automáticamente aquí.
             new_pedido_id = new_pedido['id']
 
             # 2. Crear los items del pedido
@@ -49,18 +36,14 @@ class PedidoModel(BaseModel):
                         'pedido_id': new_pedido_id,
                         'producto_id': item['producto_id'],
                         'cantidad': item['cantidad'],
-                        # FIX: Asegurar que el estado se incluye
                         'estado': item.get('estado', 'PENDIENTE')
                     }
-                    # Usamos el cliente de Supabase directamente para insertar en pedido_items
                     item_insert_result = self.db.table('pedido_items').insert(item_data).execute()
                     if not item_insert_result.data:
-                        # Si un item falla, intentamos deshacer el pedido principal.
                         logger.error(f"Error creando item para el pedido {new_pedido_id}. Intentando rollback...")
                         self.delete(id_value=new_pedido_id, id_field='id')
                         raise Exception("Error al crear uno de los items del pedido. Se ha deshecho el pedido.")
             except Exception as e:
-                # Si la creación de items falla, eliminamos el pedido que acabamos de crear.
                 logger.error(f"Error en la creación de items para el pedido {new_pedido_id}. Deshaciendo... Error: {e}")
                 self.delete(id_value=new_pedido_id, id_field='id')
                 return {'success': False, 'error': str(e)}
@@ -78,17 +61,13 @@ class PedidoModel(BaseModel):
         """
         try:
             query = self.db.table(self.table_name).select("*, items:pedido_items(*, productos(nombre))")
-
             if filtros:
                 for key, value in filtros.items():
                     if value is not None:
                         query = query.eq(key, value)
-
             query = query.order("fecha_solicitud", desc=True).order("id", desc=True)
             result = query.execute()
-
             return {'success': True, 'data': result.data}
-
         except Exception as e:
             logger.error(f"Error al obtener pedidos con items: {str(e)}")
             return {'success': False, 'error': str(e)}
@@ -98,25 +77,20 @@ class PedidoModel(BaseModel):
         Obtiene un pedido específico con todos sus items y datos relacionados.
         """
         try:
-            # .maybe_single() prepara la consulta para devolver una o cero filas.
-            # .execute() ejecuta la consulta.
             response = self.db.table(self.table_name).select(
                 "*, items:pedido_items(*, producto_nombre:productos(nombre))"
             ).eq("id", pedido_id).maybe_single().execute()
             
             result = response.data
-
             if result:
                 for item in result.get('items', []):
                     if item.get('producto_nombre'):
-                        # El resultado de la subconsulta es un dict, necesitamos extraer el valor.
                         item['producto_nombre'] = item['producto_nombre']['nombre']
                     else:
                         item['producto_nombre'] = 'N/A'
                 return {'success': True, 'data': result}
             else:
                 return {'success': False, 'error': f"Pedido con id {pedido_id} no encontrado."}
-
         except Exception as e:
             logger.error(f"Error al obtener el pedido {pedido_id} con items: {str(e)}")
             return {'success': False, 'error': str(e)}
@@ -126,37 +100,91 @@ class PedidoModel(BaseModel):
         Actualiza un pedido y sus items.
         """
         try:
-            # 1. Actualizar el pedido principal
-            # Eliminamos el 'id' del payload del pedido principal si está presente, 
-            # ya que ya lo usamos en el método self.update como filtro.
             if 'id' in pedido_data:
                 pedido_data.pop('id')
-                
             update_result = self.update(id_value=pedido_id, data=pedido_data, id_field='id')
             if not update_result['success']:
-                raise Exception(f"Error al actualizar el pedido principal: {update_result.get('error')}")
+                raise Exception(f"Error al actualizar los datos del pedido: {update_result.get('error')}")
 
-            # 2. Eliminar los items antiguos (Estrategia de eliminación y reinserción)
-            delete_result = self.db.table('pedido_items').delete().eq('pedido_id', pedido_id).execute()
-            # No es necesario revisar delete_result a menos que se quiera manejar una falla crítica de DB.
+            existing_items_raw = self.db.table('pedido_items').select('*').eq('pedido_id', pedido_id).execute().data
+            existing_items_by_product = {}
+            for item in existing_items_raw:
+                pid = item['producto_id']
+                if pid not in existing_items_by_product:
+                    existing_items_by_product[pid] = []
+                existing_items_by_product[pid].append(item)
 
-            # 3. Insertar los nuevos items
-            for item in items_data:
-                item_data = {
-                    'pedido_id': pedido_id,
-                    'producto_id': item['producto_id'],
-                    'cantidad': item['cantidad'],
-                    # FIX CRÍTICO: Incluir el ESTADO del ítem que vino del formulario.
-                    # Si no se incluye, Supabase inserta el valor por defecto ('PENDIENTE').
-                    'estado': item['estado'] # <-- ¡LA LÍNEA QUE FALTABA!
-                }
+            incoming_items_by_product = {int(item['producto_id']): item for item in items_data}
+            
+            form_product_ids = set(incoming_items_by_product.keys())
+            db_product_ids = set(existing_items_by_product.keys())
+
+            # --- Manejar productos eliminados del formulario ---
+            products_to_remove_ids = db_product_ids - form_product_ids
+            for pid in products_to_remove_ids:
+                items_for_deletion = existing_items_by_product.get(pid, [])
+                if any(item['estado'] != 'PENDIENTE' for item in items_for_deletion):
+                    raise Exception(f"No se puede eliminar el producto ID {pid} porque ya está en producción.")
                 
-                item_insert_result = self.db.table('pedido_items').insert(item_data).execute()
-                if not item_insert_result.data:
-                    # Si un item falla, una solución real requeriría una transacción a nivel de base de datos.
-                    logger.error(f"Error al insertar un nuevo item para el pedido {pedido_id} durante la actualización.")
-                    # En este punto, los items antiguos ya se borraron, se debe manejar el error.
-                    raise Exception(f"Error al insertar un nuevo item para el pedido {pedido_id} durante la actualización.")
+                item_ids_to_delete = [i['id'] for i in items_for_deletion]
+                self.db.table('pedido_items').delete().in_('id', item_ids_to_delete).execute()
+
+            # --- Manejar productos añadidos o actualizados ---
+            for pid, new_item_data in incoming_items_by_product.items():
+                nueva_cantidad_total = int(new_item_data['cantidad'])
+                existing_items = existing_items_by_product.get(pid, [])
+                
+                is_simple_case = len(existing_items) == 1 and existing_items[0]['estado'] == 'PENDIENTE'
+
+                if is_simple_case:
+                    simple_item = existing_items[0]
+                    if nueva_cantidad_total > 0:
+                        logger.info(f"Caso simple para producto {pid}: actualizando cantidad a {nueva_cantidad_total}.")
+                        self.db.table('pedido_items').update({'cantidad': nueva_cantidad_total}).eq('id', simple_item['id']).execute()
+                    else: 
+                        logger.info(f"Caso simple para producto {pid}: cantidad es 0, eliminando item.")
+                        self.db.table('pedido_items').delete().eq('id', simple_item['id']).execute()
+                    continue 
+
+                cantidad_existente_total = sum(i['cantidad'] for i in existing_items)
+
+                if nueva_cantidad_total > cantidad_existente_total:
+                    cantidad_a_anadir = nueva_cantidad_total - cantidad_existente_total
+                    self.db.table('pedido_items').insert({
+                        'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': cantidad_a_anadir, 'estado': 'PENDIENTE'
+                    }).execute()
+                
+                elif nueva_cantidad_total < cantidad_existente_total:
+                    cantidad_a_reducir = cantidad_existente_total - nueva_cantidad_total
+                    items_pendientes = [i for i in existing_items if i['estado'] == 'PENDIENTE']
+                    cantidad_pendiente_total = sum(i['cantidad'] for i in items_pendientes)
+
+                    if cantidad_a_reducir > cantidad_pendiente_total:
+                        raise Exception(f"No se puede reducir la cantidad para el producto {pid}. Se intentan reducir {cantidad_a_reducir} unidades, pero solo hay {cantidad_pendiente_total} en estado PENDIENTE.")
+                    
+                    if items_pendientes:
+                        self.db.table('pedido_items').delete().in_('id', [i['id'] for i in items_pendientes]).execute()
+                    
+                    nueva_cantidad_pendiente = cantidad_pendiente_total - cantidad_a_reducir
+                    if nueva_cantidad_pendiente > 0:
+                        self.db.table('pedido_items').insert({
+                            'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': nueva_cantidad_pendiente, 'estado': 'PENDIENTE'
+                        }).execute()
+
+            pedido_status = pedido_data.get('estado')
+            status_mapping = {
+                'EN_PROCESO': 'EN_PRODUCCION',
+                'LISTO_PARA_ENTREGA': 'ALISTADO',
+                'COMPLETADO': 'COMPLETADO',
+                'CANCELADO': 'CANCELADO'
+            }
+            
+            if pedido_status in status_mapping:
+                target_item_status = status_mapping[pedido_status]
+                logger.info(f"Propagando estado '{target_item_status}' a items pendientes del pedido {pedido_id}.")
+                self.db.table('pedido_items').update(
+                    {'estado': target_item_status}
+                ).eq('pedido_id', pedido_id).eq('estado', 'PENDIENTE').execute()
 
             logger.info(f"Pedido {pedido_id} y sus items actualizados correctamente.")
             return self.get_one_with_items(pedido_id)
@@ -168,9 +196,120 @@ class PedidoModel(BaseModel):
     def cambiar_estado(self, pedido_id: int, nuevo_estado: str) -> Dict:
         """
         Cambia el estado de un pedido.
+        Si el nuevo estado es 'CANCELADO', también cancela todos los items pendientes asociados.
         """
         try:
-            return self.update(id_value=pedido_id, data={'estado': nuevo_estado}, id_field='id')
+            update_result = self.update(id_value=pedido_id, data={'estado': nuevo_estado}, id_field='id')
+            
+            if not update_result['success']:
+                return update_result
+
+            if nuevo_estado == 'CANCELADO':
+                logger.info(f"Pedido {pedido_id} cancelado. Cancelando sus items 'PENDIENTE'...")
+                
+                items_update_result = self.db.table('pedido_items').update(
+                    {'estado': 'CANCELADO'}
+                ).eq('pedido_id', pedido_id).eq('estado', 'PENDIENTE').execute()
+
+                if items_update_result.data:
+                    logger.info(f"Se cancelaron {len(items_update_result.data)} items para el pedido {pedido_id}.")
+
+            return update_result
         except Exception as e:
             logger.error(f"Error cambiando estado del pedido {pedido_id}: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def actualizar_estado_agregado(self, pedido_id: int) -> Dict:
+        """
+        Recalcula y actualiza el estado de un pedido principal basado en el estado
+        de todos sus items.
+        """
+        try:
+            items_result = self.db.table('pedido_items').select('estado').eq('pedido_id', pedido_id).execute()
+            
+            if not items_result.data:
+                logger.warning(f"No se encontraron items para el pedido {pedido_id} al actualizar estado agregado.")
+                return {'success': True, 'message': 'No items found.'}
+
+            estados_items = {item['estado'] for item in items_result.data}
+            
+            nuevo_estado_pedido = None
+            
+            # Lógica de estados:
+            # Si TODOS los items están 'ALISTADO', el pedido está listo para entrega.
+            if all(estado == 'ALISTADO' for estado in estados_items):
+                nuevo_estado_pedido = 'LISTO_PARA_ENTREGA'
+            # Si AL MENOS UNO está 'EN_PRODUCCION', el pedido está en proceso.
+            elif 'EN_PRODUCCION' in estados_items:
+                nuevo_estado_pedido = 'EN_PROCESO'
+            
+            if nuevo_estado_pedido:
+                logger.info(f"Actualizando estado del pedido {pedido_id} a '{nuevo_estado_pedido}'.")
+                return self.cambiar_estado(pedido_id, nuevo_estado_pedido)
+            
+            return {'success': True, 'message': 'No state change required.'}
+
+        except Exception as e:
+            logger.error(f"Error al actualizar estado agregado para el pedido {pedido_id}: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def find_all_items(self, filters: Optional[Dict] = None) -> Dict:
+        """
+        Obtiene todos los items de pedido que coinciden con los filtros,
+        enriquecidos con el nombre del producto y el cliente.
+        """
+        try:
+            # Seleccionamos campos de pedido_items, el nombre del producto y el nombre del cliente del pedido.
+            query = self.db.table('pedido_items').select(
+                "*, producto_nombre:productos(nombre), pedido:pedidos(nombre_cliente)"
+            )
+
+            if filters:
+                for key, value in filters.items():
+                    if isinstance(value, tuple) and len(value) == 2:
+                        operator, filter_value = value
+                        if operator == 'eq':
+                            query = query.eq(key, filter_value)
+                        elif operator == 'in':
+                            query = query.in_(key, filter_value)
+                        elif operator == 'is':
+                            query = query.is_(key, filter_value)
+                    else:
+                        query = query.eq(key, value)
+
+            result = query.order("id", desc=True).execute()
+            
+            # Limpiar y aplanar los datos anidados para un uso más fácil en la plantilla
+            for item in result.data:
+                # Extraer el nombre del producto
+                prod_nombre_data = item.get('producto_nombre')
+                if isinstance(prod_nombre_data, dict):
+                    item['producto_nombre'] = prod_nombre_data.get('nombre') or 'N/A'
+                elif not prod_nombre_data:
+                    item['producto_nombre'] = 'N/A'
+                
+                # Extraer el nombre del cliente
+                pedido_data = item.get('pedido')
+                if isinstance(pedido_data, dict):
+                    item['cliente'] = pedido_data.get('nombre_cliente') or 'N/A'
+                else:
+                    item['cliente'] = 'N/A'
+                # Eliminar el objeto 'pedido' anidado después de extraer el cliente
+                item.pop('pedido', None)
+
+            return {'success': True, 'data': result.data}
+
+        except Exception as e:
+            logger.error(f"Error al obtener items de pedido: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def update_items(self, item_ids: List[int], data: Dict) -> Dict:
+        """
+        Actualiza múltiples items de pedido en un solo lote.
+        """
+        try:
+            result = self.db.table('pedido_items').update(data).in_('id', item_ids).execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error al actualizar items de pedido: {str(e)}")
             return {'success': False, 'error': str(e)}
