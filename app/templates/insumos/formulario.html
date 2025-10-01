@@ -90,12 +90,16 @@ Agregar nuevo insumo al catálogo
                                 <option value="kg" {% if insumo and insumo.unidad_medida=='kg' %}selected{% endif %}>
                                     Kilogramos (kg)
                                 </option>
+                                <option value="t" {% if insumo and insumo.unidad_medida=='t' %}selected{%
+                                    endif %}>
+                                    Toneladas (t)
+                                </option>
                                 <option value="g" {% if insumo and insumo.unidad_medida=='g' %}selected{% endif %}>
                                     Gramos (g)
                                 </option>
                                 <option value="litros" {% if insumo and insumo.unidad_medida=='litros' %}selected{%
                                     endif %}>
-                                    Litros
+                                    Litros (g)
                                 </option>
                                 <option value="unidades" {% if insumo and insumo.unidad_medida=='unidades' %}selected{%
                                     endif %}>
@@ -166,9 +170,9 @@ Agregar nuevo insumo al catálogo
                                 <input class="form-check-input" type="checkbox" name="es_critico" id="es_critico"
                                     value="true" {% if not insumo or insumo.es_critico %}checked{% endif %}>
                                 <label class="form-check-label" for="es_critico">
-                                    Es un insumo critico para la produccion
+                                    Es un insumo delicado para la produccion
                                 </label>
-                                <div class="form-text">Marcar si es de necesidad critica en la produccion</div>
+                                <div class="form-text">Marcar si tiene cuidados especiales para mantener su estado de conservación optima.</div>
                             </div>
                         </div>
 

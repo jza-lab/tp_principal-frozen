@@ -49,9 +49,11 @@
                         
                         <div class="col-md-6">
                             <label for="fecha_solicitud" class="form-label">Fecha de Solicitud <span class="text-danger">*</span></label>
-                            <!-- FIX PREVIO: Se usa la conversión a string y el slicing [0:10] para manejar de forma segura datetime/strings. -->
                             <input type="date" class="form-control" id="fecha_solicitud" name="fecha_solicitud" 
-                                   value="{{ (pedido.fecha_solicitud | string)[:10] if pedido and pedido.fecha_solicitud else '' }}" required>
+                                value="{{ (pedido.fecha_solicitud | string)[:10] if is_edit else today }}" 
+                                required {{ 'readonly' if is_edit }}
+                                min="2025-01-01" 
+                                max="{{ today }}">
                         </div>
                     </div>
                 </div>

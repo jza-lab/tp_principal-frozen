@@ -54,7 +54,9 @@
                         <div class="col-md-6">
                             <label for="fecha_ingreso" class="form-label">Fecha de Ingreso <span class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_ingreso" name="fecha_ingreso"
-                                   value="{{ lote.f_ingreso if is_edit else today }}" required {{ 'readonly' if is_edit }}>
+                                value="{{ lote.f_ingreso if is_edit else today }}" required {{ 'readonly' if is_edit }}
+                                min="2025-01-01" 
+                                max="{{ today }}">
                         </div>
 
                         {% if is_edit %}
@@ -87,7 +89,8 @@
                         <div class="col-md-6">
                             <label for="fecha_vencimiento" class="form-label">Fecha de Vencimiento <span class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_vencimiento" name="fecha_vencimiento"
-                                   value="{{ lote.f_vencimiento if is_edit else '' }}" required>
+                                   value="{{ lote.f_vencimiento if is_edit else '' }}" required {{ 'readonly' if is_edit }} 
+                            min="{{ today }}">
                         </div>
                         
                         <div class="col-12">

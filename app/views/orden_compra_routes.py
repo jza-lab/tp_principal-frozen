@@ -3,6 +3,7 @@ from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
 from app.utils.decorators import roles_required
+from datetime import datetime # Importación de datetime para manejar las fechas
 
 orden_compra_bp = Blueprint('orden_compra', __name__, url_prefix='/compras')
 
@@ -24,7 +25,6 @@ def listar():
     # 'get_all_ordenes' en tu controlador acepte 'filtros' como argumento y devuelva un
     # diccionario de respuesta y el código de estado (response, status_code).
     response, status_code = controller.get_all_ordenes(filtros)
-    
     ordenes = []
     if response.get('success'):
         ordenes_data = response.get('data', [])
@@ -52,14 +52,18 @@ def nueva():
         else:
             flash(f"Error al crear la orden: {resultado.get('error', 'Error desconocido')}", 'error')
     
-    # GET request
+    today = datetime.now().strftime('%Y-%m-%d')
+    
     proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
     insumos_resp, _ = insumo_controller.obtener_insumos()
 
     proveedores = proveedores_resp.get('data', []) if proveedores_resp.get('success') else []
     insumos = insumos_resp.get('data', []) if insumos_resp.get('success') else []
 
-    return render_template('ordenes_compra/formulario.html', proveedores=proveedores, insumos=insumos)
+    return render_template('ordenes_compra/formulario.html', 
+                           proveedores=proveedores, 
+                           insumos=insumos, 
+                           today=today) 
 
 @orden_compra_bp.route('/detalle/<int:id>')
 def detalle(id):
