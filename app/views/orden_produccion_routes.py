@@ -178,7 +178,7 @@ def iniciar(id):
     else:
         flash(f"Error al iniciar la orden: {resultado.get('error', 'Error desconocido')}", 'error')
 
-    return redirect(url_for('orden_produccion.detalle', id=id))
+    return redirect(url_for('orden_produccion.listar', id=id))
 
 @orden_produccion_bp.route('/<int:id>/completar', methods=['POST'])
 def completar(id):

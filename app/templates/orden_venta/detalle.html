@@ -129,36 +129,42 @@
                         <i class="bi bi-printer me-1"></i>Imprimir Pedido
                     </button>
                     {% if pedido.estado != 'CANCELADO' %}
-                    <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#confirm-cancel-modal">
-                        <i class="bi bi-x-circle me-1"></i>Cancelar Pedido
-                    </button>
+                    <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}" class="confirm-form d-grid"
+                        data-title="Confirmar Cancelación" data-message="¿Está seguro de que desea cancelar este pedido? Esta acción no se puede deshacer." data-button-type="danger">
+                        <button type="submit" class="btn btn-outline-danger">
+                            <i class="bi bi-x-circle me-1"></i>Cancelar Pedido
+                        </button>
+                    </form>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
-{% if pedido.estado != 'CANCELADO' %}
-<!-- Modal de Confirmación de Cancelación -->
-<div class="modal fade" id="confirm-cancel-modal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalLabel">Confirmar Cancelación</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                ¿Está seguro de que desea cancelar este pedido? Esta acción no se puede deshacer.
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                <form action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}" method="POST" style="display: inline;">
-                    <button type="submit" class="btn btn-danger">Sí, Cancelar Pedido</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const forms = document.querySelectorAll('.confirm-form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            
+            const title = form.dataset.title || 'Confirmar Acción';
+            const message = form.dataset.message || '¿Está seguro de que desea realizar esta acción?';
+            const buttonType = form.dataset.buttonType || 'primary';
+
+            showConfirmationModal(
+                title,
+                message,
+                () => { // Callback de confirmación
+                    form.submit();
+                },
+                buttonType
+            );
+        });
+    });
+});
+</script>
 {% endblock %}

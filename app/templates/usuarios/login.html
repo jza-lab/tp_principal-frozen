@@ -16,18 +16,6 @@
         </div>
 
         <div class="login-body">
-            <!-- Flash Messages -->
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show mb-3">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-
             <!-- Reconocimiento Facial -->
             <div id="areaReconocimientoFacial" class="facial-recognition-section">
                 <p id="guiaFacial" class="guidance-text">
