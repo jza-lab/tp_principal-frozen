@@ -32,7 +32,7 @@ def listar():
     ordenes = []
     if response.get('success'):
         ordenes_data = response.get('data', [])
-        # Ordenar: no canceladas primero, luego canceladas
+        # Ordenar: no CANCELADAs primero, luego CANCELADAs
         ordenes = sorted(ordenes_data, key=lambda x: x.get('estado') == 'CANCELADA')
     else:
         flash(response.get('error', 'Error al cargar las órdenes de producción.'), 'error')

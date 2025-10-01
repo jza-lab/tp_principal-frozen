@@ -27,7 +27,8 @@
                         <option value="">Todas las órdenes</option>
                         <option value="PENDIENTE" {% if request.args.get('estado') == 'PENDIENTE' %}selected{% endif %}>Pendientes</option>
                         <option value="APROBADA" {% if request.args.get('estado') == 'APROBADA' %}selected{% endif %}>Aprobadas</option>
-                        <option value="CANCELADA" {% if request.args.get('estado') == 'CANCELADA' %}selected{% endif %}>Canceladas</option>
+                        <option value="CANCELADA" {% if request.args.get('estado') == 'CANCELADA' %}selected{% endif %}>En espera</option>
+                        <option value="COMPLETADA" {% if request.args.get('estado') == 'COMPLETADA' %}selected{% endif %}>Completadas</option>
                     </select>
                     
                 </div>
@@ -126,9 +127,12 @@
                 <div class="d-flex justify-content-between">
                     <h5 class="card-title">{{ orden.producto_nombre or 'Producto no definido' }}</h5>
                     {% set estado_config = {
-                    'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
-                    'APROBADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
-                    'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
+                        'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
+                        'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
+                        'PLANIFICADA': {'class': 'bg-light text-dark', 'icon': 'calendar3'},
+                        'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
+                        'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle-fill'},
+                        'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
                     {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':
                     'question-circle'}) %}
@@ -176,6 +180,14 @@
                         data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
                         <button type="submit" class="btn btn-sm btn-outline-success" title="Iniciar Orden">
                             <i class="bi bi-play-fill"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                    {% if orden.estado == 'EN_PROCESO' %}
+                    <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+                        data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
+                        <button type="submit" class="btn btn-sm btn-outline-success" title="Completar Orden">
+                            <i class="bi bi-check-circle-fill"></i>
                         </button>
                     </form>
                     {% endif %}
