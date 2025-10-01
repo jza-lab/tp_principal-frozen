@@ -15,6 +15,7 @@ from app.views.orden_compra_routes import orden_compra_bp
 from app.views.facial_routes import facial_bp
 from app.views.pedido_routes import orden_venta_bp
 from app.views.planificacion_routes import planificacion_bp
+from app.views.google_forms_routes import google_forms_bp
 
 def create_app():
     """Factory para crear la aplicación Flask"""
@@ -50,6 +51,8 @@ def create_app():
     app.register_blueprint(facial_bp, url_prefix='/totem')
     app.register_blueprint(orden_venta_bp)
     app.register_blueprint(planificacion_bp)
+    app.register_blueprint(google_forms_bp)
+
     # Ruta de health check
     @app.route('/api/health')
     def health_check():
@@ -83,7 +86,7 @@ def create_app():
             'error': 'Error interno del servidor',
             'message': 'Contacte al administrador del sistema'
         }, 500
-    
+
     @app.route('/')
     def index():
         session.clear()
