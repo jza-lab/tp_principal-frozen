@@ -47,36 +47,31 @@ Agregar nuevo insumo al catálogo
                         </div>
 
                         <div class="col-md-6">
-                            <label for="categoria" class="form-label">Categoría <span
-                                    class="text-danger">*</span></label>
+                            <label for="categoria" class="form-label">Categoría <span class="text-danger">*</span></label>
                             <select class="form-select" name="categoria" id="categoria" required>
                                 <option value="">Seleccionar unidad...</option>
-                                <option value="Carnes" {% if insumo and insumo.categoria=="Carnes" %}selected{% endif
-                                    %}>
+                                <option value="Carnes" {% if insumo and insumo.categoria=="Carnes" %}selected{% endif %}>
                                     Carnes (Pollo, Cerdo, etc...)
                                 </option>
-                                <option value="Verduras" {% if insumo and insumo.categoria=='Verduras' %}selected{%
-                                    endif %}>
+                                <option value="Verduras" {% if insumo and insumo.categoria=='Verduras' %}selected{% endif %}>
                                     Verduras (Choclo, patata, etc...)
                                 </option>
-                                <option value="Harinas" {% if insumo and insumo.categoria=='Harinas' %}selected{% endif
-                                    %}>
+                                <option value="Harinas" {% if insumo and insumo.categoria=='Harinas' %}selected{% endif %}>
                                     Harinas (Pan rallado, harina, derivados de cereal, etc...)
                                 </option>
-                                <option value="Aditivos" {% if insumo and insumo.unidad_medida=='Aditivos' %}selected{%
-                                    endif %}>
+                                <option value="Aditivos" {% if insumo and insumo.categoria=='Aditivos' %}selected{% endif %}>
                                     Aditivos autorizados (Conservantes, Antioxidantes, etc...)
                                 </option>
-                                <option value="Complementarios" {% if insumo and insumo.unidad_medida=='Complementarios'
-                                    %}selected{% endif %}>
+                                <option value="Complementarios" {% if insumo and insumo.categoria=='Complementarios' %}selected{% endif %}>
                                     Complementarios (Condimentos, aceites, huevos, etc...)
                                 </option>
-                                <option value="Envases" {% if insumo and insumo.unidad_medida=='Envases' %}selected{%
-                                    endif %}>
+                                <option value="Envases" {% if insumo and insumo.categoria=='Envases' %}selected{% endif %}>
                                     Envases (Bandejas, bolsas, etc...)
                                 </option>
-                                <option value="Otros" {% if insumo and insumo.unidad_medida=='Otros' %}selected{% endif
-                                    %}>
+                                <option value="Lacteos y Derivados" {% if insumo and insumo.categoria=='Lacteos y Derivados' %}selected{% endif %}>
+                                    Lácteos y Derivados (Leche, queso etc...)
+                                </option>
+                                <option value="Otros" {% if insumo and insumo.categoria=='Otros' %}selected{% endif %}>
                                     Otros
                                 </option>
                             </select>
@@ -90,12 +85,16 @@ Agregar nuevo insumo al catálogo
                                 <option value="kg" {% if insumo and insumo.unidad_medida=='kg' %}selected{% endif %}>
                                     Kilogramos (kg)
                                 </option>
+                                <option value="t" {% if insumo and insumo.unidad_medida=='t' %}selected{%
+                                    endif %}>
+                                    Toneladas (t)
+                                </option>
                                 <option value="g" {% if insumo and insumo.unidad_medida=='g' %}selected{% endif %}>
                                     Gramos (g)
                                 </option>
                                 <option value="litros" {% if insumo and insumo.unidad_medida=='litros' %}selected{%
                                     endif %}>
-                                    Litros
+                                    Litros (g)
                                 </option>
                                 <option value="unidades" {% if insumo and insumo.unidad_medida=='unidades' %}selected{%
                                     endif %}>
@@ -122,16 +121,16 @@ Agregar nuevo insumo al catálogo
                             <label for="precio_unitario" class="form-label">Precio Unitario</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
-                                <input type="number" step="0.01" min= "1" class="form-control" name="precio_unitario"
-                                    id="precio_unitario" value="{{ insumo.precio_unitario if insumo else '' }}">
+                                <input type="number" step="0.01" class="form-control" name="precio_unitario"
+                                    id="precio_unitario" min="1" max="10000" value="{{ insumo.precio_unitario if insumo else '' }}" >
                             </div>
                             <div class="form-text">Opcional - para cálculos de costos</div>
                         </div>
 
                         <div class="col-md-6">
                             <label for="dias_vida_util" class="form-label">Días de Vida Útil</label>
-                            <input type="number" step="1" min= "1" max="10000" class="form-control" name="dias_vida_util" id="dias_vida_util"
-                                value="{{ insumo.vida_util_dias if insumo else '' }}">
+                            <input type="number" step="1" class="form-control" name="dias_vida_util" id="dias_vida_util" required min= "1" max="10000"
+                                value= "{{ insumo.vida_util_dias if insumo else '' }}">
                             <div class="form-text">Duración promedio antes del vencimiento</div>
                         </div>
 
@@ -166,9 +165,9 @@ Agregar nuevo insumo al catálogo
                                 <input class="form-check-input" type="checkbox" name="es_critico" id="es_critico"
                                     value="true" {% if not insumo or insumo.es_critico %}checked{% endif %}>
                                 <label class="form-check-label" for="es_critico">
-                                    Es un insumo critico para la produccion
+                                    Es un insumo delicado para la produccion
                                 </label>
-                                <div class="form-text">Marcar si es de necesidad critica en la produccion</div>
+                                <div class="form-text">Marcar si tiene cuidados especiales para mantener su estado de conservación optima.</div>
                             </div>
                         </div>
 

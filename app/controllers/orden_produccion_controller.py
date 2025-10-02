@@ -39,6 +39,24 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
+    def obtener_cantidad_ordenes_estado(self, estado: str, fecha: Optional[str] = None) -> Optional[Dict]:
+        filtros = {'estado': estado} if estado else {}
+        
+        if fecha:
+            filtros['fecha_planificada'] = fecha
+        
+        response, status_code = self.obtener_ordenes(filtros)
+        if(response.get('success')):
+            ordenes=response.get('data', [])
+            cantidad= len(ordenes)
+            return self.success_response(data={'cantidad': cantidad})
+        else:
+            error_msg =response.get('error', 'No se pudo contar las ordenes planificadas')
+            status_code = 404 if "no encontradas" in str(error_msg).lower() else 500
+            return self.error_response(error_msg, status_code)
+
+        
+
     def obtener_orden_por_id(self, orden_id: int) -> Optional[Dict]:
         """
         Obtiene el detalle de una orden de producción específica.

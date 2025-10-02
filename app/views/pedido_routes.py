@@ -59,6 +59,10 @@ def listar():
 @orden_venta_bp.route('/nueva', methods=['GET', 'POST'])
 def nueva():
     """Gestiona la creación de un nuevo pedido de venta."""
+    
+    # Calculamos la fecha de hoy en formato AAAA-MM-DD
+    hoy = datetime.now().strftime('%Y-%m-%d')
+    
     if request.method == 'POST':
         form_data = _parse_form_data(request.form.to_dict())
         response, status_code = controller.crear_pedido_con_items(form_data)
@@ -69,12 +73,12 @@ def nueva():
             return redirect(url_for('orden_venta.listar'))
         else:
             flash(response.get('error', 'Error al crear el pedido.'), 'error')
-            # Volver a cargar los datos del formulario para no perderlos
+            # Volver a cargar los datos y AÑADIR 'today'
             form_data_resp, _ = controller.obtener_datos_para_formulario()
-            # Pasamos los datos parseados de vuelta para que el formulario se repoble correctamente
             return render_template('orden_venta/formulario.html', 
-                                   productos=form_data_resp.get('data', {}).get('productos', []),
-                                   pedido=form_data)
+                                    productos=form_data_resp.get('data', {}).get('productos', []),
+                                    pedido=form_data,
+                                    today=hoy)
 
     # Método GET
     response, status_code = controller.obtener_datos_para_formulario()
@@ -84,10 +88,13 @@ def nueva():
     else:
         flash(response.get('error', 'No se pudieron cargar los datos para el formulario.'), 'error')
         
-    return render_template('orden_venta/formulario.html', productos=productos, pedido=None)
-
+    return render_template('orden_venta/formulario.html', 
+                           productos=productos, 
+                           pedido=None, 
+                           today=hoy)
 @orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
 def editar(id):
+    hoy = datetime.now().strftime('%Y-%m-%d')
     """Gestiona la edición de un pedido de venta existente."""
     if request.method == 'POST':
         form_data = _parse_form_data(request.form.to_dict())
@@ -104,7 +111,8 @@ def editar(id):
             form_data['id'] = id
             return render_template('orden_venta/formulario.html',
                                    productos=form_data_resp.get('data', {}).get('productos', []),
-                                   pedido=form_data)
+                                   pedido=form_data,
+                                   today=hoy)
     
     # Método GET
     pedido_resp, _ = controller.obtener_pedido_por_id(id)
@@ -122,7 +130,8 @@ def editar(id):
 
     return render_template('orden_venta/formulario.html', 
                            pedido=pedido_resp.get('data'), 
-                           productos=productos)
+                           productos=productos,
+                           today=hoy)
 
 @orden_venta_bp.route('/<int:id>/detalle')
 def detalle(id):

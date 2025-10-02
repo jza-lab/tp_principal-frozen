@@ -16,11 +16,44 @@ document.addEventListener('DOMContentLoaded', function() {
         const prefix = 'items';
 
         /**
-         * Helper para actualizar el índice de los campos en una fila.
-         * @param {HTMLElement} el Elemento a actualizar.
-         * @param {string} prefix Prefijo del formset (e.g., 'items').
-         * @param {number} index Nuevo índice.
+         * Gestiona la exclusión de productos ya seleccionados en otros selectores.
+         * Deshabilita las opciones para evitar duplicados.
          */
+        function updateAvailableProducts() {
+            // 1. Recopilar todos los IDs de producto seleccionados en CUALQUIER fila.
+            const selectedProductIds = new Set();
+            document.querySelectorAll('.producto-selector').forEach(select => {
+                if (select.value) {
+                    selectedProductIds.add(select.value);
+                }
+            });
+
+            // 2. Iterar sobre todos los selectores para aplicar la exclusión.
+            document.querySelectorAll('.producto-selector').forEach(currentSelect => {
+                const currentValue = currentSelect.value;
+                
+                // Iterar sobre todas las opciones con data-id
+                currentSelect.querySelectorAll('option[data-id]').forEach(option => {
+                    const optionId = option.getAttribute('data-id');
+
+                    // Habilitar la opción por defecto (limpiar el estado anterior)
+                    option.disabled = false;
+
+                    // 3. Lógica de Inhabilitación:
+                    // Deshabilita la opción si ha sido seleccionada, Y NO es la opción actual de ESTA fila.
+                    if (selectedProductIds.has(optionId) && optionId !== currentValue) {
+                        option.disabled = true;
+                    }
+                });
+            });
+        }
+
+        /**
+          * Helper para actualizar el índice de los campos en una fila.
+          * @param {HTMLElement} el Elemento a actualizar.
+          * @param {string} prefix Prefijo del formset (e.g., 'items').
+          * @param {number} index Nuevo índice.
+          */
         function updateElementIndex(el, prefix, index) {
             // Expresión regular para encontrar el índice anterior (e.g., -0-, -1-, etc.)
             const idRegex = new RegExp('(' + prefix + '-\\d+-)(.*)');
@@ -31,15 +64,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 el.id = el.id.replace(idRegex, replacement);
             }
             if (el.name) {
-                // Esto asegura que campos como producto_id, cantidad, y el nuevo estado
-                // se reindexen correctamente: items-N-producto_id, items-N-estado
                 el.name = el.name.replace(idRegex, replacement);
             }
         }
 
         /**
-         * Gestiona la visibilidad del mensaje "Añada productos".
-         */
+          * Gestiona la visibilidad del mensaje "Añada productos".
+          */
         function toggleNoItemsMessage() {
             if (noItemsMsg) {
                 const rowCount = container.querySelectorAll('.item-row').length;
@@ -48,10 +79,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         /**
-         * Actualiza el stock visible cuando se selecciona un producto.
-         * También se usa para cargar el stock inicial de filas existentes.
-         * @param {Event|object} event - El objeto Event o un objeto simulado con el target.
-         */
+          * Actualiza el stock visible cuando se selecciona un producto.
+          * También se usa para cargar el stock inicial de filas existentes.
+          * @param {Event|object} event - El objeto Event o un objeto simulado con el target.
+          */
         function handleProductChange(event) {
             const select = event.target;
             const row = select.closest('.item-row');
@@ -74,8 +105,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         /**
-         * Re-indexa todas las filas después de una adición o eliminación.
-         */
+          * Re-indexa todas las filas después de una adición o eliminación.
+          */
         function reindexRows() {
             const rows = container.querySelectorAll('.item-row');
             let newIndex = 0;
@@ -91,9 +122,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 const removeButton = row.querySelector('.remove-item-btn');
                 
                 if (productSelect) {
-                    // Limpiar y adjuntar listener de cambio de producto
+                    // Limpiar y adjuntar listener de cambio de producto/stock
                     productSelect.removeEventListener('change', handleProductChange);
                     productSelect.addEventListener('change', handleProductChange);
+
+                    // Limpiar y adjuntar listener para la EXCLUSIÓN DE PRODUCTOS
+                    productSelect.removeEventListener('change', updateAvailableProducts);
+                    productSelect.addEventListener('change', updateAvailableProducts);
 
                     // Llamar a handleProductChange para actualizar el stock visible
                     handleProductChange({ target: productSelect });
@@ -117,8 +152,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         /**
-         * Añade una nueva fila de ítem.
-         */
+          * Añade una nueva fila de ítem.
+          */
         function addItem() {
             if (!itemTemplate || !totalFormsInput) return;
 
@@ -133,17 +168,23 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // La reindexación se encarga de adjuntar los listeners
             reindexRows(); 
+            
+            // Aplicar la lógica de exclusión después de añadir una fila
+            updateAvailableProducts(); 
         }
 
         /**
-         * Elimina una fila de ítem.
-         * @param {Event} event 
-         */
+          * Elimina una fila de ítem.
+          * @param {Event} event 
+          */
         function removeItem(event) {
             const row = event.target.closest('.item-row');
             if (row) {
                 row.remove();
                 reindexRows(); // Reindexar después de eliminar
+                
+                // Re-habilitar los productos después de eliminar una fila
+                updateAvailableProducts();
             }
         }
 
@@ -156,9 +197,38 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 2. Inicializar listeners para filas existentes (al cargar la página)
         reindexRows(); 
+        
+        // 3. Aplicar la lógica de exclusión inicial para cualquier producto precargado
+        updateAvailableProducts();
 
     } catch (e) {
         console.error("Error crítico en la inicialización del formset de pedidos:", e);
-        // Si el formulario se "rompe", este error defensivo ayudará a diagnosticar.
     }
+});
+
+const form = document.getElementById('pedido-form'); // Usamos el ID del formulario en tu HTML
+const itemsContainer = document.getElementById('items-container');
+
+form.addEventListener('submit', function(event) {
+    event.preventDefault(); 
+
+    // 1. Validación de HTML5 (campos 'required', min/max, etc.)
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated'); 
+        return; 
+    }
+
+    // 2. Validación de Ítems Mínimos
+    const itemRows = itemsContainer.querySelectorAll('.item-row');
+    
+    if (itemRows.length === 0) {
+        // Asumiendo que 'showNotificationModal' es una función que existe en tu proyecto
+        showNotificationModal('Error al crear el pedido','Debe añadir al menos un producto al pedido de venta.','error'); 
+        itemsContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return; 
+    }
+    
+    // 3. ENVÍO DEL FORMULARIO
+    form.classList.remove('was-validated'); 
+    form.submit(); 
 });

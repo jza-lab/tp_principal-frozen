@@ -319,7 +319,7 @@ document.addEventListener('DOMContentLoaded', function () {
             
         } else if (step === 2) {
             if (nextStepBtn.disabled) {
-                alert('Por favor, corrija los errores antes de continuar.');
+                showNotificationModal('Formulario Incompleto', 'Por favor, corrija los errores resaltados antes de continuar.', 'warning');
                 return;
             }
             
@@ -377,7 +377,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 
             } catch (error) {
                 console.error('Error al acceder a la cámara:', error);
-                alert('Error al acceder a la cámara: ' + error.message);
+                showNotificationModal('Error de Cámara', 'No se pudo acceder a la cámara. Verifique los permisos y que no esté siendo usada por otra aplicación.', 'error');
             }
         });
     }
@@ -390,7 +390,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             
             if (!videoStream || !videoElement.srcObject) {
-                alert('Por favor, inicie la cámara primero.');
+                showNotificationModal('Cámara no Iniciada', 'Por favor, inicie la cámara antes de capturar una foto.', 'warning');
                 return;
             }
             
@@ -428,7 +428,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (!result.valid) {
                     // Mostrar error específico
                     const errorMessage = result.message || 'Error al validar el rostro';
-                    alert(errorMessage);
+                    showNotificationModal('Error de Validación Facial', errorMessage, 'error');
                     
                     // Mostrar error visual en la interfaz
                     const photoPreview = document.getElementById('photoPreview');
@@ -476,7 +476,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 
             } catch (error) {
                 console.error('Error al validar rostro:', error);
-                alert('Error de conexión al validar el rostro. Intente nuevamente.');
+                showNotificationModal('Error de Conexión', 'No se pudo validar el rostro. Verifique su conexión e intente nuevamente.', 'error');
                 
                 // Permitir retomar foto
                 this.disabled = false;
@@ -499,7 +499,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             if (!photoTaken || !faceDataInput.value) {
-                alert('Por favor, capture una foto primero.');
+                showNotificationModal('Foto Requerida', 'Por favor, capture una foto antes de confirmar.', 'warning');
                 return;
             }
 
@@ -531,7 +531,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 submitFormBtn.classList.add('btn-success');
             }
             
-            alert('Rostro registrado correctamente. Puede finalizar la creación del usuario.');
+            showNotificationModal('Éxito', 'Rostro confirmado correctamente. Ahora puede finalizar la creación del usuario.', 'success');
         });
     }
 
@@ -579,13 +579,13 @@ document.addEventListener('DOMContentLoaded', function () {
         userForm.addEventListener('submit', function (e) {
             if (currentStep === 2 && !photoConfirmed) {
                 e.preventDefault();
-                alert('Por favor, capture y confirme su rostro antes de crear el usuario.');
+                showNotificationModal('Rostro no Confirmado', 'Por favor, capture y confirme su rostro antes de crear el usuario.', 'warning');
                 return false;
             }
             
             if (!faceDataInput.value) {
                 e.preventDefault();
-                alert('No se ha capturado ninguna foto. Por favor, capture su rostro.');
+                showNotificationModal('Foto Requerida', 'No se ha capturado ninguna foto. Por favor, capture su rostro para continuar.', 'warning');
                 return false;
             }
             

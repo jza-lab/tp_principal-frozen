@@ -281,7 +281,7 @@ class UsuarioController(BaseController):
         }
 
         return {'success': True, 'data': estado}
-    ## ____________________________________________________________________________
+ 
     def obtener_usuario_por_id(self, usuario_id: int) -> Optional[Dict]:
         """Obtiene un usuario por su ID."""
         result = self.model.find_by_id(usuario_id)
@@ -347,3 +347,30 @@ class UsuarioController(BaseController):
             return {'valid': False, 'error': 'Error al realizar la validación.'}
         else:
             return {'valid': True}
+
+    def obtener_porcentaje_asistencia(self) -> float:
+
+        """
+        Calcula el porcentaje de usuarios activos que tienen una sesión de tótem activa hoy.
+        """
+ 
+        todos_activos = self.model.find_all({'activo': True})
+
+        if not todos_activos.get('success') or not todos_activos.get('data'):
+            return 0.0
+
+        usuarios_activos = todos_activos['data']
+        total_usuarios_activos = len(usuarios_activos)
+
+        if total_usuarios_activos == 0:
+            return 0.0
+        
+        cant_en_empresa = 0
+        for usuario in usuarios_activos:
+            if self._verificar_login_totem_activo(usuario):
+                cant_en_empresa += 1
+        
+
+        porcentaje = int((cant_en_empresa / total_usuarios_activos) * 100)
+        
+        return round(porcentaje, 0)

@@ -49,9 +49,11 @@
                         
                         <div class="col-md-6">
                             <label for="fecha_solicitud" class="form-label">Fecha de Solicitud <span class="text-danger">*</span></label>
-                            <!-- FIX PREVIO: Se usa la conversión a string y el slicing [0:10] para manejar de forma segura datetime/strings. -->
                             <input type="date" class="form-control" id="fecha_solicitud" name="fecha_solicitud" 
-                                   value="{{ (pedido.fecha_solicitud | string)[:10] if pedido and pedido.fecha_solicitud else '' }}" required>
+                                value="{{ (pedido.fecha_solicitud | string)[:10] if is_edit else today }}" 
+                                required {{ 'readonly' if is_edit }}
+                                min="2025-01-01" 
+                                max="{{ today }}">
                         </div>
                     </div>
                 </div>
@@ -73,7 +75,7 @@
                                     <th style="width: 40%;">Producto <span class="text-danger">*</span></th>
                                     <th style="width: 15%;">Cantidad <span class="text-danger">*</span></th>
                                     <th style="width: 15%;">Estado</th>
-                                    <th style="width: 15%;">Stock</th>
+                                    <!-- <th style="width: 15%;">Stock</th> -->
                                     <th style="width: 15%;" class="text-center">Acción</th>
                                 </tr>
                             </thead>
@@ -171,20 +173,20 @@
     <tr class="item-row">
         <td>
             <input type="hidden" name="items-__prefix__-id" value=""> 
-            <select class="form-select form-select-sm" name="items-__prefix__-producto_id" required>
-                <option value="" selected>Seleccione un producto...</option>
+            <select class="form-select form-select-sm producto-selector" name="items-__prefix__-producto_id" required>
+                <option value="" selected data-id="">Seleccione un producto...</option>
                 {% for producto in productos %}
-                    <option value="{{ producto.id }}" data-stock="{{ producto.stock_disponible or 0 }}">{{ producto.nombre }}</option>
+                    <option value="{{ producto.id }}" data-id="{{ producto.id }}" data-stock="{{ producto.stock_disponible or 0 }}">{{ producto.nombre }}</option>
                 {% endfor %}
             </select>
         </td>
         <td>
-            <input type="number" min="1" step="1" class="form-control form-control-sm" name="items-__prefix__-cantidad" 
+            <input type="number" min="1" max="5000" step="1" class="form-control form-control-sm" name="items-__prefix__-cantidad" 
                    placeholder="Ej: 10"  required>
         </td>
-        <td>
+        <!-- <td>
             <span class="badge bg-secondary text-white stock-display">--</span>
-        </td>
+        </td> -->
         <td class="text-center">
             <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem"><i class="bi bi-trash"></i></button>
         </td>

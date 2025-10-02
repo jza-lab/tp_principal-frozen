@@ -79,9 +79,13 @@ class OrdenProduccionModel(BaseModel):
             # Aplicar filtros
             if filtros:
                 for key, value in filtros.items():
-                    if value is not None:
-                        query = query.eq(key, value)
-            
+                    if value is not None: #Esto es solo para planificar las cosas desde x a y fecha (?
+                        if key == 'fecha_planificada_desde':
+                            query = query.gte('fecha_planificada', value)
+                        elif key == 'fecha_planificada_hasta':
+                            query = query.lte('fecha_planificada', value)
+                        else:
+                            query = query.eq(key, value)
             # Ordenar
             query = query.order("fecha_planificada", desc=True).order("id", desc=True)
 

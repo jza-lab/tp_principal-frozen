@@ -26,8 +26,10 @@
                     <select name="estado" class="form-select" onchange="this.form.submit()">
                         <option value="">Todas las órdenes</option>
                         <option value="PENDIENTE" {% if request.args.get('estado') == 'PENDIENTE' %}selected{% endif %}>Pendientes</option>
+                        <option value="EN_PROCESO" {% if request.args.get('estado') == 'EN_PROCESO' %}selected{% endif %}>En Proceso</option>
                         <option value="APROBADA" {% if request.args.get('estado') == 'APROBADA' %}selected{% endif %}>Aprobadas</option>
-                        <option value="CANCELADA" {% if request.args.get('estado') == 'CANCELADA' %}selected{% endif %}>Canceladas</option>
+                        <option value="CANCELADA" {% if request.args.get('estado') == 'CANCELADA' %}selected{% endif %}>En espera</option>
+                        <option value="COMPLETADA" {% if request.args.get('estado') == 'COMPLETADA' %}selected{% endif %}>Completadas</option>
                     </select>
                     
                 </div>
@@ -126,9 +128,12 @@
                 <div class="d-flex justify-content-between">
                     <h5 class="card-title">{{ orden.producto_nombre or 'Producto no definido' }}</h5>
                     {% set estado_config = {
-                    'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
-                    'APROBADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
-                    'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
+                        'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
+                        'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
+                        'PLANIFICADA': {'class': 'bg-light text-dark', 'icon': 'calendar3'},
+                        'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
+                        'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle-fill'},
+                        'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
                     {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':
                     'question-circle'}) %}
@@ -172,27 +177,34 @@
                         <i class="bi bi-eye"></i>
                     </a>
                     {% if orden.estado == 'PLANIFICADA' or orden.estado == 'APROBADA' %}
-                    <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}"
-                        style="display: inline;" onsubmit="return confirm('¿Iniciar esta orden de producción?')">
+                    <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+                        data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
                         <button type="submit" class="btn btn-sm btn-outline-success" title="Iniciar Orden">
                             <i class="bi bi-play-fill"></i>
                         </button>
                     </form>
                     {% endif %}
+                    {% if orden.estado == 'EN_PROCESO' %}
+                    <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+                        data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
+                        <button type="submit" class="btn btn-sm btn-outline-success" title="Completar Orden">
+                            <i class="bi bi-check-circle-fill"></i>
+                        </button>
+                    </form>
+                    {% endif %}
                     {% if orden.estado == 'PENDIENTE' %}
-                    <form method="POST" action="{{ url_for('orden_produccion.aprobar', id=orden.id) }}"
-                        style="display: inline;" onsubmit="return confirm('¿Aprobar esta orden de producción?')">
+                    <form method="POST" action="{{ url_for('orden_produccion.aprobar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+                        data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de producción?" data-button-type="success">
                         <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
-                            <i class="bi bi-play-fill"></i>
+                            <i class="bi bi-check-circle"></i>
                         </button>
                     </form>
-                    <form method="POST" action="{{ url_for('orden_produccion.rechazar', id=orden.id) }}"
-                        style="display: inline;" onsubmit="return confirm('¿Rechazar esta orden de producción?')">
+                    <form method="POST" action="{{ url_for('orden_produccion.rechazar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+                        data-title="Confirmar Rechazo" data-message="¿Está seguro de que desea rechazar esta orden de producción? Esta acción no se puede deshacer." data-button-type="danger">
                         <button type="submit" class="btn btn-sm btn-outline-danger" title="Rechazar Orden">
-                            <i class="bi bi-x"></i>
+                            <i class="bi bi-x-circle"></i>
                         </button>
                     </form>
-
                     {% endif %}
                 </div>
             </div>
@@ -214,4 +226,31 @@
 </div>
 {% endfor %}
 </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const forms = document.querySelectorAll('.confirm-form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            
+            const title = form.dataset.title || 'Confirmar Acción';
+            const message = form.dataset.message || '¿Está seguro de que desea realizar esta acción?';
+            const buttonType = form.dataset.buttonType || 'primary';
+
+            showConfirmationModal(
+                title,
+                message,
+                () => { // Callback de confirmación
+                    form.submit();
+                },
+                buttonType
+            );
+        });
+    });
+});
+</script>
 {% endblock %}

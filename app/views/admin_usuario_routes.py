@@ -1,6 +1,8 @@
+from datetime import date, timedelta
 from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
+from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.utils.decorators import roles_required
 
 # Blueprint para la administración de usuarios
@@ -9,12 +11,51 @@ admin_usuario_bp = Blueprint('admin_usuario', __name__, url_prefix='/admin')
 # Instanciar controladores
 usuario_controller = UsuarioController()
 facial_controller = FacialController()
+orden_produccion_controller=OrdenProduccionController()
 
 @admin_usuario_bp.route('/')
 @roles_required('ADMIN')
 def index():
+    hoy = date.today()
+
+    # 0 = Lunes, 6 = Domingo. weekday() devuelve 0 para Lunes.
+    # Calcular el desplazamiento (días a restar) para llegar al Lunes.
+    dias_restar = hoy.weekday()
+    
+    # Lunes de esta semana
+    fecha_inicio_semana = hoy - timedelta(days=dias_restar)
+    
+    # Domingo de esta semana (6 días después del Lunes)
+    fecha_fin_semana = fecha_inicio_semana + timedelta(days=6)
+    
+    # Convertir a formato ISO (YYYY-MM-DD) para los filtros
+    fecha_inicio_iso = fecha_inicio_semana.isoformat()
+    fecha_fin_iso = fecha_fin_semana.isoformat()
+
     """Página principal del panel de administración."""
-    return render_template('dashboard/index.html')
+    respuesta, estado = orden_produccion_controller.obtener_cantidad_ordenes_estado("EN_PROCESO", hoy)
+    ordenes_pendientes = respuesta['data']['cantidad']
+
+    respuesta2, estado = orden_produccion_controller.obtener_cantidad_ordenes_estado("APROBADA")
+    respuesta3, estado = orden_produccion_controller.obtener_cantidad_ordenes_estado("COMPLETADA")
+
+    filtros = {
+        'estado': 'APROBADA',
+        'fecha_planificada_desde': fecha_inicio_iso, 
+        'fecha_planificada_hasta': fecha_fin_iso 
+    }
+
+    respuesta, estado = orden_produccion_controller.obtener_ordenes(filtros)
+    print(respuesta)
+    ordenes_aprobadas = respuesta['data']
+    ordenes_totales = int(respuesta2['data']['cantidad']) + int(respuesta3['data']['cantidad'])
+
+    asistencia = usuario_controller.obtener_porcentaje_asistencia()
+
+    return render_template('dashboard/index.html', asistencia=asistencia,
+                            ordenes_pendientes = ordenes_pendientes,
+                            ordenes_aprobadas = ordenes_aprobadas,
+                            ordenes_totales = ordenes_totales)
 
 @admin_usuario_bp.route('/usuarios')
 @roles_required('ADMIN')

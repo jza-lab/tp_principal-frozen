@@ -15,15 +15,15 @@
             <i class="bi bi-arrow-left me-1"></i>Volver
         </a>
         {% if orden.estado == 'PLANIFICADA' %}
-        <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;"
-            onsubmit="return confirm('¿Iniciar esta orden de producción?')">
+        <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+            data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
             <button type="submit" class="btn btn-success">
                 <i class="bi bi-play-fill me-1"></i>Iniciar Producción
             </button>
         </form>
         {% elif orden.estado == 'EN_PROCESO' %}
-        <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;"
-            onsubmit="return confirm('¿Marcar como completada?')">
+        <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+            data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
             <button type="submit" class="btn btn-success">
                 <i class="bi bi-check-circle me-1"></i>Completar Orden
             </button>
@@ -262,15 +262,15 @@
             <div class="card-body">
                 <div class="d-grid gap-2">
                     {% if orden.estado == 'PLANIFICADA' %}
-                    <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}"
-                        onsubmit="return confirm('¿Iniciar esta orden de producción?')">
+                    <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" class="confirm-form"
+                        data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
                         <button type="submit" class="btn btn-success w-100">
                             <i class="bi bi-play-fill me-2"></i>Iniciar Producción
                         </button>
                     </form>
                     {% elif orden.estado == 'EN_PROCESO' %}
-                    <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}"
-                        onsubmit="return confirm('¿Marcar como completada?')">
+                    <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" class="confirm-form"
+                        data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
                         <button type="submit" class="btn btn-success w-100">
                             <i class="bi bi-check-circle me-2"></i>Completar Orden
                         </button>
@@ -310,4 +310,30 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const forms = document.querySelectorAll('.confirm-form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            
+            const title = form.dataset.title || 'Confirmar Acción';
+            const message = form.dataset.message || '¿Está seguro de que desea realizar esta acción?';
+            const buttonType = form.dataset.buttonType || 'primary';
+
+            showConfirmationModal(
+                title,
+                message,
+                () => { // Callback de confirmación
+                    form.submit();
+                },
+                buttonType
+            );
+        });
+    });
+});
+</script>
 {% endblock %}

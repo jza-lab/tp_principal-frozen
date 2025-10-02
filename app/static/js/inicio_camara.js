@@ -1,61 +1,141 @@
-document.addEventListener('DOMContentLoaded', function () {
-    video = document.getElementById("video");
-    boton_inicioSesionCamara = document.getElementById("botonCamara");
-    formulario_inicioSesion = document.getElementById("credenciales");
-    area_reconocimientoFacial = document.getElementById("areaRecoFacial");
-    boton_verificarRostro = document.getElementById("botonVerificarRostro");
-    mensajeGuia = this.getElementById("guia");
-
-    if(area_reconocimientoFacial.style.display == "none"){
-        navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-            .then(function (stream) {
-
-                video.srcObject = stream;
-                //video.setPointerCapture(0);
-                video.play();
-
-            })
-            .catch(function (err) {
-                console.log("An error occurred! " + err);
-            });
+/**
+ * Muestra un modal de confirmación genérico con dos botones (Confirmar/Cancelar).
+ * @param {string} title - El título del modal.
+ * @param {string} body - El mensaje en el cuerpo del modal.
+ * @param {function} confirmCallback - La función que se ejecutará si el usuario hace clic en "Confirmar".
+ * @param {string} [buttonType='primary'] - El estilo del botón de confirmación ('primary', 'success', 'danger').
+ */
+function showConfirmationModal(title, body, confirmCallback, buttonType = 'primary') {
+    const modalElement = document.getElementById('confirmationModal');
+    if (!modalElement) {
+        console.error('Modal element #confirmationModal not found in the DOM.');
+        return;
     }
 
-    boton_inicioSesionCamara.addEventListener('click', () => {
-        boton_inicioSesionCamara.style.display = 'none';
-        area_reconocimientoFacial.style.display = 'block';
-    })
+    const modalTitle = modalElement.querySelector('#modalTitle');
+    const modalBody = modalElement.querySelector('#modalBody');
+    const modalConfirmButton = modalElement.querySelector('#modalConfirmButton');
+    const modalCancelButton = modalElement.querySelector('#modalCancelButton');
 
-    boton_verificarRostro.addEventListener('click', () => {
-        area_reconocimientoFacial.style.display = 'none';
-        mensajeGuia.style.display = 'none'
-        const canvas = document.getElementById("canvas");
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // Asignar contenido y configurar botones
+    modalTitle.textContent = title;
+    modalBody.textContent = body;
+    modalConfirmButton.textContent = 'Confirmar';
+    modalConfirmButton.className = `btn btn-${buttonType}`; // Asignar clase de estilo
+    modalCancelButton.style.display = ''; // Asegurarse de que el botón Cancelar esté visible
 
-        // Convertir a dataURL (base64)
-        const imageDataUrl = canvas.toDataURL("image/jpeg");
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
 
-        // Enviar al backend
-        fetch("/auth/identificar_rostro", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image: imageDataUrl })
-        })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                       window.location.href = data.redirect
-                } else {
-                    boton_inicioSesionCamara.style.display = 'none';
-                    area_reconocimientoFacial.style.display='none'
-                    formulario_inicioSesion.style.display = 'block';
-                    alert(data.message);
-                }
-            })
-            .catch(err => {
-                console.error("Error:", err);
-            });
+    // Clonar y reemplazar el botón para limpiar listeners de eventos anteriores
+    const newConfirmButton = modalConfirmButton.cloneNode(true);
+    modalConfirmButton.parentNode.replaceChild(newConfirmButton, modalConfirmButton);
+    
+    // Asignar el nuevo callback
+    newConfirmButton.addEventListener('click', () => {
+        confirmCallback();
+        modal.hide();
+    });
+
+    modal.show();
+}
 
 
-    })
-})
+document.addEventListener('DOMContentLoaded', function () {
+    const confirmationModal = document.getElementById('confirmationModal');
+    if (confirmationModal) {
+        let form = null; 
+
+        confirmationModal.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const url = button.getAttribute('data-url');
+            const message = button.getAttribute('data-message');
+            const title = button.getAttribute('data-title');
+
+            const modalTitle = confirmationModal.querySelector('#modalTitle');
+            const modalBody = confirmationModal.querySelector('#modalBody');
+            const modalConfirmButton = confirmationModal.querySelector('#modalConfirmButton');
+
+            // Set title and message
+            modalTitle.textContent = title || 'Confirmación';
+            modalBody.innerHTML = message || '¿Estás seguro de que quieres realizar esta acción?';
+
+            if (url) {
+                // Create a form for the action
+                form = document.createElement('form');
+                form.method = 'POST';
+                form.action = url;
+                form.style.display = 'inline';
+
+                // Move the original confirm button inside the form
+                const confirmButtonClone = modalConfirmButton.cloneNode(true);
+                confirmButtonClone.type = 'submit';
+                confirmButtonClone.classList.remove('btn-primary');
+                confirmButtonClone.classList.add('btn-danger');
+                confirmButtonClone.textContent = 'Eliminar';
+
+
+                form.appendChild(confirmButtonClone);
+                
+                modalConfirmButton.style.display = 'none';
+                modalConfirmButton.parentElement.insertBefore(form, modalConfirmButton.nextSibling);
+
+            } else {
+                modalConfirmButton.style.display = 'inline-block';
+            }
+        });
+
+        confirmationModal.addEventListener('hide.bs.modal', function() {
+            // Cleanup: remove the dynamically created form
+            if (form) {
+                form.remove();
+                form = null;
+            }
+             const modalConfirmButton = confirmationModal.querySelector('#modalConfirmButton');
+            if(modalConfirmButton) {
+                modalConfirmButton.style.display = 'inline-block';
+            }
+        });
+    }
+});
+
+/**
+ * Muestra un modal de notificación con un solo botón (OK).
+ * @param {string} title - El título del modal.
+ * @param {string} body - El mensaje en el cuerpo del modal.
+ * @param {string} [type='info'] - El tipo de notificación ('success', 'error', 'info') para colorear el botón.
+ * @param {function} [closeCallback] - (Opcional) La función que se ejecutará después de que el modal se cierre.
+ */
+function showNotificationModal(title, body, type = 'info', closeCallback) {
+    const modalElement = document.getElementById('notificationModal');
+    if (!modalElement) {
+        console.error('Modal element #notificationModal not found in the DOM.');
+        return;
+    }
+
+    const modalTitle = modalElement.querySelector('#notificationModalTitle');
+    const modalBody = modalElement.querySelector('#notificationModalBody');
+    const modalOkButton = modalElement.querySelector('#notificationModalOkButton');
+
+    // Asignar contenido y configurar botones
+    modalTitle.textContent = title;
+    modalBody.innerHTML = body; // Usar innerHTML para permitir contenido HTML
+
+    // Cambiar color del botón según el tipo de notificación
+    let buttonClass = 'btn btn-primary';
+    if (type === 'success') {
+        buttonClass = 'btn btn-success';
+    } else if (type === 'error') {
+        buttonClass = 'btn btn-danger';
+    }
+    modalOkButton.className = buttonClass;
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+
+    // Si hay un callback, lo ejecutamos DESPUÉS de que el modal se oculte.
+    // Usamos { once: true } para que el listener se elimine automáticamente después de ejecutarse una vez.
+    if (closeCallback && typeof closeCallback === 'function') {
+        modalElement.addEventListener('hidden.bs.modal', closeCallback, { once: true });
+    }
+
+    modal.show();
+}

@@ -55,14 +55,12 @@ document.addEventListener('DOMContentLoaded', function () {
             })
             .then(result => {
                 if (result.success) {
+                    // El mensaje flash de éxito se mostrará en el modal en la página de redirección
                     window.location.href = redirectUrl;
                 } else {
-                    // Este bloque podría no alcanzarse si el error se maneja en el .catch
-                    let errorMsg = result.error || 'Ocurrió un error desconocido.';
-                    if (result.details) {
-                        errorMsg += ': ' + JSON.stringify(result.details);
-                    }
-                    alert(`Falla al ${isEdit ? 'actualizar' : 'crear'} lote: ${errorMsg}`);
+                    // Este caso es para errores de validación que no lanzan una excepción HTTP
+                    const errorMsg = result.error || 'Ocurrió un error desconocido.';
+                    showNotificationModal(`Error al ${isEdit ? 'Actualizar' : 'Crear'} Lote`, errorMsg, 'error');
                     submitButton.disabled = false;
                     submitButton.innerHTML = originalButtonText;
                 }
@@ -70,28 +68,16 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(error => {
                 console.error('Error en fetch:', error);
                 let errorMsg = error.error || 'Error de conexión o del servidor.';
+                // Si hay detalles de validación, los formateamos como HTML
                 if (error.details) {
-                    // Formatear los detalles para una mejor legibilidad
                     const details = Object.entries(error.details).map(([field, messages]) => 
-                        `<strong>${field}:</strong> ${messages.join(', ')}`
+                        `<strong>${field.replace(/_/g, ' ')}:</strong> ${messages.join(', ')}`
                     ).join('<br>');
-                    errorMsg += `<br><br><div class="text-start small">${details}</div>`;
+                    errorMsg = `Se encontraron los siguientes errores:<br><br><div class="text-start small">${details}</div>`;
                 }
-
-                // Usar el modal de notificación en lugar de alert()
-                const notificationModal = new bootstrap.Modal(document.getElementById('notificationModal'));
-                const modalTitle = document.getElementById('notificationModalTitle');
-                const modalBody = document.getElementById('notificationModalBody');
-
-                modalTitle.textContent = `Error al ${isEdit ? 'Actualizar' : 'Crear'} Lote`;
-                modalBody.innerHTML = errorMsg;
                 
-                // Cambiar el color del header a rojo para errores
-                modalTitle.parentElement.classList.remove('bg-success', 'bg-primary');
-                modalTitle.parentElement.classList.add('bg-danger', 'text-white');
-
-
-                notificationModal.show();
+                // Usamos la función genérica mejorada
+                showNotificationModal(`Error al ${isEdit ? 'Actualizar' : 'Crear'} Lote`, errorMsg, 'error');
 
                 submitButton.disabled = false;
                 submitButton.innerHTML = originalButtonText;

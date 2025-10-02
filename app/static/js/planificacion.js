@@ -74,27 +74,32 @@ document.addEventListener('DOMContentLoaded', function () {
     // Confirmación al enviar
     if (planificacionForm) {
         planificacionForm.addEventListener('submit', function(e) {
+            e.preventDefault(); // Prevenir el envío por defecto para usar el modal
+
             const checkedCount = document.querySelectorAll('.item-checkbox:checked').length;
             
             if (checkedCount === 0) {
-                e.preventDefault();
-                alert('Por favor, seleccione al menos un item para crear órdenes de producción.');
-                return false;
+                showNotificationModal('Selección Requerida', 'Por favor, seleccione al menos un ítem para crear órdenes de producción.', 'warning');
+                return;
             }
 
-            const confirmMessage = `¿Está seguro de crear órdenes de producción para ${checkedCount} item${checkedCount !== 1 ? 's' : ''}?`;
+            const confirmMessage = `¿Está seguro de que desea crear órdenes de producción para los ${checkedCount} ítems seleccionados?`;
             
-            if (!confirm(confirmMessage)) {
-                e.preventDefault();
-                return false;
-            }
-
-            // Agregar estado de carga al botón
-            if (createOrdersBtn) {
-                createOrdersBtn.disabled = true;
-                createOrdersBtn.classList.add('btn-loading');
-                createOrdersBtn.innerHTML = '<i class="bi bi-gear-fill me-2"></i>Creando órdenes...';
-            }
+            // Usar el modal de confirmación genérico
+            showConfirmationModal(
+                'Confirmar Creación', 
+                confirmMessage, 
+                function() {
+                    // Callback de confirmación: agregar estado de carga y enviar el formulario
+                    if (createOrdersBtn) {
+                        createOrdersBtn.disabled = true;
+                        createOrdersBtn.classList.add('btn-loading');
+                        createOrdersBtn.innerHTML = '<i class="bi bi-gear-fill me-2"></i>Creando órdenes...';
+                    }
+                    planificacionForm.submit(); // Enviar el formulario programáticamente
+                },
+                'success' // Usar un botón verde para la confirmación
+            );
         });
     }
 

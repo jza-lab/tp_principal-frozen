@@ -118,7 +118,7 @@ function showNotificationModal(title, body, type = 'info', closeCallback) {
 
     // Asignar contenido y configurar botones
     modalTitle.textContent = title;
-    modalBody.textContent = body;
+    modalBody.innerHTML = body; // Usar innerHTML para permitir contenido HTML
 
     // Cambiar color del botón según el tipo de notificación
     let buttonClass = 'btn btn-primary';

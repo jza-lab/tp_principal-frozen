@@ -44,7 +44,7 @@
                             <select class="form-select" id="proveedor_id" name="proveedor_id" required {{ 'disabled' if is_edit }}>
                                 <option value="">Seleccionar proveedor...</option>
                                 {% for p in proveedores %}
-                                <option value="{{ p.id_proveedor }}" {{ 'selected' if is_edit and lote.id_proveedor == p.id_proveedor }}>
+                                <option value="{{ p.id_proveedor }}" {{ 'selected' if is_edit and lote.id_proveedor == p.id_proveedor }} required true>
                                     {{ p.nombre }}
                                 </option>
                                 {% endfor %}
@@ -54,14 +54,16 @@
                         <div class="col-md-6">
                             <label for="fecha_ingreso" class="form-label">Fecha de Ingreso <span class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_ingreso" name="fecha_ingreso"
-                                   value="{{ lote.f_ingreso if is_edit else today }}" required {{ 'readonly' if is_edit }}>
+                                value="{{ lote.f_ingreso if is_edit else today }}" required {{ 'readonly' if is_edit }}
+                                min="2025-01-01" 
+                                max="{{ today }}">
                         </div>
 
                         {% if is_edit %}
                         <div class="col-md-6">
                             <label for="cantidad_inicial" class="form-label">Cantidad Inicial</label>
                             <div class="input-group">
-                                <input type="number" min="1 max="10000" step="0.1" class="form-control" id="cantidad_inicial" name="cantidad_inicial"
+                                <input type="number" min="1 max="10000" step="1" class="form-control" id="cantidad_inicial" name="cantidad_inicial"
                                        value="{{ lote.get('cantidad_inicial', '') }}" readonly>
                                 <span class="input-group-text">{{ insumo.unidad_medida }}</span>
                             </div>
@@ -69,8 +71,8 @@
                         <div class="col-md-6">
                             <label for="cantidad_actual" class="form-label">Cantidad Actual <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <input type="number" min="0" step="0.1"class="form-control" id="cantidad_actual" name="cantidad_actual"
-                                       value="{{ lote.get('cantidad_actual', '') }}" required>
+                                <input type="number" step="0.1"class="form-control" id="cantidad_actual" name="cantidad_actual"
+                                       value="{{ lote.get('cantidad_actual', '') }}" required max="5000" min="0">
                                 <span class="input-group-text">{{ insumo.unidad_medida }}</span>
                             </div>
                         </div>
@@ -78,7 +80,7 @@
                         <div class="col-md-6">
                             <label for="cantidad_inicial" class="form-label">Cantidad Inicial <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <input type="number" min="1" step="0.1" class="form-control" id="cantidad_inicial" name="cantidad_inicial" required>
+                                <input type="number" step="0.1" class="form-control" id="cantidad_inicial" name="cantidad_inicial" required max="5000" min="1">
                                 <span class="input-group-text">{{ insumo.unidad_medida }}</span>
                             </div>
                         </div>
@@ -87,7 +89,8 @@
                         <div class="col-md-6">
                             <label for="fecha_vencimiento" class="form-label">Fecha de Vencimiento <span class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_vencimiento" name="fecha_vencimiento"
-                                   value="{{ lote.f_vencimiento if is_edit else '' }}" required>
+                                   value="{{ lote.f_vencimiento if is_edit else '' }}" required {{ 'readonly' if is_edit }} 
+                            min="{{ today }}">
                         </div>
                         
                         <div class="col-12">
@@ -112,7 +115,7 @@
                             <label for="precio_unitario" class="form-label">Precio Unitario</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
-                                <input type="number" step="0.01" min= "1" class="form-control" id="precio_unitario" name="precio_unitario"
+                                <input type="number" step="0.01" class="form-control" id="precio_unitario" name="precio_unitario" required max="50000" min= "1"
                                        value="{{ lote.get('precio_unitario', '') }}">
                             </div>
                         </div>

@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path='credenciales.env')
-    
+
 
 class Config:
 
@@ -12,7 +12,13 @@ class Config:
 
     # Flask Configuration
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-    DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+
+    # Configuraciones para desarrollo con PyScripter
+    DEBUG = True
+    TESTING = False
+
+    # Evitar problemas de puertos
+    USE_RELOADER = False
 
     # Pagination
     DEFAULT_PAGE_SIZE = 20
