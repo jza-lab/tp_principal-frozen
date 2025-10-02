@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', function () {
         row.innerHTML = `
             <div class="col-md-4">
                 <label class="form-label">Insumo</label>
-                <select class="form-select insumo-selector" name="insumo_id[]">
+                <select class="form-select insumo-selector" name="insumo_id[]" required>
                     ${optionsHtml}
                 </select>
             </div>
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
             <div class="col-md-2">
                 <label class="form-label">Precio Unitario</label>
-                <input type="number" step="0.01" min="1" class="form-control precio_unitario" name="precio_unitario[]" value="1.00">
+                <input type="number" step="0.01" min="1" class="form-control precio_unitario" name="precio_unitario[]" value="1.00" required>
             </div>
             <div class="col-md-2">
                 <label class="form-label">Subtotal</label>
@@ -147,4 +147,28 @@ document.addEventListener('DOMContentLoaded', function () {
     // Cálculo y exclusión inicial
     calcularSubtotales();
     updateAvailableInsumos();
+});
+
+const form = document.querySelector('form'); 
+const itemsContainer = document.getElementById('itemsContainer');
+
+form.addEventListener('submit', function(event) {
+    event.preventDefault();
+
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated'); 
+        return; 
+    }
+
+    const itemRows = itemsContainer.querySelectorAll('.item-row');
+    
+    if (itemRows.length === 0) {
+        showNotificationModal('Error','Debe añadir al menos un insumo a la orden de compra.','error'); 
+    
+        itemsContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        return; 
+    }
+    form.classList.remove('was-validated'); 
+    form.submit(); 
 });

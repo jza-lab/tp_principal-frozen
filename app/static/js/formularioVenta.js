@@ -205,3 +205,30 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error("Error crítico en la inicialización del formset de pedidos:", e);
     }
 });
+
+const form = document.getElementById('pedido-form'); // Usamos el ID del formulario en tu HTML
+const itemsContainer = document.getElementById('items-container');
+
+form.addEventListener('submit', function(event) {
+    event.preventDefault(); 
+
+    // 1. Validación de HTML5 (campos 'required', min/max, etc.)
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated'); 
+        return; 
+    }
+
+    // 2. Validación de Ítems Mínimos
+    const itemRows = itemsContainer.querySelectorAll('.item-row');
+    
+    if (itemRows.length === 0) {
+        // Asumiendo que 'showNotificationModal' es una función que existe en tu proyecto
+        showNotificationModal('Error al crear el pedido','Debe añadir al menos un producto al pedido de venta.','error'); 
+        itemsContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return; 
+    }
+    
+    // 3. ENVÍO DEL FORMULARIO
+    form.classList.remove('was-validated'); 
+    form.submit(); 
+});
