@@ -27,15 +27,16 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                // La redirección mostrará el mensaje flash de éxito en el nuevo modal
                 window.location.href = LISTA_URL;
             } else {
-                // Manejo de errores de validación de Flask/Marshmallow
-                alert('Operacion fallida: ' + data.error);
+                // Mostrar error de validación en el modal
+                showNotificationModal('Error de Validación', data.error, 'error');
             }
         })
         .catch(error => {
             console.error('Error en la petición:', error);
-            alert('Ocurrió un error al procesar la orden: ' + error.message);
+            showNotificationModal('Error de Conexión', 'No se pudo procesar la solicitud. Verifique su conexión e intente nuevamente.', 'error');
         });
 
         return false;

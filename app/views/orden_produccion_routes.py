@@ -32,7 +32,7 @@ def listar():
     ordenes = []
     if response.get('success'):
         ordenes_data = response.get('data', [])
-        # Ordenar: no canceladas primero, luego canceladas
+        # Ordenar: no CANCELADAs primero, luego CANCELADAs
         ordenes = sorted(ordenes_data, key=lambda x: x.get('estado') == 'CANCELADA')
     else:
         flash(response.get('error', 'Error al cargar las órdenes de producción.'), 'error')
@@ -178,7 +178,7 @@ def iniciar(id):
     else:
         flash(f"Error al iniciar la orden: {resultado.get('error', 'Error desconocido')}", 'error')
 
-    return redirect(url_for('orden_produccion.detalle', id=id))
+    return redirect(url_for('orden_produccion.listar', id=id))
 
 @orden_produccion_bp.route('/<int:id>/completar', methods=['POST'])
 def completar(id):

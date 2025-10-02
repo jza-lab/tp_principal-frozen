@@ -28,17 +28,6 @@
                 <p class="text-muted">Complete todos los campos obligatorios (*)</p>
             </div>
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ 'danger' if category == 'error' else 'success' }} alert-dismissible fade show">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-
             <form method="POST" id="registerForm">
                 <!-- Información Básica -->
                 <div class="row mb-4">
