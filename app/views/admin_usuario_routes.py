@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
+from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.utils.decorators import roles_required
 
 # Blueprint para la administración de usuarios
@@ -9,6 +10,7 @@ admin_usuario_bp = Blueprint('admin_usuario', __name__, url_prefix='/admin')
 # Instanciar controladores
 usuario_controller = UsuarioController()
 facial_controller = FacialController()
+orden_produccion_controller=OrdenProduccionController()
 
 @admin_usuario_bp.route('/')
 @roles_required('ADMIN')

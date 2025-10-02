@@ -281,7 +281,7 @@ class UsuarioController(BaseController):
         }
 
         return {'success': True, 'data': estado}
-    ## ____________________________________________________________________________
+ 
     def obtener_usuario_por_id(self, usuario_id: int) -> Optional[Dict]:
         """Obtiene un usuario por su ID."""
         result = self.model.find_by_id(usuario_id)
@@ -347,3 +347,6 @@ class UsuarioController(BaseController):
             return {'valid': False, 'error': 'Error al realizar la validación.'}
         else:
             return {'valid': True}
+
+    def obtener_porcentaje_asistencia(self) -> float:
+        return 0.1
