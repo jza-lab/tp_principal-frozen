@@ -26,6 +26,7 @@
                     <select name="estado" class="form-select" onchange="this.form.submit()">
                         <option value="">Todas las órdenes</option>
                         <option value="PENDIENTE" {% if request.args.get('estado') == 'PENDIENTE' %}selected{% endif %}>Pendientes</option>
+                        <option value="EN_PROCESO" {% if request.args.get('estado') == 'EN_PROCESO' %}selected{% endif %}>En Proceso</option>
                         <option value="APROBADA" {% if request.args.get('estado') == 'APROBADA' %}selected{% endif %}>Aprobadas</option>
                         <option value="CANCELADA" {% if request.args.get('estado') == 'CANCELADA' %}selected{% endif %}>En espera</option>
                         <option value="COMPLETADA" {% if request.args.get('estado') == 'COMPLETADA' %}selected{% endif %}>Completadas</option>

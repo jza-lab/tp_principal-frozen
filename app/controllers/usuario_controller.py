@@ -349,4 +349,28 @@ class UsuarioController(BaseController):
             return {'valid': True}
 
     def obtener_porcentaje_asistencia(self) -> float:
-        return 0.1
+
+        """
+        Calcula el porcentaje de usuarios activos que tienen una sesión de tótem activa hoy.
+        """
+ 
+        todos_activos = self.model.find_all({'activo': True})
+
+        if not todos_activos.get('success') or not todos_activos.get('data'):
+            return 0.0
+
+        usuarios_activos = todos_activos['data']
+        total_usuarios_activos = len(usuarios_activos)
+
+        if total_usuarios_activos == 0:
+            return 0.0
+        
+        cant_en_empresa = 0
+        for usuario in usuarios_activos:
+            if self._verificar_login_totem_activo(usuario):
+                cant_en_empresa += 1
+        
+
+        porcentaje = int((cant_en_empresa / total_usuarios_activos) * 100)
+        
+        return round(porcentaje, 0)

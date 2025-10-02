@@ -39,11 +39,13 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
-    def obtener_cantidad_ordenes_pendiente(self) -> Optional[Dict]:
-        estado = "PENDIENTE"
+    def obtener_cantidad_ordenes_estado(self, estado: str, fecha: Optional[str] = None) -> Optional[Dict]:
         filtros = {'estado': estado} if estado else {}
-        response, status_code = self.obtener_ordenes(filtros)
         
+        if fecha:
+            filtros['fecha_planificada'] = fecha
+        
+        response, status_code = self.obtener_ordenes(filtros)
         if(response.get('success')):
             ordenes=response.get('data', [])
             cantidad= len(ordenes)
