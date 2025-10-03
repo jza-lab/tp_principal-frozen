@@ -38,6 +38,10 @@
                         <p class="form-control-plaintext">{{ insumo.unidad_medida }}</p>
                     </div>
                     <div class="col-md-4">
+                        <label class="form-label-sm">Precio por unidad</label>
+                        <p class="form-control-plaintext">${{ insumo.precio_unitario }}</p>
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label-sm">Temperatura Recomendada</label>
                         <p class="form-control-plaintext">{{ insumo.tem_recomendada or 'N/A' }} °C</p>
                     </div>

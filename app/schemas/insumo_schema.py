@@ -62,6 +62,15 @@ class InsumosCatalogoSchema(Schema):
     activo = fields.Bool(dump_only=True)
     created_at = fields.Str(dump_only=True)
     updated_at = fields.Str(dump_only=True)
+    precio_unitario = fields.Float(
+        validate=validate.Range(min=1.00, error="El precio unitario debe ser mayor que 0."),
+        error_messages={
+            "required": "El precio unitario es obligatorio",
+            "invalid": "El precio unitario debe ser un número válido."
+        },
+        allow_none=False,
+        load_default=1
+    )
 
 
     @post_load

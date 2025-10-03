@@ -129,14 +129,13 @@ Agregar nuevo insumo al catálogo
                         </div>
 
                         <div class="col-md-6">
-                            <label for="precio_unitario" class="form-label">Precio Unitario</label>
+                            <label for="precio_unitario" class="form-label" required>Precio Unitario</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
                                 <input type="number" step="0.01" class="form-control" name="precio_unitario"
                                     id="precio_unitario" min="1" max="10000"
                                     value="{{ insumo.precio_unitario if insumo else '' }}">
                             </div>
-                            <div class="form-text">Opcional - para cálculos de costos</div>
                         </div>
 
                         <div class="col-md-6">

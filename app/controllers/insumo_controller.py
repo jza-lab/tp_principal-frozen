@@ -47,6 +47,7 @@ class InsumoController(BaseController):
         try:
             # Validar datos con esquema
             validated_data = self.schema.load(data)
+
             nombre = validated_data.get('nombre', '').strip().lower()
             existe_nombre = self.insumo_model.find_all({'nombre': nombre})
             if existe_nombre['success'] and existe_nombre['data']:
@@ -87,7 +88,6 @@ class InsumoController(BaseController):
             if result['success']:
                 logger.info(f"Insumo creado exitosamente: {result['data']['id_insumo']}")
 
-                # ✅ SIMPLIFICADO: El esquema ya maneja la serialización
                 return self.success_response(
                     data=self.schema.dump(result['data']),  # Marshmallow se encarga
                     message='Insumo creado exitosamente',
