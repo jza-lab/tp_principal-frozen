@@ -47,6 +47,9 @@
                             <a class="nav-link {% if 'orden_compra' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_compra.listar') }}">Compras</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link {% if 'inventario' in request.endpoint %}active{% endif %}" href="{{ url_for('inventario_view.listar_lotes') }}">Inventario</a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link {% if 'orden_venta' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_venta.listar') }}">Ventas</a>
                         </li>
                         <li class="nav-item">

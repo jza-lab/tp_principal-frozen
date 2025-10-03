@@ -46,7 +46,7 @@ def index():
     }
 
     respuesta, estado = orden_produccion_controller.obtener_ordenes(filtros)
-    print(respuesta)
+
     ordenes_aprobadas = respuesta['data']
     ordenes_totales = int(respuesta2['data']['cantidad']) + int(respuesta3['data']['cantidad'])
 

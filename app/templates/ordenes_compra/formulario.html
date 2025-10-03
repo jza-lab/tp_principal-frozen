@@ -104,13 +104,13 @@
                     </div>
                     
                     <div class="col-md-2">
-                        <label class="form-label">Cantidad</label>
+                        <label class="form-label">Cantidad </label>
                         <input type="number" step="0.1" min="1" max="5000" class="form-control cantidad" name="cantidad_solicitada[]" value="{{ item.cantidad_solicitada }}">
                     </div>
                     
                     <div class="col-md-2">
                         <label class="form-label">Precio Unitario</label>
-                        <input type="number" step="0.01" min="1" class="form-control precio_unitario" name="precio_unitario[]" value="{{ item.precio_unitario }}" required>
+                        <input type="number" id="precio_unitario" class="form-control precio_unitario" name="precio_unitario[]" value="{{ item.precio_unitario }}" readonly>
                     </div>
                     
                     <div class="col-md-2">

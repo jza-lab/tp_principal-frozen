@@ -127,3 +127,32 @@ def rechazar(id):
     else:
         flash(f"Error al rechazar: {resultado.get('error', 'Error desconocido')}", 'error')
     return redirect(url_for('orden_compra.listar'))
+
+@orden_compra_bp.route('/<int:id>/marcar-en-transito', methods=['POST'])
+@roles_required('SUPERVISOR', 'ADMIN', 'GERENTE')
+def marcar_en_transito(id):
+    resultado = controller.marcar_en_transito(id)
+    if resultado.get('success'):
+        flash('La orden de compra ha sido marcada como "En Tránsito".', 'info')
+    else:
+        flash(f"Error al actualizar el estado: {resultado.get('error', 'Error desconocido')}", 'error')
+    return redirect(url_for('orden_compra.listar'))
+
+@orden_compra_bp.route('/recepcion/<int:orden_id>', methods=['POST'])
+@roles_required('SUPERVISOR', 'ADMIN', 'GERENTE', 'OPERARIO')
+def procesar_recepcion(orden_id):
+    """
+    Procesa el formulario de recepción de una orden de compra.
+    """
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        flash('Su sesión ha expirado, por favor inicie sesión de nuevo.', 'error')
+        return redirect(url_for('auth.login'))
+
+    resultado = controller.procesar_recepcion(orden_id, request.form, usuario_id)
+    if resultado.get('success'):
+        flash('Recepción de la orden procesada exitosamente. Se crearon los lotes en inventario.', 'success')
+    else:
+        flash(f"Error al procesar la recepción: {resultado.get('error', 'Error desconocido')}", 'error')
+    
+    return redirect(url_for('orden_compra.detalle', id=orden_id))

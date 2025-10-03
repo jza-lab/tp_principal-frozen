@@ -92,8 +92,24 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Evento de IVA
-    ivaCheckbox.addEventListener('change', calcularSubtotales);
+    itemsContainer.addEventListener('change', function(e) {
+        if (e.target.classList.contains('insumo-selector')) {
+            const insumoId = e.target.value;
+            const insumo = insumosData.find(i => String(i.id) === String(insumoId));
+            const row = e.target.closest('.item-row');
+            const precioInput = row.querySelector('.precio_unitario');
+            const unidadLabel = row.querySelector('.unidad-label');
+            
+            if (insumo) {
+                if (precioInput) precioInput.value = insumo.precio_unitario ?? '';
+                if (unidadLabel) unidadLabel.textContent = insumo.unidad_medida ? `(${insumo.unidad_medida})` : '';
+            } else {
+                if (precioInput) precioInput.value = '';
+                if (unidadLabel) unidadLabel.textContent = '';
+            }
+            calcularSubtotales();
+        }
+    });
 
     // Añadir ítem
     addItemBtn.addEventListener('click', function () {
@@ -114,12 +130,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 </select>
             </div>
             <div class="col-md-2">
-                <label class="form-label">Cantidad</label>
+                <label class="form-label">Cantidad <span class="unidad-label"></span></label>
                 <input type="number" min="1" max="5000" step="0.1" class="form-control cantidad" name="cantidad_solicitada[]" value="1">
             </div>
             <div class="col-md-2">
                 <label class="form-label">Precio Unitario</label>
-                <input type="number" step="0.01" min="1" class="form-control precio_unitario" name="precio_unitario[]" value="1.00" required>
+                <input type="number" id="precio_unitario" class="form-control precio_unitario" name="precio_unitario[]" value="{{ item.precio_unitario }}" readonly>
             </div>
             <div class="col-md-2">
                 <label class="form-label">Subtotal</label>

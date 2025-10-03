@@ -1,0 +1,120 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Detalle del Lote - {{ lote.numero_lote_proveedor or 'N/A' }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">
+            Detalle del Lote
+        </h1>
+        <p class="text-muted mb-0">Lote: <code class="text-muted">{{ lote.numero_lote_proveedor or 'N/A' }}</code></p>
+    </div>
+    <div class="btn-toolbar">
+        <a href="{{ url_for('inventario_view.listar_lotes') }}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left me-1"></i>Volver al Inventario
+        </a>
+        <button class="btn btn-primary" disabled>
+            <i class="bi bi-pencil-square me-1"></i>Editar Lote (Próximamente)
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Información del Lote</h5>
+                <span class="badge bg-success fs-6">{{ lote.estado | title }}</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-4">
+                    <!-- Columna 1: Detalles del Insumo y Proveedor -->
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Detalles del Insumo</h6>
+                        <div class="d-grid gap-3">
+                            <div class="border-start border-3 border-primary ps-3">
+                                <div class="small text-muted">Insumo</div>
+                                <div class="fw-bold">{{ lote.insumo_nombre or 'No disponible' }}</div>
+                            </div>
+                            <div class="border-start border-3 border-secondary ps-3">
+                                <div class="small text-muted">Proveedor</div>
+                                <div class="fw-bold">{{ lote.proveedor_nombre or 'No especificado' }}</div>
+                            </div>
+                            <div class="border-start border-3 border-secondary ps-3">
+                                <div class="small text-muted">Documento de Ingreso</div>
+                                <div>{{ lote.documento_ingreso or 'N/A' }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Columna 2: Cantidades y Costos -->
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Stock y Costos</h6>
+                        <div class="row g-3">
+                            <div class="col-6">
+                                <div class="small text-muted">Cantidad Inicial</div>
+                                <div class="fw-bold">{{ lote.cantidad_inicial | round(2) }} {{ lote.insumo_unidad_medida }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">Cantidad Actual</div>
+                                <div class="fw-bold h5">{{ lote.cantidad_actual | round(2) }} {{ lote.insumo_unidad_medida }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">Precio Unitario</div>
+                                <div>$ {{ "%.2f"|format(lote.precio_unitario|float) if lote.precio_unitario else 'N/A' }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">Costo Total Ingreso</div>
+                                <div>$ {{ "%.2f"|format(lote.costo_total|float) if lote.costo_total else 'N/A' }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Columna 3: Fechas y Ubicación -->
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Trazabilidad</h6>
+                         <div class="d-grid gap-3">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-calendar-plus text-muted me-2"></i>
+                                <div>
+                                    <div class="small text-muted">Fecha de Ingreso</div>
+                                    <div class="fw-bold">{{ lote.f_ingreso }}</div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-calendar-x text-danger me-2"></i>
+                                <div>
+                                    <div class="small text-muted">Fecha de Vencimiento</div>
+                                    <div class="fw-bold">{{ lote.f_vencimiento or 'No aplica' }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Observaciones -->
+                    {% if lote.observaciones %}
+                    <div class="col-12">
+                        <h6 class="text-muted mb-2">Observaciones</h6>
+                        <div class="border-start border-3 border-warning ps-3">
+                            <p class="mb-0">{{ lote.observaciones }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">Acciones</h6>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Próximamente se podrán realizar ajustes de stock y movimientos desde aquí.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

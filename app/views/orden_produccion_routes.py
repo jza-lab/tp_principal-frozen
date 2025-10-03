@@ -57,7 +57,6 @@ def nueva():
     operarios = usuario_controller.obtener_todos_los_usuarios()
     return render_template('ordenes_produccion/formulario.html', etapas=etapas, productos=productos, operarios = operarios)
         
-
 @orden_produccion_bp.route('/nueva/crear', methods=['POST'])
 def crear():
     try:
@@ -93,7 +92,6 @@ def crear():
             'error': 'Error interno del servidor'
         }), 500
     
-
 @orden_produccion_bp.route('/modificar/<int:id>', methods=['GET', 'POST', 'PUT'])
 def modificar(id):
     """

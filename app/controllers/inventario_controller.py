@@ -299,3 +299,18 @@ class InventarioController(BaseController):
             logger.error(f"Error eliminando lote: {str(e)}")
             
             return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def obtener_lotes_para_vista(self, filtros: Optional[Dict] = None) -> tuple:
+        """
+        Obtiene todos los lotes con datos enriquecidos para ser mostrados en una tabla.
+        """
+        try:
+            result = self.inventario_model.get_all_lotes_for_view(filtros)
+            if result['success']:
+                # No es necesario serializar con el schema porque los datos ya están aplanados
+                return self.success_response(data=result['data'])
+            else:
+                return self.error_response(result['error'])
+        except Exception as e:
+            logger.error(f"Error obteniendo lotes para la vista: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)

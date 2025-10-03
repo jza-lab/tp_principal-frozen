@@ -146,6 +146,11 @@
                     <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
                     <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b> unidades</span>
                     <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
+                    
+                    {% if orden.estado == 'APROBADA' or orden.estado == 'EN_PROCESO' or orden.estado == 'COMPLETADA' %}
+                    <span><i class="bi bi-calendar2-check"></i> {{ orden.fecha_aprobacion }}</span>
+                    <span><i class="bi bi-calendar2-range"></i> {{ orden.fecha_fin_estimada }}</span>
+                    {% endif %}
                 </div>
 
                 <div class="mt-auto">
@@ -179,7 +184,7 @@
                     {% if orden.estado == 'PLANIFICADA' or orden.estado == 'APROBADA' %}
                     <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                         data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
-                        <button type="submit" class="btn btn-sm btn-outline-success" title="Iniciar Orden">
+                        <button type="submit" class="btn btn-sm btn-outline-success" title="Iniciar Orden">Iniciar
                             <i class="bi bi-play-fill"></i>
                         </button>
                     </form>
@@ -187,7 +192,7 @@
                     {% if orden.estado == 'EN_PROCESO' %}
                     <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                         data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
-                        <button type="submit" class="btn btn-sm btn-outline-success" title="Completar Orden">
+                        <button type="submit" class="btn btn-sm btn-outline-success" title="Completar Orden">Completar
                             <i class="bi bi-check-circle-fill"></i>
                         </button>
                     </form>
@@ -195,13 +200,13 @@
                     {% if orden.estado == 'PENDIENTE' %}
                     <form method="POST" action="{{ url_for('orden_produccion.aprobar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                         data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de producción?" data-button-type="success">
-                        <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
+                        <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">Aprobar
                             <i class="bi bi-check-circle"></i>
                         </button>
                     </form>
                     <form method="POST" action="{{ url_for('orden_produccion.rechazar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                         data-title="Confirmar Rechazo" data-message="¿Está seguro de que desea rechazar esta orden de producción? Esta acción no se puede deshacer." data-button-type="danger">
-                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Rechazar Orden">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Rechazar Orden">Rechazar
                             <i class="bi bi-x-circle"></i>
                         </button>
                     </form>

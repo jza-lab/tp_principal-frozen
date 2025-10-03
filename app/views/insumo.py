@@ -66,10 +66,17 @@ def obtener_insumos():
 
         # Limpiar filtros vacíos
         filtros = {k: v for k, v in filtros.items() if v is not None and v != ''}
-        response, status= insumo_controller.obtener_insumos(filtros)
-        insumos=response['data']
+        
+        # Obtener insumos y categorías
+        response, status = insumo_controller.obtener_insumos(filtros)
+        insumos = response.get('data', [])
+        
+        # FIX: Llamar al método para obtener categorías desde el controlador
+        categorias_response, _ = insumo_controller.obtener_categorias_distintas()
+        categorias = categorias_response.get('data', [])
 
-        return render_template('insumos/listar.html', insumos=insumos)
+        return render_template('insumos/listar.html', insumos=insumos, categorias=categorias)
+
 
     except Exception as e:
         logger.error(f"Error inesperado en obtener_insumos: {str(e)}")

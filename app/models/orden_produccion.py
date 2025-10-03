@@ -1,6 +1,6 @@
 from app.models.base_model import BaseModel
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 # Importamos el modelo de Pedido para poder invocar su lógica
 from app.models.pedido import PedidoModel
@@ -30,6 +30,12 @@ class OrdenProduccionModel(BaseModel):
                 update_data['fecha_inicio'] = datetime.now().isoformat()
             elif nuevo_estado == 'COMPLETADA':
                 update_data['fecha_fin'] = datetime.now().isoformat()
+            elif nuevo_estado == 'APROBADA':
+                fecha_aprobacion = datetime.now()
+                fecha_fin_esperada = fecha_aprobacion + timedelta(weeks=1)
+                update_data['fecha_aprobacion'] = fecha_aprobacion.isoformat()
+                update_data['fecha_fin_estimada'] = fecha_fin_esperada.isoformat()
+
 
             update_result = self.update(id_value=orden_id, data=update_data, id_field='id')
             if not update_result.get('success'):
@@ -90,11 +96,24 @@ class OrdenProduccionModel(BaseModel):
             query = query.order("fecha_planificada", desc=True).order("id", desc=True)
 
             result = query.execute()
+            FORMATO_SALIDA = "%Y-%m-%d %H:%M"
 
             if result.data:
                 # Aplanar la respuesta para que coincida con lo que espera la vista/template
                 processed_data = []
                 for item in result.data:
+
+                    for key, value in item.items():
+                        if key.startswith('fecha') and isinstance(value, str) and value:
+                            try:
+                                dt_object = datetime.fromisoformat(value)
+                                if len(value) > 10:
+                                    item[key] = dt_object.strftime(FORMATO_SALIDA)
+                                else:
+                                    item[key] = dt_object.strftime("%Y-%m-%d")
+                            except Exception:
+                                item[key] = 'Error de formato de fecha'
+
                     if item.get('productos'):
                         item['producto_nombre'] = item.pop('productos')['nombre']
                     else:
@@ -126,8 +145,27 @@ class OrdenProduccionModel(BaseModel):
             ).eq("id", orden_id).maybe_single().execute()
            
             item = response.data
+            FORMATO_SALIDA = "%Y-%m-%d %H:%M"
            
             if item:
+                for key, value in item.items():
+                    if key.startswith('fecha') and isinstance(value, str) and value:
+                        try:
+                            timestamp_str = item.get(key)
+
+                            if timestamp_str:
+                                try:
+                                    dt_object = datetime.fromisoformat(timestamp_str)
+                                    if len(value) > 10: #para cuando es una fecha con hora 
+                                        item[key] = dt_object.strftime(FORMATO_SALIDA)
+                                    else: #para cuando es solo una fecha
+                                        item[key] = dt_object.strftime("%Y-%m-%d")
+                                    
+                                except ValueError:
+                                    # En caso de que el string no sea un formato de fecha válido
+                                    item[key] = 'Error de formato de fecha' 
+                        except Exception:
+                            item[key] = 'Error de formato de fecha'
                 # Aplanar la respuesta
                 if item.get('productos'):
                     item['producto_nombre'] = item['productos'].get('nombre', 'N/A')

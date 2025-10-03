@@ -14,9 +14,9 @@
 </div>
 
 <!-- Filtros -->
-<!-- <div class="card mb-4">
+<div class="card mb-4">
     <div class="card-body card-filter">
-        <form method="get" action="{{ url_for('insumos_api.obtener_insumos') }}">
+        <form id="filter-form" method="get" action="{{ url_for('insumos_api.obtener_insumos') }}">
             <div class="row g-3 align-items-end">
                 <div class="col-md-4">
                     <label for="busqueda" class="form-label">Buscar</label>
@@ -24,30 +24,30 @@
                         placeholder="Nombre o código..." value="{{ request.args.get('busqueda', '') }}">
                 </div>
                 <div class="col-md-3">
-                    <label for="categoria" class="form-label">Categoría</label>
+                    <label for="categoria" class="form-label">Filtrar por Categoría</label>
                     <select name="categoria" id="categoria" class="form-select">
                         <option value="">Todas las categorías</option>
                         {% for cat in categorias %}
-                        <option value="{{ cat }}" {% if request.args.get('categoria')==cat %}selected{% endif %}>
+                        <option value="{{ cat }}" {% if request.args.get('categoria') == cat %}selected{% endif %}>
                             {{ cat }}
                         </option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-2">
+                     <div class="col-md-2 align-self-end">
                     <button type="submit" class="btn btn-outline-secondary w-100">
-                        <i class="bi bi-search me-1"></i>Filtrar
+                        <i class="bi bi-search"></i> Buscar
                     </button>
                 </div>
                 <div class="col-md-3">
-                    <div class="text-muted small">
+                    <div class="text-muted small text-end">
                         <p>{{ insumos|length }} insumos encontrados</p>
                     </div>
                 </div>
             </div>
         </form>
     </div>
-</div>-->
+</div>
 
 <!-- Tarjetas de Insumos -->
 <div class="row">
@@ -60,6 +60,7 @@
                     <span><i class="bi bi-tag-fill"></i> {{ insumo['categoria'] }}</span>
                     <span><i class="bi bi-upc-scan"></i> <code>{{ insumo['codigo_interno'] }}</code></span>
                     <span><i class="bi bi-rulers"></i> {{ insumo['unidad_medida'] }}</span>
+                    <span><i class="bi bi-currency-dollar"></i> {{ insumo['precio_unitario'] }}</span>
                 </div>
 
                 <div class="mt-auto">
@@ -129,4 +130,17 @@
 </div>
 <script src="{{ url_for('static', filename='js/scriptEliminarInsumo.js') }}"></script>
 <script src="{{ url_for('static', filename='js/habilitarInsumo.js') }}"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const filterForm = document.getElementById('filter-form');
+    const categoriaSelect = document.getElementById('categoria');
+
+    if (categoriaSelect) {
+        categoriaSelect.addEventListener('change', function() {
+            filterForm.submit();
+        });
+    }
+});
+</script>
 {% endblock %}
