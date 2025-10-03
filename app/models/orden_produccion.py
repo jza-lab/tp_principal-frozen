@@ -126,8 +126,22 @@ class OrdenProduccionModel(BaseModel):
             ).eq("id", orden_id).maybe_single().execute()
            
             item = response.data
+            FORMATO_SALIDA = "%Y-%m-%d %H:%M"
            
             if item:
+                for key in ['fecha_inicio', 'fecha_fin']:
+                    timestamp_str = item.get(key)
+
+                    if timestamp_str:
+                        try:
+                            dt_object = datetime.fromisoformat(timestamp_str)
+                            
+                            item[key] = dt_object.strftime(FORMATO_SALIDA)
+                            print(item[key])
+                            
+                        except ValueError:
+                            # En caso de que el string no sea un formato de fecha válido
+                            item[key] = 'Error de formato de fecha' 
                 # Aplanar la respuesta
                 if item.get('productos'):
                     item['producto_nombre'] = item['productos'].get('nombre', 'N/A')
