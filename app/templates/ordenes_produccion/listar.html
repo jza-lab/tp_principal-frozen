@@ -146,6 +146,11 @@
                     <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
                     <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b> unidades</span>
                     <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
+                    
+                    {% if orden.estado == 'APROBADA' or orden.estado == 'EN_PROCESO' or orden.estado == 'COMPLETADA' %}
+                    <span><i class="bi bi-calendar2-check"></i> {{ orden.fecha_aprobacion }}</span>
+                    <span><i class="bi bi-calendar2-range"></i> {{ orden.fecha_fin_estimada }}</span>
+                    {% endif %}
                 </div>
 
                 <div class="mt-auto">

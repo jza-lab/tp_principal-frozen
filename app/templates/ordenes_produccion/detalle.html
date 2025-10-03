@@ -79,10 +79,6 @@
                                 <div class="small text-muted">Cantidad Planificada</div>
                                 <div class="fw-bold">{{ orden.cantidad_planificada }} unidades</div>
                             </div>
-                            <div class="col-6">
-                                <div class="small text-muted">Receta</div>
-                                <div class="fw-bold">{{ orden.receta_nombre or 'N/A' }}</div>
-                            </div>
                         </div>
                     </div>
 
@@ -95,8 +91,18 @@
                             </div>
                             <div class="col-6">
                                 <div class="small text-muted">Fecha Planificada</div>
-                                <div class="fw-bold">{{ orden.fecha_planificada }}</div>
+                                <div class="fw-bold">{{ orden.fecha_planificada or 'N/A'}}</div>
                             </div>
+                            {% if orden.estado == 'APROBADA' or orden.estado == 'EN_PROCESO' or orden.estado == 'COMPLETADA' %}
+                            <div class="col-6">
+                                <div class="small text-muted">Fecha Estimada</div>
+                                <div class="fw-bold">{{ orden.fecha_fin_estimada or 'N/A'}}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">Fecha Aprobación</div>
+                                <div class="fw-bold">{{ orden.fecha_aprobacion or 'N/A'}}</div>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
 
