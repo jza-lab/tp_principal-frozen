@@ -155,3 +155,38 @@ class InventarioModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo stock consolidado: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def get_all_lotes_for_view(self, filtros: Optional[Dict] = None) -> Dict:
+        """
+        Obtiene todos los lotes con detalles del insumo y proveedor para la vista de listado.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select(
+                '*, insumo:insumos_catalogo(nombre, categoria, unidad_medida), proveedor:proveedores(nombre)'
+            )
+
+            if filtros:
+                for key, value in filtros.items():
+                    if value:
+                        query = query.eq(key, value)
+
+            result = query.order('f_ingreso', desc=True).execute()
+
+            # Aplanar los datos para la plantilla
+            for lote in result.data:
+                if lote.get('insumo'):
+                    lote['insumo_nombre'] = lote['insumo']['nombre']
+                    lote['insumo_categoria'] = lote['insumo']['categoria']
+                    lote['insumo_unidad_medida'] = lote['insumo']['unidad_medida']
+                else:
+                    lote['insumo_nombre'] = 'Insumo no encontrado'
+                
+                if lote.get('proveedor'):
+                    lote['proveedor_nombre'] = lote['proveedor']['nombre']
+                else:
+                    lote['proveedor_nombre'] = 'N/A'
+
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error obteniendo lotes para la vista: {e}")
+            return {'success': False, 'error': str(e)}

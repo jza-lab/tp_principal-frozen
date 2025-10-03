@@ -7,7 +7,8 @@ from .json_encoder import CustomJSONEncoder
 
 # --- Blueprints ---
 from app.views.insumo import insumos_bp
-from app.views.inventario import inventario_bp
+from app.views.inventario import inventario_bp as inventario_api_bp
+from app.views.inventario_routes import inventario_view_bp
 from app.views.auth_routes import auth_bp
 from app.views.admin_usuario_routes import admin_usuario_bp
 from app.views.orden_produccion_routes import orden_produccion_bp
@@ -43,7 +44,8 @@ def create_app():
 
     # Registrar blueprints
     app.register_blueprint(insumos_bp)
-    app.register_blueprint(inventario_bp)
+    app.register_blueprint(inventario_api_bp) # API routes
+    app.register_blueprint(inventario_view_bp)
     app.register_blueprint(orden_produccion_bp)
     app.register_blueprint(orden_compra_bp)
     app.register_blueprint(auth_bp, url_prefix='/auth')  # Prefijo opcional

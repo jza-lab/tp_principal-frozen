@@ -125,19 +125,34 @@ class InsumoController(BaseController):
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def obtener_insumo_por_id(self, id_insumo: str) -> tuple:
-        """Obtener un insumo específico por ID"""
+        """Obtener un insumo específico por ID, incluyendo sus lotes en inventario."""
         try:
-            result = self.insumo_model.find_by_id(id_insumo, 'id_insumo')
+            # 1. Obtener los datos del insumo
+            insumo_result = self.insumo_model.find_by_id(id_insumo, 'id_insumo')
 
-            if result['success']:
-                return self.success_response(
-                    data=self.schema.dump(result['data'])
-                )
+            if not insumo_result.get('success'):
+                return self.error_response(insumo_result.get('error', 'Insumo no encontrado'), 404)
+            
+            insumo_data = self.schema.dump(insumo_result['data'])
+
+            # 2. Obtener los lotes asociados
+            # Usamos el modelo de inventario que ya está instanciado en el controlador
+            lotes_result = self.inventario_model.find_by_insumo(id_insumo, solo_disponibles=False)
+            
+            if lotes_result.get('success'):
+                # Ordenar lotes por fecha de ingreso descendente para mostrar los más nuevos primero
+                lotes_data = sorted(lotes_result['data'], key=lambda x: x.get('f_ingreso', ''), reverse=True)
+                insumo_data['lotes'] = lotes_data
             else:
-                return self.error_response(result['error'], 404)
+                # Si falla la obtención de lotes, no es un error fatal.
+                # Simplemente se mostrará el insumo sin lotes.
+                insumo_data['lotes'] = []
+                logger.warning(f"No se pudieron obtener los lotes para el insumo {id_insumo}: {lotes_result.get('error')}")
+
+            return self.success_response(data=insumo_data)
 
         except Exception as e:
-            logger.error(f"Error obteniendo insumo por ID: {str(e)}")
+            logger.error(f"Error obteniendo insumo por ID con lotes: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def actualizar_insumo(self, id_insumo: str, data: Dict) -> tuple:

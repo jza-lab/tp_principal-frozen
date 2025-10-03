@@ -326,6 +326,32 @@ class OrdenCompraItemModel(BaseModel):
     def get_table_name(self) -> str:
         return 'orden_compra_items'
 
+    def update(self, item_id: int, data: Dict) -> Dict:
+        """
+        Actualiza un ítem específico de una orden de compra.
+        """
+        try:
+            # Asegurarse de que solo se actualicen campos permitidos
+            allowed_fields = ['cantidad_recibida', 'precio_unitario']
+            update_data = {key: data[key] for key in data if key in allowed_fields}
+
+            if not update_data:
+                return {'success': False, 'error': 'No hay datos válidos para actualizar.'}
+
+            update_data['updated_at'] = datetime.now().isoformat()
+
+            result = self.db.table(self.get_table_name()).update(update_data).eq('id', item_id).execute()
+
+            if result.data:
+                return {'success': True, 'data': result.data[0]}
+            else:
+                # Supabase puede no devolver datos en una actualización si no se usa `select()`
+                # o si la fila no existe. Asumimos éxito si no hay error.
+                return {'success': True, 'data': {'id': item_id, **update_data}}
+        except Exception as e:
+            logger.error(f"Error actualizando el ítem de orden de compra {item_id}: {e}")
+            return {'success': False, 'error': str(e)}
+
     def create_many(self, items: List[Dict]) -> Dict:
         """
         Crea múltiples ítems de orden de compra.

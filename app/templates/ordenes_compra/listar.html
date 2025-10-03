@@ -51,12 +51,13 @@
                     <h5 class="card-title">{{ orden.proveedor_nombre or 'Proveedor no definido' }}</h5>
                     {% set estado_config = {
                         'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
-                        'APROBADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
+                        'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
                         'EN_TRANSITO': {'class': 'bg-primary-soft text-primary', 'icon': 'truck'},
                         'RECIBIDA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
                         'RECHAZADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
-                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':
+                    'question-circle'}) %}
                     <span class="badge {{ config.class }}">
                         <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado.replace('_', ' ') }}
                     </span>
@@ -90,19 +91,35 @@
                         </div>
                     </div>
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
-                        <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}"
-                           class="btn btn-sm btn-outline-primary" title="Ver Detalle">
+                        <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                             <i class="bi bi-eye"></i>
                         </a>
-                        {% if orden.estado == 'PENDIENTE' and ('SUPERVISOR' in session['rol'] or 'ADMIN' in session['rol']) %}
-                        <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id) }}" style="display: inline;" onsubmit="return confirm('¿Aprobar esta orden de compra?')">
-                            <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
-                                <i class="bi bi-check-lg"></i>Aprobar
-                            </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger" title="Rechazar Orden" data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}">
-                            <i class="bi bi-x-lg"></i>Rechazar
-                        </button>
-                        </form>
+                        
+                        {% if 'SUPERVISOR' in session.get('rol', '') or 'ADMIN' in session.get('rol', '') %}
+                            {% if orden.estado == 'PENDIENTE' %}
+                                <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id) }}"class="confirm-form"
+                                data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de producción?" data-button-type="success">
+                                    <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
+                                        <i class="bi bi-check-lg"></i> Aprobar
+                                    </button>
+                                </form>
+                                <button type="button" class="btn btn-sm btn-outline-danger" title="Rechazar Orden" data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}">
+                                    <i class="bi bi-x-lg"></i> Rechazar
+                                </button>
+                            
+                            {% elif orden.estado == 'APROBADA' %}
+                                <form method="POST" action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id) }}" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-primary" title="Marcar como En Tránsito">
+                                        <i class="bi bi-truck"></i> En Tránsito
+                                    </button>
+                                </form>
+                            {% endif %}
+                        {% endif %}
+
+                        {% if orden.estado == 'EN_TRANSITO' %}
+                            <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-info" title="Recibir Mercadería">
+                                <i class="bi bi-box-arrow-in-down"></i> Recibir
+                            </a>
                         {% endif %}
                     </div>
                 </div>

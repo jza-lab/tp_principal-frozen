@@ -67,14 +67,16 @@ body {
 .card {
     border: 1px solid var(--frozen-border);
     border-radius: 8px;
-    box-shadow: 0 1px 3px var(--frozen-shadow);
-    transition: all 0.3s ease;
+    /* Manteniendo una sombra sutil por defecto */
+    box-shadow: 0 1px 3px var(--frozen-shadow); 
+    transition: all 0.3s ease; /* Asegura una transición suave */
     background-color: var(--frozen-bg);
 }
 
 .card:hover {
-    box-shadow: 0 4px 12px var(--frozen-shadow);
     transform: translateY(-3px);
+    /* Aplicamos la nueva animación de movimiento de borde */
+    animation: border-glow-move 4s linear infinite; /* 4s de duración, movimiento lineal y continuo */
 }
 
 .card-header {
@@ -347,7 +349,7 @@ body {
 
 /* Insumo Card Styles */
 .insumo-card {
-    border: none !important;
+    border: none !important; 
     border-radius: 0.75rem;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
@@ -355,7 +357,8 @@ body {
 
 .insumo-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 12px 16px rgba(0, 0, 0, 0.1);
+    /* Aplicamos la nueva animación de movimiento de borde */
+    animation: border-glow-move 4s linear infinite;
 }
 
 .insumo-card .card-title {
@@ -741,5 +744,39 @@ body {
         flex-direction: row !important;
         justify-content: space-between !important;
         align-items: center !important;
+    }
+}
+
+/* Animación para simular el movimiento del resplandor alrededor del contorno */
+@keyframes border-glow-move {
+    0% {
+        /* Esquina superior izquierda (Rojo) */
+        box-shadow: 
+            0 0 15px rgba(255, 0, 0, 0.6), 
+            -5px -5px 15px rgba(255, 0, 0, 0.4); 
+    }
+    25% {
+        /* Esquina superior derecha (Verde) */
+        box-shadow: 
+            0 0 15px rgba(0, 255, 0, 0.6), 
+            5px -5px 15px rgba(0, 255, 0, 0.4); 
+    }
+    50% {
+        /* Esquina inferior derecha (Azul) */
+        box-shadow: 
+            0 0 15px rgba(0, 0, 255, 0.6), 
+            5px 5px 15px rgba(0, 0, 255, 0.4); 
+    }
+    75% {
+        /* Esquina inferior izquierda (Cian/Magenta intermedio) */
+        box-shadow: 
+            0 0 15px rgba(255, 0, 255, 0.6), 
+            -5px 5px 15px rgba(255, 0, 255, 0.4); 
+    }
+    100% {
+        /* Vuelve a la esquina superior izquierda (Rojo) */
+        box-shadow: 
+            0 0 15px rgba(255, 0, 0, 0.6), 
+            -5px -5px 15px rgba(255, 0, 0, 0.4); 
     }
 }

@@ -1,0 +1,84 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Registrar Nuevo Lote{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">Registrar Nuevo Lote en Inventario</h1>
+        <p class="text-muted mb-0">Ingrese los detalles del nuevo lote.</p>
+    </div>
+    <div class="btn-toolbar">
+        <a href="{{ url_for('inventario_view.listar_lotes') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Cancelar y Volver
+        </a>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Datos del Lote</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('inventario_view.nuevo_lote') }}">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="id_insumo" class="form-label">Insumo <span class="text-danger">*</span></label>
+                            <select class="form-select" id="id_insumo" name="id_insumo" required>
+                                <option value="" disabled selected>Seleccione un insumo...</option>
+                                {% for insumo in insumos %}
+                                <option value="{{ insumo.id_insumo }}">{{ insumo.nombre }} ({{ insumo.codigo_interno }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="id_proveedor" class="form-label">Proveedor</label>
+                            <select class="form-select" id="id_proveedor" name="id_proveedor">
+                                <option value="" disabled selected>Seleccione un proveedor...</option>
+                                {% for proveedor in proveedores %}
+                                <option value="{{ proveedor.id }}">{{ proveedor.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="cantidad_inicial" class="form-label">Cantidad Inicial <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="cantidad_inicial" name="cantidad_inicial" step="any" min="0.01" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="precio_unitario" class="form-label">Precio Unitario</label>
+                            <input type="number" class="form-control" id="precio_unitario" name="precio_unitario" step="any" min="0">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="f_ingreso" class="form-label">Fecha de Ingreso</label>
+                            <input type="date" class="form-control" id="f_ingreso" name="f_ingreso" value="{{ today }}">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="f_vencimiento" class="form-label">Fecha de Vencimiento</label>
+                            <input type="date" class="form-control" id="f_vencimiento" name="f_vencimiento">
+                        </div>
+
+                        <div class="col-12">
+                            <label for="observaciones" class="form-label">Observaciones</label>
+                            <textarea class="form-control" id="observaciones" name="observaciones" rows="3"></textarea>
+                        </div>
+
+                        <div class="col-12 text-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-plus-circle me-1"></i>
+                                Registrar Lote
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
