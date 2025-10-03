@@ -103,14 +103,10 @@ class InsumoController(BaseController):
     def obtener_insumos(self, filtros: Optional[Dict] = None) -> tuple:
         """Obtener lista de insumos con filtros"""
         try:
-            # Aplicar filtros por defecto
             filtros = filtros or {}
 
-            # Determinar la fuente de los datos
-            if filtros.get('busqueda'):
-                result = self.insumo_model.buscar_texto(filtros['busqueda'])
-            else:
-                result = self.insumo_model.find_all(filtros)
+            # La lógica de búsqueda ahora está unificada en el método find_all del modelo
+            result = self.insumo_model.find_all(filtros)
 
             # Procesar el resultado
             if not result['success']:
@@ -246,4 +242,16 @@ class InsumoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error obteniendo insumos con stock: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+        
+    def obtener_categorias_distintas(self) -> tuple:
+        """Obtener una lista de todas las categorías de insumos únicas."""
+        try:
+            result = self.insumo_model.get_distinct_categories()
+            if result['success']:
+                return self.success_response(data=result['data'])
+            else:
+                return self.error_response(result['error'])
+        except Exception as e:
+            logger.error(f"Error obteniendo insumos: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
