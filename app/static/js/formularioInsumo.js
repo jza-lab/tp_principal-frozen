@@ -6,7 +6,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Recopilar datos
         const data = {
-            codigo_interno: document.getElementById('codigo_interno').value,
             nombre: document.getElementById('nombre').value,
             categoria: document.getElementById('categoria').value,
             unidad_medida: document.getElementById('unidad_medida').value,

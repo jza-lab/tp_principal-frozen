@@ -1,3 +1,4 @@
+import re
 from app.controllers.base_controller import BaseController
 from app.models.insumo import InsumoModel
 from app.models.inventario import InventarioModel
@@ -20,11 +21,59 @@ class InsumoController(BaseController):
         #self.alertas_service = AlertasService()
         self.schema = InsumosCatalogoSchema()
 
+
+    def _abrev(self, texto, length=3):
+        """Devuelve una abreviación de la cadena, solo letras, en mayúsculas."""
+        if not texto:
+            return "XXX"
+        texto = re.sub(r'[^A-Za-z]', '', texto)
+        return texto.upper()[:length].ljust(length, "X")
+    
+    def _iniciales(self, texto):
+        """Devuelve las iniciales de cada palabra, en mayúsculas."""
+        if not texto:
+            return "X"
+        palabras = re.findall(r'\b\w', texto)
+        return ''.join(palabras).upper()
+
+    def _generar_codigo_interno(self, categoria, nombre):
+        cat = self._abrev(categoria)
+        nom = self._abrev(nombre)
+        return f"INS-{cat}-{nom}"
+
+
     def crear_insumo(self, data: Dict) -> tuple:
         """Crear un nuevo insumo en el catálogo"""
         try:
             # Validar datos con esquema
             validated_data = self.schema.load(data)
+            nombre = validated_data.get('nombre', '').strip().lower()
+            existe_nombre = self.insumo_model.find_all({'nombre': nombre})
+            if existe_nombre['success'] and existe_nombre['data']:
+                return self.error_response('Ya existe un insumo con ese nombre.', 409)
+
+            # Generar código interno si no viene
+            if not validated_data.get('codigo_interno'):
+                base_codigo = self._generar_codigo_interno(
+                    validated_data.get('categoria', ''),
+                    validated_data.get('nombre', '')
+                )
+                codigo = base_codigo
+                sufijo = self._iniciales(validated_data.get('nombre', ''))
+
+                intento = 1
+                existe = self.insumo_model.find_by_codigo(codigo)
+                while existe['success']: #Se repite hasta que no exista ninguno
+                    
+                    if intento == 1:
+                        codigo = f"{base_codigo}-{sufijo}"
+                    else:
+                        codigo = f"{base_codigo}-{sufijo}{intento}"
+
+                    intento += 1
+                    existe = self.insumo_model.find_by_codigo(codigo)
+
+                validated_data['codigo_interno'] = codigo
 
             # Verificar que no existe código interno duplicado
             if validated_data.get('codigo_interno'):

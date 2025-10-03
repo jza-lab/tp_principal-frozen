@@ -29,17 +29,20 @@ Agregar nuevo insumo al catálogo
             <div class="card-body">
                 <form id="formulario-insumo" method="POST">
                     <div class="row g-3">
+                        {% if insumo %}
                         <div class="col-md-6">
+                            
                             <label for="codigo_interno" class="form-label">Código Interno <span
                                     class="text-danger">*</span></label>
+
                             <input type="text" class="form-control" name="codigo_interno" id="codigo_interno"
                                 value="{{ insumo.codigo_interno if insumo else '' }}" required {% if insumo %}readonly{%
                                 endif %}>
-                            {% if not insumo %}
-                            <div class="form-text">Código único para identificar el insumo</div>
-                            {% endif %}
-                        </div>
 
+                            <div class="form-text">Código único para identificar el insumo</div>
+                            
+                        </div>
+                        {% endif %}
                         <div class="col-md-6">
                             <label for="nombre" class="form-label">Nombre <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" name="nombre" id="nombre"
@@ -47,28 +50,36 @@ Agregar nuevo insumo al catálogo
                         </div>
 
                         <div class="col-md-6">
-                            <label for="categoria" class="form-label">Categoría <span class="text-danger">*</span></label>
+                            <label for="categoria" class="form-label">Categoría <span
+                                    class="text-danger">*</span></label>
                             <select class="form-select" name="categoria" id="categoria" required>
                                 <option value="">Seleccionar unidad...</option>
-                                <option value="Carnes" {% if insumo and insumo.categoria=="Carnes" %}selected{% endif %}>
+                                <option value="Carnes" {% if insumo and insumo.categoria=="Carnes" %}selected{% endif
+                                    %}>
                                     Carnes (Pollo, Cerdo, etc...)
                                 </option>
-                                <option value="Verduras" {% if insumo and insumo.categoria=='Verduras' %}selected{% endif %}>
+                                <option value="Verduras" {% if insumo and insumo.categoria=='Verduras' %}selected{%
+                                    endif %}>
                                     Verduras (Choclo, patata, etc...)
                                 </option>
-                                <option value="Harinas" {% if insumo and insumo.categoria=='Harinas' %}selected{% endif %}>
+                                <option value="Harinas" {% if insumo and insumo.categoria=='Harinas' %}selected{% endif
+                                    %}>
                                     Harinas (Pan rallado, harina, derivados de cereal, etc...)
                                 </option>
-                                <option value="Aditivos" {% if insumo and insumo.categoria=='Aditivos' %}selected{% endif %}>
+                                <option value="Aditivos" {% if insumo and insumo.categoria=='Aditivos' %}selected{%
+                                    endif %}>
                                     Aditivos autorizados (Conservantes, Antioxidantes, etc...)
                                 </option>
-                                <option value="Complementarios" {% if insumo and insumo.categoria=='Complementarios' %}selected{% endif %}>
+                                <option value="Complementarios" {% if insumo and insumo.categoria=='Complementarios'
+                                    %}selected{% endif %}>
                                     Complementarios (Condimentos, aceites, huevos, etc...)
                                 </option>
-                                <option value="Envases" {% if insumo and insumo.categoria=='Envases' %}selected{% endif %}>
+                                <option value="Envases" {% if insumo and insumo.categoria=='Envases' %}selected{% endif
+                                    %}>
                                     Envases (Bandejas, bolsas, etc...)
                                 </option>
-                                <option value="Lacteos y Derivados" {% if insumo and insumo.categoria=='Lacteos y Derivados' %}selected{% endif %}>
+                                <option value="Lacteos y Derivados" {% if insumo and
+                                    insumo.categoria=='Lacteos y Derivados' %}selected{% endif %}>
                                     Lácteos y Derivados (Leche, queso etc...)
                                 </option>
                                 <option value="Otros" {% if insumo and insumo.categoria=='Otros' %}selected{% endif %}>
@@ -82,12 +93,11 @@ Agregar nuevo insumo al catálogo
                                     class="text-danger">*</span></label>
                             <select class="form-select" name="unidad_medida" id="unidad_medida" required>
                                 <option value="">Seleccionar unidad...</option>
+                                <option value="t" {% if insumo and insumo.unidad_medida=='t' %}selected{% endif %}>
+                                    Toneladas (t)
+                                </option>
                                 <option value="kg" {% if insumo and insumo.unidad_medida=='kg' %}selected{% endif %}>
                                     Kilogramos (kg)
-                                </option>
-                                <option value="t" {% if insumo and insumo.unidad_medida=='t' %}selected{%
-                                    endif %}>
-                                    Toneladas (t)
                                 </option>
                                 <option value="g" {% if insumo and insumo.unidad_medida=='g' %}selected{% endif %}>
                                     Gramos (g)
@@ -100,20 +110,21 @@ Agregar nuevo insumo al catálogo
                                     endif %}>
                                     Unidades
                                 </option>
+
                             </select>
                         </div>
 
                         <div class="col-md-6">
                             <label for="stock_min" class="form-label">Stock Mínimo <span
                                     class="text-danger">*</span></label>
-                            <input type="number" step="1" min= "0" max="5000" class="form-control" name="stock_min" id="stock_min"
-                                value="{{ insumo.stock_min if insumo else '' }}" required>
+                            <input type="number" step="1" min="0" max="5000" class="form-control" name="stock_min"
+                                id="stock_min" value="{{ insumo.stock_min if insumo else '' }}" required>
                             <div class="form-text">Cantidad mínima que debe mantenerse</div>
 
                             <label for="stock_max" class="form-label">Stock Máximo <span
                                     class="text-danger">*</span></label>
-                            <input type="number" step="1" min= "0" max="5000" class="form-control" name="stock_max" id="stock_max"
-                                value="{{ insumo.stock_max if insumo else '' }}" required>
+                            <input type="number" step="1" min="0" max="5000" class="form-control" name="stock_max"
+                                id="stock_max" value="{{ insumo.stock_max if insumo else '' }}" required>
                             <div class="form-text">Cantidad máxima que debe mantenerse</div>
                         </div>
 
@@ -122,23 +133,25 @@ Agregar nuevo insumo al catálogo
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
                                 <input type="number" step="0.01" class="form-control" name="precio_unitario"
-                                    id="precio_unitario" min="1" max="10000" value="{{ insumo.precio_unitario if insumo else '' }}" >
+                                    id="precio_unitario" min="1" max="10000"
+                                    value="{{ insumo.precio_unitario if insumo else '' }}">
                             </div>
                             <div class="form-text">Opcional - para cálculos de costos</div>
                         </div>
 
                         <div class="col-md-6">
                             <label for="dias_vida_util" class="form-label">Días de Vida Útil</label>
-                            <input type="number" step="1" class="form-control" name="dias_vida_util" id="dias_vida_util" required min= "1" max="10000"
-                                value= "{{ insumo.vida_util_dias if insumo else '' }}">
+                            <input type="number" step="1" class="form-control" name="dias_vida_util" id="dias_vida_util"
+                                required min="1" max="10000" value="{{ insumo.vida_util_dias if insumo else '' }}">
                             <div class="form-text">Duración promedio antes del vencimiento</div>
                         </div>
 
                         <div class="col-md-6">
                             <label for="temperatura_conservacion" class="form-label">Temperatura de Conservación
                                 (°C)</label>
-                            <input type="number" step="0.1" min= "-100" max="100" class="form-control" name="temperatura_conservacion"
-                                id="temperatura_conservacion" value="{{ insumo.tem_recomendada if insumo else '' }}">
+                            <input type="number" step="0.1" min="-100" max="100" class="form-control"
+                                name="temperatura_conservacion" id="temperatura_conservacion"
+                                value="{{ insumo.tem_recomendada if insumo else '' }}">
                         </div>
                         <div>
 
@@ -152,8 +165,9 @@ Agregar nuevo insumo al catálogo
 
                         <div class="col-12">
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" name="requiere_certificacion" id="requiere_certificacion"
-                                    value="false" {% if not insumo or insumo.requiere_certificacion %}checked{% endif %}>
+                                <input class="form-check-input" type="checkbox" name="requiere_certificacion"
+                                    id="requiere_certificacion" value="false" {% if not insumo or
+                                    insumo.requiere_certificacion %}checked{% endif %}>
                                 <label class="form-check-label" for="requiere_certificacion">
                                     Requiere certificacion
                                 </label>
@@ -167,7 +181,8 @@ Agregar nuevo insumo al catálogo
                                 <label class="form-check-label" for="es_critico">
                                     Es un insumo delicado para la produccion
                                 </label>
-                                <div class="form-text">Marcar si tiene cuidados especiales para mantener su estado de conservación optima.</div>
+                                <div class="form-text">Marcar si tiene cuidados especiales para mantener su estado de
+                                    conservación optima.</div>
                             </div>
                         </div>
 
@@ -214,7 +229,7 @@ Agregar nuevo insumo al catálogo
 <script>
     // Crea una variable global de JS con la URL generada por Flask/Jinja
     const INSUMOS_LISTA_URL = "{{ url_for('insumos_api.obtener_insumos') }}";
-    const ID_INSUMO= "{{ insumo.id_insumo }}"
+    const ID_INSUMO = "{{ insumo.id_insumo }}"
     const IS_EDIT = '{{ insumo is defined }}';
     const isEditBoolean = IS_EDIT == 'True';
 </script>
