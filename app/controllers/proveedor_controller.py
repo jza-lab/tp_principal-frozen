@@ -28,3 +28,22 @@ class ProveedorController(BaseController):
         except Exception as e:
             logger.error(f"Error obteniendo proveedores: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+
+
+    def buscar_por_identificacion(self, fila: Dict) -> Optional[Dict]:
+        """
+        Busca proveedor por email o CUIL/CUIT usando el modelo
+
+        Args:
+            fila: Diccionario con datos que pueden contener email_proveedor o cuil_proveedor
+
+        Returns:
+            Dict con datos del proveedor o None
+        """
+        try:
+            # Usar el método del modelo para buscar
+            return self.model.buscar_por_identificacion(fila)
+
+        except Exception as e:
+            logger.error(f"Error en controlador buscando proveedor: {str(e)}")
+            return None
