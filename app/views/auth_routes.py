@@ -22,26 +22,26 @@ def login():
 
         if respuesta.get('success') and usuario and usuario.get('activo'):
             session['usuario_id'] = usuario['id']
-            session['rol'] = usuario['rol']
+            session['rol'] = usuario.get('rol_codigo')  # Ahora viene del join con roles
             session['usuario_nombre'] = f"{usuario['nombre']}"
-            session['user_data'] = usuario # Guardar para el registro de egreso
+            session['user_data'] = usuario
 
             flash(f"Bienvenido {usuario['nombre']}", 'success')
             
             # Redirección basada en rol
-            if usuario['rol'] == 'SUPERVISOR':
+            rol_codigo = usuario.get('rol_codigo')
+            if rol_codigo == 'SUPERVISOR':
                 return redirect(url_for('orden_produccion.ordenes_pendientes'))
-            elif usuario['rol'] == 'ADMIN':
+            elif rol_codigo == 'ADMIN' or rol_codigo == 'GERENTE':
                 return redirect(url_for('admin_usuario.index'))
             else:
-                return redirect(url_for('admin_usuario.index')) # Fallback
+                return redirect(url_for('admin_usuario.index'))
+
         else:
-            # Usar el mensaje de error específico del controlador, que incluye el aviso del tótem
             error_message = respuesta.get('error', 'Credenciales incorrectas o usuario inactivo.')
             flash(error_message, 'error')
             return redirect(url_for('auth.login'))
 
-    # Para peticiones GET, simplemente renderizar la plantilla
     return render_template('usuarios/login.html')
 
 @auth_bp.route("/identificar_rostro", methods=["POST"])

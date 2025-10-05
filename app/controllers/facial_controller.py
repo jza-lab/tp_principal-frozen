@@ -7,13 +7,14 @@ from datetime import datetime
 import face_recognition
 import json
 import logging
+from typing import Dict
 from app.database import Database
 
 logger = logging.getLogger(__name__)
 
 class FacialController:
     """
-    Controlador de lógica de negocio para todas las operaciones faciales y de registro de asistencia.
+    Controlador actualizado para operaciones faciales usando la nueva estructura de sesiones.
     """
     
     def __init__(self):
@@ -36,8 +37,7 @@ class FacialController:
     def identificar_rostro(self, image_data_url):
         """
         Intenta identificar un usuario a partir de una imagen facial.
-        Encuentra el rostro que mejor coincide (menor distancia) en lugar del primero.
-        Devuelve los datos del usuario si se encuentra una coincidencia clara.
+        Ahora solo busca usuarios activos sin depender de flags obsoletos.
         """
         frame = self._get_image_from_data_url(image_data_url)
         if frame is None:
@@ -53,8 +53,9 @@ class FacialController:
         input_encoding = face_encodings[0]
 
         try:
+            # Solo buscar usuarios activos con encoding facial
             response = self.db.table("usuarios").select(
-                "id, email, nombre, apellido, facial_encoding, rol, activo, login_totem_activo, ultimo_login_totem"
+                "id, email, nombre, apellido, facial_encoding, role_id, roles(codigo, nombre), activo"
             ).not_.is_("facial_encoding", "null").eq("activo", True).execute()
             
             usuarios = response.data
@@ -64,7 +65,7 @@ class FacialController:
             known_encodings = []
             usuarios_con_encoding = []
 
-            # 2. Decodificar y recopilar los encodings válidos
+            # Decodificar y recopilar los encodings válidos
             for usuario in usuarios:
                 if usuario.get('facial_encoding'):
                     try:
@@ -88,6 +89,9 @@ class FacialController:
             TOLERANCE = 0.5
             if min_distance <= TOLERANCE:
                 best_match_user = usuarios_con_encoding[best_match_index]
+                # Aplanar la estructura del rol para mantener compatibilidad
+                if 'roles' in best_match_user and best_match_user['roles']:
+                    best_match_user['rol'] = best_match_user['roles']['codigo']
                 return {'success': True, 'usuario': best_match_user}
             else:
                 return {'success': False, 'message': 'Rostro no reconocido.'}
@@ -148,8 +152,8 @@ class FacialController:
         new_encoding_json = json.dumps(face_encodings[0].tolist())
         return {'success': True, 'encoding': new_encoding_json}
 
-    def registrar_acceso(self, usuario_id, tipo, metodo, dispositivo, observaciones=None):
-        """Registra entrada/salida en la base de datos"""
+    def registrar_acceso(self, usuario_id, tipo, metodo, dispositivo, sesion_totem_id=None, ubicacion_totem=None, observaciones=None):
+        """Registra entrada/salida en la base de datos con la nueva estructura"""
         try:
             registro_data = {
                 "usuario_id": usuario_id,
@@ -157,6 +161,8 @@ class FacialController:
                 "tipo": tipo,
                 "metodo": metodo,
                 "dispositivo": dispositivo,
+                "sesion_totem_id": sesion_totem_id,
+                "ubicacion_totem": ubicacion_totem,
                 "observaciones": observaciones
             }
 
@@ -175,22 +181,102 @@ class FacialController:
             logger.error(f"❌ Error registrando acceso: {e}")
             return {'success': False, 'error': str(e)}
 
+    def _verificar_sesion_activa_hoy(self, usuario_id: int) -> bool:
+        """
+        Verifica si el usuario tiene una sesión activa hoy.
+        """
+        try:
+            from datetime import date
+            hoy = date.today().isoformat()
+            
+            response = self.db.table("totem_sesiones")\
+                .select('*')\
+                .eq('usuario_id', usuario_id)\
+                .eq('activa', True)\
+                .gte('fecha_inicio', f'{hoy}T00:00:00')\
+                .lte('fecha_inicio', f'{hoy}T23:59:59')\
+                .execute()
+
+            return len(response.data) > 0
+        except Exception as e:
+            logger.error(f"Error verificando sesión activa hoy: {str(e)}")
+            return False
+
+    def _crear_sesion_totem(self, usuario_id: int, metodo_acceso: str) -> Dict:
+        """
+        Crea una nueva sesión de tótem para el usuario.
+        """
+        try:
+            import secrets
+            session_id = secrets.token_urlsafe(32)
+
+            data = {
+                'usuario_id': usuario_id,
+                'session_id': session_id,
+                'metodo_acceso': metodo_acceso,
+                'dispositivo_totem': 'TOTEM_PRINCIPAL',
+                'activa': True
+            }
+
+            response = self.db.table("totem_sesiones").insert(data).execute()
+            if response.data:
+                return {'success': True, 'data': response.data[0]}
+            else:
+                return {'success': False, 'error': 'No se pudo crear la sesión'}
+        except Exception as e:
+            logger.error(f"Error creando sesión de totem: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def _cerrar_sesion_totem(self, usuario_id: int) -> Dict:
+        """
+        Cierra la sesión activa de un usuario en el totem.
+        """
+        try:
+            response = self.db.table("totem_sesiones")\
+                .update({'activa': False, 'fecha_fin': datetime.now().isoformat()})\
+                .eq('usuario_id', usuario_id)\
+                .eq('activa', True)\
+                .execute()
+
+            if response.data:
+                return {'success': True, 'data': response.data[0]}
+            else:
+                return {'success': False, 'error': 'No se encontró sesión activa'}
+        except Exception as e:
+            logger.error(f"Error cerrando sesión de totem: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
     def _manejar_logica_acceso(self, usuario: dict, metodo: str):
         """
-        Lógica para registrar entrada/salida de un usuario ya autenticado.
+        Lógica actualizada para registrar entrada/salida usando sesiones de tótem.
         """
         usuario_id = usuario['id']
         usuario_nombre = usuario.get('nombre', 'Usuario')
-        login_activo = usuario.get('login_totem_activo', False)
 
-        from app.controllers.usuario_controller import UsuarioController
-        usuario_controller = UsuarioController()
+        # Verificar si ya tiene sesión activa hoy
+        tiene_sesion_activa = self._verificar_sesion_activa_hoy(usuario_id)
 
-        if not login_activo:
-            # Logica de ENTRADA
+        if not tiene_sesion_activa:
+            # Lógica de ENTRADA
             logger.info(f"Procesando ENTRADA para {usuario_nombre} a través de {metodo}")
-            self.registrar_acceso(usuario_id, "ENTRADA", metodo, "TOTEM")
-            usuario_controller.activar_login_totem(usuario_id)
+            
+            # Crear sesión de tótem
+            resultado_sesion = self._crear_sesion_totem(usuario_id, metodo)
+            if not resultado_sesion.get('success'):
+                return {
+                    'success': False,
+                    'message': 'Error al registrar la sesión de entrada'
+                }
+
+            # Registrar acceso de entrada
+            self.registrar_acceso(
+                usuario_id, 
+                "ingreso", 
+                metodo, 
+                "TOTEM",
+                sesion_totem_id=resultado_sesion['data']['id'],
+                ubicacion_totem='TOTEM_PRINCIPAL'
+            )
             
             return {
                 'success': True,
@@ -199,10 +285,22 @@ class FacialController:
                 'usuario': usuario
             }
         else:
-            # Logica de SALIDA
+            # Lógica de SALIDA
             logger.info(f"Procesando SALIDA para {usuario_nombre} a través de {metodo}")
-            self.registrar_acceso(usuario_id, "SALIDA", metodo, "TOTEM")
-            usuario_controller.desactivar_login_totem(usuario_id)
+            
+            # Cerrar sesión de tótem
+            resultado_cierre = self._cerrar_sesion_totem(usuario_id)
+            if not resultado_cierre.get('success'):
+                logger.warning(f"No se pudo cerrar sesión para usuario {usuario_id}")
+
+            # Registrar acceso de salida
+            self.registrar_acceso(
+                usuario_id, 
+                "egreso", 
+                metodo, 
+                "TOTEM",
+                ubicacion_totem='TOTEM_PRINCIPAL'
+            )
 
             return {
                 'success': True,
@@ -235,16 +333,15 @@ class FacialController:
             from app.controllers.usuario_controller import UsuarioController
             usuario_controller = UsuarioController()
             
-            usuario_autenticado = usuario_controller.autenticar_usuario(legajo, password)
-            if not usuario_autenticado:
-                return {'success': False, 'message': 'Credenciales inválidas.'}
+            resultado_autenticacion = usuario_controller.autenticar_usuario_V2(legajo, password)
+            if not resultado_autenticacion.get('success'):
+                return {'success': False, 'message': resultado_autenticacion.get('error', 'Credenciales inválidas.')}
             
-            # Refrescar datos para obtener el estado más reciente del usuario.
-            usuario = usuario_controller.obtener_usuario_por_id(usuario_autenticado['id'])
+            usuario = resultado_autenticacion.get('data')
             if not usuario:
-                 return {'success': False, 'message': 'No se pudo encontrar al usuario después de la autenticación.'}
+                return {'success': False, 'message': 'No se pudo obtener datos del usuario.'}
 
-            return self._manejar_logica_acceso(usuario, "MANUAL")
+            return self._manejar_logica_acceso(usuario, "CREDENCIAL")
 
         except Exception as e:
             logger.error(f"Error en procesar_acceso_manual_totem: {str(e)}")
