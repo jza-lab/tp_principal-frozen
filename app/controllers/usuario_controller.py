@@ -1,5 +1,6 @@
 from app.controllers.base_controller import BaseController
 from app.models.usuario import UsuarioModel
+from app.models.totem_sesion import TotemSesionModel
 from app.schemas.usuario_schema import UsuarioSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
@@ -7,17 +8,17 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 import logging
 
-
 logger = logging.getLogger(__name__)
 
 class UsuarioController(BaseController):
     """
-    Controlador para la lógica de negocio de los usuarios.
+    Controlador actualizado para la lógica de negocio de los usuarios.
     """
 
     def __init__(self):
         super().__init__()
         self.model = UsuarioModel()
+        self.totem_sesion = TotemSesionModel()
         self.schema = UsuarioSchema()
 
     def crear_usuario(self, data: Dict) -> Dict:
@@ -40,30 +41,17 @@ class UsuarioController(BaseController):
         except Exception as e:
             return {'success': False, 'error': f'Error interno: {str(e)}'}
 
-    def autenticar_usuario(self, legajo: str, password: str) -> Optional[Dict]:
-        """Autentica a un usuario por legajo y contraseña."""
-        user_result = self.model.find_by_legajo(legajo)
-        if user_result.get('success') and user_result.get('data'):
-            user_data = user_result['data']
-            if check_password_hash(user_data['password_hash'], password):
-                return user_data
-        return None
-
-    ##GONZA
-
-    def autenticar_usuario_V2(self, legajo: str, password: str) -> Dict:
+    def _autenticar_credenciales_base(self, legajo: str, password: str) -> Dict:
         """
-        Autentica a un usuario por legajo y contraseña.
-        VERIFICA que tenga login activo en tótem.
+        Lógica base para autenticar credenciales de un usuario.
+        Verifica legajo, contraseña y estado activo.
         """
-        
         user_result = self.model.find_by_legajo(legajo)
 
         if not user_result.get('success') or not user_result.get('data'):
             return {'success': False, 'error': 'Credenciales inválidas'}
 
         user_data = user_result['data']
-        logger.info(f"🔍 Usuario encontrado: {user_data.get('email')}")
 
         # 1. Verificar contraseña
         if not check_password_hash(user_data['password_hash'], password):
@@ -73,28 +61,34 @@ class UsuarioController(BaseController):
         if not user_data.get('activo', True):
             return {'success': False, 'error': 'Usuario desactivado'}
 
-        # 3. DEBUG: Mostrar estado actual del usuario
-        logger.info("📊 Estado del usuario:")
-        logger.info(f"   - login_totem_activo: {user_data.get('login_totem_activo')}")
-        logger.info(f"   - ultimo_login_totem: {user_data.get('ultimo_login_totem')}")
-        logger.info(f"   - activo: {user_data.get('activo')}")
+        # Si las credenciales son válidas, devolver el usuario
+        return {'success': True, 'data': user_data}
 
-        # 4. VERIFICACIÓN CLAVE: ¿Tiene login activo en tótem hoy?
-        verificacion_totem = self._verificar_login_totem_activo(user_data)
-        logger.info(f"✅ Resultado verificación tótem: {verificacion_totem}")
+    def autenticar_usuario_web(self, legajo: str, password: str) -> Dict:
+        """
+        Autentica a un usuario para el acceso web.
+        Verifica credenciales Y que tenga una sesión activa en el tótem.
+        """
+        # Paso 1: Autenticación de credenciales base
+        auth_result = self._autenticar_credenciales_base(legajo, password)
+        if not auth_result.get('success'):
+            return auth_result
 
-        if not verificacion_totem:
+        user_data = auth_result['data']
+        logger.info(f"🔍 Credenciales válidas para: {user_data.get('email')}")
+
+        # Paso 2: Verificación específica para web (sesión de tótem)
+        tiene_sesion_activa = self.totem_sesion.verificar_sesion_activa_hoy(user_data['id'])
+        logger.info(f"✅ Usuario tiene sesión activa hoy: {tiene_sesion_activa}")
+
+        if not tiene_sesion_activa:
             return {
                 'success': False,
                 'error': 'Debe registrar su entrada en el tótem primero para acceder por web'
             }
 
-        update_result = self.model.update(user_data['id'], {
-            'ultimo_login_web': datetime.now().isoformat()
-        })
-
-        if not update_result.get('success'):
-            logger.error(f"Error actualizando último login web: {update_result.get('error')}")
+        # Paso 3: Actualizar último login web y devolver éxito
+        self.model.update(user_data['id'], {'ultimo_login_web': datetime.now().isoformat()})
 
         return {
             'success': True,
@@ -102,10 +96,17 @@ class UsuarioController(BaseController):
             'message': 'Autenticación exitosa'
         }
 
+    def autenticar_usuario_para_totem(self, legajo: str, password: str) -> Dict:
+        """
+        Autentica a un usuario para uso exclusivo del tótem (solo credenciales).
+        """
+        logger.info(f"🔍 Autenticando usuario para tótem con legajo: {legajo}")
+        return self._autenticar_credenciales_base(legajo, password)
+
     def autenticar_usuario_facial_web(self, image_data_url: str) -> Dict:
         """
         Autentica a un usuario por rostro para el login web.
-        VERIFICA que tenga login activo en tótem.
+        VERIFICA que tenga sesión activa en tótem.
         """
         from app.controllers.facial_controller import FacialController
         facial_controller = FacialController()        
@@ -116,12 +117,16 @@ class UsuarioController(BaseController):
         user_data = resultado_identificacion['usuario']
         if not user_data.get('activo', True):
             return {'success': False, 'message': 'Este usuario se encuentra desactivado.'}
-        verificacion_totem = self._verificar_login_totem_activo(user_data)
-        if not verificacion_totem:
+        
+        # Verificar sesión activa en tótem
+        tiene_sesion_activa = self.totem_sesion.verificar_sesion_activa_hoy(user_data['id'])
+        if not tiene_sesion_activa:
             return {
                 'success': False,
                 'message': 'Acceso Web denegado. Por favor, registre su ingreso en el tótem antes de continuar.'
             }
+        
+        # Actualizar último login web
         self.model.update(user_data['id'], {'ultimo_login_web': datetime.now().isoformat()})
         return {
             'success': True,
@@ -129,73 +134,30 @@ class UsuarioController(BaseController):
             'message': 'Autenticación exitosa'
         }
 
-    def _verificar_login_totem_activo(self, user_data: Dict) -> bool:
+    def activar_login_totem(self, usuario_id: int, metodo_acceso: str = 'FACIAL') -> Dict:
         """
-        Verifica de forma robusta si el usuario tiene un login activo en el tótem para el día de hoy.
-        """
-        login_totem_activo = user_data.get('login_totem_activo')
-        ultimo_login_totem = user_data.get('ultimo_login_totem')
-
-        if not login_totem_activo:
-            return False
-
-        if not ultimo_login_totem:
-            return False
-
-        try:
-            login_date = None
-            if isinstance(ultimo_login_totem, str):
-                if ultimo_login_totem.endswith('Z'):
-                    ultimo_login_totem = ultimo_login_totem[:-1] + "+00:00"
-                
-                login_datetime = datetime.fromisoformat(ultimo_login_totem)
-                login_date = login_datetime.date()
-
-            # Como fallback, si ya es un objeto datetime.
-            elif isinstance(ultimo_login_totem, datetime):
-                login_date = ultimo_login_totem.date()
-
-            # Si pudimos obtener una fecha, la comparamos con la fecha de hoy.
-            if login_date:
-                return login_date == date.today()
-
-            return False
-
-        except (ValueError, TypeError) as e:
-            logger.error(f"Error al parsear la fecha del tótem '{ultimo_login_totem}': {e}")
-            return False
-
-    def activar_login_totem(self, usuario_id: int) -> Dict:
-        """
-        Activa el flag de login en tótem para un usuario.
+        Crea una nueva sesión de tótem para un usuario (reemplaza el flag anterior).
         """
         try:
-            update_data = {
-                'login_totem_activo': True,
-                'ultimo_login_totem': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),  # Formato explícito
-                'totem_session_id': self._generar_session_id()
-            }
+            logger.info(f"🔄 Creando sesión de tótem para usuario ID: {usuario_id}")
 
-            logger.info(f"🔄 Activando login tótem con datos: {update_data}")
+            # Crear sesión en la nueva tabla
+            resultado = self.totem_sesion.crear_sesion(
+                usuario_id=usuario_id,
+                metodo_acceso=metodo_acceso,
+                dispositivo_totem='TOTEM_PRINCIPAL'
+            )
 
-            result = self.model.update(usuario_id, update_data)
-
-            if result.get('success'):
-                # Verificar inmediatamente después de actualizar
-                user_updated = self.model.find_by_id(usuario_id)
-                if user_updated.get('success') and user_updated.get('data'):
-                    user_data = user_updated['data']
-                    logger.info("✅ Usuario actualizado:")
-                    logger.info(f"   - login_totem_activo: {user_data.get('login_totem_activo')}")
-                    logger.info(f"   - ultimo_login_totem: {user_data.get('ultimo_login_totem')}")
-
-                    # Verificar la verificación
-                    verificacion = self._verificar_login_totem_activo(user_data)
-                    logger.info(f"   - Verificación inmediata: {verificacion}")
-
-                return {'success': True, 'session_id': update_data['totem_session_id']}
+            if resultado.get('success'):
+                logger.info("✅ Sesión de tótem creada correctamente")
+                return {
+                    'success': True, 
+                    'session_id': resultado['data']['session_id'],
+                    'message': 'Acceso registrado correctamente'
+                }
             else:
-                return {'success': False, 'error': 'Error activando login tótem'}
+                logger.error(f"❌ Error creando sesión: {resultado.get('error')}")
+                return {'success': False, 'error': 'Error registrando acceso en tótem'}
 
         except Exception as e:
             logger.error(f"Error en activar_login_totem: {str(e)}")
@@ -203,43 +165,24 @@ class UsuarioController(BaseController):
 
     def desactivar_login_totem(self, usuario_id: int) -> Dict:
         """
-        Desactiva el flag de login en tótem (al hacer logout).
+        Cierra la sesión activa de tótem para un usuario (reemplaza el flag anterior).
         """
         try:
-            logger.info(f"🔒 Desactivando login tótem para usuario ID: {usuario_id}")
+            logger.info(f"🔒 Cerrando sesión de tótem para usuario ID: {usuario_id}")
 
-            update_data = {
-                'login_totem_activo': False,
-                'totem_session_id': None
-                # NOTA: No modificamos ultimo_login_totem para mantener el registro histórico
-            }
+            # Cerrar sesión en la nueva tabla
+            resultado = self.totem_sesion.cerrar_sesion(usuario_id)
 
-            logger.info(f"📋 Datos a actualizar: {update_data}")
-
-            # Usar actualización directa para evitar problemas con el model
-            try:
-                response = self.model.db.table("usuarios").update(update_data).eq("id", usuario_id).execute()
-                logger.info(f"📡 Respuesta de Supabase: {response}")
-
-                if response.data:
-                    logger.info("✅ Flags desactivados correctamente en la base de datos")
-                    return {'success': True}
-                else:
-                    logger.error("❌ No se pudo actualizar el usuario")
-                    return {'success': False, 'error': 'Usuario no encontrado'}
-
-            except Exception as e:
-                logger.error(f"❌ Error en actualización directa: {e}")
-                return {'success': False, 'error': f'Error de base de datos: {str(e)}'}
+            if resultado.get('success'):
+                logger.info("✅ Sesión de tótem cerrada correctamente")
+                return {'success': True, 'message': 'Salida registrada correctamente'}
+            else:
+                logger.warning(f"⚠️  No se encontró sesión activa para usuario {usuario_id}")
+                return {'success': True, 'message': 'No había sesión activa'}
 
         except Exception as e:
             logger.error(f"❌ Error en desactivar_login_totem: {str(e)}")
             return {'success': False, 'error': f'Error interno: {str(e)}'}
-
-    def _generar_session_id(self) -> str:
-        """Genera un ID único para la sesión del tótem"""
-        import secrets
-        return secrets.token_urlsafe(32)
 
     def verificar_acceso_web(self, usuario_id: int) -> Dict:
         """
@@ -253,7 +196,9 @@ class UsuarioController(BaseController):
 
         user_data = user_result['data']
 
-        if not self._verificar_login_totem_activo(user_data):
+        # Verificar sesión activa en tótem
+        tiene_sesion_activa = self.totem_sesion.verificar_sesion_activa_hoy(usuario_id)
+        if not tiene_sesion_activa:
             return {
                 'success': False,
                 'error': 'Acceso web no permitido. Registre entrada en tótem.'
@@ -269,19 +214,24 @@ class UsuarioController(BaseController):
             return {'success': False, 'error': 'Usuario no encontrado'}
 
         user_data = user_result['data']
+        
+        # Verificar sesión activa
+        tiene_sesion_activa = self.totem_sesion.verificar_sesion_activa_hoy(usuario_id)
+        sesion_activa = self.totem_sesion.obtener_sesion_activa(usuario_id)
 
         estado = {
             'usuario_id': usuario_id,
             'nombre': user_data.get('nombre'),
             'email': user_data.get('email'),
-            'login_totem_activo': user_data.get('login_totem_activo', False),
-            'ultimo_login_totem': user_data.get('ultimo_login_totem'),
+            'sesion_totem_activa': tiene_sesion_activa,
+            'detalle_sesion': sesion_activa.get('data') if sesion_activa.get('success') else None,
             'ultimo_login_web': user_data.get('ultimo_login_web'),
-            'puede_acceder_web': self._verificar_login_totem_activo(user_data)
+            'puede_acceder_web': tiene_sesion_activa
         }
 
         return {'success': True, 'data': estado}
- 
+
+    # Mantener métodos existentes que no necesitan cambios...
     def obtener_usuario_por_id(self, usuario_id: int) -> Optional[Dict]:
         """Obtiene un usuario por su ID."""
         result = self.model.find_by_id(usuario_id)
@@ -319,22 +269,15 @@ class UsuarioController(BaseController):
             return {'success': False, 'error': f'Error interno: {str(e)}'}
 
     def eliminar_usuario(self, usuario_id: int) -> Dict:
-        """
-        Desactiva un usuario (eliminación lógica).
-        No se elimina físicamente para mantener la integridad referencial.
-        """
+        """Desactiva un usuario (eliminación lógica)."""
         return self.model.update(usuario_id, {'activo': False})
 
     def habilitar_usuario(self, usuario_id: int) -> Dict:
-        """
-        Reactiva un usuario que fue desactivado lógicamente.
-        """
+        """Reactiva un usuario que fue desactivado lógicamente."""
         return self.model.update(usuario_id, {'activo': True})
 
     def validar_campo_unico(self, field: str, value: str) -> Dict:
-        """
-        Verifica si un valor para un campo específico (legajo o email) ya existe.
-        """
+        """Verifica si un valor para un campo específico ya existe."""
         if field not in ['legajo', 'email']:
             return {'valid': False, 'error': 'Campo de validación no soportado.'}
 
@@ -349,11 +292,9 @@ class UsuarioController(BaseController):
             return {'valid': True}
 
     def obtener_porcentaje_asistencia(self) -> float:
-
         """
         Calcula el porcentaje de usuarios activos que tienen una sesión de tótem activa hoy.
         """
- 
         todos_activos = self.model.find_all({'activo': True})
 
         if not todos_activos.get('success') or not todos_activos.get('data'):
@@ -367,10 +308,27 @@ class UsuarioController(BaseController):
         
         cant_en_empresa = 0
         for usuario in usuarios_activos:
-            if self._verificar_login_totem_activo(usuario):
+            if self.totem_sesion.verificar_sesion_activa_hoy(usuario['id']):
                 cant_en_empresa += 1
-        
 
         porcentaje = int((cant_en_empresa / total_usuarios_activos) * 100)
         
         return round(porcentaje, 0)
+    
+    def obtener_todos_los_roles(self) -> List[Dict]:
+        """Obtiene una lista de todos los roles disponibles."""
+        try:
+            response = self.db.table("roles").select("*").order("nivel").execute()
+            return response.data
+        except Exception as e:
+            logger.error(f"Error obteniendo roles: {str(e)}")
+            return []
+
+    def obtener_rol_por_id(self, role_id: int) -> Optional[Dict]:
+        """Obtiene un rol por su ID."""
+        try:
+            response = self.db.table("roles").select("*").eq("id", role_id).execute()
+            return response.data[0] if response.data else None
+        except Exception as e:
+            logger.error(f"Error obteniendo rol por ID: {str(e)}")
+            return None
