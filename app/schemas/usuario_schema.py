@@ -1,4 +1,5 @@
-from marshmallow import Schema, fields, validate
+from marshmallow import Schema, fields, validate, validates_schema, ValidationError
+from datetime import datetime
 
 class UsuarioSchema(Schema):
     """
@@ -12,26 +13,26 @@ class UsuarioSchema(Schema):
     # El password solo se usa para crear o actualizar, no para mostrar.
     password = fields.Str(required=True, load_only=True, validate=validate.Length(min=8))
 
-    # Validar que el rol sea uno de los predefinidos
-    rol = fields.Str(required=True, validate=validate.OneOf(
-        ['ADMIN', 'GERENTE', 'SUPERVISOR', 'OPERARIO', 'VENTAS']
-    ))
+    # Ahora usamos role_id en lugar de rol
+    role_id = fields.Int(required=True, validate=validate.Range(min=1))
 
     activo = fields.Bool(dump_only=True)
-    creado_en = fields.DateTime(dump_only=True)
-    actualizado_en = fields.DateTime(dump_only=True)
-    legajo = fields.Str(allow_none=True)
+    created_at = fields.DateTime(dump_only=True)
+    updated_at = fields.DateTime(dump_only=True)
+    legajo = fields.Str(required=True)
     dni = fields.Str(allow_none=True)
     telefono = fields.Str(allow_none=True)
     direccion = fields.Str(allow_none=True)
     fecha_nacimiento = fields.Date(allow_none=True)
     fecha_ingreso = fields.Date(allow_none=True)
-    departamento = fields.Str(allow_none=True)
-    puesto = fields.Str(allow_none=True)
     supervisor_id = fields.Int(allow_none=True)
-    turno = fields.Str(allow_none=True)
-    ultimo_login = fields.DateTime(dump_only=True, allow_none=True)
-    login_totem_activo = fields.Boolean(allow_none=True)
-    ultimo_login_totem = fields.DateTime(allow_none=True)
-    totem_session_id = fields.String(allow_none=True)
-    ultimo_login_web = fields.DateTime(allow_none=True)
+    turno = fields.Str(allow_none=True, validate=validate.OneOf(['MAÑANA', 'TARDE', 'NOCHE', 'ROTATIVO']))
+    ultimo_login_web = fields.DateTime(dump_only=True, allow_none=True)
+    facial_encoding = fields.String(allow_none=True, dump_only=True)
+
+    @validates_schema
+    def validate_dates(self, data, **kwargs):
+        """Valida que las fechas sean lógicas"""
+        if (data.get('fecha_nacimiento') and data.get('fecha_ingreso') and 
+            data['fecha_nacimiento'] > data['fecha_ingreso']):
+            raise ValidationError('La fecha de nacimiento no puede ser posterior a la fecha de ingreso')
