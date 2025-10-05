@@ -51,6 +51,51 @@
 
                         <div class="col-md-6">
                             <div class="form-floating">
+                                <input type="text" class="form-control" id="dni" name="dni"
+                                    value="{{ usuario.dni or '' }}" placeholder="DNI">
+                                <label for="dni">
+                                    <i class="bi bi-person-vcard me-1"></i>DNI
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <select class="form-select" id="turno" name="turno">
+                                    <option value="">Seleccionar turno...</option>
+                                    <option value="MAÑANA" {% if usuario.turno == 'MAÑANA' %}selected{% endif %}>Mañana</option>
+                                    <option value="TARDE" {% if usuario.turno == 'TARDE' %}selected{% endif %}>Tarde</option>
+                                    <option value="NOCHE" {% if usuario.turno == 'NOCHE' %}selected{% endif %}>Noche</option>
+                                    <option value="ROTATIVO" {% if usuario.turno == 'ROTATIVO' %}selected{% endif %}>Rotativo</option>
+                                </select>
+                                <label for="turno">
+                                    <i class="bi bi-clock-history me-1"></i>Turno
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                             <div class="form-floating">
+                                <input type="text" class="form-control" id="telefono" name="telefono"
+                                    value="{{ usuario.telefono or '' }}" placeholder="Teléfono">
+                                <label for="telefono">
+                                    <i class="bi bi-telephone me-1"></i>Teléfono
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="direccion" name="direccion"
+                                    value="{{ usuario.direccion or '' }}" placeholder="Dirección">
+                                <label for="direccion">
+                                    <i class="bi bi-geo-alt me-1"></i>Dirección
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
                                 <select class="form-select" id="role_id" name="role_id" required>
                                     <option value="">Seleccionar rol...</option>
                                     {% for rol in roles %}

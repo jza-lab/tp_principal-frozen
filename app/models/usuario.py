@@ -58,8 +58,8 @@ class UsuarioModel(BaseModel):
         Método genérico y privado para buscar un usuario por un campo específico.
         """
         try:
-            # La consulta siempre incluye la información del rol
-            result = self.db.table(self.get_table_name()).select('*, roles(*)').eq(field, value).execute()
+            # La consulta siempre incluye la información del rol, incluyendo el nivel
+            result = self.db.table(self.get_table_name()).select('*, roles(codigo, nombre, nivel)').eq(field, value).execute()
             if result.data:
                 return {'success': True, 'data': result.data[0]}
             else:
