@@ -35,6 +35,7 @@ CREATE TABLE public.insumos_catalogo (
   activo boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  precio_unitario numeric NOT NULL DEFAULT '1'::numeric,
   CONSTRAINT insumos_catalogo_pkey PRIMARY KEY (id_insumo)
 );
 CREATE TABLE public.insumos_inventario (
@@ -134,6 +135,8 @@ CREATE TABLE public.ordenes_produccion (
   prioridad character varying DEFAULT 'NORMAL'::character varying,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  fecha_fin_estimada timestamp with time zone,
+  fecha_aprobacion timestamp with time zone,
   CONSTRAINT ordenes_produccion_pkey PRIMARY KEY (id),
   CONSTRAINT ordenes_produccion_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES public.productos(id),
   CONSTRAINT ordenes_produccion_receta_id_fkey FOREIGN KEY (receta_id) REFERENCES public.recetas(id),
@@ -143,7 +146,7 @@ CREATE TABLE public.pedido_items (
   id integer NOT NULL DEFAULT nextval('pedido_items_id_seq'::regclass),
   pedido_id integer NOT NULL,
   producto_id integer NOT NULL,
-  cantidad real NOT NULL,
+  cantidad integer NOT NULL,
   estado character varying NOT NULL DEFAULT 'PENDIENTE'::character varying,
   orden_produccion_id integer,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -250,8 +253,33 @@ CREATE TABLE public.registros_acceso (
   metodo character varying NOT NULL,
   dispositivo character varying NOT NULL,
   observaciones text,
+  sesion_totem_id integer,
+  ubicacion_totem character varying,
   CONSTRAINT registros_acceso_pkey PRIMARY KEY (id),
-  CONSTRAINT registros_acceso_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id)
+  CONSTRAINT registros_acceso_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id),
+  CONSTRAINT registros_acceso_sesion_totem_id_fkey FOREIGN KEY (sesion_totem_id) REFERENCES public.totem_sesiones(id)
+);
+CREATE TABLE public.roles (
+  id integer NOT NULL DEFAULT nextval('roles_id_seq'::regclass),
+  codigo character varying NOT NULL UNIQUE,
+  nombre character varying NOT NULL,
+  nivel integer NOT NULL DEFAULT 1,
+  descripcion text,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT roles_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.totem_sesiones (
+  id integer NOT NULL DEFAULT nextval('totem_sesiones_id_seq'::regclass),
+  usuario_id integer NOT NULL,
+  fecha_inicio timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  fecha_fin timestamp without time zone,
+  session_id character varying NOT NULL,
+  metodo_acceso character varying NOT NULL CHECK (metodo_acceso::text = ANY (ARRAY['FACIAL'::character varying, 'CREDENCIAL'::character varying]::text[])),
+  dispositivo_totem character varying NOT NULL,
+  activa boolean DEFAULT true,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT totem_sesiones_pkey PRIMARY KEY (id),
+  CONSTRAINT totem_sesiones_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id)
 );
 CREATE TABLE public.usuarios (
   id integer NOT NULL DEFAULT nextval('usuarios_id_seq'::regclass),
@@ -259,7 +287,6 @@ CREATE TABLE public.usuarios (
   password_hash character varying NOT NULL,
   nombre character varying NOT NULL,
   apellido character varying NOT NULL,
-  rol character varying NOT NULL CHECK (rol::text = ANY (ARRAY['ADMIN'::character varying::text, 'SUPERVISOR'::character varying::text, 'OPERARIO'::character varying::text, 'LECTURA'::character varying::text])),
   activo boolean DEFAULT true,
   created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
   legajo character varying NOT NULL UNIQUE,
@@ -268,17 +295,11 @@ CREATE TABLE public.usuarios (
   direccion text,
   fecha_nacimiento date,
   fecha_ingreso date,
-  departamento character varying CHECK (departamento::text = ANY (ARRAY['PRODUCCION'::character varying, 'CALIDAD'::character varying, 'ADMINISTRACION'::character varying, 'ALMACEN'::character varying, 'LOGISTICA'::character varying]::text[])),
-  puesto character varying,
-  supervisor_id integer,
   turno character varying CHECK (turno::text = ANY (ARRAY['MAÑANA'::character varying, 'TARDE'::character varying, 'NOCHE'::character varying, 'ROTATIVO'::character varying]::text[])),
-  ultimo_login timestamp without time zone,
   facial_encoding text,
   updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-  login_totem_activo boolean DEFAULT false,
-  ultimo_login_totem timestamp without time zone,
-  totem_session_id character varying,
   ultimo_login_web timestamp with time zone,
+  role_id integer NOT NULL,
   CONSTRAINT usuarios_pkey PRIMARY KEY (id),
-  CONSTRAINT usuarios_supervisor_id_fkey FOREIGN KEY (supervisor_id) REFERENCES public.usuarios(id)
+  CONSTRAINT usuarios_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id)
 );

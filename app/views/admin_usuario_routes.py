@@ -14,7 +14,7 @@ facial_controller = FacialController()
 orden_produccion_controller=OrdenProduccionController()
 
 @admin_usuario_bp.route('/')
-@roles_required('ADMIN')
+@roles_required(min_level=2, allowed_roles=['RRHH', 'GERENTE'])
 def index():
     hoy = date.today()
 
@@ -58,14 +58,14 @@ def index():
                             ordenes_totales = ordenes_totales)
 
 @admin_usuario_bp.route('/usuarios')
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
 def listar_usuarios():
     """Muestra la lista de todos los usuarios del sistema."""
     usuarios = usuario_controller.obtener_todos_los_usuarios()
     return render_template('usuarios/listar.html', usuarios=usuarios)
 
 @admin_usuario_bp.route('/usuarios/<int:id>')
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
 def ver_perfil(id):
     """Muestra el perfil de un usuario específico."""
     usuario = usuario_controller.obtener_usuario_por_id(id)
@@ -75,59 +75,72 @@ def ver_perfil(id):
     return render_template('usuarios/perfil.html', usuario=usuario)
 
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
 def nuevo_usuario():
     """
-    Gestiona la creación de un nuevo usuario con una lógica de validación facial robusta.
-    El rostro se valida ANTES de crear el usuario para asegurar la atomicidad.
+    Gestiona la creación de un nuevo usuario con la nueva estructura.
     """
     if request.method == 'POST':
         datos_usuario = request.form.to_dict()
         face_data = datos_usuario.pop('face_data', None)
+
+        # Convertir role_id a entero
+        if 'role_id' in datos_usuario:
+            datos_usuario['role_id'] = int(datos_usuario['role_id'])
 
         # 1. Si se adjuntó una foto, validarla primero.
         if face_data:
             validacion_facial = facial_controller.validar_y_codificar_rostro(face_data)
             if not validacion_facial.get('success'):
                 flash(f"Error en el registro facial: {validacion_facial.get('message')}", 'error')
-                return render_template('usuarios/formulario.html', usuario=datos_usuario, is_new=True)
+                return render_template('usuarios/formulario.html', 
+                                    usuario=datos_usuario, 
+                                    is_new=True,
+                                    roles=usuario_controller.obtener_todos_los_roles())
 
-        # 2. Si no hubo foto o la validación facial fue exitosa, proceder a crear el usuario.
+        # 2. Crear el usuario
         resultado_creacion = usuario_controller.crear_usuario(datos_usuario)
         
         if not resultado_creacion.get('success'):
-            # Si la creación del usuario falla (p. ej. email/legajo duplicado), mostrar error.
             flash(f"Error al crear el usuario: {resultado_creacion.get('error')}", 'error')
-            return render_template('usuarios/formulario.html', usuario=datos_usuario, is_new=True)
+            return render_template('usuarios/formulario.html', 
+                                usuario=datos_usuario, 
+                                is_new=True,
+                                roles=usuario_controller.obtener_todos_los_roles())
 
-        # 3. Si el usuario se creó correctamente, registrar el rostro (si aplica).
+        # 3. Registrar el rostro si aplica
         usuario_creado = resultado_creacion.get('data')
         user_id = usuario_creado.get('id')
 
         if user_id and face_data:
-            # Llamamos a registrar_rostro, que ahora solo actualiza el encoding.
-            # La validación costosa ya se hizo.
             resultado_facial = facial_controller.registrar_rostro(user_id, face_data)
             if resultado_facial.get('success'):
                 flash('Usuario creado y rostro registrado exitosamente.', 'success')
             else:
-                # Este es un caso raro donde la validación inicial pasó pero el guardado final falló.
-                # Se informa al admin que el usuario se creó pero sin rostro.
-                flash(f"Usuario creado, pero falló el registro facial final: {resultado_facial.get('message')}", 'warning')
+                flash(f"Usuario creado, pero falló el registro facial: {resultado_facial.get('message')}", 'warning')
         else:
             flash('Usuario creado exitosamente (sin registro facial).', 'success')
 
         return redirect(url_for('admin_usuario.listar_usuarios'))
 
-    # Para el método GET, simplemente mostrar el formulario vacío.
-    return render_template('usuarios/formulario.html', usuario={}, is_new=True)
+    # Para el método GET, mostrar el formulario con la lista de roles
+    roles = usuario_controller.obtener_todos_los_roles()
+    return render_template('usuarios/formulario.html', 
+                         usuario={}, 
+                         is_new=True,
+                         roles=roles)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/editar', methods=['GET', 'POST'])
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
 def editar_usuario(id):
     """Gestiona la edición de un usuario existente."""
     if request.method == 'POST':
         datos_actualizados = request.form.to_dict()
+        
+        # Convertir role_id a entero si existe
+        if 'role_id' in datos_actualizados:
+            datos_actualizados['role_id'] = int(datos_actualizados['role_id'])
+            
         resultado = usuario_controller.actualizar_usuario(id, datos_actualizados)
         if resultado.get('success'):
             flash('Usuario actualizado exitosamente.', 'success')
@@ -136,16 +149,25 @@ def editar_usuario(id):
             flash(f"Error al actualizar el usuario: {resultado.get('error')}", 'error')
             usuario = request.form.to_dict()
             usuario['id'] = id
-            return render_template('usuarios/formulario.html', usuario=usuario, is_new=False)
+            roles = usuario_controller.obtener_todos_los_roles()
+            return render_template('usuarios/formulario.html', 
+                                usuario=usuario, 
+                                is_new=False,
+                                roles=roles)
 
     usuario = usuario_controller.obtener_usuario_por_id(id)
     if not usuario:
         flash('Usuario no encontrado.', 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
-    return render_template('usuarios/formulario.html', usuario=usuario, is_new=False)
+    
+    roles = usuario_controller.obtener_todos_los_roles()
+    return render_template('usuarios/formulario.html', 
+                         usuario=usuario, 
+                         is_new=False,
+                         roles=roles)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/eliminar', methods=['POST'])
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
 def eliminar_usuario(id):
     if session.get('usuario_id') == id:
         msg = 'No puedes desactivar tu propia cuenta.'
@@ -165,7 +187,7 @@ def eliminar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/usuarios/<int:id>/habilitar', methods=['POST'])
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
 def habilitar_usuario(id):
     """Reactiva un usuario."""
     resultado = usuario_controller.habilitar_usuario(id)
@@ -176,7 +198,7 @@ def habilitar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/usuarios/validar', methods=['POST'])
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
 def validar_campo():
     """
     Valida de forma asíncrona si un campo (legajo o email) ya existe.
@@ -192,7 +214,7 @@ def validar_campo():
     return jsonify(resultado)
 
 @admin_usuario_bp.route('/usuarios/validar_rostro', methods=['POST'])
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
 def validar_rostro():
     """
     Valida si el rostro en la imagen es válido y no está duplicado.

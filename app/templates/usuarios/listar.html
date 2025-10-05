@@ -16,6 +16,16 @@
         </div>
     </div>
 
+    <!-- Lógica para contar roles -->
+    {% set stats = namespace(admins=0, operarios=0) %}
+    {% for u in usuarios %}
+        {% if u.roles and u.roles.codigo == 'ADMIN' %}
+            {% set stats.admins = stats.admins + 1 %}
+        {% elif u.roles and u.roles.codigo == 'OPERARIO' %}
+            {% set stats.operarios = stats.operarios + 1 %}
+        {% endif %}
+    {% endfor %}
+
     <!-- Estadísticas rápidas -->
     <div class="row mb-4">
         <div class="col-md-3">
@@ -32,13 +42,13 @@
         </div>
         <div class="col-md-3">
             <div class="stats-card">
-                <div class="stats-number">{{ usuarios|selectattr('rol', 'equalto', 'ADMIN')|list|length }}</div>
+                <div class="stats-number">{{ stats.admins }}</div>
                 <div class="stats-label">Administradores</div>
             </div>
         </div>
         <div class="col-md-3">
             <div class="stats-card">
-                <div class="stats-number">{{ usuarios|selectattr('rol', 'equalto', 'OPERARIO')|list|length }}</div>
+                <div class="stats-number">{{ stats.operarios }}</div>
                 <div class="stats-label">Operarios</div>
             </div>
         </div>
@@ -60,7 +70,7 @@
                     <div class="card-secondary-details mb-3">
                         <span><i class="bi bi-hash"></i> {{ usuario.legajo or 'N/A' }}</span>
                         <span><i class="bi bi-envelope"></i> {{ usuario.email }}</span>
-                        <span><i class="bi bi-shield-check"></i> {{ usuario.rol }}</span>
+                        <span><i class="bi bi-shield-check"></i> {{ usuario.roles.nombre if usuario.roles else 'Sin rol' }}</span>
                     </div>
 
                     <div class="mt-auto">
