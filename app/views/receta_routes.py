@@ -28,7 +28,7 @@ def detalle(id):
     return render_template('recetas/detalle.html', receta=receta)
 
 @receta_bp.route('/nueva', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE_GENERAL', 'SUPERVISOR', 'CONTROL_CALIDAD'])
+@roles_required(allowed_roles=['GERENTE', 'SUPERVISOR', 'CONTROL_CALIDAD'])
 def nueva():
     """Gestiona la creación de una nueva receta con sus ingredientes."""
     if request.method == 'POST':
@@ -68,14 +68,14 @@ def nueva():
     return render_template('recetas/formulario.html', receta={}, productos=productos, insumos=insumos, is_new=True)
 
 @receta_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE_GENERAL', 'SUPERVISOR', 'CONTROL_CALIDAD'])
+@roles_required(allowed_roles=['GERENTE', 'SUPERVISOR', 'CONTROL_CALIDAD'])
 def editar(id):
     """Gestiona la edición de una receta existente (funcionalidad pendiente)."""
     flash('Funcionalidad de editar receta aún no implementada.', 'info')
     return redirect(url_for('receta.detalle', id=id))
 
 @receta_bp.route('/<int:id>/eliminar', methods=['POST'])
-@roles_required(allowed_roles=['GERENTE_GENERAL', 'SUPERVISOR', 'CONTROL_CALIDAD'])
+@roles_required(allowed_roles=['GERENTE', 'SUPERVISOR', 'CONTROL_CALIDAD'])
 def eliminar(id):
     """Elimina una receta (funcionalidad pendiente)."""
     flash('Funcionalidad de eliminar receta aún no implementada.', 'info')

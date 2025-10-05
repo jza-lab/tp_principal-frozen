@@ -49,7 +49,7 @@ def listar():
 
 
 @orden_produccion_bp.route("/nueva", methods=["GET", "POST", "PUT"])
-@roles_required(allowed_roles=["SUPERVISOR", "GERENTE_GENERAL"])
+@roles_required(allowed_roles=["SUPERVISOR", "GERENTE"])
 def nueva():
     """Muestra la página para crear una nueva orden de producción."""
     productos = producto_controller.obtener_todos_los_productos()
@@ -60,7 +60,7 @@ def nueva():
 
 
 @orden_produccion_bp.route("/nueva/crear", methods=["POST"])
-@roles_required(allowed_roles=["SUPERVISOR", "GERENTE_GENERAL"])
+@roles_required(allowed_roles=["SUPERVISOR", "GERENTE"])
 def crear():
     try:
         datos_json = request.get_json()
@@ -83,7 +83,7 @@ def crear():
 
 
 @orden_produccion_bp.route("/modificar/<int:id>", methods=["GET", "POST", "PUT"])
-@roles_required(allowed_roles=["SUPERVISOR", "GERENTE_GENERAL"])
+@roles_required(allowed_roles=["SUPERVISOR", "GERENTE"])
 def modificar(id):
     """Gestiona la modificación de una orden de producción."""
     try:
@@ -163,7 +163,7 @@ def completar(id):
 
 
 @orden_produccion_bp.route("/pendientes")
-@roles_required(allowed_roles=["SUPERVISOR", "GERENTE_GENERAL"])
+@roles_required(allowed_roles=["SUPERVISOR", "GERENTE"])
 def listar_pendientes():
     """Muestra las órdenes pendientes de aprobación."""
     response, _ = controller.obtener_ordenes({"estado": "PENDIENTE"})
@@ -176,7 +176,7 @@ def listar_pendientes():
 
 
 @orden_produccion_bp.route("/<int:id>/aprobar", methods=["POST"])
-@roles_required(allowed_roles=["SUPERVISOR", "GERENTE_GENERAL"])
+@roles_required(allowed_roles=["SUPERVISOR", "GERENTE"])
 def aprobar(id):
     """Aprueba una orden de producción."""
     usuario_id = session.get("usuario_id")
@@ -189,7 +189,7 @@ def aprobar(id):
 
 
 @orden_produccion_bp.route("/<int:id>/rechazar", methods=["POST"])
-@roles_required(allowed_roles=["SUPERVISOR", "GERENTE_GENERAL"])
+@roles_required(allowed_roles=["SUPERVISOR", "GERENTE"])
 def rechazar(id):
     """Rechaza una orden de producción."""
     motivo = request.form.get("motivo", "No especificado")

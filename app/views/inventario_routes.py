@@ -29,7 +29,7 @@ def listar_lotes():
     return render_template('inventario/listar.html', lotes=lotes)
 
 @inventario_view_bp.route('/lote/nuevo', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE_GENERAL', 'SUPERVISOR', 'EMPLEADO'])
+@roles_required(allowed_roles=['GERENTE', 'SUPERVISOR', 'EMPLEADO'])
 def nuevo_lote():
     """
     Gestiona la creación de un nuevo lote en el inventario.

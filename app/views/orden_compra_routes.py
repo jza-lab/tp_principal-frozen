@@ -30,7 +30,7 @@ def listar():
 
 
 @orden_compra_bp.route("/nueva", methods=["GET", "POST"])
-@roles_required(allowed_roles=["GERENTE_GENERAL", "RESPONSABLE_COMERCIAL"])
+@roles_required(allowed_roles=["GERENTE", "RESPONSABLE_COMERCIAL"])
 def nueva():
     if request.method == "POST":
         usuario_id = session.get("usuario_id")
@@ -70,7 +70,7 @@ def detalle(id):
 
 
 @orden_compra_bp.route("/<int:id>/aprobar", methods=["POST"])
-@roles_required(allowed_roles=["GERENTE_GENERAL", "RESPONSABLE_COMERCIAL"])
+@roles_required(allowed_roles=["GERENTE", "RESPONSABLE_COMERCIAL"])
 def aprobar(id):
     usuario_id = session.get("usuario_id")
     resultado = controller.aprobar_orden(id, usuario_id)
@@ -84,7 +84,7 @@ def aprobar(id):
 
 
 @orden_compra_bp.route("/<int:id>/editar", methods=["GET", "POST"])
-@roles_required(allowed_roles=["GERENTE_GENERAL", "RESPONSABLE_COMERCIAL"])
+@roles_required(allowed_roles=["GERENTE", "RESPONSABLE_COMERCIAL"])
 def editar(id):
     if request.method == "POST":
         resultado = controller.actualizar_orden(id, request.form)
@@ -116,7 +116,7 @@ def editar(id):
 
 
 @orden_compra_bp.route("/<int:id>/rechazar", methods=["POST"])
-@roles_required(allowed_roles=["GERENTE_GENERAL", "RESPONSABLE_COMERCIAL"])
+@roles_required(allowed_roles=["GERENTE", "RESPONSABLE_COMERCIAL"])
 def rechazar(id):
     motivo = request.form.get("motivo", "No especificado")
     resultado = controller.rechazar_orden(id, motivo)
@@ -130,7 +130,7 @@ def rechazar(id):
 
 
 @orden_compra_bp.route("/<int:id>/marcar-en-transito", methods=["POST"])
-@roles_required(allowed_roles=["GERENTE_GENERAL", "RESPONSABLE_COMERCIAL"])
+@roles_required(allowed_roles=["GERENTE", "RESPONSABLE_COMERCIAL"])
 def marcar_en_transito(id):
     resultado = controller.marcar_en_transito(id)
     if resultado.get("success"):
@@ -144,7 +144,7 @@ def marcar_en_transito(id):
 
 
 @orden_compra_bp.route("/recepcion/<int:orden_id>", methods=["POST"])
-@roles_required(allowed_roles=["GERENTE_GENERAL", "SUPERVISOR", "EMPLEADO"])
+@roles_required(allowed_roles=["GERENTE", "SUPERVISOR", "EMPLEADO"])
 def procesar_recepcion(orden_id):
     usuario_id = session.get("usuario_id")
     if not usuario_id:

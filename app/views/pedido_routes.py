@@ -40,7 +40,7 @@ def _parse_form_data(form_dict):
     return parsed_data
 
 @orden_venta_bp.route('/')
-@roles_required(allowed_roles=['GERENTE_GENERAL', 'RESPONSABLE_COMERCIAL', 'SUPERVISOR'])
+@roles_required(allowed_roles=['GERENTE', 'RESPONSABLE_COMERCIAL', 'SUPERVISOR'])
 def listar():
     """Muestra la lista de todos los pedidos de venta."""
     estado = request.args.get('estado')
@@ -59,7 +59,7 @@ def listar():
     return render_template('orden_venta/listar.html', pedidos=pedidos, titulo="Pedidos de Venta")
 
 @orden_venta_bp.route('/nueva', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE_GENERAL', 'RESPONSABLE_COMERCIAL'])
+@roles_required(allowed_roles=['GERENTE', 'RESPONSABLE_COMERCIAL'])
 def nueva():
     """Gestiona la creación de un nuevo pedido de venta."""
     
@@ -96,7 +96,7 @@ def nueva():
                            pedido=None, 
                            today=hoy)
 @orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE_GENERAL', 'RESPONSABLE_COMERCIAL'])
+@roles_required(allowed_roles=['GERENTE', 'RESPONSABLE_COMERCIAL'])
 def editar(id):
     hoy = datetime.now().strftime('%Y-%m-%d')
     """Gestiona la edición de un pedido de venta existente."""
@@ -138,7 +138,7 @@ def editar(id):
                            today=hoy)
 
 @orden_venta_bp.route('/<int:id>/detalle')
-@roles_required(allowed_roles=['GERENTE_GENERAL', 'RESPONSABLE_COMERCIAL', 'SUPERVISOR'])
+@roles_required(allowed_roles=['GERENTE', 'RESPONSABLE_COMERCIAL', 'SUPERVISOR'])
 def detalle(id):
     """Muestra la página de detalle de un pedido de venta."""
     response, status_code = controller.obtener_pedido_por_id(id)
@@ -157,7 +157,7 @@ def detalle(id):
         return redirect(url_for('orden_venta.listar'))
 
 @orden_venta_bp.route('/<int:id>/cancelar', methods=['POST'])
-@roles_required(allowed_roles=['GERENTE_GENERAL', 'RESPONSABLE_COMERCIAL'])
+@roles_required(allowed_roles=['GERENTE', 'RESPONSABLE_COMERCIAL'])
 def cancelar(id):
     """Endpoint para cambiar el estado de un pedido a 'CANCELADO'."""
     response, status_code = controller.cancelar_pedido(id)

@@ -31,7 +31,7 @@ def index():
     return render_template('planificacion/index.html', items=items)
 
 @planificacion_bp.route('/crear_orden', methods=['POST'])
-@roles_required(allowed_roles=['GERENTE_GENERAL', 'SUPERVISOR'])
+@roles_required(allowed_roles=['GERENTE', 'SUPERVISOR'])
 def crear_orden():
     """
     Crea órdenes de producción a partir de los items de pedido seleccionados.
