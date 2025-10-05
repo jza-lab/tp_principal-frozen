@@ -12,7 +12,7 @@ insumo_controller = InsumoController()
 proveedor_controller = ProveedorController()
 
 @inventario_view_bp.route('/')
-@roles_required('SUPERVISOR', 'ADMIN', 'GERENTE', 'OPERARIO')
+@roles_required(min_level=2, allowed_roles=['EMPLEADO'])
 def listar_lotes():
     """
     Muestra la lista de todos los lotes en el inventario.
@@ -29,7 +29,7 @@ def listar_lotes():
     return render_template('inventario/listar.html', lotes=lotes)
 
 @inventario_view_bp.route('/lote/nuevo', methods=['GET', 'POST'])
-@roles_required('SUPERVISOR', 'ADMIN', 'GERENTE')
+@roles_required(allowed_roles=['GERENTE_GENERAL', 'SUPERVISOR', 'EMPLEADO'])
 def nuevo_lote():
     """
     Gestiona la creación de un nuevo lote en el inventario.
@@ -56,7 +56,6 @@ def nuevo_lote():
         except Exception as e:
             flash(f"Ocurrió un error inesperado: {e}", 'error')
 
-    # Para la petición GET, preparamos los datos para el formulario
     insumos_resp, _ = insumo_controller.obtener_insumos({'activo': True})
     proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
 
@@ -70,7 +69,7 @@ def nuevo_lote():
                            today=today)
 
 @inventario_view_bp.route('/lote/<id_lote>')
-@roles_required('SUPERVISOR', 'ADMIN', 'GERENTE', 'OPERARIO')
+@roles_required(min_level=2, allowed_roles=['EMPLEADO'])
 def detalle_lote(id_lote):
     """
     Muestra la página de detalle para un lote específico.
@@ -84,9 +83,6 @@ def detalle_lote(id_lote):
             lote['insumo_nombre'] = insumo_resp['data'].get('nombre')
             lote['insumo_unidad_medida'] = insumo_resp['data'].get('unidad_medida')
         
-        if lote.get('id_proveedor'):
-            pass
-
         return render_template('inventario/detalle.html', lote=lote)
     else:
         flash(response.get('error', 'Lote no encontrado.'), 'error')

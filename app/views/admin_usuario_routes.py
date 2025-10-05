@@ -14,7 +14,7 @@ facial_controller = FacialController()
 orden_produccion_controller=OrdenProduccionController()
 
 @admin_usuario_bp.route('/')
-@roles_required('ADMIN')
+@roles_required(min_level=2, allowed_roles=['RRHH', 'GERENTE_GENERAL'])
 def index():
     hoy = date.today()
 
@@ -58,14 +58,14 @@ def index():
                             ordenes_totales = ordenes_totales)
 
 @admin_usuario_bp.route('/usuarios')
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE_GENERAL', 'RRHH', 'IT'])
 def listar_usuarios():
     """Muestra la lista de todos los usuarios del sistema."""
     usuarios = usuario_controller.obtener_todos_los_usuarios()
     return render_template('usuarios/listar.html', usuarios=usuarios)
 
 @admin_usuario_bp.route('/usuarios/<int:id>')
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE_GENERAL', 'RRHH', 'IT'])
 def ver_perfil(id):
     """Muestra el perfil de un usuario específico."""
     usuario = usuario_controller.obtener_usuario_por_id(id)
@@ -75,7 +75,7 @@ def ver_perfil(id):
     return render_template('usuarios/perfil.html', usuario=usuario)
 
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE_GENERAL', 'RRHH', 'IT'])
 def nuevo_usuario():
     """
     Gestiona la creación de un nuevo usuario con la nueva estructura.
@@ -131,7 +131,7 @@ def nuevo_usuario():
                          roles=roles)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/editar', methods=['GET', 'POST'])
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE_GENERAL', 'RRHH', 'IT'])
 def editar_usuario(id):
     """Gestiona la edición de un usuario existente."""
     if request.method == 'POST':
@@ -167,7 +167,7 @@ def editar_usuario(id):
                          roles=roles)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/eliminar', methods=['POST'])
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE_GENERAL', 'RRHH', 'IT'])
 def eliminar_usuario(id):
     if session.get('usuario_id') == id:
         msg = 'No puedes desactivar tu propia cuenta.'
@@ -187,7 +187,7 @@ def eliminar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/usuarios/<int:id>/habilitar', methods=['POST'])
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE_GENERAL', 'RRHH', 'IT'])
 def habilitar_usuario(id):
     """Reactiva un usuario."""
     resultado = usuario_controller.habilitar_usuario(id)
@@ -198,7 +198,7 @@ def habilitar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/usuarios/validar', methods=['POST'])
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE_GENERAL', 'RRHH', 'IT'])
 def validar_campo():
     """
     Valida de forma asíncrona si un campo (legajo o email) ya existe.
@@ -214,7 +214,7 @@ def validar_campo():
     return jsonify(resultado)
 
 @admin_usuario_bp.route('/usuarios/validar_rostro', methods=['POST'])
-@roles_required('ADMIN')
+@roles_required(allowed_roles=['GERENTE_GENERAL', 'RRHH', 'IT'])
 def validar_rostro():
     """
     Valida si el rostro en la imagen es válido y no está duplicado.
