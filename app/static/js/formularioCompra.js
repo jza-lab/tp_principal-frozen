@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', function () {
         totalInput.value = total.toFixed(2);
         
         // Llamada a la función de exclusión
-        updateAvailableInsumos(); 
+        updateAvaizlableInsumos(); 
     }
 
     /**
@@ -91,6 +91,8 @@ document.addEventListener('DOMContentLoaded', function () {
             // No es necesario llamar updateAvailableInsumos aquí, ya está en calcularSubtotales()
         }
     });
+
+    ivaCheckbox.addEventListener('change', calcularSubtotales);
 
     itemsContainer.addEventListener('change', function(e) {
         if (e.target.classList.contains('insumo-selector')) {
@@ -188,3 +190,4 @@ form.addEventListener('submit', function(event) {
     form.classList.remove('was-validated'); 
     form.submit(); 
 });
+
