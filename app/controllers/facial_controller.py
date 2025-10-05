@@ -9,6 +9,7 @@ import json
 import logging
 from typing import Dict
 from app.database import Database
+from app.models.totem_sesion import TotemSesionModel
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ class FacialController:
     
     def __init__(self):
         self.db = Database().client
+        self.totem_sesion_model = TotemSesionModel()
         self.save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Data")
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -181,71 +183,6 @@ class FacialController:
             logger.error(f"❌ Error registrando acceso: {e}")
             return {'success': False, 'error': str(e)}
 
-    def _verificar_sesion_activa_hoy(self, usuario_id: int) -> bool:
-        """
-        Verifica si el usuario tiene una sesión activa hoy.
-        """
-        try:
-            from datetime import date
-            hoy = date.today().isoformat()
-            
-            response = self.db.table("totem_sesiones")\
-                .select('*')\
-                .eq('usuario_id', usuario_id)\
-                .eq('activa', True)\
-                .gte('fecha_inicio', f'{hoy}T00:00:00')\
-                .lte('fecha_inicio', f'{hoy}T23:59:59')\
-                .execute()
-
-            return len(response.data) > 0
-        except Exception as e:
-            logger.error(f"Error verificando sesión activa hoy: {str(e)}")
-            return False
-
-    def _crear_sesion_totem(self, usuario_id: int, metodo_acceso: str) -> Dict:
-        """
-        Crea una nueva sesión de tótem para el usuario.
-        """
-        try:
-            import secrets
-            session_id = secrets.token_urlsafe(32)
-
-            data = {
-                'usuario_id': usuario_id,
-                'session_id': session_id,
-                'metodo_acceso': metodo_acceso,
-                'dispositivo_totem': 'TOTEM_PRINCIPAL',
-                'activa': True
-            }
-
-            response = self.db.table("totem_sesiones").insert(data).execute()
-            if response.data:
-                return {'success': True, 'data': response.data[0]}
-            else:
-                return {'success': False, 'error': 'No se pudo crear la sesión'}
-        except Exception as e:
-            logger.error(f"Error creando sesión de totem: {str(e)}")
-            return {'success': False, 'error': str(e)}
-
-    def _cerrar_sesion_totem(self, usuario_id: int) -> Dict:
-        """
-        Cierra la sesión activa de un usuario en el totem.
-        """
-        try:
-            response = self.db.table("totem_sesiones")\
-                .update({'activa': False, 'fecha_fin': datetime.now().isoformat()})\
-                .eq('usuario_id', usuario_id)\
-                .eq('activa', True)\
-                .execute()
-
-            if response.data:
-                return {'success': True, 'data': response.data[0]}
-            else:
-                return {'success': False, 'error': 'No se encontró sesión activa'}
-        except Exception as e:
-            logger.error(f"Error cerrando sesión de totem: {str(e)}")
-            return {'success': False, 'error': str(e)}
-
     def _manejar_logica_acceso(self, usuario: dict, metodo: str):
         """
         Lógica actualizada para registrar entrada/salida usando sesiones de tótem.
@@ -254,14 +191,14 @@ class FacialController:
         usuario_nombre = usuario.get('nombre', 'Usuario')
 
         # Verificar si ya tiene sesión activa hoy
-        tiene_sesion_activa = self._verificar_sesion_activa_hoy(usuario_id)
+        tiene_sesion_activa = self.totem_sesion_model.verificar_sesion_activa_hoy(usuario_id)
 
         if not tiene_sesion_activa:
             # Lógica de ENTRADA
             logger.info(f"Procesando ENTRADA para {usuario_nombre} a través de {metodo}")
             
             # Crear sesión de tótem
-            resultado_sesion = self._crear_sesion_totem(usuario_id, metodo)
+            resultado_sesion = self.totem_sesion_model.crear_sesion(usuario_id, metodo)
             if not resultado_sesion.get('success'):
                 return {
                     'success': False,
@@ -289,7 +226,7 @@ class FacialController:
             logger.info(f"Procesando SALIDA para {usuario_nombre} a través de {metodo}")
             
             # Cerrar sesión de tótem
-            resultado_cierre = self._cerrar_sesion_totem(usuario_id)
+            resultado_cierre = self.totem_sesion_model.cerrar_sesion(usuario_id)
             if not resultado_cierre.get('success'):
                 logger.warning(f"No se pudo cerrar sesión para usuario {usuario_id}")
 
@@ -333,7 +270,7 @@ class FacialController:
             from app.controllers.usuario_controller import UsuarioController
             usuario_controller = UsuarioController()
             
-            resultado_autenticacion = usuario_controller.autenticar_usuario_V2(legajo, password)
+            resultado_autenticacion = usuario_controller.autenticar_usuario_para_totem(legajo, password)
             if not resultado_autenticacion.get('success'):
                 return {'success': False, 'message': resultado_autenticacion.get('error', 'Credenciales inválidas.')}
             

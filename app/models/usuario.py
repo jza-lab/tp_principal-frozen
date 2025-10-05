@@ -53,41 +53,32 @@ class UsuarioModel(BaseModel):
     def get_table_name(self) -> str:
         return 'usuarios'
 
-    def find_by_email(self, email: str) -> Dict:
-        """Busca un usuario por email con información de rol"""
+    def _find_by(self, field: str, value) -> Dict:
+        """
+        Método genérico y privado para buscar un usuario por un campo específico.
+        """
         try:
-            result = self.db.table(self.get_table_name()).select('*, roles(*)').eq('email', email).execute()
+            # La consulta siempre incluye la información del rol
+            result = self.db.table(self.get_table_name()).select('*, roles(*)').eq(field, value).execute()
             if result.data:
                 return {'success': True, 'data': result.data[0]}
             else:
                 return {'success': False, 'error': 'Usuario no encontrado'}
         except Exception as e:
-            logger.error(f"Error buscando usuario por email: {str(e)}")
+            logger.error(f"Error buscando usuario por {field}: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def find_by_email(self, email: str) -> Dict:
+        """Busca un usuario por email con información de rol"""
+        return self._find_by('email', email)
 
     def find_by_id(self, usuario_id: int) -> Dict:
         """Busca un usuario por su ID con información de rol"""
-        try:
-            response = self.db.table("usuarios").select("*, roles(*)").eq("id", usuario_id).execute()
-            if response.data:
-                return {'success': True, 'data': response.data[0]}
-            else:
-                return {'success': False, 'error': 'Usuario no encontrado'}
-        except Exception as e:
-            logger.error(f"Error buscando por ID: {e}")
-            return {'success': False, 'error': str(e)}
+        return self._find_by('id', usuario_id)
 
     def find_by_legajo(self, legajo: str) -> Dict:
         """Busca un usuario por su legajo con información de rol"""
-        try:
-            response = self.db.table("usuarios").select("*, roles(*)").eq("legajo", legajo).execute()
-            if response.data:
-                return {'success': True, 'data': response.data[0]}
-            else:
-                return {'success': False, 'error': 'Usuario no encontrado'}
-        except Exception as e:
-            logger.error(f"Error buscando por legajo: {e}")
-            return {'success': False, 'error': str(e)}
+        return self._find_by('legajo', legajo)
 
     def update(self, usuario_id: int, data: Dict) -> Dict:
         """Actualiza un usuario"""

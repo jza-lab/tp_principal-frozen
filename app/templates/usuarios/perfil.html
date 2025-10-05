@@ -15,7 +15,7 @@
             <p><strong>Legajo:</strong> {{ usuario.legajo }}</p>
             <p><strong>Nombre:</strong> {{ usuario.nombre }}</p>
             <p><strong>Apellido:</strong> {{ usuario.apellido }}</p>
-            <p><strong>Rol:</strong> {{ usuario.rol }}</p>
+            <p><strong>Rol:</strong> {{ usuario.roles.nombre if usuario.roles else 'Sin rol' }}</p>
             <p><strong>Activo:</strong> {{ 'Sí' if usuario.activo else 'No' }}</p>
         </div>
         <div class="card-footer">

@@ -41,10 +41,10 @@ class UsuarioController(BaseController):
         except Exception as e:
             return {'success': False, 'error': f'Error interno: {str(e)}'}
 
-    def autenticar_usuario_V2(self, legajo: str, password: str) -> Dict:
+    def _autenticar_credenciales_base(self, legajo: str, password: str) -> Dict:
         """
-        Autentica a un usuario por legajo y contraseña.
-        VERIFICA que tenga sesión activa en tótem.
+        Lógica base para autenticar credenciales de un usuario.
+        Verifica legajo, contraseña y estado activo.
         """
         user_result = self.model.find_by_legajo(legajo)
 
@@ -52,7 +52,6 @@ class UsuarioController(BaseController):
             return {'success': False, 'error': 'Credenciales inválidas'}
 
         user_data = user_result['data']
-        logger.info(f"🔍 Usuario encontrado: {user_data.get('email')}")
 
         # 1. Verificar contraseña
         if not check_password_hash(user_data['password_hash'], password):
@@ -62,7 +61,23 @@ class UsuarioController(BaseController):
         if not user_data.get('activo', True):
             return {'success': False, 'error': 'Usuario desactivado'}
 
-        # 3. VERIFICACIÓN CLAVE: ¿Tiene sesión activa en tómet hoy?
+        # Si las credenciales son válidas, devolver el usuario
+        return {'success': True, 'data': user_data}
+
+    def autenticar_usuario_web(self, legajo: str, password: str) -> Dict:
+        """
+        Autentica a un usuario para el acceso web.
+        Verifica credenciales Y que tenga una sesión activa en el tótem.
+        """
+        # Paso 1: Autenticación de credenciales base
+        auth_result = self._autenticar_credenciales_base(legajo, password)
+        if not auth_result.get('success'):
+            return auth_result
+
+        user_data = auth_result['data']
+        logger.info(f"🔍 Credenciales válidas para: {user_data.get('email')}")
+
+        # Paso 2: Verificación específica para web (sesión de tótem)
         tiene_sesion_activa = self.totem_sesion.verificar_sesion_activa_hoy(user_data['id'])
         logger.info(f"✅ Usuario tiene sesión activa hoy: {tiene_sesion_activa}")
 
@@ -72,19 +87,21 @@ class UsuarioController(BaseController):
                 'error': 'Debe registrar su entrada en el tótem primero para acceder por web'
             }
 
-        # Actualizar último login web
-        update_result = self.model.update(user_data['id'], {
-            'ultimo_login_web': datetime.now().isoformat()
-        })
-
-        if not update_result.get('success'):
-            logger.error(f"Error actualizando último login web: {update_result.get('error')}")
+        # Paso 3: Actualizar último login web y devolver éxito
+        self.model.update(user_data['id'], {'ultimo_login_web': datetime.now().isoformat()})
 
         return {
             'success': True,
             'data': user_data,
             'message': 'Autenticación exitosa'
         }
+
+    def autenticar_usuario_para_totem(self, legajo: str, password: str) -> Dict:
+        """
+        Autentica a un usuario para uso exclusivo del tótem (solo credenciales).
+        """
+        logger.info(f"🔍 Autenticando usuario para tótem con legajo: {legajo}")
+        return self._autenticar_credenciales_base(legajo, password)
 
     def autenticar_usuario_facial_web(self, image_data_url: str) -> Dict:
         """

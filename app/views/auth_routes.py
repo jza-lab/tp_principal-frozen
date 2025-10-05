@@ -17,19 +17,20 @@ def login():
         legajo = request.form['legajo']
         password = request.form['password']
         
-        respuesta = usuario_controller.autenticar_usuario_V2(legajo, password)
+        respuesta = usuario_controller.autenticar_usuario_web(legajo, password)
         usuario = respuesta.get('data')
 
         if respuesta.get('success') and usuario and usuario.get('activo'):
+            rol_codigo = usuario.get('roles', {}).get('codigo')
+
             session['usuario_id'] = usuario['id']
-            session['rol'] = usuario.get('rol_codigo')  # Ahora viene del join con roles
+            session['rol'] = rol_codigo
             session['usuario_nombre'] = f"{usuario['nombre']}"
             session['user_data'] = usuario
 
             flash(f"Bienvenido {usuario['nombre']}", 'success')
             
             # Redirección basada en rol
-            rol_codigo = usuario.get('rol_codigo')
             if rol_codigo == 'SUPERVISOR':
                 return redirect(url_for('orden_produccion.ordenes_pendientes'))
             elif rol_codigo == 'ADMIN' or rol_codigo == 'GERENTE':
