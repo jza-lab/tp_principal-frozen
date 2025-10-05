@@ -4,387 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cargar Archivo de Proveedor</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cargaPrecios.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        .card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
-        }
-
-        .header {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-
-        .header h1 {
-            font-size: 28px;
-            margin-bottom: 10px;
-        }
-
-        .header p {
-            opacity: 0.9;
-            font-size: 16px;
-        }
-
-        .content {
-            padding: 30px;
-        }
-
-        /* Área de carga de archivos */
-        .upload-area {
-            border: 2px dashed #cbd5e1;
-            border-radius: 8px;
-            padding: 40px 20px;
-            text-align: center;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            margin-bottom: 25px;
-        }
-
-        .upload-area:hover {
-            border-color: #4f46e5;
-            background-color: #f8fafc;
-        }
-
-        .upload-area.dragover {
-            border-color: #4f46e5;
-            background-color: #e0e7ff;
-        }
-
-        .upload-icon {
-            font-size: 48px;
-            color: #94a3b8;
-            margin-bottom: 15px;
-        }
-
-        .upload-text {
-            margin-bottom: 15px;
-        }
-
-        .upload-text h3 {
-            color: #1e293b;
-            margin-bottom: 8px;
-        }
-
-        .upload-text p {
-            color: #64748b;
-            font-size: 14px;
-        }
-
-        .file-input {
-            display: none;
-        }
-
-        .browse-btn {
-            background: #4f46e5;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: background 0.3s ease;
-        }
-
-        .browse-btn:hover {
-            background: #4338ca;
-        }
-
-        .selected-file {
-            background: #f1f5f9;
-            border-radius: 6px;
-            padding: 15px;
-            margin-top: 15px;
-            display: none;
-        }
-
-        .file-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .file-icon {
-            color: #4f46e5;
-            font-size: 24px;
-        }
-
-        .file-details {
-            flex: 1;
-        }
-
-        .file-name {
-            font-weight: 500;
-            color: #1e293b;
-        }
-
-        .file-size {
-            font-size: 12px;
-            color: #64748b;
-        }
-
-        .remove-file {
-            background: none;
-            border: none;
-            color: #ef4444;
-            cursor: pointer;
-            font-size: 18px;
-        }
-
-        /* Botón de enviar */
-        .submit-btn {
-            width: 100%;
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white;
-            border: none;
-            padding: 15px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-
-        .submit-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4);
-        }
-
-        .submit-btn:disabled {
-            background: #94a3b8;
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        /* Estados de carga */
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
-
-        .spinner {
-            border: 4px solid #f3f4f6;
-            border-top: 4px solid #4f46e5;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Resultados */
-        .results {
-            display: none;
-            margin-top: 25px;
-        }
-
-        .result-card {
-            background: #f8fafc;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .result-header {
-            display: flex;
-            justify-content: between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .result-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #1e293b;
-        }
-
-        .result-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .badge-success {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .badge-warning {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .badge-error {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .stat-item {
-            text-align: center;
-            padding: 15px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #4f46e5;
-            margin-bottom: 5px;
-        }
-
-        .stat-label {
-            font-size: 12px;
-            color: #64748b;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .details-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-
-        .details-table th {
-            background: #e2e8f0;
-            padding: 12px;
-            text-align: left;
-            font-size: 12px;
-            color: #475569;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .details-table td {
-            padding: 12px;
-            border-bottom: 1px solid #e2e8f0;
-        }
-
-        .status-cell {
-            font-weight: 600;
-            font-size: 12px;
-            padding: 4px 8px;
-            border-radius: 4px;
-        }
-
-        .status-actualizado {
-            background: #dcfce7;
-            color: #166534;
-        }
-
-        .status-sin-cambios {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .status-error {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        /* Alertas */
-        .alert {
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: none;
-        }
-
-        .alert-error {
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            color: #991b1b;
-        }
-
-        .alert-success {
-            background: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            color: #166534;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .container {
-                padding: 10px;
-            }
-            
-            .content {
-                padding: 20px;
-            }
-            
-            .stats {
-                grid-template-columns: 1fr 1fr;
-            }
-            
-            .details-table {
-                font-size: 14px;
-            }
-            
-            .details-table th, 
-            .details-table td {
-                padding: 8px;
-            }
-        }
-    </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
-            <div class="header">
+            <div class="header"> 
                 <h1>Cargar Archivo de Precios</h1>
-                <p>Sube tu archivo Excel para actualizar los precios de proveedor</p>
+                <p class="subtitulo">Sube tu archivo Excel para actualizar los precios de proveedor</p>
             </div>
             
             <div class="content">
-                <!-- Alerta de error -->
-                <div class="alert alert-error" id="errorAlert"></div>
+                <div class="alert alert-error" id="errorAlert" style="display: none;"></div>
                 
-                <!-- Alerta de éxito -->
-                <div class="alert alert-success" id="successAlert"></div>
+                <div class="alert alert-success" id="successAlert" style="display: none;"></div>
                 
-                <!-- Área de carga -->
                 <div class="upload-area" id="uploadArea">
                     <div class="upload-icon">📁</div>
                     <div class="upload-text">
@@ -394,7 +32,7 @@
                     <button class="browse-btn" id="browseBtn">Buscar Archivo</button>
                     <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls">
                     
-                    <div class="selected-file" id="selectedFile">
+                    <div class="selected-file" id="selectedFile" style="display: none;">
                         <div class="file-info">
                             <div class="file-icon">📄</div>
                             <div class="file-details">
@@ -406,32 +44,28 @@
                     </div>
                 </div>
                 
-                <!-- Botón de enviar -->
                 <button class="submit-btn" id="submitBtn" disabled>
                     <span>Procesar Archivo</span>
                 </button>
                 
-                <!-- Estado de carga -->
-                <div class="loading" id="loadingState">
+                <div class="loading" id="loadingState" style="display: none;">
                     <div class="spinner"></div>
                     <p>Procesando archivo, por favor espera...</p>
                 </div>
                 
-                <!-- Resultados -->
-                <div class="results" id="resultsSection">
-                    <div class="result-card">
+                <div class="results" id="resultsSection" style="display: none;">
+                    <div class="result-card"> 
                         <div class="result-header">
                             <div class="result-title">Resultado del Procesamiento</div>
-                            <div class="result-badge badge-success" id="resultBadge">Éxito</div>
+                            <div class="result-badge badge bg-success-soft text-success" id="resultBadge">Éxito</div>
                         </div>
                         
                         <div class="stats" id="statsContainer">
-                            <!-- Las estadísticas se llenarán con JavaScript -->
-                        </div>
+                            </div>
                         
                         <h4>Detalles por Producto:</h4>
                         <div class="table-container">
-                            <table class="details-table" id="detailsTable">
+                            <table class="details-table table-striped table-hover" id="detailsTable">
                                 <thead>
                                     <tr>
                                         <th>Fila</th>
@@ -443,8 +77,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <!-- Las filas se llenarán con JavaScript -->
-                                </tbody>
+                                    </tbody>
                             </table>
                         </div>
                     </div>
@@ -453,250 +86,7 @@
         </div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Elementos del DOM
-            const uploadArea = document.getElementById('uploadArea');
-            const fileInput = document.getElementById('fileInput');
-            const browseBtn = document.getElementById('browseBtn');
-            const selectedFile = document.getElementById('selectedFile');
-            const fileName = document.getElementById('fileName');
-            const fileSize = document.getElementById('fileSize');
-            const removeFile = document.getElementById('removeFile');
-            const submitBtn = document.getElementById('submitBtn');
-            const loadingState = document.getElementById('loadingState');
-            const resultsSection = document.getElementById('resultsSection');
-            const errorAlert = document.getElementById('errorAlert');
-            const successAlert = document.getElementById('successAlert');
-            const statsContainer = document.getElementById('statsContainer');
-            const detailsTable = document.getElementById('detailsTable');
-            const resultBadge = document.getElementById('resultBadge');
+<script src="{{ url_for('static', filename='js/preciosProveedores.js') }}"></script>
 
-            let currentFile = null;
-
-            // Event Listeners
-            browseBtn.addEventListener('click', () => fileInput.click());
-            fileInput.addEventListener('change', handleFileSelect);
-            removeFile.addEventListener('click', clearFile);
-            submitBtn.addEventListener('click', submitFile);
-
-            // Drag and Drop
-            uploadArea.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                uploadArea.classList.add('dragover');
-            });
-
-            uploadArea.addEventListener('dragleave', () => {
-                uploadArea.classList.remove('dragover');
-            });
-
-            uploadArea.addEventListener('drop', (e) => {
-                e.preventDefault();
-                uploadArea.classList.remove('dragover');
-                
-                if (e.dataTransfer.files.length) {
-                    handleFile(e.dataTransfer.files[0]);
-                }
-            });
-
-            // Funciones
-            function handleFileSelect(e) {
-                if (e.target.files.length) {
-                    handleFile(e.target.files[0]);
-                }
-            }
-
-            function handleFile(file) {
-                // Validar tipo de archivo
-                const validTypes = [
-                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                    'application/vnd.ms-excel'
-                ];
-                
-                if (!validTypes.includes(file.type) && !file.name.match(/\.(xlsx|xls)$/)) {
-                    showError('Por favor, selecciona un archivo Excel válido (.xlsx o .xls)');
-                    return;
-                }
-
-                currentFile = file;
-                
-                // Mostrar información del archivo
-                fileName.textContent = file.name;
-                fileSize.textContent = formatFileSize(file.size);
-                selectedFile.style.display = 'block';
-                
-                // Habilitar botón de enviar
-                submitBtn.disabled = false;
-                
-                // Ocultar alertas y resultados anteriores
-                hideAlerts();
-                resultsSection.style.display = 'none';
-            }
-
-            function clearFile() {
-                currentFile = null;
-                fileInput.value = '';
-                selectedFile.style.display = 'none';
-                submitBtn.disabled = true;
-                hideAlerts();
-            }
-
-            async function submitFile() {
-    if (!currentFile) {
-        showError('Por favor, selecciona un archivo primero');
-        return;
-    }
-
-    // Mostrar estado de carga
-    loadingState.style.display = 'block';
-    submitBtn.disabled = true;
-    hideAlerts();
-    resultsSection.style.display = 'none';
-
-    const formData = new FormData();
-    formData.append('archivo', currentFile);
-
-    try {
-        console.log('=== INICIANDO ENVÍO ===');
-        console.log('Archivo:', currentFile.name);
-        console.log('Tamaño:', currentFile.size);
-        console.log('Tipo:', currentFile.type);
-        
-        const response = await fetch('/api/precios/cargar-archivo-proveedor', {
-            method: 'POST',
-            body: formData
-        });
-
-        console.log('=== RESPUESTA RECIBIDA ===');
-        console.log('Status:', response.status);
-        console.log('Status Text:', response.statusText);
-        console.log('Headers:', Object.fromEntries(response.headers.entries()));
-        
-        const text = await response.text();
-        console.log('Response body:', text);
-        
-        // Intentar parsear como JSON
-        let result;
-        try {
-            result = JSON.parse(text);
-            console.log('JSON parseado:', result);
-        } catch (e) {
-            console.error('Error parseando JSON:', e);
-            throw new Error('Respuesta no es JSON válido: ' + text.substring(0, 100));
-        }
-
-        if (!response.ok) {
-            throw new Error(result.error || `Error ${response.status}: ${response.statusText}`);
-        }
-
-        // Mostrar resultados
-        showResults(result);
-        showSuccess(result.message || 'Archivo procesado exitosamente');
-
-    } catch (error) {
-        console.error('=== ERROR COMPLETO ===', error);
-        showError(error.message);
-    } finally {
-        loadingState.style.display = 'none';
-        submitBtn.disabled = false;
-        console.log('=== PROCESAMIENTO COMPLETADO ===');
-    }
-}
-
-            function showResults(result) {
-                // Actualizar badge según éxito
-                if (result.success) {
-                    resultBadge.className = 'result-badge badge-success';
-                    resultBadge.textContent = 'Éxito';
-                } else {
-                    resultBadge.className = 'result-badge badge-error';
-                    resultBadge.textContent = 'Error';
-                }
-
-                // Mostrar estadísticas
-                if (result.reporte) {
-                    const stats = result.reporte;
-                    statsContainer.innerHTML = `
-                        <div class="stat-item">
-                            <div class="stat-value">${stats.total_filas}</div>
-                            <div class="stat-label">Total Filas</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${stats.actualizados}</div>
-                            <div class="stat-label">Actualizados</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${stats.sin_cambios}</div>
-                            <div class="stat-label">Sin Cambios</div>
-                        </div>
-                        <div class="stat-item">
-                            <div class="stat-value">${stats.errores}</div>
-                            <div class="stat-label">Errores</div>
-                        </div>
-                    `;
-                }
-
-                // Mostrar detalles
-                if (result.detalles && result.detalles.length) {
-                    const tbody = detailsTable.querySelector('tbody');
-                    tbody.innerHTML = '';
-                    
-                    result.detalles.forEach(detalle => {
-                        const statusClass = getStatusClass(detalle.estado);
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${detalle.fila}</td>
-                            <td>${detalle.codigo_interno}</td>
-                            <td>${detalle.producto}</td>
-                            <td>${detalle.proveedor}</td>
-                            <td><span class="status-cell ${statusClass}">${detalle.estado}</span></td>
-                            <td>${detalle.mensaje}</td>
-                        `;
-                        tbody.appendChild(row);
-                    });
-                }
-
-                resultsSection.style.display = 'block';
-            }
-
-            function getStatusClass(estado) {
-                switch(estado) {
-                    case 'ACTUALIZADO':
-                        return 'status-actualizado';
-                    case 'SIN_CAMBIOS':
-                        return 'status-sin-cambios';
-                    case 'ERROR':
-                        return 'status-error';
-                    default:
-                        return '';
-                }
-            }
-
-            function showError(message) {
-                errorAlert.textContent = message;
-                errorAlert.style.display = 'block';
-                successAlert.style.display = 'none';
-            }
-
-            function showSuccess(message) {
-                successAlert.textContent = message;
-                successAlert.style.display = 'block';
-                errorAlert.style.display = 'none';
-            }
-
-            function hideAlerts() {
-                errorAlert.style.display = 'none';
-                successAlert.style.display = 'none';
-            }
-
-            function formatFileSize(bytes) {
-                if (bytes === 0) return '0 Bytes';
-                const k = 1024;
-                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-            }
-        });
-    </script>
 </body>
 </html>

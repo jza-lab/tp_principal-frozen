@@ -35,3 +35,4 @@ numpy==1.26.2
 
 Pillow==10.1.0
 websockets
+openpyxl
