@@ -17,6 +17,9 @@ def roles_required(min_level=0, allowed_roles=None):
             user_role_code = session.get('rol')
             user_level = session.get('user_level', 0)
 
+            if user_role_code == 'GERENTE':
+                return f(*args, **kwargs)
+
             is_authorized = False
             if not min_level and not allowed_roles:
                 is_authorized = False

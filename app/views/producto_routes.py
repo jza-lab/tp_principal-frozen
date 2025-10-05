@@ -13,7 +13,7 @@ def listar():
     return render_template('productos/listar.html', productos=productos)
 
 @producto_bp.route('/nuevo', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE', 'RESPONSABLE_COMERCIAL'])
+@roles_required(allowed_roles=['GERENTE', 'COMERCIAL'])
 def nuevo():
     """Gestiona la creación de un nuevo producto."""
     if request.method == 'POST':
@@ -28,7 +28,7 @@ def nuevo():
     return render_template('productos/formulario.html', producto={}, is_new=True)
 
 @producto_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE', 'RESPONSABLE_COMERCIAL'])
+@roles_required(allowed_roles=['GERENTE', 'COMERCIAL'])
 def editar(id):
     """Gestiona la edición de un producto existente."""
     if request.method == 'POST':
@@ -50,7 +50,7 @@ def editar(id):
     return render_template('productos/formulario.html', producto=producto, is_new=False)
 
 @producto_bp.route('/<int:id>/eliminar', methods=['POST'])
-@roles_required(allowed_roles=['GERENTE', 'RESPONSABLE_COMERCIAL'])
+@roles_required(allowed_roles=['GERENTE', 'COMERCIAL'])
 def eliminar(id):
     """Desactiva un producto (eliminación lógica)."""
     resultado = producto_controller.eliminar_producto(id)

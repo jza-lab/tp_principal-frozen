@@ -32,7 +32,7 @@ usuario_controller = UsuarioController()
 
 @insumos_bp.route("/catalogo/nuevo", methods=["GET", "POST"])
 @roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "RESPONSABLE_COMERCIAL"]
+    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
 )
 def crear_insumo():
     try:
@@ -90,7 +90,7 @@ def obtener_insumo_por_id(id_insumo):
     "/catalogo/actualizar/<string:id_insumo>", methods=["GET", "POST", "PUT"]
 )
 @roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "RESPONSABLE_COMERCIAL"]
+    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
 )
 def actualizar_insumo(id_insumo):
     try:
@@ -116,7 +116,7 @@ def actualizar_insumo(id_insumo):
 
 @insumos_bp.route("/catalogo/eliminar/<string:id_insumo>", methods=["DELETE"])
 @roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "RESPONSABLE_COMERCIAL"]
+    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
 )
 def eliminar_insumo(id_insumo):
     try:
@@ -131,7 +131,7 @@ def eliminar_insumo(id_insumo):
 
 @insumos_bp.route("/catalogo/habilitar/<string:id_insumo>", methods=["POST"])
 @roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "RESPONSABLE_COMERCIAL"]
+    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
 )
 def habilitar_insumo(id_insumo):
     try:
@@ -146,7 +146,7 @@ def habilitar_insumo(id_insumo):
 
 @insumos_bp.route("/catalogo/lote/nuevo/<string:id_insumo>", methods=["GET", "POST"])
 @roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "RESPONSABLE_COMERCIAL"]
+    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
 )
 def agregar_lote(id_insumo):
     proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
@@ -173,7 +173,7 @@ def agregar_lote(id_insumo):
     "/catalogo/lote/nuevo/<string:id_insumo>/crear", methods=["GET", "POST"]
 )
 @roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "RESPONSABLE_COMERCIAL"]
+    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
 )
 def crear_lote(id_insumo):
     try:
@@ -194,7 +194,7 @@ def crear_lote(id_insumo):
     "/catalogo/lote/editar/<string:id_insumo>/<string:id_lote>", methods=["GET"]
 )
 @roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "RESPONSABLE_COMERCIAL"]
+    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
 )
 def editar_lote(id_insumo, id_lote):
     def parse_date(date_str):
@@ -238,7 +238,7 @@ def editar_lote(id_insumo, id_lote):
     "/catalogo/lote/editar/<string:id_insumo>/<string:id_lote>", methods=["PUT"]
 )
 @roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "RESPONSABLE_COMERCIAL"]
+    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
 )
 def actualizar_lote_api(id_insumo, id_lote):
     try:
@@ -260,7 +260,7 @@ def actualizar_lote_api(id_insumo, id_lote):
     "/catalogo/lote/eliminar/<string:id_insumo>/<string:id_lote>", methods=["POST"]
 )
 @roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "RESPONSABLE_COMERCIAL"]
+    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
 )
 def eliminar_lote(id_insumo, id_lote):
     try:
