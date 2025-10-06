@@ -32,8 +32,12 @@ body {
     padding-top: 70px;
     margin-left: 40px;
     margin-right: 40px;
-    /* Suaviza las animaciones en general */
-    transition: background-color 0.3s ease; 
+    transition: background-color 0.3s ease, opacity 0.4s ease-in-out; 
+    opacity: 1;
+}
+
+body.fade-out {
+    opacity: 0 !important;
 }
 
 
@@ -1034,22 +1038,3 @@ body {
   }
 }
 
-/*
- * ----------------------------------
- * TRANSICIÓN DE PÁGINA CON JAVASCRIPT
- * ----------------------------------
- */
-
-body {
-    /* * **IMPORTANTE:** Define una transición en el body.
-     * Si ya tienes una transición de color de fondo, añádele `opacity`.
-     */
-    transition: background-color 0.3s ease, opacity 0.4s ease-in-out; 
-    opacity: 1; /* Asegura que la página inicia visible */
-    /* ... el resto de tus estilos del body ... */
-}
-
-/* Esta clase es la que aplica el JavaScript antes de cambiar de página */
-body.fade-out {
-    opacity: 0 !important; /* Fuerza la opacidad a 0 */
-}
