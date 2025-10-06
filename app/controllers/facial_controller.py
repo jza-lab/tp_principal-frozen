@@ -4,7 +4,6 @@ import numpy as np
 import base64
 import re
 from datetime import datetime
-import face_recognition
 import json
 import logging
 from typing import Dict
@@ -41,6 +40,7 @@ class FacialController:
         Intenta identificar un usuario a partir de una imagen facial.
         Ahora solo busca usuarios activos sin depender de flags obsoletos.
         """
+        import face_recognition
         frame = self._get_image_from_data_url(image_data_url)
         if frame is None:
             return {'success': False, 'message': 'Error al procesar la imagen.'}
@@ -134,6 +134,7 @@ class FacialController:
         Valida que una imagen contenga un único rostro y que no esté ya registrado.
         Devuelve el encoding si la validación es exitosa.
         """
+        import face_recognition
         frame = self._get_image_from_data_url(image_data_url)
         if frame is None:
             return {'success': False, 'message': 'Error al procesar la imagen.'}

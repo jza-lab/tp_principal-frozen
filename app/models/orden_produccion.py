@@ -75,11 +75,11 @@ class OrdenProduccionModel(BaseModel):
         (productos, usuarios, etc.) utilizando el cliente de Supabase.
         """
         try:
-            # El string de select indica que queremos todos los campos de ordenes_produccion,
-            # y de las tablas relacionadas 'productos' y 'usuarios', traemos el campo 'nombre'.
-            # Supabase infiere las relaciones por las Foreign Keys.
+            # Se especifica explícitamente la relación para desambiguar entre creador y supervisor.
             query = self.db.table(self.table_name).select(
-                "*, productos(nombre), usuarios(nombre)"
+                "*, productos(nombre), "
+                "creador:usuario_creador_id(nombre, apellido), "
+                "supervisor:supervisor_responsable_id(nombre, apellido)"
             )
             
             # Aplicar filtros
@@ -119,10 +119,19 @@ class OrdenProduccionModel(BaseModel):
                     else:
                         item['producto_nombre'] = 'N/A'
                     
-                    if item.get('usuarios'):
-                        item['creador_nombre'] = item.pop('usuarios')['nombre']
+                    # Aplanar 'creador'
+                    if item.get('creador'):
+                        creador_info = item.pop('creador')
+                        item['creador_nombre'] = f"{creador_info.get('nombre', '')} {creador_info.get('apellido', '')}".strip()
                     else:
                         item['creador_nombre'] = 'No asignado'
+
+                    # Aplanar 'supervisor'
+                    if item.get('supervisor'):
+                        supervisor_info = item.pop('supervisor')
+                        item['supervisor_nombre'] = f"{supervisor_info.get('nombre', '')} {supervisor_info.get('apellido', '')}".strip()
+                    else:
+                        item['supervisor_nombre'] = 'No asignado'
                     
                     processed_data.append(item)
                 return {'success': True, 'data': processed_data}
@@ -141,7 +150,9 @@ class OrdenProduccionModel(BaseModel):
         try:
             # .maybe_single() ejecuta la consulta y devuelve un solo dict o None
             response = self.db.table(self.table_name).select(
-                "*, productos(nombre, descripcion), recetas(id, descripcion, rendimiento, activa), usuarios(nombre)"
+                "*, productos(nombre, descripcion), recetas(id, descripcion, rendimiento, activa), "
+                "creador:usuario_creador_id(nombre, apellido), "
+                "supervisor:supervisor_responsable_id(nombre, apellido)"
             ).eq("id", orden_id).maybe_single().execute()
            
             item = response.data
@@ -176,9 +187,17 @@ class OrdenProduccionModel(BaseModel):
                     item['receta_codigo'] = item['recetas'].get('codigo', 'N/A')
                     item.pop('recetas')
 
-                if item.get('usuarios'):
-                    item['creador_nombre'] = item['usuarios'].get('nombre', 'No asignado')
-                    item.pop('usuarios')
+                if item.get('creador'):
+                    creador_info = item.pop('creador')
+                    item['creador_nombre'] = f"{creador_info.get('nombre', '')} {creador_info.get('apellido', '')}".strip()
+                else:
+                    item['creador_nombre'] = 'No asignado'
+
+                if item.get('supervisor'):
+                    supervisor_info = item.pop('supervisor')
+                    item['supervisor_nombre'] = f"{supervisor_info.get('nombre', '')} {supervisor_info.get('apellido', '')}".strip()
+                else:
+                    item['supervisor_nombre'] = 'No asignado'
                 
                 return {'success': True, 'data': item}
             else:

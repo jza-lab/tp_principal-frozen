@@ -34,21 +34,26 @@ def index():
 
     """Página principal del panel de administración."""
     respuesta, estado = orden_produccion_controller.obtener_cantidad_ordenes_estado("EN_PROCESO", hoy)
-    ordenes_pendientes = respuesta['data']['cantidad']
+    ordenes_pendientes = respuesta.get('data', {}).get('cantidad', 0)
 
     respuesta2, estado = orden_produccion_controller.obtener_cantidad_ordenes_estado("APROBADA")
     respuesta3, estado = orden_produccion_controller.obtener_cantidad_ordenes_estado("COMPLETADA")
 
     filtros = {
         'estado': 'APROBADA',
-        'fecha_planificada_desde': fecha_inicio_iso, 
-        'fecha_planificada_hasta': fecha_fin_iso 
+        'fecha_planificada_desde': fecha_inicio_iso,
+        'fecha_planificada_hasta': fecha_fin_iso
     }
 
     respuesta, estado = orden_produccion_controller.obtener_ordenes(filtros)
 
-    ordenes_aprobadas = respuesta['data']
-    ordenes_totales = int(respuesta2['data']['cantidad']) + int(respuesta3['data']['cantidad'])
+    # Manejo seguro de datos
+    ordenes_aprobadas = respuesta.get('data', [])
+    
+    cantidad_aprobadas = respuesta2.get('data', {}).get('cantidad', 0)
+    cantidad_completadas = respuesta3.get('data', {}).get('cantidad', 0)
+    
+    ordenes_totales = int(cantidad_aprobadas) + int(cantidad_completadas)
 
     asistencia = usuario_controller.obtener_porcentaje_asistencia()
 
