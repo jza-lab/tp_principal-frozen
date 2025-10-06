@@ -95,7 +95,7 @@
                             <i class="bi bi-eye"></i>
                         </a>
                         
-                        {% if 'SUPERVISOR' in session.get('rol', '') or 'ADMIN' in session.get('rol', '') %}
+                        {% if 'SUPERVISOR' in session.get('rol', '') or 'GERENTE' in session.get('rol', '') %}
                             {% if orden.estado == 'PENDIENTE' %}
                                 <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id) }}"class="confirm-form"
                                 data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de producción?" data-button-type="success">
