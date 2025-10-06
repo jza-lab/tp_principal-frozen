@@ -144,7 +144,7 @@ def marcar_en_transito(id):
 
 
 @orden_compra_bp.route("/recepcion/<int:orden_id>", methods=["POST"])
-@permission_required(sector_codigo='ALMACENAMIENTO', accion='crear')
+@permission_required(sector_codigo='ALMACEN', accion='crear')
 def procesar_recepcion(orden_id):
     usuario_id = session.get("usuario_id")
     if not usuario_id:
