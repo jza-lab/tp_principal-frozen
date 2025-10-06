@@ -198,6 +198,34 @@ class UsuarioController(BaseController):
             'message': 'Autenticación exitosa'
         }
 
+    def _autenticar_credenciales_base(self, legajo: str, password: str) -> Dict:
+        """
+        Método base para autenticar un usuario por legajo y contraseña.
+        Utilizado tanto para acceso web como para tótem.
+        """
+        try:
+            usuario_result = self.model.find_by_legajo(legajo) 
+            
+            if not usuario_result.get('success') or not usuario_result.get('data'):
+                logger.warning(f"❌ Intento de login fallido: Legajo {legajo} no encontrado.")
+                return {'success': False, 'error': 'Legajo o contraseña incorrectos.'}
+            
+            user_data = usuario_result['data']
+            
+            if not user_data.get('activo', True):
+                 logger.warning(f"❌ Intento de login fallido: Usuario {user_data.get('email')} desactivado.")
+                 return {'success': False, 'error': 'Usuario inactivo. Contacte al administrador.'}
+
+            if not check_password_hash(user_data['password_hash'], password):
+                logger.warning(f"❌ Intento de login fallido: Contraseña incorrecta para {user_data.get('email')}.")
+                return {'success': False, 'error': 'Legajo o contraseña incorrectos.'}
+
+            return {'success': True, 'data': user_data}
+
+        except Exception as e:
+            logger.error(f"Error en _autenticar_credenciales_base: {str(e)}")
+            return {'success': False, 'error': f'Error interno de autenticación: {str(e)}'}
+
     def autenticar_usuario_para_totem(self, legajo: str, password: str) -> Dict:
         """
         Autentica a un usuario para uso exclusivo del tótem (solo credenciales).
@@ -347,7 +375,7 @@ class UsuarioController(BaseController):
             return {'valid': False, 'error': 'Campo de validación no soportado.'}
 
         filters = {field: value}
-        existing_user_result = self.model.find_all(filters, limit=1)
+        existing_user_result = self.model.find_all(filters)
 
         if existing_user_result.get('success') and existing_user_result.get('data'):
             return {'valid': False, 'message': f'El {field} ya está en uso.'}

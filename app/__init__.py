@@ -18,7 +18,7 @@ from app.views.pedido_routes import orden_venta_bp
 from app.views.planificacion_routes import planificacion_bp
 from app.views.google_forms_routes import google_forms_bp
 from app.views.precios_routes import precios_bp
-
+from app.views.productos_routes import productos_bp
 def create_app():
     """Factory para crear la aplicación Flask"""
 
@@ -56,6 +56,8 @@ def create_app():
     app.register_blueprint(planificacion_bp)
     app.register_blueprint(google_forms_bp)
     app.register_blueprint(precios_bp)
+    app.register_blueprint(productos_bp)
+
 
     # Ruta de health check
     @app.route('/api/health')

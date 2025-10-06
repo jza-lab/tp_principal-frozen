@@ -202,7 +202,6 @@ class InsumoController(BaseController):
             logger.error(f"Error eliminando insumo: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
-
     def eliminar_insumo_logico(self, id_insumo: str) -> tuple:
         """Eliminar un insumo del catálogo"""
         try:

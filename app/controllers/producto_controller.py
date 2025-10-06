@@ -1,3 +1,4 @@
+from venv import logger
 from app.controllers.base_controller import BaseController
 from app.models.producto import ProductoModel
 from app.schemas.producto_schema import ProductoSchema
@@ -36,11 +37,19 @@ class ProductoController(BaseController):
 
     def obtener_todos_los_productos(self, filtros: Optional[Dict] = None) -> List[Dict]:
         """Obtiene una lista de todos los productos."""
-        filtros = filtros or {}
-        if 'activo' not in filtros:
-            filtros['activo'] = True # Por defecto, solo mostrar activos
-        result = self.model.find_all(filtros, order_by='nombre')
-        return result.get('data', [])
+        try:
+            filtros = filtros or {}
+            result = self.model.find_all(filtros)
+            if not result['success']:
+                return self.error_response(result['error'])
+            datos = result['data']
+            sorted_data = sorted(datos, key=lambda x: x.get('activo', False), reverse=True)
+            # Serializar y responder
+            serialized_data = self.schema.dump(sorted_data, many=True)
+            return self.success_response(data=serialized_data)
+        except Exception as e:
+            # logger.error(f"Error obteniendo productos: {str(e)}", exc_info=True)
+            return self.error_response(f'Error interno', 500)
 
     def actualizar_producto(self, producto_id: int, data: Dict) -> Dict:
         """Actualiza un producto existente."""
@@ -59,9 +68,42 @@ class ProductoController(BaseController):
         except Exception as e:
             return {'success': False, 'error': f'Error interno: {str(e)}'}
 
-    def eliminar_producto(self, producto_id: int) -> Dict:
+    def eliminar_producto_logico(self, producto_id: int) -> Dict:
         """
         Desactiva un producto (eliminación lógica).
         No se elimina físicamente para mantener la integridad referencial en recetas y órdenes.
         """
-        return self.model.delete(producto_id, 'id', soft_delete=True)
+        try:
+
+            data = {'activo': False}
+            result = self.model.update(producto_id, data, 'id')
+
+            if result['success']:
+                logger.info(f"Producto eliminado: {producto_id}")
+                return self.success_response(message="Producto desactivado correctamente.")
+            else:
+                return self.error_response(result['error'])
+
+        except Exception as e:
+            logger.error(f"Error eliminando producto: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def habilitar_producto(self, producto_id: int) -> Dict:
+        """
+        Desactiva un producto (eliminación lógica).
+        No se elimina físicamente para mantener la integridad referencial en recetas y órdenes.
+        """
+        try:
+
+            data = {'activo': True}
+            result = self.model.update(producto_id, data, 'id')
+
+            if result['success']:
+                logger.info(f"Producto habilitardo: {producto_id}")
+                return self.success_response(message="Producto activado correctamente.")
+            else:
+                return self.error_response(result['error'])
+
+        except Exception as e:
+            logger.error(f"Error habilitado producto: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)

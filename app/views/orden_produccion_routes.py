@@ -15,6 +15,7 @@ from app.controllers.producto_controller import ProductoController
 from app.controllers.etapa_produccion_controller import EtapaProduccionController
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
+from app.utils.decorators import roles_required
 from app.permisos import permission_required
 from datetime import date
 

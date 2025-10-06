@@ -43,9 +43,7 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=flask_port,
-        debug=True,
-        use_reloader=False,  # ⬅️ ESTA ES LA CLAVE
-        threaded=False       # ⬅️ EVITA HILOS MÚLTIPLES
+        debug=True
     )
 
 
