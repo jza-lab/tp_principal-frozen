@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.models.pedido import PedidoModel
-from app.utils.decorators import roles_required
+from app.permisos import permission_required
 from itertools import groupby
 from operator import itemgetter
 
@@ -11,7 +11,7 @@ orden_produccion_controller = OrdenProduccionController()
 pedido_model = PedidoModel()
 
 @planificacion_bp.route('/')
-@roles_required(min_level=2)
+@permission_required(sector_codigo='PRODUCCION', accion='leer')
 def index():
     """
     Muestra los items de pedidos pendientes de planificación.
@@ -31,7 +31,7 @@ def index():
     return render_template('planificacion/index.html', items=items)
 
 @planificacion_bp.route('/crear_orden', methods=['POST'])
-@roles_required(allowed_roles=['GERENTE', 'SUPERVISOR'])
+@permission_required(sector_codigo='PRODUCCION', accion='crear')
 def crear_orden():
     """
     Crea órdenes de producción a partir de los items de pedido seleccionados.

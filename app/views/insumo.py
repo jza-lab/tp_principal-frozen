@@ -13,7 +13,7 @@ from app.controllers.inventario_controller import InventarioController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.usuario_controller import UsuarioController
-from app.utils.decorators import roles_required
+from app.permisos import permission_required
 from app.utils.validators import validate_uuid
 from marshmallow import ValidationError
 import logging
@@ -31,9 +31,7 @@ usuario_controller = UsuarioController()
 
 
 @insumos_bp.route("/catalogo/nuevo", methods=["GET", "POST"])
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='crear')
 def crear_insumo():
     try:
         if request.method == "POST":
@@ -52,7 +50,7 @@ def crear_insumo():
 
 
 @insumos_bp.route("/catalogo", methods=["GET"])
-@roles_required(min_level=2, allowed_roles=["EMPLEADO"])
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='leer')
 def obtener_insumos():
     try:
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
@@ -69,7 +67,7 @@ def obtener_insumos():
 
 
 @insumos_bp.route("/catalogo/<string:id_insumo>", methods=["GET"])
-@roles_required(min_level=2, allowed_roles=["EMPLEADO"])
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='leer')
 def obtener_insumo_por_id(id_insumo):
     try:
         if not validate_uuid(id_insumo):
@@ -89,9 +87,7 @@ def obtener_insumo_por_id(id_insumo):
 @insumos_bp.route(
     "/catalogo/actualizar/<string:id_insumo>", methods=["GET", "POST", "PUT"]
 )
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='actualizar')
 def actualizar_insumo(id_insumo):
     try:
         if not validate_uuid(id_insumo):
@@ -115,9 +111,7 @@ def actualizar_insumo(id_insumo):
 
 
 @insumos_bp.route("/catalogo/eliminar/<string:id_insumo>", methods=["DELETE"])
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='eliminar')
 def eliminar_insumo(id_insumo):
     try:
         if not validate_uuid(id_insumo):
@@ -130,9 +124,7 @@ def eliminar_insumo(id_insumo):
 
 
 @insumos_bp.route("/catalogo/habilitar/<string:id_insumo>", methods=["POST"])
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='actualizar')
 def habilitar_insumo(id_insumo):
     try:
         if not validate_uuid(id_insumo):
@@ -145,9 +137,7 @@ def habilitar_insumo(id_insumo):
 
 
 @insumos_bp.route("/catalogo/lote/nuevo/<string:id_insumo>", methods=["GET", "POST"])
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='crear')
 def agregar_lote(id_insumo):
     proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
     proveedores = proveedores_resp.get("data", [])
@@ -172,9 +162,7 @@ def agregar_lote(id_insumo):
 @insumos_bp.route(
     "/catalogo/lote/nuevo/<string:id_insumo>/crear", methods=["GET", "POST"]
 )
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='crear')
 def crear_lote(id_insumo):
     try:
         datos_json = request.get_json()
@@ -193,9 +181,7 @@ def crear_lote(id_insumo):
 @insumos_bp.route(
     "/catalogo/lote/editar/<string:id_insumo>/<string:id_lote>", methods=["GET"]
 )
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='actualizar')
 def editar_lote(id_insumo, id_lote):
     def parse_date(date_str):
         if not date_str:
@@ -237,9 +223,7 @@ def editar_lote(id_insumo, id_lote):
 @insumos_bp.route(
     "/catalogo/lote/editar/<string:id_insumo>/<string:id_lote>", methods=["PUT"]
 )
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='actualizar')
 def actualizar_lote_api(id_insumo, id_lote):
     try:
         if not validate_uuid(id_lote):
@@ -259,9 +243,7 @@ def actualizar_lote_api(id_insumo, id_lote):
 @insumos_bp.route(
     "/catalogo/lote/eliminar/<string:id_insumo>/<string:id_lote>", methods=["POST"]
 )
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='eliminar')
 def eliminar_lote(id_insumo, id_lote):
     try:
         if not validate_uuid(id_lote) or not validate_uuid(id_insumo):
@@ -285,7 +267,7 @@ def eliminar_lote(id_insumo, id_lote):
 
 
 @insumos_bp.route("/stock", methods=["GET"])
-@roles_required(min_level=2, allowed_roles=["EMPLEADO"])
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='leer')
 def obtener_stock_consolidado():
     try:
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}

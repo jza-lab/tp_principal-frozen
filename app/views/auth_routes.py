@@ -23,7 +23,8 @@ def login():
             rol_codigo = rol.get('codigo')
             rol_nivel = rol.get('nivel', 0)
 
-            session['usuario_id'] = usuario['id']
+            session['usuario_id'] = usuario.get('id')
+            session['rol_id'] = usuario.get('role_id')
             session['rol'] = rol_codigo
             session['user_level'] = rol_nivel
             session['usuario_nombre'] = f"{usuario['nombre']}"
@@ -54,7 +55,8 @@ def identificar_rostro():
         rol_codigo = rol.get('codigo')
         rol_nivel = rol.get('nivel', 0)
         
-        session['usuario_id'] = usuario['id']
+        session['usuario_id'] = usuario.get('id')
+        session['rol_id'] = usuario.get('role_id')
         session['rol'] = rol_codigo
         session['user_level'] = rol_nivel
         session['usuario_nombre'] = f"{usuario.get('nombre')} {usuario.get('apellido')}"

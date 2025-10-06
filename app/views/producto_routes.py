@@ -1,19 +1,19 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from app.controllers.producto_controller import ProductoController
-from app.utils.decorators import roles_required
+from app.permisos import permission_required
 
 producto_bp = Blueprint('producto', __name__, url_prefix='/admin/productos')
 producto_controller = ProductoController()
 
 @producto_bp.route('/')
-@roles_required(min_level=2, allowed_roles=['EMPLEADO'])
+@permission_required(sector_codigo='LOGISTICA', accion='leer')
 def listar():
     """Muestra la lista de todos los productos del catálogo."""
     productos = producto_controller.obtener_todos_los_productos()
     return render_template('productos/listar.html', productos=productos)
 
 @producto_bp.route('/nuevo', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE', 'COMERCIAL'])
+@permission_required(sector_codigo='LOGISTICA', accion='crear')
 def nuevo():
     """Gestiona la creación de un nuevo producto."""
     if request.method == 'POST':
@@ -28,7 +28,7 @@ def nuevo():
     return render_template('productos/formulario.html', producto={}, is_new=True)
 
 @producto_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE', 'COMERCIAL'])
+@permission_required(sector_codigo='LOGISTICA', accion='actualizar')
 def editar(id):
     """Gestiona la edición de un producto existente."""
     if request.method == 'POST':
@@ -50,7 +50,7 @@ def editar(id):
     return render_template('productos/formulario.html', producto=producto, is_new=False)
 
 @producto_bp.route('/<int:id>/eliminar', methods=['POST'])
-@roles_required(allowed_roles=['GERENTE', 'COMERCIAL'])
+@permission_required(sector_codigo='LOGISTICA', accion='eliminar')
 def eliminar(id):
     """Desactiva un producto (eliminación lógica)."""
     resultado = producto_controller.eliminar_producto(id)

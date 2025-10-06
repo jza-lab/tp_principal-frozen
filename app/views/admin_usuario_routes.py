@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, session, request, redirect, url_for, flash
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
-from app.utils.decorators import roles_required
+from app.permisos import permission_required
 
 # Blueprint para la administración de usuarios
 admin_usuario_bp = Blueprint('admin_usuario', __name__, url_prefix='/admin')
@@ -14,7 +14,7 @@ facial_controller = FacialController()
 orden_produccion_controller=OrdenProduccionController()
 
 @admin_usuario_bp.route('/')
-@roles_required(min_level=2, allowed_roles=['RRHH', 'GERENTE'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
 def index():
     hoy = date.today()
 
@@ -34,21 +34,26 @@ def index():
 
     """Página principal del panel de administración."""
     respuesta, estado = orden_produccion_controller.obtener_cantidad_ordenes_estado("EN_PROCESO", hoy)
-    ordenes_pendientes = respuesta['data']['cantidad']
+    ordenes_pendientes = respuesta.get('data', {}).get('cantidad', 0)
 
     respuesta2, estado = orden_produccion_controller.obtener_cantidad_ordenes_estado("APROBADA")
     respuesta3, estado = orden_produccion_controller.obtener_cantidad_ordenes_estado("COMPLETADA")
 
     filtros = {
         'estado': 'APROBADA',
-        'fecha_planificada_desde': fecha_inicio_iso, 
-        'fecha_planificada_hasta': fecha_fin_iso 
+        'fecha_planificada_desde': fecha_inicio_iso,
+        'fecha_planificada_hasta': fecha_fin_iso
     }
 
     respuesta, estado = orden_produccion_controller.obtener_ordenes(filtros)
 
-    ordenes_aprobadas = respuesta['data']
-    ordenes_totales = int(respuesta2['data']['cantidad']) + int(respuesta3['data']['cantidad'])
+    # Manejo seguro de datos
+    ordenes_aprobadas = respuesta.get('data', [])
+    
+    cantidad_aprobadas = respuesta2.get('data', {}).get('cantidad', 0)
+    cantidad_completadas = respuesta3.get('data', {}).get('cantidad', 0)
+    
+    ordenes_totales = int(cantidad_aprobadas) + int(cantidad_completadas)
 
     asistencia = usuario_controller.obtener_porcentaje_asistencia()
 
@@ -58,14 +63,14 @@ def index():
                             ordenes_totales = ordenes_totales)
 
 @admin_usuario_bp.route('/usuarios')
-@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
 def listar_usuarios():
     """Muestra la lista de todos los usuarios del sistema."""
     usuarios = usuario_controller.obtener_todos_los_usuarios()
     return render_template('usuarios/listar.html', usuarios=usuarios)
 
 @admin_usuario_bp.route('/usuarios/<int:id>')
-@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
 def ver_perfil(id):
     """Muestra el perfil de un usuario específico."""
     usuario = usuario_controller.obtener_usuario_por_id(id)
@@ -75,69 +80,78 @@ def ver_perfil(id):
     return render_template('usuarios/perfil.html', usuario=usuario)
 
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
 def nuevo_usuario():
     """
-    Gestiona la creación de un nuevo usuario con la nueva estructura.
+    Gestiona la creación de un nuevo usuario, incluyendo la asignación de sectores.
     """
     if request.method == 'POST':
         datos_usuario = request.form.to_dict()
+        datos_usuario['sectores'] = [int(s) for s in request.form.getlist('sectores')]
         face_data = datos_usuario.pop('face_data', None)
 
-        # Convertir role_id a entero
         if 'role_id' in datos_usuario:
             datos_usuario['role_id'] = int(datos_usuario['role_id'])
 
-        # 1. Si se adjuntó una foto, validarla primero.
+        # 1. Validar rostro si se proporciona
         if face_data:
             validacion_facial = facial_controller.validar_y_codificar_rostro(face_data)
             if not validacion_facial.get('success'):
                 flash(f"Error en el registro facial: {validacion_facial.get('message')}", 'error')
+                roles = usuario_controller.obtener_todos_los_roles()
+                sectores = usuario_controller.obtener_todos_los_sectores()
                 return render_template('usuarios/formulario.html', 
                                     usuario=datos_usuario, 
                                     is_new=True,
-                                    roles=usuario_controller.obtener_todos_los_roles())
+                                    roles=roles,
+                                    sectores=sectores,
+                                    usuario_sectores_ids=datos_usuario.get('sectores', []))
 
         # 2. Crear el usuario
         resultado_creacion = usuario_controller.crear_usuario(datos_usuario)
         
         if not resultado_creacion.get('success'):
             flash(f"Error al crear el usuario: {resultado_creacion.get('error')}", 'error')
+            roles = usuario_controller.obtener_todos_los_roles()
+            sectores = usuario_controller.obtener_todos_los_sectores()
             return render_template('usuarios/formulario.html', 
                                 usuario=datos_usuario, 
                                 is_new=True,
-                                roles=usuario_controller.obtener_todos_los_roles())
+                                roles=roles,
+                                sectores=sectores,
+                                usuario_sectores_ids=datos_usuario.get('sectores', []))
 
         # 3. Registrar el rostro si aplica
         usuario_creado = resultado_creacion.get('data')
-        user_id = usuario_creado.get('id')
-
-        if user_id and face_data:
-            resultado_facial = facial_controller.registrar_rostro(user_id, face_data)
+        if usuario_creado and face_data:
+            resultado_facial = facial_controller.registrar_rostro(usuario_creado.get('id'), face_data)
             if resultado_facial.get('success'):
                 flash('Usuario creado y rostro registrado exitosamente.', 'success')
             else:
                 flash(f"Usuario creado, pero falló el registro facial: {resultado_facial.get('message')}", 'warning')
         else:
-            flash('Usuario creado exitosamente (sin registro facial).', 'success')
+            flash('Usuario creado exitosamente.', 'success')
 
         return redirect(url_for('admin_usuario.listar_usuarios'))
 
-    # Para el método GET, mostrar el formulario con la lista de roles
+    # Método GET
     roles = usuario_controller.obtener_todos_los_roles()
+    sectores = usuario_controller.obtener_todos_los_sectores()
     return render_template('usuarios/formulario.html', 
                          usuario={}, 
                          is_new=True,
-                         roles=roles)
+                         roles=roles,
+                         sectores=sectores,
+                         usuario_sectores_ids=[])
 
 @admin_usuario_bp.route('/usuarios/<int:id>/editar', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='actualizar')
 def editar_usuario(id):
-    """Gestiona la edición de un usuario existente."""
+    """Gestiona la edición de un usuario existente, incluyendo sus sectores."""
     if request.method == 'POST':
         datos_actualizados = request.form.to_dict()
+        datos_actualizados['sectores'] = [int(s) for s in request.form.getlist('sectores')]
         
-        # Convertir role_id a entero si existe
         if 'role_id' in datos_actualizados:
             datos_actualizados['role_id'] = int(datos_actualizados['role_id'])
             
@@ -150,24 +164,34 @@ def editar_usuario(id):
             usuario = request.form.to_dict()
             usuario['id'] = id
             roles = usuario_controller.obtener_todos_los_roles()
+            sectores = usuario_controller.obtener_todos_los_sectores()
             return render_template('usuarios/formulario.html', 
                                 usuario=usuario, 
                                 is_new=False,
-                                roles=roles)
+                                roles=roles,
+                                sectores=sectores,
+                                usuario_sectores_ids=datos_actualizados.get('sectores', []))
 
+    # Método GET
     usuario = usuario_controller.obtener_usuario_por_id(id)
     if not usuario:
         flash('Usuario no encontrado.', 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
     
     roles = usuario_controller.obtener_todos_los_roles()
+    sectores = usuario_controller.obtener_todos_los_sectores()
+    usuario_sectores_actuales = usuario_controller.obtener_sectores_usuario(id)
+    usuario_sectores_ids = [s['id'] for s in usuario_sectores_actuales]
+
     return render_template('usuarios/formulario.html', 
                          usuario=usuario, 
                          is_new=False,
-                         roles=roles)
+                         roles=roles,
+                         sectores=sectores,
+                         usuario_sectores_ids=usuario_sectores_ids)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/eliminar', methods=['POST'])
-@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='eliminar')
 def eliminar_usuario(id):
     if session.get('usuario_id') == id:
         msg = 'No puedes desactivar tu propia cuenta.'
@@ -187,7 +211,7 @@ def eliminar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/usuarios/<int:id>/habilitar', methods=['POST'])
-@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='actualizar')
 def habilitar_usuario(id):
     """Reactiva un usuario."""
     resultado = usuario_controller.habilitar_usuario(id)
@@ -198,7 +222,7 @@ def habilitar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/usuarios/validar', methods=['POST'])
-@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
 def validar_campo():
     """
     Valida de forma asíncrona si un campo (legajo o email) ya existe.
@@ -214,7 +238,7 @@ def validar_campo():
     return jsonify(resultado)
 
 @admin_usuario_bp.route('/usuarios/validar_rostro', methods=['POST'])
-@roles_required(allowed_roles=['GERENTE', 'RRHH', 'IT'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
 def validar_rostro():
     """
     Valida si el rostro en la imagen es válido y no está duplicado.

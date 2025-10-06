@@ -1,6 +1,8 @@
 from app.controllers.base_controller import BaseController
 from app.models.usuario import UsuarioModel
 from app.models.totem_sesion import TotemSesionModel
+from app.models.sector import SectorModel
+from app.models.usuario_sector import UsuarioSectorModel
 from app.schemas.usuario_schema import UsuarioSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
@@ -12,19 +14,21 @@ logger = logging.getLogger(__name__)
 
 class UsuarioController(BaseController):
     """
-    Controlador actualizado para la lógica de negocio de los usuarios.
+    Controlador actualizado para la lógica de negocio de los usuarios con gestión de sectores.
     """
 
     def __init__(self):
         super().__init__()
         self.model = UsuarioModel()
         self.totem_sesion = TotemSesionModel()
+        self.sector_model = SectorModel()
+        self.usuario_sector_model = UsuarioSectorModel()
         self.schema = UsuarioSchema()
 
     def crear_usuario(self, data: Dict) -> Dict:
-        """Valida y crea un nuevo usuario."""
+        """Valida y crea un nuevo usuario con asignación de sectores."""
         try:
-            # Validar con el esquema
+            sectores_ids = data.pop('sectores', [])
             validated_data = self.schema.load(data)
 
             # Verificar si el email ya existe
@@ -35,39 +39,130 @@ class UsuarioController(BaseController):
             password = validated_data.pop('password')
             validated_data['password_hash'] = generate_password_hash(password)
 
-            return self.model.create(validated_data)
+            # Crear el usuario
+            resultado_creacion = self.model.create(validated_data)
+            
+            if not resultado_creacion.get('success'):
+                return resultado_creacion
+
+            usuario_creado = resultado_creacion['data']
+            usuario_id = usuario_creado['id']
+
+            # Asignar sectores si se proporcionaron
+            if sectores_ids:
+                resultado_sectores = self._asignar_sectores_usuario(usuario_id, sectores_ids)
+                if not resultado_sectores.get('success'):
+                    # Si falla la asignación de sectores, revertir la creación del usuario
+                    self.model.db.table("usuarios").delete().eq("id", usuario_id).execute()
+                    return resultado_sectores
+
+            # Obtener el usuario completo con sectores
+            usuario_completo = self.model.find_by_id(usuario_id, include_sectores=True)
+            return usuario_completo
+
         except ValidationError as e:
             return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
         except Exception as e:
             return {'success': False, 'error': f'Error interno: {str(e)}'}
 
-    def _autenticar_credenciales_base(self, legajo: str, password: str) -> Dict:
-        """
-        Lógica base para autenticar credenciales de un usuario.
-        Verifica legajo, contraseña y estado activo.
-        """
-        user_result = self.model.find_by_legajo(legajo)
+    def _asignar_sectores_usuario(self, usuario_id: int, sectores_ids: List[int]) -> Dict:
+        """Asigna sectores a un usuario"""
+        try:
+            for sector_id in sectores_ids:
+                resultado = self.usuario_sector_model.asignar_sector(usuario_id, sector_id)
+                if not resultado.get('success'):
+                    # Si falla alguna asignación, eliminar todas las asignaciones
+                    self.usuario_sector_model.eliminar_todas_asignaciones(usuario_id)
+                    return {'success': False, 'error': f'Error asignando sector ID {sector_id}'}
+            
+            return {'success': True, 'message': 'Sectores asignados correctamente'}
+        except Exception as e:
+            logger.error(f"Error asignando sectores: {str(e)}")
+            return {'success': False, 'error': str(e)}
 
-        if not user_result.get('success') or not user_result.get('data'):
-            return {'success': False, 'error': 'Credenciales inválidas'}
+    def actualizar_usuario(self, usuario_id: int, data: Dict) -> Dict:
+        """Actualiza un usuario existente con gestión de sectores."""
+        try:
+            # Extraer sectores si vienen en los datos
+            sectores_ids = data.pop('sectores', None)
+            
+            # Si se proporciona una nueva contraseña, hashearla
+            if 'password' in data and data['password']:
+                password = data.pop('password')
+                data['password_hash'] = generate_password_hash(password)
+            else:
+                # Evitar que el campo de contraseña vacío se valide
+                data.pop('password', None)
 
-        user_data = user_result['data']
+            validated_data = self.schema.load(data, partial=True)
+            # Verificar unicidad del email si se está cambiando
+            if 'email' in validated_data:
+                existing = self.model.find_by_email(validated_data['email']).get('data')
+                if existing and existing['id'] != usuario_id:
+                    return {'success': False, 'error': 'El correo electrónico ya está en uso.'}
 
-        # 1. Verificar contraseña
-        if not check_password_hash(user_data['password_hash'], password):
-            return {'success': False, 'error': 'Credenciales inválidas'}
+            # Actualizar datos básicos del usuario
+            resultado_actualizacion = self.model.update(usuario_id, validated_data)
+            if not resultado_actualizacion.get('success'):
+                return resultado_actualizacion
 
-        # 2. Verificar que el usuario esté activo
-        if not user_data.get('activo', True):
-            return {'success': False, 'error': 'Usuario desactivado'}
+            # Actualizar sectores si se proporcionaron
+            if sectores_ids is not None:
+                # Eliminar asignaciones existentes
+                self.usuario_sector_model.eliminar_todas_asignaciones(usuario_id)
+                
+                # Asignar nuevos sectores
+                if sectores_ids:
+                    resultado_sectores = self._asignar_sectores_usuario(usuario_id, sectores_ids)
+                    if not resultado_sectores.get('success'):
+                        return resultado_sectores
 
-        # Si las credenciales son válidas, devolver el usuario
-        return {'success': True, 'data': user_data}
+            # Devolver usuario actualizado con sectores
+            return self.model.find_by_id(usuario_id, include_sectores=True)
+
+        except ValidationError as e:
+            return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
+        except Exception as e:
+            return {'success': False, 'error': f'Error interno: {str(e)}'}
+
+    def obtener_usuario_por_id(self, usuario_id: int, include_sectores: bool = True) -> Optional[Dict]:
+        """Obtiene un usuario por su ID con opción de incluir sectores."""
+        result = self.model.find_by_id(usuario_id, include_sectores)
+        return result.get('data')
+
+    def obtener_todos_los_usuarios(self, filtros: Optional[Dict] = None, include_sectores: bool = True) -> List[Dict]:
+        """Obtiene una lista de todos los usuarios con opción de incluir sectores."""
+        result = self.model.find_all(filtros, include_sectores)
+        return result.get('data', [])
+
+    def obtener_todos_los_sectores(self) -> List[Dict]:
+        """Obtiene todos los sectores disponibles."""
+        try:
+            resultado = self.sector_model.find_all()
+            return resultado.get('data', [])
+        except Exception as e:
+            logger.error(f"Error obteniendo sectores: {str(e)}")
+            return []
+
+    def obtener_sectores_usuario(self, usuario_id: int) -> List[Dict]:
+        """Obtiene los sectores de un usuario específico."""
+        try:
+            resultado = self.usuario_sector_model.find_by_usuario(usuario_id)
+            if resultado.get('success'):
+                # Extraer solo la información del sector
+                sectores = []
+                for item in resultado['data']:
+                    if item.get('sectores'):
+                        sectores.append(item['sectores'])
+                return sectores
+            return []
+        except Exception as e:
+            logger.error(f"Error obteniendo sectores del usuario: {str(e)}")
+            return []
 
     def autenticar_usuario_web(self, legajo: str, password: str) -> Dict:
         """
-        Autentica a un usuario para el acceso web.
-        Verifica credenciales Y que tenga una sesión activa en el tótem.
+        Autentica a un usuario para el acceso web incluyendo sectores en la respuesta.
         """
         # Paso 1: Autenticación de credenciales base
         auth_result = self._autenticar_credenciales_base(legajo, password)
@@ -87,12 +182,19 @@ class UsuarioController(BaseController):
                 'error': 'Debe registrar su entrada en el tótem primero para acceder por web'
             }
 
-        # Paso 3: Actualizar último login web y devolver éxito
+        # Paso 3: Cargar sectores del usuario
+        usuario_completo_result = self.model.find_by_id(user_data['id'], include_sectores=True)
+        if not usuario_completo_result.get('success'):
+            return usuario_completo_result
+
+        usuario_completo = usuario_completo_result['data']
+
+        # Paso 4: Actualizar último login web y devolver éxito
         self.model.update(user_data['id'], {'ultimo_login_web': datetime.now().isoformat()})
 
         return {
             'success': True,
-            'data': user_data,
+            'data': usuario_completo,
             'message': 'Autenticación exitosa'
         }
 
@@ -230,43 +332,6 @@ class UsuarioController(BaseController):
         }
 
         return {'success': True, 'data': estado}
-
-    # Mantener métodos existentes que no necesitan cambios...
-    def obtener_usuario_por_id(self, usuario_id: int) -> Optional[Dict]:
-        """Obtiene un usuario por su ID."""
-        result = self.model.find_by_id(usuario_id)
-        return result.get('data')
-
-    def obtener_todos_los_usuarios(self, filtros: Optional[Dict] = None) -> List[Dict]:
-        """Obtiene una lista de todos los usuarios."""
-        result = self.model.find_all(filtros)
-        return result.get('data', [])
-
-    def actualizar_usuario(self, usuario_id: int, data: Dict) -> Dict:
-        """Actualiza un usuario existente."""
-        try:
-            # Si se proporciona una nueva contraseña, hashearla.
-            if 'password' in data and data['password']:
-                password = data.pop('password')
-                data['password_hash'] = generate_password_hash(password)
-            else:
-                # Evitar que el campo de contraseña vacío se valide
-                data.pop('password', None)
-
-            # Validar con el esquema (parcial)
-            validated_data = self.schema.load(data, partial=True)
-
-            # Verificar unicidad del email si se está cambiando
-            if 'email' in validated_data:
-                existing = self.model.find_by_email(validated_data['email']).get('data')
-                if existing and existing['id'] != usuario_id:
-                    return {'success': False, 'error': 'El correo electrónico ya está en uso.'}
-
-            return self.model.update(usuario_id, validated_data)
-        except ValidationError as e:
-            return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
-        except Exception as e:
-            return {'success': False, 'error': f'Error interno: {str(e)}'}
 
     def eliminar_usuario(self, usuario_id: int) -> Dict:
         """Desactiva un usuario (eliminación lógica)."""
