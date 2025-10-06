@@ -13,8 +13,7 @@ class OrdenProduccionSchema(Schema):
     # Campos opcionales
     prioridad = fields.Str(validate=validate.OneOf(['BAJA', 'NORMAL', 'ALTA', 'URGENTE']), load_default='NORMAL')
     observaciones = fields.Str(allow_none=True)
-    
-    # ¡Elimina esta línea! --> operario_responsable_id = fields.Int(required=False, allow_none=True)
+    supervisor_responsable_id = fields.Int(required=False, allow_none=True)
 
     # Campos de solo lectura (generados por el sistema)
     id = fields.Int(dump_only=True)

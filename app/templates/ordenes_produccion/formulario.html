@@ -83,12 +83,27 @@
                                 </option>
                             </select>
                         </div>
-                            <div class="col-md-8 mx-auto">
-                                <label for="observaciones" class="form-label">Descripcion</label>
-                                <input type="text" class="form-control" name="observaciones" id="observaciones"
-                                    value="{{ orden.observaciones if orden else '' }}">
-                                <div class="form-text">Opcional - Ingrese una descipción del insumo</div>
-                            </div>
+
+                        <div class="col-md-6">
+                            <label for="supervisor_responsable_id" class="form-label">Supervisor Asignado</label>
+                            <select class="form-select" id="supervisor_responsable_id" name="supervisor_responsable_id">
+                                <option value="">Sin asignar</option>
+                                {% for supervisor in supervisores %}
+                                <option value="{{ supervisor.id }}"
+                                    {% if orden and orden.supervisor_responsable_id == supervisor.id %}selected{% endif %}>
+                                    {{ supervisor.nombre }} {{ supervisor.apellido }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Opcional - Puede asignar un supervisor más tarde.</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="observaciones" class="form-label">Observaciones</label>
+                            <textarea class="form-control" name="observaciones" id="observaciones"
+                                rows="3">{{ orden.observaciones if orden else '' }}</textarea>
+                            <div class="form-text">Opcional - Ingrese detalles adicionales.</div>
+                        </div>
                     </div>
 
                     <div class="alert alert-light border mt-4">

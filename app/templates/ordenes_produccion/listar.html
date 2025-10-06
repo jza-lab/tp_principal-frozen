@@ -177,10 +177,35 @@
                         </div>
                     </div>
 
+                    <!-- Asignación de Supervisor -->
+                    <div class="supervisor-section mb-3">
+                        <span class="stock-label">Supervisor a Cargo</span>
+                        <span class="stock-value fw-bold {% if not orden.supervisor_responsable_id %}text-muted{% endif %}">
+                            {{ orden.supervisor_nombre or 'Sin asignar' }}
+                        </span>
+                    
+                        {% if orden.estado != 'CANCELADA' and orden.estado != 'COMPLETADA' and orden.estado != 'EN_PROCESO' %}
+                        <form method="POST" action="{{ url_for('orden_produccion.asignar_supervisor', id=orden.id) }}" class="mt-2">
+                            <div class="input-group input-group-sm">
+                                <select name="supervisor_id" class="form-select">
+                                    <option value="">Seleccionar supervisor...</option>
+                                    {% for supervisor in supervisores %}
+                                        <option value="{{ supervisor.id }}" {% if orden.supervisor_responsable_id == supervisor.id %}selected{% endif %}>
+                                            {{ supervisor.nombre }} {{ supervisor.apellido }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-outline-secondary">Guardar</button>
+                            </div>
+                        </form>
+                        {% endif %}
+                    </div>
+
                     <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}"
                         class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                         <i class="bi bi-eye"></i>
                     </a>
+
                     {% if orden.estado == 'PLANIFICADA' or orden.estado == 'APROBADA' %}
                     <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                         data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">

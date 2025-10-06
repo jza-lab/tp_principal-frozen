@@ -58,7 +58,7 @@
                         <p class="form-control-plaintext">{{ insumo.stock_max or 'N/A' }} {{ insumo.unidad_medida }}</p>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label-sm">¿Es Crítico?</label>
+                        <label class="form-label-sm">¿Es Delicado?</label>
                         <p class="form-control-plaintext">
                             <span class="badge bg-{{ 'danger' if insumo.es_critico else 'secondary' }}">
                                 {{ 'Sí' if insumo.es_critico else 'No' }}

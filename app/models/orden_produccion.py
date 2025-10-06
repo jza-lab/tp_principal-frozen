@@ -79,7 +79,7 @@ class OrdenProduccionModel(BaseModel):
             # y de las tablas relacionadas 'productos' y 'usuarios', traemos el campo 'nombre'.
             # Supabase infiere las relaciones por las Foreign Keys.
             query = self.db.table(self.table_name).select(
-                "*, productos(nombre), usuarios(nombre)"
+                "*, productos(nombre), creador:usuarios!usuario_creador_id(nombre), supervisor:usuarios!supervisor_responsable_id(nombre)"
             )
             
             # Aplicar filtros
@@ -119,10 +119,11 @@ class OrdenProduccionModel(BaseModel):
                     else:
                         item['producto_nombre'] = 'N/A'
                     
-                    if item.get('usuarios'):
-                        item['creador_nombre'] = item.pop('usuarios')['nombre']
-                    else:
-                        item['creador_nombre'] = 'No asignado'
+                    creador_data = item.pop('creador', None)
+                    item['creador_nombre'] = creador_data.get('nombre', 'No asignado') if creador_data else 'No asignado'
+                    
+                    supervisor_data = item.pop('supervisor', None)
+                    item['supervisor_nombre'] = supervisor_data.get('nombre', 'No asignado') if supervisor_data else 'No asignado'
                     
                     processed_data.append(item)
                 return {'success': True, 'data': processed_data}
@@ -141,7 +142,7 @@ class OrdenProduccionModel(BaseModel):
         try:
             # .maybe_single() ejecuta la consulta y devuelve un solo dict o None
             response = self.db.table(self.table_name).select(
-                "*, productos(nombre, descripcion), recetas(id, descripcion, rendimiento, activa), usuarios(nombre)"
+                "*, productos(nombre, descripcion), recetas(id, descripcion, rendimiento, activa), creador:usuarios!usuario_creador_id(nombre), supervisor:usuarios!supervisor_responsable_id(nombre)"
             ).eq("id", orden_id).maybe_single().execute()
            
             item = response.data
@@ -176,9 +177,11 @@ class OrdenProduccionModel(BaseModel):
                     item['receta_codigo'] = item['recetas'].get('codigo', 'N/A')
                     item.pop('recetas')
 
-                if item.get('usuarios'):
-                    item['creador_nombre'] = item['usuarios'].get('nombre', 'No asignado')
-                    item.pop('usuarios')
+                creador_data = item.pop('creador', None)
+                item['creador_nombre'] = creador_data.get('nombre', 'No asignado') if creador_data else 'No asignado'
+                
+                supervisor_data = item.pop('supervisor', None)
+                item['supervisor_nombre'] = supervisor_data.get('nombre', 'No asignado') if supervisor_data else 'No asignado'
                 
                 return {'success': True, 'data': item}
             else:

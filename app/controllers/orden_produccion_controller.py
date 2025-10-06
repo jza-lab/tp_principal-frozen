@@ -75,7 +75,7 @@ class OrdenProduccionController(BaseController):
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """
         Valida datos y crea una orden en estado PENDIENTE,
-        guardando el ID del operario en el campo usuario_creador_id si está asignado.
+        guardando el ID del supervisor si está asignado.
         """
         from app.models.receta import RecetaModel
         receta_model = RecetaModel()
@@ -84,16 +84,18 @@ class OrdenProduccionController(BaseController):
             # Extraer producto_id y limpiar datos que gestiona el servidor
             producto_id = form_data.get('producto_id')
             if not producto_id:
-                return {'success': False, 'error': 'El campo producto_id es requerido.'}
+                return self.error_response('El campo producto_id es requerido.', 400)
 
             # Mapear 'cantidad' del formulario a 'cantidad_planificada' del esquema
             if 'cantidad' in form_data:
                 form_data['cantidad_planificada'] = form_data.pop('cantidad')
             
-            # Obtener el ID del operario del formulario
-            operario_asignado_id = form_data.pop('operario_asignado', None)
+            # Obtener el ID del supervisor del formulario y asegurarse de que sea un entero si existe
+            supervisor_id = form_data.get('supervisor_responsable_id')
+            if supervisor_id:
+                form_data['supervisor_responsable_id'] = int(supervisor_id)
+
             # Quitar campos que no deben venir del cliente para la validación
-            # Este paso es importante para evitar el error 'Unknown field'
             form_data.pop('usuario_id', None)
             form_data.pop('estado', None)
             form_data.pop('receta_id', None)
@@ -105,28 +107,41 @@ class OrdenProduccionController(BaseController):
             }, limit=1)
 
             if not receta_result.get('success') or not receta_result.get('data'):
-                return {'success': False, 'error': f'No se encontró una receta activa para el producto seleccionado (ID: {producto_id}).'}
+                return self.error_response(f'No se encontró una receta activa para el producto seleccionado (ID: {producto_id}).', 404)
             
             receta = receta_result['data'][0]
             form_data['receta_id'] = receta['id']
 
-            # Validar los datos (ahora limpios) con el esquema
+            # Validar los datos con el esquema
             validated_data = self.schema.load(form_data)
             validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
             validated_data['estado'] = 'PENDIENTE'
-            
-            # LÓGICA CLAVE: Asignar el ID del operario al campo 'usuario_creador_id'
-            if operario_asignado_id:
-                validated_data['usuario_creador_id'] = int(operario_asignado_id)
-            else:
-                validated_data['usuario_creador_id'] = usuario_id # Si no se asigna, usa el tuyo
+            validated_data['usuario_creador_id'] = usuario_id # El creador es siempre el usuario logueado
 
             return self.model.create(validated_data)
 
         except ValidationError as e:
-            return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
+            return self.error_response(f"Datos inválidos: {e.messages}", 400)
         except Exception as e:
-            return {'success': False, 'error': f'Error interno: {str(e)}'}
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def asignar_supervisor(self, orden_id: int, supervisor_id: int) -> tuple:
+        """
+        Asigna un supervisor a una orden de producción existente.
+        """
+        try:
+            if not supervisor_id:
+                return self.error_response("El ID del supervisor es requerido.", 400)
+
+            update_data = {'supervisor_responsable_id': int(supervisor_id)}
+            result = self.model.update(id_value=orden_id, data=update_data, id_field='id')
+
+            if result.get('success'):
+                return self.success_response(data=result.get('data'), message="Supervisor asignado correctamente.")
+            else:
+                return self.error_response('Error al asignar supervisor.', 500)
+        except Exception as e:
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
     def aprobar_orden(self, orden_id: int, usuario_id: int) -> Dict:
         """
