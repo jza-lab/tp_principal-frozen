@@ -426,6 +426,7 @@ body {
     pointer-events: auto; /* Permite que los botones dentro de la tarjeta inactiva sí sean clickeables */
 }
 
+
 .bg-danger-soft {
     background-color: rgba(231, 74, 59, 0.1) !important;
     color: #e74a3b !important;

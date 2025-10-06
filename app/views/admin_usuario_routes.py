@@ -34,7 +34,8 @@ def index():
 
     """Página principal del panel de administración."""
     respuesta, estado = orden_produccion_controller.obtener_cantidad_ordenes_estado("EN_PROCESO", hoy)
-    ordenes_pendientes = respuesta.get('data', {}).get('cantidad', 0)
+    ordenes_pendientes_data = respuesta.get('data', {})
+    ordenes_pendientes = ordenes_pendientes_data.get('cantidad', 0)
 
     respuesta2, estado = orden_produccion_controller.obtener_cantidad_ordenes_estado("APROBADA")
     respuesta3, estado = orden_produccion_controller.obtener_cantidad_ordenes_estado("COMPLETADA")

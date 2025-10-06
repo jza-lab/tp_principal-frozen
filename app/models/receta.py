@@ -89,3 +89,4 @@ class RecetaModel(BaseModel):
         except Exception as e:
             # Loggear el error sería una buena práctica aquí
             return {'success': False, 'error': f'Error al obtener ingredientes: {str(e)}'}
+        

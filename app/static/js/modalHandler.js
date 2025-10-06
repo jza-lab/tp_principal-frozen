@@ -47,6 +47,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         confirmationModal.addEventListener('show.bs.modal', function (event) {
             const button = event.relatedTarget;
+            if (!button) {
+                return;
+            }            
             const url = button.getAttribute('data-url');
             const message = button.getAttribute('data-message');
             const title = button.getAttribute('data-title');
