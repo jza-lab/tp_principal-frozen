@@ -9,16 +9,16 @@ class InsumoModel(BaseModel):
 
     def get_table_name(self) -> str:
         return 'insumos_catalogo'
-    
+
     def find_all(self, filters: Optional[Dict] = None, order_by: str = 'nombre', limit: Optional[int] = None) -> Dict:
         """
         Sobrescribe find_all para manejar la búsqueda de texto junto con otros filtros.
         """
         try:
             query = self.db.table(self.get_table_name()).select('*')
-            
+
             filters_copy = filters.copy() if filters else {}
-            
+
             texto_busqueda = filters_copy.pop('busqueda', None)
 
             if texto_busqueda:
@@ -41,7 +41,7 @@ class InsumoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo registros de {self.get_table_name()}: {str(e)}")
             return {'success': False, 'error': str(e)}
-        
+
     def find_by_codigo(self, codigo: str, tipo_codigo: str = 'interno') -> Dict:
         """Buscar insumo por código interno o EAN"""
         try:
@@ -70,7 +70,7 @@ class InsumoModel(BaseModel):
         Obtiene una lista de categorías únicas y no nulas.
         """
         try:
-            response = self.find_all() 
+            response = self.find_all()
 
             if response.get('success'):
                 insumos = response.get('data', [])
@@ -103,3 +103,68 @@ class InsumoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error en eliminación personalizada: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+
+    def buscar_por_codigo_interno(self, codigo_interno: str) -> Optional[Dict]:
+        """
+        Busca insumo por código interno (exacto)
+        """
+        try:
+            if not codigo_interno:
+                return None
+
+            print(codigo_interno)
+
+            response = self.db.table(self.get_table_name())\
+                           .select('*')\
+                           .eq('codigo_interno', codigo_interno.strip().upper())\
+                           .execute()
+
+            return response.data[0] if response.data else None
+
+        except Exception as e:
+            logger.error(f"Error buscando insumo {codigo_interno}: {str(e)}")
+            return None
+
+    def actualizar_precio(self, id_insumo: str, precio_nuevo: float) -> bool:
+        """
+        Actualiza el precio de un insumo
+        """
+        try:
+            response = self.db.table(self.get_table_name())\
+                           .update({
+                               'precio_unitario': precio_nuevo,
+                               'updated_at': 'now()'
+                           })\
+                           .eq('id_insumo', id_insumo)\
+                           .execute()
+
+            return len(response.data) > 0
+
+        except Exception as e:
+            logger.error(f"Error actualizando precio insumo {id_insumo}: {str(e)}")
+            return False
+
+    def buscar_por_codigo_proveedor(self, codigo_proveedor: str, proveedor_id: str = None) -> Optional[Dict]:
+        """
+        Busca insumo por código de proveedor
+        """
+        try:
+            if not codigo_proveedor:
+                return None
+
+            query = self.db.table(self.get_table_name())\
+                          .select('*')\
+                          .eq('codigo_proveedor', codigo_proveedor.strip())
+
+            # Si se proporciona proveedor_id, filtrar también por proveedor
+            if proveedor_id:
+                query = query.eq('proveedor_id', proveedor_id)
+
+            response = query.execute()
+
+            return response.data[0] if response.data else None
+
+        except Exception as e:
+            logger.error(f"Error buscando insumo por código proveedor {codigo_proveedor}: {str(e)}")
+            return None

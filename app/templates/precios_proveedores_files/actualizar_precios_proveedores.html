@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cargar Archivo de Proveedor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cargaPrecios.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header"> 
+                <h1>Cargar Archivo de Precios</h1>
+                <p class="subtitulo">Sube tu archivo Excel para actualizar los precios de proveedor</p>
+            </div>
+            
+            <div class="content">
+                <div class="alert alert-error" id="errorAlert" style="display: none;"></div>
+                
+                <div class="alert alert-success" id="successAlert" style="display: none;"></div>
+                
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">
+                        <h3>Selecciona tu archivo Excel</h3>
+                        <p>Arrastra y suelta tu archivo aquí o haz clic para buscarlo</p>
+                    </div>
+                    <button class="browse-btn" id="browseBtn">Buscar Archivo</button>
+                    <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls">
+                    
+                    <div class="selected-file" id="selectedFile" style="display: none;">
+                        <div class="file-info">
+                            <div class="file-icon">📄</div>
+                            <div class="file-details">
+                                <div class="file-name" id="fileName"></div>
+                                <div class="file-size" id="fileSize"></div>
+                            </div>
+                            <button class="remove-file" id="removeFile">×</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="submit-btn" id="submitBtn" disabled>
+                    <span>Procesar Archivo</span>
+                </button>
+                
+                <div class="loading" id="loadingState" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Procesando archivo, por favor espera...</p>
+                </div>
+                
+                <div class="results" id="resultsSection" style="display: none;">
+                    <div class="result-card"> 
+                        <div class="result-header">
+                            <div class="result-title">Resultado del Procesamiento</div>
+                            <div class="result-badge badge bg-success-soft text-success" id="resultBadge">Éxito</div>
+                        </div>
+                        
+                        <div class="stats" id="statsContainer">
+                            </div>
+                        
+                        <h4>Detalles por Producto:</h4>
+                        <div class="table-container">
+                            <table class="details-table table-striped table-hover" id="detailsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Fila</th>
+                                        <th>Código</th>
+                                        <th>Producto</th>
+                                        <th>Proveedor</th>
+                                        <th>Estado</th>
+                                        <th>Mensaje</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script src="{{ url_for('static', filename='js/preciosProveedores.js') }}"></script>
+
+</body>
+</html>
