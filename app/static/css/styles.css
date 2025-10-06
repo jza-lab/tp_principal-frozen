@@ -10,13 +10,17 @@
     --frozen-card-bg: #ffffff;
     --frozen-shadow: rgba(0, 0, 0, 0.05);
 
-    --app-primary: #313131;
+    --app-primary: #313131; /* Principal: Negro o Gris Oscuro */
     --app-primary-hover: #494949;
     --accent-green: #1cc88a;
     --accent-orange: #fd7e14;
     --accent-purple: #6f42c1;
     --accent-red: #e74a3b;
 
+    /* Nuevas variables para efectos */
+    --glow-primary: rgba(49, 49, 49, 0.5); /* Sombra de app-primary */
+    --button-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    --button-shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
 body {
@@ -25,78 +29,255 @@ body {
     background-image: white;
     color: var(--frozen-text-primary);
     line-height: 1.6;
-    padding-top: 50px;
-    margin-left: 50px;
-    margin-right: 50px;
+    padding-top: 70px;
+    margin-left: 40px;
+    margin-right: 40px;
+    /* Suaviza las animaciones en general */
+    transition: background-color 0.3s ease; 
 }
+
+
+/* ---------------------------------- */
+/* ANIMACIONES DEL HEADER (Mantenidas y Mejoradas) */
+/* ---------------------------------- */
 
 /* Navbar styles */
 .navbar-custom {
+    position: fixed; /* Asegura que la barra de navegación esté arriba */
+    top: 0;
+    left: 0;
+    z-index: 1030;
     width: 100%;
-    padding: 0.5rem 2rem;
     border-bottom: 1px solid var(--frozen-border);
     background: var(--header-bg);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.08);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    animation: slideDown 0.5s cubic-bezier(0.23, 1, 0.32, 1); /* Curva de aceleración mejorada */
 }
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
 
 .navbar-custom .navbar-brand {
     font-weight: 700;
-    font-size: 1.5rem;
-    color: var(--header-text) !important;
+    font-size: 1.6rem;
+    color: var(--app-primary) !important;
+    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* Transición más sofisticada */
+}
+
+.navbar-custom .navbar-brand:hover {
+    color: var(--app-primary-hover) !important;
+    transform: scale(1.05); /* Escala un poco más */
+}
+
+.navbar-custom .navbar-brand i.bi-snow2 {
+    color: var(--app-primary);
+    transition: transform 0.5s ease-out;
+}
+
+.navbar-custom .navbar-brand:hover i.bi-snow2 {
+    transform: rotate(720deg); /* Doble giro para más impacto */
 }
 
 .navbar-custom .nav-link {
     color: var(--header-text) !important;
     font-weight: 600;
     padding: 0.5rem 1rem !important;
-    transition: all 0.2s ease;
-    border-radius: 20px;
-    margin: 3px;
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
+    border-radius: 8px; 
+    margin: 0 5px;
+    position: relative;
+    overflow: hidden;
 }
 
-.navbar-custom .nav-link:hover,
+/* Animación de línea que se desliza por encima (Overlay) */
+.navbar-custom .nav-link::after {
+    content: '';
+    position: absolute;
+    top: 0; /* Cambio de bottom a top */
+    left: 0;
+    width: 100%;
+    height: 100%; /* La línea cubre todo el enlace */
+    background-color: var(--app-primary);
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-out;
+    opacity: 0.1; /* Sutil overlay para el efecto */
+    z-index: 0;
+    border-radius: 8px;
+}
+
+.navbar-custom .nav-link:hover::after {
+    transform: translateX(0);
+}
+
+.navbar-custom .nav-link:hover {
+    color: var(--app-primary) !important; /* Mantiene el color original */
+    background-color: transparent; /* Remueve el background del hover anterior */
+    box-shadow: inset 0 0 0 1px var(--app-primary); /* Borde sutil al hacer hover */
+}
+/* Asegura que el texto esté sobre el overlay */
+.navbar-custom .nav-item {
+    z-index: 1;
+}
+
 .navbar-custom .nav-link.active {
     color: var(--header-text-hover) !important;
-    background-color: var(--header-link-hover-bg);
+    background-color: var(--app-primary); /* Estilo activo fuerte */
+    box-shadow: 0 2px 8px var(--glow-primary); /* Sombra que resalta */
+    transform: translateY(-1px);
 }
+
+.navbar-custom .nav-link.active::after {
+    background-color: transparent;
+    transform: translateX(-100%);
+}
+
+/* Estilos para el dropdown-toggle (el icono de flecha) */
+.navbar-custom .dropdown-toggle::after {
+    transition: transform 0.2s ease-out;
+}
+
+.navbar-custom .dropdown-toggle[aria-expanded="true"]::after {
+    transform: rotate(180deg);
+}
+
+
+/* Estilos para el Dropdown Menu - Mejorados */
+.navbar-custom .dropdown-menu {
+    border-radius: 8px;
+    border: 1px solid var(--frozen-border);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2); /* Sombra más pronunciada */
+    padding: 0.5rem 0;
+    /* Animación de entrada del dropdown */
+    animation: fadeInScale 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Curva de 'bounce' ligera */
+}
+
+@keyframes fadeInScale {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.navbar-custom .dropdown-item {
+    padding: 0.5rem 1.5rem;
+    color: var(--frozen-text-primary);
+    font-weight: 500;
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease-out;
+}
+
+.navbar-custom .dropdown-item:hover,
+.navbar-custom .dropdown-item.active {
+    background-color: var(--app-primary);
+    color: white;
+    transform: translateX(4px); /* Deslizamiento sutil al item */
+}
+
+/* Navbar de Usuario (Avatar) - Animación de Pulse */
+.navbar-custom #navbarDropdownUser {
+    border-radius: 50px;
+    padding: 0.5rem 1rem;
+    transition: box-shadow 0.3s ease;
+}
+
+.navbar-custom #navbarDropdownUser:hover {
+    box-shadow: 0 0 0 3px var(--accent-green); /* Efecto de "pulse" en el hover */
+}
+
+.navbar-custom #navbarDropdownUser i.bi-person-circle {
+    font-size: 1.25rem;
+    transition: color 0.3s ease;
+}
+
+.navbar-custom #navbarDropdownUser:hover i.bi-person-circle {
+    color: var(--accent-green);
+}
+
+
+/* ---------------------------------- */
+/* NUEVOS DETALLES VISUALES Y ANIMACIONES MODERNAS */
+/* ---------------------------------- */
 
 /* Card styles */
 .card {
     border: 1px solid var(--frozen-border);
-    border-radius: 8px;
-    box-shadow: 0 1px 3px var(--frozen-shadow);
-    transition: all 0.3s ease;
+    border-radius: 12px; /* Radio más pronunciado para un look más suave */
+    box-shadow: var(--button-shadow); /* Usa la nueva variable de sombra */
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.5, 1); /* Transición más fluida y elástica */
     background-color: var(--frozen-bg);
+    position: relative;
 }
 
 .card:hover {
-    box-shadow: 0 4px 12px var(--frozen-shadow);
-    transform: translateY(-3px);
+    box-shadow: var(--button-shadow-hover);
+    transform: translateY(-5px); /* Desplazamiento más notorio */
+    /* Agrega un borde de color sutil en el hover */
+    border-color: var(--app-primary); 
 }
 
 .card-header {
-    background-color: transparent;
+    background-color: var(--header-bg); /* Fondo sutil para el header de la tarjeta */
     border-bottom: 1px solid var(--frozen-border);
-    font-weight: 600;
+    font-weight: 700; /* Más audaz */
     padding: 1rem 1.5rem;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
 }
 
 /* Button styles */
 .btn {
     font-weight: 600;
     border-radius: 8px;
-    transition: all 0.25s ease-in-out;
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Transición con efecto de 'pop' */
     padding: 0.6rem 1.2rem;
     border: none;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    z-index: 2; /* Asegura que el botón esté sobre otros elementos */
 }
 
 .btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    z-index: 3;
 }
+
+/* Efecto de 'ripple' o pulso en el hover */
+.btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 0.4s, height 0.4s;
+    z-index: 1;
+}
+
+.btn:hover::before {
+    width: 250%;
+    height: 250%;
+}
+
 
 .btn-primary {
     background-color: var(--app-primary);
@@ -110,22 +291,26 @@ body {
 .btn-success {
     background-color: var(--accent-green);
     color: white;
+    box-shadow: 0 4px 10px rgba(28, 200, 138, 0.3); /* Sombra de color para acento */
 }
 
 .btn-success:hover {
     background-color: #17a673;
+    box-shadow: 0 6px 15px rgba(28, 200, 138, 0.4);
 }
 
 .btn-outline-secondary {
     background-color: transparent;
     color: var(--frozen-text-secondary);
     border: 1px solid var(--frozen-border);
+    box-shadow: none;
 }
 
 .btn-outline-secondary:hover {
     background-color: var(--frozen-bg);
     border-color: var(--frozen-text-secondary);
-    color: #000000;
+    color: var(--app-primary);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 .w-100 {
@@ -167,46 +352,65 @@ body {
     background-color: var(--frozen-light);
 }
 
-/* Alert styles */
+/* Alert styles - Mejorado con línea de color animada */
 .alert {
-    border-radius: 6px;
+    border-radius: 8px; /* Redondeado para coincidir con el resto */
     border: none;
-    box-shadow: 0 2px 4px var(--frozen-shadow);
+    box-shadow: 0 4px 10px var(--frozen-shadow);
+    animation: fadeIn 0.5s ease-in-out;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Línea de color de acento con animación de 'swipe' */
+.alert::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px; /* Ancho de la línea */
+    height: 100%;
+    transition: width 0.3s ease-out;
+}
+
+.alert:hover::before {
+    width: 8px; /* Se expande un poco en el hover */
 }
 
 .alert-danger {
     background-color: #f8d7da;
     color: #721c24;
-    border-left: 4px solid var(--accent-red);
 }
+.alert-danger::before { background-color: var(--accent-red); }
 
 .alert-warning {
     background-color: #fff3cd;
     color: #856404;
-    border-left: 4px solid var(--accent-orange);
 }
+.alert-warning::before { background-color: var(--accent-orange); }
 
 .alert-success {
     background-color: #d1eddf;
     color: #155724;
-    border-left: 4px solid var(--accent-green);
 }
+.alert-success::before { background-color: var(--accent-green); }
 
 .alert-info {
     background-color: #d1ecf1;
     color: #0c5460;
-    border-left: 4px solid var(--app-primary);
+}
+.alert-info::before { background-color: var(--app-primary); }
+
+
+/* Form styles - Foco mejorado */
+.form-control, .form-select {
+    border-radius: 6px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* Form styles */
-.form-control:focus {
-    border-color: var(--frozen-primary);
-    box-shadow: 0 0 0 0.2rem rgba(0, 0, 0, 0.1);
-}
-
-.form-select:focus {
-    border-color: var(--frozen-primary);
-    box-shadow: 0 0 0 0.2rem rgba(0, 0, 0, 0.1);
+.form-control:focus, .form-select:focus {
+    border-color: var(--app-primary);
+    box-shadow: 0 0 0 0.25rem rgba(49, 49, 49, 0.25); /* Sombra del color principal */
 }
 
 /* Badge styles */
@@ -245,7 +449,7 @@ body {
 .login-card {
     background: white;
     border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); /* Sombra de login más fuerte */
     border: 1px solid var(--frozen-border);
     overflow: hidden;
     max-width: 400px;
@@ -253,7 +457,7 @@ body {
 }
 
 .login-header {
-    background-color: var(--frozen-primary);
+    background-color: var(--app-primary);
     color: white;
     padding: 2rem;
     text-align: center;
@@ -345,17 +549,35 @@ body {
     background: var(--frozen-primary);
 }
 
-/* Insumo Card Styles */
+/* Insumo Card Styles - Mejorado con borde dinámico */
 .insumo-card {
     border: none !important;
     border-radius: 0.75rem;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out, border 0.3s ease;
+    position: relative;
+}
+
+.insumo-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: 2px solid transparent;
+    border-radius: 0.75rem;
+    transition: border-color 0.3s ease;
+    pointer-events: none;
 }
 
 .insumo-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 12px 16px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 14px 20px rgba(0, 0, 0, 0.15);
+}
+
+.insumo-card:hover::after {
+    border-color: var(--accent-green); /* Borde de acento en el hover */
 }
 
 .insumo-card .card-title {
@@ -420,37 +642,62 @@ body {
     opacity: 0.6;
     background-color: #f8f9fa;
     pointer-events: none; /* Evita que se pueda hacer hover o click en la tarjeta */
+    filter: grayscale(50%); /* Detalle visual para inactivo */
 }
 
 .insumo-inactivo .action-buttons {
     pointer-events: auto; /* Permite que los botones dentro de la tarjeta inactiva sí sean clickeables */
 }
+.insumo-inactivo:hover::after {
+    border-color: transparent;
+}
 
 
+/* Badges Soft - Mejorados */
 .bg-danger-soft {
     background-color: rgba(231, 74, 59, 0.1) !important;
     color: #e74a3b !important;
     font-size: 0.9rem;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    padding: 0.3em 0.6em;
+    border-radius: 6px;
+    font-weight: 700;
 }
 
 .bg-success-soft {
     background-color: rgba(28, 200, 138, 0.1) !important;
     color: #1cc88a !important;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    padding: 0.3em 0.6em;
+    border-radius: 6px;
+    font-weight: 700;
 }
 
 .bg-primary-soft {
     background-color: rgba(49, 49, 49, 0.1) !important;
     color: #313131 !important;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    padding: 0.3em 0.6em;
+    border-radius: 6px;
+    font-weight: 700;
 }
 
 .bg-warning-soft {
     background-color: rgba(253, 126, 20, 0.1) !important;
     color: #fd7e14 !important;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    padding: 0.3em 0.6em;
+    border-radius: 6px;
+    font-weight: 700;
 }
 
 .bg-secondary-soft {
     background-color: rgba(108, 117, 125, 0.1) !important;
     color: #6c757d !important;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    padding: 0.3em 0.6em;
+    border-radius: 6px;
+    font-weight: 700;
 }
 
 .subtitulo {
@@ -475,14 +722,14 @@ body {
 }
 
 .usuario-card {
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.5, 1);
     border: 1px solid #dee2e6;
-    border-radius: 8px;
+    border-radius: 10px;
 }
 
 .usuario-card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    transform: scale(1.01); /* Zoom sutil */
 }
 
 .usuario-inactivo {
@@ -550,13 +797,19 @@ body {
     color: #721c24 !important;
 }
 
-/* Stats cards */
+/* Stats cards - Efecto de levitación */
 .stats-card {
-    background: linear-gradient(135deg, #000000 0%, #333333 100%);
+    background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-hover) 100%);
     color: white;
     border-radius: 8px;
     padding: 1.5rem;
     text-align: center;
+    transition: all 0.3s ease;
+}
+
+.stats-card:hover {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
 }
 
 .stats-number {
@@ -588,7 +841,7 @@ body {
     }
     
     .form-header {
-        background-color: #000000;
+        background-color: var(--app-primary);
         color: white;
         padding: 2rem;
         text-align: center;
@@ -599,13 +852,13 @@ body {
     }
     
     .form-control:focus {
-        border-color: #000000;
-        box-shadow: 0 0 0 0.2rem rgba(0, 0, 0, 0.1);
+        border-color: var(--app-primary);
+        box-shadow: 0 0 0 0.25rem rgba(49, 49, 49, 0.25);
     }
     
     .form-select:focus {
-        border-color: #000000;
-        box-shadow: 0 0 0 0.2rem rgba(0, 0, 0, 0.1);
+        border-color: var(--app-primary);
+        box-shadow: 0 0 0 0.25rem rgba(49, 49, 49, 0.25);
     }
     
     .camera-section {
@@ -641,8 +894,8 @@ body {
     }
     
     .btn-camera {
-        background-color: #000000;
-        border-color: #000000;
+        background-color: var(--app-primary);
+        border-color: var(--app-primary);
         color: white;
         padding: 0.75rem 1.5rem;
         border-radius: 6px;
@@ -650,8 +903,8 @@ body {
     }
     
     .btn-camera:hover {
-        background-color: #333333;
-        border-color: #333333;
+        background-color: var(--app-primary-hover);
+        border-color: var(--app-primary-hover);
         color: white;
     }
     
@@ -676,9 +929,10 @@ body {
     }
     
     .step.active {
-        background: #000000;
-        border-color: #000000;
+        background: var(--app-primary);
+        border-color: var(--app-primary);
         color: white;
+        box-shadow: 0 0 0 4px rgba(49, 49, 49, 0.3); /* Efecto de anillo de pulso */
     }
     
     .step.completed {
@@ -697,7 +951,7 @@ body {
     }
 
     .insumo-card .action-buttons .btn {
-        flex: 1 1 100%;  
+        flex: 1 1 100%;
     }
 }
 
@@ -713,7 +967,7 @@ body {
     /* En tablet, dos columnas */
     .insumo-card .action-buttons .btn {
         flex: 1 1 calc(50% - 0.5rem); 
-        min-width: 120px;           
+        min-width: 120px;
     }
 }
 
@@ -743,4 +997,59 @@ body {
         justify-content: space-between !important;
         align-items: center !important;
     }
+}
+
+/* Funciona en navegadores modernos (Chrome, Edge, Opera, y soporte creciente) */
+@view-transition {
+  navigation: auto;
+}
+
+/* Personaliza el tiempo para que el cambio de página sea más notorio */
+::view-transition-group(root) {
+  animation-duration: 0.45s; /* Un poco más lenta para verse mejor */
+}
+
+/* Animación: La página vieja se desliza un poco hacia afuera */
+::view-transition-old(root) {
+  animation: 0.45s ease-in-out slide-out-to-left;
+}
+
+/* Animación: La nueva página entra ligeramente desde el lado opuesto */
+::view-transition-new(root) {
+  animation: 0.45s ease-in-out slide-in-from-right;
+}
+
+/* Definición de los Keyframes */
+@keyframes slide-out-to-left {
+  to {
+    transform: translateX(-15px);
+    opacity: 0.8;
+  }
+}
+
+@keyframes slide-in-from-right {
+  from {
+    transform: translateX(15px);
+    opacity: 0.8;
+  }
+}
+
+/*
+ * ----------------------------------
+ * TRANSICIÓN DE PÁGINA CON JAVASCRIPT
+ * ----------------------------------
+ */
+
+body {
+    /* * **IMPORTANTE:** Define una transición en el body.
+     * Si ya tienes una transición de color de fondo, añádele `opacity`.
+     */
+    transition: background-color 0.3s ease, opacity 0.4s ease-in-out; 
+    opacity: 1; /* Asegura que la página inicia visible */
+    /* ... el resto de tus estilos del body ... */
+}
+
+/* Esta clase es la que aplica el JavaScript antes de cambiar de página */
+body.fade-out {
+    opacity: 0 !important; /* Fuerza la opacidad a 0 */
 }

@@ -375,7 +375,7 @@ class UsuarioController(BaseController):
             return {'valid': False, 'error': 'Campo de validación no soportado.'}
 
         filters = {field: value}
-        existing_user_result = self.model.find_all(filters, limit=1)
+        existing_user_result = self.model.find_all(filters)
 
         if existing_user_result.get('success') and existing_user_result.get('data'):
             return {'valid': False, 'message': f'El {field} ya está en uso.'}
