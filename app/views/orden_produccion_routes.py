@@ -15,7 +15,7 @@ from app.controllers.producto_controller import ProductoController
 from app.controllers.etapa_produccion_controller import EtapaProduccionController
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
-from app.utils.decorators import roles_required
+from app.permisos import permission_required
 from datetime import date
 
 orden_produccion_bp = Blueprint("orden_produccion", __name__, url_prefix="/ordenes")
@@ -28,7 +28,7 @@ receta_controller = RecetaController()
 
 
 @orden_produccion_bp.route("/")
-@roles_required(min_level=2, allowed_roles=["EMPLEADO"])
+@permission_required(sector_codigo='PRODUCCION', accion='leer')
 def listar():
     """Muestra la lista de órdenes de producción."""
     estado = request.args.get("estado")
@@ -49,7 +49,7 @@ def listar():
 
 
 @orden_produccion_bp.route("/nueva", methods=["GET", "POST", "PUT"])
-@roles_required(allowed_roles=["SUPERVISOR", "GERENTE"])
+@permission_required(sector_codigo='PRODUCCION', accion='crear')
 def nueva():
     """Muestra la página para crear una nueva orden de producción."""
     productos = producto_controller.obtener_todos_los_productos()
@@ -60,7 +60,7 @@ def nueva():
 
 
 @orden_produccion_bp.route("/nueva/crear", methods=["POST"])
-@roles_required(allowed_roles=["SUPERVISOR", "GERENTE"])
+@permission_required(sector_codigo='PRODUCCION', accion='crear')
 def crear():
     try:
         datos_json = request.get_json()
@@ -83,7 +83,7 @@ def crear():
 
 
 @orden_produccion_bp.route("/modificar/<int:id>", methods=["GET", "POST", "PUT"])
-@roles_required(allowed_roles=["SUPERVISOR", "GERENTE"])
+@permission_required(sector_codigo='PRODUCCION', accion='actualizar')
 def modificar(id):
     """Gestiona la modificación de una orden de producción."""
     try:
@@ -112,7 +112,7 @@ def modificar(id):
 
 
 @orden_produccion_bp.route("/<int:id>/detalle")
-@roles_required(min_level=2, allowed_roles=["EMPLEADO"])
+@permission_required(sector_codigo='PRODUCCION', accion='leer')
 def detalle(id):
     """Muestra el detalle de una orden de producción."""
     respuesta = controller.obtener_orden_por_id(id)
@@ -139,7 +139,7 @@ def detalle(id):
 
 
 @orden_produccion_bp.route("/<int:id>/iniciar", methods=["POST"])
-@roles_required(min_level=2, allowed_roles=["EMPLEADO"])
+@permission_required(sector_codigo='PRODUCCION', accion='actualizar')
 def iniciar(id):
     """Inicia una orden de producción."""
     resultado = controller.cambiar_estado_orden(id, "EN_PROCESO")
@@ -151,7 +151,7 @@ def iniciar(id):
 
 
 @orden_produccion_bp.route("/<int:id>/completar", methods=["POST"])
-@roles_required(min_level=2, allowed_roles=["EMPLEADO"])
+@permission_required(sector_codigo='PRODUCCION', accion='actualizar')
 def completar(id):
     """Completa una orden de producción."""
     resultado = controller.cambiar_estado_orden(id, "COMPLETADA")
@@ -163,7 +163,7 @@ def completar(id):
 
 
 @orden_produccion_bp.route("/pendientes")
-@roles_required(allowed_roles=["SUPERVISOR", "GERENTE"])
+@permission_required(sector_codigo='PRODUCCION', accion='leer')
 def listar_pendientes():
     """Muestra las órdenes pendientes de aprobación."""
     response, _ = controller.obtener_ordenes({"estado": "PENDIENTE"})
@@ -176,7 +176,7 @@ def listar_pendientes():
 
 
 @orden_produccion_bp.route("/<int:id>/aprobar", methods=["POST"])
-@roles_required(allowed_roles=["SUPERVISOR", "GERENTE"])
+@permission_required(sector_codigo='PRODUCCION', accion='aprobar')
 def aprobar(id):
     """Aprueba una orden de producción."""
     usuario_id = session.get("usuario_id")
@@ -189,7 +189,7 @@ def aprobar(id):
 
 
 @orden_produccion_bp.route("/<int:id>/rechazar", methods=["POST"])
-@roles_required(allowed_roles=["SUPERVISOR", "GERENTE"])
+@permission_required(sector_codigo='PRODUCCION', accion='aprobar')
 def rechazar(id):
     """Rechaza una orden de producción."""
     motivo = request.form.get("motivo", "No especificado")

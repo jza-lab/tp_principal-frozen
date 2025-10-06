@@ -160,37 +160,6 @@ class UsuarioController(BaseController):
             logger.error(f"Error obteniendo sectores del usuario: {str(e)}")
             return []
 
-    def usuario_tiene_permiso(self, usuario_id: int, sector_codigo: str, accion: str) -> bool:
-        """
-        Verifica si un usuario tiene permiso para una acción en un sector específico.
-        Combina la verificación de rol y sector.
-        """
-        from app.permissions import PERMISOS_POR_ROL
-        
-        # Obtener usuario con rol y sectores
-        usuario_result = self.model.find_by_id(usuario_id, include_sectores=True)
-        if not usuario_result.get('success') or not usuario_result.get('data'):
-            return False
-
-        usuario = usuario_result['data']
-        rol_codigo = usuario.get('roles', {}).get('codigo')
-        
-        if not rol_codigo:
-            return False
-
-        # Verificar que el usuario tenga el sector asignado
-        sectores_usuario = usuario.get('sectores', [])
-        tiene_sector = any(sector.get('codigo') == sector_codigo for sector in sectores_usuario)
-        if not tiene_sector:
-            return False
-
-        # Verificar permisos del rol en ese sector
-        permisos_rol = PERMISOS_POR_ROL.get(rol_codigo, {})
-        if sector_codigo not in permisos_rol:
-            return False
-
-        return accion in permisos_rol[sector_codigo]
-    
     def autenticar_usuario_web(self, legajo: str, password: str) -> Dict:
         """
         Autentica a un usuario para el acceso web incluyendo sectores en la respuesta.

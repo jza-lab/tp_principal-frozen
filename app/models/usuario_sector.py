@@ -67,6 +67,23 @@ class UsuarioSectorModel(BaseModel):
             logger.error(f"Error eliminando todas las asignaciones del usuario: {str(e)}")
             return {'success': False, 'error': str(e)}
 
+    def check_user_sector_assignment(self, usuario_id: int, sector_id: int) -> bool:
+        """
+        Verifica si un usuario está asignado a un sector específico por sus IDs.
+        Es más eficiente que buscar por código de sector.
+        """
+        try:
+            query = self.db.table(self.get_table_name())\
+                .select("count", count='exact')\
+                .eq("usuario_id", usuario_id)\
+                .eq("sector_id", sector_id)\
+                .execute()
+            
+            return query.count > 0
+        except Exception as e:
+            logger.error(f"Error verificando asignación de sector para usuario {usuario_id}: {str(e)}")
+            return False
+
     def usuario_tiene_sector(self, usuario_id: int, sector_codigo: str) -> bool:
         """Verifica si un usuario tiene un sector específico"""
         try:

@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session
 from app.controllers.inventario_controller import InventarioController
-from app.utils.decorators import roles_required
+from app.permisos import permission_required
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.proveedor_controller import ProveedorController
 from marshmallow import ValidationError
@@ -12,7 +12,7 @@ insumo_controller = InsumoController()
 proveedor_controller = ProveedorController()
 
 @inventario_view_bp.route('/')
-@roles_required(min_level=2, allowed_roles=['EMPLEADO'])
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='leer')
 def listar_lotes():
     """
     Muestra la lista de todos los lotes en el inventario.
@@ -29,7 +29,7 @@ def listar_lotes():
     return render_template('inventario/listar.html', lotes=lotes)
 
 @inventario_view_bp.route('/lote/nuevo', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE', 'SUPERVISOR', 'EMPLEADO'])
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='crear')
 def nuevo_lote():
     """
     Gestiona la creación de un nuevo lote en el inventario.
@@ -69,7 +69,7 @@ def nuevo_lote():
                            today=today)
 
 @inventario_view_bp.route('/lote/<id_lote>')
-@roles_required(min_level=2, allowed_roles=['EMPLEADO'])
+@permission_required(sector_codigo='ALMACENAMIENTO', accion='leer')
 def detalle_lote(id_lote):
     """
     Muestra la página de detalle para un lote específico.

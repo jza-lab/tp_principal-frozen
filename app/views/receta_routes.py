@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from app.controllers.receta_controller import RecetaController
 from app.controllers.producto_controller import ProductoController
 from app.controllers.insumo_controller import InsumoController
-from app.utils.decorators import roles_required
+from app.permisos import permission_required
 
 receta_bp = Blueprint('receta', __name__, url_prefix='/recetas')
 controller = RecetaController()
@@ -11,14 +11,14 @@ producto_controller = ProductoController()
 insumo_controller = InsumoController()
 
 @receta_bp.route('/')
-@roles_required(min_level=2, allowed_roles=['EMPLEADO'])
+@permission_required(sector_codigo='PRODUCCION', accion='leer')
 def listar():
     """Muestra una lista de todas las recetas."""
     recetas = controller.obtener_recetas()
     return render_template('recetas/listar.html', recetas=recetas)
 
 @receta_bp.route('/<int:id>')
-@roles_required(min_level=2, allowed_roles=['EMPLEADO'])
+@permission_required(sector_codigo='PRODUCCION', accion='leer')
 def detalle(id):
     """Muestra el detalle de una receta, incluyendo sus ingredientes."""
     receta = controller.obtener_receta_con_ingredientes(id)
@@ -28,7 +28,7 @@ def detalle(id):
     return render_template('recetas/detalle.html', receta=receta)
 
 @receta_bp.route('/nueva', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE', 'SUPERVISOR', 'CALIDAD'])
+@permission_required(sector_codigo='PRODUCCION', accion='crear')
 def nueva():
     """Gestiona la creación de una nueva receta con sus ingredientes."""
     if request.method == 'POST':
@@ -68,14 +68,14 @@ def nueva():
     return render_template('recetas/formulario.html', receta={}, productos=productos, insumos=insumos, is_new=True)
 
 @receta_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
-@roles_required(allowed_roles=['GERENTE', 'SUPERVISOR', 'CALIDAD'])
+@permission_required(sector_codigo='PRODUCCION', accion='actualizar')
 def editar(id):
     """Gestiona la edición de una receta existente (funcionalidad pendiente)."""
     flash('Funcionalidad de editar receta aún no implementada.', 'info')
     return redirect(url_for('receta.detalle', id=id))
 
 @receta_bp.route('/<int:id>/eliminar', methods=['POST'])
-@roles_required(allowed_roles=['GERENTE', 'SUPERVISOR', 'CALIDAD'])
+@permission_required(sector_codigo='PRODUCCION', accion='eliminar')
 def eliminar(id):
     """Elimina una receta (funcionalidad pendiente)."""
     flash('Funcionalidad de eliminar receta aún no implementada.', 'info')

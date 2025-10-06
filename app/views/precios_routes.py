@@ -8,6 +8,7 @@ from io import BytesIO
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.historial_precios_controller import HistorialPreciosController
+from app.permisos import permission_required
 
 precios_bp = Blueprint('precios', __name__)
 logger = logging.getLogger(__name__)
@@ -19,10 +20,12 @@ historial_controller = HistorialPreciosController()
 
 
 @precios_bp.route('/actualizar-precios')
+@permission_required(sector_codigo='LOGISTICA', accion='actualizar')
 def index():
     return render_template('precios_proveedores_files/actualizar_precios_proveedores.html')
 
 @precios_bp.route('/api/precios/cargar-archivo-proveedor', methods=['POST'])
+@permission_required(sector_codigo='LOGISTICA', accion='actualizar')
 def cargar_archivo_precios_proveedor():
     """
     Endpoint para cargar archivo Excel con precios de proveedores - VERSIÓN SIMPLIFICADA
@@ -257,6 +260,7 @@ def generar_reporte_consolidado(resultados):
 
 # Otros endpoints (plantillas, catálogo, etc.)
 @precios_bp.route('/api/precios/plantilla', methods=['GET'])
+@permission_required(sector_codigo='LOGISTICA', accion='leer')
 def descargar_plantilla():
     """Descarga plantilla para carga de precios"""
     # Obtener catálogo usando controller
