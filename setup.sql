@@ -293,6 +293,16 @@ CREATE TABLE public.totem_sesiones (
   CONSTRAINT totem_sesiones_pkey PRIMARY KEY (id),
   CONSTRAINT totem_sesiones_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id)
 );
+CREATE TABLE public.usuario_permisos (
+  id integer NOT NULL DEFAULT nextval('permisos_id_seq'::regclass),
+  role_id integer NOT NULL,
+  sector_id integer NOT NULL,
+  accion character varying NOT NULL,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT usuario_permisos_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_role FOREIGN KEY (role_id) REFERENCES public.roles(id),
+  CONSTRAINT fk_sector FOREIGN KEY (sector_id) REFERENCES public.sectores(id)
+);
 CREATE TABLE public.usuario_sectores (
   id integer NOT NULL DEFAULT nextval('usuario_sectores_id_seq'::regclass),
   usuario_id integer NOT NULL,
