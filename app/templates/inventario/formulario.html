@@ -46,22 +46,22 @@
 
                         <div class="col-md-6">
                             <label for="cantidad_inicial" class="form-label">Cantidad Inicial <span class="text-danger">*</span></label>
-                            <input type="number" class="form-control" id="cantidad_inicial" name="cantidad_inicial" step="any" min="0.01" required>
+                            <input type="number" min="1" max="5000"class="form-control" id="cantidad_inicial" name="cantidad_inicial" step="any" min="0.01" required>
                         </div>
 
                         <div class="col-md-6">
                             <label for="precio_unitario" class="form-label">Precio Unitario</label>
-                            <input type="number" class="form-control" id="precio_unitario" name="precio_unitario" step="any" min="0">
+                            <input type="number" class="form-control" id="precio_unitario" name="precio_unitario" step="0.01" min="0" max="10000"required>
                         </div>
 
                         <div class="col-md-6">
                             <label for="f_ingreso" class="form-label">Fecha de Ingreso</label>
-                            <input type="date" class="form-control" id="f_ingreso" name="f_ingreso" value="{{ today }}">
+                            <input type="date" class="form-control" id="f_ingreso" name="f_ingreso" value="{{ today }}" max="{{ today }}">
                         </div>
 
                         <div class="col-md-6">
                             <label for="f_vencimiento" class="form-label">Fecha de Vencimiento</label>
-                            <input type="date" class="form-control" id="f_vencimiento" name="f_vencimiento">
+                            <input type="date" class="form-control" id="f_vencimiento" name="f_vencimiento" required min="{{ today }}">
                         </div>
 
                         <div class="col-12">
