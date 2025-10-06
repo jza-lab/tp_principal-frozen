@@ -137,6 +137,7 @@ def nuevo_usuario():
 
     # Método GET
     roles = usuario_controller.obtener_todos_los_roles()
+    flash(f"DEBUG: Roles cargados: {roles}")
     sectores = usuario_controller.obtener_todos_los_sectores()
     return render_template('usuarios/formulario.html', 
                          usuario={}, 

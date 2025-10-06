@@ -10,7 +10,7 @@
             <p class="text-muted mb-0">Administración de personal y roles del sistema</p>
         </div>
         <div class="btn-toolbar">
-            <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary">
+            <a href="{{ url_for('admin_usuario.crear_usuario') }}" class="btn btn-primary">
                 <i class="bi bi-person-plus me-1"></i>Crear Nuevo Usuario
             </a>
         </div>
@@ -131,7 +131,7 @@
                 <i class="bi bi-people fs-1 d-block mb-2 opacity-50"></i>
                 <h4>No hay usuarios registrados</h4>
                 <p>Comience agregando el primer usuario al sistema</p>
-                <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary">
+                <a href="{{ url_for('admin_usuario.crear_usuario') }}" class="btn btn-primary">
                     <i class="bi bi-person-plus me-1"></i>Crear Primer Usuario
                 </a>
             </div>
