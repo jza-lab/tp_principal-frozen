@@ -1,5 +1,5 @@
 from dataclasses import dataclass, asdict
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from datetime import datetime, date
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.models.base_model import BaseModel
@@ -17,7 +17,7 @@ class Usuario:
     password_hash: str
     nombre: str
     apellido: str
-    role_id: int  # Cambiamos rol por role_id
+    role_id: int
     activo: bool = True
     created_at: Optional[datetime] = None
     legajo: Optional[str] = None
@@ -28,9 +28,10 @@ class Usuario:
     fecha_ingreso: Optional[date] = None
     supervisor_id: Optional[int] = None
     turno: Optional[str] = None
-    ultimo_login_web: Optional[datetime] = None  # Mantenemos solo este
+    ultimo_login_web: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     facial_encoding: Optional[str] = None
+    sectores: Optional[List[Dict]] = None
 
     def set_password(self, password: str):
         self.password_hash = generate_password_hash(password)
@@ -45,6 +46,12 @@ class Usuario:
                 d[key] = value.isoformat() if value else None
         return d
 
+    def tiene_sector(self, sector_codigo: str) -> bool:
+        """Verifica si el usuario tiene un sector específico"""
+        if not self.sectores:
+            return False
+        return any(sector.get('codigo') == sector_codigo for sector in self.sectores)
+
 
 class UsuarioModel(BaseModel):
     """
@@ -53,32 +60,90 @@ class UsuarioModel(BaseModel):
     def get_table_name(self) -> str:
         return 'usuarios'
 
-    def _find_by(self, field: str, value) -> Dict:
+    def _find_by(self, field: str, value, include_sectores: bool = False) -> Dict:
         """
         Método genérico y privado para buscar un usuario por un campo específico.
         """
         try:
-            # La consulta siempre incluye la información del rol, incluyendo el nivel
-            result = self.db.table(self.get_table_name()).select('*, roles(codigo, nombre, nivel)').eq(field, value).execute()
-            if result.data:
-                return {'success': True, 'data': result.data[0]}
-            else:
+            # Consulta base con información del rol
+            query = self.db.table(self.get_table_name()).select('*, roles(codigo, nombre, nivel)')
+            query = query.eq(field, value)
+            
+            result = query.execute()
+            
+            if not result.data:
                 return {'success': False, 'error': 'Usuario no encontrado'}
+
+            usuario_data = result.data[0]
+
+            # Si se solicita incluir sectores, cargarlos
+            if include_sectores:
+                from app.models.usuario_sector import UsuarioSectorModel
+                usuario_sector_model = UsuarioSectorModel()
+                sectores_result = usuario_sector_model.find_by_usuario(usuario_data['id'])
+                
+                if sectores_result.get('success'):
+                    # Extraer solo los datos del sector (no la relación intermedia)
+                    sectores = []
+                    for item in sectores_result['data']:
+                        if item.get('sectores'):
+                            sectores.append(item['sectores'])
+                    usuario_data['sectores'] = sectores
+                else:
+                    usuario_data['sectores'] = []
+
+            return {'success': True, 'data': usuario_data}
+            
         except Exception as e:
             logger.error(f"Error buscando usuario por {field}: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    def find_by_email(self, email: str) -> Dict:
-        """Busca un usuario por email con información de rol"""
-        return self._find_by('email', email)
+    def find_by_email(self, email: str, include_sectores: bool = False) -> Dict:
+        """Busca un usuario por email"""
+        return self._find_by('email', email, include_sectores)
 
-    def find_by_id(self, usuario_id: int) -> Dict:
-        """Busca un usuario por su ID con información de rol"""
-        return self._find_by('id', usuario_id)
+    def find_by_id(self, usuario_id: int, include_sectores: bool = False) -> Dict:
+        """Busca un usuario por su ID"""
+        return self._find_by('id', usuario_id, include_sectores)
 
-    def find_by_legajo(self, legajo: str) -> Dict:
-        """Busca un usuario por su legajo con información de rol"""
-        return self._find_by('legajo', legajo)
+    def find_by_legajo(self, legajo: str, include_sectores: bool = False) -> Dict:
+        """Busca un usuario por su legajo"""
+        return self._find_by('legajo', legajo, include_sectores)
+
+    def find_all(self, filtros: Dict = None, include_sectores: bool = False) -> Dict:
+        """Obtiene todos los usuarios con opción de incluir sectores"""
+        try:
+            query = self.db.table(self.get_table_name()).select('*, roles(codigo, nombre, nivel)')
+            
+            if filtros:
+                for key, value in filtros.items():
+                    query = query.eq(key, value)
+                    
+            response = query.execute()
+            
+            usuarios = response.data
+            
+            # Si se solicita incluir sectores, cargarlos para cada usuario
+            if include_sectores and usuarios:
+                from app.models.usuario_sector import UsuarioSectorModel
+                usuario_sector_model = UsuarioSectorModel()
+                
+                for usuario in usuarios:
+                    sectores_result = usuario_sector_model.find_by_usuario(usuario['id'])
+                    if sectores_result.get('success'):
+                        sectores = []
+                        for item in sectores_result['data']:
+                            if item.get('sectores'):
+                                sectores.append(item['sectores'])
+                        usuario['sectores'] = sectores
+                    else:
+                        usuario['sectores'] = []
+
+            return {'success': True, 'data': usuarios}
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo usuarios: {str(e)}")
+            return {'success': False, 'error': str(e)}
 
     def update(self, usuario_id: int, data: Dict) -> Dict:
         """Actualiza un usuario"""

@@ -137,10 +137,12 @@ CREATE TABLE public.ordenes_produccion (
   updated_at timestamp with time zone DEFAULT now(),
   fecha_fin_estimada timestamp with time zone,
   fecha_aprobacion timestamp with time zone,
+  supervisor_responsable_id integer,
   CONSTRAINT ordenes_produccion_pkey PRIMARY KEY (id),
   CONSTRAINT ordenes_produccion_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES public.productos(id),
   CONSTRAINT ordenes_produccion_receta_id_fkey FOREIGN KEY (receta_id) REFERENCES public.recetas(id),
-  CONSTRAINT ordenes_produccion_usuario_creador_id_fkey FOREIGN KEY (usuario_creador_id) REFERENCES public.usuarios(id)
+  CONSTRAINT ordenes_produccion_usuario_creador_id_fkey FOREIGN KEY (usuario_creador_id) REFERENCES public.usuarios(id),
+  CONSTRAINT ordenes_produccion_supervisor_responsable_id_fkey FOREIGN KEY (supervisor_responsable_id) REFERENCES public.usuarios(id)
 );
 CREATE TABLE public.pedido_items (
   id integer NOT NULL DEFAULT nextval('pedido_items_id_seq'::regclass),
@@ -174,6 +176,8 @@ CREATE TABLE public.productos (
   activo boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  unidad_medida character varying,
+  precio_unitario numeric DEFAULT '1'::numeric,
   CONSTRAINT productos_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.proveedores (
@@ -268,6 +272,14 @@ CREATE TABLE public.roles (
   created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT roles_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.sectores (
+  id integer NOT NULL DEFAULT nextval('sectores_id_seq'::regclass),
+  codigo character varying NOT NULL UNIQUE,
+  nombre character varying NOT NULL,
+  descripcion text,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT sectores_pkey PRIMARY KEY (id)
+);
 CREATE TABLE public.totem_sesiones (
   id integer NOT NULL DEFAULT nextval('totem_sesiones_id_seq'::regclass),
   usuario_id integer NOT NULL,
@@ -280,6 +292,15 @@ CREATE TABLE public.totem_sesiones (
   created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT totem_sesiones_pkey PRIMARY KEY (id),
   CONSTRAINT totem_sesiones_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id)
+);
+CREATE TABLE public.usuario_sectores (
+  id integer NOT NULL DEFAULT nextval('usuario_sectores_id_seq'::regclass),
+  usuario_id integer NOT NULL,
+  sector_id integer NOT NULL,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT usuario_sectores_pkey PRIMARY KEY (id),
+  CONSTRAINT usuario_sectores_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id),
+  CONSTRAINT usuario_sectores_sector_id_fkey FOREIGN KEY (sector_id) REFERENCES public.sectores(id)
 );
 CREATE TABLE public.usuarios (
   id integer NOT NULL DEFAULT nextval('usuarios_id_seq'::regclass),
