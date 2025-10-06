@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const passwordInput = document.getElementById('password');
     const nombreInput = document.getElementById('nombre');
     const apellidoInput = document.getElementById('apellido');
-    const rolSelect = document.getElementById('rol');
+    const rolSelect = document.getElementById('role_id');
     const requiredInputs = basicInfoSection.querySelectorAll('input[required], select[required]');
 
     // Elementos de la cámara

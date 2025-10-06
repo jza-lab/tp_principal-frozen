@@ -113,7 +113,7 @@
                                 <select class="form-select" id="role_id" name="role_id" required>
                                     <option value="">Seleccionar rol...</option>
                                     {% for rol in roles %}
-                                        <option value="{{ rol.id }}" {% if usuario.role_id == rol.id %}selected{% endif %}>
+                                        <option value="{{ rol.id }}" {% if usuario and usuario.roles and usuario.roles.id == rol.id %}selected{% endif %}>
                                             {{ rol.nombre }}
                                         </option>
                                     {% endfor %}

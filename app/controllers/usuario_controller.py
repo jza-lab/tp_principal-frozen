@@ -3,6 +3,7 @@ from app.models.usuario import UsuarioModel
 from app.models.totem_sesion import TotemSesionModel
 from app.models.sector import SectorModel
 from app.models.usuario_sector import UsuarioSectorModel
+from app.models.rol import RoleModel
 from app.schemas.usuario_schema import UsuarioSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
@@ -23,6 +24,7 @@ class UsuarioController(BaseController):
         self.totem_sesion = TotemSesionModel()
         self.sector_model = SectorModel()
         self.usuario_sector_model = UsuarioSectorModel()
+        self.role_model = RoleModel()
         self.schema = UsuarioSchema()
 
     def crear_usuario(self, data: Dict) -> Dict:
@@ -410,12 +412,8 @@ class UsuarioController(BaseController):
     
     def obtener_todos_los_roles(self) -> List[Dict]:
         """Obtiene una lista de todos los roles disponibles."""
-        try:
-            response = self.db.table("roles").select("*").order("nivel").execute()
-            return response.data
-        except Exception as e:
-            logger.error(f"Error obteniendo roles: {str(e)}")
-            return []
+        resultado = self.role_model.find_all()
+        return resultado.get('data', [])
 
     def obtener_rol_por_id(self, role_id: int) -> Optional[Dict]:
         """Obtiene un rol por su ID."""

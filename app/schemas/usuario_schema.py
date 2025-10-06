@@ -1,5 +1,6 @@
 from marshmallow import Schema, fields, validate, validates_schema, ValidationError
 from datetime import datetime
+from app.schemas.roles_schema import RoleSchema
 
 class UsuarioSchema(Schema):
     """
@@ -13,8 +14,9 @@ class UsuarioSchema(Schema):
     # El password solo se usa para crear o actualizar, no para mostrar.
     password = fields.Str(required=True, load_only=True, validate=validate.Length(min=8))
 
-    # Ahora usamos role_id en lugar de rol
-    role_id = fields.Int(required=True, validate=validate.Range(min=1))
+    # Usamos role_id en lugar de rol
+    role_id = fields.Int(required=True, validate=validate.Range(min=1), load_only=True)
+    roles = fields.Nested(RoleSchema, dump_only=True)
 
     activo = fields.Bool(dump_only=True)
     created_at = fields.DateTime(dump_only=True)

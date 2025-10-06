@@ -6,8 +6,9 @@ class PermisosModel(BaseModel):
     Modelo para gestionar los permisos que relacionan roles, sectores y acciones.
     """
 
-    def __init__(self):
-        super().__init__('permisos')
+    def get_table_name(self) -> str:
+        """Retorna el nombre de la tabla para este modelo."""
+        return 'usuario_permisos'
 
     def check_permission(self, role_id: int, sector_id: int, accion: str) -> bool:
         """
@@ -22,7 +23,7 @@ class PermisosModel(BaseModel):
             bool: True si el permiso existe, False en caso contrario.
         """
         try:
-            query = self.db.table(self.table_name).select("count", count='exact').eq("role_id", role_id).eq("sector_id", sector_id).eq("accion", accion).execute()
+            query = self.db.table(self.get_table_name()).select("count", count='exact').eq("role_id", role_id).eq("sector_id", sector_id).eq("accion", accion).execute()
             
             if query.count > 0:
                 return True
@@ -46,7 +47,7 @@ class PermisosModel(BaseModel):
         """
         try:
             # Usamos una vista o un join para obtener los códigos de sector
-            query = self.db.table(self.table_name)\
+            query = self.db.table(self.get_table_name())\
                 .select('accion, sectores(codigo)')\
                 .eq('role_id', role_id)\
                 .execute()
@@ -85,7 +86,7 @@ class PermisosModel(BaseModel):
     def revoke_permission(self, role_id: int, sector_id: int, accion: str) -> Dict[str, Any]:
         """Revoca un permiso específico."""
         try:
-            query = self.db.table(self.table_name)\
+            query = self.db.table(self.get_table_name())\
                 .delete()\
                 .eq("role_id", role_id)\
                 .eq("sector_id", sector_id)\
