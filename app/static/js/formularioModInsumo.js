@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
             stock_min: parseFloat(document.getElementById('stock_min').value),
             stock_max: parseFloat(document.getElementById('stock_max').value),
             vida_util_dias: parseInt(document.getElementById('dias_vida_util').value),
+            precio_unitario: parseInt(document.getElementById('precio_unitario').value),
             tem_recomendada: parseFloat(document.getElementById('temperatura_conservacion').value),
             descripcion: document.getElementById('descripcion').value,
             es_critico: document.getElementById('es_critico').checked,

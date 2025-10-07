@@ -162,6 +162,21 @@ def actualizar_producto(id_producto):
         logger.error(f"Error inesperado en actualizar_producto: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
+
+@productos_bp.route(
+    "/catalogo/actualizar-precio/<string:id_producto>", methods=["GET","PUT"]
+)
+@roles_required(
+    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
+)
+def actualizar_precio(id_producto):
+    try:
+        respuesta, status = producto_controller.actualizar_costo_producto(id_producto)
+        return jsonify(respuesta), status
+    except Exception as e:
+        logger.error(f"Error inesperado en actualizar_producto: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
 @productos_bp.route("/catalogo/eliminar/<string:id_producto>", methods=["DELETE"])
 @roles_required(
     allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]

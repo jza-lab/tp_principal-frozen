@@ -20,3 +20,9 @@ class ProductoSchema(Schema):
         validate=validate.Range(min=0.01, error="El precio debe ser mayor que 0."),
         error_messages={"required": "El precio es obligatorio."}
     )
+
+    porcentaje_extra = fields.Float(
+        required=False)
+    
+    iva = fields.Bool(
+        required=True)

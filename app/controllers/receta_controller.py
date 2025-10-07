@@ -43,7 +43,31 @@ class RecetaController(BaseController):
         """
         return self.model.get_ingredientes(receta_id)
 
+    def calcular_costo_total_receta(self, receta_id: int) -> Optional[float]:
+        """
+        Calcula el costo total de una receta sumando el costo de cada ingrediente.
+        """
+        ingredientes_result = self.obtener_ingredientes_para_receta(receta_id)
+        if not ingredientes_result.get('success'):
+            return ingredientes_result
 
+        ingredientes = ingredientes_result['data']
+        costo_total = 0.0
+
+        for ingrediente in ingredientes:
+            try:
+                insumo_result = self.model.db.table('insumos_catalogo').select('precio_unitario').eq('id_insumo', ingrediente['id_insumo']).execute()
+
+            except Exception as e:
+                return {'success': False, 'error': f"Error al obtener el costo del insumo {ingrediente['id_insumo']}: {str(e)}"}
+            if insumo_result.data:
+                costo_unitario = insumo_result.data[0]['precio_unitario']
+                costo_total += costo_unitario * ingrediente['cantidad']
+            else:
+                return {'success': False, 'error': f"Insumo con ID {ingrediente['id_insumo']} no encontrado."}
+                    
+        return {'success': True, 'data': {'costo_total': costo_total}}
+    
     def crear_receta_con_ingredientes(self, data: Dict) -> Dict:
         """
         Crea una receta y sus ingredientes asociados de forma transaccional.

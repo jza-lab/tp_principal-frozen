@@ -21,10 +21,10 @@ document.addEventListener('DOMContentLoaded', function () {
         subtotalInput.value = subtotalTotal.toFixed(2);
 
         const porcentaje = parseFloat(porcentajeExtraInput.value) || 0;
-        let total = subtotalTotal + (subtotalTotal * porcentaje / 100);
+        let total = subtotalTotal * (1 + ( porcentaje / 100));
 
         if (ivaCheckbox.checked) {
-            total += subtotalTotal * 0.21;
+            total *= 1.21;
         }
         totalInput.value = total.toFixed(2);
     }
@@ -135,6 +135,8 @@ document.addEventListener('DOMContentLoaded', function () {
             categoria: formData.get('categoria'),
             unidad_medida: formData.get('unidad_medida'),
             descripcion: formData.get('descripcion'),
+            porcentaje_extra: formData.get('porcentaje_extra'),
+            iva: formData.get('iva') === '1',
             precio_unitario: parseFloat(document.getElementById('total').value) || 0,
             receta_items: []
         };

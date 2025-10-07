@@ -117,6 +117,7 @@ class ProductoController(BaseController):
 
             receta_existente = self.receta_model.find_all({'producto_id': producto_id})
             receta_id = None
+
             if receta_existente.get('success') and receta_existente.get('data'):
                 receta_id = receta_existente['data'][0]['id']
             else:
@@ -141,6 +142,45 @@ class ProductoController(BaseController):
             return self.error_response(f"Datos inválidos: {e.messages}", 422)
         except Exception as e:
             logger.error(f"Error en actualizar_producto: {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
+
+    def actualizar_costo_producto(self, producto_id: int) -> Dict:
+        """Actualiza el costo del producto basado en su receta."""
+        try:
+            receta_existente = self.receta_model.find_all({'producto_id': producto_id})
+
+            if not (receta_existente.get('success') and receta_existente.get('data')):
+                return self.error_response('El producto no tiene una receta asociada.', 400)
+            
+            receta_id = receta_existente['data'][0]['id']
+
+            costo_result = self.receta_controller.calcular_costo_total_receta(receta_id)
+
+            if not costo_result.get('success'):
+                return self.error_response(costo_result.get('error', 'Error al calcular el costo de la receta.'), 500)
+            
+            producto = self.obtener_producto_por_id(producto_id)
+            if not producto:
+                return self.error_response('Producto no encontrado.', 404)
+            
+            nuevo_costo_base = costo_result['data']['costo_total']
+            
+            porcentaje_margen = producto.get('porcentaje_extra', 0) / 100
+            costo_con_margen = nuevo_costo_base * (1 + porcentaje_margen)
+
+            factor_iva = 1.21 if producto.get('iva') else 1.0
+            
+            nuevo_costo = round(costo_con_margen * factor_iva, 2)
+            
+            update_result = self.model.update(producto_id, {'precio_unitario': nuevo_costo}, 'id')
+
+            if not update_result.get('success'):
+                return self.error_response(update_result.get('error', 'Error al actualizar el costo del producto.'), 500)
+            
+            return self.success_response(update_result.get('data'), "Costo del producto actualizado con éxito")
+        
+        except Exception as e:
+            logger.error(f"Error en actualizar_costo_producto: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
 
     def obtener_producto_por_id(self, producto_id: int) -> Optional[Dict]:
