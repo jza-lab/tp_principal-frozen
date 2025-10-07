@@ -22,7 +22,8 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-productos_bp = Blueprint("productos", __name__, url_prefix="/api/productos")
+# The url_prefix will be handled in app/__init__.py
+productos_bp = Blueprint("productos", __name__)
 
 insumo_controller = InsumoController()
 producto_controller = ProductoController()
@@ -44,8 +45,11 @@ def crear_producto():
                 return jsonify(
                     {"success": False, "error": "No se recibieron datos JSON válidos"}
                 ), 400
+            # Correctly unpack the response from the controller
             response, status = producto_controller.crear_producto(datos_json)
             return jsonify(response), status
+        
+        # For GET request
         producto = None
         insumos_resp, _ = insumo_controller.obtener_insumos()
         insumos = insumos_resp.get("data", [])
@@ -70,7 +74,7 @@ def obtener_productos():
         logger.error(f"Error inesperado en obtener_todos_los_productos: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
-@productos_bp.route("/catalogo/<string:id_producto>", methods=["GET"])
+@productos_bp.route("/catalogo/<int:id_producto>", methods=["GET"])
 @roles_required(min_level=2, allowed_roles=["EMPLEADO"])
 def obtener_producto_por_id(id_producto):
     try:
@@ -79,8 +83,14 @@ def obtener_producto_por_id(id_producto):
         response_insumos, status_insumo = insumo_controller.obtener_insumos()
         insumos = response_insumos.get("data", [])
 
-        receta_items= receta_controller.obtener_ingredientes_para_receta(id_producto).get("data", [])
-        
+        # Correctly fetch recipe and then its ingredients
+        receta_items = []
+        receta_response = receta_controller.model.db.table('recetas').select('id').eq('producto_id', id_producto).execute()
+        if receta_response.data:
+            receta_id = receta_response.data[0]['id']
+            receta_items_response = receta_controller.obtener_ingredientes_para_receta(receta_id)
+            receta_items = receta_items_response.get("data", [])
+
         insumos_dict = {str(insumo['id']): insumo for insumo in insumos}
 
         for item in receta_items:
@@ -100,31 +110,41 @@ def obtener_producto_por_id(id_producto):
         return redirect(url_for("productos.obtener_productos"))
 
 @productos_bp.route(
-    "/catalogo/actualizar/<string:id_producto>", methods=["GET", "POST", "PUT"]
+    "/catalogo/actualizar/<int:id_producto>", methods=["GET", "PUT"]
 )
 @roles_required(
     allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
 )
 def actualizar_producto(id_producto):
     try:
-        if request.method in ["PUT"]:
+        if request.method == "PUT":
             datos_json = request.get_json()
             if not datos_json:
                 return jsonify(
                     {"success": False, "error": "No se recibieron datos JSON válidos"}
                 ), 400
-            response= producto_controller.actualizar_producto(
+            # Correctly unpack the response
+            response, status = producto_controller.actualizar_producto(
                 id_producto, datos_json
             )
-            status = 200 if response.get("success") else 400
             return jsonify(response), status
 
-        producto= producto_controller.obtener_producto_por_id(id_producto)
+        # GET Request Logic
+        producto = producto_controller.obtener_producto_por_id(id_producto)
+        if not producto:
+            flash("Producto no encontrado.", "error")
+            return redirect(url_for('productos.obtener_productos'))
 
         response_insumos, status_insumo = insumo_controller.obtener_insumos()
         insumos = response_insumos.get("data", [])
 
-        receta_items= receta_controller.obtener_ingredientes_para_receta(id_producto).get("data", [])
+        # Correctly fetch recipe and then its ingredients
+        receta_items = []
+        receta_response = receta_controller.model.db.table('recetas').select('id').eq('producto_id', id_producto).execute()
+        if receta_response.data:
+            receta_id = receta_response.data[0]['id']
+            receta_items_response = receta_controller.obtener_ingredientes_para_receta(receta_id)
+            receta_items = receta_items_response.get("data", [])
         
         insumos_dict = {str(insumo['id']): insumo for insumo in insumos}
 
@@ -166,4 +186,3 @@ def habilitar_producto(id_producto):
     except Exception as e:
         logger.error(f"Error inesperado en habilitar_producto: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
-

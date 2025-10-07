@@ -76,3 +76,38 @@ class RecetaController(BaseController):
         except Exception as e:
             # En un caso real, aquí se manejaría un rollback de la transacción
             return {'success': False, 'error': f'Error interno en el controlador: {str(e)}'}
+
+    def gestionar_ingredientes_para_receta(self, receta_id: int, receta_items: List[Dict]) -> Dict:
+        """
+        Gestiona los ingredientes de la receta de forma eficiente.
+        Elimina los ingredientes existentes y luego inserta los nuevos en un solo lote.
+        """
+        try:
+            # 1. Eliminar ingredientes antiguos
+            self.model.db.table('receta_ingredientes').delete().eq('receta_id', receta_id).execute()
+
+            if not receta_items:
+                return {'success': True} # No hay nada más que hacer si no hay nuevos ingredientes.
+
+            # 2. Preparar los nuevos ingredientes para una inserción en lote
+            ingredientes_a_insertar = [
+                {
+                    'receta_id': receta_id,
+                    'id_insumo': item['id_insumo'],
+                    'cantidad': item['cantidad'],
+                    'unidad_medida': item['unidad_medida']
+                }
+                for item in receta_items
+            ]
+            
+            # 3. Insertar todos los nuevos ingredientes en una sola llamada
+            insert_result = self.model.db.table('receta_ingredientes').insert(ingredientes_a_insertar).execute()
+
+            # 4. Verificar que la inserción fue exitosa
+            if len(insert_result.data) != len(ingredientes_a_insertar):
+                raise Exception("No se pudieron guardar todos los ingredientes de la receta.")
+            
+            return {'success': True}
+        except Exception as e:
+            # Loggear el error sería una buena práctica aquí
+            return {'success': False, 'error': str(e)}

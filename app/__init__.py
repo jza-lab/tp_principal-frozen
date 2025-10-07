@@ -56,7 +56,7 @@ def create_app():
     app.register_blueprint(planificacion_bp)
     app.register_blueprint(google_forms_bp)
     app.register_blueprint(precios_bp)
-    app.register_blueprint(productos_bp)
+    app.register_blueprint(productos_bp, url_prefix='/api/productos')
 
 
     # Ruta de health check
