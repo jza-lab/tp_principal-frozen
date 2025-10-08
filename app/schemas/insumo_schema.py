@@ -15,6 +15,10 @@ class InsumosCatalogoSchema(Schema):
         allow_none=True,
         load_default=None
     )
+    stock_actual = fields.Float(
+        allow_none=True,
+        load_default=None
+    )
     codigo_ean = fields.Str(
         validate=validate.Length(max=13),
         allow_none=True,
@@ -70,6 +74,10 @@ class InsumosCatalogoSchema(Schema):
         },
         allow_none=False,
         load_default=1
+    )
+    id_proveedor = fields.Int(
+        allow_none=True,
+        load_default=None
     )
 
 

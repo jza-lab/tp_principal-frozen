@@ -190,3 +190,39 @@ class InventarioModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo lotes para la vista: {e}")
             return {'success': False, 'error': str(e)}
+
+    def get_lote_detail_for_view(self, id_lote: str) -> Dict:
+        """
+        Obtiene un único lote con todos los detalles de insumo y proveedor.
+        Este método es el equivalente de 'find_by_id' pero enriquecido.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select(
+                '*, insumo:insumos_catalogo(nombre, categoria, unidad_medida), proveedor:proveedores(nombre)'
+            ).eq('id_lote', id_lote) 
+
+            result = query.execute()
+
+            if not result.data:
+                return {'success': True, 'data': None}
+
+            lote = result.data[0]
+
+            # Aplanar los datos del primer lote
+            if lote.get('insumo'):
+                lote['insumo_nombre'] = lote['insumo']['nombre']
+                lote['insumo_categoria'] = lote['insumo']['categoria']
+                lote['insumo_unidad_medida'] = lote['insumo']['unidad_medida']
+            else:
+                lote['insumo_nombre'] = 'Insumo no encontrado'
+
+            if lote.get('proveedor'):
+                lote['proveedor_nombre'] = lote['proveedor']['nombre']
+            else:
+                lote['proveedor_nombre'] = 'N/A'
+                
+            return {'success': True, 'data': lote}
+
+        except Exception as e:
+            logger.error(f"Error obteniendo detalle de lote: {e}")
+            return {'success': False, 'error': str(e)}

@@ -1,0 +1,137 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Gestión de proveedor - Sistema Frozen{% endblock %}
+
+{% block content %}
+<div class="proveedores-container">
+    <div class="d-flex justify-content-between align-items-center pb-2 mb-4 border-bottom">
+        <div>
+            <h1 class="h2 mb-1">Gestión de Proveedores</h1>
+            <p class="text-muted mb-0">Administración de proveedores registrados en el sistema</p>
+        </div>
+        <div class="btn-toolbar">
+            <a href="{{ url_for('clientes_proveedores.nuevo_proveedor') }}" class="btn btn-primary">
+                <i class="bi bi-person-plus me-1"></i>Crear Nuevo Proveedor
+            </a>
+        </div>
+    </div>
+
+
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body card-filter">
+            <form id="filter-form" method="get" action="{{ url_for('clientes_proveedores.listar_proveedores') }}">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label for="busqueda" class="form-label">Buscar</label>
+                        <input type="text" name="busqueda" id="busqueda" class="form-control"
+                            placeholder="Nombre o código..." value="{{ request.args.get('busqueda', '') }}">
+                    </div>
+                    <div class="col-md-2 align-self-end">
+                        <button type="submit" class="btn btn-outline-secondary w-100">
+                            <i class="bi bi-search"></i> Buscar
+                        </button>
+                    </div>
+
+                    <div class="col-md-3">
+                        <div class="text-muted small text-end">
+                            <p>{{ proveedores|length }} proveedores encontrados</p>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+    <!-- Tarjetas de proveedores -->
+<div class="row">
+    {% for proveedor in proveedores %}
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 proveedor-card {% if not proveedor.activo %}insumo-inactivo{% endif %}">
+            <div class="card-body d-flex flex-column">
+                <h5 class="card-title">
+                    {{ proveedor.nombre }} {{ proveedor.apellido }}
+                    {% if not proveedor.activo %}
+                    <span class="badge bg-secondary">Inactivo</span>
+                    {% endif %}
+                </h5>
+
+                <div class="card-secondary-details mb-3">
+                    <span><i class="bi bi-hash"></i> {{ proveedor.codigo or 'N/A' }}</span>
+                    <span><i class="bi bi-person-vcard"></i> {{ proveedor.cuit }}</span>
+                    <span><i class="bi bi-envelope"></i> {{ proveedor.email }}</span>
+                    <span><i class="bi bi-phone"></i> {{ proveedor.telefono }}</span>
+                    <span><i class="bi bi-house"></i> {{proveedor.direccion }}</span>
+                </div>
+
+                <div class="mt-auto">
+                    <hr class="card-divider">
+
+                    <div class="d-flex justify-content-between align-items-center mb-3 user-info">
+                        <div>
+                            <span class="user-label">Estado</span>
+                            <span class="user-value">
+                                {% if proveedor.activo %}Activo{% else %}Inactivo{% endif %}
+                            </span>
+                        </div>
+                        <div>
+                            {% if proveedor.activo %}
+                            <span class="badge bg-success-soft text-success">
+                                <i class="bi bi-check-circle me-1"></i>Activo
+                            </span>
+                            {% else %}
+                            <span class="badge bg-danger-soft text-danger">
+                                <i class="bi bi-x-circle me-1"></i>Inactivo
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                        {% if proveedor.activo %}
+                        <a href="{{ url_for('clientes_proveedores.editar_proveedor', id=proveedor.id) }}"
+                            class="btn btn-sm btn-outline-primary" title="Editar proveedor">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+
+                        <a href="{{ url_for('clientes_proveedores.ver_perfil_proveedor', id=proveedor.id) }}"
+                            class="btn btn-sm btn-outline-primary" title="Ver detalle">
+                            <i class="bi bi-eye"></i>
+                        </a>
+
+                        <form method="POST"
+                            action="{{ url_for('clientes_proveedores.eliminar_proveedor', id=proveedor.id) }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-person-x"></i> Desactivar
+                            </button>
+                        </form>
+
+                        {% else %}
+                        <form method="POST"
+                            action="{{ url_for('clientes_proveedores.habilitar_proveedor', id=proveedor.id) }}">
+                            <button type="submit" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-person-check"></i> Activar
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-12">
+        <div class="text-center text-muted py-5">
+            <i class="bi bi-people fs-1 d-block mb-2 opacity-50"></i>
+            <h4>No hay proveedors registrados</h4>
+            <p>Comience agregando el primer proveedor al sistema</p>
+            <a href="{{ url_for('clientes_proveedores.nuevo_proveedor') }}" class="btn btn-primary">
+                <i class="bi bi-person-plus me-1"></i>Crear Primer proveedor
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+</div>
+{% endblock %}

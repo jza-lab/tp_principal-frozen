@@ -5,6 +5,7 @@ import logging
 from datetime import datetime
 from io import BytesIO
 
+from app.controllers.producto_controller import ProductoController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.historial_precios_controller import HistorialPreciosController
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 proveedor_controller = ProveedorController()
 insumo_controller = InsumoController()
 historial_controller = HistorialPreciosController()
-
+producto_controller = ProductoController()
 
 @precios_bp.route('/actualizar-precios')
 @permission_required(sector_codigo='LOGISTICA', accion='actualizar')
@@ -30,6 +31,7 @@ def cargar_archivo_precios_proveedor():
     """
     Endpoint para cargar archivo Excel con precios de proveedores - VERSIÓN SIMPLIFICADA
     """
+
     try:
         if 'archivo' not in request.files:
             return jsonify({'success': False, 'error': 'No se envió archivo'}), 400
@@ -123,6 +125,7 @@ def procesar_archivo_proveedor(archivo, usuario):
     try:
         datos = pd.read_excel(archivo)
         resultados = []
+        insumos_actualizados = [] 
 
         for indice, fila in datos.iterrows():
             # Usar controller para buscar proveedor
@@ -157,13 +160,25 @@ def procesar_archivo_proveedor(archivo, usuario):
 
             # Procesar actualización de precio
             resultado = procesar_actualizacion_precio(insumo, proveedor, fila, usuario)
+            if resultado.get('insumo_actualizado'):
+                insumos_actualizados.append(resultado['insumo_actualizado'])
             resultado['fila'] = indice + 2
             resultado['proveedor'] = proveedor['nombre']
             resultado['codigo_interno'] = insumo['codigo_interno']
             resultado['producto'] = insumo['nombre']
 
-            resultados.append(resultado)
+            if 'insumo_actualizado' in resultado:
+                 del resultado['insumo_actualizado']
 
+            resultados.append(resultado)
+            if insumos_actualizados:
+                logger.info(f"Actualizando precios de productos para {len(insumos_actualizados)} insumos únicos.")
+                
+                productos_update_result, status = producto_controller.actualizar_costo_productos_insumo(insumos_actualizados)
+                
+                if not productos_update_result.get('success'):
+                    logger.error(f"Fallo al actualizar costos de productos: {productos_update_result.get('error')}")
+                    
         return resultados
 
     except Exception as e:
@@ -202,6 +217,7 @@ def procesar_actualizacion_precio(insumo, proveedor, fila, usuario):
 
             if exito:
                 # Registrar en historial (si tienes este controller)
+                insumo_actualizado_data = {'id_insumo': insumo['id_insumo']} 
                 try:
                     historial_controller.registrar_cambio({
                         'id_insumo': insumo['id_insumo'],
@@ -217,17 +233,20 @@ def procesar_actualizacion_precio(insumo, proveedor, fila, usuario):
 
                 return {
                     'estado': 'ACTUALIZADO',
-                    'mensaje': f'Precio actualizado de ${precio_anterior:.2f} a ${precio_nuevo:.2f} ({"+" if variacion > 0 else ""}{variacion:.1f}%)'
+                    'mensaje': f'Precio actualizado de ${precio_anterior:.2f} a ${precio_nuevo:.2f} ({"+" if variacion > 0 else ""}{variacion:.1f}%)',
+                    'insumo_actualizado': insumo_actualizado_data
                 }
             else:
                 return {
                     'estado': 'ERROR',
-                    'mensaje': 'Error actualizando precio en base de datos'
+                    'mensaje': 'Error actualizando precio en base de datos',
+                    'insumo_actualizado': None
                 }
         else:
             return {
                 'estado': 'SIN_CAMBIOS',
-                'mensaje': 'Precio sin cambios'
+                'mensaje': 'Precio sin cambios',
+                'insumo_actualizado': None
             }
 
     except Exception as e:

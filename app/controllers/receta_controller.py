@@ -43,7 +43,31 @@ class RecetaController(BaseController):
         """
         return self.model.get_ingredientes(receta_id)
 
+    def calcular_costo_total_receta(self, receta_id: int) -> Optional[float]:
+        """
+        Calcula el costo total de una receta sumando el costo de cada ingrediente.
+        """
+        ingredientes_result = self.obtener_ingredientes_para_receta(receta_id)
+        if not ingredientes_result.get('success'):
+            return ingredientes_result
 
+        ingredientes = ingredientes_result['data']
+        costo_total = 0.0
+
+        for ingrediente in ingredientes:
+            try:
+                insumo_result = self.model.db.table('insumos_catalogo').select('precio_unitario').eq('id_insumo', ingrediente['id_insumo']).execute()
+
+            except Exception as e:
+                return {'success': False, 'error': f"Error al obtener el costo del insumo {ingrediente['id_insumo']}: {str(e)}"}
+            if insumo_result.data:
+                costo_unitario = insumo_result.data[0]['precio_unitario']
+                costo_total += costo_unitario * ingrediente['cantidad']
+            else:
+                return {'success': False, 'error': f"Insumo con ID {ingrediente['id_insumo']} no encontrado."}
+                    
+        return {'success': True, 'data': {'costo_total': costo_total}}
+    
     def crear_receta_con_ingredientes(self, data: Dict) -> Dict:
         """
         Crea una receta y sus ingredientes asociados de forma transaccional.
@@ -76,3 +100,38 @@ class RecetaController(BaseController):
         except Exception as e:
             # En un caso real, aquí se manejaría un rollback de la transacción
             return {'success': False, 'error': f'Error interno en el controlador: {str(e)}'}
+
+    def gestionar_ingredientes_para_receta(self, receta_id: int, receta_items: List[Dict]) -> Dict:
+        """
+        Gestiona los ingredientes de la receta de forma eficiente.
+        Elimina los ingredientes existentes y luego inserta los nuevos en un solo lote.
+        """
+        try:
+            # 1. Eliminar ingredientes antiguos
+            self.model.db.table('receta_ingredientes').delete().eq('receta_id', receta_id).execute()
+
+            if not receta_items:
+                return {'success': True} # No hay nada más que hacer si no hay nuevos ingredientes.
+
+            # 2. Preparar los nuevos ingredientes para una inserción en lote
+            ingredientes_a_insertar = [
+                {
+                    'receta_id': receta_id,
+                    'id_insumo': item['id_insumo'],
+                    'cantidad': item['cantidad'],
+                    'unidad_medida': item['unidad_medida']
+                }
+                for item in receta_items
+            ]
+            
+            # 3. Insertar todos los nuevos ingredientes en una sola llamada
+            insert_result = self.model.db.table('receta_ingredientes').insert(ingredientes_a_insertar).execute()
+
+            # 4. Verificar que la inserción fue exitosa
+            if len(insert_result.data) != len(ingredientes_a_insertar):
+                raise Exception("No se pudieron guardar todos los ingredientes de la receta.")
+            
+            return {'success': True}
+        except Exception as e:
+            # Loggear el error sería una buena práctica aquí
+            return {'success': False, 'error': str(e)}

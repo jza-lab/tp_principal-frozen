@@ -16,7 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
             tem_recomendada: parseFloat(document.getElementById('temperatura_conservacion').value),
             descripcion: document.getElementById('descripcion').value,
             es_critico: document.getElementById('es_critico').checked,
-            requiere_certificacion: document.getElementById('requiere_certificacion').checked
+            requiere_certificacion: document.getElementById('requiere_certificacion').checked,
+            id_proveedor: parseInt(document.getElementById('proveedor').value)
         };
         
         // --- VALIDACIÓN AGREGADA ---

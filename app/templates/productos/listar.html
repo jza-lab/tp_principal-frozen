@@ -62,6 +62,12 @@
                     <hr class="card-divider"></hr>
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
                         {% if producto.activo %}
+                        <a 
+                            onClick = "recargarPrecioProducto('{{ producto.id }}')"
+                            class="btn btn-sm btn-outline-primary" title="Actualizar precio">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </a>
+
                         <a href="{{ url_for('productos.actualizar_producto', id_producto=producto.id) }}"
                             class="btn btn-sm btn-outline-primary" title="Modificar producto">
                             <i class="bi bi-pencil"></i>
@@ -100,6 +106,7 @@
 </div>
 <script src="{{ url_for('static', filename='js/scriptEliminarProducto.js') }}"></script>
 <script src="{{ url_for('static', filename='js/habilitarProducto.js') }}"></script>
+<script src="{{ url_for('static', filename='js/recargarPrecioProducto.js') }}"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

@@ -31,7 +31,7 @@ Agregar nuevo insumo al catálogo
                     <div class="row g-3">
                         {% if insumo %}
                         <div class="col-md-6">
-                            
+
                             <label for="codigo_interno" class="form-label">Código Interno <span
                                     class="text-danger">*</span></label>
 
@@ -40,7 +40,7 @@ Agregar nuevo insumo al catálogo
                                 endif %}>
 
                             <div class="form-text">Código único para identificar el insumo</div>
-                            
+
                         </div>
                         {% endif %}
                         <div class="col-md-6">
@@ -110,6 +110,20 @@ Agregar nuevo insumo al catálogo
                                     endif %}>
                                     Unidades
                                 </option>
+
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="proveedor" class="form-label">Proveedor del Insumo <span
+                                    class="text-danger">*</span></label>
+                            <select class="form-select" name="proveedor" id="proveedor" required>
+                                <option value="">Seleccionar unidad...</option>
+                                {% for proveedor in proveedores %}
+                                <option value="{{ proveedor.id }}" {% if producto and producto.id_proveedor== proveedor.id %}selected{% endif %}>
+                                    {{ proveedor.nombre }}
+                                </option>
+                                {% endfor %}
+
 
                             </select>
                         </div>

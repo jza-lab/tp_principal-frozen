@@ -145,13 +145,16 @@ class InventarioController(BaseController):
             logger.error(f"Error obteniendo lotes: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
+# --- Dentro de app/controllers/inventario_controller.py (clase InventarioController) ---
+
     def obtener_lote_por_id(self, id_lote: str) -> tuple:
-        """Obtener un lote específico por su ID."""
+        """Obtener un lote específico por su ID usando el método enriquecido."""
         try:
-            result = self.inventario_model.find_by_id(id_lote, 'id_lote')
+            result = self.inventario_model.get_lote_detail_for_view(id_lote) 
 
             if result['success']:
                 if result['data']:
+                    # El dato ya viene aplanado con insumo_nombre y proveedor_nombre
                     serialized_data = self._serialize_data(result['data'])
                     return self.success_response(data=serialized_data)
                 else:

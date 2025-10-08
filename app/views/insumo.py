@@ -43,7 +43,9 @@ def crear_insumo():
             response, status = insumo_controller.crear_insumo(datos_json)
             return jsonify(response), status
         insumo = None
-        return render_template("insumos/formulario.html", insumo=insumo)
+        proveedores_resp, estado = proveedor_controller.obtener_proveedores_activos()
+        proveedores = proveedores_resp.get("data", [])
+        return render_template("insumos/formulario.html", insumo=insumo, proveedores=proveedores)
     except Exception as e:
         logger.error(f"Error inesperado en crear_insumo: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
@@ -58,9 +60,11 @@ def obtener_insumos():
         insumos = response.get("data", [])
         categorias_response, _ = insumo_controller.obtener_categorias_distintas()
         categorias = categorias_response.get("data", [])
+
         return render_template(
             "insumos/listar.html", insumos=insumos, categorias=categorias
         )
+
     except Exception as e:
         logger.error(f"Error inesperado en obtener_insumos: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
@@ -104,7 +108,10 @@ def actualizar_insumo(id_insumo):
             return jsonify(response), status
         response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
         insumo = response["data"]
-        return render_template("insumos/formulario.html", insumo=insumo)
+        proveedores_resp, estado = proveedor_controller.obtener_proveedores_activos()
+        proveedores = proveedores_resp.get("data", [])
+
+        return render_template("insumos/formulario.html", insumo=insumo, proveedores=proveedores)
     except Exception as e:
         logger.error(f"Error inesperado en actualizar_insumo: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
@@ -275,4 +282,22 @@ def obtener_stock_consolidado():
         return jsonify(response), status
     except Exception as e:
         logger.error(f"Error inesperado en obtener_stock_consolidado: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+
+@insumos_bp.route("/catalogo/actualizar-stock/<string:id_insumo>", methods=["POST"])
+@permission_required(sector_codigo='ALMACEN', accion='actualizar')
+def actualizar_stock_insumo(id_insumo):
+    """
+    Endpoint para calcular y actualizar el stock de un insumo.
+    """
+    try:
+        if not validate_uuid(id_insumo):
+            return jsonify({"success": False, "error": "ID de insumo inválido"}), 400
+
+        response, status = insumo_controller.actualizar_stock_insumo(id_insumo)
+        return jsonify(response), status
+
+    except Exception as e:
+        logger.error(f"Error inesperado en actualizar_stock_insumo: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500

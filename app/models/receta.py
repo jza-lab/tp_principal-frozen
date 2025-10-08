@@ -90,3 +90,19 @@ class RecetaModel(BaseModel):
             # Loggear el error sería una buena práctica aquí
             return {'success': False, 'error': f'Error al obtener ingredientes: {str(e)}'}
         
+    def find_all_recetas_by_insumo(self, insumo_id: int) -> dict:
+        """
+        Encuentra todas las recetas que utilizan un insumo específico.
+        """
+        try:
+            result = self.db.table('recetas').select(
+                '*, receta_ingredientes!inner(id_insumo)'
+            ).eq('receta_ingredientes.id_insumo', insumo_id).execute()
+
+            if result.data:
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': True, 'data': []} # No es un error si no hay recetas
+
+        except Exception as e:
+            return {'success': False, 'error': f'Error al buscar recetas por insumo: {str(e)}'}
