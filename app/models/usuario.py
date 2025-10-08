@@ -21,7 +21,7 @@ class Usuario:
     activo: bool = True
     created_at: Optional[datetime] = None
     legajo: Optional[str] = None
-    dni: Optional[str] = None
+    cuil_cuit: Optional[str] = None
     telefono: Optional[str] = None
     direccion: Optional[str] = None
     fecha_nacimiento: Optional[date] = None

@@ -22,7 +22,13 @@ class UsuarioSchema(Schema):
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
     legajo = fields.Str(required=True)
-    dni = fields.Str(allow_none=True)
+    cuil_cuit = fields.Str(
+        allow_none=True,
+        validate=validate.Regexp(
+            r'^\d{11}$',
+            error='El CUIL/CUIT debe contener exactamente 11 dígitos numéricos.'
+        )
+    )
     telefono = fields.Str(allow_none=True)
     direccion = fields.Str(allow_none=True)
     fecha_nacimiento = fields.Date(allow_none=True)
