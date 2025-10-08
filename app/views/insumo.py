@@ -50,7 +50,7 @@ def crear_insumo():
 
 
 @insumos_bp.route("/catalogo", methods=["GET"])
-@permission_required(sector_codigo='ALMACEN', accion='leer')
+##@permission_required(sector_codigo='ALMACEN', accion='leer')
 def obtener_insumos():
     try:
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
