@@ -32,8 +32,8 @@ class UsuarioSchema(Schema):
     telefono = fields.Str(
         allow_none=True,
         validate=validate.Regexp(
-            r'^\+?\d{9,15}$',
-            error='El teléfono debe tener un formato internacional (ej: +541122334455) y entre 9 y 15 dígitos.'
+            r'^\d{7,15}$',
+            error='El teléfono debe contener solo números y tener entre 7 y 15 dígitos.'
         )
     )
     direccion = fields.Str(allow_none=True)

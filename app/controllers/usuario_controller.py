@@ -508,6 +508,28 @@ class UsuarioController(BaseController):
         
         return round(porcentaje, 0)
     
+    def obtener_actividad_totem(self) -> Dict:
+        """
+        Obtiene la lista de actividad del tótem (ingresos/egresos) de hoy.
+        """
+        try:
+            resultado = self.totem_sesion.obtener_actividad_totem_hoy()
+            return resultado
+        except Exception as e:
+            logger.error(f"Error obteniendo actividad del tótem: {str(e)}", exc_info=True)
+            return {'success': False, 'error': f'Error interno: {str(e)}'}
+
+    def obtener_actividad_web(self) -> Dict:
+        """
+        Obtiene la lista de usuarios que iniciaron sesión en la web hoy.
+        """
+        try:
+            resultado = self.model.find_by_web_login_today()
+            return resultado
+        except Exception as e:
+            logger.error(f"Error obteniendo actividad web: {str(e)}", exc_info=True)
+            return {'success': False, 'error': f'Error interno: {str(e)}'}
+
     def obtener_todos_los_roles(self) -> List[Dict]:
         """Obtiene una lista de todos los roles disponibles."""
         resultado = self.role_model.find_all()

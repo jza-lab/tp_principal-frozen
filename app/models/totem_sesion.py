@@ -92,3 +92,28 @@ class TotemSesionModel(BaseModel):
         except Exception as e:
             logger.error(f"Error verificando sesión activa hoy: {str(e)}")
             return False
+
+    def obtener_actividad_totem_hoy(self) -> Dict:
+        """
+        Obtiene toda la actividad del tótem (ingresos y egresos) del día de hoy.
+        """
+        try:
+            from datetime import date
+            hoy = date.today().isoformat()
+
+            # Consultar todas las sesiones iniciadas hoy
+            response = self.db.table(self.get_table_name())\
+                .select('*, usuario:usuarios(id, nombre, apellido, legajo, roles(nombre))')\
+                .gte('fecha_inicio', f'{hoy}T00:00:00')\
+                .lte('fecha_inicio', f'{hoy}T23:59:59')\
+                .order('fecha_inicio', desc=True)\
+                .execute()
+
+            if response.data:
+                return {'success': True, 'data': response.data}
+            else:
+                # Devuelve éxito con lista vacía si no hay actividad
+                return {'success': True, 'data': []}
+        except Exception as e:
+            logger.error(f"Error obteniendo la actividad del tótem de hoy: {str(e)}")
+            return {'success': False, 'error': str(e)}

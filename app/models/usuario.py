@@ -161,3 +161,29 @@ class UsuarioModel(BaseModel):
         except Exception as e:
             logger.error(f"Error actualizando en usuarios: {e}")
             return {'success': False, 'error': str(e)}
+
+    def find_by_web_login_today(self) -> Dict:
+        """
+        Encuentra a todos los usuarios que han iniciado sesión en la web hoy.
+        """
+        try:
+            from datetime import date, datetime, time
+            hoy = date.today()
+            start_of_day = datetime.combine(hoy, time.min).isoformat()
+            end_of_day = datetime.combine(hoy, time.max).isoformat()
+
+            response = self.db.table(self.get_table_name())\
+                .select("id, nombre, apellido, legajo, ultimo_login_web, roles(nombre)")\
+                .gte('ultimo_login_web', start_of_day)\
+                .lte('ultimo_login_web', end_of_day)\
+                .order('ultimo_login_web', desc=True)\
+                .execute()
+
+            if response.data:
+                return {'success': True, 'data': response.data}
+            
+            return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error buscando usuarios con login web hoy: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}

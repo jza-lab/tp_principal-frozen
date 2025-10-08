@@ -223,6 +223,30 @@ def habilitar_usuario(id):
         flash(f"Error al activar el usuario: {resultado.get('error')}", 'error')
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
+@admin_usuario_bp.route('/usuarios/actividad_totem', methods=['GET'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+def obtener_actividad_totem():
+    """
+    Devuelve una lista en formato JSON de la actividad del tótem (ingresos/egresos) de hoy.
+    """
+    resultado = usuario_controller.obtener_actividad_totem()
+    if resultado.get('success'):
+        return jsonify(success=True, data=resultado.get('data', []))
+    else:
+        return jsonify(success=False, error=resultado.get('error', 'Error al obtener la actividad del tótem')), 500
+
+@admin_usuario_bp.route('/usuarios/actividad_web', methods=['GET'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+def obtener_actividad_web():
+    """
+    Devuelve una lista en formato JSON de los usuarios que iniciaron sesión en la web hoy.
+    """
+    resultado = usuario_controller.obtener_actividad_web()
+    if resultado.get('success'):
+        return jsonify(success=True, data=resultado.get('data', []))
+    else:
+        return jsonify(success=False, error=resultado.get('error', 'Error al obtener la actividad web')), 500
+
 @admin_usuario_bp.route('/usuarios/validar', methods=['POST'])
 @permission_required(sector_codigo='ADMINISTRACION', accion='crear')
 def validar_campo():
