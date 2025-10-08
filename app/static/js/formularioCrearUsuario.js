@@ -166,9 +166,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (field === 'telefono') {
-            const telefonoRegex = /^\d{7,15}$/;
+            const telefonoRegex = /^\+\d{9,15}$/;
             if (!telefonoRegex.test(value)) {
-                showError(inputElement, 'El teléfono debe contener solo números y tener entre 7 y 15 dígitos.');
+                showError(inputElement, 'El teléfono debe tener un formato internacional (ej: +541122334455) y entre 9 y 15 dígitos.');
                 validationState[field] = false;
                 updateStepButtonState();
                 return;
@@ -467,7 +467,16 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (telefonoInput) {
+        telefonoInput.addEventListener('focus', function() {
+            if (this.value === '') {
+                this.value = '+54';
+            }
+        });
+
         telefonoInput.addEventListener('blur', function() {
+            if (this.value === '+54') {
+                this.value = '';
+            }
             validateField('telefono', this.value);
         });
     }
