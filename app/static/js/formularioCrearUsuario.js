@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const rolSelect = document.getElementById('role_id');
     const cuilInput = document.getElementById('cuil_cuit');
     const telefonoInput = document.getElementById('telefono');
+    const cuilHelper = document.getElementById('cuil-helper');
     const requiredInputsStep1 = personalInfoSection ? personalInfoSection.querySelectorAll('input[required], select[required]') : [];
 
     // Campos del formulario - Paso 2
@@ -222,9 +223,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (field === 'telefono') {
-            const telefonoRegex = /^\+\d{9,15}$/;
+            // Updated regex: solo números, entre 7 y 15 dígitos.
+            const telefonoRegex = /^\d{7,15}$/;
             if (!telefonoRegex.test(value)) {
-                showError(inputElement, 'El teléfono debe tener un formato internacional (ej: +541122334455) y entre 9 y 15 dígitos.');
+                showError(inputElement, 'El teléfono debe contener solo números y tener entre 7 y 15 dígitos.');
                 validationState[field] = false;
                 updateStepButtonState();
                 return;
@@ -517,22 +519,36 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (cuilInput) {
+        cuilInput.addEventListener('input', function () {
+            // Sanitizar: solo números y máximo 11
+            this.value = this.value.replace(/\D/g, '').slice(0, 11);
+            
+            const remaining = 11 - this.value.length;
+            if (this.value.length > 0 && this.value.length < 11) {
+                cuilHelper.textContent = `Faltan ${remaining} dígito(s).`;
+                cuilHelper.style.display = 'inline';
+            } else {
+                cuilHelper.textContent = '';
+                cuilHelper.style.display = 'none';
+            }
+        });
+
         cuilInput.addEventListener('blur', function() {
             validateField('cuil_cuit', this.value);
+            // Ocultar helper si el campo es válido o está vacío
+            if (this.value.length === 11 || this.value.length === 0) {
+                 cuilHelper.style.display = 'none';
+            }
         });
     }
 
     if (telefonoInput) {
-        telefonoInput.addEventListener('focus', function() {
-            if (this.value === '') {
-                this.value = '+54';
-            }
+        telefonoInput.addEventListener('input', function() {
+            // Sanitizar: solo números
+            this.value = this.value.replace(/\D/g, '');
         });
 
         telefonoInput.addEventListener('blur', function() {
-            if (this.value === '+54') {
-                this.value = '';
-            }
             validateField('telefono', this.value);
         });
     }
