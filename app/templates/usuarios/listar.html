@@ -20,16 +20,16 @@
     <!-- Navegación por Pestañas -->
     <ul class="nav nav-tabs-custom mb-4" id="userTabs" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link-custom active" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity-panel" type="button" role="tab">
-                <i class="bi bi-activity me-2"></i>
-                <span>Actividad del Día</span>
+            <button class="nav-link-custom active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users-panel" type="button" role="tab">
+                <i class="bi bi-people me-2"></i>
+                <span>Todos los Usuarios</span>
                 <span class="tab-indicator"></span>
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link-custom" id="users-tab" data-bs-toggle="tab" data-bs-target="#users-panel" type="button" role="tab">
-                <i class="bi bi-people me-2"></i>
-                <span>Todos los Usuarios</span>
+            <button class="nav-link-custom" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity-panel" type="button" role="tab">
+                <i class="bi bi-activity me-2"></i>
+                <span>Actividad del Día</span>
                 <span class="tab-indicator"></span>
             </button>
         </li>
@@ -37,86 +37,8 @@
 
     <!-- Contenido de las Pestañas -->
     <div class="tab-content" id="userTabsContent">
-        
-        <!-- Panel de Actividad -->
-        <div class="tab-pane fade show active" id="activity-panel" role="tabpanel">
-            <div class="row">
-                <!-- Actividad en Fábrica -->
-                <div class="col-lg-6 mb-4">
-                    <div class="activity-section-card">
-                        <div class="activity-section-header">
-                            <div class="d-flex align-items-center">
-                                <div class="activity-icon totem-icon">
-                                    <i class="bi bi-building-gear"></i>
-                                </div>
-                                <div>
-                                    <h3 class="activity-section-title">Actividad en Fábrica</h3>
-                                    <p class="activity-section-subtitle">Control de acceso por tótem</p>
-                                </div>
-                            </div>
-                            <div class="activity-counter" id="totem-counter">
-                                <span class="counter-number">0</span>
-                                <span class="counter-label">Activos</span>
-                            </div>
-                        </div>
-                        
-                        <div id="totem-activity-container" class="activity-list">
-                            <div id="loading-totem-activity" class="text-center py-5">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Cargando...</span>
-                                </div>
-                                <p class="mt-3 text-muted">Cargando actividad del tótem...</p>
-                            </div>
-                            
-                            <div id="no-totem-activity" class="empty-state" style="display: none;">
-                                <i class="bi bi-person-slash"></i>
-                                <h4>Sin Actividad en Fábrica</h4>
-                                <p>Nadie ha fichado hoy en el tótem.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Actividad en Web -->
-                <div class="col-lg-6 mb-4">
-                    <div class="activity-section-card">
-                        <div class="activity-section-header">
-                            <div class="d-flex align-items-center">
-                                <div class="activity-icon web-icon">
-                                    <i class="bi bi-laptop"></i>
-                                </div>
-                                <div>
-                                    <h3 class="activity-section-title">Actividad en Web</h3>
-                                    <p class="activity-section-subtitle">Sesiones activas en el sistema</p>
-                                </div>
-                            </div>
-                            <div class="activity-counter" id="web-counter">
-                                <span class="counter-number">0</span>
-                                <span class="counter-label">Conectados</span>
-                            </div>
-                        </div>
-                        
-                        <div id="web-activity-container" class="activity-list">
-                            <div id="loading-web-activity" class="text-center py-5">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Cargando...</span>
-                                </div>
-                                <p class="mt-3 text-muted">Cargando actividad web...</p>
-                            </div>
-                            
-                            <div id="no-web-activity" class="empty-state" style="display: none;">
-                                <i class="bi bi-laptop"></i>
-                                <h4>Sin Actividad en Web</h4>
-                                <p>Ningún usuario ha iniciado sesión en la web hoy.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Panel de Todos los Usuarios -->
-        <div class="tab-pane fade" id="users-panel" role="tabpanel">
+        <div class="tab-pane fade show active" id="users-panel" role="tabpanel">
             <!-- Barra de búsqueda y filtros -->
             <div class="search-filter-bar">
                 <div class="search-box-wrapper">
@@ -240,10 +162,92 @@
                 <p>Intenta con otros términos de búsqueda</p>
             </div>
         </div>
+        
+        <!-- Panel de Actividad -->
+        <div class="tab-pane fade" id="activity-panel" role="tabpanel">
+            <div class="row">
+                <!-- Actividad en Fábrica -->
+                <div class="col-lg-6 mb-4">
+                    <div class="activity-section-card">
+                        <div class="activity-section-header">
+                            <div class="d-flex align-items-center">
+                                <div class="activity-icon totem-icon">
+                                    <i class="bi bi-building-gear"></i>
+                                </div>
+                                <div>
+                                    <h3 class="activity-section-title">Actividad en Fábrica</h3>
+                                    <p class="activity-section-subtitle">Control de acceso por tótem</p>
+                                </div>
+                            </div>
+                            <div class="activity-counter" id="totem-counter">
+                                <span class="counter-number">0</span>
+                                <span class="counter-label">Activos</span>
+                            </div>
+                        </div>
+                        
+                        <div id="totem-activity-container" class="activity-list">
+                            <div id="loading-totem-activity" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <p class="mt-3 text-muted">Cargando actividad del tótem...</p>
+                            </div>
+                            
+                            <div id="no-totem-activity" class="empty-state" style="display: none;">
+                                <i class="bi bi-person-slash"></i>
+                                <h4>Sin Actividad en Fábrica</h4>
+                                <p>Nadie ha fichado hoy en el tótem.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actividad en Web -->
+                <div class="col-lg-6 mb-4">
+                    <div class="activity-section-card">
+                        <div class="activity-section-header">
+                            <div class="d-flex align-items-center">
+                                <div class="activity-icon web-icon">
+                                    <i class="bi bi-laptop"></i>
+                                </div>
+                                <div>
+                                    <h3 class="activity-section-title">Actividad en Web</h3>
+                                    <p class="activity-section-subtitle">Sesiones activas en el sistema</p>
+                                </div>
+                            </div>
+                            <div class="activity-counter" id="web-counter">
+                                <span class="counter-number">0</span>
+                                <span class="counter-label">Conectados</span>
+                            </div>
+                        </div>
+                        
+                        <div id="web-activity-container" class="activity-list">
+                            <div id="loading-web-activity" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <p class="mt-3 text-muted">Cargando actividad web...</p>
+                            </div>
+                            
+                            <div id="no-web-activity" class="empty-state" style="display: none;">
+                                <i class="bi bi-laptop"></i>
+                                <h4>Sin Actividad en Web</h4>
+                                <p>Ningún usuario ha iniciado sesión en la web hoy.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
 
     </div>
 </div>
 
+<script>
+    const URL_TOTEM_ACTIVITY = "{{ url_for('admin_usuario.obtener_actividad_totem') }}";
+    const URL_WEB_ACTIVITY = "{{ url_for('admin_usuario.obtener_actividad_web') }}";
+</script>
 <script src="{{ url_for('static', filename='js/habilitarUsuario.js') }}"></script>
 <script src="{{ url_for('static', filename='js/listarUsuarios.js') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/listarUsuarios.css') }}">
