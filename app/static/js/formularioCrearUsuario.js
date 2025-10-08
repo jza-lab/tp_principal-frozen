@@ -3,7 +3,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const userForm = document.getElementById('userForm');
     const step1Element = document.getElementById('step1');
     const step2Element = document.getElementById('step2');
-    const basicInfoSection = document.getElementById('basicInfo');
+    const step3Element = document.getElementById('step3');
+    const personalInfoSection = document.getElementById('personalInfo');
+    const addressInfoSection = document.getElementById('addressInfo');
     const faceRegistrationSection = document.getElementById('faceRegistration');
 
     // Botones de navegación
@@ -12,14 +14,24 @@ document.addEventListener('DOMContentLoaded', function () {
     const submitFormBtn = document.getElementById('submitForm');
     const cancelBtn = document.getElementById('cancelBtn');
 
-    // Campos del formulario
+    // Campos del formulario - Paso 1
     const legajoInput = document.getElementById('legajo');
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
     const nombreInput = document.getElementById('nombre');
     const apellidoInput = document.getElementById('apellido');
     const rolSelect = document.getElementById('role_id');
-    const requiredInputs = basicInfoSection.querySelectorAll('input[required], select[required]');
+    const requiredInputsStep1 = personalInfoSection ? personalInfoSection.querySelectorAll('input[required], select[required]') : [];
+
+    // Campos del formulario - Paso 2
+    const calleInput = document.getElementById('calle');
+    const alturaInput = document.getElementById('altura');
+    const provinciaSelect = document.getElementById('provincia');
+    const localidadInput = document.getElementById('localidad');
+    const pisoInput = document.getElementById('piso');
+    const departamentoInput = document.getElementById('departamento');
+    const direccionInput = document.getElementById('direccion');
+    const requiredInputsStep2 = addressInfoSection ? addressInfoSection.querySelectorAll('input[required], select[required]') : [];
 
     // Elementos de la cámara
     const startCameraBtn = document.getElementById('startCamera');
@@ -38,13 +50,20 @@ document.addEventListener('DOMContentLoaded', function () {
     let photoTaken = false;
     let photoConfirmed = false;
     const validationState = {
+        // Paso 1
         legajo: false,
         email: false,
         password: false,
         nombre: false,
         apellido: false,
         rol: false,
-        requiredFields: false
+        step1Complete: false,
+        // Paso 2
+        calle: false,
+        altura: false,
+        provincia: false,
+        localidad: false,
+        step2Complete: false
     };
 
     // --- FUNCIONES DE VALIDACIÓN ---
@@ -52,12 +71,11 @@ document.addEventListener('DOMContentLoaded', function () {
     function showError(inputElement, message) {
         if (!inputElement) return;
         
-        const formField = inputElement.closest('.col-md-6, .col-12');
+        const formField = inputElement.closest('.col-md-6, .col-md-8, .col-md-4, .col-12');
         if (!formField) return;
         
         let errorDiv = formField.querySelector('.invalid-feedback');
         
-        // Crear el div de error si no existe
         if (!errorDiv) {
             errorDiv = document.createElement('div');
             errorDiv.className = 'invalid-feedback';
@@ -73,7 +91,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function clearError(inputElement) {
         if (!inputElement) return;
         
-        const formField = inputElement.closest('.col-md-6, .col-12');
+        const formField = inputElement.closest('.col-md-6, .col-md-8, .col-md-4, .col-12');
         if (!formField) return;
         
         const errorDiv = formField.querySelector('.invalid-feedback');
@@ -100,17 +118,16 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!value || !value.trim()) {
             showError(inputElement, 'Este campo es obligatorio.');
             validationState[field] = false;
-            updateNextButtonState();
+            updateStepButtonState();
             return;
         }
 
-        // Validación específica de email
         if (field === 'email') {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(value)) {
                 showError(inputElement, 'Por favor, ingrese un email válido (ejemplo: usuario@dominio.com).');
                 validationState[field] = false;
-                updateNextButtonState();
+                updateStepButtonState();
                 return;
             }
         }
@@ -140,7 +157,7 @@ document.addEventListener('DOMContentLoaded', function () {
             validationState[field] = false;
         }
         
-        updateNextButtonState();
+        updateStepButtonState();
     }
 
     function validateNombre() {
@@ -161,7 +178,7 @@ document.addEventListener('DOMContentLoaded', function () {
             validationState.nombre = true;
         }
         
-        updateNextButtonState();
+        updateStepButtonState();
     }
 
     function validateApellido() {
@@ -182,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function () {
             validationState.apellido = true;
         }
         
-        updateNextButtonState();
+        updateStepButtonState();
     }
 
     function validateRol() {
@@ -195,10 +212,15 @@ document.addEventListener('DOMContentLoaded', function () {
             validationState.rol = true;
         }
         
-        updateNextButtonState();
+        updateStepButtonState();
     }
 
     function validatePassword() {
+        if (!passwordInput) {
+            validationState.password = true;
+            return;
+        }
+        
         clearError(passwordInput);
         
         const password = passwordInput.value;
@@ -213,42 +235,154 @@ document.addEventListener('DOMContentLoaded', function () {
             validationState.password = true;
         }
         
-        updateNextButtonState();
+        updateStepButtonState();
     }
 
-    function checkRequiredFields() {
+    function validateAddressField(field) {
+        let inputElement, fieldName;
+        
+        switch(field) {
+            case 'calle':
+                inputElement = calleInput;
+                fieldName = 'La calle';
+                break;
+            case 'altura':
+                inputElement = alturaInput;
+                fieldName = 'La altura';
+                break;
+            case 'provincia':
+                inputElement = provinciaSelect;
+                fieldName = 'La provincia';
+                break;
+            case 'localidad':
+                inputElement = localidadInput;
+                fieldName = 'La localidad';
+                break;
+        }
+        
+        if (!inputElement) return;
+        
+        clearError(inputElement);
+        
+        const value = inputElement.value.trim();
+        
+        if (!value) {
+            showError(inputElement, `${fieldName} es obligatoria.`);
+            validationState[field] = false;
+        } else {
+            validationState[field] = true;
+        }
+        
+        updateStepButtonState();
+        updateDireccionCompleta();
+    }
+
+    function updateDireccionCompleta() {
+        if (!direccionInput) return;
+        
+        const calle = calleInput ? calleInput.value.trim() : '';
+        const altura = alturaInput ? alturaInput.value.trim() : '';
+        const piso = pisoInput ? pisoInput.value.trim() : '';
+        const depto = departamentoInput ? departamentoInput.value.trim() : '';
+        const localidad = localidadInput ? localidadInput.value.trim() : '';
+        const provincia = provinciaSelect ? provinciaSelect.value : '';
+        
+        let direccionCompleta = '';
+        
+        if (calle && altura) {
+            direccionCompleta = `${calle} ${altura}`;
+            
+            if (piso) {
+                direccionCompleta += `, Piso ${piso}`;
+            }
+            
+            if (depto) {
+                direccionCompleta += `, Dpto ${depto}`;
+            }
+            
+            if (localidad) {
+                direccionCompleta += `, ${localidad}`;
+            }
+            
+            if (provincia) {
+                direccionCompleta += `, ${provincia}`;
+            }
+        }
+        
+        direccionInput.value = direccionCompleta;
+    }
+
+    function checkStep1Complete() {
         let allFilled = true;
         
-        requiredInputs.forEach(input => {
+        requiredInputsStep1.forEach(input => {
             if (!input.value || !input.value.trim()) {
                 allFilled = false;
             }
         });
         
-        validationState.requiredFields = allFilled;
-        updateNextButtonState();
+        const isStep1Valid = validationState.legajo && 
+                            validationState.email && 
+                            validationState.nombre && 
+                            validationState.apellido && 
+                            validationState.rol && 
+                            validationState.password &&
+                            allFilled;
+        
+        validationState.step1Complete = isStep1Valid;
+        return isStep1Valid;
     }
 
-    function updateNextButtonState() {
-        const isStep1Valid = Object.values(validationState).every(isValid => isValid === true);
-        nextStepBtn.disabled = !isStep1Valid;
+    function checkStep2Complete() {
+        let allFilled = true;
         
-        if (isStep1Valid) {
-            nextStepBtn.classList.remove('btn-secondary');
-            nextStepBtn.classList.add('btn-primary');
-        } else {
-            nextStepBtn.classList.remove('btn-primary');
-            nextStepBtn.classList.add('btn-secondary');
+        requiredInputsStep2.forEach(input => {
+            if (!input.value || !input.value.trim()) {
+                allFilled = false;
+            }
+        });
+        
+        const isStep2Valid = validationState.calle && 
+                            validationState.altura && 
+                            validationState.provincia && 
+                            validationState.localidad &&
+                            allFilled;
+        
+        validationState.step2Complete = isStep2Valid;
+        return isStep2Valid;
+    }
+
+    function updateStepButtonState() {
+        if (currentStep === 1) {
+            const isValid = checkStep1Complete();
+            nextStepBtn.disabled = !isValid;
+            
+            if (isValid) {
+                nextStepBtn.classList.remove('btn-secondary');
+                nextStepBtn.classList.add('btn-primary');
+            } else {
+                nextStepBtn.classList.remove('btn-primary');
+                nextStepBtn.classList.add('btn-secondary');
+            }
+        } else if (currentStep === 2) {
+            const isValid = checkStep2Complete();
+            nextStepBtn.disabled = !isValid;
+            
+            if (isValid) {
+                nextStepBtn.classList.remove('btn-secondary');
+                nextStepBtn.classList.add('btn-primary');
+            } else {
+                nextStepBtn.classList.remove('btn-primary');
+                nextStepBtn.classList.add('btn-secondary');
+            }
         }
     }
 
-    // --- EVENT LISTENERS PARA VALIDACIÓN ---
+    // --- EVENT LISTENERS PARA VALIDACIÓN - PASO 1 ---
 
     if (nombreInput) {
         nombreInput.addEventListener('blur', validateNombre);
         nombreInput.addEventListener('input', function() {
-            checkRequiredFields();
-            // Validar en tiempo real si ya hay contenido
             if (this.value.trim().length > 0) {
                 validateNombre();
             }
@@ -258,8 +392,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (apellidoInput) {
         apellidoInput.addEventListener('blur', validateApellido);
         apellidoInput.addEventListener('input', function() {
-            checkRequiredFields();
-            // Validar en tiempo real si ya hay contenido
             if (this.value.trim().length > 0) {
                 validateApellido();
             }
@@ -275,29 +407,81 @@ document.addEventListener('DOMContentLoaded', function () {
         legajoInput.addEventListener('blur', function() {
             validateField('legajo', this.value);
         });
-        legajoInput.addEventListener('input', checkRequiredFields);
     }
 
     if (emailInput) {
         emailInput.addEventListener('blur', function() {
             validateField('email', this.value);
         });
-        emailInput.addEventListener('input', checkRequiredFields);
     }
 
     if (passwordInput) {
         passwordInput.addEventListener('blur', validatePassword);
         passwordInput.addEventListener('input', function() {
-            checkRequiredFields();
             if (this.value.length >= 8) {
                 validatePassword();
             }
         });
     }
 
-    // Validar todos los campos requeridos al cambiar
-    requiredInputs.forEach(input => {
-        input.addEventListener('input', checkRequiredFields);
+    requiredInputsStep1.forEach(input => {
+        input.addEventListener('input', () => {
+            updateStepButtonState();
+        });
+    });
+
+    // --- EVENT LISTENERS PARA VALIDACIÓN - PASO 2 ---
+
+    if (calleInput) {
+        calleInput.addEventListener('blur', () => validateAddressField('calle'));
+        calleInput.addEventListener('input', () => {
+            if (calleInput.value.trim().length > 0) {
+                validateAddressField('calle');
+            }
+            updateDireccionCompleta();
+        });
+    }
+
+    if (alturaInput) {
+        alturaInput.addEventListener('blur', () => validateAddressField('altura'));
+        alturaInput.addEventListener('input', () => {
+            if (alturaInput.value.trim().length > 0) {
+                validateAddressField('altura');
+            }
+            updateDireccionCompleta();
+        });
+    }
+
+    if (provinciaSelect) {
+        provinciaSelect.addEventListener('change', () => {
+            validateAddressField('provincia');
+            updateDireccionCompleta();
+        });
+        provinciaSelect.addEventListener('blur', () => validateAddressField('provincia'));
+    }
+
+    if (localidadInput) {
+        localidadInput.addEventListener('blur', () => validateAddressField('localidad'));
+        localidadInput.addEventListener('input', () => {
+            if (localidadInput.value.trim().length > 0) {
+                validateAddressField('localidad');
+            }
+            updateDireccionCompleta();
+        });
+    }
+
+    if (pisoInput) {
+        pisoInput.addEventListener('input', updateDireccionCompleta);
+    }
+
+    if (departamentoInput) {
+        departamentoInput.addEventListener('input', updateDireccionCompleta);
+    }
+
+    requiredInputsStep2.forEach(input => {
+        input.addEventListener('input', () => {
+            updateStepButtonState();
+        });
     });
 
     // --- NAVEGACIÓN ENTRE PASOS ---
@@ -308,18 +492,23 @@ document.addEventListener('DOMContentLoaded', function () {
             step1Element.classList.add('active');
             step1Element.classList.remove('completed');
             step2Element.classList.remove('active', 'completed');
+            step3Element.classList.remove('active', 'completed');
             
-            basicInfoSection.style.display = 'block';
-            faceRegistrationSection.style.display = 'none';
+            personalInfoSection.style.display = 'block';
+            if (addressInfoSection) addressInfoSection.style.display = 'none';
+            if (faceRegistrationSection) faceRegistrationSection.style.display = 'none';
             
             nextStepBtn.style.display = 'inline-block';
+            nextStepBtn.innerHTML = 'Siguiente <i class="bi bi-arrow-right ms-1"></i>';
             prevStepBtn.style.display = 'none';
             submitFormBtn.style.display = 'none';
             cancelBtn.style.display = 'inline-block';
             
+            updateStepButtonState();
+            
         } else if (step === 2) {
             if (nextStepBtn.disabled) {
-                showNotificationModal('Formulario Incompleto', 'Por favor, corrija los errores resaltados antes de continuar.', 'warning');
+                showNotificationModal('Formulario Incompleto', 'Por favor, complete todos los campos obligatorios antes de continuar.', 'warning');
                 return;
             }
             
@@ -327,23 +516,63 @@ document.addEventListener('DOMContentLoaded', function () {
             step1Element.classList.remove('active');
             step1Element.classList.add('completed');
             step2Element.classList.add('active');
+            step2Element.classList.remove('completed');
+            step3Element.classList.remove('active');
 
-            basicInfoSection.style.display = 'none';
-            faceRegistrationSection.style.display = 'block';
+            personalInfoSection.style.display = 'none';
+            if (addressInfoSection) addressInfoSection.style.display = 'block';
+            if (faceRegistrationSection) faceRegistrationSection.style.display = 'none';
+
+            nextStepBtn.style.display = 'inline-block';
+            nextStepBtn.innerHTML = 'Siguiente <i class="bi bi-arrow-right ms-1"></i>';
+            prevStepBtn.style.display = 'inline-block';
+            submitFormBtn.style.display = 'none';
+            cancelBtn.style.display = 'none';
+            
+            updateStepButtonState();
+            
+        } else if (step === 3) {
+            if (nextStepBtn.disabled) {
+                showNotificationModal('Dirección Incompleta', 'Por favor, complete todos los campos de dirección antes de continuar.', 'warning');
+                return;
+            }
+            
+            currentStep = 3;
+            step1Element.classList.add('completed');
+            step2Element.classList.remove('active');
+            step2Element.classList.add('completed');
+            step3Element.classList.add('active');
+
+            personalInfoSection.style.display = 'none';
+            if (addressInfoSection) addressInfoSection.style.display = 'none';
+            if (faceRegistrationSection) faceRegistrationSection.style.display = 'block';
 
             nextStepBtn.style.display = 'none';
             prevStepBtn.style.display = 'inline-block';
             submitFormBtn.style.display = 'inline-block';
+            submitFormBtn.disabled = true;
             cancelBtn.style.display = 'none';
         }
     }
     
     if (nextStepBtn) {
-        nextStepBtn.addEventListener('click', () => goToStep(2));
+        nextStepBtn.addEventListener('click', () => {
+            if (currentStep === 1) {
+                goToStep(2);
+            } else if (currentStep === 2) {
+                goToStep(3);
+            }
+        });
     }
     
     if (prevStepBtn) {
-        prevStepBtn.addEventListener('click', () => goToStep(1));
+        prevStepBtn.addEventListener('click', () => {
+            if (currentStep === 2) {
+                goToStep(1);
+            } else if (currentStep === 3 && !photoTaken) {
+                goToStep(2);
+            }
+        });
     }
 
     // --- LÓGICA DE LA CÁMARA ---
@@ -358,8 +587,8 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({
                     video: { 
-                        width: { ideal: 320 }, 
-                        height: { ideal: 240 }, 
+                        width: { ideal: 640 }, 
+                        height: { ideal: 480 }, 
                         facingMode: 'user' 
                     }
                 });
@@ -373,7 +602,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (cameraActive) cameraActive.style.display = 'block';
                 
                 this.disabled = true;
-                this.textContent = 'Cámara Activa';
+                this.innerHTML = '<i class="bi bi-camera-video-fill me-2"></i>Cámara Activa';
                 
             } catch (error) {
                 console.error('Error al acceder a la cámara:', error);
@@ -401,18 +630,15 @@ document.addEventListener('DOMContentLoaded', function () {
             
             const imageData = canvasElement.toDataURL('image/jpeg', 0.8);
             
-            // Mostrar estado de carga
             this.disabled = true;
             this.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Verificando rostro...';
             
-            // Bloquear botón de volver después de capturar foto
             if (prevStepBtn) {
                 prevStepBtn.disabled = true;
                 prevStepBtn.title = 'No puede volver después de capturar una foto';
             }
             
             try {
-                // Validar el rostro con el backend
                 const response = await fetch('/admin/usuarios/validar_rostro', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -426,11 +652,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 const result = await response.json();
                 
                 if (!result.valid) {
-                    // Mostrar error específico
                     const errorMessage = result.message || 'Error al validar el rostro';
                     showNotificationModal('Error de Validación Facial', errorMessage, 'error');
                     
-                    // Mostrar error visual en la interfaz
                     const photoPreview = document.getElementById('photoPreview');
                     if (photoPreview) {
                         const errorDiv = document.createElement('div');
@@ -438,27 +662,22 @@ document.addEventListener('DOMContentLoaded', function () {
                         errorDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${errorMessage}`;
                         photoPreview.appendChild(errorDiv);
                         
-                        // Remover el error después de 5 segundos
                         setTimeout(() => errorDiv.remove(), 5000);
                     }
                     
-                    // Permitir retomar foto
                     this.disabled = false;
                     this.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar Foto';
                     
-                    // Desbloquear botón de volver
                     if (prevStepBtn) {
                         prevStepBtn.disabled = false;
                         prevStepBtn.title = '';
                     }
                     
-                    // Limpiar la foto capturada
                     faceDataInput.value = '';
                     
                     return;
                 }
                 
-                // Si la validación es exitosa, mostrar la foto
                 capturedImage.src = imageData;
                 faceDataInput.value = imageData;
                 
@@ -470,7 +689,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 photoTaken = true;
                 
-                // Restaurar botón
                 this.disabled = false;
                 this.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar Foto';
                 
@@ -478,11 +696,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.error('Error al validar rostro:', error);
                 showNotificationModal('Error de Conexión', 'No se pudo validar el rostro. Verifique su conexión e intente nuevamente.', 'error');
                 
-                // Permitir retomar foto
                 this.disabled = false;
                 this.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar Foto';
                 
-                // Desbloquear botón de volver
                 if (prevStepBtn) {
                     prevStepBtn.disabled = false;
                     prevStepBtn.title = '';
@@ -503,28 +719,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
-            // Detener el stream de video
             if (videoStream) {
                 videoStream.getTracks().forEach(track => track.stop());
                 videoStream = null;
             }
             
             photoConfirmed = true;
-            step2Element.classList.add('completed');
+            step3Element.classList.add('completed');
 
-            // Deshabilitar botones
             this.disabled = true;
             if (retakePhotoBtn) retakePhotoBtn.disabled = true;
             if (retakePhotoBtn2) retakePhotoBtn2.disabled = true;
             if (capturePhotoBtn) capturePhotoBtn.disabled = true;
             if (startCameraBtn) startCameraBtn.disabled = true;
 
-            // Actualizar UI
             this.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Foto Confirmada';
             this.classList.remove('btn-success');
             this.classList.add('btn-secondary');
             
-            // Habilitar el botón de envío
             if (submitFormBtn) {
                 submitFormBtn.disabled = false;
                 submitFormBtn.classList.remove('btn-secondary');
@@ -550,17 +762,15 @@ document.addEventListener('DOMContentLoaded', function () {
         photoTaken = false;
         faceDataInput.value = '';
         
-        // Habilitar botón de volver de nuevo al retomar
         if (prevStepBtn) {
             prevStepBtn.disabled = false;
             prevStepBtn.title = '';
         }
         
-        // Reiniciar cámara si no está activa
         if (!videoStream || !videoStream.active) {
             if (startCameraBtn) {
                 startCameraBtn.disabled = false;
-                startCameraBtn.textContent = 'Iniciar Cámara';
+                startCameraBtn.innerHTML = '<i class="bi bi-camera-video me-2"></i>Activar Cámara';
             }
         }
     }
@@ -577,19 +787,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (userForm) {
         userForm.addEventListener('submit', function (e) {
-            if (currentStep === 2 && !photoConfirmed) {
+            if (currentStep === 3 && !photoConfirmed) {
                 e.preventDefault();
                 showNotificationModal('Rostro no Confirmado', 'Por favor, capture y confirme su rostro antes de crear el usuario.', 'warning');
                 return false;
             }
             
-            if (!faceDataInput.value) {
+            if (!faceDataInput || !faceDataInput.value) {
                 e.preventDefault();
                 showNotificationModal('Foto Requerida', 'No se ha capturado ninguna foto. Por favor, capture su rostro para continuar.', 'warning');
                 return false;
             }
             
-            // Deshabilitar el botón de envío para evitar doble submit
             if (submitFormBtn) {
                 submitFormBtn.disabled = true;
                 submitFormBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Creando usuario...';
@@ -606,8 +815,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // --- INICIALIZACIÓN ---
-    updateNextButtonState();
-    checkRequiredFields();
+    updateStepButtonState();
     
     // Validar campos iniciales si tienen valores
     if (nombreInput && nombreInput.value.trim()) validateNombre();
@@ -617,5 +825,5 @@ document.addEventListener('DOMContentLoaded', function () {
     if (emailInput && emailInput.value.trim()) validateField('email', emailInput.value);
     if (passwordInput && passwordInput.value) validatePassword();
     
-    console.log('Formulario de usuario inicializado correctamente');
+    console.log('Formulario de usuario mejorado inicializado correctamente');
 });
