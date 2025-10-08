@@ -454,19 +454,35 @@ class UsuarioController(BaseController):
         return self.model.update(usuario_id, {'activo': True})
 
     def validar_campo_unico(self, field: str, value: str) -> Dict:
-        """Verifica si un valor para un campo específico ya existe."""
-        if field not in ['legajo', 'email']:
+        """Verifica si un valor para un campo específico ya existe (legajo, email, cuil_cuit, telefono)."""
+        find_methods = {
+            'legajo': self.model.find_by_legajo,
+            'email': self.model.find_by_email,
+            'cuil_cuit': self.model.find_by_cuil,
+            'telefono': self.model.find_by_telefono
+        }
+
+        find_method = find_methods.get(field)
+
+        if not find_method:
             return {'valid': False, 'error': 'Campo de validación no soportado.'}
 
-        filters = {field: value}
-        existing_user_result = self.model.find_all(filters)
+        try:
+            result = find_method(value)
 
-        if existing_user_result.get('success') and existing_user_result.get('data'):
-            return {'valid': False, 'message': f'El {field} ya está en uso.'}
-        elif not existing_user_result.get('success'):
+            if result.get('success'):
+                return {'valid': False, 'message': f'El valor ingresado para {field} ya está en uso.'}
+
+            error_msg = result.get('error', '')
+            if 'no encontrado' in error_msg:
+                return {'valid': True}
+
+            logger.error(f"Validation error for field '{field}': {error_msg}")
             return {'valid': False, 'error': 'Error al realizar la validación.'}
-        else:
-            return {'valid': True}
+
+        except Exception as e:
+            logger.error(f"Exception during field validation for '{field}': {str(e)}", exc_info=True)
+            return {'valid': False, 'error': 'Error interno del servidor durante la validación.'}
 
     def obtener_porcentaje_asistencia(self) -> float:
         """

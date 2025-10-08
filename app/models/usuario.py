@@ -108,6 +108,14 @@ class UsuarioModel(BaseModel):
         """Busca un usuario por su legajo"""
         return self._find_by('legajo', legajo, include_sectores, include_direccion)
 
+    def find_by_cuil(self, cuil_cuit: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
+        """Busca un usuario por su CUIL/CUIT"""
+        return self._find_by('cuil_cuit', cuil_cuit, include_sectores, include_direccion)
+
+    def find_by_telefono(self, telefono: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
+        """Busca un usuario por su teléfono"""
+        return self._find_by('telefono', telefono, include_sectores, include_direccion)
+
     def find_all(self, filtros: Dict = None, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
         """Obtiene todos los usuarios con opción de incluir sectores y dirección."""
         try:

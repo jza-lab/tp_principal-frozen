@@ -21,6 +21,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const nombreInput = document.getElementById('nombre');
     const apellidoInput = document.getElementById('apellido');
     const rolSelect = document.getElementById('role_id');
+    const cuilInput = document.getElementById('cuil_cuit');
+    const telefonoInput = document.getElementById('telefono');
     const requiredInputsStep1 = personalInfoSection ? personalInfoSection.querySelectorAll('input[required], select[required]') : [];
 
     // Campos del formulario - Paso 2
@@ -57,6 +59,8 @@ document.addEventListener('DOMContentLoaded', function () {
         nombre: false,
         apellido: false,
         rol: false,
+        cuil_cuit: true, // Opcional, válido por defecto
+        telefono: true, // Opcional, válido por defecto
         step1Complete: false,
         // Paso 2
         calle: false,
@@ -106,26 +110,65 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function validateField(field, value) {
         let inputElement;
-        
-        if (field === 'legajo') {
-            inputElement = legajoInput;
-        } else if (field === 'email') {
-            inputElement = emailInput;
+
+        switch (field) {
+            case 'legajo':
+                inputElement = legajoInput;
+                break;
+            case 'email':
+                inputElement = emailInput;
+                break;
+            case 'cuil_cuit':
+                inputElement = cuilInput;
+                break;
+            case 'telefono':
+                inputElement = telefonoInput;
+                break;
+            default:
+                return;
         }
         
         clearError(inputElement);
 
+        const isOptional = ['cuil_cuit', 'telefono'].includes(field);
+
         if (!value || !value.trim()) {
-            showError(inputElement, 'Este campo es obligatorio.');
-            validationState[field] = false;
-            updateStepButtonState();
-            return;
+            if (isOptional) {
+                validationState[field] = true; // Campo opcional vacío es válido
+                updateStepButtonState();
+                return;
+            } else {
+                showError(inputElement, 'Este campo es obligatorio.');
+                validationState[field] = false;
+                updateStepButtonState();
+                return;
+            }
         }
 
         if (field === 'email') {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(value)) {
                 showError(inputElement, 'Por favor, ingrese un email válido (ejemplo: usuario@dominio.com).');
+                validationState[field] = false;
+                updateStepButtonState();
+                return;
+            }
+        }
+
+        if (field === 'cuil_cuit') {
+            const cuilRegex = /^\d{11}$/;
+            if (!cuilRegex.test(value)) {
+                showError(inputElement, 'El CUIL/CUIT debe contener exactamente 11 dígitos numéricos.');
+                validationState[field] = false;
+                updateStepButtonState();
+                return;
+            }
+        }
+
+        if (field === 'telefono') {
+            const telefonoRegex = /^\d{7,15}$/;
+            if (!telefonoRegex.test(value)) {
+                showError(inputElement, 'El teléfono debe contener solo números y tener entre 7 y 15 dígitos.');
                 validationState[field] = false;
                 updateStepButtonState();
                 return;
@@ -327,6 +370,8 @@ document.addEventListener('DOMContentLoaded', function () {
                             validationState.apellido && 
                             validationState.rol && 
                             validationState.password &&
+                            validationState.cuil_cuit &&
+                            validationState.telefono &&
                             allFilled;
         
         validationState.step1Complete = isStep1Valid;
@@ -412,6 +457,18 @@ document.addEventListener('DOMContentLoaded', function () {
     if (emailInput) {
         emailInput.addEventListener('blur', function() {
             validateField('email', this.value);
+        });
+    }
+
+    if (cuilInput) {
+        cuilInput.addEventListener('blur', function() {
+            validateField('cuil_cuit', this.value);
+        });
+    }
+
+    if (telefonoInput) {
+        telefonoInput.addEventListener('blur', function() {
+            validateField('telefono', this.value);
         });
     }
 
@@ -824,6 +881,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (legajoInput && legajoInput.value.trim()) validateField('legajo', legajoInput.value);
     if (emailInput && emailInput.value.trim()) validateField('email', emailInput.value);
     if (passwordInput && passwordInput.value) validatePassword();
+    if (cuilInput && cuilInput.value.trim()) validateField('cuil_cuit', cuilInput.value);
+    if (telefonoInput && telefonoInput.value.trim()) validateField('telefono', telefonoInput.value);
     
     console.log('Formulario de usuario mejorado inicializado correctamente');
 });

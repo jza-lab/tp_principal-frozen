@@ -29,7 +29,13 @@ class UsuarioSchema(Schema):
             error='El CUIL/CUIT debe contener exactamente 11 dígitos numéricos.'
         )
     )
-    telefono = fields.Str(allow_none=True)
+    telefono = fields.Str(
+        allow_none=True,
+        validate=validate.Regexp(
+            r'^\d{7,15}$',
+            error='El teléfono debe contener solo números y tener entre 7 y 15 dígitos.'
+        )
+    )
     direccion = fields.Str(allow_none=True)
     fecha_nacimiento = fields.Date(allow_none=True)
     fecha_ingreso = fields.Date(allow_none=True)
