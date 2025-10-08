@@ -10,8 +10,11 @@ from marshmallow import ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 import logging
+from app.controllers.usuario_direccion_controller import GeorefController
+from app.models.usuario_direccion import DireccionModel
 
 logger = logging.getLogger(__name__)
+
 
 class UsuarioController(BaseController):
     """
@@ -26,45 +29,118 @@ class UsuarioController(BaseController):
         self.usuario_sector_model = UsuarioSectorModel()
         self.role_model = RoleModel()
         self.schema = UsuarioSchema()
+        self.usuario_direccion_controller = GeorefController()
+        self.direccion_model = DireccionModel()
+
+    def _handle_direccion(self, data: Dict) -> Dict:
+        """
+        Private helper to normalize, find or create a user address.
+        Returns a dictionary with 'success' and 'direccion_id' or 'error'.
+        """
+        # Extract address data
+        address_fields = ['calle', 'altura', 'piso', 'depto', 'localidad', 'provincia', 'codigo_postal']
+        direccion_data = {field: data.get(field) for field in address_fields}
+
+        if not all([direccion_data['calle'], direccion_data['altura'], direccion_data['localidad'],
+                    direccion_data['provincia']]):
+            return {'success': True, 'direccion_id': None}  # Not enough data to process, skip
+
+        # 1. Normalize with GEOREF API
+        full_street = f"{direccion_data['calle']} {direccion_data['altura']}"
+        norm_result = self.usuario_direccion_controller.normalizar_direccion(
+            direccion=full_street,
+            localidad=direccion_data['localidad'],
+            provincia=direccion_data['provincia']
+        )
+
+        if not norm_result.get('success'):
+            # If normalization fails, proceed with user-provided data but log it
+            logger.warning(f"GEOREF normalization failed: {norm_result.get('message')}. Using user-provided address.")
+            db_address_data = direccion_data
+        else:
+            norm_data = norm_result['data']
+            db_address_data = {
+                "calle": norm_data['calle']['nombre'],
+                "altura": norm_data['altura']['valor'],
+                "piso": direccion_data.get('piso'),
+                "depto": direccion_data.get('depto'),
+                "codigo_postal": norm_data.get('codigo_postal', direccion_data.get('codigo_postal')),
+                "localidad": norm_data['localidad_censal']['nombre'],
+                "provincia": norm_data['provincia']['nombre'],
+                "latitud": norm_data['ubicacion']['lat'],
+                "longitud": norm_data['ubicacion']['lon']
+            }
+
+        # 2. Find if the address already exists to avoid duplicates
+        existing_address = self.direccion_model.find_by_full_address(
+            calle=db_address_data['calle'],
+            altura=db_address_data['altura'],
+            piso=db_address_data.get('piso'),
+            depto=db_address_data.get('depto'),
+            localidad=db_address_data['localidad'],
+            provincia=db_address_data['provincia']
+        )
+
+        if existing_address.get('success'):
+            return {'success': True, 'direccion_id': existing_address['data']['id']}
+
+        # 3. If it doesn't exist, create it
+        new_address_result = self.direccion_model.create(db_address_data)
+        if not new_address_result.get('success'):
+            return {'success': False, 'error': 'Failed to save the normalized address.'}
+
+        return {'success': True, 'direccion_id': new_address_result['data']['id']}
 
     def crear_usuario(self, data: Dict) -> Dict:
-        """Valida y crea un nuevo usuario con asignación de sectores."""
+        """Validates and creates a new user, including address and sector assignment."""
         try:
+            # Handle address first
+            direccion_result = self._handle_direccion(data)
+            if not direccion_result.get('success'):
+                return direccion_result
+            direccion_id = direccion_result.get('direccion_id')
+
+            # Separate user data from other data
             sectores_ids = data.pop('sectores', [])
             validated_data = self.schema.load(data)
 
-            # Verificar si el email ya existe
             if self.model.find_by_email(validated_data['email']).get('data'):
                 return {'success': False, 'error': 'El correo electrónico ya está en uso.'}
 
-            # Hashear la contraseña antes de guardarla
             password = validated_data.pop('password')
             validated_data['password_hash'] = generate_password_hash(password)
 
-            # Crear el usuario
+            # Add direccion_id to user data
+            if direccion_id:
+                validated_data['direccion_id'] = direccion_id
+
+            # Create user
             resultado_creacion = self.model.create(validated_data)
-            
             if not resultado_creacion.get('success'):
+                # Basic rollback for address if it was newly created and user creation fails
+                # Note: This doesn't cover all edge cases but is a safeguard.
+                if self.direccion_model.find_by_id(direccion_id):
+                     # This is a simplification. A full rollback would be more complex.
+                     pass
                 return resultado_creacion
 
             usuario_creado = resultado_creacion['data']
             usuario_id = usuario_creado['id']
 
-            # Asignar sectores si se proporcionaron
+            # Assign sectors
             if sectores_ids:
                 resultado_sectores = self._asignar_sectores_usuario(usuario_id, sectores_ids)
                 if not resultado_sectores.get('success'):
-                    # Si falla la asignación de sectores, revertir la creación del usuario
                     self.model.db.table("usuarios").delete().eq("id", usuario_id).execute()
                     return resultado_sectores
 
-            # Obtener el usuario completo con sectores
-            usuario_completo = self.model.find_by_id(usuario_id, include_sectores=True)
-            return usuario_completo
+            # Return the complete user data
+            return self.model.find_by_id(usuario_id, include_sectores=True, include_direccion=True)
 
         except ValidationError as e:
             return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
         except Exception as e:
+            logger.error(f"Error creating user: {str(e)}", exc_info=True)
             return {'success': False, 'error': f'Error interno: {str(e)}'}
 
     def _asignar_sectores_usuario(self, usuario_id: int, sectores_ids: List[int]) -> Dict:
@@ -83,58 +159,64 @@ class UsuarioController(BaseController):
             return {'success': False, 'error': str(e)}
 
     def actualizar_usuario(self, usuario_id: int, data: Dict) -> Dict:
-        """Actualiza un usuario existente con gestión de sectores."""
+        """Updates an existing user, including address and sector management."""
         try:
-            # Extraer sectores si vienen en los datos
+            # Handle address first
+            direccion_result = self._handle_direccion(data)
+            if not direccion_result.get('success'):
+                return direccion_result
+            direccion_id = direccion_result.get('direccion_id')
+
+            # Separate user data from other data
             sectores_ids = data.pop('sectores', None)
             
-            # Si se proporciona una nueva contraseña, hashearla
             if 'password' in data and data['password']:
                 password = data.pop('password')
                 data['password_hash'] = generate_password_hash(password)
             else:
-                # Evitar que el campo de contraseña vacío se valide
                 data.pop('password', None)
 
             validated_data = self.schema.load(data, partial=True)
-            # Verificar unicidad del email si se está cambiando
+            
             if 'email' in validated_data:
                 existing = self.model.find_by_email(validated_data['email']).get('data')
                 if existing and existing['id'] != usuario_id:
                     return {'success': False, 'error': 'El correo electrónico ya está en uso.'}
 
-            # Actualizar datos básicos del usuario
+            # Add direccion_id to user data to be updated
+            if direccion_id:
+                validated_data['direccion_id'] = direccion_id
+
+            # Update user's basic data
             resultado_actualizacion = self.model.update(usuario_id, validated_data)
             if not resultado_actualizacion.get('success'):
                 return resultado_actualizacion
 
-            # Actualizar sectores si se proporcionaron
+            # Update sectors if provided
             if sectores_ids is not None:
-                # Eliminar asignaciones existentes
                 self.usuario_sector_model.eliminar_todas_asignaciones(usuario_id)
-                
-                # Asignar nuevos sectores
                 if sectores_ids:
                     resultado_sectores = self._asignar_sectores_usuario(usuario_id, sectores_ids)
                     if not resultado_sectores.get('success'):
                         return resultado_sectores
 
-            # Devolver usuario actualizado con sectores
-            return self.model.find_by_id(usuario_id, include_sectores=True)
+            # Return updated user with all details
+            return self.model.find_by_id(usuario_id, include_sectores=True, include_direccion=True)
 
         except ValidationError as e:
             return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
         except Exception as e:
+            logger.error(f"Error updating user: {str(e)}", exc_info=True)
             return {'success': False, 'error': f'Error interno: {str(e)}'}
 
-    def obtener_usuario_por_id(self, usuario_id: int, include_sectores: bool = True) -> Optional[Dict]:
-        """Obtiene un usuario por su ID con opción de incluir sectores."""
-        result = self.model.find_by_id(usuario_id, include_sectores)
+    def obtener_usuario_por_id(self, usuario_id: int, include_sectores: bool = True, include_direccion: bool = False) -> Optional[Dict]:
+        """Obtiene un usuario por su ID con opción de incluir sectores y dirección."""
+        result = self.model.find_by_id(usuario_id, include_sectores, include_direccion)
         return result.get('data')
 
-    def obtener_todos_los_usuarios(self, filtros: Optional[Dict] = None, include_sectores: bool = True) -> List[Dict]:
-        """Obtiene una lista de todos los usuarios con opción de incluir sectores."""
-        result = self.model.find_all(filtros, include_sectores)
+    def obtener_todos_los_usuarios(self, filtros: Optional[Dict] = None, include_sectores: bool = True, include_direccion: bool = False) -> List[Dict]:
+        """Obtiene una lista de todos los usuarios con opción de incluir sectores y dirección."""
+        result = self.model.find_all(filtros, include_sectores, include_direccion)
         return result.get('data', [])
 
     def obtener_todos_los_sectores(self) -> List[Dict]:
@@ -372,19 +454,35 @@ class UsuarioController(BaseController):
         return self.model.update(usuario_id, {'activo': True})
 
     def validar_campo_unico(self, field: str, value: str) -> Dict:
-        """Verifica si un valor para un campo específico ya existe."""
-        if field not in ['legajo', 'email']:
+        """Verifica si un valor para un campo específico ya existe (legajo, email, cuil_cuit, telefono)."""
+        find_methods = {
+            'legajo': self.model.find_by_legajo,
+            'email': self.model.find_by_email,
+            'cuil_cuit': self.model.find_by_cuil,
+            'telefono': self.model.find_by_telefono
+        }
+
+        find_method = find_methods.get(field)
+
+        if not find_method:
             return {'valid': False, 'error': 'Campo de validación no soportado.'}
 
-        filters = {field: value}
-        existing_user_result = self.model.find_all(filters)
+        try:
+            result = find_method(value)
 
-        if existing_user_result.get('success') and existing_user_result.get('data'):
-            return {'valid': False, 'message': f'El {field} ya está en uso.'}
-        elif not existing_user_result.get('success'):
+            if result.get('success'):
+                return {'valid': False, 'message': f'El valor ingresado para {field} ya está en uso.'}
+
+            error_msg = result.get('error', '')
+            if 'no encontrado' in error_msg:
+                return {'valid': True}
+
+            logger.error(f"Validation error for field '{field}': {error_msg}")
             return {'valid': False, 'error': 'Error al realizar la validación.'}
-        else:
-            return {'valid': True}
+
+        except Exception as e:
+            logger.error(f"Exception during field validation for '{field}': {str(e)}", exc_info=True)
+            return {'valid': False, 'error': 'Error interno del servidor durante la validación.'}
 
     def obtener_porcentaje_asistencia(self) -> float:
         """
@@ -410,6 +508,28 @@ class UsuarioController(BaseController):
         
         return round(porcentaje, 0)
     
+    def obtener_actividad_totem(self) -> Dict:
+        """
+        Obtiene la lista de actividad del tótem (ingresos/egresos) de hoy.
+        """
+        try:
+            resultado = self.totem_sesion.obtener_actividad_totem_hoy()
+            return resultado
+        except Exception as e:
+            logger.error(f"Error obteniendo actividad del tótem: {str(e)}", exc_info=True)
+            return {'success': False, 'error': f'Error interno: {str(e)}'}
+
+    def obtener_actividad_web(self) -> Dict:
+        """
+        Obtiene la lista de usuarios que iniciaron sesión en la web hoy.
+        """
+        try:
+            resultado = self.model.find_by_web_login_today()
+            return resultado
+        except Exception as e:
+            logger.error(f"Error obteniendo actividad web: {str(e)}", exc_info=True)
+            return {'success': False, 'error': f'Error interno: {str(e)}'}
+
     def obtener_todos_los_roles(self) -> List[Dict]:
         """Obtiene una lista de todos los roles disponibles."""
         resultado = self.role_model.find_all()

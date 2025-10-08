@@ -175,7 +175,7 @@ def editar_usuario(id):
                                 usuario_sectores_ids=datos_actualizados.get('sectores', []))
 
     # Método GET
-    usuario = usuario_controller.obtener_usuario_por_id(id)
+    usuario = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)
     if not usuario:
         flash('Usuario no encontrado.', 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
@@ -223,6 +223,30 @@ def habilitar_usuario(id):
         flash(f"Error al activar el usuario: {resultado.get('error')}", 'error')
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
+@admin_usuario_bp.route('/usuarios/actividad_totem', methods=['GET'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+def obtener_actividad_totem():
+    """
+    Devuelve una lista en formato JSON de la actividad del tótem (ingresos/egresos) de hoy.
+    """
+    resultado = usuario_controller.obtener_actividad_totem()
+    if resultado.get('success'):
+        return jsonify(success=True, data=resultado.get('data', []))
+    else:
+        return jsonify(success=False, error=resultado.get('error', 'Error al obtener la actividad del tótem')), 500
+
+@admin_usuario_bp.route('/usuarios/actividad_web', methods=['GET'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+def obtener_actividad_web():
+    """
+    Devuelve una lista en formato JSON de los usuarios que iniciaron sesión en la web hoy.
+    """
+    resultado = usuario_controller.obtener_actividad_web()
+    if resultado.get('success'):
+        return jsonify(success=True, data=resultado.get('data', []))
+    else:
+        return jsonify(success=False, error=resultado.get('error', 'Error al obtener la actividad web')), 500
+
 @admin_usuario_bp.route('/usuarios/validar', methods=['POST'])
 @permission_required(sector_codigo='ADMINISTRACION', accion='crear')
 def validar_campo():
@@ -264,3 +288,32 @@ def validar_rostro():
             'valid': False,
             'message': resultado.get('message', 'Error al validar el rostro.')
         })
+
+@admin_usuario_bp.route('/usuarios/verificar_direccion', methods=['POST'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
+def verificar_direccion():
+    """
+    Verifica una dirección en tiempo real usando la API de Georef.
+    """
+    data = request.get_json()
+    calle = data.get('calle')
+    altura = data.get('altura')
+    localidad = data.get('localidad')
+    provincia = data.get('provincia')
+
+    if not all([calle, altura, localidad, provincia]):
+        return jsonify({
+            'success': False,
+            'message': 'Todos los campos de dirección son requeridos para la verificación.'
+        }), 400
+
+    georef_controller = usuario_controller.usuario_direccion_controller
+    full_street = f"{calle} {altura}"
+    
+    resultado = georef_controller.normalizar_direccion(
+        direccion=full_street,
+        localidad=localidad,
+        provincia=provincia
+    )
+
+    return jsonify(resultado)

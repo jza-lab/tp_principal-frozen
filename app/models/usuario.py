@@ -7,6 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class Usuario:
     """
@@ -21,9 +22,9 @@ class Usuario:
     activo: bool = True
     created_at: Optional[datetime] = None
     legajo: Optional[str] = None
-    dni: Optional[str] = None
+    cuil_cuit: Optional[str] = None
     telefono: Optional[str] = None
-    direccion: Optional[str] = None
+    direccion_id: Optional[int] = None
     fecha_nacimiento: Optional[date] = None
     fecha_ingreso: Optional[date] = None
     supervisor_id: Optional[int] = None
@@ -57,92 +58,96 @@ class UsuarioModel(BaseModel):
     """
     Modelo actualizado para interactuar con la tabla de usuarios.
     """
+
     def get_table_name(self) -> str:
         return 'usuarios'
 
-    def _find_by(self, field: str, value, include_sectores: bool = False) -> Dict:
+    def _find_by(self, field: str, value, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
         """
         Método genérico y privado para buscar un usuario por un campo específico.
         """
         try:
-            # Consulta base con información del rol
-            query = self.db.table(self.get_table_name()).select('*, roles(codigo, nombre, nivel)')
-            query = query.eq(field, value)
-            
+            select_query = "*, roles(codigo, nombre, nivel)"
+            if include_direccion:
+                select_query += ", direccion:usuario_direccion(*)"
+
+            query = self.db.table(self.get_table_name()).select(select_query).eq(field, value)
             result = query.execute()
-            
+
             if not result.data:
                 return {'success': False, 'error': 'Usuario no encontrado'}
 
             usuario_data = result.data[0]
 
-            # Si se solicita incluir sectores, cargarlos
             if include_sectores:
                 from app.models.usuario_sector import UsuarioSectorModel
                 usuario_sector_model = UsuarioSectorModel()
                 sectores_result = usuario_sector_model.find_by_usuario(usuario_data['id'])
-                
+
                 if sectores_result.get('success'):
-                    # Extraer solo los datos del sector (no la relación intermedia)
-                    sectores = []
-                    for item in sectores_result['data']:
-                        if item.get('sectores'):
-                            sectores.append(item['sectores'])
+                    sectores = [item['sectores'] for item in sectores_result['data'] if item.get('sectores')]
                     usuario_data['sectores'] = sectores
                 else:
                     usuario_data['sectores'] = []
 
             return {'success': True, 'data': usuario_data}
-            
+
         except Exception as e:
-            logger.error(f"Error buscando usuario por {field}: {str(e)}")
+            logger.error(f"Error buscando usuario por {field}: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
-    def find_by_email(self, email: str, include_sectores: bool = False) -> Dict:
+    def find_by_email(self, email: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
         """Busca un usuario por email"""
-        return self._find_by('email', email, include_sectores)
+        return self._find_by('email', email, include_sectores, include_direccion)
 
-    def find_by_id(self, usuario_id: int, include_sectores: bool = False) -> Dict:
+    def find_by_id(self, usuario_id: int, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
         """Busca un usuario por su ID"""
-        return self._find_by('id', usuario_id, include_sectores)
+        return self._find_by('id', usuario_id, include_sectores, include_direccion)
 
-    def find_by_legajo(self, legajo: str, include_sectores: bool = False) -> Dict:
+    def find_by_legajo(self, legajo: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
         """Busca un usuario por su legajo"""
-        return self._find_by('legajo', legajo, include_sectores)
+        return self._find_by('legajo', legajo, include_sectores, include_direccion)
 
-    def find_all(self, filtros: Dict = None, include_sectores: bool = False) -> Dict:
-        """Obtiene todos los usuarios con opción de incluir sectores"""
+    def find_by_cuil(self, cuil_cuit: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
+        """Busca un usuario por su CUIL/CUIT"""
+        return self._find_by('cuil_cuit', cuil_cuit, include_sectores, include_direccion)
+
+    def find_by_telefono(self, telefono: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
+        """Busca un usuario por su teléfono"""
+        return self._find_by('telefono', telefono, include_sectores, include_direccion)
+
+    def find_all(self, filtros: Dict = None, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
+        """Obtiene todos los usuarios con opción de incluir sectores y dirección."""
         try:
-            query = self.db.table(self.get_table_name()).select('*, roles(codigo, nombre, nivel)')
-            
+            select_query = "*, roles(codigo, nombre, nivel)"
+            if include_direccion:
+                select_query += ", direccion:usuario_direccion(*)"
+
+            query = self.db.table(self.get_table_name()).select(select_query)
+
             if filtros:
                 for key, value in filtros.items():
                     query = query.eq(key, value)
-                    
+
             response = query.execute()
-            
             usuarios = response.data
-            
-            # Si se solicita incluir sectores, cargarlos para cada usuario
+
             if include_sectores and usuarios:
                 from app.models.usuario_sector import UsuarioSectorModel
                 usuario_sector_model = UsuarioSectorModel()
-                
+
                 for usuario in usuarios:
                     sectores_result = usuario_sector_model.find_by_usuario(usuario['id'])
                     if sectores_result.get('success'):
-                        sectores = []
-                        for item in sectores_result['data']:
-                            if item.get('sectores'):
-                                sectores.append(item['sectores'])
+                        sectores = [item['sectores'] for item in sectores_result['data'] if item.get('sectores')]
                         usuario['sectores'] = sectores
                     else:
                         usuario['sectores'] = []
 
             return {'success': True, 'data': usuarios}
-            
+
         except Exception as e:
-            logger.error(f"Error obteniendo usuarios: {str(e)}")
+            logger.error(f"Error obteniendo usuarios: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def update(self, usuario_id: int, data: Dict) -> Dict:
@@ -155,4 +160,30 @@ class UsuarioModel(BaseModel):
                 return {'success': False, 'error': 'Usuario no encontrado'}
         except Exception as e:
             logger.error(f"Error actualizando en usuarios: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def find_by_web_login_today(self) -> Dict:
+        """
+        Encuentra a todos los usuarios que han iniciado sesión en la web hoy.
+        """
+        try:
+            from datetime import date, datetime, time
+            hoy = date.today()
+            start_of_day = datetime.combine(hoy, time.min).isoformat()
+            end_of_day = datetime.combine(hoy, time.max).isoformat()
+
+            response = self.db.table(self.get_table_name())\
+                .select("id, nombre, apellido, legajo, ultimo_login_web, roles(nombre)")\
+                .gte('ultimo_login_web', start_of_day)\
+                .lte('ultimo_login_web', end_of_day)\
+                .order('ultimo_login_web', desc=True)\
+                .execute()
+
+            if response.data:
+                return {'success': True, 'data': response.data}
+            
+            return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error buscando usuarios con login web hoy: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}

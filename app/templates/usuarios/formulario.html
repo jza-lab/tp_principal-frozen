@@ -4,6 +4,10 @@
 {% if is_new %}Nuevo Usuario{% else %}Editar Usuario{% endif %} - Sistema Frozen
 {% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/crearUsuario.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="form-container">
     <div class="form-card">
@@ -13,16 +17,33 @@
                 {% if is_new %}Crear Nuevo Usuario{% else %}Editar Usuario{% endif %}
             </h2>
             <p class="mb-0 opacity-75">
-                {% if is_new %}Complete la información y registre el rostro{% else %}Modificar información del usuario{%
-                endif %}
+                {% if is_new %}Complete la información en 3 simples pasos{% else %}Modificar información del usuario {% endif %}
             </p>
         </div>
         <div class="form-body">
             <!-- Indicador de pasos (solo para usuarios nuevos) -->
             {% if is_new %}
             <div class="step-indicator">
-                <div class="step active" id="step1">1</div>
-                <div class="step" id="step2">2</div>
+                <div class="step-item">
+                    <div class="step active" id="step1">
+                        <i class="bi bi-person-fill"></i>
+                    </div>
+                    <span class="step-label">Datos Personales</span>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step-item">
+                    <div class="step" id="step2">
+                        <i class="bi bi-geo-alt-fill"></i>
+                    </div>
+                    <span class="step-label">Dirección</span>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step-item">
+                    <div class="step" id="step3">
+                        <i class="bi bi-camera-fill"></i>
+                    </div>
+                    <span class="step-label">Registro Facial</span>
+                </div>
             </div>
             {% endif %}
 
@@ -30,173 +51,306 @@
                 action="{{ url_for('admin_usuario.nuevo_usuario') if is_new else url_for('admin_usuario.editar_usuario', id=usuario.id) }}"
                 enctype="multipart/form-data" id="userForm">
 
-                <!-- Paso 1: Información básica -->
-                <div id="basicInfo" class="form-section">
-                    <h5 class="mb-4">
-                        <i class="bi bi-person me-2"></i>
-                        Información Personal
-                    </h5>
+                <!-- Paso 1: Información Personal -->
+                <div id="personalInfo" class="form-section">
+                    <div class="section-title">
+                        <i class="bi bi-person-vcard me-2"></i>
+                        <h5 class="mb-0">Información Personal</h5>
+                    </div>
 
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="legajo" name="legajo"
-                                    value="{{ usuario.legajo or '' }}" required placeholder="Número de legajo">
-                                <label for="legajo">
-                                    <i class="bi bi-hash me-1"></i>Legajo
-                                </label>
+                    <div class="form-subsection">
+                        <h6 class="subsection-title">
+                            <i class="bi bi-person me-2"></i>Datos Básicos
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="nombre" name="nombre"
+                                        value="{{ usuario.nombre or '' }}" required placeholder="Nombre">
+                                    <label for="nombre">
+                                        <i class="bi bi-person me-1"></i>Nombre
+                                    </label>
+                                </div>
+                                <div class="invalid-feedback"></div>
                             </div>
-                            <div class="invalid-feedback"></div>
-                        </div>
 
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="dni" name="dni"
-                                    value="{{ usuario.dni or '' }}" placeholder="DNI">
-                                <label for="dni">
-                                    <i class="bi bi-person-vcard me-1"></i>DNI
-                                </label>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="apellido" name="apellido"
+                                        value="{{ usuario.apellido or '' }}" required placeholder="Apellido">
+                                    <label for="apellido">
+                                        <i class="bi bi-person me-1"></i>Apellido
+                                    </label>
+                                </div>
+                                <div class="invalid-feedback"></div>
                             </div>
-                        </div>
 
-                        <div class="col-12">
-                            <label for="sectores" class="form-label">
-                                <i class="bi bi-diagram-3 me-1"></i>Sectores Asignados
-                            </label>
-                            <select class="form-select" id="sectores" name="sectores" multiple size="3">
-                                {% for sector in sectores %}
-                                    <option value="{{ sector.id }}" {% if sector.id in usuario_sectores_ids %}selected{% endif %}>
-                                        {{ sector.nombre }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                            <small class="form-text text-muted ms-2">Mantenga presionado Ctrl (o Cmd en Mac) para seleccionar múltiples sectores.</small>
-                        </div>
-
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <select class="form-select" id="turno" name="turno">
-                                    <option value="">Seleccionar turno...</option>
-                                    <option value="MAÑANA" {% if usuario.turno == 'MAÑANA' %}selected{% endif %}>Mañana</option>
-                                    <option value="TARDE" {% if usuario.turno == 'TARDE' %}selected{% endif %}>Tarde</option>
-                                    <option value="NOCHE" {% if usuario.turno == 'NOCHE' %}selected{% endif %}>Noche</option>
-                                    <option value="ROTATIVO" {% if usuario.turno == 'ROTATIVO' %}selected{% endif %}>Rotativo</option>
-                                </select>
-                                <label for="turno">
-                                    <i class="bi bi-clock-history me-1"></i>Turno
-                                </label>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="legajo" name="legajo"
+                                        value="{{ usuario.legajo or '' }}" required placeholder="Número de legajo">
+                                    <label for="legajo">
+                                        <i class="bi bi-hash me-1"></i>Legajo
+                                    </label>
+                                </div>
+                                <div class="invalid-feedback"></div>
                             </div>
-                        </div>
 
-                        <div class="col-md-6">
-                             <div class="form-floating">
-                                <input type="text" class="form-control" id="telefono" name="telefono"
-                                    value="{{ usuario.telefono or '' }}" placeholder="Teléfono">
-                                <label for="telefono">
-                                    <i class="bi bi-telephone me-1"></i>Teléfono
-                                </label>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="cuil_cuit" name="cuil_cuit"
+                                        value="{{ usuario.cuil_cuit or '' }}" placeholder="CUIL/CUIT (11 dígitos)"
+                                        pattern="\\d{11}" title="Debe contener 11 dígitos numéricos.">
+                                    <label for="cuil_cuit">
+                                        <i class="bi bi-person-vcard me-1"></i>CUIL/CUIT
+                                    </label>
+                                </div>
+                                <small id="cuil-helper" class="form-text text-muted ms-2"></small>
+                                <div class="invalid-feedback"></div>
                             </div>
-                        </div>
 
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="direccion" name="direccion"
-                                    value="{{ usuario.direccion or '' }}" placeholder="Dirección">
-                                <label for="direccion">
-                                    <i class="bi bi-geo-alt me-1"></i>Dirección
-                                </label>
+                            <div class="col-12">
+                                <div class="form-floating">
+                                    <input type="email" class="form-control" id="email" name="email"
+                                        value="{{ usuario.email or '' }}" required placeholder="nombre@empresa.com">
+                                    <label for="email">
+                                        <i class="bi bi-envelope me-1"></i>Correo Electrónico
+                                    </label>
+                                </div>
+                                <div class="invalid-feedback"></div>
                             </div>
-                        </div>
 
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <select class="form-select" id="role_id" name="role_id" required>
-                                    <option value="">Seleccionar rol...</option>
-                                    {% for rol in roles %}
-                                        <option value="{{ rol.id }}" {% if usuario and usuario.roles and usuario.roles.id == rol.id %}selected{% endif %}>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="telefono" name="telefono"
+                                        value="{{ usuario.telefono or '' }}" placeholder="Ej: +541122334455">
+                                    <label for="telefono">
+                                        <i class="bi bi-telephone me-1"></i>Teléfono
+                                    </label>
+                                </div>
+                                <div class="invalid-feedback"></div>
+                            </div>
+
+                            {% if is_new %}
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="password" class="form-control" id="password" name="password" required
+                                        placeholder="Contraseña">
+                                    <label for="password">
+                                        <i class="bi bi-key me-1"></i>Contraseña (mínimo 8 caracteres)
+                                    </label>
+                                </div>
+                                <div class="invalid-feedback"></div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="form-subsection mt-4">
+                        <h6 class="subsection-title">
+                            <i class="bi bi-briefcase me-2"></i>Información Laboral
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <select class="form-select" id="role_id" name="role_id" required>
+                                        <option value="">Seleccionar rol...</option>
+                                        {% for rol in roles %}
+                                        <option value="{{ rol.id }}" {% if usuario and usuario.roles and
+                                            usuario.roles.id==rol.id %}selected{% endif %}>
                                             {{ rol.nombre }}
                                         </option>
+                                        {% endfor %}
+                                    </select>
+                                    <label for="role_id">
+                                        <i class="bi bi-shield-check me-1"></i>Rol
+                                    </label>
+                                </div>
+                                <div class="invalid-feedback"></div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <select class="form-select" id="turno" name="turno">
+                                        <option value="">Seleccionar turno...</option>
+                                        <option value="MAÑANA" {% if usuario.turno=='MAÑANA' %}selected{% endif %}>
+                                            Mañana</option>
+                                        <option value="TARDE" {% if usuario.turno=='TARDE' %}selected{% endif %}>Tarde
+                                        </option>
+                                        <option value="NOCHE" {% if usuario.turno=='NOCHE' %}selected{% endif %}>Noche
+                                        </option>
+                                        <option value="ROTATIVO" {% if usuario.turno=='ROTATIVO' %}selected{% endif %}>
+                                            Rotativo</option>
+                                    </select>
+                                    <label for="turno">
+                                        <i class="bi bi-clock-history me-1"></i>Turno
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <label for="sectores" class="form-label">
+                                    <i class="bi bi-diagram-3 me-1"></i>Sectores Asignados
+                                </label>
+                                <select class="form-select" id="sectores" name="sectores" multiple size="3">
+                                    {% for sector in sectores %}
+                                    <option value="{{ sector.id }}" {% if sector.id in usuario_sectores_ids %}selected{%
+                                        endif %}>
+                                        {{ sector.nombre }}
+                                    </option>
                                     {% endfor %}
                                 </select>
-                                <label for="role_id">
-                                    <i class="bi bi-shield-check me-1"></i>Rol
-                                </label>
+                                <small class="form-text text-muted ms-2">Mantenga presionado Ctrl (o Cmd en Mac) para
+                                    seleccionar múltiples sectores.</small>
                             </div>
                         </div>
-
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="nombre" name="nombre"
-                                    value="{{ usuario.nombre or '' }}" required placeholder="Nombre">
-                                <label for="nombre">
-                                    <i class="bi bi-person me-1"></i>Nombre
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6">
-                            <div class="form-floating">
-                                <input type="text" class="form-control" id="apellido" name="apellido"
-                                    value="{{ usuario.apellido or '' }}" required placeholder="Apellido">
-                                <label for="apellido">
-                                    <i class="bi bi-person me-1"></i>Apellido
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="col-12">
-                            <div class="form-floating">
-                                <input type="email" class="form-control" id="email" name="email"
-                                    value="{{ usuario.email or '' }}" required placeholder="nombre@empresa.com">
-                                <label for="email">
-                                    <i class="bi bi-envelope me-1"></i>Correo Electrónico
-                                </label>
-                            </div>
-                            <div class="invalid-feedback"></div>
-                        </div>
-
-                        {% if is_new %}
-                        <div class="col-12">
-                            <div class="form-floating">
-                                <input type="password" class="form-control" id="password" name="password" required
-                                    placeholder="Contraseña">
-                                <label for="password">
-                                    <i class="bi bi-key me-1"></i>Contraseña (mínimo 8 caracteres)
-                                </label>
-                            </div>
-                            <div class="invalid-feedback"></div>
-                        </div>
-                        {% endif %}
                     </div>
                 </div>
 
-                <!-- Paso 2: Registro de rostro (solo para usuarios nuevos) -->
+               <!-- PASOO 2: Dirección -->
+                <div id="addressInfo" class="form-section" {% if is_new %}style="display: none;" {% else %}
+                    style="margin-top: 2rem;" {% endif %}>
+                    <div class="section-title">
+                        <i class="bi bi-geo-alt me-2"></i>
+                        <h5 class="mb-0">Dirección de Residencia</h5>
+                    </div>
+                    <div id="address-feedback" class="form-text my-2"></div>
+
+                    <div class="form-subsection">
+                        <div class="row g-3">
+                            <div class="col-md-8">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="calle" name="calle" placeholder="Calle"
+                                        value="{{ usuario.get('direccion', {}).get('calle', '') }}" required>
+                                    <label for="calle">
+                                        <i class="bi bi-signpost me-1"></i>Calle
+                                    </label>
+                                </div>
+                                <div class="invalid-feedback"></div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control" id="altura" name="altura"
+                                        placeholder="Altura" value="{{ usuario.get('direccion', {}).get('altura', '') }}" required>
+                                    <label for="altura">
+                                        <i class="bi bi-123 me-1"></i>Altura
+                                    </label>
+                                </div>
+                                <div class="invalid-feedback"></div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <select class="form-select" id="provincia" name="provincia" required>
+                                        <option value="">Seleccionar provincia...</option>
+                                        {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
+                                        "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
+                                        Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan",
+                                        "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del Fuego",
+                                        "Tucumán"] %}
+                                        {% for p in provincias %}
+                                        <option value="{{ p }}" {% if usuario.get('direccion') and usuario.get('direccion').get('provincia') == p %}selected{% endif %}>{{ p }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <label for="provincia">
+                                        <i class="bi bi-map me-1"></i>Provincia
+                                    </label>
+                                </div>
+                                <div class="invalid-feedback"></div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="localidad" name="localidad"
+                                        placeholder="Localidad" value="{{ usuario.get('direccion', {}).get('localidad', '') }}"
+                                        required>
+                                    <label for="localidad">
+                                        <i class="bi bi-pin-map me-1"></i>Localidad
+                                    </label>
+                                </div>
+                                <div class="invalid-feedback"></div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="piso" name="piso"
+                                        placeholder="Piso (Opcional)" value="{{ usuario.get('direccion', {}).get('piso', '') }}">
+                                    <label for="piso">
+                                        <i class="bi bi-building me-1"></i>Piso (Opcional)
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="depto" name="depto"
+                                        placeholder="Dto (Opcional)" value="{{ usuario.get('direccion', {}).get('depto', '') }}">
+                                    <label for="depto">
+                                        <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                                        placeholder="Código Postal"
+                                        value="{{ usuario.get('direccion', {}).get('codigo_postal', '') }}">
+                                    <label for="codigo_postal">
+                                        <i class="bi bi-mailbox me-1"></i>Código Postal
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- Paso 3: Registro de rostro (solo para usuarios nuevos) -->
                 {% if is_new %}
-                <div id="faceRegistration" class="form-section mt-5" style="display: none;">
-                    <h5 class="mb-4">
-                        <i class="bi bi-camera me-2"></i>
-                        Registro de Rostro
-                    </h5>
+                <div id="faceRegistration" class="form-section" style="display: none;">
+                    <div class="section-title">
+                        <i class="bi bi-shield-lock me-2"></i>
+                        <h5 class="mb-0">Registro Biométrico</h5>
+                    </div>
 
                     <div class="camera-section" id="cameraSection">
                         <div id="cameraInactive">
-                            <i class="bi bi-camera fs-1 text-muted mb-3"></i>
-                            <h6>Registro Biométrico</h6>
-                            <p class="text-muted mb-3">
-                                Para mayor seguridad, registre su rostro para el acceso al sistema
+                            <div class="camera-icon-container">
+                                <i class="bi bi-camera fs-1 mb-3"></i>
+                            </div>
+                            <h6 class="fw-bold">Verificación de Identidad</h6>
+                            <p class="text-muted mb-4">
+                                Para completar el registro, necesitamos una foto de su rostro para garantizar<br>
+                                la seguridad del sistema de acceso biométrico.
                             </p>
-                            <button type="button" class="btn btn-camera" id="startCamera">
+                            <div class="camera-tips mb-4">
+                                <p class="mb-2 fw-semibold">
+                                    <i class="bi bi-lightbulb text-warning me-2"></i>Consejos para una buena captura:
+                                </p>
+                                <ul class="text-start text-muted small">
+                                    <li>Asegúrese de tener buena iluminación</li>
+                                    <li>Retire gafas, gorras u otros accesorios</li>
+                                    <li>Mire directamente a la cámara</li>
+                                    <li>Mantenga una expresión neutral</li>
+                                </ul>
+                            </div>
+                            <button type="button" class="btn btn-camera btn-lg" id="startCamera">
                                 <i class="bi bi-camera-video me-2"></i>
                                 Activar Cámara
                             </button>
                         </div>
 
                         <div id="cameraActive" style="display: none;">
-                            <video id="videoElement" autoplay playsinline></video>
+                            <div class="video-container">
+                                <video id="videoElement" autoplay playsinline></video>
+                                <div class="face-outline"></div>
+                            </div>
                             <canvas id="canvasElement" style="display: none;"></canvas>
 
                             <div class="capture-controls">
-                                <button type="button" class="btn btn-camera" id="capturePhoto">
+                                <button type="button" class="btn btn-camera btn-lg" id="capturePhoto">
                                     <i class="bi bi-camera me-2"></i>
                                     Capturar Foto
                                 </button>
@@ -209,11 +363,13 @@
                         </div>
 
                         <div id="photoPreview" style="display: none;">
-                            <h6 class="mb-3">Vista previa:</h6>
-                            <img id="capturedImage" class="preview-image" alt="Foto capturada">
+                            <h6 class="mb-3 fw-bold">Vista previa de la captura:</h6>
+                            <div class="preview-container">
+                                <img id="capturedImage" class="preview-image" alt="Foto capturada">
+                            </div>
                             <input type="hidden" id="faceData" name="face_data">
-                            <div class="mt-3">
-                                <button type="button" class="btn btn-camera" id="confirmPhoto">
+                            <div class="mt-4">
+                                <button type="button" class="btn btn-success btn-lg" id="confirmPhoto">
                                     <i class="bi bi-check-circle me-2"></i>
                                     Confirmar Foto
                                 </button>
@@ -228,12 +384,13 @@
                 {% endif %}
 
                 <!-- Botones de acción -->
-                <div class="d-flex justify-content-between mt-4">
+                <div class="d-flex justify-content-between mt-4 form-actions">
                     <div>
-                        <button type="button" class="btn btn-secondary" id="prevStep" style="display: none;">
-                            <i class="bi bi-arrow-left me-1"></i>Volver
+                        <button type="button" class="btn btn-outline-secondary" id="prevStep" style="display: none;">
+                            <i class="bi bi-arrow-left me-1"></i>Anterior
                         </button>
-                        <a href="{{ url_for('admin_usuario.listar_usuarios') }}" class="btn btn-outline-secondary" id="cancelBtn">
+                        <a href="{{ url_for('admin_usuario.listar_usuarios') }}" class="btn btn-outline-secondary"
+                            id="cancelBtn">
                             <i class="bi bi-x-lg me-1"></i>Cancelar
                         </a>
                     </div>
