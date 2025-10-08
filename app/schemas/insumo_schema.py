@@ -75,6 +75,10 @@ class InsumosCatalogoSchema(Schema):
         allow_none=False,
         load_default=1
     )
+    id_proveedor = fields.Int(
+        allow_none=True,
+        load_default=None
+    )
 
 
     @post_load

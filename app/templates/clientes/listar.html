@@ -1,0 +1,187 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Gestión de clientes - Sistema Frozen{% endblock %}
+
+{% block content %}
+<div class="clientes-container">
+    <div class="d-flex justify-content-between align-items-center pb-2 mb-4 border-bottom">
+        <div>
+            <h1 class="h2 mb-1">Gestión de Clientes</h1>
+            <p class="text-muted mb-0">Administración de clientes registrados en el sistema</p>
+        </div>
+        <div class="btn-toolbar">
+            <a href="{{ url_for('clientes_proveedores.nuevo_cliente') }}" class="btn btn-primary">
+                <i class="bi bi-person-plus me-1"></i>Crear Nuevo Cliente
+            </a>
+        </div>
+    </div>
+
+    
+<!-- Filtros -->
+<div class="card mb-4">
+    <div class="card-body card-filter">
+        <form id="filter-form" method="get" action="{{ url_for('clientes_proveedores.listar_clientes') }}">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="busqueda" class="form-label">Buscar</label>
+                    <input type="text" name="busqueda" id="busqueda" class="form-control"
+                        placeholder="Nombre o código..." value="{{ request.args.get('busqueda', '') }}">
+                </div>
+                     <div class="col-md-2 align-self-end">
+                    <button type="submit" class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-search"></i> Buscar
+                    </button>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="text-muted small text-end">
+                        <p>{{ clientes|length }} clientes encontrados</p>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+    <!-- Tarjetas de clientes -->
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 cliente-card">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">
+                        Pedrito Gonzalez
+                    </h5>
+                    
+                    <div class="card-secondary-details mb-3">
+                        <span><i class="bi bi-hash"></i>  25521524 </span>
+                        <span><i class="bi bi-envelope"></i> pedritogonzalez@correo.com </span>
+                        <span><i class="bi bi-phone"></i> 1112345678</span>
+                        <span><i class="bi bi-house"></i> Casa 123</span>
+                    </div>
+
+                    <div class="mt-auto">
+                        <hr class="card-divider">
+                        <div class="d-flex justify-content-between align-items-center mb-3 user-info">
+                            <div>
+                                <span class="user-label">Estado</span>
+                                <span class="user-value">
+                                    Activo
+                                </span>
+                            </div>
+                            <div>
+                                <span class="badge bg-success-soft text-success">
+                                    <i class="bi bi-check-circle me-1"></i>Activo
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+
+                                <a 
+                                   class="btn btn-sm btn-outline-primary" title="Editar cliente">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+
+                                <a  class="btn btn-sm btn-outline-primary" title="Ver detalle">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+
+                                <form method="POST" >
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-person-x"></i> Desactivar
+                                    </button>
+                                </form>
+
+                          
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% for cliente in clientes %}
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 cliente-card {% if not cliente.activo %}cliente-inactivo{% endif %}">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">
+                        {{ cliente.nombre }} {{ cliente.apellido }}
+                        {% if not cliente.activo %}
+                            <span class="badge bg-secondary">Inactivo</span>
+                        {% endif %}
+                    </h5>
+                    
+                    <div class="card-secondary-details mb-3">
+                        <span><i class="bi bi-hash"></i> {{ cliente.legajo or 'N/A' }}</span>
+                        <span><i class="bi bi-envelope"></i> {{ cliente.email }}</span>
+                        <span><i class="bi bi-phone"></i> {{ cliente.telefono }}</span>
+                        <span><i class="bi bi-house"></i> {{cliente.direccion }}</span>
+                    </div>
+
+                    <div class="mt-auto">
+                        <hr class="card-divider">
+
+                        <div class="d-flex justify-content-between align-items-center mb-3 user-info">
+                            <div>
+                                <span class="user-label">Estado</span>
+                                <span class="user-value">
+                                    {% if cliente.activo %}Activo{% else %}Inactivo{% endif %}
+                                </span>
+                            </div>
+                            <div>
+                                {% if cliente.activo %}
+                                    <span class="badge bg-success-soft text-success">
+                                        <i class="bi bi-check-circle me-1"></i>Activo
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-danger-soft text-danger">
+                                        <i class="bi bi-x-circle me-1"></i>Inactivo
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                            {% if cliente.activo %}
+                                <a href="{{ url_for('clientes_proveedores.editar_cliente', id=cliente.id) }}" 
+                                   class="btn btn-sm btn-outline-primary" title="Editar cliente">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+
+                                <a href="{{ url_for('clientes_proveedores.ver_perfil_cliente', id=cliente.id) }}" class="btn btn-sm btn-outline-primary" title="Ver detalle">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+
+                                <form method="POST" action="{{ url_for('clientes_proveedores.eliminar_cliente', id=cliente.id) }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-person-x"></i> Desactivar
+                                    </button>
+                                </form>
+
+                            {% else %}
+                                <form method="POST" action="{{ url_for('clientes_proveedores.habilitar_cliente', id=cliente.id) }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <i class="bi bi-person-check"></i> Activar
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12">
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-people fs-1 d-block mb-2 opacity-50"></i>
+                <h4>No hay clientes registrados</h4>
+                <p>Comience agregando el primer cliente al sistema</p>
+                <a href="{{ url_for('clientes_proveedores.nuevo_cliente') }}" class="btn btn-primary">
+                    <i class="bi bi-person-plus me-1"></i>Crear Primer cliente
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

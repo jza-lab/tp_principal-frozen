@@ -1,0 +1,129 @@
+{% extends 'layouts/base.html' %}
+
+{% set is_edit = proveedor and proveedor.id %}
+{% set form_title = 'Editar proveedor' if is_edit else 'Agregar Nuevo proveedor' %}
+
+{% block title %}{{ form_title }} - Sistema Frozen{% endblock %}
+
+{% block page_title %}{{ form_title }}{% endblock %}
+{% block page_subtitle %}
+{% if is_edit %}
+Modificar información de {{ proveedor.nombre }}
+{% else %}
+Agregar nuevo proveedor
+{% endif %}
+{% endblock %}
+{% block page_actions %}
+<a href="{{ url_for('clientes_proveedores.listar_proveedores') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Volver a la lista
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 col-xl-9">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Información del proveedor</h5>
+            </div>
+            <div class="card-body">
+                <form id="formulario-proveedor" method="POST">
+                    <div class="row g-3">
+                        {% if proveedor %}
+                        <div class="col-md-6">
+                            
+                            <label for="codigo" class="form-label">Código<span
+                                    class="text-danger">*</span></label>
+
+                            <input type="text" class="form-control" name="codigo" id="codigo"
+                                value="{{ proveedor.codigo if proveedor else '' }}" required {% if proveedor %}readonly{%
+                                endif %}>
+
+                            <div class="form-text">Código único para identificar el proveedor</div>
+                            
+                        </div>
+                        {% endif %}
+                        <div class="col-md-6">
+                            <label for="nombre" class="form-label">Nombre y apellido <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="nombre" id="nombre"
+                                value="{{ proveedor.nombre if proveedor else '' }}" required>
+                        </div>
+                      
+                        <div class="col-md-6">
+                            <label for="telefono" class="form-label">Teléfono <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="telefono" id="telefono"
+                                value="{{ proveedor.telefono if proveedor else '' }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" name="email" id="email"
+                                value="{{ proveedor.email if proveedor else '' }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="cuit" class="form-label">CUIT <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="cuit" id="cuit"
+                                value="{{ proveedor.cuit if proveedor else '' }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="direccion" class="form-label">Dirección</label>
+                            <input type="text" class="form-control" name="direccion" id="direccion"
+                                value="{{ proveedor.direccion if proveedor else '' }}">
+                            <div class="form-text">Dirección física del proveedor</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="condicion_iva" class="form-label">Condicion iva</label>
+                            <input type="text" class="form-control" name="condicion_iva" id="condicion_iva"
+                                value="{{ proveedor.condicion_iva if proveedor else '' }}">
+                            <div class="form-text">Condicion iva del proveedor</div>
+                        </div>
+
+                    </div>
+
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{{ url_for('clientes_proveedores.listar_proveedores') }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle me-1"></i>
+                            {% if proveedor %}Actualizar{% else %}Crear{% endif %} proveedor
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 col-xl-3">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Ayuda
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-light border">
+                    <h6>Consejos importantes:</h6>
+                    <ul class="mb-0 small">
+                        <li>Revise que sea la información correcta antes de crear/editar al proveedor</li>
+                        <li>Los campos con * son obligatorios</li>
+                        <li>El cuit debe tener el formato correcto (XX-XXXXXXXX-X)</li>
+                        <li>El telefono debe incluir el código de área</li>
+                        <li>El email debe ser válido</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    // Crea una variable global de JS con la URL generada por Flask/Jinja
+    const proveedorS_LISTA_URL = "{{ url_for('clientes_proveedores.listar_proveedores') }}";
+    const ID_proveedor = "{{ proveedor.id }}"
+    const isEditBoolean = {{ is_edit | tojson }};
+</script>
+
+<script src="{{ url_for('static', filename='js/formularioProveedor.js') }}"></script>
+
+{% endblock %}
