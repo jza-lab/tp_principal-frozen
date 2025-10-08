@@ -4,6 +4,7 @@ from app.models.totem_sesion import TotemSesionModel
 from app.models.sector import SectorModel
 from app.models.usuario_sector import UsuarioSectorModel
 from app.models.rol import RoleModel
+from app.models.usuario_turno import UsuarioTurnoModel
 from app.schemas.usuario_schema import UsuarioSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
@@ -28,6 +29,7 @@ class UsuarioController(BaseController):
         self.sector_model = SectorModel()
         self.usuario_sector_model = UsuarioSectorModel()
         self.role_model = RoleModel()
+        self.turno_model = UsuarioTurnoModel()
         self.schema = UsuarioSchema()
         self.usuario_direccion_controller = GeorefController()
         self.direccion_model = DireccionModel()
@@ -543,3 +545,8 @@ class UsuarioController(BaseController):
         except Exception as e:
             logger.error(f"Error obteniendo rol por ID: {str(e)}")
             return None
+
+    def obtener_todos_los_turnos(self) -> List[Dict]:
+        """Obtiene una lista de todos los turnos de trabajo disponibles."""
+        resultado = self.turno_model.find_all()
+        return resultado.get('data', [])

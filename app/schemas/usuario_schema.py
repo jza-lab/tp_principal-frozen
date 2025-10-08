@@ -36,11 +36,10 @@ class UsuarioSchema(Schema):
             error='El teléfono debe contener solo números y tener entre 7 y 15 dígitos.'
         )
     )
-    direccion = fields.Str(allow_none=True)
     fecha_nacimiento = fields.Date(allow_none=True)
     fecha_ingreso = fields.Date(allow_none=True)
     supervisor_id = fields.Int(allow_none=True)
-    turno = fields.Str(allow_none=True, validate=validate.OneOf(['MAÑANA', 'TARDE', 'NOCHE', 'ROTATIVO']))
+    turno_id = fields.Int(allow_none=True)
     ultimo_login_web = fields.DateTime(dump_only=True, allow_none=True)
     facial_encoding = fields.String(allow_none=True, dump_only=True)
 

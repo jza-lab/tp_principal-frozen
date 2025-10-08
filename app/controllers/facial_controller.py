@@ -9,6 +9,10 @@ import logging
 from typing import Dict
 from app.database import Database
 from app.models.totem_sesion import TotemSesionModel
+from app.models.usuario_turno import UsuarioTurnoModel
+from app.models.autorizacion_ingreso import AutorizacionIngresoModel
+from app.models.notificacion import NotificacionModel
+from datetime import datetime, timedelta, time
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +24,9 @@ class FacialController:
     def __init__(self):
         self.db = Database().client
         self.totem_sesion_model = TotemSesionModel()
+        self.turno_model = UsuarioTurnoModel()
+        self.autorizacion_model = AutorizacionIngresoModel()
+        self.notificacion_model = NotificacionModel()
         self.save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Data")
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -57,7 +64,7 @@ class FacialController:
         try:
             # Solo buscar usuarios activos con encoding facial
             response = self.db.table("usuarios").select(
-                "id, email, nombre, apellido, facial_encoding, role_id, roles(codigo, nombre), activo"
+                "id, email, nombre, apellido, facial_encoding, role_id, roles(codigo, nombre), activo, turno_id"
             ).not_.is_("facial_encoding", "null").eq("activo", True).execute()
             
             usuarios = response.data
@@ -184,6 +191,89 @@ class FacialController:
             logger.error(f"❌ Error registrando acceso: {e}")
             return {'success': False, 'error': str(e)}
 
+    def _validar_acceso_por_turno(self, usuario: dict):
+        """
+        Valida si un usuario puede realizar un ingreso según su turno, la hora actual y las autorizaciones.
+        """
+        usuario_id = usuario['id']
+        turno_id = usuario.get('turno_id')
+
+        # Si el usuario no tiene turno asignado, se permite el acceso por defecto.
+        if not turno_id:
+            logger.info(f"Usuario {usuario_id} no tiene turno asignado. Acceso permitido.")
+            return {'success': True}
+
+        # Obtener detalles del turno asignado
+        turnos_result = self.turno_model.find_all()
+        if not turnos_result.get('success'):
+            logger.error("Error del sistema: No se pudieron obtener los turnos de la DB.")
+            return {'success': False, 'message': 'Error del sistema: No se pudo verificar el turno.'}
+        
+        turno_asignado = next((t for t in turnos_result['data'] if t['id'] == turno_id), None)
+        
+        if not turno_asignado:
+            logger.error(f"Turno ID {turno_id} asignado al usuario {usuario_id} no encontrado.")
+            return {'success': False, 'message': 'Error: Su turno configurado no es válido.'}
+
+        ahora = datetime.now()
+        hora_actual = ahora.time()
+        fecha_actual = ahora.date()
+
+        # Convertir horas de string a time object
+        hora_inicio_turno = datetime.strptime(turno_asignado['hora_inicio'], '%H:%M:%S').time()
+        hora_fin_turno = datetime.strptime(turno_asignado['hora_fin'], '%H:%M:%S').time()
+        
+        # Definir margen de tolerancia
+        margen_tolerancia = timedelta(minutes=15)
+        
+        # Calcular límite de tardanza
+        limite_tardanza = (datetime.combine(fecha_actual, hora_inicio_turno) + margen_tolerancia).time()
+        
+        # Chequeo de tardanza
+        if hora_actual > limite_tardanza and hora_actual < hora_fin_turno:
+            mensaje = f"El empleado {usuario.get('nombre')} {usuario.get('apellido')} (Legajo: {usuario.get('legajo')}) ha llegado tarde a las {hora_actual.strftime('%H:%M:%S')}."
+            self.notificacion_model.create({
+                'usuario_id': usuario_id,
+                'tipo': 'TARDANZA',
+                'mensaje': mensaje
+            })
+            logger.info(f"NOTIFICACION CREADA: Usuario {usuario_id} llegó tarde.")
+        
+        # Chequeo de acceso dentro del turno (permitimos fichar 15 minutos antes)
+        inicio_permitido = (datetime.combine(fecha_actual, hora_inicio_turno) - margen_tolerancia).time()
+        
+        if inicio_permitido <= hora_actual <= hora_fin_turno:
+            logger.info(f"Acceso en turno para usuario {usuario_id}.")
+            return {'success': True}
+        
+        # Si no está en su turno, buscar autorización para el día de hoy
+        logger.info(f"Usuario {usuario_id} intenta acceder fuera de su turno. Buscando autorización...")
+        autorizacion_result = self.autorizacion_model.find_by_usuario_and_fecha(usuario_id, fecha_actual)
+        
+        if not autorizacion_result.get('success'):
+            logger.warning(f"Acceso denegado. Usuario {usuario_id} sin autorización para hoy.")
+            return {'success': False, 'message': 'Acceso fuera de horario. Requiere autorización de supervisor.'}
+        
+        # Se encontró autorización, verificar si está dentro del turno autorizado
+        autorizacion = autorizacion_result['data']
+        turno_autorizado_id = autorizacion['turno_autorizado_id']
+        
+        turno_autorizado = next((t for t in turnos_result['data'] if t['id'] == turno_autorizado_id), None)
+        if not turno_autorizado:
+            logger.error(f"Turno autorizado ID {turno_autorizado_id} no es válido.")
+            return {'success': False, 'message': 'Error: Turno autorizado inválido.'}
+
+        hora_inicio_auth = datetime.strptime(turno_autorizado['hora_inicio'], '%H:%M:%S').time()
+        hora_fin_auth = datetime.strptime(turno_autorizado['hora_fin'], '%H:%M:%S').time()
+        inicio_permitido_auth = (datetime.combine(fecha_actual, hora_inicio_auth) - margen_tolerancia).time()
+
+        if inicio_permitido_auth <= hora_actual <= hora_fin_auth:
+            logger.info(f"Acceso permitido para usuario {usuario_id} con autorización para el turno '{turno_autorizado['nombre']}'.")
+            return {'success': True}
+        
+        logger.warning(f"Acceso denegado. Usuario {usuario_id} con autorización pero fuera de horario del turno autorizado.")
+        return {'success': False, 'message': 'Autorización encontrada, pero intenta acceder fuera del horario permitido.'}
+
     def _manejar_logica_acceso(self, usuario: dict, metodo: str):
         """
         Lógica actualizada para registrar entrada/salida usando sesiones de tótem.
@@ -198,6 +288,11 @@ class FacialController:
             # Lógica de ENTRADA
             logger.info(f"Procesando ENTRADA para {usuario_nombre} a través de {metodo}")
             
+            # Validar acceso por turno
+            validacion_turno = self._validar_acceso_por_turno(usuario)
+            if not validacion_turno.get('success'):
+                return validacion_turno
+
             # Crear sesión de tótem
             resultado_sesion = self.totem_sesion_model.crear_sesion(usuario_id, metodo)
             if not resultado_sesion.get('success'):

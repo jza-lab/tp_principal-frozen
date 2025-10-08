@@ -99,4 +99,19 @@ def create_app():
     def index():
         session.clear()
         return redirect(url_for('auth.login'))
+    
+    # Registrar filtros de Jinja2
+    from datetime import datetime
+    def format_datetime_filter(value, format='%d/%m/%Y %H:%M'):
+        if value is None:
+            return ""
+        # Intenta parsear la fecha, asumiendo que es un string ISO 8601
+        try:
+            dt_object = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+            return dt_object.strftime(format)
+        except (ValueError, TypeError):
+            return value # Devolver el valor original si no se puede formatear
+
+    app.jinja_env.filters['format_datetime'] = format_datetime_filter
+
     return app
