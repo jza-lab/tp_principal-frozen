@@ -276,3 +276,21 @@ def obtener_stock_consolidado():
     except Exception as e:
         logger.error(f"Error inesperado en obtener_stock_consolidado: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+
+@insumos_bp.route("/catalogo/actualizar-stock/<string:id_insumo>", methods=["POST"])
+@permission_required(sector_codigo='ALMACEN', accion='actualizar')
+def actualizar_stock_insumo(id_insumo):
+    """
+    Endpoint para calcular y actualizar el stock de un insumo.
+    """
+    try:
+        if not validate_uuid(id_insumo):
+            return jsonify({"success": False, "error": "ID de insumo inválido"}), 400
+
+        response, status = insumo_controller.actualizar_stock_insumo(id_insumo)
+        return jsonify(response), status
+
+    except Exception as e:
+        logger.error(f"Error inesperado en actualizar_stock_insumo: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500

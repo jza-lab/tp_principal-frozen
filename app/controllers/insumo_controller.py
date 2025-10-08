@@ -325,4 +325,37 @@ class InsumoController(BaseController):
             logger.error(f"Error en controlador buscando insumo por código proveedor: {str(e)}")
             return None
 
+    def actualizar_stock_insumo(self, id_insumo: str) -> tuple:
+        """
+        Calcula y actualiza el stock de un insumo basado en sus lotes en inventario.
+        """
+        try:
+            # 1. Obtener todos los lotes disponibles para el insumo
+            lotes_result = self.inventario_model.find_by_insumo(id_insumo, solo_disponibles=True)
+
+            if not lotes_result.get('success'):
+                return self.error_response(f"No se pudieron obtener los lotes para el insumo: {lotes_result.get('error')}")
+
+            # 2. Calcular el stock sumando la cantidad actual de cada lote
+            total_stock = sum(lote.get('cantidad_actual', 0) for lote in lotes_result.get('data', []))
+
+            # 3. Actualizar el campo stock_actual en la tabla de insumos
+            update_data = {'stock_actual': int(total_stock)}
+            update_result = self.insumo_model.update(id_insumo, update_data, 'id_insumo')
+
+            if not update_result.get('success'):
+                return self.error_response(f"Error al actualizar el stock del insumo: {update_result.get('error')}")
+
+            logger.info(f"Stock actualizado para el insumo {id_insumo}: {total_stock}")
+
+            # 4. Devolver el insumo actualizado
+            return self.success_response(
+                data=self.schema.dump(update_result['data']),
+                message='Stock del insumo actualizado correctamente.'
+            )
+
+        except Exception as e:
+            logger.error(f"Error actualizando stock de insumo {id_insumo}: {str(e)}")
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
 

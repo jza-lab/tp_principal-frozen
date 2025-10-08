@@ -57,6 +57,25 @@
                         <label class="form-label-sm">Stock Máximo</label>
                         <p class="form-control-plaintext">{{ insumo.stock_max or 'N/A' }} {{ insumo.unidad_medida }}</p>
                     </div>
+                        <div>
+                            <span class="stock-label">Stock</span>
+                            <span class="stock-value 
+                                {% if insumo.stock_actual is not none and insumo.stock_actual < insumo.stock_min %}
+                                    badge text-bg-danger fw-normal py-1 fs-6
+                                {% elif insumo.stock_actual is not none and insumo.stock_actual >= insumo.stock_min %}
+                                    badge text-bg-success fw-normal py-1 fs-6
+                                {% else %}
+                                    text-muted
+                                {% endif %}" 
+                                id="stock-value-{{ insumo.id_insumo }}">
+                                {{ insumo.stock_actual if insumo.stock_actual is not none else 'N/A' }}
+                            </span>
+                            <span class="stock-min text-muted">/ Min: {{ insumo.stock_min }}</span>
+                            <button class="btn btn-sm btn-outline-secondary ms-2 p-0 px-1 update-stock-btn"
+                                    data-id="{{ insumo.id_insumo }}" title="Actualizar Stock">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </div>
                     <div class="col-md-4">
                         <label class="form-label-sm">¿Es Delicado?</label>
                         <p class="form-control-plaintext">
@@ -156,4 +175,8 @@
                 </div>
             </div>
         </div>
-    {% endblock %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/insumo_stock.js') }}"></script>
+{% endblock %}
