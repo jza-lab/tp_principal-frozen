@@ -144,6 +144,48 @@ class ProductoController(BaseController):
             logger.error(f"Error en actualizar_producto: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
 
+    def actualizar_costo_productos_insumo(self, insumos_id: Optional[Dict]) -> Dict:
+        """Actualiza el costo de todos los productos que contienen los insumos dados."""
+        try:
+
+            productos_a_actualizar = set()
+            
+            # 1. Recorrer los insumos actualizados y recopilar todos los productos afectados.
+            for insumo in insumos_id:
+                insumo_id = insumo.get('id_insumo')
+                if not insumo_id:
+                    continue
+                
+                # Buscar todas las recetas que usan este insumo
+                recetas_result = self.receta_model.find_all_recetas_by_insumo(insumo_id)
+                
+
+                if recetas_result.get('success') and recetas_result.get('data'):
+                    recetas = recetas_result['data']
+                    # Agrega los IDs de los productos a un conjunto (set) para asegurar unicidad
+                    for receta in recetas:
+                        if 'producto_id' in receta:
+                            productos_a_actualizar.add(receta['producto_id'])
+
+            productos_actualizados = []
+            
+            # 2. Iterar sobre el CONJUNTO único de productos afectados y actualizarlos solo una vez.
+            for producto_id in productos_a_actualizar:
+                costo_update_result, status = self.actualizar_costo_producto(producto_id)
+                if costo_update_result.get('success'):
+                    productos_actualizados.append(producto_id)
+                else:
+                    logger.error(f"Error actualizando costo para producto ID {producto_id}: {costo_update_result.get('error')}")
+
+            return self.success_response(
+                {'productos_actualizados': productos_actualizados},
+                f"Costos actualizados para {len(productos_actualizados)} productos."
+            )
+            
+        except Exception as e:
+            logger.error(f"Error en actualizar_costo_productos_insumo: {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
+        
     def actualizar_costo_producto(self, producto_id: int) -> Dict:
         """Actualiza el costo del producto basado en su receta."""
         try:
