@@ -175,7 +175,7 @@ def editar_usuario(id):
                                 usuario_sectores_ids=datos_actualizados.get('sectores', []))
 
     # Método GET
-    usuario = usuario_controller.obtener_usuario_por_id(id)
+    usuario = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)
     if not usuario:
         flash('Usuario no encontrado.', 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
