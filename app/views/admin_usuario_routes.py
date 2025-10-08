@@ -264,3 +264,32 @@ def validar_rostro():
             'valid': False,
             'message': resultado.get('message', 'Error al validar el rostro.')
         })
+
+@admin_usuario_bp.route('/usuarios/verificar_direccion', methods=['POST'])
+@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
+def verificar_direccion():
+    """
+    Verifica una dirección en tiempo real usando la API de Georef.
+    """
+    data = request.get_json()
+    calle = data.get('calle')
+    altura = data.get('altura')
+    localidad = data.get('localidad')
+    provincia = data.get('provincia')
+
+    if not all([calle, altura, localidad, provincia]):
+        return jsonify({
+            'success': False,
+            'message': 'Todos los campos de dirección son requeridos para la verificación.'
+        }), 400
+
+    georef_controller = usuario_controller.usuario_direccion_controller
+    full_street = f"{calle} {altura}"
+    
+    resultado = georef_controller.normalizar_direccion(
+        direccion=full_street,
+        localidad=localidad,
+        provincia=provincia
+    )
+
+    return jsonify(resultado)

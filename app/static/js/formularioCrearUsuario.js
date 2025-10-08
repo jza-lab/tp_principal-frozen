@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const pisoInput = document.getElementById('piso');
     const departamentoInput = document.getElementById('departamento');
     const direccionInput = document.getElementById('direccion');
+    const addressFeedback = document.getElementById('address-feedback');
     const requiredInputsStep2 = addressInfoSection ? addressInfoSection.querySelectorAll('input[required], select[required]') : [];
 
     // Elementos de la cámara
@@ -107,6 +108,61 @@ document.addEventListener('DOMContentLoaded', function () {
         inputElement.classList.remove('is-invalid');
         inputElement.classList.add('is-valid');
     }
+
+    function debounce(func, delay) {
+        let timeout;
+        return function(...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), delay);
+        };
+    }
+
+    async function verifyAddress() {
+        if (!calleInput.value || !alturaInput.value || !localidadInput.value || !provinciaSelect.value) {
+            if(addressFeedback) addressFeedback.innerHTML = '';
+            return;
+        }
+
+        if(addressFeedback) {
+            addressFeedback.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Verificando dirección...';
+            addressFeedback.className = 'form-text text-muted my-2';
+        }
+
+        try {
+            const response = await fetch('/admin/usuarios/verificar_direccion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    calle: calleInput.value,
+                    altura: alturaInput.value,
+                    localidad: localidadInput.value,
+                    provincia: provinciaSelect.value
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success && addressFeedback) {
+                const normalized = result.data;
+                const normalizedAddress = `${normalized.calle.nombre} ${normalized.altura.valor}, ${normalized.localidad_censal.nombre}, ${normalized.provincia.nombre}`;
+                addressFeedback.innerHTML = `<i class="bi bi-check-circle-fill text-success me-2"></i>Dirección verificada: ${normalizedAddress}`;
+                addressFeedback.className = 'form-text text-success my-2';
+            } else if(addressFeedback) {
+                addressFeedback.innerHTML = `<i class="bi bi-x-circle-fill text-danger me-2"></i>Error: ${result.message || 'No se pudo verificar la dirección.'}`;
+                addressFeedback.className = 'form-text text-danger my-2';
+            }
+
+        } catch (error) {
+            console.error('Error al verificar dirección:', error);
+            if(addressFeedback) {
+                addressFeedback.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Error de red al verificar la dirección.';
+                addressFeedback.className = 'form-text text-warning my-2';
+            }
+        }
+    }
+
+    const debouncedVerifyAddress = debounce(verifyAddress, 800);
 
     async function validateField(field, value) {
         let inputElement;
@@ -501,6 +557,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (calleInput) {
         calleInput.addEventListener('blur', () => validateAddressField('calle'));
         calleInput.addEventListener('input', () => {
+            debouncedVerifyAddress();
             if (calleInput.value.trim().length > 0) {
                 validateAddressField('calle');
             }
@@ -511,6 +568,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (alturaInput) {
         alturaInput.addEventListener('blur', () => validateAddressField('altura'));
         alturaInput.addEventListener('input', () => {
+            debouncedVerifyAddress();
             if (alturaInput.value.trim().length > 0) {
                 validateAddressField('altura');
             }
@@ -520,6 +578,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (provinciaSelect) {
         provinciaSelect.addEventListener('change', () => {
+            verifyAddress();
             validateAddressField('provincia');
             updateDireccionCompleta();
         });
@@ -529,6 +588,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (localidadInput) {
         localidadInput.addEventListener('blur', () => validateAddressField('localidad'));
         localidadInput.addEventListener('input', () => {
+            debouncedVerifyAddress();
             if (localidadInput.value.trim().length > 0) {
                 validateAddressField('localidad');
             }
