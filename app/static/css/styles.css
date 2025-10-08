@@ -16,6 +16,7 @@
     --accent-orange: #fd7e14;
     --accent-purple: #6f42c1;
     --accent-red: #e74a3b;
+    --accent-white:#ffffff;
 
     /* Nuevas variables para efectos */
     --glow-primary: rgba(49, 49, 49, 0.5); /* Sombra de app-primary */

@@ -21,22 +21,52 @@
     <div class="card-body card-filter">
         <form method="get" action="{{ url_for('orden_produccion.listar') }}">
             <div class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label for="estado" class="form-label">Filtrar por Estado</label>
-                    <select name="estado" class="form-select" onchange="this.form.submit()">
-                        <option value="">Todas las órdenes</option>
-                        <option value="PENDIENTE" {% if request.args.get('estado') == 'PENDIENTE' %}selected{% endif %}>Pendientes</option>
-                        <option value="EN_PROCESO" {% if request.args.get('estado') == 'EN_PROCESO' %}selected{% endif %}>En Proceso</option>
-                        <option value="APROBADA" {% if request.args.get('estado') == 'APROBADA' %}selected{% endif %}>Aprobadas</option>
-                        <option value="CANCELADA" {% if request.args.get('estado') == 'CANCELADA' %}selected{% endif %}>En espera</option>
-                        <option value="COMPLETADA" {% if request.args.get('estado') == 'COMPLETADA' %}selected{% endif %}>Completadas</option>
-                    </select>
-                    
-                </div>
-                <div class="col-md-8">
-                    <div class="text-muted small">
-                        <p>{{ ordenes|length }} órdenes encontradas</p>
-                    </div>
+                <div class="card-body card-filter">
+                    <form method="get" action="{{ url_for('orden_produccion.listar') }}">
+                        <div class="row g-3 align-items-end">   
+                            <div class="col-12 mb-3">
+                                <h5 class="form-label mb-1 text-white">Filtrar por Estado</h5>
+                                <p class="text-white small mb-0">{{ ordenes|length }} órdenes encontradas</p>
+                            </div>
+                            
+                            <div class="col-12 d-flex">
+                                {% set current_status = request.args.get('estado') %}
+                                
+                                <div class="d-flex flex-wrap gap-2 align-items-center" role="group" aria-label="Filtro de Órdenes">
+                                    
+                                    <a href="{{ url_for('orden_produccion.listar', estado='') }}" 
+                                    class="btn btn-sm {% if not current_status %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        Todas las órdenes
+                                    </a>
+                                    <span class="text-white fw-bold mx-1 justify-content-center">|</span>
+                                    <a href="{{ url_for('orden_produccion.listar', estado='PENDIENTE') }}" 
+                                    class="btn btn-sm {% if current_status == 'PENDIENTE' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        Pendientes
+                                    </a>
+                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                                    <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" 
+                                    class="btn btn-sm {% if current_status == 'EN_PROCESO' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        En Proceso
+                                    </a>
+                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                                    <a href="{{ url_for('orden_produccion.listar', estado='APROBADA') }}" 
+                                    class="btn btn-sm {% if current_status == 'APROBADA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        Aprobadas
+                                    </a>
+                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                                    <a href="{{ url_for('orden_produccion.listar', estado='CANCELADA') }}" 
+                                    class="btn btn-sm {% if current_status == 'CANCELADA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        En espera
+                                    </a>
+                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                                    <a href="{{ url_for('orden_produccion.listar', estado='COMPLETADA') }}" 
+                                    class="btn btn-sm {% if current_status == 'COMPLETADA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        Completadas
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
                 </div>
             </div>
         </form>
