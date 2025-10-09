@@ -1,4 +1,11 @@
 document.addEventListener('DOMContentLoaded', function () {
+    // Si no estamos en la página de crear un nuevo usuario, no ejecutar este script.
+    // La variable IS_NEW es inyectada desde el template de Flask.
+    if (typeof IS_NEW === 'undefined' || !IS_NEW) {
+        console.log('Modo de edición de usuario detectado. El script de creación multi-paso no se ejecutará.');
+        return; // Detiene la ejecución del script.
+    }
+
     // --- ELEMENTOS DEL DOM ---
     const userForm = document.getElementById('userForm');
     const step1Element = document.getElementById('step1');

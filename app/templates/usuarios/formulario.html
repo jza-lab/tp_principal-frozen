@@ -217,7 +217,7 @@
                             <div class="col-md-8">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="calle" name="calle" placeholder="Calle"
-                                        value="{{ usuario.get('direccion', {}).get('calle', '') }}" required>
+                                        value="{{ (usuario.get('direccion') or {}).get('calle', '') }}" required>
                                     <label for="calle">
                                         <i class="bi bi-signpost me-1"></i>Calle
                                     </label>
@@ -228,7 +228,7 @@
                             <div class="col-md-4">
                                 <div class="form-floating">
                                     <input type="number" class="form-control" id="altura" name="altura"
-                                        placeholder="Altura" value="{{ usuario.get('direccion', {}).get('altura', '') }}" required>
+                                        placeholder="Altura" value="{{ (usuario.get('direccion') or {}).get('altura', '') }}" required>
                                     <label for="altura">
                                         <i class="bi bi-123 me-1"></i>Altura
                                     </label>
@@ -246,7 +246,7 @@
                                         "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del Fuego",
                                         "Tucumán"] %}
                                         {% for p in provincias %}
-                                        <option value="{{ p }}" {% if usuario.get('direccion') and usuario.get('direccion').get('provincia') == p %}selected{% endif %}>{{ p }}</option>
+                                        <option value="{{ p }}" {% if (usuario.get('direccion') or {}).get('provincia') == p %}selected{% endif %}>{{ p }}</option>
                                         {% endfor %}
                                     </select>
                                     <label for="provincia">
@@ -259,7 +259,7 @@
                             <div class="col-md-6">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="localidad" name="localidad"
-                                        placeholder="Localidad" value="{{ usuario.get('direccion', {}).get('localidad', '') }}"
+                                        placeholder="Localidad" value="{{ (usuario.get('direccion') or {}).get('localidad', '') }}"
                                         required>
                                     <label for="localidad">
                                         <i class="bi bi-pin-map me-1"></i>Localidad
@@ -271,7 +271,7 @@
                             <div class="col-md-4">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="piso" name="piso"
-                                        placeholder="Piso (Opcional)" value="{{ usuario.get('direccion', {}).get('piso', '') }}">
+                                        placeholder="Piso (Opcional)" value="{{ (usuario.get('direccion') or {}).get('piso', '') }}">
                                     <label for="piso">
                                         <i class="bi bi-building me-1"></i>Piso (Opcional)
                                     </label>
@@ -281,7 +281,7 @@
                             <div class="col-md-4">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="depto" name="depto"
-                                        placeholder="Dto (Opcional)" value="{{ usuario.get('direccion', {}).get('depto', '') }}">
+                                        placeholder="Dto (Opcional)" value="{{ (usuario.get('direccion') or {}).get('depto', '') }}">
                                     <label for="depto">
                                         <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
                                     </label>
@@ -292,7 +292,7 @@
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
                                         placeholder="Código Postal"
-                                        value="{{ usuario.get('direccion', {}).get('codigo_postal', '') }}">
+                                        value="{{ (usuario.get('direccion') or {}).get('codigo_postal', '') }}">
                                     <label for="codigo_postal">
                                         <i class="bi bi-mailbox me-1"></i>Código Postal
                                     </label>
@@ -410,6 +410,11 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Inyecta la variable 'is_new' de Jinja2 a JavaScript
+    const IS_NEW = {{ is_new|tojson }};
+</script>
 <script src="{{ url_for('static', filename='js/usuarios/formularioCrearUsuario.js') }}"></script>
 
 {% endblock %}
