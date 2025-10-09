@@ -71,7 +71,7 @@ def index():
                             ordenes_pendientes = ordenes_pendientes,
                             ordenes_aprobadas = ordenes_aprobadas,
                             ordenes_totales = ordenes_totales,
-                            notificaciones=notificaciones)
+                            notificaciones=notificaciones,
                             alertas_stock_count=alertas_stock_count)
 
 @admin_usuario_bp.route('/usuarios')
