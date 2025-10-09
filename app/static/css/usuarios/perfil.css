@@ -4,9 +4,6 @@
     --profile-shadow-hover: 0 10px 50px rgba(0, 0, 0, 0.12);
 }
 
-/* ================================
-   CONTENEDOR PRINCIPAL
-   ================================ */
 .profile-container {
     max-width: 1200px;
     margin: 0 auto;
@@ -14,9 +11,6 @@
     animation: fadeIn 0.5s ease-out;
 }
 
-/* ================================
-   HEADER DEL PERFIL
-   ================================ */
 .profile-header-section {
     margin-bottom: 2rem;
 }
@@ -63,9 +57,6 @@
     font-weight: 700;
 }
 
-/* ================================
-   TARJETA PRINCIPAL
-   ================================ */
 .profile-card {
     background: white;
     border-radius: 20px;
@@ -96,9 +87,7 @@
     }
 }
 
-/* ================================
-   HERO SECTION
-   ================================ */
+
 .profile-hero {
     background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
     padding: 3rem 2rem;
@@ -175,9 +164,6 @@
     font-size: 1.1rem;
 }
 
-/* ================================
-   BARRA DE ACCIÓN
-   ================================ */
 .profile-action-bar {
     padding: 1.5rem 2rem;
     background: #f8f9fa;
@@ -223,9 +209,6 @@
     transform: translateY(0);
 }
 
-/* ================================
-   CONTENIDO DEL PERFIL
-   ================================ */
 .profile-content {
     padding: 2.5rem 2rem;
     transition: background 0.5s ease;
@@ -338,9 +321,8 @@
     word-break: break-word;
 }
 
-/* ================================
-   MODO EDICIÓN
-   ================================ */
+
+ /*Modo edicion /**/
 .profile-content.edit-mode .info-item {
     animation: editPulse 0.5s ease-out;
     border-color: var(--app-primary);
@@ -402,9 +384,6 @@ select.form-control-inline {
     cursor: pointer;
 }
 
-/* ================================
-   NOTIFICACIONES
-   ================================ */
 .alert-notification {
     position: fixed;
     top: 20px;
@@ -432,9 +411,6 @@ select.form-control-inline {
     font-size: 1.5rem;
 }
 
-/* ================================
-   MODAL PERSONALIZADO
-   ================================ */
 .modal-content {
     border-radius: 16px;
     border: none;
@@ -451,9 +427,7 @@ select.form-control-inline {
     padding: 1.25rem;
 }
 
-/* ================================
-   ANIMACIONES
-   ================================ */
+
 @keyframes fadeIn {
     from {
         opacity: 0;
@@ -489,9 +463,6 @@ select.form-control-inline {
     }
 }
 
-/* ================================
-   SPINNER DE CARGA
-   ================================ */
 .spinner-border-sm {
     width: 1rem;
     height: 1rem;
@@ -509,9 +480,7 @@ select.form-control-inline {
     box-shadow: none !important;
 }
 
-/* ================================
-   RESPONSIVE - TABLETS
-   ================================ */
+
 @media (max-width: 992px) {
     .profile-hero {
         flex-direction: column;
@@ -536,9 +505,6 @@ select.form-control-inline {
     }
 }
 
-/* ================================
-   RESPONSIVE - MÓVILES
-   ================================ */
 @media (max-width: 768px) {
     .profile-container {
         padding: 1rem 0.5rem;
@@ -669,9 +635,7 @@ select.form-control-inline {
         padding: 0.65rem 0.85rem;
     }
 }
-/* ================================
-   MEJORAS DE ACCESIBILIDAD
-   ================================ */
+
 .btn-back:focus,
 .btn-action:focus,
 .form-control-inline:focus {
@@ -679,9 +643,7 @@ select.form-control-inline {
     outline-offset: 2px;
 }
 
-/* ================================
-   TRANSICIONES SUAVES
-   ================================ */
+
 * {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -693,63 +655,6 @@ select.form-control-inline {
     will-change: transform;
 }
 
-/* ================================
-   ESTADOS DE LOADING
-   ================================ */
-.btn-action:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-    transform: none !important;
-}
-
-.btn-action:disabled:hover {
-    transform: none !important;
-    box-shadow: none !important;
-}
-
-/* ================================
-   MEJORAS VISUALES ADICIONALES
-   ================================ */
-.profile-card {
-    position: relative;
-}
-
-.profile-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, var(--app-primary), var(--accent-green), var(--app-primary));
-    background-size: 200% 100%;
-    animation: gradientShift 3s ease infinite;
-}
-
-@keyframes gradientShift {
-    0%, 100% {
-        background-position: 0% 50%;
-    }
-    50% {
-        background-position: 100% 50%;
-    }
-}
-
-.info-section:last-child {
-    margin-bottom: 0;
-}
-
-/* Efecto de foco en inputs */
-.form-control-inline::placeholder {
-    color: #adb5bd;
-    font-weight: 500;
-}
-
-.form-control-inline:hover {
-    border-color: var(--app-primary-hover);
-}
-
-/* Badges mejorados */
 .badge {
     display: inline-flex;
     align-items: center;
@@ -758,4 +663,83 @@ select.form-control-inline {
 
 .badge i {
     font-size: 0.875rem;
+}
+
+.info-item:active {
+    transform: scale(0.98);
+}
+
+.btn-action:active {
+    transform: scale(0.97);
+}
+
+
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+.loading-skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 1000px 100%;
+    animation: shimmer 2s infinite;
+}
+
+
+@media print {
+    .profile-action-bar,
+    .btn-back,
+    .profile-status-badge {
+        display: none !important;
+    }
+
+    .profile-card {
+        box-shadow: none;
+        border: 1px solid #000;
+    }
+
+    .info-item {
+        break-inside: avoid;
+    }
+
+    .profile-hero {
+        break-after: avoid;
+    }
+}
+
+    /* ================================
+    DARK MODE SUPPORT (Opcional)
+   ================================ */
+@media (prefers-color-scheme: dark) {
+    .profile-card {
+        /* background: #1a1a1a; */
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+.text-truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.text-truncate-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
