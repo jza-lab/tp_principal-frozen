@@ -100,7 +100,7 @@
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="cuil_cuit" name="cuil_cuit"
                                         value="{{ usuario.cuil_cuit or '' }}" placeholder="CUIL/CUIT (11 dígitos)"
-                                        pattern="\\d{11}" title="Debe contener 11 dígitos numéricos.">
+                                        pattern="\\d{11}" title="Debe contener 11 dígitos numéricos." required>
                                     <label for="cuil_cuit">
                                         <i class="bi bi-person-vcard me-1"></i>CUIL/CUIT
                                     </label>
@@ -123,7 +123,7 @@
                             <div class="col-md-6">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="telefono" name="telefono"
-                                        value="{{ usuario.telefono or '' }}" placeholder="Ej: +541122334455">
+                                        value="{{ usuario.telefono or '' }}" placeholder="Ej: +541122334455" required>
                                     <label for="telefono">
                                         <i class="bi bi-telephone me-1"></i>Teléfono
                                     </label>

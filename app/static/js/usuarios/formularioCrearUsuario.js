@@ -61,8 +61,8 @@ document.addEventListener('DOMContentLoaded', function () {
         nombre: false,
         apellido: false,
         rol: false,
-        cuil_cuit: true, // Opcional, válido por defecto
-        telefono: true, // Opcional, válido por defecto
+        cuil_cuit: false,
+        telefono: false,
         step1Complete: false,
         // Paso 2
         calle: false,
@@ -195,16 +195,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 break;
             default:
                 return;
-        }
-        
-        const isOptional = ['cuil_cuit', 'telefono'].includes(field);
-
-        // Si es opcional y está vacío, limpiar estilos y marcar como válido.
-        if (isOptional && (!value || !value.trim())) {
-            clearError(inputElement);
-            validationState[field] = true;
-            updateStepButtonState();
-            return;
         }
         
         // --- Validaciones de formato ---
