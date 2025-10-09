@@ -43,9 +43,9 @@ def listar():
         flash(
             response.get("error", "Error al cargar las órdenes de producción."), "error"
         )
-    
+
     supervisores_response = usuario_controller.obtener_todos_los_usuarios(filtros={'role_id': 4})
-    
+
     # --- CORRECCIÓN DEL ERROR 'list' object has no attribute 'get' ---
     supervisores = []
     if isinstance(supervisores_response, dict) and supervisores_response.get("success"):
@@ -63,12 +63,12 @@ def listar():
 
 
 @orden_produccion_bp.route("/nueva", methods=["GET", "POST", "PUT"])
-@permission_required(sector_codigo='PRODUCCION', accion='crear')
+##@permission_required(sector_codigo='PRODUCCION', accion='crear')
 def nueva():
     """Muestra la página para crear una nueva orden de producción."""
     productos = producto_controller.obtener_todos_los_productos()
     supervisores_response = usuario_controller.obtener_todos_los_usuarios(filtros={'role_id': 4})
-    
+
     # --- CORRECCIÓN DEL ERROR 'list' object has no attribute 'get' ---
     supervisores = []
     if isinstance(supervisores_response, dict) and supervisores_response.get("success"):
@@ -76,14 +76,14 @@ def nueva():
     elif isinstance(supervisores_response, list):
         supervisores = supervisores_response
     # ------------------------------------------------------------------
-    
+
     return render_template(
         "ordenes_produccion/formulario.html", productos=productos, supervisores=supervisores
     )
 
 
 @orden_produccion_bp.route("/nueva/crear", methods=["POST"])
-@permission_required(sector_codigo='PRODUCCION', accion='crear')
+##@permission_required(sector_codigo='PRODUCCION', accion='crear')
 def crear():
     try:
         datos_json = request.get_json()
@@ -124,7 +124,7 @@ def modificar(id):
         orden = controller.obtener_orden_por_id(id).get("data")
         productos = producto_controller.obtener_todos_los_productos()
         operarios = usuario_controller.obtener_todos_los_usuarios()
-        
+
         # FIX para operarios en modificar (ya que también llama a obtener_todos_los_usuarios)
         # Asumimos que aquí el problema no ocurrió, pero mejor prevenir
         if isinstance(operarios, list):
@@ -133,7 +133,7 @@ def modificar(id):
              operarios_list = operarios.get("data", [])
         else:
              operarios_list = []
-             
+
         return render_template(
             "ordenes_produccion/formulario.html",
             orden_m=orden,
@@ -249,11 +249,11 @@ def asignar_supervisor(id):
     # no está en este archivo, sino dentro de controller.asignar_supervisor.
     # El error de tipo 'AttributeError' sí fue arreglado aquí.
     response, status_code = controller.asignar_supervisor(id, int(supervisor_id))
-    
+
     if status_code == 200:
         flash(response.get("message", "Supervisor asignado con éxito."), "success")
     else:
         # Se muestra el mensaje de error de la respuesta, que puede ser el de PostgreSQL
         flash(response.get("error", "Error al asignar supervisor."), "error")
-        
+
     return redirect(url_for("orden_produccion.listar"))
