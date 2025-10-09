@@ -31,6 +31,15 @@
                     <input type="date" class="form-control" id="fecha_autorizada" name="fecha_autorizada" value="{{ autorizacion.fecha_autorizada or '' }}" required>
                 </div>
 
+                <!-- Tipo de Autorización -->
+                <div class="mb-3">
+                    <label for="tipo" class="form-label">Tipo de Autorización</label>
+                    <select class="form-select" id="tipo" name="tipo" required>
+                        <option value="TURNO_ESPECIAL" {% if not autorizacion.tipo or autorizacion.tipo == 'TURNO_ESPECIAL' %}selected{% endif %}>Turno Especial</option>
+                        <option value="TARDANZA" {% if autorizacion.tipo == 'TARDANZA' %}selected{% endif %}>Llegada Tarde</option>
+                    </select>
+                </div>
+
                 <!-- Selección de Turno Autorizado -->
                 <div class="mb-3">
                     <label for="turno_autorizado_id" class="form-label">Turno Autorizado</label>

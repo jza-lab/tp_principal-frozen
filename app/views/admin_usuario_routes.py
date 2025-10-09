@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, session, request, redirect, url_for, flash
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
-from app.controllers.notificacion_controller import NotificacionController
+from app.controllers.notificación_controller import NotificacionController
 from app.permisos import permission_required
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 
@@ -328,31 +328,29 @@ def verificar_direccion():
     return jsonify(resultado)
 
 @admin_usuario_bp.route('/autorizaciones/nueva', methods=['GET', 'POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='crear') # O un permiso más específico
+@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
 def nueva_autorizacion():
     """
     Muestra el formulario para crear una nueva autorización de ingreso y la procesa.
     """
     if request.method == 'POST':
         data = request.form.to_dict()
-        data['supervisor_id'] = session.get('usuario_id') # El supervisor es el usuario logueado
+        data['supervisor_id'] = session.get('usuario_id')
         
         # Convertir a tipos de datos correctos
         data['usuario_id'] = int(data['usuario_id'])
-        data['turno_autorizado_id'] = int(data['turno_autorizado_id'])
-        # La fecha ya viene en formato YYYY-MM-DD del input type="date"
+        data['turno_autorizado_id'] = int(data['turno_autorizado_id']) if data.get('turno_autorizado_id') else None
         
         resultado = autorizacion_model.create(data)
 
         if resultado.get('success'):
             flash('Autorización creada exitosamente.', 'success')
-            return redirect(url_for('admin_usuario.listar_usuarios')) # Redirigir a una futura lista de autorizaciones
+            return redirect(url_for('admin_usuario.listar_usuarios'))
         else:
             flash(f"Error al crear la autorización: {resultado.get('error')}", 'error')
-            # Volver a renderizar el formulario con los datos ingresados
             usuarios = usuario_controller.obtener_todos_los_usuarios({'activo': True})
             turnos = usuario_controller.obtener_todos_los_turnos()
-            return render_template('usuarios/autorizacion_formulario.html',
+            return render_template('usuarios/autorizacion.html',
                                  usuarios=usuarios,
                                  turnos=turnos,
                                  autorizacion=data)
@@ -360,7 +358,7 @@ def nueva_autorizacion():
     # Método GET
     usuarios = usuario_controller.obtener_todos_los_usuarios({'activo': True})
     turnos = usuario_controller.obtener_todos_los_turnos()
-    return render_template('usuarios/autorizacion_formulario.html',
+    return render_template('usuarios/autorizacion.html',
                          usuarios=usuarios,
                          turnos=turnos,
                          autorizacion={})

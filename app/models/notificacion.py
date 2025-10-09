@@ -5,7 +5,10 @@ logger = logging.getLogger(__name__)
 
 class NotificacionModel(BaseModel):
     def __init__(self):
-        super().__init__('notificaciones')
+        super().__init__()
+
+    def get_table_name(self) -> str:
+        return 'notificaciones'
 
     def create(self, data: dict):
         """

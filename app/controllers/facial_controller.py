@@ -193,86 +193,85 @@ class FacialController:
 
     def _validar_acceso_por_turno(self, usuario: dict):
         """
-        Valida si un usuario puede realizar un ingreso según su turno, la hora actual y las autorizaciones.
+        Valida el acceso de un usuario según su turno, la hora actual y las autorizaciones.
+        La lógica es más estricta: la tardanza sin autorización deniega el acceso.
         """
         usuario_id = usuario['id']
         turno_id = usuario.get('turno_id')
 
-        # Si el usuario no tiene turno asignado, se permite el acceso por defecto.
         if not turno_id:
-            logger.info(f"Usuario {usuario_id} no tiene turno asignado. Acceso permitido.")
+            logger.info(f"Usuario {usuario_id} no tiene turno asignado. Acceso permitido por defecto.")
             return {'success': True}
 
-        # Obtener detalles del turno asignado
         turnos_result = self.turno_model.find_all()
         if not turnos_result.get('success'):
-            logger.error("Error del sistema: No se pudieron obtener los turnos de la DB.")
             return {'success': False, 'message': 'Error del sistema: No se pudo verificar el turno.'}
         
-        turno_asignado = next((t for t in turnos_result['data'] if t['id'] == turno_id), None)
+        turnos_data = turnos_result['data']
+        turno_asignado = next((t for t in turnos_data if t['id'] == turno_id), None)
         
         if not turno_asignado:
-            logger.error(f"Turno ID {turno_id} asignado al usuario {usuario_id} no encontrado.")
             return {'success': False, 'message': 'Error: Su turno configurado no es válido.'}
 
         ahora = datetime.now()
         hora_actual = ahora.time()
         fecha_actual = ahora.date()
+        margen_tolerancia = timedelta(minutes=15)
 
-        # Convertir horas de string a time object
         hora_inicio_turno = datetime.strptime(turno_asignado['hora_inicio'], '%H:%M:%S').time()
         hora_fin_turno = datetime.strptime(turno_asignado['hora_fin'], '%H:%M:%S').time()
         
-        # Definir margen de tolerancia
-        margen_tolerancia = timedelta(minutes=15)
-        
-        # Calcular límite de tardanza
-        limite_tardanza = (datetime.combine(fecha_actual, hora_inicio_turno) + margen_tolerancia).time()
-        
-        # Chequeo de tardanza
-        if hora_actual > limite_tardanza and hora_actual < hora_fin_turno:
-            mensaje = f"El empleado {usuario.get('nombre')} {usuario.get('apellido')} (Legajo: {usuario.get('legajo')}) ha llegado tarde a las {hora_actual.strftime('%H:%M:%S')}."
-            self.notificacion_model.create({
-                'usuario_id': usuario_id,
-                'tipo': 'TARDANZA',
-                'mensaje': mensaje
-            })
-            logger.info(f"NOTIFICACION CREADA: Usuario {usuario_id} llegó tarde.")
-        
-        # Chequeo de acceso dentro del turno (permitimos fichar 15 minutos antes)
         inicio_permitido = (datetime.combine(fecha_actual, hora_inicio_turno) - margen_tolerancia).time()
-        
+        limite_tardanza = (datetime.combine(fecha_actual, hora_inicio_turno) + margen_tolerancia).time()
+
+        # 1. Chequeo de acceso dentro del turno normal (con tolerancia de ingreso)
         if inicio_permitido <= hora_actual <= hora_fin_turno:
+            # Si está después del límite de tardanza, igual se registra. La penalización es lógica.
+            if hora_actual > limite_tardanza:
+                mensaje = f"El empleado {usuario.get('nombre')} {usuario.get('apellido')} (Legajo: {usuario.get('legajo')}) ha llegado tarde a las {hora_actual.strftime('%H:%M:%S')}."
+                self.notificacion_model.create({'usuario_id': usuario_id, 'tipo': 'TARDANZA', 'mensaje': mensaje})
+                logger.info(f"NOTIFICACION CREADA: Usuario {usuario_id} llegó tarde.")
+            
             logger.info(f"Acceso en turno para usuario {usuario_id}.")
             return {'success': True}
-        
-        # Si no está en su turno, buscar autorización para el día de hoy
+
+        # 2. Si está fuera de su turno, buscar autorización para TARDANZA o TURNO_ESPECIAL
         logger.info(f"Usuario {usuario_id} intenta acceder fuera de su turno. Buscando autorización...")
-        autorizacion_result = self.autorizacion_model.find_by_usuario_and_fecha(usuario_id, fecha_actual)
-        
-        if not autorizacion_result.get('success'):
-            logger.warning(f"Acceso denegado. Usuario {usuario_id} sin autorización para hoy.")
-            return {'success': False, 'message': 'Acceso fuera de horario. Requiere autorización de supervisor.'}
-        
-        # Se encontró autorización, verificar si está dentro del turno autorizado
-        autorizacion = autorizacion_result['data']
-        turno_autorizado_id = autorizacion['turno_autorizado_id']
-        
-        turno_autorizado = next((t for t in turnos_result['data'] if t['id'] == turno_autorizado_id), None)
-        if not turno_autorizado:
-            logger.error(f"Turno autorizado ID {turno_autorizado_id} no es válido.")
-            return {'success': False, 'message': 'Error: Turno autorizado inválido.'}
 
-        hora_inicio_auth = datetime.strptime(turno_autorizado['hora_inicio'], '%H:%M:%S').time()
-        hora_fin_auth = datetime.strptime(turno_autorizado['hora_fin'], '%H:%M:%S').time()
-        inicio_permitido_auth = (datetime.combine(fecha_actual, hora_inicio_auth) - margen_tolerancia).time()
-
-        if inicio_permitido_auth <= hora_actual <= hora_fin_auth:
-            logger.info(f"Acceso permitido para usuario {usuario_id} con autorización para el turno '{turno_autorizado['nombre']}'.")
+        # Intenta buscar autorización para tardanza primero
+        auth_tardanza = self.autorizacion_model.find_by_usuario_and_fecha(usuario_id, fecha_actual, tipo='TARDANZA')
+        if auth_tardanza.get('success'):
+            logger.info(f"Acceso permitido para usuario {usuario_id} con autorización de TARDANZA.")
             return {'success': True}
-        
-        logger.warning(f"Acceso denegado. Usuario {usuario_id} con autorización pero fuera de horario del turno autorizado.")
-        return {'success': False, 'message': 'Autorización encontrada, pero intenta acceder fuera del horario permitido.'}
+
+        # Si no hay de tardanza, busca para turno especial
+        auth_especial = self.autorizacion_model.find_by_usuario_and_fecha(usuario_id, fecha_actual, tipo='TURNO_ESPECIAL')
+        if auth_especial.get('success'):
+            autorizacion = auth_especial['data']
+            turno_autorizado_id = autorizacion.get('turno_autorizado_id')
+            
+            if not turno_autorizado_id:
+                logger.error(f"Autorización ID {autorizacion['id']} no tiene un turno_autorizado_id.")
+                return {'success': False, 'message': 'Error en la configuración de la autorización.'}
+
+            turno_autorizado = next((t for t in turnos_data if t['id'] == turno_autorizado_id), None)
+            if not turno_autorizado:
+                return {'success': False, 'message': 'Error: Turno autorizado inválido.'}
+
+            hora_inicio_auth = datetime.strptime(turno_autorizado['hora_inicio'], '%H:%M:%S').time()
+            hora_fin_auth = datetime.strptime(turno_autorizado['hora_fin'], '%H:%M:%S').time()
+            inicio_permitido_auth = (datetime.combine(fecha_actual, hora_inicio_auth) - margen_tolerancia).time()
+
+            if inicio_permitido_auth <= hora_actual <= hora_fin_auth:
+                logger.info(f"Acceso permitido para usuario {usuario_id} con autorización para el turno '{turno_autorizado['nombre']}'.")
+                return {'success': True}
+            else:
+                logger.warning(f"Acceso denegado. Usuario {usuario_id} con autorización pero fuera de horario del turno autorizado.")
+                return {'success': False, 'message': 'Autorización encontrada, pero intenta acceder fuera del horario permitido.'}
+
+        # 3. Si no hay ninguna autorización válida, denegar acceso.
+        logger.warning(f"Acceso denegado. Usuario {usuario_id} sin autorización válida para hoy.")
+        return {'success': False, 'message': 'Acceso fuera de horario. Requiere autorización de supervisor.'}
 
     def _manejar_logica_acceso(self, usuario: dict, metodo: str):
         """

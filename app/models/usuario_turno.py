@@ -4,8 +4,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 class UsuarioTurnoModel(BaseModel):
+    def get_table_name(self) -> str:
+        return 'usuarios_turnos'
+
     def __init__(self):
-        super().__init__('usuarios_turnos')
+        super().__init__()
 
     def find_all(self):
         """

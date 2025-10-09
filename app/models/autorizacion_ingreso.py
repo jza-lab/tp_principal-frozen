@@ -6,22 +6,33 @@ logger = logging.getLogger(__name__)
 
 class AutorizacionIngresoModel(BaseModel):
     def __init__(self):
-        super().__init__('u_autorizaciones_ingreso')
+        super().__init__()
 
-    def find_by_usuario_and_fecha(self, usuario_id: int, fecha: date):
+    def get_table_name(self) -> str:
+        return 'u_autorizaciones_ingreso'
+
+    def find_by_usuario_and_fecha(self, usuario_id: int, fecha: date, tipo: str = None):
         """
-        Busca una autorización de ingreso para un usuario en una fecha específica.
+        Busca una autorización de ingreso para un usuario en una fecha específica,
+        con la opción de filtrar por tipo de autorización.
         """
         try:
-            response = self.db.table(self.table_name)\
+            query = self.db.table(self.table_name)\
                 .select("*")\
                 .eq("usuario_id", usuario_id)\
-                .eq("fecha_autorizada", fecha.isoformat())\
-                .execute()
+                .eq("fecha_autorizada", fecha.isoformat())
+
+            if tipo:
+                query = query.eq('tipo', tipo)
+
+            response = query.execute()
             
             if response.data:
                 return {'success': True, 'data': response.data[0]}
-            return {'success': False, 'error': 'Autorización no encontrada.'}
+            
+            error_message = f'Autorización de tipo "{tipo}" no encontrada.' if tipo else 'Autorización no encontrada.'
+            return {'success': False, 'error': error_message}
+            
         except Exception as e:
             logger.error(f"Error al buscar autorización para usuario {usuario_id} en fecha {fecha}: {e}", exc_info=True)
             return {'success': False, 'error': f"Error en la base de datos: {e}"}
