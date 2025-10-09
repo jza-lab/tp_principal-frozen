@@ -1,0 +1,74 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Nueva Autorización de Ingreso{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Crear Nueva Autorización de Ingreso</h2>
+            <p class="card-subtitle text-muted">Permitir que un empleado ingrese fuera de su turno habitual.</p>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('admin_usuario.nueva_autorizacion') }}">
+                
+                <!-- Selección de Usuario -->
+                <div class="mb-3">
+                    <label for="usuario_id" class="form-label">Empleado</label>
+                    <select class="form-select" id="usuario_id" name="usuario_id" required>
+                        <option value="">Seleccione un empleado...</option>
+                        {% for usuario in usuarios %}
+                        <option value="{{ usuario.id }}" {% if autorizacion.usuario_id == usuario.id %}selected{% endif %}>
+                            {{ usuario.nombre }} {{ usuario.apellido }} (Legajo: {{ usuario.legajo }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Selección de Fecha -->
+                <div class="mb-3">
+                    <label for="fecha_autorizada" class="form-label">Fecha de Autorización</label>
+                    <input type="date" class="form-control" id="fecha_autorizada" name="fecha_autorizada" value="{{ autorizacion.fecha_autorizada or '' }}" required>
+                </div>
+
+                <!-- Tipo de Autorización -->
+                <div class="mb-3">
+                    <label for="tipo" class="form-label">Tipo de Autorización</label>
+                    <select class="form-select" id="tipo" name="tipo" required>
+                        <option value="TURNO_ESPECIAL" {% if not autorizacion.tipo or autorizacion.tipo == 'TURNO_ESPECIAL' %}selected{% endif %}>Turno Especial</option>
+                        <option value="TARDANZA" {% if autorizacion.tipo == 'TARDANZA' %}selected{% endif %}>Llegada Tarde</option>
+                    </select>
+                </div>
+
+                <!-- Selección de Turno Autorizado -->
+                <div class="mb-3">
+                    <label for="turno_autorizado_id" class="form-label">Turno Autorizado</label>
+                    <select class="form-select" id="turno_autorizado_id" name="turno_autorizado_id" required>
+                        <option value="">Seleccione el turno a autorizar...</option>
+                        {% for turno in turnos %}
+                        <option value="{{ turno.id }}" {% if autorizacion.turno_autorizado_id == turno.id %}selected{% endif %}>
+                            {{ turno.nombre }} ({{ turno.hora_inicio[:5] }} - {{ turno.hora_fin[:5] }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Motivo -->
+                <div class="mb-3">
+                    <label for="motivo" class="form-label">Motivo (Opcional)</label>
+                    <textarea class="form-control" id="motivo" name="motivo" rows="3">{{ autorizacion.motivo or '' }}</textarea>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="d-flex justify-content-end">
+                    <a href="{{ url_for('admin_usuario.listar_usuarios') }}" class="btn btn-outline-secondary me-2">Cancelar</a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-1"></i>
+                        Guardar Autorización
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

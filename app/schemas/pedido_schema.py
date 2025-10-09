@@ -18,6 +18,7 @@ class PedidoItemSchema(Schema):
         validate=validate.Range(min=1, error="La cantidad debe ser un número entero mayor que cero."),
         error_messages={"invalid": "La cantidad debe ser un número entero válido."}
     )
+    orden_produccion_id = fields.Int(allow_none=True)
     
     estado = fields.Str(
         validate=validate.OneOf(ITEM_ESTADOS_VALIDOS),
@@ -25,6 +26,8 @@ class PedidoItemSchema(Schema):
     )
 
     producto_nombre = fields.Str(dump_only=True)
+    created_at = fields.DateTime(dump_only=True)
+    updated_at = fields.DateTime(dump_only=True)
 
 
 class PedidoSchema(Schema):
@@ -34,6 +37,8 @@ class PedidoSchema(Schema):
     """
     nombre_cliente = fields.Str(required=True, validate=validate.Length(min=1, error="El nombre del cliente no puede estar vacío."))
     fecha_solicitud = fields.Date(required=True, error_messages={"required": "La fecha de solicitud es obligatoria."})
+    fecha_requerido = fields.Date(allow_none=True)
+    precio_orden = fields.Decimal(as_string=True, allow_none=True)
 
     estado = fields.Str(validate=validate.OneOf(['PENDIENTE', 'EN_PROCESO', 'LISTO_PARA_ENTREGA', 'COMPLETADO', 'CANCELADO']))
 

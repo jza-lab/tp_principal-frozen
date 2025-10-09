@@ -1,4 +1,11 @@
 document.addEventListener('DOMContentLoaded', function () {
+    // Si no estamos en la página de crear un nuevo usuario, no ejecutar este script.
+    // La variable IS_NEW es inyectada desde el template de Flask.
+    if (typeof IS_NEW === 'undefined' || !IS_NEW) {
+        console.log('Modo de edición de usuario detectado. El script de creación multi-paso no se ejecutará.');
+        return; // Detiene la ejecución del script.
+    }
+
     // --- ELEMENTOS DEL DOM ---
     const userForm = document.getElementById('userForm');
     const step1Element = document.getElementById('step1');
@@ -61,53 +68,66 @@ document.addEventListener('DOMContentLoaded', function () {
         nombre: false,
         apellido: false,
         rol: false,
-        cuil_cuit: true, // Opcional, válido por defecto
-        telefono: true, // Opcional, válido por defecto
+        cuil_cuit: false,
+        telefono: false,
         step1Complete: false,
         // Paso 2
         calle: false,
         altura: false,
         provincia: false,
         localidad: false,
-        step2Complete: false
+        step2Complete: false,
+        addressVerified: false
     };
 
     // --- FUNCIONES DE VALIDACIÓN ---
 
     function showError(inputElement, message) {
         if (!inputElement) return;
-        
         const formField = inputElement.closest('.col-md-6, .col-md-8, .col-md-4, .col-12');
         if (!formField) return;
-        
+
         let errorDiv = formField.querySelector('.invalid-feedback');
-        
         if (!errorDiv) {
             errorDiv = document.createElement('div');
             errorDiv.className = 'invalid-feedback';
             inputElement.parentNode.appendChild(errorDiv);
         }
-        
+
         errorDiv.textContent = message;
         errorDiv.style.display = 'block';
-        inputElement.classList.add('is-invalid');
         inputElement.classList.remove('is-valid');
+        inputElement.classList.add('is-invalid');
     }
 
-    function clearError(inputElement) {
+    function showSuccess(inputElement) {
         if (!inputElement) return;
-        
         const formField = inputElement.closest('.col-md-6, .col-md-8, .col-md-4, .col-12');
         if (!formField) return;
-        
+
         const errorDiv = formField.querySelector('.invalid-feedback');
         if (errorDiv) {
             errorDiv.style.display = 'none';
             errorDiv.textContent = '';
         }
-        
+
         inputElement.classList.remove('is-invalid');
         inputElement.classList.add('is-valid');
+    }
+
+    function clearError(inputElement) {
+        if (!inputElement) return;
+        const formField = inputElement.closest('.col-md-6, .col-md-8, .col-md-4, .col-12');
+        if (!formField) return;
+
+        const errorDiv = formField.querySelector('.invalid-feedback');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+        }
+
+        inputElement.classList.remove('is-invalid');
+        inputElement.classList.remove('is-valid');
     }
 
     function debounce(func, delay) {
@@ -120,8 +140,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function verifyAddress() {
+        // Reset verification status whenever a check is triggered
+        validationState.addressVerified = false;
+
         if (!calleInput.value || !alturaInput.value || !localidadInput.value || !provinciaSelect.value) {
             if(addressFeedback) addressFeedback.innerHTML = '';
+            updateStepButtonState(); // Update button state immediately
             return;
         }
 
@@ -149,9 +173,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 const normalizedAddress = `${normalized.calle.nombre} ${normalized.altura.valor}, ${normalized.localidad_censal.nombre}, ${normalized.provincia.nombre}`;
                 addressFeedback.innerHTML = `<i class="bi bi-check-circle-fill text-success me-2"></i>Dirección verificada: ${normalizedAddress}`;
                 addressFeedback.className = 'form-text text-success my-2';
+                validationState.addressVerified = true;
             } else if(addressFeedback) {
                 addressFeedback.innerHTML = `<i class="bi bi-x-circle-fill text-danger me-2"></i>Error: ${result.message || 'No se pudo verificar la dirección.'}`;
                 addressFeedback.className = 'form-text text-danger my-2';
+                validationState.addressVerified = false;
             }
 
         } catch (error) {
@@ -160,6 +186,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 addressFeedback.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Error de red al verificar la dirección.';
                 addressFeedback.className = 'form-text text-warning my-2';
             }
+            validationState.addressVerified = false;
+        } finally {
+            updateStepButtonState();
         }
     }
 
@@ -185,21 +214,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
         }
         
-        clearError(inputElement);
-
-        const isOptional = ['cuil_cuit', 'telefono'].includes(field);
-
+        // --- Validaciones de formato ---
         if (!value || !value.trim()) {
-            if (isOptional) {
-                validationState[field] = true; // Campo opcional vacío es válido
-                updateStepButtonState();
-                return;
-            } else {
-                showError(inputElement, 'Este campo es obligatorio.');
-                validationState[field] = false;
-                updateStepButtonState();
-                return;
-            }
+            showError(inputElement, 'Este campo es obligatorio.');
+            validationState[field] = false;
+            updateStepButtonState();
+            return;
         }
 
         if (field === 'email') {
@@ -223,7 +243,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (field === 'telefono') {
-            // Updated regex: solo números, entre 7 y 15 dígitos.
             const telefonoRegex = /^\d{7,15}$/;
             if (!telefonoRegex.test(value)) {
                 showError(inputElement, 'El teléfono debe contener solo números y tener entre 7 y 15 dígitos.');
@@ -233,6 +252,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
+        // --- Validación asíncrona (unicidad) ---
         try {
             const response = await fetch('/admin/usuarios/validar', {
                 method: 'POST',
@@ -240,9 +260,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 body: JSON.stringify({ field, value })
             });
 
-            if (!response.ok) {
-                throw new Error('Error en la validación del servidor');
-            }
+            if (!response.ok) throw new Error('Error en la validación del servidor');
 
             const result = await response.json();
 
@@ -250,6 +268,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 showError(inputElement, result.message || 'Valor ya en uso.');
                 validationState[field] = false;
             } else {
+                showSuccess(inputElement); // Éxito
                 validationState[field] = true;
             }
         } catch (error) {
@@ -262,8 +281,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function validateNombre() {
-        clearError(nombreInput);
-        
         const nombre = nombreInput.value.trim();
         
         if (!nombre) {
@@ -276,6 +293,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showError(nombreInput, 'El nombre debe tener al menos 2 caracteres.');
             validationState.nombre = false;
         } else {
+            showSuccess(nombreInput);
             validationState.nombre = true;
         }
         
@@ -283,8 +301,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function validateApellido() {
-        clearError(apellidoInput);
-        
         const apellido = apellidoInput.value.trim();
         
         if (!apellido) {
@@ -297,6 +313,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showError(apellidoInput, 'El apellido debe tener al menos 2 caracteres.');
             validationState.apellido = false;
         } else {
+            showSuccess(apellidoInput);
             validationState.apellido = true;
         }
         
@@ -304,12 +321,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function validateRol() {
-        clearError(rolSelect);
-        
         if (!rolSelect.value || rolSelect.value === '') {
             showError(rolSelect, 'Debe seleccionar un rol.');
             validationState.rol = false;
         } else {
+            showSuccess(rolSelect);
             validationState.rol = true;
         }
         
@@ -322,8 +338,6 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         
-        clearError(passwordInput);
-        
         const password = passwordInput.value;
         
         if (!password) {
@@ -333,6 +347,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showError(passwordInput, 'La contraseña debe tener al menos 8 caracteres.');
             validationState.password = false;
         } else {
+            showSuccess(passwordInput);
             validationState.password = true;
         }
         
@@ -363,14 +378,13 @@ document.addEventListener('DOMContentLoaded', function () {
         
         if (!inputElement) return;
         
-        clearError(inputElement);
-        
         const value = inputElement.value.trim();
         
         if (!value) {
             showError(inputElement, `${fieldName} es obligatoria.`);
             validationState[field] = false;
         } else {
+            showSuccess(inputElement);
             validationState[field] = true;
         }
         
@@ -449,7 +463,8 @@ document.addEventListener('DOMContentLoaded', function () {
                             validationState.altura && 
                             validationState.provincia && 
                             validationState.localidad &&
-                            allFilled;
+                            allFilled &&
+                            validationState.addressVerified;
         
         validationState.step2Complete = isStep2Valid;
         return isStep2Valid;
@@ -674,8 +689,11 @@ document.addEventListener('DOMContentLoaded', function () {
             updateStepButtonState();
             
         } else if (step === 3) {
-            if (nextStepBtn.disabled) {
-                showNotificationModal('Dirección Incompleta', 'Por favor, complete todos los campos de dirección antes de continuar.', 'warning');
+            if (!checkStep2Complete()) {
+                const message = !validationState.addressVerified 
+                    ? 'La dirección ingresada no pudo ser verificada. Por favor, corríjala antes de continuar.'
+                    : 'Por favor, complete todos los campos de dirección obligatorios antes de continuar.';
+                showNotificationModal('Dirección Inválida', message, 'warning');
                 return;
             }
             

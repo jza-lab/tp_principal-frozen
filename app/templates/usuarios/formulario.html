@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/crearUsuario.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/crearUsuario.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -49,7 +49,7 @@
 
             <form method="POST"
                 action="{{ url_for('admin_usuario.nuevo_usuario') if is_new else url_for('admin_usuario.editar_usuario', id=usuario.id) }}"
-                enctype="multipart/form-data" id="userForm">
+                enctype="multipart/form-data" id="userForm" novalidate>
 
                 <!-- Paso 1: Información Personal -->
                 <div id="personalInfo" class="form-section">
@@ -100,7 +100,7 @@
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="cuil_cuit" name="cuil_cuit"
                                         value="{{ usuario.cuil_cuit or '' }}" placeholder="CUIL/CUIT (11 dígitos)"
-                                        pattern="\\d{11}" title="Debe contener 11 dígitos numéricos.">
+                                        pattern="\\d{11}" title="Debe contener 11 dígitos numéricos." required>
                                     <label for="cuil_cuit">
                                         <i class="bi bi-person-vcard me-1"></i>CUIL/CUIT
                                     </label>
@@ -123,7 +123,7 @@
                             <div class="col-md-6">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="telefono" name="telefono"
-                                        value="{{ usuario.telefono or '' }}" placeholder="Ej: +541122334455">
+                                        value="{{ usuario.telefono or '' }}" placeholder="Ej: +541122334455" required>
                                     <label for="telefono">
                                         <i class="bi bi-telephone me-1"></i>Teléfono
                                     </label>
@@ -156,8 +156,7 @@
                                     <select class="form-select" id="role_id" name="role_id" required>
                                         <option value="">Seleccionar rol...</option>
                                         {% for rol in roles %}
-                                        <option value="{{ rol.id }}" {% if usuario and usuario.roles and
-                                            usuario.roles.id==rol.id %}selected{% endif %}>
+                                        <option value="{{ rol.id }}" {% if usuario and usuario.role_id == rol.id %}selected{% endif %}>
                                             {{ rol.nombre }}
                                         </option>
                                         {% endfor %}
@@ -171,18 +170,15 @@
 
                             <div class="col-md-6">
                                 <div class="form-floating">
-                                    <select class="form-select" id="turno" name="turno">
+                                    <select class="form-select" id="turno_id" name="turno_id">
                                         <option value="">Seleccionar turno...</option>
-                                        <option value="MAÑANA" {% if usuario.turno=='MAÑANA' %}selected{% endif %}>
-                                            Mañana</option>
-                                        <option value="TARDE" {% if usuario.turno=='TARDE' %}selected{% endif %}>Tarde
+                                        {% for turno in turnos %}
+                                        <option value="{{ turno.id }}" {% if usuario and usuario.turno_id == turno.id %}selected{% endif %}>
+                                            {{ turno.nombre }} ({{ turno.hora_inicio[:5] }} - {{ turno.hora_fin[:5] }})
                                         </option>
-                                        <option value="NOCHE" {% if usuario.turno=='NOCHE' %}selected{% endif %}>Noche
-                                        </option>
-                                        <option value="ROTATIVO" {% if usuario.turno=='ROTATIVO' %}selected{% endif %}>
-                                            Rotativo</option>
+                                        {% endfor %}
                                     </select>
-                                    <label for="turno">
+                                    <label for="turno_id">
                                         <i class="bi bi-clock-history me-1"></i>Turno
                                     </label>
                                 </div>
@@ -221,7 +217,7 @@
                             <div class="col-md-8">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="calle" name="calle" placeholder="Calle"
-                                        value="{{ usuario.get('direccion', {}).get('calle', '') }}" required>
+                                        value="{{ (usuario.get('direccion') or {}).get('calle', '') }}" required>
                                     <label for="calle">
                                         <i class="bi bi-signpost me-1"></i>Calle
                                     </label>
@@ -232,7 +228,7 @@
                             <div class="col-md-4">
                                 <div class="form-floating">
                                     <input type="number" class="form-control" id="altura" name="altura"
-                                        placeholder="Altura" value="{{ usuario.get('direccion', {}).get('altura', '') }}" required>
+                                        placeholder="Altura" value="{{ (usuario.get('direccion') or {}).get('altura', '') }}" required>
                                     <label for="altura">
                                         <i class="bi bi-123 me-1"></i>Altura
                                     </label>
@@ -250,7 +246,7 @@
                                         "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del Fuego",
                                         "Tucumán"] %}
                                         {% for p in provincias %}
-                                        <option value="{{ p }}" {% if usuario.get('direccion') and usuario.get('direccion').get('provincia') == p %}selected{% endif %}>{{ p }}</option>
+                                        <option value="{{ p }}" {% if (usuario.get('direccion') or {}).get('provincia') == p %}selected{% endif %}>{{ p }}</option>
                                         {% endfor %}
                                     </select>
                                     <label for="provincia">
@@ -263,7 +259,7 @@
                             <div class="col-md-6">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="localidad" name="localidad"
-                                        placeholder="Localidad" value="{{ usuario.get('direccion', {}).get('localidad', '') }}"
+                                        placeholder="Localidad" value="{{ (usuario.get('direccion') or {}).get('localidad', '') }}"
                                         required>
                                     <label for="localidad">
                                         <i class="bi bi-pin-map me-1"></i>Localidad
@@ -275,7 +271,7 @@
                             <div class="col-md-4">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="piso" name="piso"
-                                        placeholder="Piso (Opcional)" value="{{ usuario.get('direccion', {}).get('piso', '') }}">
+                                        placeholder="Piso (Opcional)" value="{{ (usuario.get('direccion') or {}).get('piso', '') }}">
                                     <label for="piso">
                                         <i class="bi bi-building me-1"></i>Piso (Opcional)
                                     </label>
@@ -285,7 +281,7 @@
                             <div class="col-md-4">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="depto" name="depto"
-                                        placeholder="Dto (Opcional)" value="{{ usuario.get('direccion', {}).get('depto', '') }}">
+                                        placeholder="Dto (Opcional)" value="{{ (usuario.get('direccion') or {}).get('depto', '') }}">
                                     <label for="depto">
                                         <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
                                     </label>
@@ -296,7 +292,7 @@
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
                                         placeholder="Código Postal"
-                                        value="{{ usuario.get('direccion', {}).get('codigo_postal', '') }}">
+                                        value="{{ (usuario.get('direccion') or {}).get('codigo_postal', '') }}">
                                     <label for="codigo_postal">
                                         <i class="bi bi-mailbox me-1"></i>Código Postal
                                     </label>
@@ -414,6 +410,11 @@
         </div>
     </div>
 </div>
-<script src="{{ url_for('static', filename='js/formularioCrearUsuario.js') }}"></script>
+
+<script>
+    // Inyecta la variable 'is_new' de Jinja2 a JavaScript
+    const IS_NEW = {{ is_new|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/usuarios/formularioCrearUsuario.js') }}"></script>
 
 {% endblock %}
