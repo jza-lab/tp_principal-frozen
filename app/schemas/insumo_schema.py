@@ -64,8 +64,8 @@ class InsumosCatalogoSchema(Schema):
     es_critico = fields.Bool(load_default=None)
     requiere_certificacion = fields.Bool(load_default=None)
     activo = fields.Bool(dump_only=True)
-    created_at = fields.Str(dump_only=True)
-    updated_at = fields.Str(dump_only=True)
+    created_at = fields.DateTime(dump_only=True)
+    updated_at = fields.DateTime(dump_only=True)
     precio_unitario = fields.Float(
         validate=validate.Range(min=1.00, error="El precio unitario debe ser mayor que 0."),
         error_messages={

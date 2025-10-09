@@ -1,6 +1,7 @@
 from app.models.base_model import BaseModel
 from typing import Dict, Optional
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -9,6 +10,19 @@ class InsumoModel(BaseModel):
 
     def get_table_name(self) -> str:
         return 'insumos_catalogo'
+
+    def _convert_timestamps(self, data):
+        """Convierte campos de fecha de string a datetime para un registro o una lista."""
+        if not data:
+            return data
+
+        records = data if isinstance(data, list) else [data]
+        for record in records:
+            if record.get('created_at') and isinstance(record['created_at'], str):
+                record['created_at'] = datetime.fromisoformat(record['created_at'])
+            if record.get('updated_at') and isinstance(record['updated_at'], str):
+                record['updated_at'] = datetime.fromisoformat(record['updated_at'])
+        return data
 
     def find_all(self, filters: Optional[Dict] = None, order_by: str = 'nombre', limit: Optional[int] = None) -> Dict:
         """
@@ -36,11 +50,18 @@ class InsumoModel(BaseModel):
 
             result = query.execute()
 
-            return {'success': True, 'data': result.data}
+            return {'success': True, 'data': self._convert_timestamps(result.data)}
 
         except Exception as e:
             logger.error(f"Error obteniendo registros de {self.get_table_name()}: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def find_by_id(self, id_value: str, id_field: str = 'id_insumo') -> Dict:
+        """Sobrescribe find_by_id para convertir timestamps."""
+        result = super().find_by_id(id_value, id_field)
+        if result.get('success'):
+            result['data'] = self._convert_timestamps(result['data'])
+        return result
 
     def find_by_codigo(self, codigo: str, tipo_codigo: str = 'interno') -> Dict:
         """Buscar insumo por código interno o EAN"""
@@ -49,7 +70,7 @@ class InsumoModel(BaseModel):
             result = self.db.table(self.table_name).select('*').eq(campo, codigo).execute()
 
             if result.data:
-                return {'success': True, 'data': result.data[0]}
+                return {'success': True, 'data': self._convert_timestamps(result.data[0])}
             else:
                 return {'success': False, 'error': 'Insumo no encontrado'}
 
@@ -120,7 +141,7 @@ class InsumoModel(BaseModel):
                            .eq('codigo_interno', codigo_interno.strip().upper())\
                            .execute()
 
-            return response.data[0] if response.data else None
+            return self._convert_timestamps(response.data[0]) if response.data else None
 
         except Exception as e:
             logger.error(f"Error buscando insumo {codigo_interno}: {str(e)}")
@@ -163,7 +184,7 @@ class InsumoModel(BaseModel):
 
             response = query.execute()
 
-            return response.data[0] if response.data else None
+            return self._convert_timestamps(response.data[0]) if response.data else None
 
         except Exception as e:
             logger.error(f"Error buscando insumo por código proveedor {codigo_proveedor}: {str(e)}")
