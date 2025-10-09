@@ -30,5 +30,4 @@ class ProductoSchema(Schema):
     
     iva = fields.Bool(
         required=True,
-        load_default=True
     )

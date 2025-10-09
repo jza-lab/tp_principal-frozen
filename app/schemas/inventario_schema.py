@@ -38,7 +38,7 @@ class InsumosInventarioSchema(Schema):
     )
     costo_total = fields.Decimal(as_string=True, dump_only=True)
 
-    f_ingreso = fields.Date(required=True, load_default=date.today)
+    f_ingreso = fields.Date(load_default=date.today)
     f_vencimiento = fields.Date(allow_none=True)
 
     ubicacion_fisica = fields.Str(
