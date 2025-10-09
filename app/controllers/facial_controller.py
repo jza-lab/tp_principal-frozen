@@ -213,6 +213,11 @@ class FacialController:
         if not turno_asignado:
             return {'success': False, 'message': 'Error: Su turno configurado no es válido.'}
 
+        # Excepción para el turno rotativo
+        if turno_asignado.get('nombre').upper() == 'ROTATIVO':
+            logger.info(f"Usuario {usuario_id} tiene turno rotativo. Acceso permitido a cualquier hora.")
+            return {'success': True}
+
         ahora = datetime.now()
         hora_actual = ahora.time()
         fecha_actual = ahora.date()

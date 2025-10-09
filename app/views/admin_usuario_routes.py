@@ -170,16 +170,29 @@ def editar_usuario(id):
             return redirect(url_for('admin_usuario.listar_usuarios'))
         else:
             flash(f"Error al actualizar el usuario: {resultado.get('error')}", 'error')
-            usuario = request.form.to_dict()
-            usuario['id'] = id
+            # Si falla la actualización, recargamos los datos originales del usuario
+            # y los actualizamos con lo que el usuario intentó enviar, para que no pierda sus cambios.
+            usuario_existente = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)
+            if usuario_existente:
+                # Actualiza el diccionario del usuario con los datos del formulario
+                usuario_existente.update(request.form.to_dict())
+                usuario = usuario_existente
+            else:
+                # Fallback por si no se encuentra el usuario (aunque no debería pasar)
+                usuario = request.form.to_dict()
+                usuario['id'] = id
+
             roles = usuario_controller.obtener_todos_los_roles()
             sectores = usuario_controller.obtener_todos_los_sectores()
+            turnos = usuario_controller.obtener_todos_los_turnos()
+            
             return render_template('usuarios/formulario.html', 
-                                usuario=usuario, 
-                                is_new=False,
-                                roles=roles,
-                                sectores=sectores,
-                                usuario_sectores_ids=datos_actualizados.get('sectores', []))
+                                 usuario=usuario, 
+                                 is_new=False,
+                                 roles=roles,
+                                 sectores=sectores,
+                                 turnos=turnos,
+                                 usuario_sectores_ids=datos_actualizados.get('sectores', []))
 
     # Método GET
     usuario = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)

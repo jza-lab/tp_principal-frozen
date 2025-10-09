@@ -199,6 +199,7 @@ document.addEventListener('DOMContentLoaded', function () {
         
         const isOptional = ['cuil_cuit', 'telefono'].includes(field);
 
+        // Si es opcional y está vacío, limpiar estilos y marcar como válido.
         if (isOptional && (!value || !value.trim())) {
             clearError(inputElement);
             validationState[field] = true;
@@ -206,6 +207,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         
+        // --- Validaciones de formato ---
         if (!value || !value.trim()) {
             showError(inputElement, 'Este campo es obligatorio.');
             validationState[field] = false;
@@ -243,6 +245,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
+        // --- Validación asíncrona (unicidad) ---
         try {
             const response = await fetch('/admin/usuarios/validar', {
                 method: 'POST',
@@ -258,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 showError(inputElement, result.message || 'Valor ya en uso.');
                 validationState[field] = false;
             } else {
-                showSuccess(inputElement);
+                showSuccess(inputElement); // Éxito
                 validationState[field] = true;
             }
         } catch (error) {
@@ -272,178 +275,706 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function validateNombre() {
         const nombre = nombreInput.value.trim();
+        
         if (!nombre) {
             showError(nombreInput, 'El nombre es obligatorio.');
-            return false;
+            validationState.nombre = false;
         } else if (/\d/.test(nombre)) {
             showError(nombreInput, 'El nombre no puede contener números.');
-            return false;
+            validationState.nombre = false;
         } else if (nombre.length < 2) {
             showError(nombreInput, 'El nombre debe tener al menos 2 caracteres.');
-            return false;
+            validationState.nombre = false;
         } else {
             showSuccess(nombreInput);
-            return true;
+            validationState.nombre = true;
         }
+        
+        updateStepButtonState();
     }
 
     function validateApellido() {
         const apellido = apellidoInput.value.trim();
+        
         if (!apellido) {
             showError(apellidoInput, 'El apellido es obligatorio.');
-            return false;
+            validationState.apellido = false;
         } else if (/\d/.test(apellido)) {
             showError(apellidoInput, 'El apellido no puede contener números.');
-            return false;
+            validationState.apellido = false;
         } else if (apellido.length < 2) {
             showError(apellidoInput, 'El apellido debe tener al menos 2 caracteres.');
-            return false;
+            validationState.apellido = false;
         } else {
             showSuccess(apellidoInput);
-            return true;
+            validationState.apellido = true;
         }
+        
+        updateStepButtonState();
     }
 
     function validateRol() {
         if (!rolSelect.value || rolSelect.value === '') {
             showError(rolSelect, 'Debe seleccionar un rol.');
-            return false;
+            validationState.rol = false;
         } else {
             showSuccess(rolSelect);
-            return true;
+            validationState.rol = true;
         }
+        
+        updateStepButtonState();
     }
 
     function validatePassword() {
-        if (!passwordInput) return true;
+        if (!passwordInput) {
+            validationState.password = true;
+            return;
+        }
+        
         const password = passwordInput.value;
+        
         if (!password) {
             showError(passwordInput, 'La contraseña es obligatoria.');
-            return false;
+            validationState.password = false;
         } else if (password.length < 8) {
             showError(passwordInput, 'La contraseña debe tener al menos 8 caracteres.');
-            return false;
+            validationState.password = false;
         } else {
             showSuccess(passwordInput);
-            return true;
+            validationState.password = true;
         }
+        
+        updateStepButtonState();
     }
 
     function validateAddressField(field) {
         let inputElement, fieldName;
+        
         switch(field) {
-            case 'calle': inputElement = calleInput; fieldName = 'La calle'; break;
-            case 'altura': inputElement = alturaInput; fieldName = 'La altura'; break;
-            case 'provincia': inputElement = provinciaSelect; fieldName = 'La provincia'; break;
-            case 'localidad': inputElement = localidadInput; fieldName = 'La localidad'; break;
+            case 'calle':
+                inputElement = calleInput;
+                fieldName = 'La calle';
+                break;
+            case 'altura':
+                inputElement = alturaInput;
+                fieldName = 'La altura';
+                break;
+            case 'provincia':
+                inputElement = provinciaSelect;
+                fieldName = 'La provincia';
+                break;
+            case 'localidad':
+                inputElement = localidadInput;
+                fieldName = 'La localidad';
+                break;
         }
-        if (!inputElement) return true;
+        
+        if (!inputElement) return;
+        
         const value = inputElement.value.trim();
+        
         if (!value) {
             showError(inputElement, `${fieldName} es obligatoria.`);
-            return false;
+            validationState[field] = false;
         } else {
             showSuccess(inputElement);
-            return true;
+            validationState[field] = true;
         }
+        
+        updateStepButtonState();
+        updateDireccionCompleta();
+    }
+
+    function updateDireccionCompleta() {
+        if (!direccionInput) return;
+        
+        const calle = calleInput ? calleInput.value.trim() : '';
+        const altura = alturaInput ? alturaInput.value.trim() : '';
+        const piso = pisoInput ? pisoInput.value.trim() : '';
+        const depto = departamentoInput ? departamentoInput.value.trim() : '';
+        const localidad = localidadInput ? localidadInput.value.trim() : '';
+        const provincia = provinciaSelect ? provinciaSelect.value : '';
+        
+        let direccionCompleta = '';
+        
+        if (calle && altura) {
+            direccionCompleta = `${calle} ${altura}`;
+            
+            if (piso) {
+                direccionCompleta += `, Piso ${piso}`;
+            }
+            
+            if (depto) {
+                direccionCompleta += `, Dpto ${depto}`;
+            }
+            
+            if (localidad) {
+                direccionCompleta += `, ${localidad}`;
+            }
+            
+            if (provincia) {
+                direccionCompleta += `, ${provincia}`;
+            }
+        }
+        
+        direccionInput.value = direccionCompleta;
+    }
+
+    function checkStep1Complete() {
+        let allFilled = true;
+        
+        requiredInputsStep1.forEach(input => {
+            if (!input.value || !input.value.trim()) {
+                allFilled = false;
+            }
+        });
+        
+        const isStep1Valid = validationState.legajo && 
+                            validationState.email && 
+                            validationState.nombre && 
+                            validationState.apellido && 
+                            validationState.rol && 
+                            validationState.password &&
+                            validationState.cuil_cuit &&
+                            validationState.telefono &&
+                            allFilled;
+        
+        validationState.step1Complete = isStep1Valid;
+        return isStep1Valid;
+    }
+
+    function checkStep2Complete() {
+        let allFilled = true;
+        
+        requiredInputsStep2.forEach(input => {
+            if (!input.value || !input.value.trim()) {
+                allFilled = false;
+            }
+        });
+        
+        const isStep2Valid = validationState.calle && 
+                            validationState.altura && 
+                            validationState.provincia && 
+                            validationState.localidad &&
+                            allFilled;
+        
+        validationState.step2Complete = isStep2Valid;
+        return isStep2Valid;
     }
 
     function updateStepButtonState() {
         if (currentStep === 1) {
             const isValid = checkStep1Complete();
             nextStepBtn.disabled = !isValid;
+            
+            if (isValid) {
+                nextStepBtn.classList.remove('btn-secondary');
+                nextStepBtn.classList.add('btn-primary');
+            } else {
+                nextStepBtn.classList.remove('btn-primary');
+                nextStepBtn.classList.add('btn-secondary');
+            }
         } else if (currentStep === 2) {
             const isValid = checkStep2Complete();
             nextStepBtn.disabled = !isValid;
+            
+            if (isValid) {
+                nextStepBtn.classList.remove('btn-secondary');
+                nextStepBtn.classList.add('btn-primary');
+            } else {
+                nextStepBtn.classList.remove('btn-primary');
+                nextStepBtn.classList.add('btn-secondary');
+            }
         }
     }
 
-    function checkStep1Complete() {
-        validationState.nombre = validateNombre();
-        validationState.apellido = validateApellido();
-        validationState.rol = validateRol();
-        validationState.password = validatePassword();
-        validateField('legajo', legajoInput.value);
-        validateField('email', emailInput.value);
-        validateField('cuil_cuit', cuilInput.value);
-        validateField('telefono', telefonoInput.value);
+    // --- EVENT LISTENERS PARA VALIDACIÓN - PASO 1 ---
 
-        return validationState.nombre && validationState.apellido && validationState.rol && validationState.password && validationState.legajo && validationState.email && validationState.cuil_cuit && validationState.telefono;
+    if (nombreInput) {
+        nombreInput.addEventListener('blur', validateNombre);
+        nombreInput.addEventListener('input', function() {
+            if (this.value.trim().length > 0) {
+                validateNombre();
+            }
+        });
     }
 
-    function checkStep2Complete() {
-        validationState.calle = validateAddressField('calle');
-        validationState.altura = validateAddressField('altura');
-        validationState.provincia = validateAddressField('provincia');
-        validationState.localidad = validateAddressField('localidad');
-        return validationState.calle && validationState.altura && validationState.provincia && validationState.localidad;
+    if (apellidoInput) {
+        apellidoInput.addEventListener('blur', validateApellido);
+        apellidoInput.addEventListener('input', function() {
+            if (this.value.trim().length > 0) {
+                validateApellido();
+            }
+        });
     }
+
+    if (rolSelect) {
+        rolSelect.addEventListener('change', validateRol);
+        rolSelect.addEventListener('blur', validateRol);
+    }
+
+    if (legajoInput) {
+        legajoInput.addEventListener('blur', function() {
+            validateField('legajo', this.value);
+        });
+    }
+
+    if (emailInput) {
+        emailInput.addEventListener('blur', function() {
+            validateField('email', this.value);
+        });
+    }
+
+    if (cuilInput) {
+        cuilInput.addEventListener('input', function () {
+            // Sanitizar: solo números y máximo 11
+            this.value = this.value.replace(/\D/g, '').slice(0, 11);
+            
+            const remaining = 11 - this.value.length;
+            if (this.value.length > 0 && this.value.length < 11) {
+                cuilHelper.textContent = `Faltan ${remaining} dígito(s).`;
+                cuilHelper.style.display = 'inline';
+            } else {
+                cuilHelper.textContent = '';
+                cuilHelper.style.display = 'none';
+            }
+        });
+
+        cuilInput.addEventListener('blur', function() {
+            validateField('cuil_cuit', this.value);
+            // Ocultar helper si el campo es válido o está vacío
+            if (this.value.length === 11 || this.value.length === 0) {
+                 cuilHelper.style.display = 'none';
+            }
+        });
+    }
+
+    if (telefonoInput) {
+        telefonoInput.addEventListener('input', function() {
+            // Sanitizar: solo números
+            this.value = this.value.replace(/\D/g, '');
+        });
+
+        telefonoInput.addEventListener('blur', function() {
+            validateField('telefono', this.value);
+        });
+    }
+
+    if (passwordInput) {
+        passwordInput.addEventListener('blur', validatePassword);
+        passwordInput.addEventListener('input', function() {
+            if (this.value.length >= 8) {
+                validatePassword();
+            }
+        });
+    }
+
+    requiredInputsStep1.forEach(input => {
+        input.addEventListener('input', () => {
+            updateStepButtonState();
+        });
+    });
+
+    // --- EVENT LISTENERS PARA VALIDACIÓN - PASO 2 ---
+
+    if (calleInput) {
+        calleInput.addEventListener('blur', () => validateAddressField('calle'));
+        calleInput.addEventListener('input', () => {
+            debouncedVerifyAddress();
+            if (calleInput.value.trim().length > 0) {
+                validateAddressField('calle');
+            }
+            updateDireccionCompleta();
+        });
+    }
+
+    if (alturaInput) {
+        alturaInput.addEventListener('blur', () => validateAddressField('altura'));
+        alturaInput.addEventListener('input', () => {
+            debouncedVerifyAddress();
+            if (alturaInput.value.trim().length > 0) {
+                validateAddressField('altura');
+            }
+            updateDireccionCompleta();
+        });
+    }
+
+    if (provinciaSelect) {
+        provinciaSelect.addEventListener('change', () => {
+            verifyAddress();
+            validateAddressField('provincia');
+            updateDireccionCompleta();
+        });
+        provinciaSelect.addEventListener('blur', () => validateAddressField('provincia'));
+    }
+
+    if (localidadInput) {
+        localidadInput.addEventListener('blur', () => validateAddressField('localidad'));
+        localidadInput.addEventListener('input', () => {
+            debouncedVerifyAddress();
+            if (localidadInput.value.trim().length > 0) {
+                validateAddressField('localidad');
+            }
+            updateDireccionCompleta();
+        });
+    }
+
+    if (pisoInput) {
+        pisoInput.addEventListener('input', updateDireccionCompleta);
+    }
+
+    if (departamentoInput) {
+        departamentoInput.addEventListener('input', updateDireccionCompleta);
+    }
+
+    requiredInputsStep2.forEach(input => {
+        input.addEventListener('input', () => {
+            updateStepButtonState();
+        });
+    });
 
     // --- NAVEGACIÓN ENTRE PASOS ---
+
     function goToStep(step) {
-        currentStep = step;
-        const sections = [personalInfoSection, addressInfoSection, faceRegistrationSection];
-        const steps = [step1Element, step2Element, step3Element];
-
-        sections.forEach((section, index) => {
-            if (section) section.style.display = (index + 1 === step) ? 'block' : 'none';
-        });
-
-        steps.forEach((stepEl, index) => {
-            if (stepEl) {
-                stepEl.classList.toggle('active', index + 1 === step);
-                stepEl.classList.toggle('completed', index + 1 < step);
-            }
-        });
-        
-        prevStepBtn.style.display = (step > 1) ? 'inline-block' : 'none';
-        nextStepBtn.style.display = (step < 3) ? 'inline-block' : 'none';
-        submitFormBtn.style.display = (step === 3) ? 'inline-block' : 'none';
-        cancelBtn.style.display = (step === 1) ? 'inline-block' : 'none';
-
-        updateStepButtonState();
-    }
-    
-    if (nextStepBtn) nextStepBtn.addEventListener('click', () => goToStep(currentStep + 1));
-    if (prevStepBtn) prevStepBtn.addEventListener('click', () => goToStep(currentStep - 1));
-
-    // --- LÓGICA DE LA CÁMARA ---
-    // (Se omite por brevedad, es la misma que antes)
-
-    // --- ENVÍO DEL FORMULARIO ---
-    if (userForm) {
-        userForm.addEventListener('submit', function (e) {
-            e.preventDefault(); // Siempre prevenir el envío por defecto
-
-            const isStep1Valid = checkStep1Complete();
-            if (!isStep1Valid) {
-                goToStep(1);
-                showNotificationModal('Formulario Incompleto', 'Por favor, corrija los errores en la sección de Datos Personales.', 'error');
-                return;
-            }
-
-            const isStep2Valid = checkStep2Complete();
-            if (!isStep2Valid) {
-                goToStep(2);
-                showNotificationModal('Formulario Incompleto', 'Por favor, corrija los errores en la sección de Dirección.', 'error');
-                return;
-            }
-
-            if (faceRegistrationSection && (!photoConfirmed || !faceDataInput.value)) {
-                goToStep(3);
-                showNotificationModal('Registro Facial Requerido', 'Por favor, complete el registro facial para continuar.', 'warning');
+        if (step === 1) {
+            currentStep = 1;
+            step1Element.classList.add('active');
+            step1Element.classList.remove('completed');
+            step2Element.classList.remove('active', 'completed');
+            step3Element.classList.remove('active', 'completed');
+            
+            personalInfoSection.style.display = 'block';
+            if (addressInfoSection) addressInfoSection.style.display = 'none';
+            if (faceRegistrationSection) faceRegistrationSection.style.display = 'none';
+            
+            nextStepBtn.style.display = 'inline-block';
+            nextStepBtn.innerHTML = 'Siguiente <i class="bi bi-arrow-right ms-1"></i>';
+            prevStepBtn.style.display = 'none';
+            submitFormBtn.style.display = 'none';
+            cancelBtn.style.display = 'inline-block';
+            
+            updateStepButtonState();
+            
+        } else if (step === 2) {
+            if (nextStepBtn.disabled) {
+                showNotificationModal('Formulario Incompleto', 'Por favor, complete todos los campos obligatorios antes de continuar.', 'warning');
                 return;
             }
             
-            // Si todo es válido, enviar el formulario
+            currentStep = 2;
+            step1Element.classList.remove('active');
+            step1Element.classList.add('completed');
+            step2Element.classList.add('active');
+            step2Element.classList.remove('completed');
+            step3Element.classList.remove('active');
+
+            personalInfoSection.style.display = 'none';
+            if (addressInfoSection) addressInfoSection.style.display = 'block';
+            if (faceRegistrationSection) faceRegistrationSection.style.display = 'none';
+
+            nextStepBtn.style.display = 'inline-block';
+            nextStepBtn.innerHTML = 'Siguiente <i class="bi bi-arrow-right ms-1"></i>';
+            prevStepBtn.style.display = 'inline-block';
+            submitFormBtn.style.display = 'none';
+            cancelBtn.style.display = 'none';
+            
+            updateStepButtonState();
+            
+        } else if (step === 3) {
+            if (nextStepBtn.disabled) {
+                showNotificationModal('Dirección Incompleta', 'Por favor, complete todos los campos de dirección antes de continuar.', 'warning');
+                return;
+            }
+            
+            currentStep = 3;
+            step1Element.classList.add('completed');
+            step2Element.classList.remove('active');
+            step2Element.classList.add('completed');
+            step3Element.classList.add('active');
+
+            personalInfoSection.style.display = 'none';
+            if (addressInfoSection) addressInfoSection.style.display = 'none';
+            if (faceRegistrationSection) faceRegistrationSection.style.display = 'block';
+
+            nextStepBtn.style.display = 'none';
+            prevStepBtn.style.display = 'inline-block';
+            submitFormBtn.style.display = 'inline-block';
+            submitFormBtn.disabled = true;
+            cancelBtn.style.display = 'none';
+        }
+    }
+    
+    if (nextStepBtn) {
+        nextStepBtn.addEventListener('click', () => {
+            if (currentStep === 1) {
+                goToStep(2);
+            } else if (currentStep === 2) {
+                goToStep(3);
+            }
+        });
+    }
+    
+    if (prevStepBtn) {
+        prevStepBtn.addEventListener('click', () => {
+            if (currentStep === 2) {
+                goToStep(1);
+            } else if (currentStep === 3 && !photoTaken) {
+                goToStep(2);
+            }
+        });
+    }
+
+    // --- LÓGICA DE LA CÁMARA ---
+
+    if (startCameraBtn) {
+        startCameraBtn.addEventListener('click', async function () {
+            if (photoConfirmed) {
+                console.log('Foto ya confirmada, no se puede iniciar la cámara nuevamente');
+                return;
+            }
+            
+            try {
+                videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        width: { ideal: 640 }, 
+                        height: { ideal: 480 }, 
+                        facingMode: 'user' 
+                    }
+                });
+                
+                videoElement.srcObject = videoStream;
+                
+                const cameraInactive = document.getElementById('cameraInactive');
+                const cameraActive = document.getElementById('cameraActive');
+                
+                if (cameraInactive) cameraInactive.style.display = 'none';
+                if (cameraActive) cameraActive.style.display = 'block';
+                
+                this.disabled = true;
+                this.innerHTML = '<i class="bi bi-camera-video-fill me-2"></i>Cámara Activa';
+                
+            } catch (error) {
+                console.error('Error al acceder a la cámara:', error);
+                showNotificationModal('Error de Cámara', 'No se pudo acceder a la cámara. Verifique los permisos y que no esté siendo usada por otra aplicación.', 'error');
+            }
+        });
+    }
+
+    if (capturePhotoBtn) {
+        capturePhotoBtn.addEventListener('click', async function () {
+            if (photoConfirmed) {
+                console.log('Foto ya confirmada, no se puede capturar nuevamente');
+                return;
+            }
+            
+            if (!videoStream || !videoElement.srcObject) {
+                showNotificationModal('Cámara no Iniciada', 'Por favor, inicie la cámara antes de capturar una foto.', 'warning');
+                return;
+            }
+            
+            const context = canvasElement.getContext('2d');
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+            context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+            
+            const imageData = canvasElement.toDataURL('image/jpeg', 0.8);
+            
+            this.disabled = true;
+            this.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Verificando rostro...';
+            
+            if (prevStepBtn) {
+                prevStepBtn.disabled = true;
+                prevStepBtn.title = 'No puede volver después de capturar una foto';
+            }
+            
+            try {
+                const response = await fetch('/admin/usuarios/validar_rostro', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: imageData })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Error al validar el rostro');
+                }
+
+                const result = await response.json();
+                
+                if (!result.valid) {
+                    const errorMessage = result.message || 'Error al validar el rostro';
+                    showNotificationModal('Error de Validación Facial', errorMessage, 'error');
+                    
+                    const photoPreview = document.getElementById('photoPreview');
+                    if (photoPreview) {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'alert alert-danger mt-3';
+                        errorDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${errorMessage}`;
+                        photoPreview.appendChild(errorDiv);
+                        
+                        setTimeout(() => errorDiv.remove(), 5000);
+                    }
+                    
+                    this.disabled = false;
+                    this.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar Foto';
+                    
+                    if (prevStepBtn) {
+                        prevStepBtn.disabled = false;
+                        prevStepBtn.title = '';
+                    }
+                    
+                    faceDataInput.value = '';
+                    
+                    return;
+                }
+                
+                capturedImage.src = imageData;
+                faceDataInput.value = imageData;
+                
+                const cameraActive = document.getElementById('cameraActive');
+                const photoPreview = document.getElementById('photoPreview');
+                
+                if (cameraActive) cameraActive.style.display = 'none';
+                if (photoPreview) photoPreview.style.display = 'block';
+                
+                photoTaken = true;
+                
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar Foto';
+                
+            } catch (error) {
+                console.error('Error al validar rostro:', error);
+                showNotificationModal('Error de Conexión', 'No se pudo validar el rostro. Verifique su conexión e intente nuevamente.', 'error');
+                
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar Foto';
+                
+                if (prevStepBtn) {
+                    prevStepBtn.disabled = false;
+                    prevStepBtn.title = '';
+                }
+            }
+        });
+    }
+
+    if (confirmPhotoBtn) {
+        confirmPhotoBtn.addEventListener('click', function () {
+            if (photoConfirmed) {
+                console.log('Foto ya confirmada');
+                return;
+            }
+
+            if (!photoTaken || !faceDataInput.value) {
+                showNotificationModal('Foto Requerida', 'Por favor, capture una foto antes de confirmar.', 'warning');
+                return;
+            }
+
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            
+            photoConfirmed = true;
+            step3Element.classList.add('completed');
+
+            this.disabled = true;
+            if (retakePhotoBtn) retakePhotoBtn.disabled = true;
+            if (retakePhotoBtn2) retakePhotoBtn2.disabled = true;
+            if (capturePhotoBtn) capturePhotoBtn.disabled = true;
+            if (startCameraBtn) startCameraBtn.disabled = true;
+
+            this.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Foto Confirmada';
+            this.classList.remove('btn-success');
+            this.classList.add('btn-secondary');
+            
+            if (submitFormBtn) {
+                submitFormBtn.disabled = false;
+                submitFormBtn.classList.remove('btn-secondary');
+                submitFormBtn.classList.add('btn-success');
+            }
+            
+            showNotificationModal('Éxito', 'Rostro confirmado correctamente. Ahora puede finalizar la creación del usuario.', 'success');
+        });
+    }
+
+    function retakePhoto() {
+        if (photoConfirmed) {
+            console.log('No se puede retomar la foto después de confirmar');
+            return;
+        }
+        
+        const photoPreview = document.getElementById('photoPreview');
+        const cameraActive = document.getElementById('cameraActive');
+        
+        if (photoPreview) photoPreview.style.display = 'none';
+        if (cameraActive) cameraActive.style.display = 'block';
+        
+        photoTaken = false;
+        faceDataInput.value = '';
+        
+        if (prevStepBtn) {
+            prevStepBtn.disabled = false;
+            prevStepBtn.title = '';
+        }
+        
+        if (!videoStream || !videoStream.active) {
+            if (startCameraBtn) {
+                startCameraBtn.disabled = false;
+                startCameraBtn.innerHTML = '<i class="bi bi-camera-video me-2"></i>Activar Cámara';
+            }
+        }
+    }
+    
+    if (retakePhotoBtn) {
+        retakePhotoBtn.addEventListener('click', retakePhoto);
+    }
+    
+    if (retakePhotoBtn2) {
+        retakePhotoBtn2.addEventListener('click', retakePhoto);
+    }
+
+    // --- ENVÍO DEL FORMULARIO ---
+
+    if (userForm) {
+        userForm.addEventListener('submit', function (e) {
+            if (currentStep === 3 && !photoConfirmed) {
+                e.preventDefault();
+                showNotificationModal('Rostro no Confirmado', 'Por favor, capture y confirme su rostro antes de crear el usuario.', 'warning');
+                return false;
+            }
+            
+            if (!faceDataInput || !faceDataInput.value) {
+                e.preventDefault();
+                showNotificationModal('Foto Requerida', 'No se ha capturado ninguna foto. Por favor, capture su rostro para continuar.', 'warning');
+                return false;
+            }
+            
             if (submitFormBtn) {
                 submitFormBtn.disabled = true;
                 submitFormBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Creando usuario...';
             }
-            userForm.submit();
         });
     }
 
+    // --- LIMPIEZA AL SALIR ---
+    
+    window.addEventListener('beforeunload', function() {
+        if (videoStream) {
+            videoStream.getTracks().forEach(track => track.stop());
+        }
+    });
+
     // --- INICIALIZACIÓN ---
-    goToStep(1); // Iniciar en el paso 1
+    updateStepButtonState();
+    
+    // Validar campos iniciales si tienen valores
+    if (nombreInput && nombreInput.value.trim()) validateNombre();
+    if (apellidoInput && apellidoInput.value.trim()) validateApellido();
+    if (rolSelect && rolSelect.value) validateRol();
+    if (legajoInput && legajoInput.value.trim()) validateField('legajo', legajoInput.value);
+    if (emailInput && emailInput.value.trim()) validateField('email', emailInput.value);
+    if (passwordInput && passwordInput.value) validatePassword();
+    if (cuilInput && cuilInput.value.trim()) validateField('cuil_cuit', cuilInput.value);
+    if (telefonoInput && telefonoInput.value.trim()) validateField('telefono', telefonoInput.value);
+    
+    console.log('Formulario de usuario mejorado inicializado correctamente');
 });
