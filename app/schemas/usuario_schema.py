@@ -1,6 +1,7 @@
 from marshmallow import Schema, fields, validate, validates_schema, ValidationError
 from datetime import datetime
 from app.schemas.roles_schema import RoleSchema
+from app.schemas.direccion_schema import DireccionSchema
 
 class UsuarioSchema(Schema):
     """
@@ -17,6 +18,10 @@ class UsuarioSchema(Schema):
     # Usamos role_id en lugar de rol
     role_id = fields.Int(required=True, validate=validate.Range(min=1), load_only=True)
     roles = fields.Nested(RoleSchema, dump_only=True)
+    
+    # Relación con Dirección
+    direccion_id = fields.Int(allow_none=True, load_only=True)
+    direccion = fields.Nested(DireccionSchema, dump_only=True)
 
     activo = fields.Bool(dump_only=True)
     created_at = fields.DateTime(dump_only=True)
@@ -38,7 +43,6 @@ class UsuarioSchema(Schema):
     )
     fecha_nacimiento = fields.Date(allow_none=True)
     fecha_ingreso = fields.Date(allow_none=True)
-    supervisor_id = fields.Int(allow_none=True)
     turno_id = fields.Int(allow_none=True)
     ultimo_login_web = fields.DateTime(dump_only=True, allow_none=True)
     facial_encoding = fields.String(allow_none=True, dump_only=True)

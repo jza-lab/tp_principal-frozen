@@ -26,10 +26,9 @@ class ClienteSchema(Schema):
     )
     direccion = fields.Str(allow_none=True, load_default=None)
     cuit = fields.Str(
-        validate=validate.Length(max=15),
-        allow_none=True,
-        load_default=None
+        required=True,
+        validate=validate.Length(max=15)
     )
     activo = fields.Bool(dump_only=True)
-    created_at = fields.Str(dump_only=True)
-    updated_at = fields.Str(dump_only=True)
+    created_at = fields.DateTime(dump_only=True)
+    updated_at = fields.DateTime(dump_only=True)
