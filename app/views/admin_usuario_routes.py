@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, session, request, redirect, url_for, flash
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
+from app.controllers.inventario_controller import InventarioController
 from app.permisos import permission_required
 
 # Blueprint para la administración de usuarios
@@ -12,6 +13,7 @@ admin_usuario_bp = Blueprint('admin_usuario', __name__, url_prefix='/admin')
 usuario_controller = UsuarioController()
 facial_controller = FacialController()
 orden_produccion_controller=OrdenProduccionController()
+inventario_controller = InventarioController()
 
 @admin_usuario_bp.route('/')
 @permission_required(sector_codigo='ADMINISTRACION', accion='leer')
@@ -58,10 +60,13 @@ def index():
 
     asistencia = usuario_controller.obtener_porcentaje_asistencia()
 
+    alertas_stock_count = inventario_controller.obtener_conteo_alertas_stock()
+
     return render_template('dashboard/index.html', asistencia=asistencia,
                             ordenes_pendientes = ordenes_pendientes,
                             ordenes_aprobadas = ordenes_aprobadas,
-                            ordenes_totales = ordenes_totales)
+                            ordenes_totales = ordenes_totales,
+                            alertas_stock_count=alertas_stock_count)
 
 @admin_usuario_bp.route('/usuarios')
 @permission_required(sector_codigo='ADMINISTRACION', accion='leer')

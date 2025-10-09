@@ -53,6 +53,19 @@ class ProductoController(BaseController):
         # 3. Formatear el nuevo código con ceros a la izquierda
         return f"{base_codigo}-{str(nuevo_sufijo_num).zfill(4)}"
 
+    def obtener_categorias_distintas(self) -> tuple:
+            """Obtener una lista de todas las categorías de productos únicas."""
+            try:
+                result = self.model.get_distinct_categories()
+                if result['success']:
+                    return self.success_response(data=result['data'])
+                else:
+                    return self.error_response(result['error'])
+            except Exception as e:
+                logger.error(f"Error obteniendo categorías de productos: {str(e)}")
+                return self.error_response(f'Error interno: {str(e)}', 500)
+
+
     def crear_producto(self, data: Dict) -> Dict:
         """Valida y crea un nuevo producto, su receta y los ingredientes asociados."""
         try:

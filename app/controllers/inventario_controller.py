@@ -2,6 +2,7 @@ from uuid import UUID
 from app.controllers.base_controller import BaseController
 from app.models.inventario import InventarioModel
 from app.models.insumo import InsumoModel
+from app.controllers.insumo_controller import InsumoController
 #from app.services.stock_service import StockService
 from app.schemas.inventario_schema import InsumosInventarioSchema
 from typing import Dict, Optional
@@ -20,6 +21,7 @@ class InventarioController(BaseController):
         super().__init__()
         self.inventario_model = InventarioModel()
         self.insumo_model = InsumoModel()
+        self.insumo_controller = InsumoController() # <-- INSTANCIA AÑADIDA
         #self.stock_service = StockService()
         self.schema = InsumosInventarioSchema()
 
@@ -70,6 +72,7 @@ class InventarioController(BaseController):
                 # ✅ Serializar los datos correctamente
                 serialized_data = self._serialize_data(result['data'])
 
+                self.insumo_controller.actualizar_stock_insumo(validated_data['id_insumo'])
                 # Evaluar alertas después de crear
                 if hasattr(self, 'stock_service'):
                     self.stock_service.evaluar_alertas_insumo(validated_data['id_insumo'])
@@ -215,10 +218,10 @@ class InventarioController(BaseController):
             if result['success']:
                 logger.info(f"Lote {id_lote} actualizado: {list(datos_actualizacion.keys())}")
 
-                # Si se actualizó la cantidad, evaluar alertas de stock
+                # Si se actualizó la cantidad, actualizar el stock del insumo
                 if 'cantidad_actual' in datos_actualizacion:
-                    if hasattr(self, 'stock_service') and self.stock_service:
-                        self.stock_service.evaluar_alertas_insumo(lote_actual['id_insumo'])
+                    # ✅ Llamada automática de actualización de stock
+                    self.insumo_controller.actualizar_stock_insumo(lote_actual['id_insumo'])
 
                 # Obtener el lote actualizado con todos los datos
                 lote_actualizado = self.inventario_model.find_by_id(id_lote, 'id_lote')
@@ -281,6 +284,20 @@ class InventarioController(BaseController):
             logger.error(f"Error obteniendo alertas: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
+    def obtener_conteo_alertas_stock(self) -> int:
+        """Obtiene el conteo de insumos con stock bajo (crítico)."""
+        try:
+            # Llamamos a obtener_stock_consolidado con el filtro 'estado_stock': 'BAJO'
+            stock_bajo_result = self.inventario_model.obtener_stock_consolidado({'estado_stock': 'BAJO'})
+
+            if stock_bajo_result.get('success'):
+                # Devolvemos la cantidad de elementos en la lista de datos
+                return len(stock_bajo_result.get('data', []))
+            return 0
+        except Exception as e:
+            logger.error(f"Error contando alertas de stock: {str(e)}")
+            return 0
+        
     def eliminar_lote(self, id_lote: str) -> tuple:
         """Eliminar un lote de inventario"""
         try:
