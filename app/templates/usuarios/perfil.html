@@ -1,36 +1,254 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}Perfil de Usuario{% endblock %}
+{% block title %}Perfil de Usuario - {{ usuario.nombre }} {{ usuario.apellido }}{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <h1>Perfil de Usuario</h1>
+<div class="profile-container">
+    <!-- Header del Perfil -->
+    <div class="profile-header-section">
+        <div class="d-flex justify-content-between align-items-start">
+            <div class="d-flex align-items-center gap-3">
+                <button onclick="history.back()" class="btn-back">
+                    <i class="bi bi-arrow-left"></i>
+                </button>
+                <div>
+                    <h1 class="profile-main-title mb-1">Perfil de Usuario</h1>
+                    <p class="profile-subtitle mb-0">Información detallada y gestión de usuario</p>
+                </div>
+            </div>
+            
+            <div class="profile-status-badge">
+                {% if usuario.activo %}
+                    <span class="badge bg-success-soft text-success badge-large">
+                        <i class="bi bi-circle-fill pulse-dot"></i>Activo
+                    </span>
+                {% else %}
+                    <span class="badge bg-danger-soft text-danger badge-large">
+                        <i class="bi bi-circle-fill"></i>Inactivo
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 
-    {% if usuario %}
-    <div class="card">
-        <div class="card-header">
-            Información del Usuario
+    <!-- Tarjeta Principal del Perfil -->
+    <div class="profile-card">
+        <!-- Sección de Avatar y Nombre -->
+        <div class="profile-hero">
+            <div class="profile-avatar-large">
+                {% if usuario.foto_facial %}
+                    <img src="data:image/jpeg;base64,{{ usuario.foto_facial }}" alt="Foto de {{ usuario.nombre }}">
+                {% else %}
+                    <i class="bi bi-person-circle"></i>
+                {% endif %}
+            </div>
+            <div class="profile-hero-info">
+                <h2 class="profile-name" id="display-nombre">{{ usuario.nombre }} {{ usuario.apellido }}</h2>
+                <div class="profile-meta">
+                    <span class="meta-item">
+                        <i class="bi bi-hash"></i>
+                        <span id="display-legajo">{{ usuario.legajo or 'N/A' }}</span>
+                    </span>
+                    <span class="meta-item">
+                        <i class="bi bi-shield-check"></i>
+                        <span id="display-rol">{{ usuario.roles.nombre if usuario.roles else 'Sin rol' }}</span>
+                    </span>
+                </div>
+            </div>
         </div>
-        <div class="card-body">
-            <p><strong>Legajo:</strong> {{ usuario.legajo }}</p>
-            <p><strong>Nombre:</strong> {{ usuario.nombre }}</p>
-            <p><strong>Apellido:</strong> {{ usuario.apellido }}</p>
-            <p><strong>CUIL/CUIT:</strong> {{ usuario.cuil_cuit or 'No especificado' }}</p>
-            <p><strong>Teléfono:</strong> {{ usuario.telefono or 'No especificado' }}</p>
-            <p><strong>Dirección:</strong> {{ usuario.direccion or 'No especificada' }}</p>
-            <hr>
-            <p><strong>Rol:</strong> {{ usuario.roles.nombre if usuario.roles else 'Sin rol' }}</p>
-            <p><strong>Turno:</strong> {{ usuario.turno or 'No especificado' }}</p>
-            <p><strong>Activo:</strong> {{ 'Sí' if usuario.activo else 'No' }}</p>
+
+        <!-- Barra de Acción -->
+        <div class="profile-action-bar" id="action-bar-view">
+            <button class="btn btn-primary btn-action" id="btn-edit-mode">
+                <i class="bi bi-pencil-square me-2"></i>Editar Información
+            </button>
+            {% if usuario.activo %}
+                <button class="btn btn-outline-danger btn-action" onclick="showDeactivateModal()">
+                    <i class="bi bi-person-x me-2"></i>Desactivar Usuario
+                </button>
+            {% else %}
+                <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-outline-success btn-action">
+                        <i class="bi bi-person-check me-2"></i>Activar Usuario
+                    </button>
+                </form>
+            {% endif %}
         </div>
-        <div class="card-footer">
-            <a href="{{ url_for('admin_usuario.listar_usuarios') }}" class="btn btn-secondary">Volver al Listado</a>
+
+        <!-- Barra de Acción en Modo Edición (Oculta por defecto) -->
+        <div class="profile-action-bar" id="action-bar-edit" style="display: none;">
+            <button class="btn btn-success btn-action" id="btn-save-changes">
+                <i class="bi bi-check-circle me-2"></i>Guardar Cambios
+            </button>
+            <button class="btn btn-outline-secondary btn-action" id="btn-cancel-edit">
+                <i class="bi bi-x-circle me-2"></i>Cancelar
+            </button>
+        </div>
+
+        <!-- Formulario de Edición (Inicialmente oculto) -->
+        <form id="edit-form" method="POST" action="{{ url_for('admin_usuario.editar_usuario', id=usuario.id) }}" style="display: none;">
+            <!-- El formulario se llenará dinámicamente -->
+        </form>
+
+        <!-- Contenido del Perfil -->
+        <div class="profile-content">
+            <!-- Información Personal -->
+            <div class="info-section">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="bi bi-person-vcard"></i>
+                    </div>
+                    <h3 class="section-title">Información Personal</h3>
+                </div>
+                
+                <div class="info-grid">
+                    <div class="info-item" data-field="nombre">
+                        <label class="info-label">Nombre</label>
+                        <div class="info-value" id="value-nombre">{{ usuario.nombre }}</div>
+                    </div>
+                    
+                    <div class="info-item" data-field="apellido">
+                        <label class="info-label">Apellido</label>
+                        <div class="info-value" id="value-apellido">{{ usuario.apellido }}</div>
+                    </div>
+                    
+                    <div class="info-item" data-field="cuil_cuit">
+                        <label class="info-label">CUIL/CUIT</label>
+                        <div class="info-value" id="value-cuil_cuit">{{ usuario.cuil_cuit or 'No especificado' }}</div>
+                    </div>
+                    
+                    <div class="info-item" data-field="legajo">
+                        <label class="info-label">Legajo</label>
+                        <div class="info-value" id="value-legajo">{{ usuario.legajo or 'N/A' }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información de Contacto -->
+            <div class="info-section">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="bi bi-telephone"></i>
+                    </div>
+                    <h3 class="section-title">Información de Contacto</h3>
+                </div>
+                
+                <div class="info-grid">
+                    <div class="info-item" data-field="email">
+                        <label class="info-label">Email</label>
+                        <div class="info-value" id="value-email">{{ usuario.email }}</div>
+                    </div>
+                    
+                    <div class="info-item" data-field="telefono">
+                        <label class="info-label">Teléfono</label>
+                        <div class="info-value" id="value-telefono">{{ usuario.telefono or 'No especificado' }}</div>
+                    </div>
+                    
+                    <div class="info-item full-width" data-field="direccion">
+                        <label class="info-label">Dirección</label>
+                        <div class="info-value" id="value-direccion">{{ usuario.direccion_formateada or 'No especificada' }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información Laboral -->
+            <div class="info-section">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="bi bi-briefcase"></i>
+                    </div>
+                    <h3 class="section-title">Información Laboral</h3>
+                </div>
+                
+                <div class="info-grid">
+                    <div class="info-item" data-field="rol_id">
+                        <label class="info-label">Rol</label>
+                        <div class="info-value" id="value-rol_id">{{ usuario.roles.nombre if usuario.roles else 'Sin rol' }}</div>
+                    </div>
+                    
+                    <div class="info-item" data-field="turno">
+                        <label class="info-label">Turno</label>
+                        <div class="info-value" id="value-turno">{{ usuario.turno or 'No especificado' }}</div>
+                    </div>
+                    
+                    <div class="info-item" data-field="fecha_ingreso">
+                        <label class="info-label">Fecha de Ingreso</label>
+                        <div class="info-value" id="value-fecha_ingreso">{{ usuario.fecha_ingreso.strftime('%d/%m/%Y') if usuario.fecha_ingreso else 'No especificada' }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Información de Acceso -->
+            <div class="info-section">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="bi bi-shield-lock"></i>
+                    </div>
+                    <h3 class="section-title">Información de Acceso</h3>
+                </div>
+                
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label class="info-label">Usuario de Sistema</label>
+                        <div class="info-value">{{ usuario.email }}</div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <label class="info-label">Último Login Web</label>
+                        <div class="info-value">
+                            {% if usuario.ultimo_login_web %}
+                                {{ usuario.ultimo_login_web.strftime('%d/%m/%Y %H:%M') }}
+                            {% else %}
+                                Nunca
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="info-item">
+                        <label class="info-label">Último Login Tótem</label>
+                        <div class="info-value">
+                            {% if usuario.ultimo_login_totem %}
+                                {{ usuario.ultimo_login_totem.strftime('%d/%m/%Y %H:%M') }}
+                            {% else %}
+                                Nunca
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-    {% else %}
-    <div class="alert alert-warning">
-        No se pudo cargar la información del usuario.
-    </div>
-    {% endif %}
 </div>
+
+<!-- Modal de Confirmación de Desactivación -->
+<div class="modal fade" id="deactivateModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Confirmar Desactivación
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">¿Está seguro que desea desactivar a <strong>{{ usuario.nombre }} {{ usuario.apellido }}</strong>?</p>
+                <p class="text-muted mt-2 mb-0">Esta acción puede ser revertida posteriormente.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form method="POST" action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-person-x me-2"></i>Desactivar Usuario
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/usuarios/perfil.js') }}"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/perfil.css') }}">
+
 {% endblock %}
+
+

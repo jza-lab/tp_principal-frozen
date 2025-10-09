@@ -1,0 +1,668 @@
+.profile-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* ================================
+   HEADER DEL PERFIL
+   ================================ */
+.profile-header-section {
+    margin-bottom: 2rem;
+}
+
+.btn-back {
+    width: 45px;
+    height: 45px;
+    border-radius: 12px;
+    border: 2px solid #e9ecef;
+    background: white;
+    color: var(--app-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    cursor: pointer;
+}
+
+.btn-back:hover {
+    background: var(--app-primary);
+    color: white;
+    border-color: var(--app-primary);
+    transform: translateX(-5px);
+}
+
+.profile-main-title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--app-primary);
+    margin: 0;
+}
+
+.profile-subtitle {
+    color: #6c757d;
+    font-size: 1rem;
+}
+
+.profile-status-badge .badge-large {
+    padding: 0.6rem 1.2rem;
+    font-size: 1rem;
+    border-radius: 10px;
+    font-weight: 700;
+}
+
+/* ================================
+   TARJETA PRINCIPAL
+   ================================ */
+.profile-card {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    border: 1px solid #e9ecef;
+}
+
+/* ================================
+   HERO SECTION (Avatar y Nombre)
+   ================================ */
+.profile-hero {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    padding: 3rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.profile-avatar-large {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-hover) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 4rem;
+    flex-shrink: 0;
+    box-shadow: 0 8px 24px rgba(49, 49, 49, 0.2);
+    border: 4px solid white;
+    transition: transform 0.3s ease;
+    overflow: hidden;
+}
+
+.profile-avatar-large img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-card:hover .profile-avatar-large {
+    transform: scale(1.05) rotate(5deg);
+}
+
+.profile-hero-info {
+    flex: 1;
+}
+
+.profile-name {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--app-primary);
+    margin-bottom: 0.75rem;
+}
+
+.profile-meta {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    color: #6c757d;
+    padding: 0.5rem 1rem;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.meta-item i {
+    color: var(--app-primary);
+    font-size: 1.1rem;
+}
+
+/* ================================
+   BARRA DE ACCIÓN
+   ================================ */
+.profile-action-bar {
+    padding: 1.5rem 2rem;
+    background: #f8f9fa;
+    border-bottom: 2px solid #e9ecef;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.btn-action {
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    border-radius: 10px;
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.btn-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ================================
+   CONTENIDO DEL PERFIL
+   ================================ */
+.profile-content {
+    padding: 2.5rem 2rem;
+}
+
+.profile-content.edit-mode {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+}
+
+.info-section {
+    margin-bottom: 2.5rem;
+    animation: slideInUp 0.4s ease-out backwards;
+}
+
+.info-section:nth-child(1) { animation-delay: 0.1s; }
+.info-section:nth-child(2) { animation-delay: 0.2s; }
+.info-section:nth-child(3) { animation-delay: 0.3s; }
+.info-section:nth-child(4) { animation-delay: 0.4s; }
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.section-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-hover) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+}
+
+.section-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--app-primary);
+    margin: 0;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.info-item {
+    background: #f8f9fa;
+    padding: 1.25rem;
+    border-radius: 12px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.info-item:hover {
+    border-color: var(--app-primary);
+    box-shadow: 0 2px 8px rgba(49, 49, 49, 0.1);
+}
+
+.info-item.full-width {
+    grid-column: 1 / -1;
+}
+
+.info-label {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+    display: block;
+}
+
+.info-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #212529;
+    transition: all 0.3s ease;
+}
+
+/* ================================
+   MODO EDICIÓN
+   ================================ */
+.info-value.editing {
+    padding: 0;
+}
+
+.form-control-inline,
+.form-control-inline:focus {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--app-primary);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #212529;
+    background: white;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 0 4px rgba(49, 49, 49, 0.1);
+}
+
+.form-control-inline:focus {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(49, 49, 49, 0.2);
+    transform: scale(1.02);
+}
+
+textarea.form-control-inline {
+    resize: vertical;
+    min-height: 80px;
+}
+
+select.form-control-inline {
+    cursor: pointer;
+}
+
+/* ================================
+   NOTIFICACIONES
+   ================================ */
+.alert-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    min-width: 300px;
+    padding: 1.25rem 1.5rem;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    border: none;
+    display: flex;
+    align-items: center;
+    font-weight: 600;
+    opacity: 0;
+    transform: translateX(400px);
+    transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.alert-notification.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.alert-notification i {
+    font-size: 1.5rem;
+}
+
+/* ================================
+   MODAL PERSONALIZADO
+   ================================ */
+.modal-content {
+    border-radius: 16px;
+    border: none;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.modal-footer {
+    border-top: 2px solid #e9ecef;
+    padding: 1.25rem;
+}
+
+/* ================================
+   ANIMACIONES
+   ================================ */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.pulse-dot {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* ================================
+   SPINNER DE CARGA
+   ================================ */
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+    border-width: 0.2em;
+}
+
+/* ================================
+   RESPONSIVE
+   ================================ */
+@media (max-width: 992px) {
+    .profile-hero {
+        flex-direction: column;
+        text-align: center;
+        padding: 2rem 1.5rem;
+    }
+
+    .profile-name {
+        font-size: 1.75rem;
+    }
+
+    .profile-meta {
+        justify-content: center;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .profile-container {
+        padding: 1rem 0.5rem;
+    }
+
+    .profile-main-title {
+        font-size: 1.5rem;
+    }
+
+    .profile-subtitle {
+        font-size: 0.9rem;
+    }
+
+    .profile-header-section .d-flex {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start !important;
+    }
+
+    .btn-back {
+        width: 40px;
+        height: 40px;
+    }
+
+    .profile-avatar-large {
+        width: 100px;
+        height: 100px;
+        font-size: 3rem;
+    }
+
+    .profile-name {
+        font-size: 1.5rem;
+    }
+
+    .meta-item {
+        font-size: 0.9rem;
+        padding: 0.4rem 0.8rem;
+    }
+
+    .profile-action-bar {
+        padding: 1rem;
+        flex-direction: column;
+    }
+
+    .btn-action {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .profile-content {
+        padding: 1.5rem 1rem;
+    }
+
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .section-icon {
+        width: 45px;
+        height: 45px;
+        font-size: 1.25rem;
+    }
+
+    .section-title {
+        font-size: 1.2rem;
+    }
+
+    .info-item {
+        padding: 1rem;
+    }
+
+    .info-value {
+        font-size: 1rem;
+    }
+
+    .alert-notification {
+        min-width: auto;
+        left: 10px;
+        right: 10px;
+        max-width: calc(100% - 20px);
+    }
+}
+
+@media (max-width: 576px) {
+    .profile-header-section .d-flex > div:first-child {
+        flex-direction: column;
+        align-items: flex-start !important;
+        gap: 0.5rem;
+    }
+
+    .btn-back {
+        margin-bottom: 0.5rem;
+    }
+
+    .profile-hero {
+        padding: 1.5rem 1rem;
+    }
+
+    .profile-avatar-large {
+        width: 80px;
+        height: 80px;
+        font-size: 2.5rem;
+    }
+
+    .profile-name {
+        font-size: 1.3rem;
+    }
+
+    .profile-meta {
+        flex-direction: column;
+        gap: 0.5rem;
+        width: 100%;
+    }
+
+    .meta-item {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .section-title {
+        font-size: 1.1rem;
+    }
+
+    .form-control-inline {
+        font-size: 0.95rem;
+        padding: 0.65rem 0.85rem;
+    }
+}
+
+/* ================================
+   EFECTOS HOVER MEJORADOS
+   ================================ */
+.info-item {
+    position: relative;
+    overflow: hidden;
+}
+
+.info-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(49, 49, 49, 0.05), transparent);
+    transition: left 0.5s ease;
+}
+
+.info-item:hover::before {
+    left: 100%;
+}
+
+.profile-content.edit-mode .info-item {
+    animation: editPulse 0.5s ease-out;
+}
+
+@keyframes editPulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 4px 16px rgba(49, 49, 49, 0.15);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* ================================
+   MEJORAS DE ACCESIBILIDAD
+   ================================ */
+.btn-back:focus,
+.btn-action:focus,
+.form-control-inline:focus {
+    outline: 3px solid rgba(49, 49, 49, 0.3);
+    outline-offset: 2px;
+}
+
+/* ================================
+   TRANSICIONES SUAVES
+   ================================ */
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.profile-card,
+.info-item,
+.btn-action {
+    will-change: transform;
+}
+
+/* ================================
+   ESTADOS DE LOADING
+   ================================ */
+.btn-action:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.btn-action:disabled:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* ================================
+   MEJORAS VISUALES ADICIONALES
+   ================================ */
+.profile-card {
+    position: relative;
+}
+
+.profile-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--app-primary), var(--accent-green), var(--app-primary));
+    background-size: 200% 100%;
+    animation: gradientShift 3s ease infinite;
+}
+
+@keyframes gradientShift {
+    0%, 100% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+.info-section:last-child {
+    margin-bottom: 0;
+}
+
+/* Efecto de foco en inputs */
+.form-control-inline::placeholder {
+    color: #adb5bd;
+    font-weight: 500;
+}
+
+.form-control-inline:hover {
+    border-color: var(--app-primary-hover);
+}
+
+/* Badges mejorados */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.badge i {
+    font-size: 0.875rem;
+}

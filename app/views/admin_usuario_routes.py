@@ -84,11 +84,20 @@ def listar_usuarios():
 @admin_usuario_bp.route('/usuarios/<int:id>')
 @permission_required(sector_codigo='ADMINISTRACION', accion='leer')
 def ver_perfil(id):
-    """Muestra el perfil de un usuario específico."""
-    usuario = usuario_controller.obtener_usuario_por_id(id)
+    """Muestra el perfil de un usuario específico, incluyendo su dirección."""
+    usuario = usuario_controller.obtener_usuario_por_id(id, include_direccion=True)
     if not usuario:
         flash('Usuario no encontrado.', 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
+    
+    # Formatear la dirección para una mejor visualización
+    if usuario.get('direccion'):
+        dir_data = usuario['direccion']
+        usuario['direccion_formateada'] = f"{dir_data.get('calle', '')} {dir_data.get('altura', '')}, " \
+                                          f"{dir_data.get('localidad', '')}, {dir_data.get('provincia', '')}"
+    else:
+        usuario['direccion_formateada'] = 'No especificada'
+
     return render_template('usuarios/perfil.html', usuario=usuario)
 
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])

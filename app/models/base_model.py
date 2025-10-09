@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Any
 from abc import ABC, abstractmethod
 import logging
 from datetime import datetime, date
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +38,16 @@ class BaseModel(ABC):
             return {'success': False, 'error': str(e)}
 
     def _prepare_data_for_db(self, data: Dict) -> Dict:
-        """Preparar datos para la base de datos"""
+        """
+        Prepara los datos para ser enviados a la base de datos, convirtiendo
+        tipos especiales de Python (Decimal, date, datetime) a strings.
+        """
         clean_data = {}
         for key, value in data.items():
             if value is not None:
-                if isinstance(value, (date, datetime)):
+                if isinstance(value, Decimal):
+                    clean_data[key] = str(value)
+                elif isinstance(value, (date, datetime)):
                     clean_data[key] = value.isoformat()
                 else:
                     clean_data[key] = value
