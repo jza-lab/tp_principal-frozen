@@ -104,8 +104,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Cargar datos de actividad
-    fetchAndRender("{{ url_for('admin_usuario.obtener_actividad_totem') }}", totemContainer, loadingTotem, noTotemMsg, createTotemActivityCard, totemCounter);
-    fetchAndRender("{{ url_for('admin_usuario.obtener_actividad_web') }}", webContainer, loadingWeb, noWebMsg, createWebActivityCard, webCounter);
+    fetchAndRender(URL_TOTEM_ACTIVITY, totemContainer, loadingTotem, noTotemMsg, createTotemActivityCard, totemCounter);
+    fetchAndRender(URL_WEB_ACTIVITY, webContainer, loadingWeb, noWebMsg, createWebActivityCard, webCounter);
 
     // --- LÓGICA DE BÚSQUEDA Y FILTROS ---
     function updateUserCounts() {
