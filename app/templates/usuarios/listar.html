@@ -20,16 +20,16 @@
     <!-- Navegación por Pestañas -->
     <ul class="nav nav-tabs-custom mb-4" id="userTabs" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link-custom active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users-panel" type="button" role="tab">
-                <i class="bi bi-people me-2"></i>
-                <span>Todos los Usuarios</span>
+            <button class="nav-link-custom active" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity-panel" type="button" role="tab">
+                <i class="bi bi-activity me-2"></i>
+                <span>Actividad del Día</span>
                 <span class="tab-indicator"></span>
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link-custom" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity-panel" type="button" role="tab">
-                <i class="bi bi-activity me-2"></i>
-                <span>Actividad del Día</span>
+            <button class="nav-link-custom" id="users-tab" data-bs-toggle="tab" data-bs-target="#users-panel" type="button" role="tab">
+                <i class="bi bi-people me-2"></i>
+                <span>Todos los Usuarios</span>
                 <span class="tab-indicator"></span>
             </button>
         </li>
@@ -38,134 +38,8 @@
     <!-- Contenido de las Pestañas -->
     <div class="tab-content" id="userTabsContent">
         
-        <!-- Panel de Todos los Usuarios -->
-        <div class="tab-pane fade show active" id="users-panel" role="tabpanel">
-            <!-- Barra de búsqueda y filtros -->
-            <div class="search-filter-bar">
-                <div class="search-box-wrapper">
-                    <i class="bi bi-search search-icon"></i>
-                    <input type="text" id="user-search-input" class="search-input" placeholder="Buscar por nombre, apellido o legajo...">
-                    <button class="clear-search" id="clear-search" style="display: none;">
-                        <i class="bi bi-x-circle-fill"></i>
-                    </button>
-                </div>
-                
-                <div class="filter-buttons">
-                    <button class="filter-btn active" data-filter="all">
-                        <i class="bi bi-people-fill me-1"></i>Todos
-                        <span class="filter-badge" id="count-all">0</span>
-                    </button>
-                    <button class="filter-btn" data-filter="active">
-                        <i class="bi bi-check-circle-fill me-1"></i>Activos
-                        <span class="filter-badge" id="count-active">0</span>
-                    </button>
-                    <button class="filter-btn" data-filter="inactive">
-                        <i class="bi bi-x-circle-fill me-1"></i>Inactivos
-                        <span class="filter-badge" id="count-inactive">0</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Tarjetas de Usuarios -->
-            <div class="row" id="all-users-container">
-                {% for usuario in usuarios %}
-                <div class="col-md-4 mb-4 user-card-wrapper" 
-                     data-legajo="{{ usuario.legajo or '' }}" 
-                     data-nombre="{{ usuario.nombre }} {{ usuario.apellido }}"
-                     data-status="{{ 'active' if usuario.activo else 'inactive' }}">
-                    <div class="card h-100 usuario-card {% if not usuario.activo %}usuario-inactivo{% endif %}">
-                        <div class="card-body d-flex flex-column">
-                            <div class="user-card-header">
-                                <div class="user-avatar">
-                                    <i class="bi bi-person-circle"></i>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <h5 class="card-title mb-1">
-                                        {{ usuario.nombre }} {{ usuario.apellido }}
-                                    </h5>
-                                    <div class="user-status-badge">
-                                        {% if usuario.activo %}
-                                            <span class="badge bg-success-soft text-success">
-                                                <i class="bi bi-circle-fill pulse-dot"></i>Activo
-                                            </span>
-                                        {% else %}
-                                            <span class="badge bg-danger-soft text-danger">
-                                                <i class="bi bi-circle-fill"></i>Inactivo
-                                            </span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="card-secondary-details mb-3">
-                                <div class="detail-item">
-                                    <i class="bi bi-hash"></i>
-                                    <span>{{ usuario.legajo or 'N/A' }}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <i class="bi bi-envelope"></i>
-                                    <span>{{ usuario.email }}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <i class="bi bi-shield-check"></i>
-                                    <span>{{ usuario.roles.nombre if usuario.roles else 'Sin rol' }}</span>
-                                </div>
-                            </div>
-
-                            <div class="mt-auto">
-                                <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
-                                    {% if usuario.activo %}
-                                        <a href="{{ url_for('admin_usuario.ver_perfil', id=usuario.id) }}" 
-                                           class="btn btn-sm btn-outline-primary" 
-                                           title="Ver detalle">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                        <a href="{{ url_for('admin_usuario.editar_usuario', id=usuario.id) }}" 
-                                           class="btn btn-sm btn-outline-primary" 
-                                           title="Editar usuario">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        <form method="POST" action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}" class="d-inline">
-                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Desactivar">
-                                                <i class="bi bi-person-x"></i>
-                                            </button>
-                                        </form>
-                                    {% else %}
-                                        <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="w-100">
-                                            <button type="submit" class="btn btn-sm btn-outline-success w-100">
-                                                <i class="bi bi-person-check me-1"></i>Activar Usuario
-                                            </button>
-                                        </form>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% else %}
-                <div class="col-12">
-                    <div class="empty-state large">
-                        <i class="bi bi-people"></i>
-                        <h4>No hay usuarios registrados</h4>
-                        <p>Comience agregando el primer usuario al sistema</p>
-                        <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary mt-3">
-                            <i class="bi bi-person-plus me-1"></i>Crear Primer Usuario
-                        </a>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-
-            <!-- Mensaje de búsqueda sin resultados -->
-            <div id="no-search-results" class="empty-state large" style="display: none;">
-                <i class="bi bi-search"></i>
-                <h4>No se encontraron resultados</h4>
-                <p>Intenta con otros términos de búsqueda</p>
-            </div>
-        </div>
-
         <!-- Panel de Actividad -->
-        <div class="tab-pane fade" id="activity-panel" role="tabpanel">
+        <div class="tab-pane fade show active" id="activity-panel" role="tabpanel">
             <div class="row">
                 <!-- Actividad en Fábrica -->
                 <div class="col-lg-6 mb-4">
@@ -241,6 +115,120 @@
             </div>
         </div>
 
+        <!-- Panel de Todos los Usuarios -->
+        <div class="tab-pane fade" id="users-panel" role="tabpanel">
+            <!-- Barra de búsqueda y filtros -->
+            <div class="search-filter-bar">
+                <div class="search-box-wrapper">
+                    <i class="bi bi-search search-icon"></i>
+                    <input type="text" id="user-search-input" class="search-input" placeholder="Buscar por nombre, apellido o legajo...">
+                    <button class="clear-search" id="clear-search" style="display: none;">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                </div>
+                
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all">
+                        <i class="bi bi-people-fill me-1"></i>Todos
+                        <span class="filter-badge" id="count-all">0</span>
+                    </button>
+                    <button class="filter-btn" data-filter="active">
+                        <i class="bi bi-check-circle-fill me-1"></i>Activos
+                        <span class="filter-badge" id="count-active">0</span>
+                    </button>
+                    <button class="filter-btn" data-filter="inactive">
+                        <i class="bi bi-x-circle-fill me-1"></i>Inactivos
+                        <span class="filter-badge" id="count-inactive">0</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tarjetas de Usuarios -->
+            <div class="row" id="all-users-container">
+                {% for usuario in usuarios %}
+                <div class="col-md-4 mb-4 user-card-wrapper" 
+                     data-legajo="{{ usuario.legajo or '' }}" 
+                     data-nombre="{{ usuario.nombre }} {{ usuario.apellido }}"
+                     data-status="{{ 'active' if usuario.activo else 'inactive' }}">
+                    <div class="card h-100 usuario-card {% if not usuario.activo %}usuario-inactivo{% endif %}">
+                        <div class="card-body d-flex flex-column">
+                            <div class="user-card-header">
+                                <div class="user-avatar">
+                                    <i class="bi bi-person-circle"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h5 class="card-title mb-1">
+                                        {{ usuario.nombre }} {{ usuario.apellido }}
+                                    </h5>
+                                    <div class="user-status-badge">
+                                        {% if usuario.activo %}
+                                            <span class="badge bg-success-soft text-success">
+                                                <i class="bi bi-circle-fill pulse-dot"></i>Activo
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-danger-soft text-danger">
+                                                <i class="bi bi-circle-fill"></i>Inactivo
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card-secondary-details mb-3">
+                                <div class="detail-item">
+                                    <i class="bi bi-hash"></i>
+                                    <span>{{ usuario.legajo or 'N/A' }}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <i class="bi bi-envelope"></i>
+                                    <span>{{ usuario.email }}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <i class="bi bi-shield-check"></i>
+                                    <span>{{ usuario.roles.nombre if usuario.roles else 'Sin rol' }}</span>
+                                </div>
+                            </div>
+
+                            <div class="mt-auto">
+                                <div class="d-grid gap-2 action-buttons">
+                                    {% if usuario.activo %}
+                                        <a href="{{ url_for('admin_usuario.ver_perfil', id=usuario.id) }}" 
+                                           class="btn btn-sm btn-primary w-100">
+                                            <i class="bi bi-person-gear me-2"></i>Gestionar Usuario
+                                        </a>
+                                    {% else %}
+                                        <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="w-100">
+                                            <button type="submit" class="btn btn-sm btn-outline-success w-100">
+                                                <i class="bi bi-person-check me-1"></i>Activar Usuario
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="col-12">
+                    <div class="empty-state large">
+                        <i class="bi bi-people"></i>
+                        <h4>No hay usuarios registrados</h4>
+                        <p>Comience agregando el primer usuario al sistema</p>
+                        <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary mt-3">
+                            <i class="bi bi-person-plus me-1"></i>Crear Primer Usuario
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Mensaje de búsqueda sin resultados -->
+            <div id="no-search-results" class="empty-state large" style="display: none;">
+                <i class="bi bi-search"></i>
+                <h4>No se encontraron resultados</h4>
+                <p>Intenta con otros términos de búsqueda</p>
+            </div>
+        </div>
 
     </div>
 </div>

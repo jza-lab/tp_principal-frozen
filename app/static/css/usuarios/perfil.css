@@ -1,3 +1,12 @@
+:root {
+    --profile-transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --profile-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    --profile-shadow-hover: 0 10px 50px rgba(0, 0, 0, 0.12);
+}
+
+/* ================================
+   CONTENEDOR PRINCIPAL
+   ================================ */
 .profile-container {
     max-width: 1200px;
     margin: 0 auto;
@@ -23,7 +32,7 @@
     align-items: center;
     justify-content: center;
     font-size: 1.25rem;
-    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: var(--profile-transition);
     cursor: pointer;
 }
 
@@ -32,6 +41,7 @@
     color: white;
     border-color: var(--app-primary);
     transform: translateX(-5px);
+    box-shadow: 0 4px 12px rgba(49, 49, 49, 0.2);
 }
 
 .profile-main-title {
@@ -59,13 +69,35 @@
 .profile-card {
     background: white;
     border-radius: 20px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--profile-shadow);
     overflow: hidden;
     border: 1px solid #e9ecef;
+    position: relative;
+}
+
+.profile-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--app-primary), var(--accent-green), var(--app-primary));
+    background-size: 200% 100%;
+    animation: gradientShift 3s ease infinite;
+}
+
+@keyframes gradientShift {
+    0%, 100% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
 }
 
 /* ================================
-   HERO SECTION (Avatar y Nombre)
+   HERO SECTION
    ================================ */
 .profile-hero {
     background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
@@ -130,6 +162,12 @@
     background: white;
     border-radius: 8px;
     border: 1px solid #e9ecef;
+    transition: var(--profile-transition);
+}
+
+.meta-item:hover {
+    border-color: var(--app-primary);
+    box-shadow: 0 2px 8px rgba(49, 49, 49, 0.1);
 }
 
 .meta-item i {
@@ -154,6 +192,26 @@
     font-weight: 600;
     border-radius: 10px;
     transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-action::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.btn-action:hover::before {
+    width: 300px;
+    height: 300px;
 }
 
 .btn-action:hover {
@@ -161,11 +219,16 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+.btn-action:active {
+    transform: translateY(0);
+}
+
 /* ================================
    CONTENIDO DEL PERFIL
    ================================ */
 .profile-content {
     padding: 2.5rem 2rem;
+    transition: background 0.5s ease;
 }
 
 .profile-content.edit-mode {
@@ -181,6 +244,7 @@
 .info-section:nth-child(2) { animation-delay: 0.2s; }
 .info-section:nth-child(3) { animation-delay: 0.3s; }
 .info-section:nth-child(4) { animation-delay: 0.4s; }
+.info-section:last-child { margin-bottom: 0; }
 
 .section-header {
     display: flex;
@@ -201,6 +265,11 @@
     justify-content: center;
     color: white;
     font-size: 1.5rem;
+    transition: transform 0.3s ease;
+}
+
+.info-section:hover .section-icon {
+    transform: rotate(10deg) scale(1.1);
 }
 
 .section-title {
@@ -221,12 +290,30 @@
     padding: 1.25rem;
     border-radius: 12px;
     border: 2px solid #e9ecef;
-    transition: all 0.3s ease;
+    transition: var(--profile-transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.info-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(49, 49, 49, 0.05), transparent);
+    transition: left 0.5s ease;
+}
+
+.info-item:hover::before {
+    left: 100%;
 }
 
 .info-item:hover {
     border-color: var(--app-primary);
     box-shadow: 0 2px 8px rgba(49, 49, 49, 0.1);
+    transform: translateY(-2px);
 }
 
 .info-item.full-width {
@@ -247,18 +334,36 @@
     font-size: 1.1rem;
     font-weight: 600;
     color: #212529;
-    transition: all 0.3s ease;
+    transition: var(--profile-transition);
+    word-break: break-word;
 }
 
 /* ================================
    MODO EDICIÓN
    ================================ */
+.profile-content.edit-mode .info-item {
+    animation: editPulse 0.5s ease-out;
+    border-color: var(--app-primary);
+}
+
+@keyframes editPulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+        box-shadow: 0 4px 16px rgba(49, 49, 49, 0.15);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
 .info-value.editing {
     padding: 0;
 }
 
-.form-control-inline,
-.form-control-inline:focus {
+.form-control-inline {
     width: 100%;
     padding: 0.75rem 1rem;
     border: 2px solid var(--app-primary);
@@ -267,7 +372,7 @@
     font-weight: 600;
     color: #212529;
     background: white;
-    transition: all 0.3s ease;
+    transition: var(--profile-transition);
     box-shadow: 0 0 0 4px rgba(49, 49, 49, 0.1);
 }
 
@@ -275,11 +380,22 @@
     outline: none;
     box-shadow: 0 0 0 4px rgba(49, 49, 49, 0.2);
     transform: scale(1.02);
+    border-color: var(--app-primary-hover);
+}
+
+.form-control-inline:hover {
+    border-color: var(--app-primary-hover);
+}
+
+.form-control-inline::placeholder {
+    color: #adb5bd;
+    font-weight: 500;
 }
 
 textarea.form-control-inline {
     resize: vertical;
     min-height: 80px;
+    font-family: inherit;
 }
 
 select.form-control-inline {
@@ -382,8 +498,19 @@ select.form-control-inline {
     border-width: 0.2em;
 }
 
+.btn-action:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+.btn-action:disabled:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
 /* ================================
-   RESPONSIVE
+   RESPONSIVE - TABLETS
    ================================ */
 @media (max-width: 992px) {
     .profile-hero {
@@ -403,8 +530,15 @@ select.form-control-inline {
     .info-grid {
         grid-template-columns: 1fr;
     }
+
+    .profile-action-bar {
+        justify-content: center;
+    }
 }
 
+/* ================================
+   RESPONSIVE - MÓVILES
+   ================================ */
 @media (max-width: 768px) {
     .profile-container {
         padding: 1rem 0.5rem;
@@ -535,47 +669,6 @@ select.form-control-inline {
         padding: 0.65rem 0.85rem;
     }
 }
-
-/* ================================
-   EFECTOS HOVER MEJORADOS
-   ================================ */
-.info-item {
-    position: relative;
-    overflow: hidden;
-}
-
-.info-item::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(49, 49, 49, 0.05), transparent);
-    transition: left 0.5s ease;
-}
-
-.info-item:hover::before {
-    left: 100%;
-}
-
-.profile-content.edit-mode .info-item {
-    animation: editPulse 0.5s ease-out;
-}
-
-@keyframes editPulse {
-    0% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.02);
-        box-shadow: 0 4px 16px rgba(49, 49, 49, 0.15);
-    }
-    100% {
-        transform: scale(1);
-    }
-}
-
 /* ================================
    MEJORAS DE ACCESIBILIDAD
    ================================ */
