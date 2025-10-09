@@ -5,6 +5,7 @@ from app.controllers.usuario_controller import UsuarioController
 from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
+from app.controllers.cliente_controller import ClienteController
 from app.permisos import permission_required
 
 # Blueprint para la administración de usuarios
@@ -15,62 +16,96 @@ proveedor_controller = ProveedorController()
 orden_compra_controller = OrdenCompraController()
 insumo_controller = InsumoController()
 usuario_controller = UsuarioController()
+cliente_controller = ClienteController()
 
 @cliente_proveedor.route('/clientes/')
 @permission_required(sector_codigo='ADMINISTRACION', accion='leer')
 def listar_clientes():
-    clientes=[]
+    clientes_result, status = cliente_controller.obtener_clientes()
+    clientes= clientes_result.get('data', []) if clientes_result.get('success') else []
     return render_template('clientes/listar.html', clientes=clientes)
 
 @cliente_proveedor.route('/clientes/<int:id>')
 @permission_required(sector_codigo='ADMINISTRACION', accion='leer')
 def ver_perfil_cliente(id):
     """Muestra el perfil de un cliente específico."""
-    return render_template('clientes/perfil.html')
+    cliente_result, status = cliente_controller.obtener_cliente(id)
+    cliente= cliente_result.get('data') if cliente_result.get('success') else None
+    return render_template('clientes/perfil.html', cliente=cliente)
 
-@cliente_proveedor.route('/clientes/nuevo', methods=['GET', 'POST'])
+@cliente_proveedor.route('/clientes/nuevo', methods=['GET', 'PUT', 'POST'])
 @permission_required(sector_codigo='ADMINISTRACION', accion='crear')
 def nuevo_cliente():
     """
     Gestiona la creación de un nuevo cliente
     """
-    return render_template('clientes/formulario.html')
+    try:
+        if request.method == 'PUT' or request.method == 'POST':
+            datos_json = request.get_json()
+            if not datos_json:
+                return jsonify(
+                    {"success": False, "error": "No se recibieron datos JSON válidos"}
+                ), 400
+            
+            resultado, status = cliente_controller.crear_cliente(datos_json)
+            
+            return jsonify(resultado), status
+    except Exception as e:
+        flash(f"Error al actualizar el proveedor: {str(e)}", 'error')
+    cliente=None
+    return render_template('clientes/formulario.html', cliente=cliente)
 
-@cliente_proveedor.route('/clientes/<int:id>/editar', methods=['GET', 'POST'])
+@cliente_proveedor.route('/clientes/<int:id>/editar', methods=['GET', 'PUT', 'POST'])
 @permission_required(sector_codigo='ADMINISTRACION', accion='actualizar')
 def editar_cliente(id):
     """Gestiona la edición de un cliente existente"""
-    if request.method == 'POST':
-        return
-    return render_template('clientes/formulario.html')
+    cliente_result, status = cliente_controller.obtener_cliente(id)
+    cliente= cliente_result.get('data') if cliente_result.get('success') else None
+    if not cliente:
+        return redirect(url_for('clientes_proveedores.listar_clientes'))
+    try:
+        if request.method == 'PUT' or request.method == 'POST':
+            datos_json = request.get_json()
+            if not datos_json:
+                return jsonify(
+                    {"success": False, "error": "No se recibieron datos JSON válidos"}
+                ), 400
+            
+            resultado, status = cliente_controller.actualizar_cliente(id, datos_json)
+            
+            return jsonify(resultado), status
+    except Exception as e:
+        flash(f"Error al actualizar el cliente: {str(e)}", 'error')
+    return render_template('clientes/formulario.html', cliente=cliente)
 
 @cliente_proveedor.route('/clientes/<int:id>/eliminar', methods=['POST'])
 @permission_required(sector_codigo='ADMINISTRACION', accion='eliminar')
 def eliminar_cliente(id):
-    """Reactiva un cliente."""
-    # resultado = cliente_controller.eliminar_cliente(id)
-    # if request.is_json:
-    #     return jsonify(resultado)
+    """Desactiva un cliente."""
+    resultado, status = cliente_controller.eliminar_cliente(id)
+    if request.is_json:
+        return jsonify(resultado)
     
-    # if resultado.get('success'):
-    #     flash('Usuario desactivado exitosamente.', 'success')
-    # else:
-    #     flash(f"Error al desactivar el usuario: {resultado.get('error')}", 'error')
-    # return redirect(url_for('admin_usuario.listar_usuarios'))
-    return
-
+    if resultado.get('success'):
+        flash('Cliente desactivado exitosamente.', 'success')
+    else:
+        flash(f"Error al desactivar el cliente: {resultado.get('error')}", 'error')
+    return redirect(url_for('clientes_proveedores.listar_clientes'))
+    
 @cliente_proveedor.route('/clientes/<int:id>/habilitar', methods=['POST'])
 @permission_required(sector_codigo='ADMINISTRACION', accion='actualizar')
 def habilitar_cliente(id):
     """Reactiva un cliente."""
-    # resultado = usuario_controller.habilitar_usuario(id)
-    # if resultado.get('success'):
-    #     flash('Usuario activado exitosamente.', 'success')
-    # else:
-    #     flash(f"Error al activar el usuario: {resultado.get('error')}", 'error')
-    # return redirect(url_for('admin_usuario.listar_usuarios'))
-    return
-
+    resultado, status = cliente_controller.habilitar_cliente(id)
+    if request.is_json:
+        return jsonify(resultado)
+    
+    if resultado.get('success'):
+        flash('Cliente activado exitosamente.', 'success')
+    else:
+        flash(f"Error al activar el cliente: {resultado.get('error')}", 'error')
+    return redirect(url_for('clientes_proveedores.listar_clientes'))
+    
 #------------------- Proveedores ------------------#
 
 @cliente_proveedor.route('/proveedores/')
@@ -137,8 +172,6 @@ def editar_proveedor(id):
             return jsonify(resultado), status
     except Exception as e:
         flash(f"Error al actualizar el proveedor: {str(e)}", 'error')
-    proveedor_result, status = proveedor_controller.obtener_proveedor(id)
-    proveedor= proveedor_result.get('data') if proveedor_result.get('success') else None
     return render_template('proveedores/formulario.html', proveedor=proveedor)
 
 @cliente_proveedor.route('/proveedores/<int:id>/eliminar', methods=['POST'])
