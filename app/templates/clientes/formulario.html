@@ -1,0 +1,122 @@
+{% extends 'layouts/base.html' %}
+
+{% set is_edit = cliente and cliente.id %}
+{% set form_title = 'Editar cliente' if is_edit else 'Agregar Nuevo Cliente' %}
+
+{% block title %}{{ form_title }} - Sistema Frozen{% endblock %}
+
+{% block page_title %}{{ form_title }}{% endblock %}
+{% block page_subtitle %}
+{% if is_edit %}
+Modificar información de {{ cliente.nombre }}
+{% else %}
+Agregar nuevo cliente
+{% endif %}
+{% endblock %}
+{% block page_actions %}
+<a href="{{ url_for('clientes_proveedores.listar_clientes') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Volver a la lista
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 col-xl-9">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Información del cliente</h5>
+            </div>
+            <div class="card-body">
+                <form id="formulario-cliente" method="POST">
+                    <div class="row g-3">
+                        {% if cliente %}
+                        <div class="col-md-6">
+                            
+                            <label for="codigo" class="form-label">Código<span
+                                    class="text-danger">*</span></label>
+
+                            <input type="text" class="form-control" name="codigo" id="codigo"
+                                value="{{ cliente.codigo if cliente else '' }}" required {% if cliente %}readonly{%
+                                endif %}>
+
+                            <div class="form-text">Código único para identificar el cliente</div>
+                            
+                        </div>
+                        {% endif %}
+                        <div class="col-md-6">
+                            <label for="nombre" class="form-label">Nombre y apellido <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="nombre" id="nombre"
+                                value="{{ cliente.nombre if cliente else '' }}" required>
+                        </div>
+                      
+                        <div class="col-md-6">
+                            <label for="telefono" class="form-label">Teléfono <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="telefono" id="telefono"
+                                value="{{ cliente.telefono if cliente else '' }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" name="email" id="email"
+                                value="{{ cliente.email if cliente else '' }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="cuit" class="form-label">CUIT <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="cuit" id="cuit"
+                                value="{{ cliente.cuit if cliente else '' }}" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="direccion" class="form-label">Dirección</label>
+                            <input type="text" class="form-control" name="direccion" id="direccion"
+                                value="{{ cliente.direccion if cliente else '' }}">
+                            <div class="form-text">Dirección física del cliente</div>
+                        </div>
+                    </div>
+
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{{ url_for('clientes_proveedores.listar_clientes') }}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle me-1"></i>
+                            {% if cliente %}Actualizar{% else %}Crear{% endif %} cliente
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 col-xl-3">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Ayuda
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-light border">
+                    <h6>Consejos importantes:</h6>
+                    <ul class="mb-0 small">
+                        <li>Revise que sea la información correcta antes de crear/editar al cliente</li>
+                        <li>Los campos con * son obligatorios</li>
+                        <li>El cuit debe tener el formato correcto (XX-XXXXXXXX-X)</li>
+                        <li>El telefono debe incluir el código de área</li>
+                        <li>El email debe ser válido</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    // Crea una variable global de JS con la URL generada por Flask/Jinja
+    const clienteS_LISTA_URL = "{{ url_for('clientes_proveedores.listar_clientes') }}";
+    const ID_cliente = "{{ cliente.id }}"
+    const isEditBoolean = {{ is_edit | tojson }};
+</script>
+
+<script src="{{ url_for('static', filename='js/formulariocliente.js') }}"></script>
+
+{% endblock %}
