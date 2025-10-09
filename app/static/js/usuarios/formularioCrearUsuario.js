@@ -76,7 +76,8 @@ document.addEventListener('DOMContentLoaded', function () {
         altura: false,
         provincia: false,
         localidad: false,
-        step2Complete: false
+        step2Complete: false,
+        addressVerified: false
     };
 
     // --- FUNCIONES DE VALIDACIÓN ---
@@ -139,8 +140,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function verifyAddress() {
+        // Reset verification status whenever a check is triggered
+        validationState.addressVerified = false;
+
         if (!calleInput.value || !alturaInput.value || !localidadInput.value || !provinciaSelect.value) {
             if(addressFeedback) addressFeedback.innerHTML = '';
+            updateStepButtonState(); // Update button state immediately
             return;
         }
 
@@ -168,9 +173,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 const normalizedAddress = `${normalized.calle.nombre} ${normalized.altura.valor}, ${normalized.localidad_censal.nombre}, ${normalized.provincia.nombre}`;
                 addressFeedback.innerHTML = `<i class="bi bi-check-circle-fill text-success me-2"></i>Dirección verificada: ${normalizedAddress}`;
                 addressFeedback.className = 'form-text text-success my-2';
+                validationState.addressVerified = true;
             } else if(addressFeedback) {
                 addressFeedback.innerHTML = `<i class="bi bi-x-circle-fill text-danger me-2"></i>Error: ${result.message || 'No se pudo verificar la dirección.'}`;
                 addressFeedback.className = 'form-text text-danger my-2';
+                validationState.addressVerified = false;
             }
 
         } catch (error) {
@@ -179,6 +186,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 addressFeedback.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Error de red al verificar la dirección.';
                 addressFeedback.className = 'form-text text-warning my-2';
             }
+            validationState.addressVerified = false;
+        } finally {
+            updateStepButtonState();
         }
     }
 
@@ -453,7 +463,8 @@ document.addEventListener('DOMContentLoaded', function () {
                             validationState.altura && 
                             validationState.provincia && 
                             validationState.localidad &&
-                            allFilled;
+                            allFilled &&
+                            validationState.addressVerified;
         
         validationState.step2Complete = isStep2Valid;
         return isStep2Valid;
@@ -678,8 +689,11 @@ document.addEventListener('DOMContentLoaded', function () {
             updateStepButtonState();
             
         } else if (step === 3) {
-            if (nextStepBtn.disabled) {
-                showNotificationModal('Dirección Incompleta', 'Por favor, complete todos los campos de dirección antes de continuar.', 'warning');
+            if (!checkStep2Complete()) {
+                const message = !validationState.addressVerified 
+                    ? 'La dirección ingresada no pudo ser verificada. Por favor, corríjala antes de continuar.'
+                    : 'Por favor, complete todos los campos de dirección obligatorios antes de continuar.';
+                showNotificationModal('Dirección Inválida', message, 'warning');
                 return;
             }
             

@@ -63,6 +63,7 @@ class DireccionModel(BaseModel):
     def find_by_full_address(self, calle: str, altura: int, piso: Optional[str], depto: Optional[str], localidad: str, provincia: str) -> Dict:
         """
         Busca una dirección exacta para evitar duplicados.
+        Maneja correctamente los campos opcionales (piso, depto) que pueden ser NULL o strings vacíos.
         """
         try:
             query = self.db.table(self.get_table_name()).select('*')
@@ -71,15 +72,19 @@ class DireccionModel(BaseModel):
             query = query.eq('localidad', localidad)
             query = query.eq('provincia', provincia)
 
+            # Si 'piso' tiene un valor, se busca ese valor.
+            # Si no, se busca donde 'piso' es NULL o es un string vacío.
             if piso:
                 query = query.eq('piso', piso)
             else:
-                query = query.is_('piso', 'NULL')
-            
+                query = query.or_("piso.is.null,piso.eq.''")
+
+            # Si 'depto' tiene un valor, se busca ese valor.
+            # Si no, se busca donde 'depto' es NULL o es un string vacío.
             if depto:
                 query = query.eq('depto', depto)
             else:
-                query = query.is_('depto', 'NULL')
+                query = query.or_("depto.is.null,depto.eq.''")
 
             result = query.execute()
 

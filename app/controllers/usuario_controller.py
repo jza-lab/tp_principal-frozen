@@ -36,10 +36,8 @@ class UsuarioController(BaseController):
 
     def _handle_direccion(self, data: Dict) -> Dict:
         """
-        Private helper to normalize, find or create a user address.
-        Returns a dictionary with 'success' and 'direccion_id' or 'error'.
+        Helper privado para manejar la normalización y almacenamiento de direcciones.
         """
-        # Extract address data
         address_fields = ['calle', 'altura', 'piso', 'depto', 'localidad', 'provincia', 'codigo_postal']
         direccion_data = {field: data.get(field) for field in address_fields}
 
@@ -47,7 +45,6 @@ class UsuarioController(BaseController):
                     direccion_data['provincia']]):
             return {'success': True, 'direccion_id': None}  # Not enough data to process, skip
 
-        # 1. Normalize with GEOREF API
         full_street = f"{direccion_data['calle']} {direccion_data['altura']}"
         norm_result = self.usuario_direccion_controller.normalizar_direccion(
             direccion=full_street,
@@ -56,7 +53,6 @@ class UsuarioController(BaseController):
         )
 
         if not norm_result.get('success'):
-            # If normalization fails, proceed with user-provided data but log it
             logger.warning(f"GEOREF normalization failed: {norm_result.get('message')}. Using user-provided address.")
             db_address_data = direccion_data
         else:
@@ -73,7 +69,6 @@ class UsuarioController(BaseController):
                 "longitud": norm_data['ubicacion']['lon']
             }
 
-        # 2. Find if the address already exists to avoid duplicates
         existing_address = self.direccion_model.find_by_full_address(
             calle=db_address_data['calle'],
             altura=db_address_data['altura'],
@@ -86,7 +81,6 @@ class UsuarioController(BaseController):
         if existing_address.get('success'):
             return {'success': True, 'direccion_id': existing_address['data']['id']}
 
-        # 3. If it doesn't exist, create it
         new_address_result = self.direccion_model.create(db_address_data)
         if not new_address_result.get('success'):
             return {'success': False, 'error': 'Failed to save the normalized address.'}
@@ -94,17 +88,19 @@ class UsuarioController(BaseController):
         return {'success': True, 'direccion_id': new_address_result['data']['id']}
 
     def crear_usuario(self, data: Dict) -> Dict:
-        """Validates and creates a new user, including address and sector assignment."""
+        """Valida y crea un nuevo usuario, incluyendo dirección y sectores."""
         try:
-            # Handle address first
             direccion_result = self._handle_direccion(data)
             if not direccion_result.get('success'):
                 return direccion_result
             direccion_id = direccion_result.get('direccion_id')
 
-            # Separate user data from other data
             sectores_ids = data.pop('sectores', [])
-            validated_data = self.schema.load(data)
+            
+            address_fields = ['calle', 'altura', 'piso', 'depto', 'localidad', 'provincia', 'codigo_postal']
+            user_data_for_validation = {k: v for k, v in data.items() if k not in address_fields}
+
+            validated_data = self.schema.load(user_data_for_validation)
 
             if self.model.find_by_email(validated_data['email']).get('data'):
                 return {'success': False, 'error': 'El correo electrónico ya está en uso.'}
@@ -112,31 +108,24 @@ class UsuarioController(BaseController):
             password = validated_data.pop('password')
             validated_data['password_hash'] = generate_password_hash(password)
 
-            # Add direccion_id to user data
             if direccion_id:
                 validated_data['direccion_id'] = direccion_id
 
-            # Create user
             resultado_creacion = self.model.create(validated_data)
             if not resultado_creacion.get('success'):
-                # Basic rollback for address if it was newly created and user creation fails
-                # Note: This doesn't cover all edge cases but is a safeguard.
                 if self.direccion_model.find_by_id(direccion_id):
-                     # This is a simplification. A full rollback would be more complex.
                      pass
                 return resultado_creacion
 
             usuario_creado = resultado_creacion['data']
             usuario_id = usuario_creado['id']
 
-            # Assign sectors
             if sectores_ids:
                 resultado_sectores = self._asignar_sectores_usuario(usuario_id, sectores_ids)
                 if not resultado_sectores.get('success'):
                     self.model.db.table("usuarios").delete().eq("id", usuario_id).execute()
                     return resultado_sectores
 
-            # Return the complete user data
             return self.model.find_by_id(usuario_id, include_sectores=True, include_direccion=True)
 
         except ValidationError as e:
@@ -163,13 +152,11 @@ class UsuarioController(BaseController):
     def actualizar_usuario(self, usuario_id: int, data: Dict) -> Dict:
         """Updates an existing user, including address and sector management."""
         try:
-            # Handle address first
             direccion_result = self._handle_direccion(data)
             if not direccion_result.get('success'):
                 return direccion_result
             direccion_id = direccion_result.get('direccion_id')
 
-            # Separate user data from other data
             sectores_ids = data.pop('sectores', None)
             
             if 'password' in data and data['password']:
@@ -177,24 +164,24 @@ class UsuarioController(BaseController):
                 data['password_hash'] = generate_password_hash(password)
             else:
                 data.pop('password', None)
+            
+            address_fields = ['calle', 'altura', 'piso', 'depto', 'localidad', 'provincia', 'codigo_postal']
+            user_data_for_validation = {k: v for k, v in data.items() if k not in address_fields}
 
-            validated_data = self.schema.load(data, partial=True)
+            validated_data = self.schema.load(user_data_for_validation, partial=True)
             
             if 'email' in validated_data:
                 existing = self.model.find_by_email(validated_data['email']).get('data')
                 if existing and existing['id'] != usuario_id:
                     return {'success': False, 'error': 'El correo electrónico ya está en uso.'}
 
-            # Add direccion_id to user data to be updated
             if direccion_id:
                 validated_data['direccion_id'] = direccion_id
 
-            # Update user's basic data
             resultado_actualizacion = self.model.update(usuario_id, validated_data)
             if not resultado_actualizacion.get('success'):
                 return resultado_actualizacion
 
-            # Update sectors if provided
             if sectores_ids is not None:
                 self.usuario_sector_model.eliminar_todas_asignaciones(usuario_id)
                 if sectores_ids:
@@ -202,7 +189,6 @@ class UsuarioController(BaseController):
                     if not resultado_sectores.get('success'):
                         return resultado_sectores
 
-            # Return updated user with all details
             return self.model.find_by_id(usuario_id, include_sectores=True, include_direccion=True)
 
         except ValidationError as e:
