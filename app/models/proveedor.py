@@ -1,11 +1,21 @@
 from app.models.base_model import BaseModel
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 class ProveedorModel(BaseModel):
     """Modelo para la tabla proveedores"""
+
+    def _convert_dates(self, data: List[Dict]) -> List[Dict]:
+        """Convierte campos de fecha de string a datetime"""
+        for item in data:
+            if item.get('created_at'):
+                item['created_at'] = datetime.fromisoformat(item['created_at'])
+            if item.get('updated_at'):
+                item['updated_at'] = datetime.fromisoformat(item['updated_at'])
+        return data
 
     def get_table_name(self) -> str:
         return 'proveedores'
@@ -14,6 +24,8 @@ class ProveedorModel(BaseModel):
         """Obtener todos los proveedores activos"""
         try:
             response = self.db.table(self.get_table_name()).select("*").execute()
+            if response.data:
+                response.data = self._convert_dates(response.data)
             return {'success': True, 'data': response.data}
         except Exception as e:
             logger.error(f"Error obteniendo proveedores activos: {e}")
@@ -23,6 +35,8 @@ class ProveedorModel(BaseModel):
         """Obtener todos los proveedores activos"""
         try:
             response = self.db.table(self.get_table_name()).select("*").eq("activo", True).execute()
+            if response.data:
+                response.data = self._convert_dates(response.data)
             return {'success': True, 'data': response.data}
         except Exception as e:
             logger.error(f"Error obteniendo proveedores activos: {e}")
