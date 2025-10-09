@@ -213,5 +213,5 @@
 <script>
     const INSUMOS_DATA = JSON.parse('{{ insumos | tojson | safe | replace("\n", "") | replace("\r", "") }}');
 </script>
-<script src="{{ url_for('static', filename='js/formularioCompra.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ordenes_compra/formularioCompra.js') }}"></script>
 {% endblock extra_js %}

@@ -175,5 +175,5 @@ Agregar nuevo producto al catálogo
     const INSUMOS_DATA = JSON.parse('{{ insumos | tojson | safe | replace("\n", "") | replace("\r", "") }}');
 </script>
 
-<script src="{{ url_for('static', filename='js/formularioCrearProducto.js') }}"></script>
+<script src="{{ url_for('static', filename='js/productos/formularioCrearProducto.js') }}"></script>
 {% endblock %}
