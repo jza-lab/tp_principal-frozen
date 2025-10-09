@@ -4,6 +4,7 @@ from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.notificación_controller import NotificacionController
+from app.controllers.inventario_controller import InventarioController
 from app.permisos import permission_required
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 
@@ -16,6 +17,7 @@ facial_controller = FacialController()
 orden_produccion_controller=OrdenProduccionController()
 autorizacion_model = AutorizacionIngresoModel()
 notificacion_controller = NotificacionController()
+inventario_controller = InventarioController()
 
 @admin_usuario_bp.route('/')
 @permission_required(sector_codigo='ADMINISTRACION', accion='leer')
@@ -63,11 +65,14 @@ def index():
     asistencia = usuario_controller.obtener_porcentaje_asistencia()
     notificaciones = notificacion_controller.obtener_notificaciones_no_leidas()
 
+    alertas_stock_count = inventario_controller.obtener_conteo_alertas_stock()
+
     return render_template('dashboard/index.html', asistencia=asistencia,
                             ordenes_pendientes = ordenes_pendientes,
                             ordenes_aprobadas = ordenes_aprobadas,
                             ordenes_totales = ordenes_totales,
                             notificaciones=notificaciones)
+                            alertas_stock_count=alertas_stock_count)
 
 @admin_usuario_bp.route('/usuarios')
 @permission_required(sector_codigo='ADMINISTRACION', accion='leer')

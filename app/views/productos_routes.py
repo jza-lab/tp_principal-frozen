@@ -65,14 +65,20 @@ def obtener_productos():
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
         response, status = producto_controller.obtener_todos_los_productos(filtros)
         productos = response.get("data", [])
-        response_insumos, status = insumo_controller.obtener_insumos()
-        insumos = response_insumos.get("data")
-
+        
+        # 1. Obtener categorías distintas
+        categorias_response, _ = producto_controller.obtener_categorias_distintas()
+        categorias = categorias_response.get("data", [])
+        
         return render_template(
-            "productos/listar.html", productos=productos, insumos=insumos)
+            "productos/listar.html", 
+            productos=productos, 
+            categorias=categorias # <-- AÑADIDO: Pasa la lista de categorías
+        )
     except Exception as e:
         logger.error(f"Error inesperado en obtener_todos_los_productos: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
 
 @productos_bp.route("/catalogo/<int:id_producto>", methods=["GET"])
 @roles_required(min_level=2, allowed_roles=["EMPLEADO"])

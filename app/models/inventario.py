@@ -139,21 +139,37 @@ class InventarioModel(BaseModel):
             return {'success': False, 'error': str(e)}
 
     def obtener_stock_consolidado(self, filtros: Optional[Dict] = None) -> Dict:
-        """Obtener stock consolidado por insumo usando la vista"""
+        """Obtener stock consolidado por insumo consultando insumos_catalogo directamente."""
         try:
-            query = self.db.table('vista_stock_actual').select('*')
-
-            if filtros:
-                for key, value in filtros.items():
-                    if value is not None:
-                        query = query.eq(key, value)
-
+            # Consultamos todos los insumos activos que tienen definido un stock mínimo.
+            query = self.db.table('insumos_catalogo').select('*').eq('activo', True).neq('stock_min', 0)
+            
             result = query.order('nombre').execute()
+            
+            if not result.data:
+                return {'success': True, 'data': []}
 
-            return {'success': True, 'data': result.data}
+            final_data = []
+            target_estado = filtros.get('estado_stock', None)
+            
+            for insumo in result.data:
+                stock_actual = insumo.get('stock_actual', 0.0) or 0.0
+                stock_min = insumo.get('stock_min', 0) or 0
+                
+                # Calcular el estado del stock
+                if stock_min > 0 and stock_actual < stock_min:
+                    insumo['estado_stock'] = 'BAJO'
+                else:
+                    insumo['estado_stock'] = 'OK'
+                    
+                # Aplicar el filtro de estado si fue solicitado (solo para 'BAJO' o 'OK')
+                if target_estado is None or insumo['estado_stock'] == target_estado:
+                    final_data.append(insumo)
+
+            return {'success': True, 'data': final_data}
 
         except Exception as e:
-            logger.error(f"Error obteniendo stock consolidado: {str(e)}")
+            logger.error(f"Error obteniendo stock consolidado (FIXED): {str(e)}")
             return {'success': False, 'error': str(e)}
 
     def get_all_lotes_for_view(self, filtros: Optional[Dict] = None) -> Dict:

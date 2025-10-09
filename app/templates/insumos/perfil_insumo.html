@@ -71,10 +71,6 @@
                                 {{ insumo.stock_actual if insumo.stock_actual is not none else 'N/A' }}
                             </span>
                             <span class="stock-min text-muted">/ Min: {{ insumo.stock_min }}</span>
-                            <button class="btn btn-sm btn-outline-secondary ms-2 p-0 px-1 update-stock-btn"
-                                    data-id="{{ insumo.id_insumo }}" title="Actualizar Stock">
-                                <i class="bi bi-arrow-clockwise"></i>
-                            </button>
                         </div>
                     <div class="col-md-4">
                         <label class="form-label-sm">¿Es Delicado?</label>

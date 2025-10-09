@@ -15,13 +15,15 @@
     --accent-green: #1cc88a;
     --accent-orange: #fd7e14;
     --accent-purple: #6f42c1;
-    --accent-red: #e74a3b;
+    --accent-red: #ff1500;
     --accent-white:#ffffff;
 
     /* Nuevas variables para efectos */
     --glow-primary: rgba(49, 49, 49, 0.5); /* Sombra de app-primary */
     --button-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     --button-shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.2);
+    /* Nueva sombra para tarjetas mejoradas */
+    --card-glow-hover: 0 16px 30px rgba(0, 0, 0, 0.25);
 }
 
 body {
@@ -41,6 +43,17 @@ body.fade-out {
     opacity: 0 !important;
 }
 
+/* Nuevo Keyframes: Animación de respiración para títulos */
+@keyframes breathing {
+    0% { opacity: 1; transform: translateY(0); }
+    50% { opacity: 0.98; transform: translateY(-0.5px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Aplicar a títulos principales */
+h1.h2 {
+    animation: breathing 8s ease-in-out infinite;
+}
 
 /* ---------------------------------- */
 /* ANIMACIONES DEL HEADER (Mantenidas y Mejoradas) */
@@ -249,8 +262,8 @@ body.fade-out {
 }
 
 .card-header {
-    background-color: var(--header-bg); /* Fondo sutil para el header de la tarjeta */
-    border-bottom: 1px solid var(--frozen-border);
+    background: linear-gradient(0deg, #f8f9fa 0%, var(--accent-white) 100%); /* Sutil degradado */
+    border-bottom: 2px solid #e9ecef; /* Borde más definido */
     font-weight: 700; /* Más audaz */
     padding: 1rem 1.5rem;
     border-top-left-radius: 12px;
@@ -261,7 +274,7 @@ body.fade-out {
 .btn {
     font-weight: 600;
     border-radius: 8px;
-    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Transición con efecto de 'pop' */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* Curva de desaceleración moderna */
     padding: 0.6rem 1.2rem;
     border: none;
     position: relative;
@@ -271,8 +284,8 @@ body.fade-out {
 }
 
 .btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    transform: translateY(-3px); /* Desplazamiento de hover más pronunciado */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.25); /* Sombra de hover más fuerte */
     z-index: 3;
 }
 
@@ -298,12 +311,14 @@ body.fade-out {
 
 
 .btn-primary {
-    background-color: var(--app-primary);
+    background: linear-gradient(180deg, var(--app-primary-hover) 0%, var(--app-primary) 100%);
     color: white;
+    border: 1px solid var(--app-primary-hover); /* Nuevo borde para estructura */
 }
 
 .btn-primary:hover {
     background-color: var(--app-primary-hover);
+    background: var(--app-primary-hover); /* Asegura que el hover se mantenga sólido y oscuro */
 }
 
 .btn-success {
@@ -423,12 +438,17 @@ body.fade-out {
 /* Form styles - Foco mejorado */
 .form-control, .form-select {
     border-radius: 6px;
+    border: 1px solid var(--frozen-border); /* Asegura borde visible por defecto */
     transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .form-control:focus, .form-select:focus {
+    /* Reemplaza la caja de sombra simple con un anillo doble */
     border-color: var(--app-primary);
-    box-shadow: 0 0 0 0.25rem rgba(49, 49, 49, 0.25); /* Sombra del color principal */
+    box-shadow: 
+        0 0 0 1px var(--app-primary), /* Anillo interior más fino */
+        0 0 0 3px rgba(49, 49, 49, 0.1); /* Anillo exterior sutil */
+    outline: none; /* Remueve el outline del navegador */
 }
 
 /* Badge styles */
@@ -568,55 +588,83 @@ body.fade-out {
 }
 
 /* Insumo Card Styles - Mejorado con borde dinámico */
-.insumo-card {
-    border: none !important;
+.insumo-card, .producto-card, .cliente-card:hover, .proveedor-card:hover, .orden-card:hover {
+    border: 1px solid var(--frozen-border) !important; /* Mantener el borde original */
     border-radius: 0.75rem;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out, border 0.3s ease;
+    transition: transform 0.4s ease-in-out, box-shadow 0.4s ease-in-out, border-color 0.4s ease;
     position: relative;
+    overflow: hidden; /* Clave para el efecto de borde inferior */
 }
 
-.insumo-card::after {
+/* Efecto de borde inferior al iniciar */
+.insumo-card::after, .producto-card::after, .cliente-card::after, .proveedor-card::after, .orden-card::after {
     content: '';
     position: absolute;
-    top: 0;
+    bottom: 0;
     left: 0;
     width: 100%;
-    height: 100%;
-    border: 2px solid transparent;
-    border-radius: 0.75rem;
-    transition: border-color 0.3s ease;
+    height: 3px;
+    background-color: var(--accent-green);
+    transform: scaleX(0); /* Inicialmente oculto */
+    transition: transform 0.4s ease-in-out;
+    transform-origin: bottom left;
     pointer-events: none;
 }
 
-.insumo-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 14px 20px rgba(0, 0, 0, 0.15);
+.insumo-card:hover, .producto-card:hover, .cliente-card:hover, .proveedor-card:hover, .orden-card:hover {
+    transform: translateY(-5px); 
+    box-shadow: var(--card-glow-hover), 0 0 10px rgba(28, 200, 138, 0.1); 
+    border-color: #e9ecef !important; /* Mantener borde sutil */
 }
 
-.insumo-card:hover::after {
-    border-color: var(--accent-green); /* Borde de acento en el hover */
+.insumo-card:hover::after, .producto-card:hover::after, .cliente-card:hover::after, .proveedor-card:hover::after, .orden-card:hover::after {
+    transform: scaleX(1); /* El borde inferior se revela completamente */
 }
 
-.insumo-card .card-title {
+.insumo-card .card-title, .producto-card .card-title, .cliente-card .card-title, .proveedor-card .card-title, .orden-card .card-title  {
     font-size: 1.5rem;
     font-weight: 800;
     color: #212529;
     margin-bottom: 0.5rem;
+    transition: color 0.3s ease;
 }
 
-.insumo-card .card-secondary-details {
+/* Nuevo: Resaltar título en hover */
+.insumo-card:hover .card-title, .producto-card:hover .card-title, .cliente-card:hover .card-title, .proveedor-card:hover .card-title, .orden-card:hover .card-title {
+    color: var(--accent-green); /* Título se vuelve verde */
+    transform: translateX(0);
+}
+
+/* UNIFICACIÓN DE DETALLES SECUNDARIOS (Vertical) */
+.insumo-card .card-secondary-details, 
+.producto-card .card-secondary-details,
+.orden-card .card-secondary-details {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 1rem;
-    font-size: 0.8rem;
-    color: #6c757d; 
+    flex-direction: column; 
+    gap: 0.35rem;          
+    font-size: 0.9rem;     
+    color: var(--frozen-text-secondary); 
+    margin-bottom: 1rem;
+    padding-left: 0.5rem; 
+    flex-wrap: nowrap; 
 }
 
-.insumo-card .card-secondary-details i {
-    margin-right: 0.25rem;
-    color: #adb5bd;
+.insumo-card .card-secondary-details i, 
+.producto-card .card-secondary-details i,
+.orden-card .card-secondary-details i {
+    margin-right: 0.5rem;
+    color: var(--app-primary); 
+    font-size: 1rem;
 }
+
+.insumo-card .card-secondary-details span:hover, 
+.producto-card .card-secondary-details span:hover,
+.orden-card .card-secondary-details span:hover {
+    color: var(--app-primary); 
+    transform: translateX(3px); 
+}
+
 
 .insumo-card .card-secondary-details code {
     font-size: 1em;
@@ -626,11 +674,11 @@ body.fade-out {
     border-radius: 3px;
 }
 
-.insumo-card hr.card-divider {
-    margin-top: 1rem;
+.insumo-card hr.card-divider, .producto-card hr.card-divider {
+    margin-top: 1.5rem; 
     margin-bottom: 1rem;
     border: 0;
-    border-top: 1px solid #e9ecef;
+    border-top: 2px dotted #e9ecef; 
 }
 
 .insumo-card .stock-info .stock-label {
@@ -638,6 +686,15 @@ body.fade-out {
     color: #6c757d;
     text-transform: uppercase;
     font-weight: 600;
+}
+
+/* Nuevo: Estilo para el área de stock/precio */
+.insumo-card .stock-info, .producto-card .stock-info {
+    padding: 0.5rem 0.75rem;
+    margin: -0.5rem -0.75rem 1rem -0.75rem; /* Margen negativo para expandir el fondo */
+    background-color: #fcfcfc; /* Fondo muy claro */
+    border-radius: 6px;
+    border: 1px solid #f0f0f0;
 }
 
 .insumo-card .stock-info .stock-value {
@@ -665,9 +722,6 @@ body.fade-out {
 
 .insumo-inactivo .action-buttons {
     pointer-events: auto; /* Permite que los botones dentro de la tarjeta inactiva sí sean clickeables */
-}
-.insumo-inactivo:hover::after {
-    border-color: transparent;
 }
 
 
@@ -920,4 +974,69 @@ body.fade-out {
 .navbar-custom #navbarDropdownUser:hover i.bi-person-circle {
     color: var(--accent-green);
     transform: scale(1.1); /* Ligeramente más grande al hacer hover */
+}
+
+/* ---------------------------------------------------- */
+/* UNIFICACIÓN: Aplicar estilos de detalles a todas las tarjetas de listado */
+/* ---------------------------------------------------- */
+.insumo-card .card-secondary-details, 
+.producto-card .card-secondary-details, 
+.orden-card .card-secondary-details,
+.proveedor-card .card-secondary-details,
+.cliente-card .card-secondary-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;        
+    font-size: 0.9rem;     
+    color: var(--frozen-text-secondary); 
+    margin-bottom: 1rem;
+    padding-left: 0.5rem; 
+    flex-wrap: nowrap;
+}
+
+.insumo-card .card-secondary-details i, 
+.producto-card .card-secondary-details i, 
+.orden-card .card-secondary-details i,
+.proveedor-card .card-secondary-details i,
+.cliente-card .card-secondary-details i {
+    margin-right: 0.5rem;
+    color: var(--app-primary);
+    font-size: 1rem;
+}
+
+/* Añadido: Hover en detalles secundarios */
+.insumo-card .card-secondary-details span, 
+.producto-card .card-secondary-details span, 
+.orden-card .card-secondary-details span,
+.proveedor-card .card-secondary-details span,
+.cliente-card .card-secondary-details span {
+    display: flex;
+    align-items: center; 
+    padding: 0.2rem 0; 
+    transition: color 0.2s ease, transform 0.1s ease;
+}
+
+.insumo-card .card-secondary-details span:hover, 
+.producto-card .card-secondary-details span:hover, 
+.orden-card .card-secondary-details span:hover,
+.proveedor-card .card-secondary-details span:hover,
+.cliente-card .card-secondary-details span:hover {
+    color: var(--app-primary); 
+    transform: translateX(3px); 
+}
+
+/* Asegurar que la regla específica de .insumo-card use los nuevos valores para sobrescribir el estilo anterior */
+.insumo-card .card-secondary-details {
+    display: flex;
+    flex-direction: column; 
+    gap: 0.35rem;
+    font-size: 0.9rem;
+    color: #6c757d; 
+    margin-bottom: 1rem;
+    padding-left: 0.5rem;
+}
+
+.insumo-card .card-secondary-details i {
+    margin-right: 0.5rem;
+    color: var(--app-primary); 
 }

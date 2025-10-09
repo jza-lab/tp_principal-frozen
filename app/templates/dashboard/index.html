@@ -43,17 +43,42 @@
 
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card stat-card h-100">
+            <a href="{{ url_for('insumos_api.obtener_insumos') }}" style="text-decoration: none;">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="stat-label mb-1">Alertas de Stock</div>
-                        <div class="stat-value text-warning">0</div>
-                    </div>
-                    <div class="text-muted">
-                        <i class="bi bi-exclamation-triangle-fill fs-1 opacity-25"></i>
-                    </div>
+                    {% if alertas_stock_count == 0 %}
+                        <div>
+                            <div class="stat-label mb-1 text-success">Alertas de Stock</div>
+                            <div class="small text-muted">Insumos por debajo del stock mínimo</div>
+                            <div class="stat-value text-success">{{ alertas_stock_count }}</div>
+                        </div>
+                        <div class="text-muted">
+                            <i class="bi bi-exclamation-triangle-fill fs-1 opacity-25 text-success"></i>
+                        </div>
+                    {% else %}
+                    {% if alertas_stock_count <= 10 %}
+                        <div>
+                            <div class="stat-label mb-1 text-warning">Alertas de Stock</div>
+                            <div class="small text-muted">Insumos por debajo del stock mínimo</div>
+                            <div class="stat-value text-warning">{{ alertas_stock_count }}</div>
+                        </div>
+                        <div class="text-muted">
+                            <i class="bi bi-exclamation-triangle-fill fs-1 opacity-25 text-warning"></i>
+                        </div>
+                    {% else %} 
+                        <div>
+                            <div class="stat-label mb-1 text-danger">Alertas de Stock</div>
+                            <div class="small text-muted">Insumos por debajo del stock mínimo</div>
+                            <div class="stat-value text-danger">{{ alertas_stock_count }}</div>
+                        </div>
+                            <div class="text-muted">
+                            <i class="bi bi-exclamation-triangle-fill fs-1 opacity-25 text-danger"></i>
+                        </div>
+                    {% endif %}
+                    {% endif %}
                 </div>
             </div>
+            </a>
         </div>
     </div>
 

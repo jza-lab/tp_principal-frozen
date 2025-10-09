@@ -27,6 +27,11 @@
                     <label for="categoria" class="form-label">Filtrar por Categoría</label>
                     <select name="categoria" id="categoria" class="form-select">
                         <option value="">Todas las categorías</option>
+                        {% for cat in categorias %}
+                        <option value="{{ cat }}" {% if request.args.get('categoria') == cat %}selected{% endif %}>
+                            {{ cat }}
+                        </option>
+                        {% endfor %}
                     </select>
                 </div>
                      <div class="col-md-2 align-self-end">
