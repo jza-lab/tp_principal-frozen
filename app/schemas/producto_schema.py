@@ -4,7 +4,8 @@ class ProductoSchema(Schema):
     """
     Schema para la validación de datos de productos del catálogo.
     """
-    id = fields.Int(dump_only=True)
+    # Corregido: Mapear el campo 'id' del schema al atributo 'id' del modelo.
+    id = fields.Int(attribute="id")
     # El código ahora es opcional en la carga, ya que se puede autogenerar.
     codigo = fields.Str(required=False, allow_none=True)
     nombre = fields.Str(required=True, validate=validate.Length(min=1, error="El nombre es obligatorio."))
