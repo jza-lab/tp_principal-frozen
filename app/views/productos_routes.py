@@ -63,21 +63,32 @@ def crear_producto():
 def obtener_productos():
     try:
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
-        response, status = producto_controller.obtener_todos_los_productos(filtros)
-        productos = response.get("data", [])
         
-        # 1. Obtener categorías distintas
+        # Corregido: Desempaquetar la tupla de respuesta del controlador
+        response, status = producto_controller.obtener_todos_los_productos(filtros)
+        
+        # Asegurarse de que la respuesta fue exitosa antes de obtener los datos
+        if status == 200:
+            productos = response.get("data", [])
+        else:
+            # Si hay un error, mostrar un mensaje y una lista vacía
+            flash(response.get("error", "Error al cargar los productos."), "error")
+            productos = []
+
+        # Obtener categorías distintas para el filtro
         categorias_response, _ = producto_controller.obtener_categorias_distintas()
         categorias = categorias_response.get("data", [])
         
         return render_template(
             "productos/listar.html", 
             productos=productos, 
-            categorias=categorias # <-- AÑADIDO: Pasa la lista de categorías
+            categorias=categorias
         )
     except Exception as e:
-        logger.error(f"Error inesperado en obtener_todos_los_productos: {str(e)}")
-        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+        logger.error(f"Error inesperado en obtener_productos: {str(e)}")
+        # En caso de una excepción grave, es mejor redirigir a una página de error o a la principal
+        flash("Ocurrió un error inesperado al cargar la página de productos.", "error")
+        return redirect(url_for('productos.obtener_productos'))
 
 
 @productos_bp.route("/catalogo/<int:id_producto>", methods=["GET"])

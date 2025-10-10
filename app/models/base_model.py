@@ -49,6 +49,8 @@ class BaseModel(ABC):
                     clean_data[key] = str(value)
                 elif isinstance(value, (date, datetime)):
                     clean_data[key] = value.isoformat()
+                elif isinstance(value, Decimal):
+                    clean_data[key] = str(value)
                 else:
                     clean_data[key] = value
         return clean_data

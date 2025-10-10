@@ -1,5 +1,5 @@
 from app.models.base_model import BaseModel
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import logging
 from datetime import datetime
 
@@ -7,6 +7,18 @@ logger = logging.getLogger(__name__)
 
 class ProveedorModel(BaseModel):
     """Modelo para la tabla proveedores"""
+
+    def _convert_item_dates(self, item: Dict) -> Dict:
+        """Convierte campos de fecha de string a datetime para un solo item"""
+        if item and item.get('created_at') and isinstance(item['created_at'], str):
+            item['created_at'] = datetime.fromisoformat(item['created_at'])
+        if item and item.get('updated_at') and isinstance(item['updated_at'], str):
+            item['updated_at'] = datetime.fromisoformat(item['updated_at'])
+        return item
+
+    def _convert_dates(self, data: List[Dict]) -> List[Dict]:
+        """Convierte campos de fecha de string a datetime"""
+        return [self._convert_item_dates(item) for item in data]
 
     def get_table_name(self) -> str:
         return 'proveedores'
@@ -28,7 +40,9 @@ class ProveedorModel(BaseModel):
         """Obtener todos los proveedores"""
         try:
             response = self.db.table(self.get_table_name()).select("*").execute()
-            return {'success': True, 'data': self._convert_timestamps(response.data)}
+            if response.data:
+                response.data = self._convert_dates(response.data)
+            return {'success': True, 'data': response.data}
         except Exception as e:
             logger.error(f"Error obteniendo proveedores: {e}")
             return {'success': False, 'error': str(e)}
@@ -37,19 +51,21 @@ class ProveedorModel(BaseModel):
         """Obtener todos los proveedores activos"""
         try:
             response = self.db.table(self.get_table_name()).select("*").eq("activo", True).execute()
-            return {'success': True, 'data': self._convert_timestamps(response.data)}
+            if response.data:
+                response.data = self._convert_dates(response.data)
+            return {'success': True, 'data': response.data}
         except Exception as e:
             logger.error(f"Error obteniendo proveedores activos: {e}")
             return {'success': False, 'error': str(e)}
 
     def find_by_id(self, id_value: str, id_field: str = 'id') -> Dict:
-        """Sobrescribe find_by_id para convertir timestamps."""
+        """Buscar por ID y convertir fechas"""
         result = super().find_by_id(id_value, id_field)
-        if result.get('success'):
-            result['data'] = self._convert_timestamps(result['data'])
+        if result.get('success') and result.get('data'):
+            result['data'] = self._convert_item_dates(result['data'])
         return result
 
-    def buscar_por_email(self, email: str) -> Optional[tuple]:
+    def buscar_por_email(self, email: str) -> Optional[Dict]:
         """Buscar proveedor por email"""
         try:
             response = self.db.table(self.get_table_name())\
@@ -57,7 +73,8 @@ class ProveedorModel(BaseModel):
                            .eq("email", email.strip().lower())\
                            .execute()
             if response.data:
-                return self._convert_timestamps(response.data[0]), response.status_code
+                item = self._convert_item_dates(response.data[0])
+                return item, response.status_code
             else:
                 return None, 404
         except Exception as e:
@@ -72,7 +89,8 @@ class ProveedorModel(BaseModel):
                            .eq("cuit", cuit.strip())\
                            .execute()
             if response.data:
-                return self._convert_timestamps(response.data[0]), 404
+                item = self._convert_item_dates(response.data[0])
+                return item, 404
             return None, 404
         except Exception as e:
             logger.error(f"Error buscando proveedor por CUIT {cuit}: {e}")

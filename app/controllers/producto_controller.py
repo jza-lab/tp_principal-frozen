@@ -252,8 +252,7 @@ class ProductoController(BaseController):
                 return self.error_response(result['error'])
             datos = result['data']
             sorted_data = sorted(datos, key=lambda x: x.get('activo', False), reverse=True)
-            serialized_data = self.schema.dump(sorted_data, many=True)
-            return self.success_response(data=serialized_data)
+            return self.success_response(data=sorted_data)
         except Exception as e:
             return self.error_response(f'Error interno', 500)
 
