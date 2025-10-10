@@ -189,26 +189,38 @@ class PedidoController(BaseController):
 
                 # --- INICIO DE LA LÓGICA DE ACTUALIZACIÓN DE ÍTEM ---
                 if cantidad_faltante > 0:
-                    # 4a. Si falta stock, crear OP y actualizar ítem a 'EN_PRODUCCION'
                     datos_orden = {
                         'producto_id': item['producto_id'],
                         'cantidad': cantidad_faltante,
                         'fecha_planificada': date.today().isoformat()
                     }
+
+                    # Llamamos al método que puede devolver dict o tuple
                     resultado_op = self.orden_produccion_controller.crear_orden(datos_orden, usuario_id)
 
-                    if resultado_op.get('success'):
-                        orden_creada = resultado_op['data']
+                    # --- INICIO DE LA CORRECCIÓN ---
+                    resultado_op_dict = {}
+                    # Verificamos si la respuesta es una tupla (el caso de error)
+                    if isinstance(resultado_op, tuple):
+                        resultado_op_dict = resultado_op[0] # Extraemos el diccionario de la tupla
+                    else:
+                        # Si no, es un diccionario (el caso de éxito)
+                        resultado_op_dict = resultado_op
+
+                    # Ahora siempre trabajamos con un diccionario
+                    if resultado_op_dict.get('success'):
+                        orden_creada = resultado_op_dict.get('data', {})
                         ordenes_creadas.append(orden_creada)
                         # Asociamos el ítem con la nueva OP y actualizamos su estado
                         self.model.update_item(item['id'], {
                             'estado': 'EN_PRODUCCION',
-                            'orden_produccion_id': orden_creada['id']
+                            'orden_produccion_id': orden_creada.get('id')
                         })
                     else:
-                        logging.error(f"No se pudo crear la OP para el producto {item['producto_id']}. Error: {resultado_op.get('error')}")
+                        logging.error(f"No se pudo crear la OP para el producto {item['producto_id']}. Error: {resultado_op_dict.get('error')}")
+                    # --- FIN DE LA CORRECCIÓN ---
+
                 else:
-                    # 4b. Si el stock fue suficiente, actualizar ítem a 'ALISTADO'
                     self.model.update_item(item['id'], {'estado': 'ALISTADO'})
                 # --- FIN DE LA LÓGICA DE ACTUALIZACIÓN DE ÍTEM ---
 
