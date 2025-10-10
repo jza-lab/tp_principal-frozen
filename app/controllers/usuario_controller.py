@@ -11,8 +11,8 @@ from marshmallow import ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 import logging
-from app.controllers.usuario_direccion_controller import GeorefController
-from app.models.usuario_direccion import DireccionModel
+from app.controllers.direccion_controller import GeorefController
+from app.models.direccion import DireccionModel
 
 logger = logging.getLogger(__name__)
 

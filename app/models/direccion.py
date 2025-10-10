@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Direccion:
     """
-    Dataclass que representa una dirección de usuario.
+    Dataclass que representa una dirección.
     """
     id: Optional[int] = None
     calle: Optional[str] = None
@@ -26,7 +26,7 @@ class Direccion:
 
 class DireccionModel(BaseModel):
     """
-    Modelo para interactuar con la tabla de direcciones de usuarios.
+    Modelo para interactuar con la tabla de direcciones.
     """
     def get_table_name(self) -> str:
         return 'usuario_direccion'

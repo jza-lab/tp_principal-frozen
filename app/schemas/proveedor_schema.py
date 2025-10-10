@@ -1,4 +1,5 @@
 from marshmallow import Schema, fields, validate
+from app.schemas.direccion_schema import DireccionSchema
 
 class ProveedorSchema(Schema):
     """Esquema para validación de proveedores"""
@@ -29,7 +30,9 @@ class ProveedorSchema(Schema):
         allow_none=True,
         load_default=None
     )
-    direccion = fields.Str(allow_none=True, load_default=None)
+    
+    direccion_id = fields.Int(allow_none=True, load_only=True)
+    direccion = fields.Nested(DireccionSchema, allow_none=True)
     cuit = fields.Str(
         validate=validate.Length(max=15),
         allow_none=True,
@@ -41,5 +44,5 @@ class ProveedorSchema(Schema):
         load_default=None
     )
     activo = fields.Bool(dump_only=True)
-    created_at = fields.DateTime(dump_only=True)
-    updated_at = fields.DateTime(dump_only=True)
+    created_at = fields.Str(dump_only=True)
+    updated_at = fields.Str(dump_only=True)
