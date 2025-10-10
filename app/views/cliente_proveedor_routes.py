@@ -41,6 +41,7 @@ def nuevo_cliente():
     """
     try:
         if request.method == 'PUT' or request.method == 'POST':
+
             datos_json = request.get_json()
             if not datos_json:
                 return jsonify(

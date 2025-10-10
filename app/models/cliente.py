@@ -10,11 +10,43 @@ class ClienteModel(BaseModel):
     def get_table_name(self) -> str:
         return 'clientes'
 
-    def get_all(self, include_direccion: bool = False) -> Dict:
+    def contar_clientes_direccion(self,direccion_id: int) -> int:
+        """
+        Cuenta el número de clientes que tienen asignada una dirección específica.
+        """
+        try:
+            # Usamos el método select con .count() para obtener solo el recuento.
+            # 'exact' asegura que el número total de filas es devuelto en la cabecera.
+            response = self.db.table(self.get_table_name()) \
+                .select('id', count='exact') \
+                .eq('direccion_id', direccion_id) \
+                .execute()
+
+            return response.count if response.count is not None else 0
+
+        except Exception as e:
+            logger.error(f"Error contando clientes por direccion_id {direccion_id}: {e}")
+            # En caso de error, retornamos 0 para evitar fallos.
+            return 0
+
+    def get_all(self, include_direccion: bool = False, filtros: Optional[Dict] = None) -> Dict:
         """Obtener todos los clientes, opcionalmente con su dirección."""
         try:
-            query = "*, direccion:direccion_id(*)" if include_direccion else "*"
-            response = self.db.table(self.get_table_name()).select(query).execute()
+            query_select = "*, direccion:direccion_id(*)" if include_direccion else "*"
+            query = self.db.table(self.get_table_name()).select(query_select)
+
+            filtros_copy = filtros.copy() if filtros else {}
+            texto_busqueda = filtros_copy.pop('busqueda', None)
+            if texto_busqueda:
+                busqueda_pattern = f"%{texto_busqueda}%"
+                query = query.or_(f"nombre.ilike.{busqueda_pattern},codigo.ilike.{busqueda_pattern},cuit.ilike.{busqueda_pattern}")
+
+            for key, value in filtros_copy.items():
+                if value is not None:
+                    query = query.eq(key, value)
+
+            response = query.execute()
+            
             return {'success': True, 'data': response.data}
         except Exception as e:
             logger.error(f"Error obteniendo clientes: {e}")

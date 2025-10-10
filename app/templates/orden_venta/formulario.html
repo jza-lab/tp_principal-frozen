@@ -1,7 +1,7 @@
 {% extends 'layouts/base.html' %}
 
 {% block title %}
-    {% if pedido %}Editar{% else %}Nuevo{% endif %} Pedido de Venta - Sistema Frozen
+{% if pedido %}Editar{% else %}Nuevo{% endif %} Pedido de Venta - Sistema Frozen
 {% endblock %}
 
 {% block content %}
@@ -12,9 +12,9 @@
         </h1>
         <p class="text-muted mb-0">
             {% if pedido and pedido.id %}
-                Modificar pedido <code>PED-{{ pedido.id }}</code> | Cliente: <strong>{{ pedido.nombre_cliente }}</strong>
+            Modificar pedido <code>PED-{{ pedido.id }}</code> | Cliente: <strong>{{ pedido.nombre_cliente }}</strong>
             {% else %}
-                Crear un nuevo pedido para un cliente
+            Crear un nuevo pedido para un cliente
             {% endif %}
         </p>
     </div>
@@ -37,30 +37,281 @@
         <div class="col-lg-8">
             <div class="card shadow-sm">
                 <div class="card-header bg-light">
-                    <h5 class="mb-0">Información del Pedido</h5>
+                    <h5 class="mb-0">Información del Cliente</h5>
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label for="nombre_cliente" class="form-label">Nombre del Cliente <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente" 
-                                   value="{{ pedido.nombre_cliente if pedido else '' }}" required>
+                            <div class="input-group">
+
+                                <input type="text" class="form-control text-center" id="cuil_parte1" name="cuil_parte1"
+                                    maxlength="2" pattern="\d{2}" placeholder="XX" required
+                                    style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
+                                    aria-label="Código de provincia">
+
+                                <span class="input-group-text">-</span>
+
+                                <div class="form-floating" style="flex-grow: 4;">
+                                    <input type="text" class="form-control text-center" id="cuil_parte2"
+                                        name="cuil_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX"
+                                        required>
+                                    <label for="cuil_parte2">
+                                        <i class="bi bi-person-badge me-1"></i>CUIL
+                                    </label>
+                                </div>
+
+                                <span class="input-group-text">-</span>
+
+                                <input type="text" class="form-control text-center" id="cuil_parte3" name="cuil_parte3"
+                                    maxlength="2" pattern="\d{2}" placeholder="XX" required
+                                    style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
+                                    aria-label="Dígito verificador">
+
+                            </div>
                         </div>
-                        
+
                         <div class="col-md-6">
-                            <label for="fecha_solicitud" class="form-label">Fecha de Solicitud <span class="text-danger">*</span></label>
-                            <input type="date" class="form-control" id="fecha_solicitud" name="fecha_solicitud" 
-                                value="{{ (pedido.fecha_solicitud | string)[:10] if is_edit else today }}" 
-                                required {{ 'readonly' if is_edit }}
-                                min="2025-01-01" 
-                                max="{{ today }}">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente"
+                                    placeholder="Nombre del Cliente"
+                                    value="{{ pedido.nombre_cliente if pedido else '' }}" required>
+                                <label for="nombre_cliente">
+                                    <i class="bi bi-person-circle me-1"></i>Nombre <span
+                                        class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" name="telefono" id="telefono"
+                                    placeholder="Teléfono" value="{{ cliente.telefono if cliente else '' }}" required>
+                                <label for="telefono">
+                                    <i class="bi bi-phone me-1"></i>Teléfono <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="email" class="form-control" name="email" id="email" placeholder="Email"
+                                    value="{{ cliente.email if cliente else '' }}" required>
+                                <label for="email">
+                                    <i class="bi bi-envelope me-1"></i>Email <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-subsection">
+
+                            <label class="form-label">Dirección de Facturacion</label>
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="calle" name="calle"
+                                            placeholder="Calle" value="" required>
+                                        <label for="calle">
+                                            <i class="bi bi-signpost me-1"></i>Calle
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="number" class="form-control" id="altura" name="altura"
+                                            placeholder="Altura" value="" required>
+                                        <label for="altura">
+                                            <i class="bi bi-123 me-1"></i>Altura
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <select class="form-select" id="provincia" name="provincia" required>
+                                            <option value="">Seleccionar provincia...</option>
+                                            {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
+                                            "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
+                                            Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan",
+                                            "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del
+                                            Fuego",
+                                            "Tucumán"] %}
+                                            {% for p in provincias %}
+                                            <option value="{{ p }}">{{ p }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <label for="provincia">
+                                            <i class="bi bi-map me-1"></i>Provincia
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="localidad" name="localidad"
+                                            placeholder="Localidad" value="" required>
+                                        <label for="localidad">
+                                            <i class="bi bi-pin-map me-1"></i>Localidad
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="piso" name="piso"
+                                            placeholder="Piso (Opcional)" value="">
+                                        <label for="piso">
+                                            <i class="bi bi-building me-1"></i>Piso (Opcional)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="depto" name="depto"
+                                            placeholder="Dto (Opcional)" value="">
+                                        <label for="depto">
+                                            <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                                            placeholder="Código Postal" value="">
+                                        <label for="codigo_postal">
+                                            <i class="bi bi-mailbox me-1"></i>Código Postal
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mt-2">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Información del Pedido</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="form-subsection">
+                            <label class="form-label">Dirección de Entrega</label>
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="calle" name="calle"
+                                            placeholder="Calle" value="" required>
+                                        <label for="calle">
+                                            <i class="bi bi-signpost me-1"></i>Calle
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="number" class="form-control" id="altura" name="altura"
+                                            placeholder="Altura" value="" required>
+                                        <label for="altura">
+                                            <i class="bi bi-123 me-1"></i>Altura
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <select class="form-select" id="provincia" name="provincia" required>
+                                            <option value="">Seleccionar provincia...</option>
+                                            {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
+                                            "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
+                                            Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan",
+                                            "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del
+                                            Fuego",
+                                            "Tucumán"] %}
+                                            {% for p in provincias %}
+                                            <option value="{{ p }}">{{ p }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <label for="provincia">
+                                            <i class="bi bi-map me-1"></i>Provincia
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="localidad" name="localidad"
+                                            placeholder="Localidad" value="" required>
+                                        <label for="localidad">
+                                            <i class="bi bi-pin-map me-1"></i>Localidad
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="piso" name="piso"
+                                            placeholder="Piso (Opcional)" value="">
+                                        <label for="piso">
+                                            <i class="bi bi-building me-1"></i>Piso (Opcional)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="depto" name="depto"
+                                            placeholder="Dto (Opcional)" value="">
+                                        <label for="depto">
+                                            <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                                            placeholder="Código Postal" value="">
+                                        <label for="codigo_postal">
+                                            <i class="bi bi-mailbox me-1"></i>Código Postal
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <div class="col-md-6">
+                            <label for="fecha_solicitud" class="form-label">Fecha de Solicitud <span
+                                    class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="fecha_solicitud" name="fecha_solicitud"
+                                value="{{ (pedido.fecha_solicitud | string)[:10] if is_edit else today }}" required
+                                {{ 'readonly' if is_edit }} min="2025-01-01" max="{{ today }}">
+                        </div>
+
+
+                        <div class="col-12">
+                            <label for="comentarios_adicionales" class="form-label">Comentarios Adicionales</label>
+                            <textarea class="form-control" name="comentarios_adicionales" id="comentarios_adicionales"
+                                rows="3"></textarea>
+                            <div class="form-text">Opcional - Ingrese comentarios adicionales sobre el pedido</div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Items del Pedido -->
-            <div class="card shadow-sm mt-4">
+            <div class="card shadow-sm mt-4 pb-7 mb-5">
                 <div class="card-header d-flex justify-content-between align-items-center bg-light">
                     <h5 class="mb-0">Productos del Pedido</h5>
                     <button type="button" class="btn btn-sm btn-outline-primary" id="add-item-btn">
@@ -80,46 +331,58 @@
                                 </tr>
                             </thead>
                             <tbody id="items-container">
-                                <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS" 
-                                       value="{{ pedido['items'] | length if pedido and pedido['items'] else 0 }}">
+                                <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS"
+                                    value="{{ pedido['items'] | length if pedido and pedido['items'] else 0 }}">
 
                                 {% if pedido and pedido['items'] %}
-                                    {% for item in pedido['items'] %}
-                                    {% set is_editable = item.estado == 'PENDIENTE' %}
-                                    <tr class="item-row {% if not is_editable %}table-light text-muted{% endif %}">
-                                        <td>
-                                            <input type="hidden" name="items-{{ loop.index0 }}-id" value="{{ item.id if item.id else '' }}">
-                                            <select class="form-select form-select-sm" name="items-{{ loop.index0 }}-producto_id" required {% if not is_editable %}disabled{% endif %}>
-                                                <option value="">Seleccione...</option>
-                                                {% for producto in productos %}
-                                                    <option value="{{ producto.id }}" data-stock="{{ producto.stock_disponible or 0 }}" {% if item.producto_id == producto.id %}selected{% endif %}>
-                                                        {{ producto.nombre }}
-                                                    </option>
-                                                {% endfor %}
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <input type="number" class="form-control form-control-sm" name="items-{{ loop.index0 }}-cantidad" 
-                                                   placeholder="Ej: 10" min="1" max="5000" step="1" value="{{ item.cantidad }}" required {% if not is_editable %}disabled{% endif %}>
-                                        </td>
-                                        <td>
-                                            {% set status_map = {'PENDIENTE': 'bg-secondary', 'EN_PRODUCCION': 'bg-warning text-dark', 'ALISTADO': 'bg-success', 'CANCELADO': 'bg-danger'} %}
-                                            <span class="badge {{ status_map.get(item.estado, 'bg-light text-dark') }}">{{ item.estado | replace('_', ' ') | title }}</span>
-                                        </td>
-                                        <!-- <td>
+                                {% for item in pedido['items'] %}
+                                {% set is_editable = item.estado == 'PENDIENTE' %}
+                                <tr class="item-row {% if not is_editable %}table-light text-muted{% endif %}">
+                                    <td>
+                                        <input type="hidden" name="items-{{ loop.index0 }}-id"
+                                            value="{{ item.id if item.id else '' }}">
+                                        <select class="form-select form-select-sm"
+                                            name="items-{{ loop.index0 }}-producto_id" required {% if not is_editable
+                                            %}disabled{% endif %}>
+                                            <option value="">Seleccione...</option>
+                                            {% for producto in productos %}
+                                            <option value="{{ producto.id }}"
+                                                data-stock="{{ producto.stock_disponible or 0 }}" {% if
+                                                item.producto_id==producto.id %}selected{% endif %}>
+                                                {{ producto.nombre }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm"
+                                            name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10" min="1"
+                                            max="5000" step="1" value="{{ item.cantidad }}" required {% if not
+                                            is_editable %}disabled{% endif %}>
+                                    </td>
+                                    <td>
+                                        {% set status_map = {'PENDIENTE': 'bg-secondary', 'EN_PRODUCCION': 'bg-warning
+                                        text-dark', 'ALISTADO': 'bg-success', 'CANCELADO': 'bg-danger'} %}
+                                        <span class="badge {{ status_map.get(item.estado, 'bg-light text-dark') }}">{{
+                                            item.estado | replace('_', ' ') | title }}</span>
+                                    </td>
+                                    <!-- <td>
                                             <span class="badge bg-secondary text-white stock-display">--</span>
                                         </td> -->
-                                        <td class="text-center">
-                                            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem" {% if not is_editable %}disabled{% endif %}><i class="bi bi-trash"></i></button>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn"
+                                            title="Eliminar ítem" {% if not is_editable %}disabled{% endif %}><i
+                                                class="bi bi-trash"></i></button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
                                 {% endif %}
                             </tbody>
                         </table>
                     </div>
                     <!-- FIX para usar la notación de diccionario para consistencia. -->
-                    <div id="no-items-msg" class="text-center text-muted py-3 border-top" {% if pedido and pedido['items'] | length > 0 %}style="display: none;"{% endif %}>
+                    <div id="no-items-msg" class="text-center text-muted py-3 border-top" {% if pedido and
+                        pedido['items'] | length> 0 %}style="display: none;"{% endif %}>
                         <i class="bi bi-box-seam fs-3"></i>
                         <p class="mt-2">Añada productos al pedido.</p>
                     </div>
@@ -130,7 +393,7 @@
         <!-- Columna lateral -->
         <div class="col-lg-4">
             <div class="card sticky-top shadow-sm" style="top: 20px;">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header bg-primary text-black">
                     <h5 class="mb-0">Resumen y Acciones</h5>
                 </div>
                 <div class="card-body">
@@ -138,21 +401,26 @@
                     <div class="mb-3">
                         <label for="estado" class="form-label">Estado del Pedido Global</label>
                         <select class="form-select" id="estado" name="estado">
-                            <option value="PENDIENTE" {% if pedido.estado == 'PENDIENTE' %}selected{% endif %}>Pendiente</option>
-                            <option value="EN_PROCESO" {% if pedido.estado == 'EN_PROCESO' %}selected{% endif %}>En Proceso</option>
-                            <option value="LISTO_PARA_ENTREGA" {% if pedido.estado == 'LISTO_PARA_ENTREGA' %}selected{% endif %}>Listo para Entrega</option>
-                            <option value="COMPLETADO" {% if pedido.estado == 'COMPLETADO' %}selected{% endif %}>Completado</option>
-                            <option value="CANCELADO" {% if pedido.estado == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
+                            <option value="PENDIENTE" {% if pedido.estado=='PENDIENTE' %}selected{% endif %}>Pendiente
+                            </option>
+                            <option value="EN_PROCESO" {% if pedido.estado=='EN_PROCESO' %}selected{% endif %}>En
+                                Proceso</option>
+                            <option value="LISTO_PARA_ENTREGA" {% if pedido.estado=='LISTO_PARA_ENTREGA' %}selected{%
+                                endif %}>Listo para Entrega</option>
+                            <option value="COMPLETADO" {% if pedido.estado=='COMPLETADO' %}selected{% endif %}>
+                                Completado</option>
+                            <option value="CANCELADO" {% if pedido.estado=='CANCELADO' %}selected{% endif %}>Cancelado
+                            </option>
                         </select>
                     </div>
                     <hr>
                     {% endif %}
-                    
+
                     <div class="alert alert-info border-0 rounded-3 bg-light p-3">
                         <i class="bi bi-info-circle me-1"></i>
                         Asegúrese de que todos los datos y cantidades son correctos antes de guardar.
                     </div>
-                    
+
                     <div class="d-grid gap-2 mt-4">
                         <button type="submit" class="btn btn-primary btn-lg">
                             <i class="bi bi-save me-1"></i>
@@ -172,23 +440,25 @@
 <template id="item-template">
     <tr class="item-row">
         <td>
-            <input type="hidden" name="items-__prefix__-id" value=""> 
+            <input type="hidden" name="items-__prefix__-id" value="">
             <select class="form-select form-select-sm producto-selector" name="items-__prefix__-producto_id" required>
                 <option value="" selected data-id="">Seleccione un producto...</option>
                 {% for producto in productos %}
-                    <option value="{{ producto.id }}" data-id="{{ producto.id }}" data-stock="{{ producto.stock_disponible or 0 }}">{{ producto.nombre }}</option>
+                <option value="{{ producto.id }}" data-id="{{ producto.id }}"
+                    data-stock="{{ producto.stock_disponible or 0 }}">{{ producto.nombre }}</option>
                 {% endfor %}
             </select>
         </td>
         <td>
-            <input type="number" min="1" max="5000" step="1" class="form-control form-control-sm" name="items-__prefix__-cantidad" 
-                   placeholder="Ej: 10"  required>
+            <input type="number" min="1" max="5000" step="1" class="form-control form-control-sm"
+                name="items-__prefix__-cantidad" placeholder="Ej: 10" required>
         </td>
         <!-- <td>
             <span class="badge bg-secondary text-white stock-display">--</span>
         </td> -->
         <td class="text-center">
-            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem"><i class="bi bi-trash"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem"><i
+                    class="bi bi-trash"></i></button>
         </td>
     </tr>
 </template>

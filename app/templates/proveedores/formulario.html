@@ -67,7 +67,7 @@ Agregar nuevo proveedor
                         <div class="col-md-6">
                             <label for="direccion" class="form-label">Dirección</label>
                             <input type="text" class="form-control" name="direccion" id="direccion"
-                                value="{{ proveedor.direccion if proveedor else '' }}">
+                                value="{{ proveedor.direccion if proveedor else '' }}" required>
                             <div class="form-text">Dirección física del proveedor</div>
                         </div>
                         <div class="col-md-6">
