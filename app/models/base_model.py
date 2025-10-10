@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Any
 from abc import ABC, abstractmethod
 import logging
 from datetime import datetime, date
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,8 @@ class BaseModel(ABC):
             if value is not None:
                 if isinstance(value, (date, datetime)):
                     clean_data[key] = value.isoformat()
+                elif isinstance(value, Decimal):
+                    clean_data[key] = str(value)
                 else:
                     clean_data[key] = value
         return clean_data
