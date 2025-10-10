@@ -60,7 +60,11 @@ class ProveedorController(BaseController):
             result = self.model.get_all(include_direccion=True)
             if not result['success']:
                 return self.error_response(result['error'])
-            serialized_data = self.schema.dump(result['data'], many=True)
+            
+            datos = result['data']
+            sorted_data = sorted(datos, key=lambda x: x.get('activo', False), reverse=True)
+
+            serialized_data = self.schema.dump(sorted_data, many=True)
             return self.success_response(data=serialized_data)
         except Exception as e:
             logger.error(f"Error obteniendo proveedores: {str(e)}")
@@ -124,6 +128,7 @@ class ProveedorController(BaseController):
     def crear_proveedor(self, data: Dict) -> tuple:
         try:
             direccion_data = data.pop('direccion', None)
+            data['codigo'] = self.generar_codigo_unico()
             validated_data = self.schema.load(data)
 
             if validated_data.get('email'):
@@ -140,7 +145,7 @@ class ProveedorController(BaseController):
             if direccion_id:
                 validated_data['direccion_id'] = direccion_id
 
-            validated_data['codigo'] = self.generar_codigo_unico()
+            
 
             result = self.model.create(validated_data)
 

@@ -41,14 +41,16 @@ document.addEventListener('DOMContentLoaded', function () {
             const resultado = await respuesta.json();
 
             if (respuesta.ok && resultado.success) {
-                showNotificationModal(resultado.message || 'Operación exitosa', 'success');
+                const mensaje = isEditBoolean? 'Los datos del cliente se actualizaron correctamente.' : 'Se creó un nuevo cliente exitosamente';
+                showNotificationModal(resultado.message || 'Operación exitosa', mensaje);
                 setTimeout(() => { window.location.href = clienteS_LISTA_URL; }, 1500);
             } else {
                 let errorMessage = 'Ocurrió un error.';
                 if (resultado && resultado.error) {
                     errorMessage = typeof resultado.error === 'object' ? Object.values(resultado.error).flat().join('\n') : resultado.error;
                 }
-                showNotificationModal(errorMessage, 'error');
+                const mensaje = isEditBoolean? 'Hubo un fallo al actualizar los datos del cliente.' : 'Hubo un fallo al crear al cliente.';
+                showNotificationModal(errorMessage, mensaje);
             }
         } catch (error) {
             console.error('Error:', error);
@@ -78,7 +80,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (verificationResult && verificationResult.error) {
                     errorMessage = verificationResult.error;
                 }
-                showNotificationModal(errorMessage, 'error');
+                showNotificationModal(errorMessage, 'Error al verificar la dirección');
                 form.classList.add('was-validated');
             }
         } catch (error) {

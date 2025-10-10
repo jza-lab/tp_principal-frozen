@@ -1,3 +1,4 @@
+from datetime import datetime, date
 from app.controllers.base_controller import BaseController
 from app.models.cliente import ClienteModel
 from app.schemas.cliente_schema import ClienteSchema
@@ -99,7 +100,11 @@ class ClienteController(BaseController):
             result = self.model.get_all(include_direccion=True, filtros=filtros)
             if not result['success']:
                 return self.error_response(result['error'])
-            serialized_data = self.schema.dump(result['data'], many=True)
+            
+            datos = result['data']
+            sorted_data = sorted(datos, key=lambda x: x.get('activo', False), reverse=True)
+
+            serialized_data = self.schema.dump(sorted_data, many=True)
             return self.success_response(data=serialized_data)
         except Exception as e:
             logger.error(f"Error obteniendo clientes: {str(e)}")
@@ -199,6 +204,7 @@ class ClienteController(BaseController):
             if not existing.get('success'):
                 return self.error_response('Cliente no encontrado', 404)
 
+    
             direccion_data = data.pop('direccion', None)
             validated_data = self.schema.load(data, partial=True)
 
@@ -225,6 +231,7 @@ class ClienteController(BaseController):
                         if id_nueva_direccion:
                             validated_data['direccion_id'] = id_nueva_direccion
                     else: 
+                        
                         self._actualizar_direccion(id_direccion_vieja, direccion_data)
 
                 else:

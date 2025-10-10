@@ -1,6 +1,6 @@
 # app/controllers/pedido_controller.py
 import logging
-from datetime import date
+from datetime import datetime, date
 from app.controllers.base_controller import BaseController
 # --- IMPORTACIONES NUEVAS ---
 from app.controllers.lote_producto_controller import LoteProductoController

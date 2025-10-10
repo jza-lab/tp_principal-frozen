@@ -30,33 +30,82 @@
 
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <i class="bi bi-phone"></i>
-                        <label class="form-label-sm">Telefono</label>
+                        <i class="bi bi-phone fm-bold"></i>
+                        <label class="form-label-sm fw-bold">Telefono</label>
                         <p class="form-control-plaintext">{{ cliente.telefono }}</p>
                     </div>
                     <div class="col-md-4">
                         <i class="bi bi-envelope"></i>
-                        <label class="form-label-sm">Correo electronico</label>
+                        <label class="form-label-sm fw-bold">Correo electronico</label>
                         <p class="form-control-plaintext">{{ cliente.email }}</p>
                     </div>
-
                     <div class="col-md-4">
-                        <i class="bi bi-house"></i>
-                        <label class="form-label-sm">Direccion</label>
-                        <p class="form-control-plaintext">{{ cliente.direccion}}</p>
+                        <div class="mb-3">
+                            <label class="form-label-sm fw-bold">
+                                <i class="bi bi-calendar-plus me-1"></i>Fecha de registro
+                            </label>
+                            <p class="form-control-plaintext">
+                                {{ cliente.created_at.split('T')[0] if cliente.created_at else 'N/A' }}
+                            </p>
+                        </div>
+
+                        <div class="mb-0">
+                            <label class="form-label-sm fw-bold">
+                                <i class="bi bi-calendar-check me-1"></i>Última Actualización
+                            </label>
+                            <p class="form-control-plaintext">
+                                {{ cliente.updated_at.split('T')[0] if cliente.updated_at else 'N/A' }}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-12">
+                        <div class="mb-3">
+                            <label class="form-label-sm fw-bold">
+                                <i class="bi bi-house me-1"></i>Dirección de Facturación
+                            </label>
+
+                            <div class="row g-2">
+                                <div class="col-sm-6">
+                                    <label class="form-label-sm fw-bold">
+                                        <i class="bi bi-signpost me-1"></i>Calle y Altura:
+                                    </label>
+                                    <p class="form-control-plaintext">
+                                        {{ cliente.direccion.calle }} {{ cliente.direccion.altura }}
+                                    </p>
+                                </div>
+
+                                <div class="col-sm-6">
+                                    <label class="form-label-sm fw-bold">
+                                        <i class="bi bi-geo-alt me-1"></i>Localidad y Provincia:
+                                    </label>
+                                    <p class="form-control-plaintext">
+                                        {{ cliente.direccion.localidad }}, {{ cliente.direccion.provincia }}
+                                    </p>
+                                </div>
+
+                                <div class="col-sm-6">
+                                    <label class="form-label-sm fw-bold">
+                                        <i class="bi bi-building me-1"></i>Piso / Dto (Opcional):
+                                    </label>
+                                    <p class="form-control-plaintext">
+                                        Piso: {{ cliente.direccion.piso | default('N/A', true) }} | Dto: {{
+                                        cliente.direccion.depto | default('N/A', true) }}
+                                    </p>
+                                </div>
+
+                                <div class="col-sm-6">
+                                    <label class="form-label-sm fw-bold">
+                                        <i class="bi bi-mailbox2 me-1"></i>Código Postal:
+                                    </label>
+                                    <p class="form-control-plaintext">
+                                        {{ cliente.direccion.codigo_postal | default('N/A', true) }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
 
-                    <div class="col-md-4">
-                        <label class="form-label-sm">Fecha de registro</label>
-                        <p class="form-control-plaintext">{{ cliente.created_at.split('T')[0] if cliente.created_at
-                            else 'N/A' }}</p>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label-sm">Última Actualización</label>
-                        <p class="form-control-plaintext">{{ cliente.updated_at.split('T')[0] if cliente.updated_at
-                            else 'N/A' }}</p>
-                    </div>
                 </div>
                 {% endif %}
 
@@ -78,7 +127,8 @@
                                 <tbody>
                                     {% for pedido in pedidos_asociados %}
                                     <tr class="align-middle">
-                                        <td href="{{ url_for('orden_venta.detalle', id=pedido.id) }}">PED-{{ pedido.codigo_interno }}</td>
+                                        <td href="{{ url_for('orden_venta.detalle', id=pedido.id) }}">PED-{{
+                                            pedido.codigo_interno }}</td>
                                         <td>{{ pedido.fecha_solicitud }}</td>
                                         <td>{{ pedido.estado }}</td>
                                     </tr>
