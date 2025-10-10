@@ -9,23 +9,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let originalValues = {};
     let isEditMode = false;
-    let selectedRoles = []; // Array para almacenar roles seleccionados
-    const MAX_ROLES = 2; // Máximo de roles permitidos
+    let selectedRol = null;
+    let selectedTurno = null;
+    let selectedSectores = [];
+    const MAX_SECTORES = 2;
 
     // Datos del usuario (estos se deben pasar desde el template)
     const userData = window.userData || {};
+    const rolesDisponibles = window.rolesDisponibles || [];
+    const turnosDisponibles = window.turnosDisponibles || [];
+    const sectoresDisponibles = window.sectoresDisponibles || [];
 
     // Configuración de campos editables
     const fieldConfig = {
         nombre: { type: 'text', required: true, label: 'Nombre' },
         apellido: { type: 'text', required: true, label: 'Apellido' },
-        cuil_cuit: { type: 'text', required: false, label: 'CUIL/CUIT', pattern: '[0-9]{2}-[0-9]{8}-[0-9]{1}' },
+        cuil_cuit: { type: 'text', required: false, label: 'CUIL/CUIT', pattern: '\\d{11}' },
         legajo: { type: 'text', required: false, label: 'Legajo' },
         email: { type: 'email', required: true, label: 'Email' },
         telefono: { type: 'tel', required: false, label: 'Teléfono' },
-        direccion: { type: 'textarea', required: false, label: 'Dirección' },
-        rol_id: { type: 'select', required: false, label: 'Rol' },
-        turno: { type: 'select', required: false, label: 'Turno' },
+        calle: { type: 'text', required: false, label: 'Calle' },
+        altura: { type: 'number', required: false, label: 'Altura' },
+        provincia: { type: 'provincia', required: false, label: 'Provincia' },
+        localidad: { type: 'text', required: false, label: 'Localidad' },
+        piso: { type: 'text', required: false, label: 'Piso' },
+        depto: { type: 'text', required: false, label: 'Departamento' },
+        codigo_postal: { type: 'text', required: false, label: 'Código Postal' },
+        role_id: { type: 'role-selector', required: false, label: 'Rol' },
+        turno_id: { type: 'turno-selector', required: false, label: 'Turno' },
+        sectores: { type: 'sector-selector', required: false, label: 'Sectores' },
         fecha_ingreso: { type: 'date', required: false, label: 'Fecha de Ingreso' }
     };
 
@@ -45,12 +57,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Detectar teclas ESC para cancelar y Ctrl+S para guardar
     document.addEventListener('keydown', function(e) {
         if (isEditMode) {
-            // ESC para cancelar
             if (e.key === 'Escape') {
                 e.preventDefault();
                 handleCancelEdit();
             }
-            // Ctrl+S o Cmd+S para guardar
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
                 handleSaveChanges();
@@ -92,25 +102,10 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (!config) return;
             
-            // Obtener el valor actual mostrado en la página (no de userData)
             let originalValue = valueDiv.textContent.trim();
             
-            // Para roles, extraer el ID si hay múltiples
-            if (field === 'rol_id' && originalValue && originalValue !== 'Sin rol') {
-                // Si hay múltiples roles separados por coma
-                if (originalValue.includes(',')) {
-                    const roleNames = originalValue.split(',').map(n => n.trim());
-                    const roles = window.rolesDisponibles || [];
-                    const roleIds = roleNames.map(name => {
-                        const rol = roles.find(r => r.nombre === name);
-                        return rol ? rol.id : null;
-                    }).filter(id => id !== null);
-                    originalValue = roleIds.join(',');
-                }
-            }
-            
-            // Si el valor es "No especificado" o similar, usar cadena vacía
-            if (originalValue === 'No especificado' || originalValue === 'N/A' || originalValue === 'Sin rol' || originalValue === 'Nunca' || originalValue === 'No especificada') {
+            // Limpiar valores "vacíos"
+            if (['No especificado', 'N/A', 'Sin rol', 'Nunca', 'No especificada', 'Sin turno', 'Sin sectores'].includes(originalValue)) {
                 originalValue = '';
             }
             
@@ -132,7 +127,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Aplicar animación de entrada con delay
             setTimeout(() => {
-                const input = valueDiv.querySelector('.form-control-inline, #role_id_input');
+                const input = valueDiv.querySelector('.form-control-inline, .roles-grid-perfil, .turno-grid-perfil, .sectores-grid-perfil');
                 if (input && input.classList.contains('form-control-inline')) {
                     input.style.animation = `slideInUp 0.3s ease-out ${index * 0.03}s backwards`;
                 }
@@ -152,8 +147,17 @@ document.addEventListener('DOMContentLoaded', function() {
             case 'textarea':
                 return `<textarea ${commonAttrs} rows="3" placeholder="Ingrese ${config.label.toLowerCase()}">${value}</textarea>`;
             
-            case 'select':
-                return createSelectHTML(field, value, commonAttrs);
+            case 'role-selector':
+                return createRoleSelector(value);
+            
+            case 'turno-selector':
+                return createTurnoSelector(value);
+            
+            case 'sector-selector':
+                return createSectorSelector(value);
+            
+            case 'provincia':
+                return createProvinciaSelect(value, commonAttrs);
             
             case 'date':
                 return `<input type="date" ${commonAttrs} value="${value}">`;
@@ -164,179 +168,381 @@ document.addEventListener('DOMContentLoaded', function() {
             case 'tel':
                 return `<input type="tel" ${commonAttrs} value="${value}" placeholder="Ingrese teléfono">`;
             
+            case 'number':
+                return `<input type="number" ${commonAttrs} value="${value}" placeholder="Ingrese ${config.label.toLowerCase()}">`;
+            
             default:
                 return `<input type="text" ${commonAttrs} value="${value}" placeholder="Ingrese ${config.label.toLowerCase()}">`;
         }
     }
 
-    function createSelectHTML(field, value, commonAttrs) {
-        if (field === 'rol_id') {
-            // Crear selector interactivo de roles
-            const roles = window.rolesDisponibles || [];
-            
-            // Inicializar roles seleccionados
-            selectedRoles = [];
-            if (value && value !== '' && value !== 'Sin rol') {
-                const rolEncontrado = roles.find(r => r.nombre === value);
-                if (rolEncontrado) {
-                    selectedRoles.push(rolEncontrado.id);
-                }
-            }
-            
-            // Iconos para diferentes tipos de roles
-            const roleIcons = {
-                'admin': 'bi-shield-fill-check',
-                'supervisor': 'bi-person-badge',
-                'operario': 'bi-person-gear',
-                'gerente': 'bi-briefcase-fill',
-                'rrhh': 'bi-people-fill',
-                'seguridad': 'bi-shield-lock-fill',
-                'default': 'bi-person-circle'
-            };
-            
-            let html = `
-                <div class="role-selector-info">
-                    <i class="bi bi-info-circle-fill"></i>
-                    <div class="role-selector-info-text">
-                        <strong>Seleccione hasta ${MAX_ROLES} roles</strong>
-                        <span>Puede asignar múltiples responsabilidades al usuario</span>
-                    </div>
-                    <div class="role-counter" id="role-counter">
-                        <i class="bi bi-check2-circle"></i>
-                        <span><span id="role-count">0</span>/${MAX_ROLES}</span>
-                    </div>
-                </div>
-                <div class="role-selector-container">
-            `;
-            
-            roles.forEach(rol => {
-                const isSelected = selectedRoles.includes(rol.id);
-                const iconClass = roleIcons[rol.nombre.toLowerCase()] || roleIcons['default'];
-                const description = getRoleDescription(rol.nombre);
-                
-                html += `
-                    <div class="role-option ${isSelected ? 'selected' : ''}" 
-                         data-role-id="${rol.id}" 
-                         data-role-name="${rol.nombre}">
-                        <div class="role-option-check">
-                            <i class="bi bi-check-lg"></i>
-                        </div>
-                        <div class="role-option-icon">
-                            <i class="bi ${iconClass}"></i>
-                        </div>
-                        <h6 class="role-option-name">${rol.nombre}</h6>
-                        <p class="role-option-description">${description}</p>
-                    </div>
-                `;
-            });
+    function createRoleSelector(currentValue) {
+        const roleIcons = {
+            'admin': 'bi-shield-fill-check',
+            'supervisor': 'bi-person-badge',
+            'operario': 'bi-person-gear',
+            'gerente': 'bi-briefcase-fill',
+            'rrhh': 'bi-people-fill',
+            'recursos humanos': 'bi-people-fill',
+            'seguridad': 'bi-shield-lock-fill',
+            'default': 'bi-person-circle'
+        };
+
+        // Encontrar el rol actual
+        const currentRole = rolesDisponibles.find(r => r.nombre === currentValue);
+        selectedRol = currentRole ? currentRole.id : null;
+
+        let html = '<div class="roles-grid-perfil" id="roles-grid-perfil">';
+        
+        rolesDisponibles.forEach(rol => {
+            const isSelected = rol.id === selectedRol;
+            const iconClass = roleIcons[rol.nombre.toLowerCase()] || roleIcons['default'];
             
             html += `
+                <div class="rol-card-perfil ${isSelected ? 'selected' : ''}" 
+                     data-rol-id="${rol.id}" 
+                     data-rol-name="${rol.nombre}">
+                    <div class="rol-icon-perfil">
+                        <i class="bi ${iconClass}"></i>
+                    </div>
+                    <p class="rol-nombre-perfil">${rol.nombre}</p>
+                    <div class="rol-check-perfil">
+                        <i class="bi bi-check-lg"></i>
+                    </div>
                 </div>
-                <input type="hidden" name="role_id" id="role_id_input" value="${selectedRoles.join(',')}">
             `;
-            
-            // Agregar event listeners después de un pequeño delay
-            setTimeout(() => {
-                initRoleSelector();
-                updateRoleCounter();
-            }, 100);
-            
-            return html;
-        }
+        });
         
-        if (field === 'turno') {
-            const turnos = ['Mañana', 'Tarde', 'Noche'];
-            let options = '<option value="">Seleccionar turno</option>';
-            turnos.forEach(turno => {
-                const selected = turno === value ? 'selected' : '';
-                options += `<option value="${turno}" ${selected}>${turno}</option>`;
-            });
-            return `<select ${commonAttrs}>${options}</select>`;
-        }
+        html += `</div><input type="hidden" name="role_id" id="role_id_input" value="${selectedRol || ''}">`;
         
-        return `<input type="text" ${commonAttrs} value="${value}">`;
+        setTimeout(() => initRoleSelector(), 100);
+        
+        return html;
     }
 
-        function getRoleDescription(roleName) {
-        const descriptions = {
-            'Admin': 'Acceso total al sistema',
-            'Supervisor': 'Gestión de personal y operaciones',
-            'Operario': 'Acceso a funciones operativas',
-            'Gerente': 'Dirección y toma de decisiones',
-            'RRHH': 'Gestión de recursos humanos',
-            'Vendedor': 'Gestión de ventas y clientes',
-            'IT': 'Soporte técnico y mantenimiento',
-            'Supervisor_Calidad': 'Control y aseguramiento de calidad',
+    function createTurnoSelector(currentValue) {
+        const turnoIcons = {
+            'mañana': 'bi-sunrise',
+            'manana': 'bi-sunrise',
+            'tarde': 'bi-sun',
+            'noche': 'bi-moon-stars',
+            'default': 'bi-clock'
         };
-        return descriptions[roleName] || 'Rol del sistema';
+
+        // Encontrar el turno actual
+        const currentTurno = turnosDisponibles.find(t => t.nombre === currentValue);
+        selectedTurno = currentTurno ? currentTurno.id : null;
+
+        let html = '<div class="turno-grid-perfil" id="turno-grid-perfil">';
+        
+        turnosDisponibles.forEach(turno => {
+            const isSelected = turno.id === selectedTurno;
+            const iconClass = turnoIcons[turno.nombre.toLowerCase()] || turnoIcons['default'];
+            
+            html += `
+                <div class="turno-card-perfil ${isSelected ? 'selected' : ''}" 
+                     data-turno-id="${turno.id}" 
+                     data-turno-name="${turno.nombre}">
+                    <div class="turno-header-perfil">
+                        <div class="turno-nombre-perfil">
+                            <i class="bi ${iconClass}"></i>
+                            ${turno.nombre}
+                        </div>
+                        <div class="turno-check-perfil">
+                            <i class="bi bi-check-lg"></i>
+                        </div>
+                    </div>
+                    <div class="turno-horario-perfil">
+                        <i class="bi bi-clock"></i>
+                        <span class="turno-time-perfil">${turno.hora_inicio} - ${turno.hora_fin}</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `</div><input type="hidden" name="turno_id" id="turno_id_input" value="${selectedTurno || ''}">`;
+        
+        setTimeout(() => initTurnoSelector(), 100);
+        
+        return html;
     }
 
-     function initRoleSelector() {
-        const roleOptions = document.querySelectorAll('.role-option');
+    function createSectorSelector(currentValue) {
+        const sectorIcons = {
+            'produccion': 'bi-gear-fill',
+            'producción': 'bi-gear-fill',
+            'almacen': 'bi-box-seam',
+            'almacén': 'bi-box-seam',
+            'logistica': 'bi-truck',
+            'logística': 'bi-truck',
+            'administracion': 'bi-building',
+            'administración': 'bi-building',
+            'calidad': 'bi-clipboard-check',
+            'mantenimiento': 'bi-tools',
+            'default': 'bi-grid-3x3-gap'
+        };
+
+        // Parsear sectores actuales (pueden venir separados por coma)
+        selectedSectores = [];
+        if (currentValue && currentValue !== '') {
+            const sectorNames = currentValue.split(',').map(s => s.trim());
+            sectorNames.forEach(name => {
+                const sector = sectoresDisponibles.find(s => s.nombre === name);
+                if (sector) selectedSectores.push(sector.id);
+            });
+        }
+
+        let html = `
+            <div class="sectores-info-perfil">
+                <i class="bi bi-info-circle-fill"></i>
+                <div class="sectores-info-text-perfil">
+                    <strong>Seleccione hasta ${MAX_SECTORES} sectores</strong>
+                </div>
+                <div class="sectores-counter-perfil" id="sectores-counter-perfil">
+                    <i class="bi bi-check-circle-fill me-1"></i>
+                    <span id="counter-text-perfil">${selectedSectores.length}/${MAX_SECTORES}</span>
+                </div>
+            </div>
+            <div class="sectores-grid-perfil" id="sectores-grid-perfil">
+        `;
         
-        roleOptions.forEach(option => {
-            option.addEventListener('click', function() {
-                const roleId = parseInt(this.dataset.roleId);
-                const roleName = this.dataset.roleName;
+        sectoresDisponibles.forEach((sector, index) => {
+            const isSelected = selectedSectores.includes(sector.id);
+            const iconClass = sectorIcons[sector.nombre.toLowerCase()] || sectorIcons['default'];
+            const order = isSelected ? selectedSectores.indexOf(sector.id) + 1 : 1;
+            
+            html += `
+                <div class="sector-card-perfil ${isSelected ? 'selected' : ''}" 
+                     data-sector-id="${sector.id}" 
+                     data-sector-name="${sector.nombre}">
+                    <div class="sector-icon-perfil">
+                        <i class="bi ${iconClass}"></i>
+                    </div>
+                    <p class="sector-nombre-perfil">${sector.nombre}</p>
+                    <div class="sector-badge-perfil">${order}</div>
+                </div>
+            `;
+        });
+        
+        html += `</div><input type="hidden" name="sectores" id="sectores_input" value="${JSON.stringify(selectedSectores)}">`;
+        
+        setTimeout(() => {
+            initSectorSelector();
+            updateSectoresCounter();
+        }, 100);
+        
+        return html;
+    }
+
+    function createProvinciaSelect(value, commonAttrs) {
+        const provincias = [
+            "Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
+            "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy",
+            "La Pampa", "La Rioja", "Mendoza", "Misiones", "Neuquén",
+            "Río Negro", "Salta", "San Juan", "San Luis", "Santa Cruz",
+            "Santa Fe", "Santiago del Estero", "Tierra del Fuego", "Tucumán"
+        ];
+        
+        let options = '<option value="">Seleccionar provincia...</option>';
+        provincias.forEach(provincia => {
+            const selected = provincia === value ? 'selected' : '';
+            options += `<option value="${provincia}" ${selected}>${provincia}</option>`;
+        });
+        
+        return `<select ${commonAttrs}>${options}</select>`;
+    }
+
+    // ==================== INICIALIZACIÓN DE SELECTORES ====================
+
+    function initRoleSelector() {
+        const rolCards = document.querySelectorAll('.rol-card-perfil');
+        const rolInput = document.getElementById('role_id_input');
+        
+        rolCards.forEach(card => {
+            card.addEventListener('click', function() {
+                // Remover selección anterior
+                rolCards.forEach(c => c.classList.remove('selected'));
+                
+                // Seleccionar nuevo rol
+                this.classList.add('selected');
+                selectedRol = parseInt(this.dataset.rolId);
+                if (rolInput) rolInput.value = selectedRol;
+                
+                console.log('Rol seleccionado:', selectedRol);
+            });
+        });
+    }
+
+    function initTurnoSelector() {
+        const turnoCards = document.querySelectorAll('.turno-card-perfil');
+        const turnoInput = document.getElementById('turno_id_input');
+        
+        turnoCards.forEach(card => {
+            card.addEventListener('click', function() {
+                // Remover selección anterior
+                turnoCards.forEach(c => c.classList.remove('selected'));
+                
+                // Seleccionar nuevo turno
+                this.classList.add('selected');
+                selectedTurno = parseInt(this.dataset.turnoId);
+                if (turnoInput) turnoInput.value = selectedTurno;
+                
+                console.log('Turno seleccionado:', selectedTurno);
+            });
+        });
+    }
+
+    function initSectorSelector() {
+        const sectorCards = document.querySelectorAll('.sector-card-perfil');
+        const sectoresInput = document.getElementById('sectores_input');
+        
+        sectorCards.forEach(card => {
+            card.addEventListener('click', function() {
+                if (this.classList.contains('disabled')) return;
+                
+                const sectorId = parseInt(this.dataset.sectorId);
                 
                 if (this.classList.contains('selected')) {
                     // Deseleccionar
                     this.classList.remove('selected');
-                    selectedRoles = selectedRoles.filter(id => id !== roleId);
+                    selectedSectores = selectedSectores.filter(id => id !== sectorId);
                 } else {
-                    // Verificar límite
-                    if (selectedRoles.length >= MAX_ROLES) {
-                        showNotification(`Solo puede seleccionar hasta ${MAX_ROLES} roles`, 'warning');
+                    // Seleccionar solo si no se alcanzó el máximo
+                    if (selectedSectores.length < MAX_SECTORES) {
+                        this.classList.add('selected');
+                        selectedSectores.push(sectorId);
+                    } else {
+                        showNotification(`Solo puede seleccionar hasta ${MAX_SECTORES} sectores`, 'warning');
                         return;
                     }
-                    // Seleccionar
-                    this.classList.add('selected');
-                    selectedRoles.push(roleId);
                 }
                 
-                // Actualizar input hidden
-                const hiddenInput = document.getElementById('role_id_input');
-                if (hiddenInput) {
-                    hiddenInput.value = selectedRoles.join(',');
-                }
+                updateSectorOrder();
+                updateSectoresCounter();
+                if (sectoresInput) sectoresInput.value = JSON.stringify(selectedSectores);
                 
-                // Actualizar contador
-                updateRoleCounter();
-                
-                // Actualizar estado de opciones
-                updateRoleOptions();
+                console.log('Sectores seleccionados:', selectedSectores);
             });
         });
     }
 
-    function updateRoleCounter() {
-        const counter = document.getElementById('role-counter');
-        const countSpan = document.getElementById('role-count');
-        
-        if (counter && countSpan) {
-            countSpan.textContent = selectedRoles.length;
-            
-            counter.classList.remove('full', 'warning');
-            
-            if (selectedRoles.length === MAX_ROLES) {
-                counter.classList.add('full');
-            } else if (selectedRoles.length > 0) {
-                counter.classList.add('warning');
-            }
-        }
-    }
- 
-    function updateRoleOptions() {
-        const roleOptions = document.querySelectorAll('.role-option');
-        
-        roleOptions.forEach(option => {
-            if (selectedRoles.length >= MAX_ROLES && !option.classList.contains('selected')) {
-                option.classList.add('disabled');
-            } else {
-                option.classList.remove('disabled');
+    function updateSectorOrder() {
+        const sectorCards = document.querySelectorAll('.sector-card-perfil');
+        sectorCards.forEach(card => {
+            if (card.classList.contains('selected')) {
+                const sectorId = parseInt(card.dataset.sectorId);
+                const order = selectedSectores.indexOf(sectorId) + 1;
+                const badge = card.querySelector('.sector-badge-perfil');
+                if (badge) badge.textContent = order;
             }
         });
     }
+
+    function updateSectoresCounter() {
+        const counterText = document.getElementById('counter-text-perfil');
+        const sectoresCounter = document.getElementById('sectores-counter-perfil');
+        
+        if (counterText) {
+            counterText.textContent = `${selectedSectores.length}/${MAX_SECTORES}`;
+        }
+        
+        if (sectoresCounter) {
+            sectoresCounter.classList.remove('warning');
+            
+            if (selectedSectores.length === MAX_SECTORES) {
+                sectoresCounter.classList.add('warning');
+            }
+        }
+        
+        // Deshabilitar/habilitar cards
+        const sectorCards = document.querySelectorAll('.sector-card-perfil');
+        sectorCards.forEach(card => {
+            if (selectedSectores.length >= MAX_SECTORES && !card.classList.contains('selected')) {
+                card.classList.add('disabled');
+            } else {
+                card.classList.remove('disabled');
+            }
+        });
+    }
+
+    // ==================== VALIDACIÓN DE DIRECCIÓN ====================
+
+    function debounce(func, delay) {
+        let timeout;
+        return function(...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), delay);
+        };
+    }
+
+    async function verifyAddress(calleInput, alturaInput, localidadInput, provinciaInput) {
+        const calle = calleInput ? calleInput.value.trim() : '';
+        const altura = alturaInput ? alturaInput.value.trim() : '';
+        const localidad = localidadInput ? localidadInput.value.trim() : '';
+        const provincia = provinciaInput ? provinciaInput.value : '';
+
+        if (!calle || !altura || !localidad || !provincia) {
+            return;
+        }
+
+        const feedbackDiv = document.getElementById('address-feedback-perfil');
+        if (feedbackDiv) {
+            feedbackDiv.className = 'address-feedback-perfil loading';
+            feedbackDiv.innerHTML = '<i class="bi bi-hourglass-split"></i>Verificando dirección...';
+        }
+
+        try {
+            const response = await fetch('/admin/usuarios/verificar_direccion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ calle, altura, localidad, provincia })
+            });
+
+            const result = await response.json();
+
+            if (result.success && feedbackDiv) {
+                const normalized = result.data;
+                const normalizedAddress = `${normalized.calle.nombre} ${normalized.altura.valor}, ${normalized.localidad_censal.nombre}, ${normalized.provincia.nombre}`;
+                feedbackDiv.className = 'address-feedback-perfil success';
+                feedbackDiv.innerHTML = `<i class="bi bi-check-circle-fill"></i>Dirección verificada: ${normalizedAddress}`;
+            } else if (feedbackDiv) {
+                feedbackDiv.className = 'address-feedback-perfil error';
+                feedbackDiv.innerHTML = `<i class="bi bi-x-circle-fill"></i>${result.message || 'No se pudo verificar la dirección'}`;
+            }
+        } catch (error) {
+            console.error('Error al verificar dirección:', error);
+            if (feedbackDiv) {
+                feedbackDiv.className = 'address-feedback-perfil error';
+                feedbackDiv.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i>Error de red al verificar la dirección';
+            }
+        }
+    }
+
+    const debouncedVerifyAddress = debounce(verifyAddress, 800);
+
+    // Agregar verificación de dirección cuando se editen campos de dirección
+    document.addEventListener('input', function(e) {
+        if (!isEditMode) return;
+
+        const fieldName = e.target.name;
+        if (['calle', 'altura', 'localidad', 'provincia'].includes(fieldName)) {
+            const calleInput = document.querySelector('input[name="calle"]');
+            const alturaInput = document.querySelector('input[name="altura"]');
+            const localidadInput = document.querySelector('input[name="localidad"]');
+            const provinciaInput = document.querySelector('select[name="provincia"]');
+
+            // Agregar div de feedback si no existe
+            const direccionItem = document.querySelector('.info-item[data-field="calle"]');
+            if (direccionItem && !document.getElementById('address-feedback-perfil')) {
+                const feedbackDiv = document.createElement('div');
+                feedbackDiv.id = 'address-feedback-perfil';
+                direccionItem.appendChild(feedbackDiv);
+            }
+
+            debouncedVerifyAddress(calleInput, alturaInput, localidadInput, provinciaInput);
+        }
+    });
 
     function handleCancelEdit() {
         if (!confirm('¿Está seguro que desea cancelar los cambios?')) {
@@ -367,6 +573,9 @@ document.addEventListener('DOMContentLoaded', function() {
         restoreOriginalValues();
         
         originalValues = {};
+        selectedRol = null;
+        selectedTurno = null;
+        selectedSectores = [];
     }
 
     function restoreOriginalValues() {
@@ -375,24 +584,20 @@ document.addEventListener('DOMContentLoaded', function() {
             const valueDiv = item.querySelector('.info-value');
             let originalValue = originalValues[field];
             
-            // Si es un valor vacío, mostrar "No especificado"
+            // Si es un valor vacío, mostrar texto apropiado
             if (!originalValue || originalValue === '') {
-                if (field === 'rol_id') {
-                    originalValue = 'Sin rol';
-                } else if (field === 'legajo') {
-                    originalValue = 'N/A';
-                } else if (field === 'fecha_ingreso') {
-                    originalValue = 'No especificada';
-                } else if (field === 'direccion') {
-                    originalValue = 'No especificada';
-                } else {
-                    originalValue = 'No especificado';
-                }
+                const emptyTexts = {
+                    'role_id': 'Sin rol',
+                    'legajo': 'N/A',
+                    'fecha_ingreso': 'No especificada',
+                    'turno_id': 'Sin turno',
+                    'sectores': 'Sin sectores'
+                };
+                originalValue = emptyTexts[field] || 'No especificado';
             }
             
-            // Para campos especiales, formatear el valor
+            // Para fechas, formatear
             if (field === 'fecha_ingreso' && originalValue !== 'No especificada' && originalValue.includes('-')) {
-                // Convertir de YYYY-MM-DD a DD/MM/YYYY
                 const parts = originalValue.split('-');
                 if (parts.length === 3) {
                     originalValue = `${parts[2]}/${parts[1]}/${parts[0]}`;
@@ -417,7 +622,14 @@ document.addEventListener('DOMContentLoaded', function() {
         
         document.querySelectorAll('.info-item[data-field]').forEach(item => {
             const field = item.dataset.field;
-            const input = item.querySelector('.form-control-inline, #role_id_input');
+            let input = item.querySelector('.form-control-inline');
+            
+            // Para selectores especiales, obtener el input hidden
+            if (!input) {
+                if (field === 'role_id') input = document.getElementById('role_id_input');
+                if (field === 'turno_id') input = document.getElementById('turno_id_input');
+                if (field === 'sectores') input = document.getElementById('sectores_input');
+            }
             
             if (input) {
                 const newValue = input.value.trim();
@@ -463,69 +675,9 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(data => {
             if (data.success) {
-                // Actualizar valores en la interfaz sin recargar
-                document.querySelectorAll('.info-item[data-field]').forEach(item => {
-                    const field = item.dataset.field;
-                    const valueDiv = item.querySelector('.info-value');
-                    
-                    if (field === 'rol_id') {
-                        // Para roles, mostrar los nombres seleccionados
-                        const hiddenInput = document.getElementById('role_id_input');
-                        if (hiddenInput && hiddenInput.value) {
-                            const roleIds = hiddenInput.value.split(',').map(id => parseInt(id));
-                            const roles = window.rolesDisponibles || [];
-                            const roleNames = roleIds.map(id => {
-                                const rol = roles.find(r => r.id === id);
-                                return rol ? rol.nombre : '';
-                            }).filter(name => name !== '');
-                            
-                            if (roleNames.length > 0) {
-                                valueDiv.textContent = roleNames.join(', ');
-                            } else {
-                                valueDiv.textContent = 'Sin rol';
-                            }
-                        } else {
-                            valueDiv.textContent = 'Sin rol';
-                        }
-                    } else {
-                        const input = item.querySelector('.form-control-inline');
-                        if (input && valueDiv) {
-                            let newValue = input.value.trim();
-                            
-                            // Formatear valores especiales para mostrar
-                            if (!newValue || newValue === '') {
-                                if (field === 'legajo') {
-                                    newValue = 'N/A';
-                                } else if (field === 'fecha_ingreso') {
-                                    newValue = 'No especificada';
-                                } else {
-                                    newValue = 'No especificado';
-                                }
-                            } else if (field === 'fecha_ingreso' && newValue.includes('-')) {
-                                // Convertir fecha de YYYY-MM-DD a DD/MM/YYYY
-                                const parts = newValue.split('-');
-                                if (parts.length === 3) {
-                                    newValue = `${parts[2]}/${parts[1]}/${parts[0]}`;
-                                }
-                            } else if (input.tagName === 'SELECT') {
-                                // Mostrar el texto seleccionado en lugar del valor
-                                const selectedOption = input.options[input.selectedIndex];
-                                newValue = selectedOption ? selectedOption.text : newValue;
-                            }
-                            
-                            // Actualizar el valor mostrado
-                            valueDiv.textContent = newValue;
-                        }
-                    }
-                });
-                
-                // Mostrar mensaje de éxito
                 showNotification('Cambios guardados exitosamente', 'success');
                 
-                // Salir del modo edición
-                exitEditMode();
-                
-                // Opcional: Recargar después de un momento para asegurar sincronización
+                // Recargar la página para mostrar los cambios
                 setTimeout(() => {
                     window.location.reload();
                 }, 1500);
@@ -628,77 +780,68 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 4000);
     }
 
-    function formatDate(dateString) {
-        if (!dateString) return 'No especificada';
-        
-        try {
-            const date = new Date(dateString);
-            if (isNaN(date)) return dateString;
-            
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            
-            return `${day}/${month}/${year}`;
-        } catch (e) {
-            return dateString;
-        }
-    }
-
     window.showDeactivateModal = function() {
         const modal = new bootstrap.Modal(document.getElementById('deactivateModal'));
         modal.show();
     };
 
-        console.log('✅ Módulo de perfil de usuario cargado correctamente');
-    });
+    console.log('✅ Módulo de perfil de usuario cargado correctamente');
+});
 
-    function copyToClipboard(text, message = 'Copiado al portapapeles') {
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(text).then(() => {
-                showNotification(message, 'success');
-            });
-        } else {
-            // Fallback para navegadores antiguos
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-999999px';
-            document.body.appendChild(textArea);
-            textArea.select();
-            try {
-                document.execCommand('copy');
-                showNotification(message, 'success');
-            } catch (err) {
-                console.error('Error al copiar:', err);
-            }
-            textArea.remove();
+// Funciones auxiliares globales
+function copyToClipboard(text, message = 'Copiado al portapapeles') {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            showNotification(message, 'success');
+        });
+    } else {
+        // Fallback para navegadores antiguos
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showNotification(message, 'success');
+        } catch (err) {
+            console.error('Error al copiar:', err);
         }
+        textArea.remove();
     }
+}
 
-    function confirmAction(message, callback) {
-        if (confirm(message)) {
-            callback();
-        }
-    }
-
-    // Datos del usuario actual
-    window.userData = {
-        nombre: "{{ usuario.nombre }}",
-        apellido: "{{ usuario.apellido }}",
-        email: "{{ usuario.email }}",
-        legajo: "{{ usuario.legajo or '' }}",
-        cuil_cuit: "{{ usuario.cuil_cuit or '' }}",
-        telefono: "{{ usuario.telefono or '' }}",
-        direccion: "{{ usuario.direccion_formateada or '' }}",
-        rol_id: "{{ usuario.role_id or '' }}",
-        turno: "{{ usuario.turno or '' }}",
-        fecha_ingreso: "{{ usuario.fecha_ingreso.strftime('%Y-%m-%d') if usuario.fecha_ingreso else '' }}"
+function showNotification(message, type = 'info') {
+    const iconMap = {
+        success: 'check-circle-fill',
+        error: 'exclamation-circle-fill',
+        warning: 'exclamation-triangle-fill',
+        info: 'info-circle-fill'
     };
-
-    /*
-    window.rolesDisponibles = [
-        {% for rol in roles_disponibles %}
-        { id: {{ rol.id }}, nombre: "{{ rol.nombre }}" }{% if not loop.last %},{% endif %}
-        {% endfor %}
-    ];*/
+    
+    const bgMap = {
+        success: 'alert-success',
+        error: 'alert-danger',
+        warning: 'alert-warning',
+        info: 'alert-info'
+    };
+    
+    const notification = document.createElement('div');
+    notification.className = `alert ${bgMap[type]} alert-notification`;
+    notification.innerHTML = `
+        <i class="bi bi-${iconMap[type]} me-2"></i>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 10);
+    
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 400);
+    }, 4000);
+}
