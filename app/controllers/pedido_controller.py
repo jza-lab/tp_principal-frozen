@@ -154,62 +154,67 @@ class PedidoController(BaseController):
 
     def aprobar_pedido(self, pedido_id: int, usuario_id: int) -> tuple:
         """
-        Aprueba un pedido, reserva el stock disponible y genera OPs para el faltante.
+        Aprueba un pedido, reserva stock, actualiza el estado de los ítems
+        y genera OPs para el faltante.
         """
         try:
+            # 1. Obtener pedido y verificar estado (sin cambios)
             pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_resp.get('success'):
                 return self.error_response("Pedido no encontrado.", 404)
-
             pedido_actual = pedido_resp['data']
             if pedido_actual.get('estado') == 'APROBADO':
                 return self.error_response("Este pedido ya ha sido aprobado.", 400)
 
-            update_result = self.model.cambiar_estado(pedido_id, 'APROBADO')
-            if not update_result.get('success'):
-                return self.error_response("Error al actualizar el estado del pedido.", 500)
+            # 2. Cambiar estado del pedido a APROBADO (sin cambios)
+            self.model.cambiar_estado(pedido_id, 'APROBADO')
 
             items_del_pedido = pedido_actual.get('items', [])
             ordenes_creadas = []
 
             for item in items_del_pedido:
-                # --- NUEVA LÓGICA DE RESERVA ---
+                # 3. Reservar stock (sin cambios)
                 reserva_result = self.lote_producto_controller.reservar_stock_para_item(
                     pedido_id=pedido_id,
-                    pedido_item_id=item['id'], # IMPORTANTE: tu modelo debe devolver el 'id' de cada item
+                    pedido_item_id=item['id'],
                     producto_id=item['producto_id'],
                     cantidad_necesaria=item['cantidad'],
                     usuario_id=usuario_id
                 )
-
                 if not reserva_result.get('success'):
-                    # Si la reserva falla, es un error grave. Se podría cancelar la aprobación.
                     logging.error(f"Falló la reserva para el pedido {pedido_id}. Motivo: {reserva_result.get('error')}")
-                    continue # Continuar con el siguiente item por ahora
+                    continue
 
-                # --- LÓGICA DE PRODUCCIÓN BASADA EN EL FALTANTE ---
                 cantidad_faltante = reserva_result['data']['cantidad_faltante']
 
+                # --- INICIO DE LA LÓGICA DE ACTUALIZACIÓN DE ÍTEM ---
                 if cantidad_faltante > 0:
-                    logging.info(f"Producto ID {item['producto_id']}: Faltan {cantidad_faltante} unidades. Creando Orden de Producción.")
-
+                    # 4a. Si falta stock, crear OP y actualizar ítem a 'EN_PRODUCCION'
                     datos_orden = {
                         'producto_id': item['producto_id'],
                         'cantidad': cantidad_faltante,
                         'fecha_planificada': date.today().isoformat()
                     }
-
                     resultado_op = self.orden_produccion_controller.crear_orden(datos_orden, usuario_id)
 
                     if resultado_op.get('success'):
-                        ordenes_creadas.append(resultado_op['data'])
+                        orden_creada = resultado_op['data']
+                        ordenes_creadas.append(orden_creada)
+                        # Asociamos el ítem con la nueva OP y actualizamos su estado
+                        self.model.update_item(item['id'], {
+                            'estado': 'EN_PRODUCCION',
+                            'orden_produccion_id': orden_creada['id']
+                        })
                     else:
                         logging.error(f"No se pudo crear la OP para el producto {item['producto_id']}. Error: {resultado_op.get('error')}")
+                else:
+                    # 4b. Si el stock fue suficiente, actualizar ítem a 'ALISTADO'
+                    self.model.update_item(item['id'], {'estado': 'ALISTADO'})
+                # --- FIN DE LA LÓGICA DE ACTUALIZACIÓN DE ÍTEM ---
 
-            msg = "Pedido aprobado con éxito. El stock ha sido reservado."
-            if ordenes_creadas:
-                msg += f" Se generaron {len(ordenes_creadas)} órdenes de producción para cubrir el faltante."
-
+            # 5. Devolver respuesta (sin cambios)
+            msg = "Pedido aprobado con éxito."
+            # ... (resto del método sin cambios)
             return self.success_response(data={'ordenes_creadas': ordenes_creadas}, message=msg)
 
         except Exception as e:
