@@ -41,6 +41,7 @@ def nuevo_cliente():
     """
     try:
         if request.method == 'PUT' or request.method == 'POST':
+
             datos_json = request.get_json()
             if not datos_json:
                 return jsonify(
@@ -54,6 +55,20 @@ def nuevo_cliente():
         flash(f"Error al actualizar el proveedor: {str(e)}", 'error')
     cliente=None
     return render_template('clientes/formulario.html', cliente=cliente)
+
+@cliente_proveedor.route('/buscar_por_cuil/<cliente_cuil>', methods=['GET'])
+def buscar_por_cuil(cliente_cuil):
+    """
+    Endpoint HTTP que llama a la función obtener_cliente_cuil
+    """
+    cliente_respuesta, estado = cliente_controller.obtener_cliente_cuil(cliente_cuil) 
+    if(cliente_respuesta['success']):
+        cliente=cliente_respuesta['data'][0]
+        return jsonify(cliente), 200
+    if estado == 404:
+        # Devolvemos 404 con un mensaje simple. El frontend IGNORARÁ esta respuesta.
+        return jsonify({'mensaje': 'Cliente no encontrado'}), 404
+    return jsonify(cliente_respuesta), estado
 
 @cliente_proveedor.route('/clientes/<int:id>/editar', methods=['GET', 'PUT', 'POST'])
 @permission_required(sector_codigo='ADMINISTRACION', accion='actualizar')

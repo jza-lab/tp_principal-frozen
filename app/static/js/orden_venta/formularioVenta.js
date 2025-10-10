@@ -1,11 +1,15 @@
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     try {
         const container = document.getElementById('items-container');
         const addItemBtn = document.getElementById('add-item-btn');
         const itemTemplate = document.getElementById('item-template');
         const totalFormsInput = document.querySelector('input[name="items-TOTAL_FORMS"]');
         const noItemsMsg = document.getElementById('no-items-msg');
-        
+        const clienteIdOculto = document.getElementById('id_cliente');
+
+        const recalculate = typeof window.calculateOrderTotals === 'function' ? window.calculateOrderTotals : () => { };
+        const attachListeners = typeof window.attachItemListeners === 'function' ? window.attachItemListeners : () => { };
+
         // Si faltan elementos esenciales, salimos para evitar errores de null
         if (!container || !totalFormsInput) {
             console.error("Faltan elementos esenciales (container o TOTAL_FORMS) para inicializar el formset de ítems.");
@@ -31,7 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // 2. Iterar sobre todos los selectores para aplicar la exclusión.
             document.querySelectorAll('.producto-selector').forEach(currentSelect => {
                 const currentValue = currentSelect.value;
-                
+
                 // Iterar sobre todas las opciones con data-id
                 currentSelect.querySelectorAll('option[data-id]').forEach(option => {
                     const optionId = option.getAttribute('data-id');
@@ -86,21 +90,21 @@ document.addEventListener('DOMContentLoaded', function() {
         function handleProductChange(event) {
             const select = event.target;
             const row = select.closest('.item-row');
-            
+
             // Verificación defensiva
-            if (!row) return; 
+            if (!row) return;
 
             const stockDisplay = row.querySelector('.stock-display');
-            
+
             // Buscamos la opción seleccionada
             const selectedOption = select.options[select.selectedIndex];
-            
+
             // Obtiene el stock del atributo data-stock de la opción seleccionada
             const stock = selectedOption ? (selectedOption.dataset.stock || 0) : 0;
-            
+
             if (stockDisplay) {
                 // Muestra stock con un decimal
-                stockDisplay.textContent = parseFloat(stock).toFixed(1); 
+                stockDisplay.textContent = parseFloat(stock).toFixed(1);
             }
         }
 
@@ -116,11 +120,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 row.querySelectorAll('[name^="' + prefix + '-"], [id^="' + prefix + '-"]').forEach(el => {
                     updateElementIndex(el, prefix, newIndex);
                 });
-                
+
                 // Re-adjuntar listeners y actualizar stock para la fila re-indexada
                 const productSelect = row.querySelector('select[name$="-producto_id"]');
                 const removeButton = row.querySelector('.remove-item-btn');
-                
+
+                attachListeners(row);
+
                 if (productSelect) {
                     // Limpiar y adjuntar listener de cambio de producto/stock
                     productSelect.removeEventListener('change', handleProductChange);
@@ -149,6 +155,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             toggleNoItemsMessage();
+            updateAvailableProducts();
+            recalculate()
         }
 
         /**
@@ -161,16 +169,21 @@ document.addEventListener('DOMContentLoaded', function() {
             const newIndex = parseInt(totalFormsInput.value, 10);
             const newRowContent = itemTemplate.content.cloneNode(true);
             const newRow = newRowContent.querySelector('.item-row');
-            
+
             newRow.innerHTML = newRow.innerHTML.replace(/__prefix__/g, newIndex);
-            
+
             container.appendChild(newRow);
-            
+
+            newRow.scrollIntoView({
+                behavior: 'smooth',
+                block: 'nearest'
+            });
+
             // La reindexación se encarga de adjuntar los listeners
-            reindexRows(); 
-            
+            reindexRows();
+
             // Aplicar la lógica de exclusión después de añadir una fila
-            updateAvailableProducts(); 
+            updateAvailableProducts();
         }
 
         /**
@@ -180,24 +193,33 @@ document.addEventListener('DOMContentLoaded', function() {
         function removeItem(event) {
             const row = event.target.closest('.item-row');
             if (row) {
+                const nextRow = row.nextElementSibling;
                 row.remove();
                 reindexRows(); // Reindexar después de eliminar
-                
+                if (nextRow) {
+                    // Usamos 'start' para alinear el tope del nuevo elemento con el tope de la vista,
+                    // lo cual obliga al scroll a moverse hacia arriba para seguir el contenido.
+                    nextRow.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+
                 // Re-habilitar los productos después de eliminar una fila
                 updateAvailableProducts();
             }
         }
 
         // --- Inicialización y Event Listeners ---
-        
+
         // 1. Botón de añadir ítem
         if (addItemBtn) {
             addItemBtn.addEventListener('click', addItem);
         }
-        
+
         // 2. Inicializar listeners para filas existentes (al cargar la página)
-        reindexRows(); 
-        
+        reindexRows();
+
         // 3. Aplicar la lógica de exclusión inicial para cualquier producto precargado
         updateAvailableProducts();
 
@@ -209,26 +231,49 @@ document.addEventListener('DOMContentLoaded', function() {
 const form = document.getElementById('pedido-form'); // Usamos el ID del formulario en tu HTML
 const itemsContainer = document.getElementById('items-container');
 
-form.addEventListener('submit', function(event) {
-    event.preventDefault(); 
+form.addEventListener('submit', function (event) {
+    event.preventDefault();
+
+    const totalFinalInput = document.getElementById('total-final');
+
+
+    const cuilParte1 = document.getElementById('cuil_parte1');
+    const cuilParte2 = document.getElementById('cuil_parte2');
+    const cuilParte3 = document.getElementById('cuil_parte3');
+    const cuil = document.getElementById('cuil'); // El campo oculto que enviará el CUIL
+
+
+    if (cuilParte1 && cuilParte2 && cuilParte3 && cuil) {
+        // Concatenamos el CUIL con guiones, asumiendo que tu backend lo espera así.
+        // Si tu backend SOLO espera dígitos, usa solo: cuilParte1.value + cuilParte2.value + cuilParte3.value
+        const cuilConcatenado = cuilParte1.value + "-" + cuilParte2.value + "-" + cuilParte3.value;
+
+        // Asignamos el valor al campo oculto. Este es el valor que se enviará.
+        cuil.value = cuilConcatenado;
+
+        cuilParte1.disabled = true;
+        cuilParte2.disabled = true;
+        cuilParte3.disabled = true;
+    }
+
 
     // 1. Validación de HTML5 (campos 'required', min/max, etc.)
     if (!form.checkValidity()) {
-        form.classList.add('was-validated'); 
-        return; 
+        form.classList.add('was-validated');
+        return;
     }
 
     // 2. Validación de Ítems Mínimos
     const itemRows = itemsContainer.querySelectorAll('.item-row');
-    
+
     if (itemRows.length === 0) {
         // Asumiendo que 'showNotificationModal' es una función que existe en tu proyecto
-        showNotificationModal('Error al crear el pedido','Debe añadir al menos un producto al pedido de venta.','error'); 
+        showNotificationModal('Error al crear el pedido', 'Debe añadir al menos un producto al pedido de venta.', 'error');
         itemsContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return; 
+        return;
     }
-    
+
     // 3. ENVÍO DEL FORMULARIO
-    form.classList.remove('was-validated'); 
-    form.submit(); 
+    form.classList.remove('was-validated');
+    form.submit();
 });

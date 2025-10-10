@@ -1,3 +1,4 @@
+from datetime import datetime, date
 import logging
 import re
 from app.controllers.base_controller import BaseController
@@ -123,7 +124,8 @@ class ProductoController(BaseController):
 
             if 'codigo' in validated_data and validated_data['codigo'] != self.model.find_by_id(producto_id, 'id')['data']['codigo']:
                  return self.error_response('El código de un producto no se puede modificar.', 400)
-
+            
+            validated_data['updated_at'] = datetime.now().isoformat()
             result_producto = self.model.update(producto_id, validated_data, 'id')
             if not result_producto.get('success'):
                  return self.error_response(result_producto.get('error', 'Error al actualizar el producto.'))

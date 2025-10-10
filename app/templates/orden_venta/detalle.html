@@ -18,14 +18,13 @@
 </div>
 
 <div class="row">
-    <!-- Columna de Información General -->
     <div class="col-lg-8">
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Información General del Pedido</h5>
                 {% set estado_config = {
                     'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
-                    'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
+                    'APROBADO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
                     'LISTO_PARA_ENTREGA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
                     'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
                     'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
@@ -57,7 +56,6 @@
             </div>
         </div>
 
-        <!-- Tabla de Items del Pedido -->
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">Productos en este Pedido</h5>
@@ -114,7 +112,6 @@
         </div>
     </div>
 
-    <!-- Columna de Acciones -->
     <div class="col-lg-4">
         <div class="card">
             <div class="card-header">
@@ -122,12 +119,25 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
+                    {% if pedido.estado == 'PENDIENTE' %}
+                    <form method="POST" action="{{ url_for('orden_venta.aprobar', id=pedido.id) }}" class="confirm-form d-grid"
+                        data-title="Confirmar Aprobación" 
+                        data-message="¿Está seguro de que desea aprobar este pedido? Se reservará el stock disponible y se crearán las órdenes de producción necesarias." 
+                        data-button-type="success">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-circle me-1"></i>Aprobar Pedido
+                        </button>
+                    </form>
+                    {% endif %}
+
                     <button class="btn btn-outline-primary" disabled>
                         <i class="bi bi-truck me-1"></i>Generar Remito
                     </button>
+
                     <button class="btn btn-outline-secondary" disabled>
                         <i class="bi bi-printer me-1"></i>Imprimir Pedido
                     </button>
+                    
                     {% if pedido.estado != 'CANCELADO' %}
                     <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}" class="confirm-form d-grid"
                         data-title="Confirmar Cancelación" data-message="¿Está seguro de que desea cancelar este pedido? Esta acción no se puede deshacer." data-button-type="danger">
@@ -146,25 +156,107 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const forms = document.querySelectorAll('.confirm-form');
-    forms.forEach(form => {
+    const formAprobar = document.querySelector('form[action*="/aprobar"]');
+
+    if (formAprobar) {
+        formAprobar.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const title = this.dataset.title || 'Confirmar';
+            const message = this.dataset.message || '¿Está seguro?';
+            const buttonType = this.dataset.buttonType || 'primary';
+            const form = this;
+            const submitButton = form.querySelector('button[type="submit"]');
+            const originalButtonContent = submitButton.innerHTML;
+
+            showConfirmationModal(title, message, function() {
+                // --- INICIO DE LA LÓGICA DE CARGA MEJORADA ---
+                
+                // 1. Desactivar botón y mostrar spinner
+                submitButton.disabled = true;
+                submitButton.innerHTML = `
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    Procesando...
+                `;
+
+                fetch(form.action, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(response => {
+                    if (!response.ok) { throw new Error('Error en la respuesta del servidor.'); }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // 3. Si todo va bien, muestra el modal de éxito final
+                        mostrarModalExito(data);
+                    } else {
+                        showNotificationModal('Error', data.error || 'No se pudo aprobar el pedido.', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error en la petición fetch:', error);
+                    showNotificationModal('Error de Red', 'No se pudo comunicar con el servidor.', 'error');
+                })
+                .finally(() => {
+                    // 2. PASE LO QUE PASE, restaura el botón a su estado original
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonContent;
+                });
+                // --- FIN DE LA LÓGICA MEJORADA ---
+            }, buttonType);
+        });
+    }
+
+    // Lógica para otros formularios de confirmación (como cancelar)
+    const otherForms = document.querySelectorAll('.confirm-form:not([action*="/aprobar"])');
+    otherForms.forEach(form => {
         form.addEventListener('submit', function (e) {
             e.preventDefault();
-            
             const title = form.dataset.title || 'Confirmar Acción';
-            const message = form.dataset.message || '¿Está seguro de que desea realizar esta acción?';
+            const message = form.dataset.message || '¿Está seguro?';
             const buttonType = form.dataset.buttonType || 'primary';
-
-            showConfirmationModal(
-                title,
-                message,
-                () => { // Callback de confirmación
-                    form.submit();
-                },
-                buttonType
-            );
+            showConfirmationModal(title, message, () => form.submit(), buttonType);
         });
     });
 });
+
+/**
+ * Función que construye y muestra el "mensaje bonito" en el modal de éxito.
+ * (Esta función no cambia)
+ */
+function mostrarModalExito(respuestaJson) {
+    const modalBody = document.getElementById('resultadoModalBody');
+    const modalElement = document.getElementById('resultadoAprobacionModal');
+    
+    let contenidoHtml = `<p>${respuestaJson.message}</p>`;
+    const ordenesCreadas = respuestaJson.data.ordenes_creadas;
+
+    if (ordenesCreadas && ordenesCreadas.length > 0) {
+        contenidoHtml += '<h6>Órdenes de Producción Generadas:</h6>';
+        contenidoHtml += '<ul class="list-group">';
+        ordenesCreadas.forEach(orden => {
+            const urlOrden = `/orden-produccion/${orden.id}/detalle`;
+            contenidoHtml += `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <a href="${urlOrden}" target="_blank"><strong>${orden.codigo}</strong></a>
+                        <small class="d-block text-muted">Cantidad: ${orden.cantidad_planificada} unidades</small>
+                    </div>
+                    <a href="${urlOrden}" target="_blank" class="btn btn-sm btn-outline-secondary">Ver</a>
+                </li>
+            `;
+        });
+        contenidoHtml += '</ul>';
+    }
+
+    modalBody.innerHTML = contenidoHtml;
+    
+    const bootstrapModal = new bootstrap.Modal(modalElement);
+    bootstrapModal.show();
+
+    modalElement.addEventListener('hidden.bs.modal', () => window.location.reload(), { once: true });
+}
 </script>
 {% endblock %}

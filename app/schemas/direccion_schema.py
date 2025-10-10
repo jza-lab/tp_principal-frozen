@@ -14,4 +14,4 @@ class DireccionSchema(Schema):
     provincia = fields.Str(required=True)
     latitud = fields.Float(dump_only=True, allow_none=True)
     longitud = fields.Float(dump_only=True, allow_none=True)
-    created_at = fields.DateTime(dump_only=True)
+    created_at = fields.Str(dump_only=True)

@@ -29,13 +29,13 @@ class ProveedorModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo proveedores activos: {e}")
             return {'success': False, 'error': str(e)}
-            
+
     def find_by_id(self, proveedor_id: int, include_direccion: bool = False) -> Dict:
         """Busca un proveedor por su ID, opcionalmente incluyendo la dirección."""
         try:
             query = "*, direccion:direccion_id(*)" if include_direccion else "*"
             response = self.db.table(self.get_table_name()).select(query).eq('id', proveedor_id).single().execute()
-            
+
             if response.data:
                 return {'success': True, 'data': response.data}
             return {'success': False, 'error': 'Proveedor no encontrado'}
@@ -43,34 +43,43 @@ class ProveedorModel(BaseModel):
             logger.error(f"Error buscando proveedor por ID {proveedor_id}: {e}")
             return {'success': False, 'error': str(e)}
 
-    def buscar_por_email(self, email: str) -> Optional[Dict]:
-        """Buscar proveedor por email"""
+    def buscar_por_cuit(self, cuit: str) -> tuple:
+        """Busca un proveedor por su CUIT/CUIL."""
         try:
-            response = self.db.table(self.get_table_name())\
-                           .select("*")\
-                           .eq("email", email.strip().lower())\
-                           .execute()
-            if response.data:
-                return response.data[0], response.status_code
-            else:
-                return None, 404
-        except Exception as e:
-            logger.error(f"Error buscando proveedor por email {email}: {e}")
-            return None, 500
+            # Ejecutamos la consulta
+            result = self.db.table(self.get_table_name()).select("*").eq("cuit", cuit).execute()
 
-    def buscar_por_cuit(self, cuit: str) -> Optional[Dict]:
-        """Buscar proveedor por CUIT/CUIL"""
-        try:
-            response = self.db.table(self.get_table_name())\
-                           .select("*")\
-                           .eq("cuit", cuit.strip())\
-                           .execute()
-            if response.data:
-                return response.data[0], response.status_code
+            # --- LÓGICA CORREGIDA ---
+            # En lugar de verificar result.status_code, verificamos si se encontraron datos.
+            # Si .execute() no lanza una excepción, la petición fue exitosa (código 2xx).
+            if result.data:
+                # Se encontró un proveedor, devolvemos sus datos y un código 200 OK
+                return result.data[0], 200
             else:
+                # No se encontró, devolvemos None y un código 404 Not Found
                 return None, 404
+
         except Exception as e:
             logger.error(f"Error buscando proveedor por CUIT {cuit}: {e}")
+            return None, 500
+
+
+    def buscar_por_email(self, email: str) -> tuple:
+        """Busca un proveedor por su email."""
+        try:
+            # Ejecutamos la consulta
+            result = self.db.table(self.get_table_name()).select("*").eq("email", email).execute()
+
+            # --- LÓGICA CORREGIDA ---
+            if result.data:
+                # Se encontró un proveedor
+                return result.data[0], 200
+            else:
+                # No se encontró
+                return None, 404
+
+        except Exception as e:
+            logger.error(f"Error buscando proveedor por email {email}: {e}")
             return None, 500
 
     def buscar_por_identificacion(self, fila: Dict) -> Optional[Dict]:
