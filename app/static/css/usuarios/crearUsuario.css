@@ -456,6 +456,355 @@
     transform: none;
 }
 
+/* ==================== SELECTOR DE ROLES ==================== */
+.roles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+.rol-card {
+    background: white;
+    border: 2px solid #e3e6f0;
+    border-radius: 10px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    text-align: center;
+}
+
+.rol-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+    border-color: var(--app-primary);
+}
+
+.rol-card.selected {
+    background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-hover) 100%);
+    border-color: var(--app-primary);
+    color: white;
+    transform: scale(1.02);
+}
+
+.rol-icon {
+    width: 45px;
+    height: 45px;
+    margin: 0 auto 0.625rem;
+    background: #f8f9fa;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.rol-card.selected .rol-icon {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.rol-icon i {
+    font-size: 1.3rem;
+    color: var(--app-primary);
+    transition: all 0.3s ease;
+}
+
+.rol-card.selected .rol-icon i {
+    color: white;
+    transform: scale(1.1);
+}
+
+.rol-nombre {
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 0;
+}
+
+.rol-check {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 22px;
+    height: 22px;
+    background: var(--accent-green);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    opacity: 0;
+    transform: scale(0);
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    box-shadow: 0 2px 8px rgba(28, 200, 138, 0.4);
+}
+
+.rol-card.selected .rol-check {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.rol-check i {
+    font-size: 0.75rem;
+}
+
+/* ==================== SELECTOR DE TURNOS ==================== */
+.turno-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+.turno-card {
+    background: white;
+    border: 2px solid #e3e6f0;
+    border-radius: 10px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.turno-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--app-primary);
+    transform: scaleY(0);
+    transition: transform 0.3s ease;
+}
+
+.turno-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+    border-color: var(--app-primary);
+}
+
+.turno-card.selected {
+    background: linear-gradient(135deg, rgba(49, 49, 49, 0.05) 0%, rgba(49, 49, 49, 0.02) 100%);
+    border-color: var(--app-primary);
+    box-shadow: 0 0 0 3px rgba(49, 49, 49, 0.1);
+}
+
+.turno-card.selected::before {
+    transform: scaleY(1);
+}
+
+.turno-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.turno-nombre {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--app-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.turno-nombre i {
+    font-size: 1.1rem;
+}
+
+.turno-check {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #dee2e6;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+}
+
+.turno-card.selected .turno-check {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
+    animation: checkPop 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.turno-check i {
+    color: white;
+    font-size: 0.75rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.turno-card.selected .turno-check i {
+    opacity: 1;
+}
+
+@keyframes checkPop {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+.turno-horario {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #6c757d;
+    font-size: 0.85rem;
+    padding: 0.625rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.turno-horario i {
+    color: var(--app-primary);
+    font-size: 1rem;
+}
+
+.turno-time {
+    font-weight: 600;
+    color: var(--app-primary);
+}
+
+/* ==================== SELECTOR DE SECTORES ==================== */
+.sectores-info {
+    background: #e7f5ff;
+    border: 1px solid #b3d9ff;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.sectores-info i {
+    color: #0066cc;
+    font-size: 1.3rem;
+}
+
+.sectores-info-text {
+    flex: 1;
+}
+
+.sectores-counter {
+    background: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 700;
+    color: var(--app-primary);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.sectores-counter.warning {
+    background: #fff3cd;
+    color: #856404;
+    animation: pulse-warning 1s ease-in-out;
+}
+
+@keyframes pulse-warning {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.sectores-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.sector-card {
+    background: white;
+    border: 2px solid #e3e6f0;
+    border-radius: 12px;
+    padding: 1.25rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    text-align: center;
+}
+
+.sector-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+    border-color: var(--app-primary);
+}
+
+.sector-card.selected {
+    background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-hover) 100%);
+    border-color: var(--app-primary);
+    color: white;
+    transform: scale(1.02);
+}
+
+.sector-card.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.sector-icon {
+    width: 50px;
+    height: 50px;
+    margin: 0 auto 0.75rem;
+    background: #f8f9fa;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.sector-card.selected .sector-icon {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.sector-icon i {
+    font-size: 1.5rem;
+    color: var(--app-primary);
+    transition: all 0.3s ease;
+}
+
+.sector-card.selected .sector-icon i {
+    color: white;
+    transform: scale(1.1);
+}
+
+.sector-nombre {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 0;
+}
+
+.sector-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 28px;
+    height: 28px;
+    background: var(--accent-green);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 0.85rem;
+    opacity: 0;
+    transform: scale(0);
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    box-shadow: 0 2px 8px rgba(28, 200, 138, 0.4);
+}
+
+.sector-card.selected .sector-badge {
+    opacity: 1;
+    transform: scale(1);
+}
+
 /* Form Actions */
 .form-actions {
     padding-top: 2rem;
@@ -549,6 +898,14 @@
 
     .form-actions .btn {
         width: 100%;
+    }
+
+    .turno-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .sectores-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     }
 }
 
