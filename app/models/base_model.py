@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 import logging
 from datetime import datetime, date
 from decimal import Decimal
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -37,23 +38,25 @@ class BaseModel(ABC):
             logger.error(f"Error creando en {self.table_name}: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    # --- MÉTODO MODIFICADO ---
+    # --- MÉTODO MODIFICADO Y FINAL ---
     def _prepare_data_for_db(self, data: Dict) -> Dict:
         """
-        Prepara los datos para ser enviados a la base de datos, convirtiendo
-        tipos especiales de Python (Decimal, date, datetime) a strings.
+        Prepara los datos para la base de datos, convirtiendo tipos especiales
+        de Python (Decimal, datetime, UUID) a formatos compatibles con JSON.
         """
         clean_data = {}
         for key, value in data.items():
             if value is not None:
-
-                # Añadimos la lógica para convertir Decimal a string
-                if isinstance(value, Decimal):
+                # 1. Convertir UUID a string
+                if isinstance(value, UUID):
                     clean_data[key] = str(value)
-                elif isinstance(value, (date, datetime)):
-                    clean_data[key] = value.isoformat()
+                # 2. Convertir Decimal a string
                 elif isinstance(value, Decimal):
                     clean_data[key] = str(value)
+                # 3. Convertir date/datetime a string en formato ISO
+                elif isinstance(value, (date, datetime)):
+                    clean_data[key] = value.isoformat()
+                # 4. Dejar el resto de los tipos como están
                 else:
                     clean_data[key] = value
         return clean_data

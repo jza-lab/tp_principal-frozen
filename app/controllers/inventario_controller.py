@@ -122,8 +122,16 @@ class InventarioController(BaseController):
     def crear_lote(self, data: Dict, id_usuario:int) -> tuple:
         """Crear un nuevo lote de inventario"""
         try:
-            # Validar datos
+            # --- LÓGICA CORREGIDA ---
+            # Copiamos la cantidad inicial a la actual ANTES de la validación.
+            # El formulario envía 'cantidad_inicial', así que lo usamos para crear 'cantidad_actual'.
+            if 'cantidad_inicial' in data and data['cantidad_inicial']:
+                data['cantidad_actual'] = data['cantidad_inicial']
+
+            # Ahora sí, validamos los datos. El schema ya encontrará el campo 'cantidad_actual'.
             validated_data = self.schema.load(data)
+            # --------------------------
+
             validated_data['usuario_ingreso_id'] = id_usuario
 
             # Verificar que el insumo existe
@@ -131,7 +139,7 @@ class InventarioController(BaseController):
             if not insumo_result['success']:
                 return self.error_response('El insumo especificado no existe', 404)
 
-             # Generar código de lote único
+            # Generar código de lote único
             codigo_insumo = insumo_result['data'].get('codigo_interno', 'INS')
             timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
             codigo_lote = f"{codigo_insumo}-{timestamp}"
@@ -142,15 +150,7 @@ class InventarioController(BaseController):
 
             if result['success']:
                 logger.info(f"Lote creado exitosamente: {result['data']['id_lote']}")
-
-                # ✅ Serializar los datos correctamente
                 serialized_data = self._serialize_data(result['data'])
-
-                self.insumo_controller.actualizar_stock_insumo(validated_data['id_insumo'])
-                # Evaluar alertas después de crear
-                if hasattr(self, 'stock_service'):
-                    self.stock_service.evaluar_alertas_insumo(validated_data['id_insumo'])
-
                 return self.success_response(
                     data=serialized_data,
                     message='Lote creado exitosamente',
@@ -160,8 +160,7 @@ class InventarioController(BaseController):
                 return self.error_response(result['error'])
 
         except ValidationError as e:
-            # Re-lanzar la excepción de validación para que la vista la maneje
-            # y devuelva un JSON con los detalles del error.
+            # Si aún así hay un error de validación, lo lanzamos para que la vista lo muestre.
             raise e
         except Exception as e:
             logger.error(f"Error creando lote: {str(e)}")
@@ -371,7 +370,7 @@ class InventarioController(BaseController):
         except Exception as e:
             logger.error(f"Error contando alertas de stock: {str(e)}")
             return 0
-        
+
     def eliminar_lote(self, id_lote: str) -> tuple:
         """Eliminar un lote de inventario"""
         try:
