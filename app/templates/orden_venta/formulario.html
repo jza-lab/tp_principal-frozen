@@ -5,6 +5,7 @@
 {% endblock %}
 
 {% block content %}
+
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">
@@ -32,6 +33,8 @@
 </div>
 
 <form method="POST" id="pedido-form">
+    <input type="hidden" id="id_cliente" name="id_cliente" value="">
+    <input type="hidden" id="cuil" name="cuil" value="">
     <div class="row">
         <!-- Columna principal del formulario -->
         <div class="col-lg-8">
@@ -63,7 +66,7 @@
                                 <span class="input-group-text">-</span>
 
                                 <input type="text" class="form-control text-center" id="cuil_parte3" name="cuil_parte3"
-                                    maxlength="2" pattern="\d{2}" placeholder="XX" required
+                                    maxlength="2" pattern="\d{1,2}" placeholder="XX" required
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
                                     aria-label="Dígito verificador">
 
@@ -74,10 +77,9 @@
                             <div class="form-floating">
                                 <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente"
                                     placeholder="Nombre del Cliente"
-                                    value="{{ pedido.nombre_cliente if pedido else '' }}" required>
+                                    value="{{ pedido.nombre_cliente if pedido else '' }}" readonly>
                                 <label for="nombre_cliente">
-                                    <i class="bi bi-person-circle me-1"></i>Nombre <span
-                                        class="text-danger">*</span>
+                                    <i class="bi bi-person-circle me-1"></i>Nombre <span class="text-danger">*</span>
                                 </label>
                             </div>
                         </div>
@@ -85,7 +87,7 @@
                         <div class="col-md-6">
                             <div class="form-floating">
                                 <input type="text" class="form-control" name="telefono" id="telefono"
-                                    placeholder="Teléfono" value="{{ cliente.telefono if cliente else '' }}" required>
+                                    placeholder="Teléfono" value="{{ cliente.telefono if cliente else '' }}" readonly>
                                 <label for="telefono">
                                     <i class="bi bi-phone me-1"></i>Teléfono <span class="text-danger">*</span>
                                 </label>
@@ -95,7 +97,7 @@
                         <div class="col-md-6">
                             <div class="form-floating">
                                 <input type="email" class="form-control" name="email" id="email" placeholder="Email"
-                                    value="{{ cliente.email if cliente else '' }}" required>
+                                    value="{{ cliente.email if cliente else '' }}" readonly>
                                 <label for="email">
                                     <i class="bi bi-envelope me-1"></i>Email <span class="text-danger">*</span>
                                 </label>
@@ -103,14 +105,13 @@
                         </div>
 
                         <div class="form-subsection">
-
                             <label class="form-label">Dirección de Facturacion</label>
                             <div class="row g-3">
                                 <div class="col-md-8">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="calle" name="calle"
-                                            placeholder="Calle" value="" required>
-                                        <label for="calle">
+                                        <input type="text" class="form-control" id="calle_facturacion"
+                                            name="calle_facturacion" placeholder="Calle" value="" readonly>
+                                        <label for="calle_facturacion">
                                             <i class="bi bi-signpost me-1"></i>Calle
                                         </label>
                                     </div>
@@ -119,9 +120,9 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="number" class="form-control" id="altura" name="altura"
-                                            placeholder="Altura" value="" required>
-                                        <label for="altura">
+                                        <input type="number" class="form-control" id="altura_facturacion"
+                                            name="altura_facturacion" placeholder="Altura" value="" readonly>
+                                        <label for="altura_facturacion">
                                             <i class="bi bi-123 me-1"></i>Altura
                                         </label>
                                     </div>
@@ -130,7 +131,8 @@
 
                                 <div class="col-md-6">
                                     <div class="form-floating">
-                                        <select class="form-select" id="provincia" name="provincia" required>
+                                        <select class="form-select" id="provincia_facturacion"
+                                            name="provincia_facturacion" readonly>
                                             <option value="">Seleccionar provincia...</option>
                                             {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
                                             "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
@@ -151,9 +153,9 @@
 
                                 <div class="col-md-6">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="localidad" name="localidad"
-                                            placeholder="Localidad" value="" required>
-                                        <label for="localidad">
+                                        <input type="text" class="form-control" id="localidad_facturacion"
+                                            name="localidad_facturacion" placeholder="Localidad" value="" readonly>
+                                        <label for="localidad_facturacion">
                                             <i class="bi bi-pin-map me-1"></i>Localidad
                                         </label>
                                     </div>
@@ -162,9 +164,9 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="piso" name="piso"
-                                            placeholder="Piso (Opcional)" value="">
-                                        <label for="piso">
+                                        <input type="text" class="form-control" id="piso_facturacion"
+                                            name="piso_facturacion" placeholder="Piso (Opcional)" value="" readonly>
+                                        <label for="piso_facturacion">
                                             <i class="bi bi-building me-1"></i>Piso (Opcional)
                                         </label>
                                     </div>
@@ -172,9 +174,9 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="depto" name="depto"
-                                            placeholder="Dto (Opcional)" value="">
-                                        <label for="depto">
+                                        <input type="text" class="form-control" id="depto_facturacion"
+                                            name="depto_facturacion" placeholder="Dto (Opcional)" value="" readonly>
+                                        <label for="depto_facturacion">
                                             <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
                                         </label>
                                     </div>
@@ -182,9 +184,10 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
-                                            placeholder="Código Postal" value="">
-                                        <label for="codigo_postal">
+                                        <input type="text" class="form-control" id="codigo_postal_facturacion"
+                                            name="codigo_postal_facturacion" placeholder="Código Postal" value=""
+                                            readonly>
+                                        <label for="codigo_postal_facturacion">
                                             <i class="bi bi-mailbox me-1"></i>Código Postal
                                         </label>
                                     </div>
@@ -207,7 +210,7 @@
                                 <div class="col-md-8">
                                     <div class="form-floating">
                                         <input type="text" class="form-control" id="calle" name="calle"
-                                            placeholder="Calle" value="" required>
+                                            placeholder="Calle" value="">
                                         <label for="calle">
                                             <i class="bi bi-signpost me-1"></i>Calle
                                         </label>
@@ -218,7 +221,7 @@
                                 <div class="col-md-4">
                                     <div class="form-floating">
                                         <input type="number" class="form-control" id="altura" name="altura"
-                                            placeholder="Altura" value="" required>
+                                            placeholder="Altura" value="">
                                         <label for="altura">
                                             <i class="bi bi-123 me-1"></i>Altura
                                         </label>
@@ -228,7 +231,7 @@
 
                                 <div class="col-md-6">
                                     <div class="form-floating">
-                                        <select class="form-select" id="provincia" name="provincia" required>
+                                        <select class="form-select" id="provincia" name="provincia">
                                             <option value="">Seleccionar provincia...</option>
                                             {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
                                             "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
@@ -250,7 +253,7 @@
                                 <div class="col-md-6">
                                     <div class="form-floating">
                                         <input type="text" class="form-control" id="localidad" name="localidad"
-                                            placeholder="Localidad" value="" required>
+                                            placeholder="Localidad" value="">
                                         <label for="localidad">
                                             <i class="bi bi-pin-map me-1"></i>Localidad
                                         </label>
@@ -310,8 +313,18 @@
                 </div>
             </div>
 
+            {% set total_pedido = 0.0 %}
+            {% if pedido and pedido['items'] %}
+            {% for item in pedido['items'] %}
+            {# CORRECCIÓN CRUCIAL: Usamos .get(key, 0) para manejar ítems sin precio o cantidad #}
+            {% set item_precio = item.get('precio_unitario', 0) %}
+            {% set item_cantidad = item.get('cantidad', 0) %}
+            {% set total_pedido = total_pedido + (item_precio * item_cantidad) %}
+            {% endfor %}
+            {% endif %}
+
             <!-- Items del Pedido -->
-            <div class="card shadow-sm mt-4 pb-7 mb-5">
+            <div class="card shadow-sm mt-4 mb-2">
                 <div class="card-header d-flex justify-content-between align-items-center bg-light">
                     <h5 class="mb-0">Productos del Pedido</h5>
                     <button type="button" class="btn btn-sm btn-outline-primary" id="add-item-btn">
@@ -323,11 +336,11 @@
                         <table class="table table-sm align-middle mb-0">
                             <thead class="bg-light">
                                 <tr>
-                                    <th style="width: 40%;">Producto <span class="text-danger">*</span></th>
+                                    <th style="width: 35%;">Producto <span class="text-danger">*</span></th>
                                     <th style="width: 15%;">Cantidad <span class="text-danger">*</span></th>
-                                    <th style="width: 15%;">Estado</th>
-                                    <!-- <th style="width: 15%;">Stock</th> -->
-                                    <th style="width: 15%;" class="text-center">Acción</th>
+                                    <th style="width: 15%;">Precio Unitario</th>
+                                    <th style="width: 15%;">Subtotal</th>
+                                    <th style="width: 10%;" class="text-center">Acción</th>
                                 </tr>
                             </thead>
                             <tbody id="items-container">
@@ -341,13 +354,14 @@
                                     <td>
                                         <input type="hidden" name="items-{{ loop.index0 }}-id"
                                             value="{{ item.id if item.id else '' }}">
-                                        <select class="form-select form-select-sm"
+                                        <select class="form-select form-select-sm product-selector"
                                             name="items-{{ loop.index0 }}-producto_id" required {% if not is_editable
                                             %}disabled{% endif %}>
                                             <option value="">Seleccione...</option>
                                             {% for producto in productos %}
                                             <option value="{{ producto.id }}"
-                                                data-stock="{{ producto.stock_disponible or 0 }}" {% if
+                                                data-stock="{{ producto.stock_disponible or 0 }}"
+                                                data-precio="{{ producto.precio_unitario | float or 0 }}" {% if
                                                 item.producto_id==producto.id %}selected{% endif %}>
                                                 {{ producto.nombre }}
                                             </option>
@@ -355,20 +369,28 @@
                                         </select>
                                     </td>
                                     <td>
-                                        <input type="number" class="form-control form-control-sm"
+                                       
+                                        <input type="number" class="form-control form-control-sm item-quantity"
                                             name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10" min="1"
-                                            max="5000" step="1" value="{{ item.cantidad }}" required {% if not
+                                            max="5000" step="1" value="{{ item.get('cantidad', 0) }}" required {% if not
                                             is_editable %}disabled{% endif %}>
                                     </td>
+
                                     <td>
-                                        {% set status_map = {'PENDIENTE': 'bg-secondary', 'EN_PRODUCCION': 'bg-warning
-                                        text-dark', 'ALISTADO': 'bg-success', 'CANCELADO': 'bg-danger'} %}
-                                        <span class="badge {{ status_map.get(item.estado, 'bg-light text-dark') }}">{{
-                                            item.estado | replace('_', ' ') | title }}</span>
+                                        
+                                        <input type="text" class="form-control form-control-sm price-display"
+                                            value="{{ '%.2f' | format(item.get('precio_unitario', 0)) }}" readonly>
                                     </td>
-                                    <!-- <td>
-                                            <span class="badge bg-secondary text-white stock-display">--</span>
-                                        </td> -->
+
+                                    <td class="text-center">
+                                        
+                                        <input type="number" step="0.01" min="1" class="form-control subtotal-item"
+                                            value="{{ '%.2f' | format(item.get('cantidad', 0) * item.get('precio_unitario', 0)) }}"
+                                            readonly>
+                                    </td>
+
+                                    <td>
+
                                     <td class="text-center">
                                         <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn"
                                             title="Eliminar ítem" {% if not is_editable %}disabled{% endif %}><i
@@ -388,8 +410,33 @@
                     </div>
                 </div>
             </div>
-        </div>
+            <div class="card mb-4">
+                <div class="card-body d-flex justify-content-end gap-3">
+                    <div class="w-25">
+                        <label class="form-label">Subtotal</label>
+                        <input type="text" class="form-control text-end" id="subtotal-neto" name="subtotal"
+                            value="{{ '%.2f' | format(total_pedido) }}" readonly>
+                    </div>
 
+                    <div class="w-25 d-flex flex-column justify-content-center">
+                        <div class="form-check mt-4">
+                            <input class="form-check-input" type="checkbox" id="iva-checkbox" name="iva" value="1" {% if
+                                pedido and pedido.iva  %}checked{% endif %}>
+                            <label class="form-check-label" for="iva-checkbox">
+                                Aplicar IVA 21%
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="w-25">
+                        <label class="form-label">Total</label>
+                        <input type="text" class="form-control text-end" id="total-final" name="total"
+                            value="{{ '%.2f' | format(total_pedido * 1.21 if pedido and 21 > 0 else total_pedido) }}"
+                            readonly>
+                    </div>
+                </div>
+            </div>
+        </div>
         <!-- Columna lateral -->
         <div class="col-lg-4">
             <div class="card sticky-top shadow-sm" style="top: 20px;">
@@ -441,21 +488,28 @@
     <tr class="item-row">
         <td>
             <input type="hidden" name="items-__prefix__-id" value="">
-            <select class="form-select form-select-sm producto-selector" name="items-__prefix__-producto_id" required>
+            <select class="form-select form-select-sm product-selector" name="items-__prefix__-producto_id" required>
                 <option value="" selected data-id="">Seleccione un producto...</option>
                 {% for producto in productos %}
                 <option value="{{ producto.id }}" data-id="{{ producto.id }}"
+                    data-precio="{{ producto.precio_unitario | float or 0 }}"
                     data-stock="{{ producto.stock_disponible or 0 }}">{{ producto.nombre }}</option>
                 {% endfor %}
             </select>
         </td>
         <td>
-            <input type="number" min="1" max="5000" step="1" class="form-control form-control-sm"
+            <input type="number" min="1" max="5000" step="1" class="form-control form-control-sm item-quantity"
                 name="items-__prefix__-cantidad" placeholder="Ej: 10" required>
         </td>
         <!-- <td>
             <span class="badge bg-secondary text-white stock-display">--</span>
         </td> -->
+        <td>
+            <input type="text" class="form-control form-control-sm price-display" value="0.00" readonly>
+        </td>
+        <td class="text-end">
+            <input type="text" class="form-control form-control-sm subtotal-item" value="0.00" readonly>
+        </td>
         <td class="text-center">
             <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem"><i
                     class="bi bi-trash"></i></button>
@@ -465,5 +519,15 @@
 {% endblock %}
 
 {% block extra_js %}
+
+<script>
+    window.CLIENTE_API_URL_BASE = "{{ url_for('clientes_proveedores.buscar_por_cuil', cliente_cuil='0') }}";
+</script>
+
+<script src="{{ url_for('static', filename='js/orden_venta/gestionClientes.js') }}"></script>
+
+<script src="{{ url_for('static', filename='js/orden_venta/gestionCalculos.js') }}"></script>
+
+
 <script src="{{ url_for('static', filename='js/orden_venta/formularioVenta.js') }}"></script>
 {% endblock extra_js %}

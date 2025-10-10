@@ -6,8 +6,10 @@ from app.controllers.base_controller import BaseController
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 # -------------------------
+from app.models.cliente import ClienteModel
 from app.models.pedido import PedidoModel
 from app.models.producto import ProductoModel
+from app.schemas.cliente_schema import ClienteSchema
 from app.schemas.pedido_schema import PedidoSchema
 from typing import Dict, Optional
 from marshmallow import ValidationError
@@ -24,6 +26,8 @@ class PedidoController(BaseController):
         self.model = PedidoModel()
         self.schema = PedidoSchema()
         self.producto_model = ProductoModel()
+        self.cliente_model = ClienteModel()
+        self.dcliente_schema = ClienteSchema()
         # --- INSTANCIAS NUEVAS ---
         self.lote_producto_controller = LoteProductoController()
         self.orden_produccion_controller = OrdenProduccionController()
@@ -98,12 +102,23 @@ class PedidoController(BaseController):
             if 'items-TOTAL_FORMS' in form_data:
                 form_data.pop('items-TOTAL_FORMS')
 
+
             if 'items' in form_data:
                 form_data['items'] = self._consolidar_items(form_data['items'])
 
-            validated_data = self.schema.load(form_data)
+
+            data ={
+                'nombre_cliente': form_data['nombre_cliente'], 'fecha_solicitud': form_data['fecha_solicitud'],
+                'items': form_data['items'], 'id_cliente': int(form_data['id_cliente']),
+                'precio_orden': float(form_data['total'])
+            }
+
+            validated_data = self.schema.load(data)
+
             items_data = validated_data.pop('items')
+
             pedido_data = validated_data
+
 
             # --- INICIO: Verificación de Stock ---
             logging.info("Iniciando verificación de stock para nuevo pedido...")

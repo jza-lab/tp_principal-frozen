@@ -1,5 +1,7 @@
 from marshmallow import Schema, fields, validate
 
+from app.schemas.cliente_schema import ClienteSchema
+
 ITEM_ESTADOS_VALIDOS = [
     'PENDIENTE',      # Recién agregado al pedido
     'EN_PRODUCCION',  # El producto está siendo fabricado/preparado
@@ -51,3 +53,7 @@ class PedidoSchema(Schema):
     id = fields.Int(dump_only=True)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
+
+    id_cliente = fields.Int(required=True, allow_none=True, error_messages={"required": "El ID del cliente es obligatorio."})
+    
+    cliente= fields.Nested(ClienteSchema, allow_none=True)

@@ -116,11 +116,28 @@ class ClienteController(BaseController):
             result = self.model.find_by_id(cliente_id, include_direccion=True)
             if not result['success']:
                 return self.error_response(result['error'], 404)
+            
             serialized_data = self.schema.dump(result['data'])
+            print(serialized_data)
+
             return self.success_response(data=serialized_data)
         except Exception as e:
             logger.error(f"Error obteniendo Cliente {cliente_id}: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def obtener_cliente_cuil(self, cliente_cuil: str) -> tuple:
+        """Obtener un Cliente por su ID"""
+        try:
+            result = self.model.buscar_por_cuit(cliente_cuil, include_direccion=True)
+            if not result['success']:
+                return self.error_response(result['error'], 404)
+            
+            serialized_data = self.schema.dump(result['data'])
+            return self.success_response(data=result['data'])
+        except Exception as e:
+            logger.error(f"Error obteniendo Cliente {cliente_cuil}: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
 
     def eliminar_cliente(self, cliente_id: int) -> tuple:
         """Elimina (desactiva) un Cliente por su ID"""

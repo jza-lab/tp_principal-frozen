@@ -5,6 +5,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const itemTemplate = document.getElementById('item-template');
         const totalFormsInput = document.querySelector('input[name="items-TOTAL_FORMS"]');
         const noItemsMsg = document.getElementById('no-items-msg');
+        const clienteIdOculto = document.getElementById('id_cliente');
+
+        const recalculate = typeof window.calculateOrderTotals === 'function' ? window.calculateOrderTotals : () => { };
+        const attachListeners = typeof window.attachItemListeners === 'function' ? window.attachItemListeners : () => { };
 
         // Si faltan elementos esenciales, salimos para evitar errores de null
         if (!container || !totalFormsInput) {
@@ -121,6 +125,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 const productSelect = row.querySelector('select[name$="-producto_id"]');
                 const removeButton = row.querySelector('.remove-item-btn');
 
+                attachListeners(row);
+
                 if (productSelect) {
                     // Limpiar y adjuntar listener de cambio de producto/stock
                     productSelect.removeEventListener('change', handleProductChange);
@@ -149,6 +155,8 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             toggleNoItemsMessage();
+            updateAvailableProducts();
+            recalculate()
         }
 
         /**
@@ -168,7 +176,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             newRow.scrollIntoView({
                 behavior: 'smooth',
-                block: 'nearest' 
+                block: 'nearest'
             });
 
             // La reindexación se encarga de adjuntar los listeners
@@ -192,8 +200,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     // Usamos 'start' para alinear el tope del nuevo elemento con el tope de la vista,
                     // lo cual obliga al scroll a moverse hacia arriba para seguir el contenido.
                     nextRow.scrollIntoView({
-                        behavior: 'smooth', 
-                        block: 'start' 
+                        behavior: 'smooth',
+                        block: 'start'
                     });
                 }
 
@@ -225,6 +233,29 @@ const itemsContainer = document.getElementById('items-container');
 
 form.addEventListener('submit', function (event) {
     event.preventDefault();
+
+    const totalFinalInput = document.getElementById('total-final');
+
+
+    const cuilParte1 = document.getElementById('cuil_parte1');
+    const cuilParte2 = document.getElementById('cuil_parte2');
+    const cuilParte3 = document.getElementById('cuil_parte3');
+    const cuil = document.getElementById('cuil'); // El campo oculto que enviará el CUIL
+
+
+    if (cuilParte1 && cuilParte2 && cuilParte3 && cuil) {
+        // Concatenamos el CUIL con guiones, asumiendo que tu backend lo espera así.
+        // Si tu backend SOLO espera dígitos, usa solo: cuilParte1.value + cuilParte2.value + cuilParte3.value
+        const cuilConcatenado = cuilParte1.value + "-" + cuilParte2.value + "-" + cuilParte3.value;
+
+        // Asignamos el valor al campo oculto. Este es el valor que se enviará.
+        cuil.value = cuilConcatenado;
+
+        cuilParte1.disabled = true;
+        cuilParte2.disabled = true;
+        cuilParte3.disabled = true;
+    }
+
 
     // 1. Validación de HTML5 (campos 'required', min/max, etc.)
     if (!form.checkValidity()) {

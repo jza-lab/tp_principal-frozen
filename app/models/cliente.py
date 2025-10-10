@@ -75,7 +75,7 @@ class ClienteModel(BaseModel):
             logger.error(f"Error buscando cliente por ID {cliente_id}: {e}")
             return {'success': False, 'error': str(e)}
 
-    def buscar_por_email(self, email: str) -> Optional[Dict]:
+    def buscar_por_email(self, email: str, include_direccion: bool = False) -> Dict:
         """Buscar cliente por email"""
         try:
             response = self.db.table(self.get_table_name())\
@@ -83,24 +83,24 @@ class ClienteModel(BaseModel):
                            .eq("email", email.strip().lower())\
                            .execute()
             if response.data:
-                return response.data[0], response.status_code
-            else:
-                return None, 404
+                return {'success': True, 'data': response.data}
+            return {'success': False, 'error': 'Cliente no encontrado'}
         except Exception as e:
             logger.error(f"Error buscando cliente por email {email}: {e}")
             return None, 500
 
-    def buscar_por_cuit(self, cuit: str) -> Optional[Dict]:
+    def buscar_por_cuit(self, cuit: str, include_direccion: bool = False) -> Dict:
         """Buscar cliente por CUIT/CUIL"""
         try:
+
+            query = "*, direccion:direccion_id(*)" if include_direccion else "*"
             response = self.db.table(self.get_table_name())\
-                           .select("*")\
+                           .select(query)\
                            .eq("cuit", cuit.strip())\
                            .execute()
             if response.data:
-                return response.data[0], response.status_code
-            else:
-                return None, 404
+                return {'success': True, 'data': response.data}
+            return {'success': False, 'error': 'Cliente no encontrado'}
         except Exception as e:
             logger.error(f"Error buscando cliente por CUIT {cuit}: {e}")
             return None,500

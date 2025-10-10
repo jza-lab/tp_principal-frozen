@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const alturaInput = document.getElementById('altura');
     const provinciaSelect = document.getElementById('provincia');
     const localidadInput = document.getElementById('localidad');
+
     
     async function enviarDatos() {
         if (!form.checkValidity()) {
@@ -14,7 +15,7 @@ document.addEventListener('DOMContentLoaded', function () {
         
         const formData = new FormData(form);
         const cuit = `${formData.get('cuit_parte1')}-${formData.get('cuit_parte2')}-${formData.get('cuit_parte3')}`;
-        const proveedorData = {
+        const clienteData = {
             nombre: formData.get('nombre'),
             cuit: cuit,
             email: formData.get('email'),
@@ -36,7 +37,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const respuesta = await fetch(url, {
                 method: method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(proveedorData)
+                body: JSON.stringify(clienteData)
             });
             const resultado = await respuesta.json();
 
