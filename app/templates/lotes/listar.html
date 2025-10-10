@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Listado de Lotes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #fafafa;
+            margin: 40px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #007BFF;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f8f8;
+        }
+        .tag {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            color: white;
+        }
+        .DISPONIBLE { background-color: #28a745; }
+        .VENCIDO { background-color: #dc3545; }
+        .AGOTADO { background-color: #6c757d; }
+    </style>
+</head>
+<body>
+
+<h1>Listado de Lotes</h1>
+
+{% if lotes %}
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Producto</th>
+            <th>Fecha Producción</th>
+            <th>Fecha Vencimiento</th>
+            <th>Estado</th>
+            <th>Cantidad</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for lote in lotes %}
+        <tr>
+            <td>{{ lote.id }}</td>
+            <td>
+                {% if lote.producto_id in productos %}
+                    {{ productos[lote.producto_id].nombre }}
+                {% else %}
+                    N/A
+                {% endif %}
+            </td>
+            <td>{{ lote.fecha_produccion or '-' }}</td>
+            <td>{{ lote.fecha_vencimiento or '-' }}</td>
+            <td>
+                <span class="tag {{ lote.estado }}">{{ lote.estado }}</span>
+            </td>
+            <td>{{ lote.cantidad or '-' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No hay lotes registrados.</p>
+{% endif %}
+
+</body>
+</html>

@@ -1,9 +1,18 @@
+# app/controllers/pedido_controller.py
+import logging
+from datetime import date
 from app.controllers.base_controller import BaseController
+# --- IMPORTACIONES NUEVAS ---
+from app.controllers.lote_producto_controller import LoteProductoController
+from app.controllers.orden_produccion_controller import OrdenProduccionController
+# -------------------------
 from app.models.pedido import PedidoModel
 from app.models.producto import ProductoModel
 from app.schemas.pedido_schema import PedidoSchema
 from typing import Dict, Optional
 from marshmallow import ValidationError
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class PedidoController(BaseController):
     """
@@ -14,8 +23,11 @@ class PedidoController(BaseController):
         super().__init__()
         self.model = PedidoModel()
         self.schema = PedidoSchema()
-        # Necesitamos el modelo de producto para obtener la lista de productos para el formulario.
         self.producto_model = ProductoModel()
+        # --- INSTANCIAS NUEVAS ---
+        self.lote_producto_controller = LoteProductoController()
+        self.orden_produccion_controller = OrdenProduccionController()
+        # -----------------------
 
     def _consolidar_items(self, items_data: list) -> list:
         """
@@ -29,13 +41,13 @@ class PedidoController(BaseController):
             producto_id = item.get('producto_id')
             if not producto_id:
                 continue
-            
+
             try:
                 # Las cantidades del formulario vienen como strings.
                 cantidad = int(item.get('cantidad', 0))
             except (ValueError, TypeError):
                 continue # Ignorar si la cantidad no es un número válido.
-            
+
             if cantidad <= 0:
                 continue # Ignorar items sin cantidad.
 
@@ -46,7 +58,7 @@ class PedidoController(BaseController):
                     'producto_id': producto_id,
                     'cantidad': cantidad
                 }
-        
+
         return list(consolidados.values())
 
     def obtener_pedidos(self, filtros: Optional[Dict] = None) -> tuple:
@@ -77,10 +89,10 @@ class PedidoController(BaseController):
                 return self.error_response(error_msg, status_code)
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
-            
+
     def crear_pedido_con_items(self, form_data: Dict) -> tuple:
         """
-        Valida y crea un nuevo pedido con sus items.
+        Valida y crea un nuevo pedido con sus items, verificando el stock previamente.
         """
         try:
             if 'items-TOTAL_FORMS' in form_data:
@@ -89,10 +101,35 @@ class PedidoController(BaseController):
             if 'items' in form_data:
                 form_data['items'] = self._consolidar_items(form_data['items'])
 
-            validated_data = self.schema.load(form_data)         
+            validated_data = self.schema.load(form_data)
             items_data = validated_data.pop('items')
             pedido_data = validated_data
-            
+
+            # --- INICIO: Verificación de Stock ---
+            logging.info("Iniciando verificación de stock para nuevo pedido...")
+            for item in items_data:
+                producto_id = item['producto_id']
+                cantidad_solicitada = item['cantidad']
+
+                # Obtener nombre del producto para un log más claro
+                producto_info = self.producto_model.find_by_id(producto_id, 'id')
+                nombre_producto = producto_info['data']['nombre'] if producto_info.get('success') and producto_info.get('data') else f"ID {producto_id}"
+
+                # Consultar stock disponible. Desempaquetamos la tupla (dict, status_code)
+                stock_response, _ = self.lote_producto_controller.obtener_stock_producto(producto_id)
+
+                if not stock_response.get('success'):
+                    logging.error(f"No se pudo verificar el stock para el producto '{nombre_producto}'. Error: {stock_response.get('error')}")
+                    continue
+
+                stock_disponible = stock_response['data']['stock_total']
+
+                if stock_disponible >= cantidad_solicitada:
+                    logging.info(f"STOCK SUFICIENTE para '{nombre_producto}': Solicitados: {cantidad_solicitada}, Disponible: {stock_disponible}")
+                else:
+                    logging.warning(f"STOCK INSUFICIENTE para '{nombre_producto}': Solicitados: {cantidad_solicitada}, Disponible: {stock_disponible}")
+            # --- FIN: Verificación de Stock ---
+
             if 'estado' not in pedido_data:
                 pedido_data['estado'] = 'PENDIENTE'
             result = self.model.create_with_items(pedido_data, items_data)
@@ -107,16 +144,83 @@ class PedidoController(BaseController):
                 error_message = e.messages['items'][0]
             else:
                 error_message = "Por favor, revise los campos del formulario. Se encontraron errores de validación."
-            
+
             return self.error_response(error_message, 400)
         except Exception as e:
+            logging.error(f"Error interno en crear_pedido_con_items: {e}", exc_info=True)
+            # La variable 'e' ya contiene el error original.
             return self.error_response(f'Error interno: {str(e)}', 500)
+
+
+    def aprobar_pedido(self, pedido_id: int, usuario_id: int) -> tuple:
+        """
+        Aprueba un pedido, reserva el stock disponible y genera OPs para el faltante.
+        """
+        try:
+            pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
+            if not pedido_resp.get('success'):
+                return self.error_response("Pedido no encontrado.", 404)
+
+            pedido_actual = pedido_resp['data']
+            if pedido_actual.get('estado') == 'APROBADO':
+                return self.error_response("Este pedido ya ha sido aprobado.", 400)
+
+            update_result = self.model.cambiar_estado(pedido_id, 'APROBADO')
+            if not update_result.get('success'):
+                return self.error_response("Error al actualizar el estado del pedido.", 500)
+
+            items_del_pedido = pedido_actual.get('items', [])
+            ordenes_creadas = []
+
+            for item in items_del_pedido:
+                # --- NUEVA LÓGICA DE RESERVA ---
+                reserva_result = self.lote_producto_controller.reservar_stock_para_item(
+                    pedido_id=pedido_id,
+                    pedido_item_id=item['id'], # IMPORTANTE: tu modelo debe devolver el 'id' de cada item
+                    producto_id=item['producto_id'],
+                    cantidad_necesaria=item['cantidad'],
+                    usuario_id=usuario_id
+                )
+
+                if not reserva_result.get('success'):
+                    # Si la reserva falla, es un error grave. Se podría cancelar la aprobación.
+                    logging.error(f"Falló la reserva para el pedido {pedido_id}. Motivo: {reserva_result.get('error')}")
+                    continue # Continuar con el siguiente item por ahora
+
+                # --- LÓGICA DE PRODUCCIÓN BASADA EN EL FALTANTE ---
+                cantidad_faltante = reserva_result['data']['cantidad_faltante']
+
+                if cantidad_faltante > 0:
+                    logging.info(f"Producto ID {item['producto_id']}: Faltan {cantidad_faltante} unidades. Creando Orden de Producción.")
+
+                    datos_orden = {
+                        'producto_id': item['producto_id'],
+                        'cantidad': cantidad_faltante,
+                        'fecha_planificada': date.today().isoformat()
+                    }
+
+                    resultado_op = self.orden_produccion_controller.crear_orden(datos_orden, usuario_id)
+
+                    if resultado_op.get('success'):
+                        ordenes_creadas.append(resultado_op['data'])
+                    else:
+                        logging.error(f"No se pudo crear la OP para el producto {item['producto_id']}. Error: {resultado_op.get('error')}")
+
+            msg = "Pedido aprobado con éxito. El stock ha sido reservado."
+            if ordenes_creadas:
+                msg += f" Se generaron {len(ordenes_creadas)} órdenes de producción para cubrir el faltante."
+
+            return self.success_response(data={'ordenes_creadas': ordenes_creadas}, message=msg)
+
+        except Exception as e:
+            logging.error(f"Error en aprobar_pedido: {e}", exc_info=True)
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
     def actualizar_pedido_con_items(self, pedido_id: int, form_data: Dict) -> tuple:
         """
         Valida y actualiza un pedido existente y sus items.
         """
-        try:            
+        try:
             if 'items-TOTAL_FORMS' in form_data:
                 form_data.pop('items-TOTAL_FORMS')
             if 'items' in form_data:
@@ -130,17 +234,17 @@ class PedidoController(BaseController):
                 return self.success_response(data=result.get('data'), message="Pedido actualizado con éxito.")
             else:
                 return self.error_response(result.get('error', 'No se pudo actualizar el pedido.'), 400)
-            
+
         except ValidationError as e:
             if 'items' in e.messages and isinstance(e.messages['items'], list):
                 error_message = e.messages['items'][0]
             else:
                 error_message = "Por favor, revise los campos del formulario. Se encontraron errores de validación."
-            
+
             return self.error_response(error_message, 400)
         except Exception as e:
             return self.error_response(f'Error interno: {str(e)}', 500)
-            
+
     def cancelar_pedido(self, pedido_id: int) -> tuple:
         """
         Cambia el estado de un pedido a 'CANCELADO'.
@@ -154,7 +258,7 @@ class PedidoController(BaseController):
             pedido_actual = pedido_existente_resp.get('data')
             if pedido_actual and pedido_actual.get('estado') == 'CANCELADO':
                 return self.error_response("Este pedido ya ha sido cancelado y no puede ser modificado.", 400)
-            
+
             result = self.model.cambiar_estado(pedido_id, 'CANCELADO')
             if result.get('success'):
                 return self.success_response(message="Pedido cancelado con éxito.")

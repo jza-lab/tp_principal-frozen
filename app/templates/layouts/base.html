@@ -184,5 +184,23 @@
     <script src="{{ url_for('static', filename='js/flashModal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pageTransition.js') }}"></script> 
     {% block extra_js %}{% endblock %}
+<div class="modal fade" id="resultadoAprobacionModal" tabindex="-1" aria-labelledby="resultadoModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="resultadoModalLabel">
+          <i class="bi bi-check-circle-fill text-success me-2"></i>¡Éxito!
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="resultadoModalBody">
+        </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        <a href="{{ url_for('orden_produccion.listar') }}" class="btn btn-primary">Ir a Producción</a>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

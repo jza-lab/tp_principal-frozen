@@ -16,7 +16,7 @@ class OrdenCompraController:
 
     def _parse_form_data(self, form_data):
         """
-        Parsea los datos del formulario web, incluyendo los items anidados.
+        Parsea los datos del formulario web o de un diccionario, incluyendo los items anidados.
         """
         orden_data = {
             'proveedor_id': form_data.get('proveedor_id'),
@@ -30,9 +30,19 @@ class OrdenCompraController:
         }
 
         items_data = []
-        insumo_ids = form_data.getlist('insumo_id[]')
-        cantidades = form_data.getlist('cantidad_solicitada[]')
-        precios = form_data.getlist('precio_unitario[]')
+
+        # --- LÓGICA MEJORADA ---
+        # Comprueba si form_data tiene el método 'getlist' (es un form de Flask)
+        if hasattr(form_data, 'getlist'):
+            insumo_ids = form_data.getlist('insumo_id[]')
+            cantidades = form_data.getlist('cantidad_solicitada[]')
+            precios = form_data.getlist('precio_unitario[]')
+        else:
+            # Si es un diccionario normal, accede a las claves directamente
+            insumo_ids = form_data.get('insumo_id[]', [])
+            cantidades = form_data.get('cantidad_solicitada[]', [])
+            precios = form_data.get('precio_unitario[]', [])
+        # ------------------------
 
         for i in range(len(insumo_ids)):
             if insumo_ids[i]:
@@ -47,7 +57,7 @@ class OrdenCompraController:
                 except (ValueError, IndexError) as e:
                     logger.warning(f"Error parseando item de orden de compra: {e}")
                     continue
-        
+
         return orden_data, items_data
 
     def crear_orden(self, form_data, usuario_id):
@@ -63,9 +73,9 @@ class OrdenCompraController:
             orden_data['usuario_creador_id'] = usuario_id
             orden_data['codigo_oc'] = f"OC-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
             orden_data['estado'] = 'PENDIENTE'
-            
+
             result = self.model.create_with_items(orden_data, items_data)
-            
+
             return result
 
         except Exception as e:
@@ -83,7 +93,7 @@ class OrdenCompraController:
                 return {'success': False, 'error': 'El proveedor y la fecha de emisión son obligatorios.'}
 
             result = self.model.update_with_items(orden_id, orden_data, items_data)
-            
+
             return result
 
         except Exception as e:
@@ -132,7 +142,7 @@ class OrdenCompraController:
                 filters['prioridad'] = request.args.get('prioridad')
 
             result = self.model.get_all(filters)
-            
+
             if result['success']:
                 return result, 200
             else:
@@ -156,7 +166,7 @@ class OrdenCompraController:
                 return jsonify({'success': False, 'error': result['error']}), 404
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
-    
+
     def obtener_codigos_por_insumo(self, insumo_id):
         """
         Obtiene los códigos de OC asociados a un insumo.
@@ -170,7 +180,7 @@ class OrdenCompraController:
         except Exception as e:
             logger.error(f"Error en controlador al obtener códigos de OC por insumo: {e}")
             return {'success': False, 'error': str(e)}, 500
-          
+
     def cancelar_orden(self, orden_id):
         """Endpoint específico para cancelar órdenes de compra"""
         try:
@@ -262,7 +272,7 @@ class OrdenCompraController:
                 return orden_actual_result
 
             observaciones_actuales = orden_actual_result['data'].get('observaciones', '')
-            
+
             update_data = {
                 'estado': 'RECHAZADA',
                 'observaciones': f"{observaciones_actuales}\n\nRechazada por: {motivo}",
@@ -302,9 +312,9 @@ class OrdenCompraController:
                 for i in range(len(item_ids)):
                     item_id = int(item_ids[i])
                     cantidad = float(cantidades_recibidas[i])
-                    
+
                     self.model.item_model.update(item_id, {'cantidad_recibida': cantidad})
-                    
+
                     if cantidad > 0:
                         item_info_result = self.model.item_model.find_by_id(item_id, 'id')
                         if item_info_result.get('success'):
@@ -321,7 +331,7 @@ class OrdenCompraController:
                     'updated_at': datetime.now().isoformat()
                 }
                 update_result = self.model.update(orden_id, orden_update_data)
-                
+
                 if not update_result.get('success'):
                     return update_result
 
@@ -338,7 +348,7 @@ class OrdenCompraController:
                         'documento_ingreso': f"OC-{orden_data.get('codigo_oc', 'N/A')}",
                         'f_ingreso': date.today().isoformat()
                     }
-                    
+
                     try:
                         lote_result, status_code = self.inventario_controller.crear_lote(lote_data, usuario_id)
                         if lote_result.get('success'):
@@ -357,7 +367,7 @@ class OrdenCompraController:
 
             elif accion == 'rechazar':
                 return self.rechazar_orden(orden_id, f"Rechazada en recepción: {observaciones}")
-            
+
             else:
                 return {'success': False, 'error': 'Acción no válida.'}
 
