@@ -371,6 +371,19 @@
     border-color: var(--app-primary);
 }
 
+.usuario-card .btn-primary {
+    transition: all 0.3s ease;
+}
+
+.usuario-card .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(var(--app-primary-rgb, 49, 49, 49), 0.3);
+}
+
+.usuario-card .btn-primary:active {
+    transform: translateY(0);
+}
+
 .usuario-inactivo {
     opacity: 0.65;
     background-color: #f8f9fa;

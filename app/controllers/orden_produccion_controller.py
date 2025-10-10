@@ -118,7 +118,11 @@ class OrdenProduccionController(BaseController):
             validated_data['estado'] = 'PENDIENTE'
             validated_data['usuario_creador_id'] = usuario_id # El creador es siempre el usuario logueado
 
-            return self.model.create(validated_data)
+            result = self.model.create(validated_data)
+            if result.get('success'):
+                # Serializar la salida para manejar Decimal, etc.
+                result['data'] = self.schema.dump(result['data'])
+            return result
 
         except ValidationError as e:
             return self.error_response(f"Datos inválidos: {e.messages}", 400)

@@ -37,7 +37,7 @@
 
     <!-- Contenido de las Pestañas -->
     <div class="tab-content" id="userTabsContent">
-        
+
         <!-- Panel de Todos los Usuarios -->
         <div class="tab-pane fade show active" id="users-panel" role="tabpanel">
             <!-- Barra de búsqueda y filtros -->
@@ -113,23 +113,12 @@
                             </div>
 
                             <div class="mt-auto">
-                                <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                                <div class="d-grid gap-2 action-buttons">
                                     {% if usuario.activo %}
                                         <a href="{{ url_for('admin_usuario.ver_perfil', id=usuario.id) }}" 
-                                           class="btn btn-sm btn-outline-primary" 
-                                           title="Ver detalle">
-                                            <i class="bi bi-eye"></i>
+                                           class="btn btn-sm btn-primary w-100">
+                                            <i class="bi bi-person-gear me-2"></i>Gestionar Usuario
                                         </a>
-                                        <a href="{{ url_for('admin_usuario.editar_usuario', id=usuario.id) }}" 
-                                           class="btn btn-sm btn-outline-primary" 
-                                           title="Editar usuario">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        <form method="POST" action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}" class="d-inline">
-                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Desactivar">
-                                                <i class="bi bi-person-x"></i>
-                                            </button>
-                                        </form>
                                     {% else %}
                                         <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="w-100">
                                             <button type="submit" class="btn btn-sm btn-outline-success w-100">
@@ -163,7 +152,7 @@
                 <p>Intenta con otros términos de búsqueda</p>
             </div>
         </div>
-
+        
         <!-- Panel de Actividad -->
         <div class="tab-pane fade" id="activity-panel" role="tabpanel">
             <div class="row">
@@ -241,6 +230,8 @@
             </div>
         </div>
 
+        <!-- Panel de Todos los Usuarios -->
+        
 
     </div>
 </div>

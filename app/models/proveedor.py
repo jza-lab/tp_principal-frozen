@@ -23,15 +23,28 @@ class ProveedorModel(BaseModel):
     def get_table_name(self) -> str:
         return 'proveedores'
 
+    def _convert_timestamps(self, data):
+        """Convierte campos de fecha de string a datetime para un registro o una lista."""
+        if not data:
+            return data
+
+        records = data if isinstance(data, list) else [data]
+        for record in records:
+            if record.get('created_at') and isinstance(record['created_at'], str):
+                record['created_at'] = datetime.fromisoformat(record['created_at'])
+            if record.get('updated_at') and isinstance(record['updated_at'], str):
+                record['updated_at'] = datetime.fromisoformat(record['updated_at'])
+        return data
+
     def get_all(self) -> Dict:
-        """Obtener todos los proveedores activos"""
+        """Obtener todos los proveedores"""
         try:
             response = self.db.table(self.get_table_name()).select("*").execute()
             if response.data:
                 response.data = self._convert_dates(response.data)
             return {'success': True, 'data': response.data}
         except Exception as e:
-            logger.error(f"Error obteniendo proveedores activos: {e}")
+            logger.error(f"Error obteniendo proveedores: {e}")
             return {'success': False, 'error': str(e)}
 
     def get_all_activos(self) -> Dict:
@@ -68,7 +81,7 @@ class ProveedorModel(BaseModel):
             logger.error(f"Error buscando proveedor por email {email}: {e}")
             return None, 500
 
-    def buscar_por_cuit(self, cuit: str) -> Optional[Dict]:
+    def buscar_por_cuit(self, cuit: str) -> Optional[tuple]:
         """Buscar proveedor por CUIT/CUIL"""
         try:
             response = self.db.table(self.get_table_name())\
@@ -86,23 +99,15 @@ class ProveedorModel(BaseModel):
     def buscar_por_identificacion(self, fila: Dict) -> Optional[Dict]:
         """
         Busca proveedor por email o CUIL/CUIT usando los métodos del modelo
-
-        Args:
-            fila: Diccionario con datos que pueden contener email_proveedor o cuil_proveedor
-
-        Returns:
-            Dict con datos del proveedor o None
         """
         try:
-            # Por email (prioridad)
             if fila.get('email_proveedor'):
-                proveedor = self.buscar_por_email(fila['email_proveedor'])
+                proveedor, status = self.buscar_por_email(fila['email_proveedor'])
                 if proveedor:
                     return proveedor
 
-            # Por CUIL/CUIT (alternativa)
             if fila.get('cuil_proveedor'):
-                proveedor = self.buscar_por_cuit(fila['cuil_proveedor'])
+                proveedor, status = self.buscar_por_cuit(fila['cuil_proveedor'])
                 if proveedor:
                     return proveedor
 
@@ -111,4 +116,3 @@ class ProveedorModel(BaseModel):
         except Exception as e:
             logger.error(f"Error buscando proveedor por identificación: {e}")
             return None
-        

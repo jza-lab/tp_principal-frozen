@@ -84,11 +84,20 @@ def listar_usuarios():
 @admin_usuario_bp.route('/usuarios/<int:id>')
 @permission_required(sector_codigo='ADMINISTRACION', accion='leer')
 def ver_perfil(id):
-    """Muestra el perfil de un usuario específico."""
-    usuario = usuario_controller.obtener_usuario_por_id(id)
+    """Muestra el perfil de un usuario específico, incluyendo su dirección."""
+    usuario = usuario_controller.obtener_usuario_por_id(id, include_direccion=True)
     if not usuario:
         flash('Usuario no encontrado.', 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
+    
+    # Formatear la dirección para una mejor visualización
+    if usuario.get('direccion'):
+        dir_data = usuario['direccion']
+        usuario['direccion_formateada'] = f"{dir_data.get('calle', '')} {dir_data.get('altura', '')}, " \
+                                          f"{dir_data.get('localidad', '')}, {dir_data.get('provincia', '')}"
+    else:
+        usuario['direccion_formateada'] = 'No especificada'
+
     return render_template('usuarios/perfil.html', usuario=usuario)
 
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
@@ -183,8 +192,25 @@ def editar_usuario(id):
                 flash('Error crítico: No se pudo encontrar el usuario para recargar el formulario.', 'error')
                 return redirect(url_for('admin_usuario.listar_usuarios'))
 
-            # Actualiza el diccionario del usuario con los datos del formulario que falló
-            usuario_existente.update(request.form.to_dict())
+            # Reconstruye el estado del formulario tal como lo envió el usuario.
+            # Primero, toma los datos enviados en el formulario.
+            datos_del_formulario = request.form.to_dict()
+
+            # Reconstruye el objeto de dirección anidado que el template espera.
+            direccion_enviada = {
+                'calle': datos_del_formulario.get('calle', ''),
+                'altura': datos_del_formulario.get('altura', ''),
+                'piso': datos_del_formulario.get('piso', ''),
+                'depto': datos_del_formulario.get('depto', ''),
+                'localidad': datos_del_formulario.get('localidad', ''),
+                'provincia': datos_del_formulario.get('provincia', ''),
+                'codigo_postal': datos_del_formulario.get('codigo_postal', '')
+            }
+            
+            # Actualiza el diccionario del usuario con los datos del formulario
+            usuario_existente.update(datos_del_formulario)
+            # Sobreescribe la dirección con el objeto anidado reconstruido
+            usuario_existente['direccion'] = direccion_enviada
             
             roles = usuario_controller.obtener_todos_los_roles()
             sectores = usuario_controller.obtener_todos_los_sectores()
