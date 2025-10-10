@@ -1,3 +1,4 @@
+import datetime
 import re
 from app.controllers.base_controller import BaseController
 from app.models.insumo import InsumoModel
@@ -171,6 +172,7 @@ class InsumoController(BaseController):
             result = self.insumo_model.update(id_insumo, validated_data, 'id_insumo')
 
             if result['success']:
+                validated_data['updated_at'] = datetime.now().isoformat()
                 logger.info(f"Insumo actualizado exitosamente: {id_insumo}")
                 return self.success_response(
                     data=self.schema.dump(result['data']),

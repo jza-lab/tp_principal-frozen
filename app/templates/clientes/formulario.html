@@ -31,50 +31,177 @@ Agregar nuevo cliente
                     <div class="row g-3">
                         {% if cliente %}
                         <div class="col-md-6">
-                            
-                            <label for="codigo" class="form-label">Código<span
-                                    class="text-danger">*</span></label>
-
-                            <input type="text" class="form-control" name="codigo" id="codigo"
-                                value="{{ cliente.codigo if cliente else '' }}" required {% if cliente %}readonly{%
-                                endif %}>
-
+                            <div class="form-floating">
+                                <input type="text" class="form-control" name="codigo" id="codigo"
+                                    placeholder="Código único para identificar el cliente"
+                                    value="{{ cliente.codigo if cliente else '' }}" required {% if cliente %}readonly{%
+                                    endif %}>
+                                <label for="codigo">
+                                    <i class="bi bi-key-fill me-1"></i>Código<span class="text-danger">*</span>
+                                </label>
+                            </div>
                             <div class="form-text">Código único para identificar el cliente</div>
-                            
                         </div>
                         {% endif %}
+
                         <div class="col-md-6">
-                            <label for="nombre" class="form-label">Nombre y apellido <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="nombre" id="nombre"
-                                value="{{ cliente.nombre if cliente else '' }}" required>
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="nombre" name="nombre"
+                                    placeholder="Nombre del Cliente" value="{{ cliente.nombre if cliente else '' }}"
+                                    required>
+                                <label for="nombre">
+                                    <i class="bi bi-person-circle me-1"></i>Nombre <span class="text-danger">*</span>
+                                </label>
+                            </div>
                         </div>
-                      
+
                         <div class="col-md-6">
-                            <label for="telefono" class="form-label">Teléfono <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="telefono" id="telefono"
-                                value="{{ cliente.telefono if cliente else '' }}" required>
+                            <div class="input-group">
+                                <input type="text" class="form-control text-center" id="cuit_parte1" name="cuit_parte1"
+                                    maxlength="2" pattern="\d{2}" placeholder="XX" value="{{  cliente.cuit.split('-')[0] if cliente and cliente.cuit else ''  }}" required
+                                    style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
+                                    aria-label="Código de provincia"
+                                    >
+
+                                <span class="input-group-text">-</span>
+
+                                <div class="form-floating" style="flex-grow: 4;">
+                                    <input type="text" class="form-control text-center" id="cuit_parte2"
+                                        name="cuit_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX"
+                                        required value="{{ cliente.cuit.split('-')[1] if cliente and cliente.cuit else '' }}">
+                                    <label for="cuit_parte2">
+                                        <i class="bi bi-person-badge me-1"></i>Cuit
+                                    </label>
+                                </div>
+
+                                <span class="input-group-text">-</span>
+
+                                <input type="text" class="form-control text-center" id="cuit_parte3" name="cuit_parte3"
+                                    maxlength="2" pattern="\d{1,2}" placeholder="XX" required
+                                    style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
+                                    aria-label="Dígito verificador"
+                                    value="{{ cliente.cuit.split('-')[2] if cliente and cliente.cuit else '' }}">
+
+                            </div>
                         </div>
+
+
                         <div class="col-md-6">
-                            <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
-                            <input type="email" class="form-control" name="email" id="email"
-                                value="{{ cliente.email if cliente else '' }}" required>
+                            <div class="form-floating">
+                                <input type="text" class="form-control" name="telefono" id="telefono"
+                                    placeholder="Teléfono" value="{{ cliente.telefono if cliente else '' }}"
+                                    pattern="\d{6,10}"
+                                    title="El número debe ser de hasta 9 dígitos (sin espacios ni guiones)." required>
+                                <label for="telefono">
+                                    <i class="bi bi-phone me-1"></i>Teléfono <span class="text-danger">*</span>
+                                </label>
+                            </div>
                         </div>
+
                         <div class="col-md-6">
-                            <label for="cuit" class="form-label">CUIT <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="cuit" id="cuit"
-                                value="{{ cliente.cuit if cliente else '' }}" required>
+                            <div class="form-floating">
+                                <input type="email" class="form-control" name="email" id="email" placeholder="Email"
+                                    value="{{ cliente.email if cliente else '' }}" required>
+                                <label for="email">
+                                    <i class="bi bi-envelope me-1"></i>Email <span class="text-danger">*</span>
+                                </label>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label for="direccion" class="form-label">Dirección</label>
-                            <input type="text" class="form-control" name="direccion" id="direccion"
-                                value="{{ cliente.direccion if cliente else '' }}">
-                            <div class="form-text">Dirección física del cliente</div>
+
+                        <div class="form-subsection">
+
+                            <label class="form-label">Dirección de Facturacion</label>
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="calle" name="calle"
+                                            placeholder="Calle" value="{{ cliente.direccion.calle if cliente and cliente.direccion }}" required>
+                                        <label for="calle">
+                                            <i class="bi bi-signpost me-1"></i>Calle
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="number" class="form-control" id="altura" name="altura"
+                                            placeholder="Altura" value="{{ cliente.direccion.altura if cliente and cliente.direccion }}" required>
+                                        <label for="altura">
+                                            <i class="bi bi-123 me-1"></i>Altura
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <select class="form-select" id="provincia" name="provincia" required>
+                                            <option value="">Seleccionar provincia...</option>
+                                            {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
+                                            "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
+                                            Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan",
+                                            "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del
+                                            Fuego",
+                                            "Tucumán"] %}
+                                            {% for p in provincias %}
+                                            <option value="{{ p }}" {{ 'selected' if cliente and cliente.direccion and cliente.direccion.provincia == p }}>{{ p }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <label for="provincia">
+                                            <i class="bi bi-map me-1"></i>Provincia
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="localidad" name="localidad"
+                                            placeholder="Localidad" value="{{ cliente.direccion.localidad if cliente and cliente.direccion }}" required>
+                                        <label for="localidad">
+                                            <i class="bi bi-pin-map me-1"></i>Localidad
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="piso" name="piso"
+                                            placeholder="Piso (Opcional)" value="{{ (cliente.get('direccion') or {}).get('piso', '') if cliente and cliente.direccion }}">
+                                        <label for="piso">
+                                            <i class="bi bi-building me-1"></i>Piso (Opcional)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="depto" name="depto"
+                                            placeholder="Dto (Opcional)" value="{{ (cliente.get('depto') or {}).get('piso', '') if cliente and cliente.direccion }}">
+                                        <label for="depto">
+                                            <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                                            placeholder="Código Postal" value="{{ (cliente.get('depto') or {}).get('piso', '') if cliente and cliente.direccion }}">
+                                        <label for="codigo_postal">
+                                            <i class="bi bi-mailbox me-1"></i>Código Postal
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-
                     <div class="d-flex justify-content-end gap-2 mt-4">
-                        <a href="{{ url_for('clientes_proveedores.listar_clientes') }}" class="btn btn-outline-secondary">
+                        <a href="{{ url_for('clientes_proveedores.listar_clientes') }}"
+                            class="btn btn-outline-secondary">
                             Cancelar
                         </a>
                         <button type="submit" class="btn btn-primary">
@@ -117,6 +244,6 @@ Agregar nuevo cliente
     const isEditBoolean = {{ is_edit | tojson }};
 </script>
 
-<script src="{{ url_for('static', filename='js/formulariocliente.js') }}"></script>
+<script src="{{ url_for('static', filename='js/clientes/formulariocliente.js') }}"></script>
 
 {% endblock %}

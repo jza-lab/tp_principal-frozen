@@ -52,7 +52,11 @@
                                 <li><a class="dropdown-item {% if 'orden_compra' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_compra.listar') }}"><i class="bi bi-truck me-2"></i> Compras (Ordenes)</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if 'inventario' in request.endpoint %}active{% endif %}" href="{{ url_for('inventario_view.listar_lotes') }}"><i class="bi bi-boxes me-2"></i> Inventario (Insumos)</a></li>
-                            </ul>
+                            	<li><hr class="dropdown-divider"></li>
+				<li><a class="dropdown-item {% if 'reservas' in request.endpoint %}active{% endif %}" href="{{ url_for('reservas.listar') }}"><i class="bi bi-signpost-split-fill me-2"></i> Trazabilidad de Reservas</a></li>
+        			<li><hr class="dropdown-divider"></li>
+				<li><a class="dropdown-item {% if 'precios' in request.endpoint %}active{% endif %}" href="{{ url_for('precios.index') }}"><i class="bi bi-tag-fill me-2"></i> Actualizar Precios</a></li>
+			    </ul>
                         </li>
 
                         <li class="nav-item dropdown">
@@ -184,5 +188,23 @@
     <script src="{{ url_for('static', filename='js/flashModal.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pageTransition.js') }}"></script> 
     {% block extra_js %}{% endblock %}
+<div class="modal fade" id="resultadoAprobacionModal" tabindex="-1" aria-labelledby="resultadoModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="resultadoModalLabel">
+          <i class="bi bi-check-circle-fill text-success me-2"></i>¡Éxito!
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="resultadoModalBody">
+        </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        <a href="{{ url_for('orden_produccion.listar') }}" class="btn btn-primary">Ir a Producción</a>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>

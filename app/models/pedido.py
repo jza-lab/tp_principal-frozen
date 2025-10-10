@@ -25,7 +25,7 @@ class PedidoModel(BaseModel):
             pedido_result = self.create(pedido_data)
             if not pedido_result['success']:
                 raise Exception(f"Error al crear el pedido principal: {pedido_result.get('error')}")
-            
+
             new_pedido = pedido_result['data']
             new_pedido_id = new_pedido['id']
 
@@ -56,11 +56,12 @@ class PedidoModel(BaseModel):
             return {'success': False, 'error': str(e)}
 
     def get_all_with_items(self, filtros: Optional[Dict] = None) -> Dict:
-        """
-        Obtiene todos los pedidos, cada uno con una lista de sus items.
-        """
+        """Obtiene todos los pedidos con sus items, especificando la relación."""
         try:
-            query = self.db.table(self.table_name).select("*, items:pedido_items(*, productos(nombre))")
+            query = self.db.table(self.get_table_name()).select(
+                # --- LÍNEA CORREGIDA ---
+                '*, items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre))'
+            )
             if filtros:
                 for key, value in filtros.items():
                     if value is not None:
@@ -73,24 +74,18 @@ class PedidoModel(BaseModel):
             return {'success': False, 'error': str(e)}
 
     def get_one_with_items(self, pedido_id: int) -> Dict:
-        """
-        Obtiene un pedido específico con todos sus items y datos relacionados.
-        """
+        """Obtiene un pedido con sus items, especificando la relación."""
         try:
-            response = self.db.table(self.table_name).select(
-                "*, items:pedido_items(*, producto_nombre:productos(nombre))"
-            ).eq("id", pedido_id).maybe_single().execute()
-            
-            result = response.data
-            if result:
-                for item in result.get('items', []):
-                    if item.get('producto_nombre'):
-                        item['producto_nombre'] = item['producto_nombre']['nombre']
-                    else:
-                        item['producto_nombre'] = 'N/A'
-                return {'success': True, 'data': result}
+            # --- LÍNEA CORREGIDA ---
+            result = self.db.table(self.get_table_name()).select(
+                '*, items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre))'
+            ).eq('id', pedido_id).single().execute()
+            # ------------------------
+
+            if result.data:
+                return {'success': True, 'data': result.data}
             else:
-                return {'success': False, 'error': f"Pedido con id {pedido_id} no encontrado."}
+                return {'success': False, 'error': 'Pedido no encontrado.'}
         except Exception as e:
             logger.error(f"Error al obtener el pedido {pedido_id} con items: {str(e)}")
             return {'success': False, 'error': str(e)}
@@ -115,7 +110,7 @@ class PedidoModel(BaseModel):
                 existing_items_by_product[pid].append(item)
 
             incoming_items_by_product = {int(item['producto_id']): item for item in items_data}
-            
+
             form_product_ids = set(incoming_items_by_product.keys())
             db_product_ids = set(existing_items_by_product.keys())
 
@@ -125,7 +120,7 @@ class PedidoModel(BaseModel):
                 items_for_deletion = existing_items_by_product.get(pid, [])
                 if any(item['estado'] != 'PENDIENTE' for item in items_for_deletion):
                     raise Exception(f"No se puede eliminar el producto ID {pid} porque ya está en producción.")
-                
+
                 item_ids_to_delete = [i['id'] for i in items_for_deletion]
                 self.db.table('pedido_items').delete().in_('id', item_ids_to_delete).execute()
 
@@ -133,7 +128,7 @@ class PedidoModel(BaseModel):
             for pid, new_item_data in incoming_items_by_product.items():
                 nueva_cantidad_total = int(new_item_data['cantidad'])
                 existing_items = existing_items_by_product.get(pid, [])
-                
+
                 is_simple_case = len(existing_items) == 1 and existing_items[0]['estado'] == 'PENDIENTE'
 
                 if is_simple_case:
@@ -141,10 +136,10 @@ class PedidoModel(BaseModel):
                     if nueva_cantidad_total > 0:
                         logger.info(f"Caso simple para producto {pid}: actualizando cantidad a {nueva_cantidad_total}.")
                         self.db.table('pedido_items').update({'cantidad': nueva_cantidad_total}).eq('id', simple_item['id']).execute()
-                    else: 
+                    else:
                         logger.info(f"Caso simple para producto {pid}: cantidad es 0, eliminando item.")
                         self.db.table('pedido_items').delete().eq('id', simple_item['id']).execute()
-                    continue 
+                    continue
 
                 cantidad_existente_total = sum(i['cantidad'] for i in existing_items)
 
@@ -153,7 +148,7 @@ class PedidoModel(BaseModel):
                     self.db.table('pedido_items').insert({
                         'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': cantidad_a_anadir, 'estado': 'PENDIENTE'
                     }).execute()
-                
+
                 elif nueva_cantidad_total < cantidad_existente_total:
                     cantidad_a_reducir = cantidad_existente_total - nueva_cantidad_total
                     items_pendientes = [i for i in existing_items if i['estado'] == 'PENDIENTE']
@@ -161,10 +156,10 @@ class PedidoModel(BaseModel):
 
                     if cantidad_a_reducir > cantidad_pendiente_total:
                         raise Exception(f"No se puede reducir la cantidad para el producto {pid}. Se intentan reducir {cantidad_a_reducir} unidades, pero solo hay {cantidad_pendiente_total} en estado PENDIENTE.")
-                    
+
                     if items_pendientes:
                         self.db.table('pedido_items').delete().in_('id', [i['id'] for i in items_pendientes]).execute()
-                    
+
                     nueva_cantidad_pendiente = cantidad_pendiente_total - cantidad_a_reducir
                     if nueva_cantidad_pendiente > 0:
                         self.db.table('pedido_items').insert({
@@ -178,7 +173,7 @@ class PedidoModel(BaseModel):
                 'COMPLETADO': 'COMPLETADO',
                 'CANCELADO': 'CANCELADO'
             }
-            
+
             if pedido_status in status_mapping:
                 target_item_status = status_mapping[pedido_status]
                 logger.info(f"Propagando estado '{target_item_status}' a items pendientes del pedido {pedido_id}.")
@@ -200,13 +195,13 @@ class PedidoModel(BaseModel):
         """
         try:
             update_result = self.update(id_value=pedido_id, data={'estado': nuevo_estado}, id_field='id')
-            
+
             if not update_result['success']:
                 return update_result
 
             if nuevo_estado == 'CANCELADO':
                 logger.info(f"Pedido {pedido_id} cancelado. Cancelando sus items 'PENDIENTE'...")
-                
+
                 items_update_result = self.db.table('pedido_items').update(
                     {'estado': 'CANCELADO'}
                 ).eq('pedido_id', pedido_id).eq('estado', 'PENDIENTE').execute()
@@ -226,15 +221,15 @@ class PedidoModel(BaseModel):
         """
         try:
             items_result = self.db.table('pedido_items').select('estado').eq('pedido_id', pedido_id).execute()
-            
+
             if not items_result.data:
                 logger.warning(f"No se encontraron items para el pedido {pedido_id} al actualizar estado agregado.")
                 return {'success': True, 'message': 'No items found.'}
 
             estados_items = {item['estado'] for item in items_result.data}
-            
+
             nuevo_estado_pedido = None
-            
+
             # Lógica de estados:
             # Si TODOS los items están 'ALISTADO', el pedido está listo para entrega.
             if all(estado == 'ALISTADO' for estado in estados_items):
@@ -242,11 +237,11 @@ class PedidoModel(BaseModel):
             # Si AL MENOS UNO está 'EN_PRODUCCION', el pedido está en proceso.
             elif 'EN_PRODUCCION' in estados_items:
                 nuevo_estado_pedido = 'EN_PROCESO'
-            
+
             if nuevo_estado_pedido:
                 logger.info(f"Actualizando estado del pedido {pedido_id} a '{nuevo_estado_pedido}'.")
                 return self.cambiar_estado(pedido_id, nuevo_estado_pedido)
-            
+
             return {'success': True, 'message': 'No state change required.'}
 
         except Exception as e:
@@ -278,7 +273,7 @@ class PedidoModel(BaseModel):
                         query = query.eq(key, value)
 
             result = query.order("id", desc=True).execute()
-            
+
             # Limpiar y aplanar los datos anidados para un uso más fácil en la plantilla
             for item in result.data:
                 # Extraer el nombre del producto
@@ -287,7 +282,7 @@ class PedidoModel(BaseModel):
                     item['producto_nombre'] = prod_nombre_data.get('nombre') or 'N/A'
                 elif not prod_nombre_data:
                     item['producto_nombre'] = 'N/A'
-                
+
                 # Extraer el nombre del cliente
                 pedido_data = item.get('pedido')
                 if isinstance(pedido_data, dict):
@@ -303,13 +298,14 @@ class PedidoModel(BaseModel):
             logger.error(f"Error al obtener items de pedido: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    def update_items(self, item_ids: List[int], data: Dict) -> Dict:
-        """
-        Actualiza múltiples items de pedido en un solo lote.
-        """
+    def update_item(self, item_id: int, data: Dict) -> Dict:
+        """Actualiza un único ítem de pedido."""
         try:
-            result = self.db.table('pedido_items').update(data).in_('id', item_ids).execute()
-            return {'success': True, 'data': result.data}
+            # Asumiendo que la tabla de items se llama 'pedido_items'
+            result = self.db.table('pedido_items').update(data).eq('id', item_id).execute()
+            if result.data:
+                return {'success': True, 'data': result.data[0]}
+            return {'success': False, 'error': 'No se pudo actualizar el ítem o no fue encontrado.'}
         except Exception as e:
-            logger.error(f"Error al actualizar items de pedido: {str(e)}")
+            logging.error(f"Error actualizando pedido_item {item_id}: {e}")
             return {'success': False, 'error': str(e)}

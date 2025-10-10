@@ -21,13 +21,13 @@ def index():
         'estado': ('eq', 'PENDIENTE'),
         'orden_produccion_id': ('is', 'null')
     })
-    
+
     items = []
     if items_result.get('success'):
         items = items_result.get('data', [])
     else:
         flash('Error al cargar los ítems para planificar.', 'error')
-        
+
     return render_template('planificacion/index.html', items=items)
 
 @planificacion_bp.route('/crear_orden', methods=['POST'])
@@ -43,19 +43,19 @@ def crear_orden():
 
     # Convertir IDs a enteros
     selected_items_ids = [int(id) for id in selected_items_ids]
-    
+
     # Obtener los detalles completos de los items seleccionados
     items_result = pedido_model.find_all_items(filters={'id': ('in', selected_items_ids)})
     if not items_result.get('success'):
         flash('Error al obtener los detalles de los ítems seleccionados.', 'error')
         return redirect(url_for('planificacion.index'))
-        
+
     all_items = items_result['data']
-    
+
     # Agrupar items por producto_id
     all_items.sort(key=itemgetter('producto_id'))
     grouped_items = {k: list(v) for k, v in groupby(all_items, key=itemgetter('producto_id'))}
-    
+
     usuario_id = session.get('usuario_id')
     if not usuario_id:
         flash('Error de autenticación. Por favor, inicie sesión de nuevo.', 'error')
@@ -67,13 +67,13 @@ def crear_orden():
     # Crear una orden de producción por cada grupo de producto
     for producto_id, items_del_producto in grouped_items.items():
         item_ids_del_producto = [item['id'] for item in items_del_producto]
-        
+
         resultado = orden_produccion_controller.crear_orden_desde_planificacion(
-            producto_id=producto_id, 
+            producto_id=producto_id,
             item_ids=item_ids_del_producto,
             usuario_id=usuario_id
         )
-        
+
         if resultado.get('success'):
             ordenes_creadas += 1
         else:
@@ -82,7 +82,7 @@ def crear_orden():
 
     if ordenes_creadas > 0:
         flash(f'{ordenes_creadas} orden(es) de producción creadas exitosamente.', 'success')
-    
+
     for error in errores:
         flash(error, 'error')
 

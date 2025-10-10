@@ -7,6 +7,14 @@ from app.controllers.producto_controller import ProductoController
 from app.controllers.receta_controller import RecetaController
 from app.controllers.usuario_controller import UsuarioController
 from datetime import datetime
+import logging
+
+# --- NUEVAS IMPORTACIONES Y DEPENDENCIAS ---
+from app.controllers.inventario_controller import InventarioController
+from app.controllers.orden_compra_controller import OrdenCompraController
+from datetime import date
+
+logger = logging.getLogger(__name__)
 
 class OrdenProduccionController(BaseController):
     """
@@ -17,10 +25,13 @@ class OrdenProduccionController(BaseController):
         super().__init__()
         self.model = OrdenProduccionModel()
         self.schema = OrdenProduccionSchema()
-        
         self.producto_controller = ProductoController()
         self.receta_controller = RecetaController()
         self.usuario_controller = UsuarioController()
+        # --- NUEVOS CONTROLADORES ---
+        self.inventario_controller = InventarioController()
+        self.orden_compra_controller = OrdenCompraController()
+
 
     def obtener_ordenes(self, filtros: Optional[Dict] = None) -> tuple:
         """
@@ -41,10 +52,10 @@ class OrdenProduccionController(BaseController):
 
     def obtener_cantidad_ordenes_estado(self, estado: str, fecha: Optional[str] = None) -> Optional[Dict]:
         filtros = {'estado': estado} if estado else {}
-        
+
         if fecha:
             filtros['fecha_planificada'] = fecha
-        
+
         response, status_code = self.obtener_ordenes(filtros)
         if(response.get('success')):
             ordenes=response.get('data', [])
@@ -55,7 +66,7 @@ class OrdenProduccionController(BaseController):
             status_code = 404 if "no encontradas" in str(error_msg).lower() else 500
             return self.error_response(error_msg, status_code)
 
-        
+
 
     def obtener_orden_por_id(self, orden_id: int) -> Optional[Dict]:
         """
@@ -89,7 +100,7 @@ class OrdenProduccionController(BaseController):
             # Mapear 'cantidad' del formulario a 'cantidad_planificada' del esquema
             if 'cantidad' in form_data:
                 form_data['cantidad_planificada'] = form_data.pop('cantidad')
-            
+
             # Obtener el ID del supervisor del formulario y asegurarse de que sea un entero si existe
             supervisor_id = form_data.get('supervisor_responsable_id')
             if supervisor_id:
@@ -108,7 +119,7 @@ class OrdenProduccionController(BaseController):
 
             if not receta_result.get('success') or not receta_result.get('data'):
                 return self.error_response(f'No se encontró una receta activa para el producto seleccionado (ID: {producto_id}).', 404)
-            
+
             receta = receta_result['data'][0]
             form_data['receta_id'] = receta['id']
 
@@ -149,14 +160,82 @@ class OrdenProduccionController(BaseController):
 
     def aprobar_orden(self, orden_id: int, usuario_id: int) -> Dict:
         """
-        Aprueba una orden, reserva el stock y cambia el estado a APROBADA.
+        Aprueba una orden, reserva insumos y si faltan, crea una Orden de Compra.
         """
-        # Esta lógica debería idealmente estar en una función RPC en la BD
-        # para asegurar la atomicidad. Por ahora, se simula aquí.
-        # Se necesita un método en el modelo para manejar esto.
-        # return self.model.aprobar_y_reservar(orden_id, usuario_id)
-        # Como no tenemos el método del modelo, lo simulamos cambiando el estado.
-        return self.model.cambiar_estado(orden_id, 'APROBADA')
+        try:
+            # 1. Obtener la orden de producción completa
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden_produccion = orden_result['data']
+
+            if orden_produccion['estado'] != 'PENDIENTE':
+                return self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
+
+            # 2. Cambiar el estado a APROBADA
+            self.cambiar_estado_orden(orden_id, 'APROBADA')
+
+            # 3. Intentar reservar los insumos necesarios
+            reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
+
+            if not reserva_result.get('success'):
+                # Si la reserva falla, podríamos revertir el estado o simplemente notificar
+                return self.error_response(f"Se aprobó la orden, pero falló la reserva de insumos: {reserva_result.get('error')}", 500)
+
+            # 4. Verificar si hay insumos faltantes y crear Orden de Compra
+            insumos_faltantes = reserva_result['data']['insumos_faltantes']
+            orden_compra_creada = None
+
+            if insumos_faltantes:
+                logger.info(f"Faltan insumos para la OP {orden_id}. Generando Orden de Compra automática.")
+                resultado_oc = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id)
+                if resultado_oc.get('success'):
+                    orden_compra_creada = resultado_oc.get('data')
+
+            # 5. Devolver una respuesta completa
+            message = "Orden de Producción aprobada y stock de insumos reservado."
+            if orden_compra_creada:
+                message += f" Se generó la Orden de Compra {orden_compra_creada['codigo_oc']} para cubrir faltantes."
+
+            return self.success_response({'orden_compra_generada': orden_compra_creada}, message)
+
+        except Exception as e:
+            logger.error(f"Error en el proceso de aprobación de OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
+
+    def _generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int) -> Dict:
+        """
+        Helper para crear una OC a partir de una lista de insumos faltantes.
+        NOTA: Esta es una implementación simple. Una versión avanzada podría agrupar por proveedor.
+        """
+        # Simplificación: Asumimos un proveedor por defecto o el primero que encontremos.
+        # Aquí deberías implementar tu lógica para seleccionar al proveedor adecuado.
+        proveedor_id_por_defecto = 1 # ¡¡IMPORTANTE: CAMBIAR ESTO!!
+
+        items_oc = []
+        for insumo in insumos_faltantes:
+            items_oc.append({
+                'insumo_id': insumo['insumo_id'],
+                'cantidad_solicitada': insumo['cantidad_faltante'],
+                'precio_unitario': 0  # El precio se deberá negociar/actualizar después
+            })
+
+        datos_oc = {
+            'proveedor_id': proveedor_id_por_defecto,
+            'fecha_emision': date.today().isoformat(),
+            'prioridad': 'ALTA',
+            'observaciones': 'Orden de Compra generada automáticamente para cubrir faltante de producción.',
+        }
+
+        # Simulamos los datos como si vinieran de un form para reusar el método del controlador
+        form_data_simulado = {
+            **datos_oc,
+            'insumo_id[]': [item['insumo_id'] for item in items_oc],
+            'cantidad_solicitada[]': [item['cantidad_solicitada'] for item in items_oc],
+            'precio_unitario[]': [item['precio_unitario'] for item in items_oc]
+        }
+
+        return self.orden_compra_controller.crear_orden(form_data_simulado, usuario_id)
 
     def rechazar_orden(self, orden_id: int, motivo: str) -> Dict:
         """
@@ -187,7 +266,7 @@ class OrdenProduccionController(BaseController):
             items_result = pedido_model.find_all_items(filters={'id': ('in', item_ids)})
             if not items_result.get('success') or not items_result.get('data'):
                 return {'success': False, 'error': 'No se encontraron los ítems de pedido para consolidar.'}
-            
+
             items = items_result['data']
             cantidad_total = sum(item['cantidad'] for item in items)
 
@@ -200,7 +279,7 @@ class OrdenProduccionController(BaseController):
             # 3. Crear la orden de producción
             datos_orden = {
                 'producto_id': producto_id,
-                'cantidad_planificada': cantidad_total, 
+                'cantidad_planificada': cantidad_total,
                 'fecha_planificada': date.today().isoformat(),
                 'receta_id': receta['id'],
                 'prioridad': 'NORMAL'
@@ -208,7 +287,7 @@ class OrdenProduccionController(BaseController):
             resultado_creacion = self.crear_orden(datos_orden, usuario_id)
 
             if not resultado_creacion.get('success'):
-                return resultado_creacion 
+                return resultado_creacion
 
             # 4. Actualizar los ítems de pedido en lote
             orden_creada = resultado_creacion['data']

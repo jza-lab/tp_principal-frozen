@@ -1,0 +1,59 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Trazabilidad de Reservas - Sistema Frozen{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">Trazabilidad de Reservas</h1>
+        <p class="text-muted mb-0">Historial unificado de reservas de stock para productos e insumos.</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Fecha</th>
+                        <th>Ítem Reservado</th>
+                        <th>Cantidad</th>
+                        <th>Lote</th>
+                        <th>Documento Origen</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reserva in reservas %}
+                    <tr>
+                        <td>
+                            {% if reserva.tipo == 'PRODUCTO' %}
+                                <span class="badge bg-primary">Producto</span>
+                            {% else %}
+                                <span class="badge bg-info">Insumo</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ reserva.fecha.strftime('%Y-%m-%d %H:%M') if reserva.fecha else 'N/A' }}</td>
+                        <td><strong>{{ reserva.item_nombre }}</strong></td>
+                        <td>{{ reserva.cantidad }}</td>
+                        <td><code>{{ reserva.lote }}</code></td>
+                        <td>
+                            <a href="{{ reserva.origen_url }}">{{ reserva.origen }}</a>
+                        </td>
+                        <td>
+                            <span class="badge rounded-pill text-bg-secondary">{{ reserva.estado }}</span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">No se encontraron registros de reservas.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
