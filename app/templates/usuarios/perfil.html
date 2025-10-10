@@ -8,7 +8,7 @@
     <div class="profile-header-section">
         <div class="d-flex justify-content-between align-items-start">
             <div class="d-flex align-items-center gap-3">
-                <a href="{{ url_for('admin_usuario.listar_usuarios') }}" class="btn-back" title="Volver a la lista">
+                <a href="{{ url_for('admin_usuario.listar_usuarios') }}" class="btn-back">
                     <i class="bi bi-arrow-left"></i>
                 </a>
                 <div>
@@ -168,7 +168,7 @@
                     
                     <div class="info-item" data-field="turno">
                         <label class="info-label">Turno</label>
-                        <div class="info-value" id="value-turno">{{ usuario.turno or 'No especificado' }}</div>
+                        <div class="info-value" id="value-turno">{{ usuario.turno.nombre if usuario.turno else 'No especificado' }}</div>
                     </div>
                     
                     <div class="info-item" data-field="fecha_ingreso">
@@ -196,7 +196,7 @@
                     <div class="info-item">
                         <label class="info-label">Último Login Web</label>
                         <div class="info-value">
-                           {% if usuario.ultimo_login_web and usuario.ultimo_login_web.strftime %}
+                            {% if usuario.ultimo_login_web %}
                                 {{ usuario.ultimo_login_web.strftime('%d/%m/%Y %H:%M') }}
                             {% else %}
                                 Nunca
@@ -207,7 +207,7 @@
                     <div class="info-item">
                         <label class="info-label">Último Login Tótem</label>
                         <div class="info-value">
-                            {% if usuario.ultimo_login_totem and usuario.ultimo_login_totem.strftime %}
+                            {% if usuario.ultimo_login_totem %}
                                 {{ usuario.ultimo_login_totem.strftime('%d/%m/%Y %H:%M') }}
                             {% else %}
                                 Nunca
@@ -244,8 +244,8 @@
             </div>
         </div>
     </div>
-
+</div>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/perfil.css') }}">
 <script src="{{ url_for('static', filename='js/usuarios/perfil.js') }}"></script>
-<script src="{{ url_for('static', filename='js/usuarios/habilitar_usuario.js') }}"></script>
-<link href="{{ url_for('static', filename='css/usuarios/perfil.css') }}" rel="stylesheet">
+
 {% endblock %}

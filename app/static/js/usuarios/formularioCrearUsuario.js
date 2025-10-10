@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const provinciaSelect = document.getElementById('provincia');
     const localidadInput = document.getElementById('localidad');
     const pisoInput = document.getElementById('piso');
-    const departamentoInput = document.getElementById('departamento');
+    const departamentoInput = document.getElementById('depto');
     const direccionInput = document.getElementById('direccion');
     const addressFeedback = document.getElementById('address-feedback');
     const requiredInputsStep2 = addressInfoSection ? addressInfoSection.querySelectorAll('input[required], select[required]') : [];
@@ -70,6 +70,8 @@ document.addEventListener('DOMContentLoaded', function () {
         rol: false,
         cuil_cuit: false,
         telefono: false,
+        turno: false,
+        sectores: false,
         step1Complete: false,
         // Paso 2
         calle: false,
@@ -79,6 +81,159 @@ document.addEventListener('DOMContentLoaded', function () {
         step2Complete: false,
         addressVerified: false
     };
+
+    // ==================== SELECTOR DE ROLES ====================
+    const rolCards = document.querySelectorAll('.rol-card');
+    const rolInput = document.getElementById('role_id');
+    let selectedRol = rolInput ? rolInput.value : null;
+
+    // Inicializar rol seleccionado si existe
+    if (selectedRol) {
+        rolCards.forEach(card => {
+            if (card.dataset.rolId === selectedRol) {
+                card.classList.add('selected');
+            }
+        });
+        validationState.rol = true;
+    }
+
+    rolCards.forEach(card => {
+        card.addEventListener('click', function() {
+            // Remover selección anterior
+            rolCards.forEach(c => c.classList.remove('selected'));
+            
+            // Seleccionar nuevo rol
+            this.classList.add('selected');
+            selectedRol = this.dataset.rolId;
+            if (rolInput) rolInput.value = selectedRol;
+            
+            validationState.rol = true;
+            updateStepButtonState();
+            
+            console.log('Rol seleccionado:', selectedRol);
+        });
+    });
+
+    // ==================== SELECTOR DE TURNOS ====================
+    const turnoCards = document.querySelectorAll('.turno-card');
+    const turnoInput = document.getElementById('turno_id');
+    let selectedTurno = turnoInput ? turnoInput.value : null;
+
+    // Inicializar turno seleccionado si existe
+    if (selectedTurno) {
+        turnoCards.forEach(card => {
+            if (card.dataset.turnoId === selectedTurno) {
+                card.classList.add('selected');
+            }
+        });
+        validationState.turno = true;
+    }
+
+    turnoCards.forEach(card => {
+        card.addEventListener('click', function() {
+            // Remover selección anterior
+            turnoCards.forEach(c => c.classList.remove('selected'));
+            
+            // Seleccionar nuevo turno
+            this.classList.add('selected');
+            selectedTurno = this.dataset.turnoId;
+            if (turnoInput) turnoInput.value = selectedTurno;
+            
+            validationState.turno = true;
+            updateStepButtonState();
+            
+            console.log('Turno seleccionado:', selectedTurno);
+        });
+    });
+
+    // ==================== SELECTOR DE SECTORES ====================
+    const MAX_SECTORES = 2;
+    let selectedSectores = [];
+    
+    const sectorCards = document.querySelectorAll('.sector-card');
+    const sectoresInput = document.getElementById('sectores');
+    const counterText = document.getElementById('counterText');
+    const sectoresCounter = document.getElementById('sectoresCounter');
+
+    // Inicializar sectores seleccionados si existen
+    sectorCards.forEach(card => {
+        if (card.dataset.selected === 'true') {
+            card.classList.add('selected');
+            selectedSectores.push(card.dataset.sectorId);
+        }
+    });
+
+    if (selectedSectores.length > 0) {
+        validationState.sectores = true;
+        updateSectorOrder();
+        updateSectoresCounter();
+        if (sectoresInput) sectoresInput.value = JSON.stringify(selectedSectores);
+    }
+
+    function updateSectoresCounter() {
+        if (!counterText) return;
+        
+        counterText.textContent = `${selectedSectores.length}/${MAX_SECTORES}`;
+        
+        if (selectedSectores.length === MAX_SECTORES) {
+            sectoresCounter.classList.add('warning');
+            // Deshabilitar cards no seleccionadas
+            sectorCards.forEach(card => {
+                if (!card.classList.contains('selected')) {
+                    card.classList.add('disabled');
+                }
+            });
+        } else {
+            sectoresCounter.classList.remove('warning');
+            // Habilitar todas las cards
+            sectorCards.forEach(card => {
+                card.classList.remove('disabled');
+            });
+        }
+
+        // Actualizar estado de validación
+        validationState.sectores = selectedSectores.length > 0;
+        updateStepButtonState();
+    }
+
+    function updateSectorOrder() {
+        sectorCards.forEach(card => {
+            if (card.classList.contains('selected')) {
+                const order = selectedSectores.indexOf(card.dataset.sectorId) + 1;
+                const badge = card.querySelector('.sector-badge');
+                if (badge) badge.textContent = order;
+            }
+        });
+    }
+
+    sectorCards.forEach(card => {
+        card.addEventListener('click', function() {
+            if (this.classList.contains('disabled')) return;
+            
+            const sectorId = this.dataset.sectorId;
+            
+            if (this.classList.contains('selected')) {
+                // Deseleccionar
+                this.classList.remove('selected');
+                selectedSectores = selectedSectores.filter(id => id !== sectorId);
+            } else {
+                // Seleccionar solo si no se alcanzó el máximo
+                if (selectedSectores.length < MAX_SECTORES) {
+                    this.classList.add('selected');
+                    selectedSectores.push(sectorId);
+                }
+            }
+            
+            updateSectorOrder();
+            updateSectoresCounter();
+            if (sectoresInput) sectoresInput.value = JSON.stringify(selectedSectores);
+            
+            console.log('Sectores seleccionados:', selectedSectores);
+        });
+    });
+
+    // Inicializar contador
+    updateSectoresCounter();
 
     // --- FUNCIONES DE VALIDACIÓN ---
 
@@ -389,42 +544,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         
         updateStepButtonState();
-        updateDireccionCompleta();
-    }
-
-    function updateDireccionCompleta() {
-        if (!direccionInput) return;
-        
-        const calle = calleInput ? calleInput.value.trim() : '';
-        const altura = alturaInput ? alturaInput.value.trim() : '';
-        const piso = pisoInput ? pisoInput.value.trim() : '';
-        const depto = departamentoInput ? departamentoInput.value.trim() : '';
-        const localidad = localidadInput ? localidadInput.value.trim() : '';
-        const provincia = provinciaSelect ? provinciaSelect.value : '';
-        
-        let direccionCompleta = '';
-        
-        if (calle && altura) {
-            direccionCompleta = `${calle} ${altura}`;
-            
-            if (piso) {
-                direccionCompleta += `, Piso ${piso}`;
-            }
-            
-            if (depto) {
-                direccionCompleta += `, Dpto ${depto}`;
-            }
-            
-            if (localidad) {
-                direccionCompleta += `, ${localidad}`;
-            }
-            
-            if (provincia) {
-                direccionCompleta += `, ${provincia}`;
-            }
-        }
-        
-        direccionInput.value = direccionCompleta;
     }
 
     function checkStep1Complete() {
@@ -444,6 +563,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             validationState.password &&
                             validationState.cuil_cuit &&
                             validationState.telefono &&
+                            validationState.sectores &&
                             allFilled;
         
         validationState.step1Complete = isStep1Valid;
@@ -592,7 +712,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (calleInput.value.trim().length > 0) {
                 validateAddressField('calle');
             }
-            updateDireccionCompleta();
         });
     }
 
@@ -603,7 +722,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (alturaInput.value.trim().length > 0) {
                 validateAddressField('altura');
             }
-            updateDireccionCompleta();
         });
     }
 
@@ -611,7 +729,6 @@ document.addEventListener('DOMContentLoaded', function () {
         provinciaSelect.addEventListener('change', () => {
             verifyAddress();
             validateAddressField('provincia');
-            updateDireccionCompleta();
         });
         provinciaSelect.addEventListener('blur', () => validateAddressField('provincia'));
     }
@@ -623,16 +740,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (localidadInput.value.trim().length > 0) {
                 validateAddressField('localidad');
             }
-            updateDireccionCompleta();
         });
-    }
-
-    if (pisoInput) {
-        pisoInput.addEventListener('input', updateDireccionCompleta);
-    }
-
-    if (departamentoInput) {
-        departamentoInput.addEventListener('input', updateDireccionCompleta);
     }
 
     requiredInputsStep2.forEach(input => {
@@ -691,7 +799,7 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (step === 3) {
             if (!checkStep2Complete()) {
                 const message = !validationState.addressVerified 
-                    ? 'La dirección ingresada no pudo ser verificada. Por favor, corríjala antes de continuar.'
+                    ? 'La dirección ingresada no pudo ser verificada. Por favor, corrÃ­jala antes de continuar.'
                     : 'Por favor, complete todos los campos de dirección obligatorios antes de continuar.';
                 showNotificationModal('Dirección Inválida', message, 'warning');
                 return;

@@ -151,59 +151,102 @@
                             <i class="bi bi-briefcase me-2"></i>Información Laboral
                         </h6>
                         <div class="row g-3">
-                            <div class="col-md-6">
-                                <div class="form-floating">
-                                    <select class="form-select" id="role_id" name="role_id" required>
-                                        <option value="">Seleccionar rol...</option>
-                                        {% for rol in roles %}
-                                        <option value="{{ rol.id }}" {% if usuario and usuario.role_id == rol.id %}selected{% endif %}>
-                                            {{ rol.nombre }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                    <label for="role_id">
-                                        <i class="bi bi-shield-check me-1"></i>Rol
-                                    </label>
+                            <!-- Selector de Rol Interactivo -->
+                            <div class="col-12">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-shield-check me-1"></i>Rol del Usuario
+                                </label>
+                                <div class="roles-grid" id="rolesGrid">
+                                    {% for rol in roles %}
+                                    <div class="rol-card" data-rol-id="{{ rol.id }}"
+                                         {% if usuario and usuario.role_id == rol.id %}data-selected="true"{% endif %}>
+                                        <div class="rol-icon">
+                                            <i class="bi bi-{% if 'admin' in rol.nombre.lower() %}shield-fill-check{% elif 'supervisor' in rol.nombre.lower() %}person-badge{% elif 'operario' in rol.nombre.lower() %}person-gear{% elif 'rrhh' in rol.nombre.lower() or 'recursos' in rol.nombre.lower() %}people-fill{% else %}person-circle{% endif %}"></i>
+                                        </div>
+                                        <p class="rol-nombre">{{ rol.nombre }}</p>
+                                        <div class="rol-check">
+                                            <i class="bi bi-check-lg"></i>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
                                 </div>
+                                <input type="hidden" id="role_id" name="role_id" value="{{ usuario.role_id or '' }}" required>
                                 <div class="invalid-feedback"></div>
                             </div>
 
-                            <div class="col-md-6">
-                                <div class="form-floating">
-                                    <select class="form-select" id="turno_id" name="turno_id">
-                                        <option value="">Seleccionar turno...</option>
-                                        {% for turno in turnos %}
-                                        <option value="{{ turno.id }}" {% if usuario and usuario.turno_id == turno.id %}selected{% endif %}>
-                                            {{ turno.nombre }} ({{ turno.hora_inicio[:5] }} - {{ turno.hora_fin[:5] }})
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                    <label for="turno_id">
-                                        <i class="bi bi-clock-history me-1"></i>Turno
-                                    </label>
+                            <!-- Selector de Turno Interactivo -->
+                            <div class="col-12">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-clock-history me-1"></i>Turno de Trabajo
+                                </label>
+                                <div class="turno-grid" id="turnoGrid">
+                                    {% for turno in turnos %}
+                                    <div class="turno-card" data-turno-id="{{ turno.id }}" 
+                                         {% if usuario and usuario.turno_id == turno.id %}data-selected="true"{% endif %}>
+                                        <div class="turno-header">
+                                            <div class="turno-nombre">
+                                                <i class="bi bi-{% if 'mañana' in turno.nombre.lower() or 'manana' in turno.nombre.lower() %}sunrise{% elif 'tarde' in turno.nombre.lower() %}sun{% elif 'noche' in turno.nombre.lower() %}moon-stars{% else %}clock{% endif %}"></i>
+                                                {{ turno.nombre }}
+                                            </div>
+                                            <div class="turno-check">
+                                                <i class="bi bi-check-lg"></i>
+                                            </div>
+                                        </div>
+                                        <div class="turno-horario">
+                                            <i class="bi bi-clock"></i>
+                                            <span class="turno-time">{{ turno.hora_inicio[:5] }} - {{ turno.hora_fin[:5] }}</span>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
                                 </div>
+                                <input type="hidden" id="turno_id" name="turno_id" value="{{ usuario.turno_id or '' }}">
                             </div>
 
-                            <div class="col-12">
-                                <label for="sectores" class="form-label">
+                            <!-- Selector de Sectores Interactivo -->
+                            <div class="col-12 mt-4">
+                                <label class="form-label fw-bold">
                                     <i class="bi bi-diagram-3 me-1"></i>Sectores Asignados
                                 </label>
-                                <select class="form-select" id="sectores" name="sectores" multiple size="3">
+                                <div class="sectores-info">
+                                    <i class="bi bi-info-circle-fill"></i>
+                                    <div class="sectores-info-text">
+                                        <strong>Seleccione hasta 2 sectores</strong> a los que tendrá acceso el usuario
+                                    </div>
+                                    <div class="sectores-counter" id="sectoresCounter">
+                                        <i class="bi bi-check-circle-fill me-1"></i>
+                                        <span id="counterText">0/2</span>
+                                    </div>
+                                </div>
+                                <div class="sectores-grid" id="sectoresGrid">
                                     {% for sector in sectores %}
-                                    <option value="{{ sector.id }}" {% if sector.id in usuario_sectores_ids %}selected{%
-                                        endif %}>
-                                        {{ sector.nombre }}
-                                    </option>
+                                    <div class="sector-card" data-sector-id="{{ sector.id }}"
+                                         {% if sector.id in usuario_sectores_ids %}data-selected="true"{% endif %}>
+                                        <div class="sector-icon">
+                                            <i class="bi bi-{% if 'produccion' in sector.nombre.lower() or 'producción' in sector.nombre.lower() %}gear-fill{% elif 'almacen' in sector.nombre.lower() or 'almacén' in sector.nombre.lower() %}box-seam{% elif 'logistica' in sector.nombre.lower() or 'logística' in sector.nombre.lower() %}truck{% elif 'administracion' in sector.nombre.lower() or 'administración' in sector.nombre.lower() %}building{% elif 'calidad' in sector.nombre.lower() %}clipboard-check{% elif 'mantenimiento' in sector.nombre.lower() %}tools{% else %}grid-3x3-gap{% endif %}"></i>
+                                        </div>
+                                        <p class="sector-nombre">{{ sector.nombre }}</p>
+                                        <div class="sector-badge">1</div>
+                                    </div>
                                     {% endfor %}
-                                </select>
-                                <small class="form-text text-muted ms-2">Mantenga presionado Ctrl (o Cmd en Mac) para
-                                    seleccionar múltiples sectores.</small>
+                                </div>
+                                <input type="hidden" id="sectores" name="sectores" value="">
+                            </div>
+                        </div>
+                    </div>
+                </div> { % endif %}"></i>
+                                        </div>
+                                        <p class="sector-nombre">{{ sector.nombre }}</p>
+                                        <div class="sector-badge">1</div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <input type="hidden" id="sectores" name="sectores" value="">
                             </div>
                         </div>
                     </div>
                 </div>
 
-               <!-- PASOO 2: Dirección -->
+               <!-- PASO 2: Dirección -->
                 <div id="addressInfo" class="form-section" {% if is_new %}style="display: none;" {% else %}
                     style="margin-top: 2rem;" {% endif %}>
                     <div class="section-title">
