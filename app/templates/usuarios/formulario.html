@@ -53,11 +53,6 @@
 
                 <!-- Paso 1: Información Personal -->
                 <div id="personalInfo" class="form-section">
-                    <div class="section-title">
-                        <i class="bi bi-person-vcard me-2"></i>
-                        <h5 class="mb-0">Información Personal</h5>
-                    </div>
-
                     <div class="form-subsection">
                         <h6 class="subsection-title">
                             <i class="bi bi-person me-2"></i>Datos Básicos
@@ -223,17 +218,6 @@
                                          {% if sector.id in usuario_sectores_ids %}data-selected="true"{% endif %}>
                                         <div class="sector-icon">
                                             <i class="bi bi-{% if 'produccion' in sector.nombre.lower() or 'producción' in sector.nombre.lower() %}gear-fill{% elif 'almacen' in sector.nombre.lower() or 'almacén' in sector.nombre.lower() %}box-seam{% elif 'logistica' in sector.nombre.lower() or 'logística' in sector.nombre.lower() %}truck{% elif 'administracion' in sector.nombre.lower() or 'administración' in sector.nombre.lower() %}building{% elif 'calidad' in sector.nombre.lower() %}clipboard-check{% elif 'mantenimiento' in sector.nombre.lower() %}tools{% else %}grid-3x3-gap{% endif %}"></i>
-                                        </div>
-                                        <p class="sector-nombre">{{ sector.nombre }}</p>
-                                        <div class="sector-badge">1</div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                <input type="hidden" id="sectores" name="sectores" value="">
-                            </div>
-                        </div>
-                    </div>
-                </div> { % endif %}"></i>
                                         </div>
                                         <p class="sector-nombre">{{ sector.nombre }}</p>
                                         <div class="sector-badge">1</div>
