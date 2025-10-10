@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
@@ -89,7 +89,18 @@ def ver_perfil(id):
     if not usuario:
         flash('Usuario no encontrado.', 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
-    
+
+    # Parsear fechas de string a datetime objects antes de renderizar
+    for key in ['ultimo_login_web', 'ultimo_login_totem', 'fecha_ingreso']:
+        if usuario.get(key) and isinstance(usuario[key], str):
+            try:
+                # Intenta parsear la fecha/hora. El replace es para compatibilidad con ISO 8601 de Supabase.
+                usuario[key] = datetime.fromisoformat(usuario[key].replace('Z', '+00:00'))
+            except (ValueError, TypeError):
+                # Si falla (p.ej. formato inesperado), se loguea y se deja como None para evitar errores en el template.
+                print(f"Advertencia: No se pudo parsear la fecha '{usuario[key]}' para el campo '{key}'. Se mostrará como no disponible.")
+                usuario[key] = None
+
     # Formatear la dirección para una mejor visualización
     if usuario.get('direccion'):
         dir_data = usuario['direccion']
