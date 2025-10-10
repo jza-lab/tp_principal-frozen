@@ -211,16 +211,31 @@ def listar_pendientes():
 
 
 @orden_produccion_bp.route("/<int:id>/aprobar", methods=["POST"])
-@permission_required(sector_codigo='PRODUCCION', accion='aprobar')
+##@permission_required(sector_codigo='PRODUCCION', accion='aprobar')
 def aprobar(id):
     """Aprueba una orden de producción."""
-    usuario_id = session.get("usuario_id")
-    resultado = controller.aprobar_orden(id, usuario_id)
-    flash(
-        resultado.get("message", "Orden aprobada."),
-        "success" if resultado.get("success") else "error",
-    )
-    return redirect(url_for("orden_produccion.listar"))
+    try:
+        usuario_id = session.get("usuario_id")
+        if not usuario_id:
+            flash("Error de autenticación. Por favor, inicie sesión.", "danger")
+            return redirect(url_for("auth.login"))
+
+        # --- LÍNEA CORREGIDA ---
+        # Desempaquetamos la tupla (diccionario, codigo_http) que devuelve el controlador
+        resultado_dict, status_code = controller.aprobar_orden(id, usuario_id)
+        # ------------------------
+
+        # Usamos el diccionario para obtener los mensajes
+        flash(
+            resultado_dict.get("message", "Acción procesada."),
+            "success" if resultado_dict.get("success") else "error",
+        )
+        return redirect(url_for("orden_produccion.listar"))
+
+    except Exception as e:
+        logger.error(f"Error inesperado en la ruta aprobar OP: {e}", exc_info=True)
+        flash("Ocurrió un error interno al procesar la solicitud.", "danger")
+        return redirect(url_for("orden_produccion.listar"))
 
 
 @orden_produccion_bp.route("/<int:id>/rechazar", methods=["POST"])

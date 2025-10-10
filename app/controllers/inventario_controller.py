@@ -10,6 +10,10 @@ from decimal import Decimal
 from datetime import datetime, date
 from marshmallow import ValidationError
 
+from app.models.receta import RecetaModel # O donde tengas la lógica de recetas
+from app.models.reserva_insumo import ReservaInsumoModel # El nuevo modelo que debes crear
+from app.schemas.reserva_insumo_schema import ReservaInsumoSchema # El nuevo schema
+
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +26,76 @@ class InventarioController(BaseController):
         self.insumo_model = InsumoModel()
         #self.stock_service = StockService()
         self.schema = InsumosInventarioSchema()
+
+    def reservar_stock_insumos_para_op(self, orden_produccion: Dict, usuario_id: int) -> dict:
+        """
+        Calcula los insumos necesarios para una OP, los reserva y devuelve los faltantes.
+        """
+        receta_model = RecetaModel()
+        reserva_insumo_model = ReservaInsumoModel()
+
+        try:
+            receta_id = orden_produccion['receta_id']
+            cantidad_a_producir = orden_produccion['cantidad_planificada']
+
+            # 1. Obtener los ingredientes de la receta
+            ingredientes_result = receta_model.get_ingredientes(receta_id)
+            if not ingredientes_result.get('success'):
+                raise Exception("No se pudieron obtener los ingredientes de la receta.")
+
+            ingredientes = ingredientes_result.get('data', [])
+            insumos_faltantes = []
+
+            # 2. Iterar por cada ingrediente para verificar y reservar stock
+            for ingrediente in ingredientes:
+                insumo_id = ingrediente['id_insumo']
+                cantidad_necesaria = ingrediente['cantidad'] * cantidad_a_producir
+
+                # Buscar lotes disponibles para este insumo (FIFO)
+                lotes_disponibles = self.inventario_model.find_all(
+                    filters={'id_insumo': insumo_id, 'cantidad_actual': ('gt', 0)},
+                    order_by='f_ingreso.asc' # Ordenar por fecha de ingreso para FIFO
+                ).get('data', [])
+
+                cantidad_restante_a_reservar = cantidad_necesaria
+
+                for lote in lotes_disponibles:
+                    if cantidad_restante_a_reservar <= 0:
+                        break
+
+                    cantidad_en_lote = lote.get('cantidad_actual', 0)
+                    cantidad_a_reservar_de_lote = min(cantidad_en_lote, cantidad_restante_a_reservar)
+
+                    # a. Crear el registro de reserva de insumo
+                    datos_reserva = {
+                        'orden_produccion_id': orden_produccion['id'],
+                        'lote_inventario_id': lote['id_lote'],
+                        'insumo_id': insumo_id,
+                        'cantidad_reservada': cantidad_a_reservar_de_lote,
+                        'usuario_reserva_id': usuario_id
+                    }
+                    reserva_insumo_model.create(datos_reserva)
+
+                    # b. Actualizar la cantidad del lote de inventario
+                    nueva_cantidad_lote = cantidad_en_lote - cantidad_a_reservar_de_lote
+                    self.inventario_model.update(lote['id_lote'], {'cantidad_actual': nueva_cantidad_lote}, 'id_lote')
+
+                    cantidad_restante_a_reservar -= cantidad_a_reservar_de_lote
+
+                # 3. Si después de revisar todos los lotes aún falta, registrar el faltante
+                if cantidad_restante_a_reservar > 0:
+                    insumos_faltantes.append({
+                        'insumo_id': insumo_id,
+                        'nombre': ingrediente.get('nombre_insumo', 'N/A'),
+                        'cantidad_faltante': cantidad_restante_a_reservar
+                    })
+
+            return {'success': True, 'data': {'insumos_faltantes': insumos_faltantes}}
+
+        except Exception as e:
+            logger.error(f"Error crítico al reservar insumos para OP {orden_produccion['id']}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
 
     def obtener_lotes(self, filtros: Optional[Dict] = None) -> tuple:
         """Obtener todos los lotes con filtros opcionales"""
@@ -150,7 +224,7 @@ class InventarioController(BaseController):
     def obtener_lote_por_id(self, id_lote: str) -> tuple:
         """Obtener un lote específico por su ID usando el método enriquecido."""
         try:
-            result = self.inventario_model.get_lote_detail_for_view(id_lote) 
+            result = self.inventario_model.get_lote_detail_for_view(id_lote)
 
             if result['success']:
                 if result['data']:
@@ -300,7 +374,7 @@ class InventarioController(BaseController):
 
         except Exception as e:
             logger.error(f"Error eliminando lote: {str(e)}")
-            
+
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def obtener_lotes_para_vista(self, filtros: Optional[Dict] = None) -> tuple:
