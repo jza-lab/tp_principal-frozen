@@ -1,4 +1,5 @@
 from marshmallow import Schema, fields, validate
+from app.schemas.direccion_schema import DireccionSchema
 
 class ClienteSchema(Schema):
     """Esquema para validación de clientes"""
@@ -24,7 +25,9 @@ class ClienteSchema(Schema):
         allow_none=True,
         load_default=None
     )
-    direccion = fields.Str(allow_none=True, load_default=None)
+    
+    direccion_id = fields.Int(allow_none=True, load_only=True)
+    direccion = fields.Nested(DireccionSchema, allow_none=True)
     cuit = fields.Str(
         validate=validate.Length(max=15),
         allow_none=True,
