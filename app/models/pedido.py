@@ -56,11 +56,12 @@ class PedidoModel(BaseModel):
             return {'success': False, 'error': str(e)}
 
     def get_all_with_items(self, filtros: Optional[Dict] = None) -> Dict:
-        """
-        Obtiene todos los pedidos, cada uno con una lista de sus items.
-        """
+        """Obtiene todos los pedidos con sus items, especificando la relación."""
         try:
-            query = self.db.table(self.table_name).select("*, items:pedido_items(*, productos(nombre))")
+            query = self.db.table(self.get_table_name()).select(
+                # --- LÍNEA CORREGIDA ---
+                '*, items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre))'
+            )
             if filtros:
                 for key, value in filtros.items():
                     if value is not None:
@@ -73,24 +74,18 @@ class PedidoModel(BaseModel):
             return {'success': False, 'error': str(e)}
 
     def get_one_with_items(self, pedido_id: int) -> Dict:
-        """
-        Obtiene un pedido específico con todos sus items y datos relacionados.
-        """
+        """Obtiene un pedido con sus items, especificando la relación."""
         try:
-            response = self.db.table(self.table_name).select(
-                "*, items:pedido_items(*, producto_nombre:productos(nombre))"
-            ).eq("id", pedido_id).maybe_single().execute()
+            # --- LÍNEA CORREGIDA ---
+            result = self.db.table(self.get_table_name()).select(
+                '*, items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre))'
+            ).eq('id', pedido_id).single().execute()
+            # ------------------------
 
-            result = response.data
-            if result:
-                for item in result.get('items', []):
-                    if item.get('producto_nombre'):
-                        item['producto_nombre'] = item['producto_nombre']['nombre']
-                    else:
-                        item['producto_nombre'] = 'N/A'
-                return {'success': True, 'data': result}
+            if result.data:
+                return {'success': True, 'data': result.data}
             else:
-                return {'success': False, 'error': f"Pedido con id {pedido_id} no encontrado."}
+                return {'success': False, 'error': 'Pedido no encontrado.'}
         except Exception as e:
             logger.error(f"Error al obtener el pedido {pedido_id} con items: {str(e)}")
             return {'success': False, 'error': str(e)}

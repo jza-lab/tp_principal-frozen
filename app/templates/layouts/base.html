@@ -53,7 +53,9 @@
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if 'inventario' in request.endpoint %}active{% endif %}" href="{{ url_for('inventario_view.listar_lotes') }}"><i class="bi bi-boxes me-2"></i> Inventario (Insumos)</a></li>
                             	<li><hr class="dropdown-divider"></li>
-        			<li><a class="dropdown-item {% if 'precios' in request.endpoint %}active{% endif %}" href="{{ url_for('precios.index') }}"><i class="bi bi-tag-fill me-2"></i> Actualizar Precios</a></li>
+				<li><a class="dropdown-item {% if 'reservas' in request.endpoint %}active{% endif %}" href="{{ url_for('reservas.listar') }}"><i class="bi bi-signpost-split-fill me-2"></i> Trazabilidad de Reservas</a></li>
+        			<li><hr class="dropdown-divider"></li>
+				<li><a class="dropdown-item {% if 'precios' in request.endpoint %}active{% endif %}" href="{{ url_for('precios.index') }}"><i class="bi bi-tag-fill me-2"></i> Actualizar Precios</a></li>
 			    </ul>
                         </li>
 
