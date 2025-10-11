@@ -184,10 +184,13 @@ def editar_usuario(id):
     """Gestiona la edición de un usuario existente, incluyendo sus sectores."""
     if request.method == 'POST':
         datos_actualizados = request.form.to_dict()
-        datos_actualizados['sectores'] = [int(s) for s in request.form.getlist('sectores')]
+        sectores_raw = request.form.getlist('sectores')
+        datos_actualizados['sectores'] = [int(s) for s in sectores_raw if s.isdigit()]
         
-        if 'role_id' in datos_actualizados:
+        if 'role_id' in datos_actualizados and datos_actualizados['role_id'].isdigit():
             datos_actualizados['role_id'] = int(datos_actualizados['role_id'])
+        else:
+            datos_actualizados.pop('role_id', None)
             
         resultado = usuario_controller.actualizar_usuario(id, datos_actualizados)
         if resultado.get('success'):

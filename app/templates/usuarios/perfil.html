@@ -225,45 +225,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Información de Acceso -->
-            <div class="info-section">
-                <div class="section-header">
-                    <div class="section-icon">
-                        <i class="bi bi-shield-lock"></i>
-                    </div>
-                    <h3 class="section-title">Información de Acceso</h3>
-                </div>
-                
-                <div class="info-grid">
-                    <div class="info-item">
-                        <label class="info-label">Usuario de Sistema</label>
-                        <div class="info-value">{{ usuario.email }}</div>
-                    </div>
-                    
-                    <div class="info-item">
-                        <label class="info-label">Último Login Web</label>
-                        <div class="info-value">
-                            {% if usuario.ultimo_login_web %}
-                                {{ usuario.ultimo_login_web.strftime('%d/%m/%Y %H:%M') }}
-                            {% else %}
-                                Nunca
-                            {% endif %}
-                        </div>
-                    </div>
-                    
-                    <div class="info-item">
-                        <label class="info-label">Último Login Tótem</label>
-                        <div class="info-value">
-                            {% if usuario.ultimo_login_totem %}
-                                {{ usuario.ultimo_login_totem.strftime('%d/%m/%Y %H:%M') }}
-                            {% else %}
-                                Nunca
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
 </div>

@@ -37,8 +37,8 @@ document.addEventListener('DOMContentLoaded', function() {
         codigo_postal: { type: 'text', required: false, label: 'Código Postal' },
         role_id: { type: 'role-selector', required: false, label: 'Rol' },
         turno_id: { type: 'turno-selector', required: false, label: 'Turno' },
-        sectores: { type: 'sector-selector', required: false, label: 'Sectores' },
-        fecha_ingreso: { type: 'date', required: false, label: 'Fecha de Ingreso' }
+        sectores: { type: 'sector-selector', required: false, label: 'Sectores' }
+        // fecha_ingreso NO es editable
     };
 
     // EVENT LISTENERS PRINCIPALES
@@ -100,6 +100,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const valueDiv = item.querySelector('.info-value');
             const config = fieldConfig[field];
             
+            // Si no hay configuración o es fecha_ingreso, no convertir
             if (!config) return;
             
             let originalValue = valueDiv.textContent.trim();
@@ -107,14 +108,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Limpiar valores "vacíos"
             if (['No especificado', 'N/A', 'Sin rol', 'Nunca', 'No especificada', 'Sin turno', 'Sin sectores'].includes(originalValue)) {
                 originalValue = '';
-            }
-            
-            // Para fechas, convertir el formato DD/MM/YYYY a YYYY-MM-DD
-            if (field === 'fecha_ingreso' && originalValue && originalValue.includes('/')) {
-                const parts = originalValue.split('/');
-                if (parts.length === 3) {
-                    originalValue = `${parts[2]}-${parts[1]}-${parts[0]}`;
-                }
             }
             
             originalValues[field] = originalValue;
@@ -189,13 +182,13 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         // Encontrar el rol actual
-        const currentRole = rolesDisponibles.find(r => r.nombre === currentValue);
+        const currentRole = rolesDisponibles.find(r => r.nombre.toLowerCase() === currentValue.toLowerCase());
         selectedRol = currentRole ? currentRole.id : null;
 
         let html = '<div class="roles-grid-perfil" id="roles-grid-perfil">';
         
         rolesDisponibles.forEach(rol => {
-            const isSelected = rol.id === selectedRol;
+            const isSelected = selectedRol && rol.id === selectedRol;
             const iconClass = roleIcons[rol.nombre.toLowerCase()] || roleIcons['default'];
             
             html += `
@@ -230,13 +223,13 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         // Encontrar el turno actual
-        const currentTurno = turnosDisponibles.find(t => t.nombre === currentValue);
+        const currentTurno = turnosDisponibles.find(t => t.nombre.toLowerCase() === currentValue.toLowerCase());
         selectedTurno = currentTurno ? currentTurno.id : null;
 
         let html = '<div class="turno-grid-perfil" id="turno-grid-perfil">';
         
         turnosDisponibles.forEach(turno => {
-            const isSelected = turno.id === selectedTurno;
+            const isSelected = selectedTurno && turno.id === selectedTurno;
             const iconClass = turnoIcons[turno.nombre.toLowerCase()] || turnoIcons['default'];
             
             html += `
