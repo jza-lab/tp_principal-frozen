@@ -6,7 +6,7 @@ from app.controllers.facial_controller import FacialController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.notificación_controller import NotificacionController
 from app.controllers.inventario_controller import InventarioController
-from app.permisos import permission_required
+from app.permisos import admin_permission_required
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 
 # Blueprint para la administración de usuarios
@@ -21,7 +21,7 @@ notificacion_controller = NotificacionController()
 inventario_controller = InventarioController()
 
 @admin_usuario_bp.route('/')
-@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+@admin_permission_required(accion='leer')
 def index():
     hoy = date.today()
 
@@ -76,14 +76,14 @@ def index():
                             alertas_stock_count=alertas_stock_count)
 
 @admin_usuario_bp.route('/usuarios')
-@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+@admin_permission_required(accion='leer')
 def listar_usuarios():
     """Muestra la lista de todos los usuarios del sistema."""
     usuarios = usuario_controller.obtener_todos_los_usuarios()
     return render_template('usuarios/listar.html', usuarios=usuarios)
 
 @admin_usuario_bp.route('/usuarios/<int:id>')
-@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+@admin_permission_required(accion='leer')
 def ver_perfil(id):
     """Muestra el perfil de un usuario específico, incluyendo su dirección."""
     usuario = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)
@@ -120,7 +120,7 @@ def ver_perfil(id):
                            turnos_disponibles=turnos_disponibles)
 
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
+@admin_permission_required(accion='crear')
 def nuevo_usuario():
     """
     Gestiona la creación de un nuevo usuario, incluyendo la asignación de sectores.
@@ -200,7 +200,7 @@ def nuevo_usuario():
                          usuario_sectores_ids=[])
 
 @admin_usuario_bp.route('/usuarios/<int:id>/editar', methods=['GET', 'POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='actualizar')
+@admin_permission_required(accion='actualizar')
 def editar_usuario(id):
     """
     Gestiona la edición de un usuario. Responde con JSON a peticiones AJAX
@@ -291,7 +291,7 @@ def editar_usuario(id):
                          usuario_sectores_ids=usuario_sectores_ids)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/eliminar', methods=['POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='eliminar')
+@admin_permission_required(accion='eliminar')
 def eliminar_usuario(id):
     if session.get('usuario_id') == id:
         msg = 'No puedes desactivar tu propia cuenta.'
@@ -311,7 +311,7 @@ def eliminar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/usuarios/<int:id>/habilitar', methods=['POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='actualizar')
+@admin_permission_required(accion='actualizar')
 def habilitar_usuario(id):
     """Reactiva un usuario."""
     resultado = usuario_controller.habilitar_usuario(id)
@@ -322,7 +322,7 @@ def habilitar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/usuarios/actividad_totem', methods=['GET'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+@admin_permission_required(accion='leer')
 def obtener_actividad_totem():
     """
     Devuelve una lista en formato JSON de la actividad del tótem (ingresos/egresos) de hoy.
@@ -334,7 +334,7 @@ def obtener_actividad_totem():
         return jsonify(success=False, error=resultado.get('error', 'Error al obtener la actividad del tótem')), 500
 
 @admin_usuario_bp.route('/usuarios/actividad_web', methods=['GET'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+@admin_permission_required(accion='leer')
 def obtener_actividad_web():
     """
     Devuelve una lista en formato JSON de los usuarios que iniciaron sesión en la web hoy.
@@ -346,7 +346,7 @@ def obtener_actividad_web():
         return jsonify(success=False, error=resultado.get('error', 'Error al obtener la actividad web')), 500
 
 @admin_usuario_bp.route('/usuarios/validar', methods=['POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
+@admin_permission_required(accion='crear')
 def validar_campo():
     """
     Valida de forma asíncrona si un campo (legajo o email) ya existe.
@@ -362,7 +362,7 @@ def validar_campo():
     return jsonify(resultado)
 
 @admin_usuario_bp.route('/usuarios/validar_rostro', methods=['POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
+@admin_permission_required(accion='crear')
 def validar_rostro():
     """
     Valida si el rostro en la imagen es válido y no está duplicado.
@@ -388,7 +388,7 @@ def validar_rostro():
         })
 
 @admin_usuario_bp.route('/usuarios/verificar_direccion', methods=['POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
+@admin_permission_required(accion='crear')
 def verificar_direccion():
     """
     Verifica una dirección en tiempo real usando la API de Georef.
@@ -417,7 +417,7 @@ def verificar_direccion():
     return jsonify(resultado)
 
 @admin_usuario_bp.route('/autorizaciones/nueva', methods=['GET', 'POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
+@admin_permission_required(accion='crear')
 def nueva_autorizacion():
     """
     Muestra el formulario para crear una nueva autorización de ingreso y la procesa.
