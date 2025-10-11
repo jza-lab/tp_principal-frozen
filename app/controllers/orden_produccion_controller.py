@@ -92,116 +92,117 @@ class OrdenProduccionController(BaseController):
         receta_model = RecetaModel()
 
         try:
-            # Extraer producto_id y limpiar datos que gestiona el servidor
+            # --- Limpieza de datos (sin cambios) ---
             producto_id = form_data.get('producto_id')
             if not producto_id:
                 return self.error_response('El campo producto_id es requerido.', 400)
 
-            # Mapear 'cantidad' del formulario a 'cantidad_planificada' del esquema
             if 'cantidad' in form_data:
                 form_data['cantidad_planificada'] = form_data.pop('cantidad')
 
-            # Obtener el ID del supervisor del formulario y asegurarse de que sea un entero si existe
             supervisor_id = form_data.get('supervisor_responsable_id')
             if supervisor_id:
                 form_data['supervisor_responsable_id'] = int(supervisor_id)
 
-            # Quitar campos que no deben venir del cliente para la validación
             form_data.pop('usuario_id', None)
             form_data.pop('estado', None)
             form_data.pop('receta_id', None)
 
-            # Lógica de negocio: Encontrar la receta activa para el producto
-            receta_result = receta_model.find_all({
+            # --- INICIO DE LA CORRECCIÓN ---
+            # Desempaquetamos la tupla para obtener el diccionario de resultados
+            receta_result_dict, _ = receta_model.find_all({
                 'producto_id': int(producto_id),
                 'activa': True
             }, limit=1)
 
-            if not receta_result.get('success') or not receta_result.get('data'):
+            # Ahora usamos el diccionario 'receta_result_dict' para las validaciones
+            if not receta_result_dict.get('success') or not receta_result_dict.get('data'):
                 return self.error_response(f'No se encontró una receta activa para el producto seleccionado (ID: {producto_id}).', 404)
 
-            receta = receta_result['data'][0]
+            receta = receta_result_dict['data'][0]
+            # --- FIN DE LA CORRECCIÓN ---
+
             form_data['receta_id'] = receta['id']
 
-            # Validar los datos con el esquema
+            # --- Resto del método (sin cambios) ---
             validated_data = self.schema.load(form_data)
             validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
             validated_data['estado'] = 'PENDIENTE'
-            validated_data['usuario_creador_id'] = usuario_id # El creador es siempre el usuario logueado
+            validated_data['usuario_creador_id'] = usuario_id
 
             result = self.model.create(validated_data)
             if result.get('success'):
-                # Serializar la salida para manejar Decimal, etc.
                 result['data'] = self.schema.dump(result['data'])
             return result
 
         except ValidationError as e:
             return self.error_response(f"Datos inválidos: {e.messages}", 400)
         except Exception as e:
+            logger.error(f"Error inesperado en crear_orden: {e}", exc_info=True)
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def asignar_supervisor(self, orden_id: int, supervisor_id: int) -> tuple:
-        """
-        Asigna un supervisor a una orden de producción existente.
-        """
-        try:
-            if not supervisor_id:
-                return self.error_response("El ID del supervisor es requerido.", 400)
+            """
+            Asigna un supervisor a una orden de producción existente.
+            """
+            try:
+                if not supervisor_id:
+                    return self.error_response("El ID del supervisor es requerido.", 400)
 
-            update_data = {'supervisor_responsable_id': int(supervisor_id)}
-            result = self.model.update(id_value=orden_id, data=update_data, id_field='id')
+                update_data = {'supervisor_responsable_id': int(supervisor_id)}
+                result = self.model.update(id_value=orden_id, data=update_data, id_field='id')
 
-            if result.get('success'):
-                return self.success_response(data=result.get('data'), message="Supervisor asignado correctamente.")
-            else:
-                return self.error_response('Error al asignar supervisor.', 500)
-        except Exception as e:
-            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+                if result.get('success'):
+                    return self.success_response(data=result.get('data'), message="Supervisor asignado correctamente.")
+                else:
+                    return self.error_response('Error al asignar supervisor.', 500)
+            except Exception as e:
+                return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
     def aprobar_orden(self, orden_id: int, usuario_id: int) -> Dict:
-        """
-        Aprueba una orden, reserva insumos y si faltan, crea una Orden de Compra.
-        """
-        try:
-            # 1. Obtener la orden de producción completa
-            orden_result = self.obtener_orden_por_id(orden_id)
-            if not orden_result.get('success'):
-                return self.error_response("Orden de producción no encontrada.", 404)
-            orden_produccion = orden_result['data']
+            """
+            Aprueba una orden, reserva insumos y si faltan, crea una Orden de Compra.
+            """
+            try:
+                # 1. Obtener la orden de producción completa
+                orden_result = self.obtener_orden_por_id(orden_id)
+                if not orden_result.get('success'):
+                    return self.error_response("Orden de producción no encontrada.", 404)
+                orden_produccion = orden_result['data']
 
-            if orden_produccion['estado'] != 'PENDIENTE':
-                return self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
+                if orden_produccion['estado'] != 'PENDIENTE':
+                    return self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
 
-            # 2. Cambiar el estado a APROBADA
-            self.cambiar_estado_orden(orden_id, 'APROBADA')
+                # 2. Cambiar el estado a APROBADA
+                self.cambiar_estado_orden(orden_id, 'APROBADA')
 
-            # 3. Intentar reservar los insumos necesarios
-            reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
+                # 3. Intentar reservar los insumos necesarios
+                reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
 
-            if not reserva_result.get('success'):
-                # Si la reserva falla, podríamos revertir el estado o simplemente notificar
-                return self.error_response(f"Se aprobó la orden, pero falló la reserva de insumos: {reserva_result.get('error')}", 500)
+                if not reserva_result.get('success'):
+                    # Si la reserva falla, podríamos revertir el estado o simplemente notificar
+                    return self.error_response(f"Se aprobó la orden, pero falló la reserva de insumos: {reserva_result.get('error')}", 500)
 
-            # 4. Verificar si hay insumos faltantes y crear Orden de Compra
-            insumos_faltantes = reserva_result['data']['insumos_faltantes']
-            orden_compra_creada = None
+                # 4. Verificar si hay insumos faltantes y crear Orden de Compra
+                insumos_faltantes = reserva_result['data']['insumos_faltantes']
+                orden_compra_creada = None
 
-            if insumos_faltantes:
-                logger.info(f"Faltan insumos para la OP {orden_id}. Generando Orden de Compra automática.")
-                resultado_oc = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id)
-                if resultado_oc.get('success'):
-                    orden_compra_creada = resultado_oc.get('data')
+                if insumos_faltantes:
+                    logger.info(f"Faltan insumos para la OP {orden_id}. Generando Orden de Compra automática.")
+                    resultado_oc = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id)
+                    if resultado_oc.get('success'):
+                        orden_compra_creada = resultado_oc.get('data')
 
-            # 5. Devolver una respuesta completa
-            message = "Orden de Producción aprobada y stock de insumos reservado."
-            if orden_compra_creada:
-                message += f" Se generó la Orden de Compra {orden_compra_creada['codigo_oc']} para cubrir faltantes."
+                # 5. Devolver una respuesta completa
+                message = "Orden de Producción aprobada y stock de insumos reservado."
+                if orden_compra_creada:
+                    message += f" Se generó la Orden de Compra {orden_compra_creada['codigo_oc']} para cubrir faltantes."
 
-            return self.success_response({'orden_compra_generada': orden_compra_creada}, message)
+                return self.success_response({'orden_compra_generada': orden_compra_creada}, message)
 
-        except Exception as e:
-            logger.error(f"Error en el proceso de aprobación de OP {orden_id}: {e}", exc_info=True)
-            return self.error_response(f"Error interno: {str(e)}", 500)
+            except Exception as e:
+                logger.error(f"Error en el proceso de aprobación de OP {orden_id}: {e}", exc_info=True)
+                return self.error_response(f"Error interno: {str(e)}", 500)
 
     def _generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int) -> Dict:
         """

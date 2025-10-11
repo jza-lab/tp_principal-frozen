@@ -66,16 +66,21 @@ def listar():
 ##@permission_required(sector_codigo='PRODUCCION', accion='crear')
 def nueva():
     """Muestra la página para crear una nueva orden de producción."""
-    productos = producto_controller.obtener_todos_los_productos()
-    supervisores_response = usuario_controller.obtener_todos_los_usuarios(filtros={'role_id': 4})
 
-    # --- CORRECCIÓN DEL ERROR 'list' object has no attribute 'get' ---
-    supervisores = []
-    if isinstance(supervisores_response, dict) and supervisores_response.get("success"):
-        supervisores = supervisores_response.get("data", [])
-    elif isinstance(supervisores_response, list):
-        supervisores = supervisores_response
-    # ------------------------------------------------------------------
+    # --- INICIO DE LA CORRECCIÓN ---
+
+    # Para PRODUCTOS
+    productos_tupla = producto_controller.obtener_todos_los_productos()
+    productos_resp = productos_tupla[0] if productos_tupla else {}
+    productos = productos_resp.get('data', [])
+
+    # Para SUPERVISORES
+    supervisores_tupla = usuario_controller.obtener_todos_los_usuarios(filtros={'role_id': 4})
+    # Verificamos si la respuesta no es None antes de intentar acceder a ella
+    supervisores_resp = supervisores_tupla[0] if supervisores_tupla else {}
+    supervisores = supervisores_resp.get("data", [])
+
+    # --- FIN DE LA CORRECCIÓN ---
 
     return render_template(
         "ordenes_produccion/formulario.html", productos=productos, supervisores=supervisores
