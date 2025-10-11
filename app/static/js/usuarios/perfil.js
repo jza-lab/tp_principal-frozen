@@ -680,26 +680,33 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .then(response => {
+            // Si la respuesta no es OK, intentamos leer el JSON para obtener el mensaje de error específico.
             if (!response.ok) {
-                throw new Error('Error en la respuesta del servidor');
+                return response.json().then(errorData => {
+                    // Lanzamos un error que contiene el mensaje del servidor.
+                    throw new Error(errorData.message || 'Error en la respuesta del servidor');
+                }).catch(() => {
+                    // Si no se puede parsear el JSON, lanzamos un error genérico.
+                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                });
             }
             return response.json();
         })
         .then(data => {
-            if (data.success) {
-                showNotification('Cambios guardados exitosamente', 'success');
-                
-                // Recargar la página para mostrar los cambios
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
-            } else {
-                throw new Error(data.message || 'Error al guardar los cambios');
-            }
+            // El `data` aquí siempre será de una respuesta exitosa (response.ok).
+            showNotification('Cambios guardados exitosamente', 'success');
+            
+            // Recargar la página para mostrar los cambios
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
         })
         .catch(error => {
-            console.error('Error:', error);
-            showNotification(error.message || 'Error al guardar los cambios', 'error');
+            // El `catch` ahora recibirá los errores específicos que lanzamos.
+            console.error('Error al guardar:', error);
+            showNotification(error.message || 'Ocurrió un error inesperado.', 'error');
+            
+            // Restaurar el botón
             btnSaveChanges.disabled = false;
             btnSaveChanges.innerHTML = originalContent;
         });

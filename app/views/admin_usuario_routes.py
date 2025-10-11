@@ -211,6 +211,7 @@ def editar_usuario(id):
 
     if request.method == 'POST':
         datos_actualizados = request.form.to_dict()
+        print(f"DEBUG: Datos recibidos en la ruta: {datos_actualizados}")
         
         # --- Procesamiento de Datos ---
         # Sectores: AJAX los envía como un string JSON, el form normal como una lista

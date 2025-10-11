@@ -128,25 +128,25 @@ class UsuarioController(BaseController):
         try:
             fields_to_sanitize = ['telefono', 'cuil_cuit', 'fecha_nacimiento', 'fecha_ingreso', 'turno_id', 'piso', 'depto', 'codigo_postal']
             for field in fields_to_sanitize:
-                if field in data and data[field] == '':
+                if field in data and (data[field] == '' or data[field] == 'None'):
                     data[field] = None
             
-
             existing = self.model.find_by_id(usuario_id)
             if not existing.get('success'):
                 return {'success': False, 'error': 'Usuario no encontrado'}
 
-            # --- 1. Separar datos: dirección, sectores y datos de usuario ---
+            # --- 1. Separar datos de sectores ANTES de la validación ---
+            # Extraemos 'sectores' del diccionario principal. El método .pop() lo extrae y lo elimina.
+            sectores_ids = data.pop('sectores', None)
+
+            # --- 2. Separar datos de dirección ---
             address_fields = ['calle', 'altura', 'piso', 'depto', 'localidad', 'provincia', 'codigo_postal']
             direccion_data_raw = {field: data.get(field) for field in address_fields}
-            sectores_ids = data.get('sectores') # No lo quitamos de `data` todavía
-
-            # --- 2. Filtrar datos del usuario para validación ---
-            # Solo incluimos campos que el schema puede cargar (no dump_only)
+            
+            # --- 3. Filtrar y validar los datos restantes del usuario ---
+            # El diccionario `data` ahora solo contiene campos de usuario, ya no tiene 'sectores'.
             loadable_fields = {k for k, v in self.schema.fields.items() if not v.dump_only}
             user_data_for_validation = {k: v for k, v in data.items() if k in loadable_fields}
-
-            # --- 3. Validar los datos filtrados ---
             validated_data = self.schema.load(user_data_for_validation, partial=True)
             
             # --- 4. Manejar el password POST-validación ---
@@ -170,24 +170,13 @@ class UsuarioController(BaseController):
             if has_address_data:
                 direccion_normalizada = self._normalizar_y_preparar_direccion(direccion_data_raw)
                 if direccion_normalizada:
-                    id_direccion_vieja = existing['data'].get('direccion_id')
-                    if id_direccion_vieja:
-                        cantidad_misma_direccion = self.model.contar_usuarios_direccion(id_direccion_vieja)
-                        
-                        if cantidad_misma_direccion > 1:
-                            id_nueva_direccion = self._get_or_create_direccion(direccion_normalizada)
-                            if id_nueva_direccion:
-                                validated_data['direccion_id'] = id_nueva_direccion
-                        else:                     
-                            # Actualizar la dirección existente y VERIFICAR el resultado
-                            actualizacion_exitosa = self._actualizar_direccion(id_direccion_vieja, direccion_normalizada)
-                            if not actualizacion_exitosa: # <-- AHORA COMPRUEBA EL BOOLEANO DIRECTAMENTE
-                                # Si la actualización de la dirección falla, detener todo y devolver el error.
-                                return {'success': False, 'error': "Ocurrió un error al intentar actualizar la dirección."}
+
+                    id_nueva_direccion = self._get_or_create_direccion(direccion_normalizada)
+                    if id_nueva_direccion:
+                        validated_data['direccion_id'] = id_nueva_direccion
                     else:
-                        id_nueva_direccion = self._get_or_create_direccion(direccion_normalizada)
-                        if id_nueva_direccion:
-                            validated_data['direccion_id'] = id_nueva_direccion
+                        # Si la dirección no se pudo procesar, devolvemos un error claro.
+                        return {'success': False, 'error': "No se pudo procesar la dirección proporcionada."}
 
             # --- 7. Actualizar el usuario en la BD ---
             resultado_actualizacion = self.model.update(usuario_id, validated_data)
