@@ -156,20 +156,16 @@ class LoteProductoController(BaseController):
     def reservar_stock_para_item(self, pedido_id: int, pedido_item_id: int, producto_id: int, cantidad_necesaria: float, usuario_id: int) -> dict:
         """
         Intenta reservar la cantidad necesaria de un producto para un item de pedido.
-        Utiliza una estrategia FIFO (First-In, First-Out) sobre los lotes.
+        Utiliza una estrategia FIFO y actualiza el estado del lote a 'AGOTADO' si se vacía.
         """
         try:
-            # 1. Obtener todos los lotes disponibles, ordenados por fecha (FIFO)
+            # 1. Obtener lotes disponibles (sin cambios)
             filtros = {
                 'producto_id': producto_id,
                 'estado': 'DISPONIBLE',
-                'cantidad_actual': ('gt', 0) # El nuevo find_all SÍ entiende esto
+                'cantidad_actual': ('gt', 0)
             }
-
-            lotes_disponibles_res = self.model.find_all(
-                filters=filtros,
-                order_by='created_at.asc' # La nueva lógica también maneja .asc y .desc
-)
+            lotes_disponibles_res = self.model.find_all(filters=filtros, order_by='created_at.asc')
 
             if not lotes_disponibles_res.get('success'):
                 return {'success': False, 'error': 'No se pudieron obtener los lotes de productos.'}
@@ -178,7 +174,7 @@ class LoteProductoController(BaseController):
             cantidad_restante_a_reservar = cantidad_necesaria
             cantidad_total_reservada = 0
 
-            # 2. Iterar sobre los lotes y reservar stock
+            # 2. Iterar sobre los lotes y reservar
             for lote in lotes_disponibles:
                 if cantidad_restante_a_reservar <= 0:
                     break
@@ -186,7 +182,7 @@ class LoteProductoController(BaseController):
                 cantidad_en_lote = lote.get('cantidad_actual', 0)
                 cantidad_a_reservar_de_este_lote = min(cantidad_en_lote, cantidad_restante_a_reservar)
 
-                # a. Crear el registro de reserva
+                # a. Crear el registro de reserva (sin cambios)
                 datos_reserva = {
                     'lote_producto_id': lote['id_lote'],
                     'pedido_id': pedido_id,
@@ -194,29 +190,38 @@ class LoteProductoController(BaseController):
                     'cantidad_reservada': cantidad_a_reservar_de_este_lote,
                     'usuario_reserva_id': usuario_id
                 }
-                self.reserva_model.create(self.reserva_schema.load(datos_reserva))
+                # Verificamos que la reserva se crea antes de continuar
+                resultado_reserva = self.reserva_model.create(self.reserva_schema.load(datos_reserva))
+                if not resultado_reserva.get('success'):
+                    raise Exception(f"No se pudo crear el registro de reserva para el lote {lote['id_lote']}.")
 
-                # b. Actualizar (decrementar) la cantidad en el lote
+                # --- INICIO DE LA LÓGICA MEJORADA ---
+                # b. Calcular la nueva cantidad y preparar la actualización
                 nueva_cantidad_lote = cantidad_en_lote - cantidad_a_reservar_de_este_lote
-                self.model.update(lote['id_lote'], {'cantidad_actual': nueva_cantidad_lote}, 'id_lote')
+                datos_actualizacion_lote = {'cantidad_actual': nueva_cantidad_lote}
 
-                # c. Actualizar contadores
+                # c. Si la cantidad llega a cero, cambiar el estado a 'AGOTADO'
+                if nueva_cantidad_lote <= 0:
+                    datos_actualizacion_lote['estado'] = 'AGOTADO'
+                    logger.info(f"El lote {lote['numero_lote']} ha sido marcado como AGOTADO.")
+
+                # d. Realizar la actualización del lote en la base de datos
+                self.model.update(lote['id_lote'], datos_actualizacion_lote, 'id_lote')
+                # --- FIN DE LA LÓGICA MEJORADA ---
+
+                # Actualizar contadores (sin cambios)
                 cantidad_total_reservada += cantidad_a_reservar_de_este_lote
                 cantidad_restante_a_reservar -= cantidad_a_reservar_de_este_lote
 
-            # 3. Devolver el resultado
+            # 3. Devolver resultado (sin cambios)
             cantidad_faltante = cantidad_necesaria - cantidad_total_reservada
             return {
                 'success': True,
-                'data': {
-                    'cantidad_reservada': cantidad_total_reservada,
-                    'cantidad_faltante': cantidad_faltante
-                }
+                'data': {'cantidad_reservada': cantidad_total_reservada, 'cantidad_faltante': cantidad_faltante}
             }
 
         except Exception as e:
-            # Aquí se debería implementar un rollback de la transacción
-            logging.error(f"Error crítico al reservar stock: {e}", exc_info=True)
+            logger.error(f"Error crítico al reservar stock: {e}", exc_info=True)
             return {'success': False, 'error': f'Error interno al reservar stock: {str(e)}'}
 
 

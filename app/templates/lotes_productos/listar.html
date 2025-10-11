@@ -42,7 +42,16 @@
                                 <span class="text-muted">No aplica</span>
                             {% endif %}
                         </td>
-                        <td><span class="badge bg-success">{{ lote.estado or 'disponible' }}</span></td>
+                        <td>
+   				{% if lote.estado == 'AGOTADO' %}
+        			<span class="badge bg-danger">{{ lote.estado }}</span>
+    				{% elif lote.estado == 'DISPONIBLE' %}
+        			<span class="badge bg-success">{{ lote.estado }}</span>
+    				{% else %}
+        			{# Para cualquier otro estado como VENCIDO o RETIRADO, usamos un color neutro #}
+        			<span class="badge bg-secondary">{{ lote.estado or 'Desconocido' }}</span>
+    				{% endif %}
+			</td>
                         <td>
                             <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-primary">
    				<i class="bi bi-eye"></i>
