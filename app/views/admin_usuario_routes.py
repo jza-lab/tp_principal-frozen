@@ -1,3 +1,4 @@
+import json
 from datetime import date, timedelta, datetime
 from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
 from app.controllers.usuario_controller import UsuarioController
@@ -5,7 +6,7 @@ from app.controllers.facial_controller import FacialController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.notificación_controller import NotificacionController
 from app.controllers.inventario_controller import InventarioController
-from app.permisos import permission_required
+from app.permisos import admin_permission_required
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 
 # Blueprint para la administración de usuarios
@@ -20,7 +21,7 @@ notificacion_controller = NotificacionController()
 inventario_controller = InventarioController()
 
 @admin_usuario_bp.route('/')
-@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+@admin_permission_required(accion='leer')
 def index():
     hoy = date.today()
 
@@ -75,17 +76,17 @@ def index():
                             alertas_stock_count=alertas_stock_count)
 
 @admin_usuario_bp.route('/usuarios')
-@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+@admin_permission_required(accion='leer')
 def listar_usuarios():
     """Muestra la lista de todos los usuarios del sistema."""
     usuarios = usuario_controller.obtener_todos_los_usuarios()
     return render_template('usuarios/listar.html', usuarios=usuarios)
 
 @admin_usuario_bp.route('/usuarios/<int:id>')
-@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+@admin_permission_required(accion='leer')
 def ver_perfil(id):
     """Muestra el perfil de un usuario específico, incluyendo su dirección."""
-    usuario = usuario_controller.obtener_usuario_por_id(id, include_direccion=True)
+    usuario = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)
     if not usuario:
         flash('Usuario no encontrado.', 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
@@ -94,11 +95,9 @@ def ver_perfil(id):
     for key in ['ultimo_login_web', 'ultimo_login_totem', 'fecha_ingreso']:
         if usuario.get(key) and isinstance(usuario[key], str):
             try:
-                # Intenta parsear la fecha/hora. El replace es para compatibilidad con ISO 8601 de Supabase.
                 usuario[key] = datetime.fromisoformat(usuario[key].replace('Z', '+00:00'))
             except (ValueError, TypeError):
-                # Si falla (p.ej. formato inesperado), se loguea y se deja como None para evitar errores en el template.
-                print(f"Advertencia: No se pudo parsear la fecha '{usuario[key]}' para el campo '{key}'. Se mostrará como no disponible.")
+                print(f"Advertencia: No se pudo parsear la fecha '{usuario[key]}' para el campo '{key}'.")
                 usuario[key] = None
 
     # Formatear la dirección para una mejor visualización
@@ -109,17 +108,39 @@ def ver_perfil(id):
     else:
         usuario['direccion_formateada'] = 'No especificada'
 
-    return render_template('usuarios/perfil.html', usuario=usuario)
+    # Obtener datos para los dropdowns del modo edición
+    roles_disponibles = usuario_controller.obtener_todos_los_roles()
+    sectores_disponibles = usuario_controller.obtener_todos_los_sectores()
+    turnos_disponibles = usuario_controller.obtener_todos_los_turnos()
+
+    return render_template('usuarios/perfil.html', 
+                           usuario=usuario,
+                           roles_disponibles=roles_disponibles,
+                           sectores_disponibles=sectores_disponibles,
+                           turnos_disponibles=turnos_disponibles)
 
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
+@admin_permission_required(accion='crear')
 def nuevo_usuario():
     """
     Gestiona la creación de un nuevo usuario, incluyendo la asignación de sectores.
     """
     if request.method == 'POST':
         datos_usuario = request.form.to_dict()
-        datos_usuario['sectores'] = [int(s) for s in request.form.getlist('sectores')]
+        
+        # --- Procesamiento de Sectores ---
+        sectores_str = datos_usuario.get('sectores', '[]')
+        try:
+            sectores_ids = json.loads(sectores_str)
+            if isinstance(sectores_ids, list):
+                datos_usuario['sectores'] = [int(s) for s in sectores_ids if str(s).isdigit()]
+            else:
+                datos_usuario['sectores'] = []
+        except (json.JSONDecodeError, TypeError):
+            # Fallback para el caso de que no sea un JSON string
+            sectores_raw = request.form.getlist('sectores')
+            datos_usuario['sectores'] = [int(s) for s in sectores_raw if s.isdigit()]
+
         face_data = datos_usuario.pop('face_data', None)
 
         if 'role_id' in datos_usuario:
@@ -179,61 +200,75 @@ def nuevo_usuario():
                          usuario_sectores_ids=[])
 
 @admin_usuario_bp.route('/usuarios/<int:id>/editar', methods=['GET', 'POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='actualizar')
+@admin_permission_required(accion='actualizar')
 def editar_usuario(id):
-    """Gestiona la edición de un usuario existente, incluyendo sus sectores."""
+    """
+    Gestiona la edición de un usuario. Responde con JSON a peticiones AJAX
+    y con render/redirect a peticiones de formulario normales.
+    """
+    # Determinar si es una petición AJAX
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
     if request.method == 'POST':
         datos_actualizados = request.form.to_dict()
-        datos_actualizados['sectores'] = [int(s) for s in request.form.getlist('sectores')]
         
-        if 'role_id' in datos_actualizados:
-            datos_actualizados['role_id'] = int(datos_actualizados['role_id'])
-            
+        # --- Procesamiento de Datos ---
+        # Sectores: AJAX los envía como un string JSON, el form normal como una lista
+        sectores_str = datos_actualizados.get('sectores', '[]')
+        try:
+            # Para AJAX
+            sectores_ids = json.loads(sectores_str)
+            if isinstance(sectores_ids, list):
+                datos_actualizados['sectores'] = [int(s) for s in sectores_ids if str(s).isdigit()]
+            else:
+                 datos_actualizados['sectores'] = []
+        except (json.JSONDecodeError, TypeError):
+            # Para Formulario normal
+            sectores_raw = request.form.getlist('sectores')
+            datos_actualizados['sectores'] = [int(s) for s in sectores_raw if s.isdigit()]
+
+        # Role ID y Turno ID
+        for key in ['role_id', 'turno_id']:
+            if key in datos_actualizados and str(datos_actualizados[key]).isdigit():
+                datos_actualizados[key] = int(datos_actualizados[key])
+            else:
+                datos_actualizados.pop(key, None)
+        
+        # --- Lógica de Actualización ---
         resultado = usuario_controller.actualizar_usuario(id, datos_actualizados)
+
         if resultado.get('success'):
-            flash('Usuario actualizado exitosamente.', 'success')
-            return redirect(url_for('admin_usuario.listar_usuarios'))
-        else:
-            flash(f"Error al actualizar el usuario: {resultado.get('error')}", 'error')
-            # Si falla la actualización, recargamos los datos originales del usuario
-            # y los actualizamos con lo que el usuario intentó enviar, para que no pierda sus cambios.
-            usuario_existente = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)
-            if not usuario_existente:
-                # Si no podemos encontrar al usuario, es un error grave. Redirigir.
-                flash('Error crítico: No se pudo encontrar el usuario para recargar el formulario.', 'error')
+            if is_ajax:
+                return jsonify({'success': True, 'message': 'Usuario actualizado exitosamente.'})
+            else:
+                flash('Usuario actualizado exitosamente.', 'success')
                 return redirect(url_for('admin_usuario.listar_usuarios'))
-
-            # Reconstruye el estado del formulario tal como lo envió el usuario.
-            # Primero, toma los datos enviados en el formulario.
-            datos_del_formulario = request.form.to_dict()
-
-            # Reconstruye el objeto de dirección anidado que el template espera.
-            direccion_enviada = {
-                'calle': datos_del_formulario.get('calle', ''),
-                'altura': datos_del_formulario.get('altura', ''),
-                'piso': datos_del_formulario.get('piso', ''),
-                'depto': datos_del_formulario.get('depto', ''),
-                'localidad': datos_del_formulario.get('localidad', ''),
-                'provincia': datos_del_formulario.get('provincia', ''),
-                'codigo_postal': datos_del_formulario.get('codigo_postal', '')
-            }
-            
-            # Actualiza el diccionario del usuario con los datos del formulario
-            usuario_existente.update(datos_del_formulario)
-            # Sobreescribe la dirección con el objeto anidado reconstruido
-            usuario_existente['direccion'] = direccion_enviada
-            
-            roles = usuario_controller.obtener_todos_los_roles()
-            sectores = usuario_controller.obtener_todos_los_sectores()
-            turnos = usuario_controller.obtener_todos_los_turnos()
-            
-            return render_template('usuarios/formulario.html', 
-                                 usuario=usuario_existente, 
-                                 is_new=False,
-                                 roles=roles,
-                                 sectores=sectores,
-                                 turnos=turnos,
-                                 usuario_sectores_ids=datos_actualizados.get('sectores', []))
+        else:
+            error_message = resultado.get('error', 'Ocurrió un error desconocido.')
+            if is_ajax:
+                return jsonify({'success': False, 'message': error_message}), 400
+            else:
+                flash(f"Error al actualizar: {error_message}", 'error')
+                # Recargar datos para el formulario en caso de error
+                usuario_existente = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)
+                if not usuario_existente:
+                    flash('Error crítico: No se pudo encontrar el usuario.', 'error')
+                    return redirect(url_for('admin_usuario.listar_usuarios'))
+                
+                # Fusionar datos para preservar la entrada del usuario
+                usuario_existente.update(datos_actualizados)
+                
+                roles = usuario_controller.obtener_todos_los_roles()
+                sectores = usuario_controller.obtener_todos_los_sectores()
+                turnos = usuario_controller.obtener_todos_los_turnos()
+                
+                return render_template('usuarios/formulario.html', 
+                                     usuario=usuario_existente, 
+                                     is_new=False,
+                                     roles=roles,
+                                     sectores=sectores,
+                                     turnos=turnos,
+                                     usuario_sectores_ids=datos_actualizados.get('sectores', []))
 
     # Método GET
     usuario = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)
@@ -256,7 +291,7 @@ def editar_usuario(id):
                          usuario_sectores_ids=usuario_sectores_ids)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/eliminar', methods=['POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='eliminar')
+@admin_permission_required(accion='eliminar')
 def eliminar_usuario(id):
     if session.get('usuario_id') == id:
         msg = 'No puedes desactivar tu propia cuenta.'
@@ -276,7 +311,7 @@ def eliminar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/usuarios/<int:id>/habilitar', methods=['POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='actualizar')
+@admin_permission_required(accion='actualizar')
 def habilitar_usuario(id):
     """Reactiva un usuario."""
     resultado = usuario_controller.habilitar_usuario(id)
@@ -287,7 +322,7 @@ def habilitar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/usuarios/actividad_totem', methods=['GET'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+@admin_permission_required(accion='leer')
 def obtener_actividad_totem():
     """
     Devuelve una lista en formato JSON de la actividad del tótem (ingresos/egresos) de hoy.
@@ -299,7 +334,7 @@ def obtener_actividad_totem():
         return jsonify(success=False, error=resultado.get('error', 'Error al obtener la actividad del tótem')), 500
 
 @admin_usuario_bp.route('/usuarios/actividad_web', methods=['GET'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='leer')
+@admin_permission_required(accion='leer')
 def obtener_actividad_web():
     """
     Devuelve una lista en formato JSON de los usuarios que iniciaron sesión en la web hoy.
@@ -311,7 +346,7 @@ def obtener_actividad_web():
         return jsonify(success=False, error=resultado.get('error', 'Error al obtener la actividad web')), 500
 
 @admin_usuario_bp.route('/usuarios/validar', methods=['POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
+@admin_permission_required(accion='crear')
 def validar_campo():
     """
     Valida de forma asíncrona si un campo (legajo o email) ya existe.
@@ -327,7 +362,7 @@ def validar_campo():
     return jsonify(resultado)
 
 @admin_usuario_bp.route('/usuarios/validar_rostro', methods=['POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
+@admin_permission_required(accion='crear')
 def validar_rostro():
     """
     Valida si el rostro en la imagen es válido y no está duplicado.
@@ -353,7 +388,7 @@ def validar_rostro():
         })
 
 @admin_usuario_bp.route('/usuarios/verificar_direccion', methods=['POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
+@admin_permission_required(accion='crear')
 def verificar_direccion():
     """
     Verifica una dirección en tiempo real usando la API de Georef.
@@ -382,7 +417,7 @@ def verificar_direccion():
     return jsonify(resultado)
 
 @admin_usuario_bp.route('/autorizaciones/nueva', methods=['GET', 'POST'])
-@permission_required(sector_codigo='ADMINISTRACION', accion='crear')
+@admin_permission_required(accion='crear')
 def nueva_autorizacion():
     """
     Muestra el formulario para crear una nueva autorización de ingreso y la procesa.

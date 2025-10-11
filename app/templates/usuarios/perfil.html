@@ -85,11 +85,6 @@
             </button>
         </div>
 
-        <!-- Formulario de Edición (Inicialmente oculto) -->
-        <form id="edit-form" method="POST" action="{{ url_for('admin_usuario.editar_usuario', id=usuario.id) }}" style="display: none;">
-            <!-- El formulario se llenará dinámicamente -->
-        </form>
-
         <!-- Contenido del Perfil -->
         <div class="profile-content">
             <!-- Información Personal -->
@@ -143,10 +138,52 @@
                         <label class="info-label">Teléfono</label>
                         <div class="info-value" id="value-telefono">{{ usuario.telefono or 'No especificado' }}</div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Dirección -->
+            <div class="info-section">
+                <div class="section-header">
+                    <div class="section-icon">
+                        <i class="bi bi-geo-alt"></i>
+                    </div>
+                    <h3 class="section-title">Dirección de Residencia</h3>
+                </div>
+                
+                <div class="info-grid">
+                    <div class="info-item" data-field="calle">
+                        <label class="info-label">Calle</label>
+                        <div class="info-value" id="value-calle">{{ (usuario.direccion or {}).get('calle', 'No especificada') }}</div>
+                    </div>
                     
-                    <div class="info-item full-width" data-field="direccion">
-                        <label class="info-label">Dirección</label>
-                        <div class="info-value" id="value-direccion">{{ usuario.direccion_formateada or 'No especificada' }}</div>
+                    <div class="info-item" data-field="altura">
+                        <label class="info-label">Altura</label>
+                        <div class="info-value" id="value-altura">{{ (usuario.direccion or {}).get('altura', 'No especificada') }}</div>
+                    </div>
+                    
+                    <div class="info-item" data-field="provincia">
+                        <label class="info-label">Provincia</label>
+                        <div class="info-value" id="value-provincia">{{ (usuario.direccion or {}).get('provincia', 'No especificada') }}</div>
+                    </div>
+                    
+                    <div class="info-item" data-field="localidad">
+                        <label class="info-label">Localidad</label>
+                        <div class="info-value" id="value-localidad">{{ (usuario.direccion or {}).get('localidad', 'No especificada') }}</div>
+                    </div>
+                    
+                    <div class="info-item" data-field="piso">
+                        <label class="info-label">Piso</label>
+                        <div class="info-value" id="value-piso">{{ (usuario.direccion or {}).get('piso', 'No especificado') }}</div>
+                    </div>
+                    
+                    <div class="info-item" data-field="depto">
+                        <label class="info-label">Departamento</label>
+                        <div class="info-value" id="value-depto">{{ (usuario.direccion or {}).get('depto', 'No especificado') }}</div>
+                    </div>
+                    
+                    <div class="info-item" data-field="codigo_postal">
+                        <label class="info-label">Código Postal</label>
+                        <div class="info-value" id="value-codigo_postal">{{ (usuario.direccion or {}).get('codigo_postal', 'No especificado') }}</div>
                     </div>
                 </div>
             </div>
@@ -161,58 +198,30 @@
                 </div>
                 
                 <div class="info-grid">
-                    <div class="info-item" data-field="rol_id">
+                    <div class="info-item" data-field="role_id">
                         <label class="info-label">Rol</label>
-                        <div class="info-value" id="value-rol_id">{{ usuario.roles.nombre if usuario.roles else 'Sin rol' }}</div>
+                        <div class="info-value" id="value-role_id">{{ usuario.roles.nombre if usuario.roles else 'Sin rol' }}</div>
                     </div>
                     
-                    <div class="info-item" data-field="turno">
+                    <div class="info-item" data-field="turno_id">
                         <label class="info-label">Turno</label>
-                        <div class="info-value" id="value-turno">{{ usuario.turno.nombre if usuario.turno else 'No especificado' }}</div>
+                        <div class="info-value" id="value-turno_id">{{ usuario.turno.nombre if usuario.turno else 'Sin turno' }}</div>
+                    </div>
+                    
+                    <div class="info-item full-width" data-field="sectores">
+                        <label class="info-label">Sectores Asignados</label>
+                        <div class="info-value" id="value-sectores">
+                            {% if usuario.sectores and usuario.sectores|length > 0 %}
+                                {{ usuario.sectores|map(attribute='nombre')|join(', ') }}
+                            {% else %}
+                                Sin sectores
+                            {% endif %}
+                        </div>
                     </div>
                     
                     <div class="info-item" data-field="fecha_ingreso">
                         <label class="info-label">Fecha de Ingreso</label>
                         <div class="info-value" id="value-fecha_ingreso">{{ usuario.fecha_ingreso.strftime('%d/%m/%Y') if usuario.fecha_ingreso else 'No especificada' }}</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Información de Acceso -->
-            <div class="info-section">
-                <div class="section-header">
-                    <div class="section-icon">
-                        <i class="bi bi-shield-lock"></i>
-                    </div>
-                    <h3 class="section-title">Información de Acceso</h3>
-                </div>
-                
-                <div class="info-grid">
-                    <div class="info-item">
-                        <label class="info-label">Usuario de Sistema</label>
-                        <div class="info-value">{{ usuario.email }}</div>
-                    </div>
-                    
-                    <div class="info-item">
-                        <label class="info-label">Último Login Web</label>
-                        <div class="info-value">
-                            {% if usuario.ultimo_login_web %}
-                                {{ usuario.ultimo_login_web.strftime('%d/%m/%Y %H:%M') }}
-                            {% else %}
-                                Nunca
-                            {% endif %}
-                        </div>
-                    </div>
-                    
-                    <div class="info-item">
-                        <label class="info-label">Último Login Tótem</label>
-                        <div class="info-value">
-                            {% if usuario.ultimo_login_totem %}
-                                {{ usuario.ultimo_login_totem.strftime('%d/%m/%Y %H:%M') }}
-                            {% else %}
-                                Nunca
-                            {% endif %}
-                        </div>
                     </div>
                 </div>
             </div>
@@ -245,7 +254,76 @@
         </div>
     </div>
 </div>
+
+<!-- Modal de Confirmación para Cancelar Edición -->
+<div class="modal fade" id="cancelEditModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-circle me-2"></i>Confirmar Cancelación
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Está seguro de que desea cancelar la edición? Todos los cambios no guardados se perderán.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No, seguir editando</button>
+                <button type="button" class="btn btn-primary" id="confirm-cancel-edit">Sí, cancelar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
 <link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/perfil.css') }}">
+
+<script>
+// Inyectar datos para el JavaScript
+window.userData = {
+    nombre: "{{ usuario.nombre }}",
+    apellido: "{{ usuario.apellido }}",
+    email: "{{ usuario.email }}",
+    legajo: "{{ usuario.legajo or '' }}",
+    cuil_cuit: "{{ usuario.cuil_cuit or '' }}",
+    telefono: "{{ usuario.telefono or '' }}",
+    calle: "{{ (usuario.direccion or {}).get('calle', '') }}",
+    altura: "{{ (usuario.direccion or {}).get('altura', '') }}",
+    provincia: "{{ (usuario.direccion or {}).get('provincia', '') }}",
+    localidad: "{{ (usuario.direccion or {}).get('localidad', '') }}",
+    piso: "{{ (usuario.direccion or {}).get('piso', '') }}",
+    depto: "{{ (usuario.direccion or {}).get('depto', '') }}",
+    codigo_postal: "{{ (usuario.direccion or {}).get('codigo_postal', '') }}",
+    role_id: "{{ usuario.role_id or '' }}",
+    turno_id: "{{ usuario.turno_id or '' }}",
+    fecha_ingreso: "{{ usuario.fecha_ingreso.strftime('%Y-%m-%d') if usuario.fecha_ingreso else '' }}"
+};
+
+window.rolesDisponibles = [
+    {% for rol in roles_disponibles %}
+    { id: {{ rol.id }}, nombre: "{{ rol.nombre }}" }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+
+window.turnosDisponibles = [
+    {% for turno in turnos_disponibles %}
+    { 
+        id: {{ turno.id }}, 
+        nombre: "{{ turno.nombre }}",
+        hora_inicio: "{{ turno.hora_inicio[:5] }}",
+        hora_fin: "{{ turno.hora_fin[:5] }}"
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+
+window.sectoresDisponibles = [
+    {% for sector in sectores_disponibles %}
+    { id: {{ sector.id }}, nombre: "{{ sector.nombre }}" }{% if not loop.last %},{% endif %}
+    {% endfor %}
+];
+</script>
+
 <script src="{{ url_for('static', filename='js/usuarios/perfil.js') }}"></script>
 
 {% endblock %}
