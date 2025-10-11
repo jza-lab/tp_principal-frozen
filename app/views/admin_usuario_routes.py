@@ -127,7 +127,20 @@ def nuevo_usuario():
     """
     if request.method == 'POST':
         datos_usuario = request.form.to_dict()
-        datos_usuario['sectores'] = [int(s) for s in request.form.getlist('sectores')]
+        
+        # --- Procesamiento de Sectores ---
+        sectores_str = datos_usuario.get('sectores', '[]')
+        try:
+            sectores_ids = json.loads(sectores_str)
+            if isinstance(sectores_ids, list):
+                datos_usuario['sectores'] = [int(s) for s in sectores_ids if str(s).isdigit()]
+            else:
+                datos_usuario['sectores'] = []
+        except (json.JSONDecodeError, TypeError):
+            # Fallback para el caso de que no sea un JSON string
+            sectores_raw = request.form.getlist('sectores')
+            datos_usuario['sectores'] = [int(s) for s in sectores_raw if s.isdigit()]
+
         face_data = datos_usuario.pop('face_data', None)
 
         if 'role_id' in datos_usuario:
