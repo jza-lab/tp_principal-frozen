@@ -18,7 +18,6 @@ class LoteProductoController(BaseController):
         self.model = LoteProductoModel()
         self.producto_model = ProductoModel()
         self.schema = LoteProductoSchema()
-        # --- NUEVOS MODELOS ---
         self.reserva_model = ReservaProductoModel()
         self.reserva_schema = ReservaProductoSchema()
 
@@ -220,3 +219,86 @@ class LoteProductoController(BaseController):
             logging.error(f"Error crítico al reservar stock: {e}", exc_info=True)
             return {'success': False, 'error': f'Error interno al reservar stock: {str(e)}'}
 
+
+    def crear_lote_desde_formulario(self, form_data: dict, usuario_id: int) -> tuple:
+            """Crea un nuevo lote de producto desde un formulario web."""
+            try:
+                # Preparamos los datos ANTES de la validación
+                data = {key: value for key, value in form_data.items() if value}
+
+                # --- INICIO DE LA CORRECCIÓN ---
+
+                # 1. Asignar cantidad_actual si existe cantidad_inicial
+                if 'cantidad_inicial' in data:
+                    data['cantidad_actual'] = data['cantidad_inicial']
+
+                # 2. Generar número de lote si no viene del formulario
+                if 'numero_lote' not in data or not data['numero_lote']:
+                     data['numero_lote'] = f"LP-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+                # 3. Añadir la fecha de producción (asumimos que es hoy)
+                if 'fecha_produccion' not in data:
+                    data['fecha_produccion'] = datetime.now().date().isoformat()
+
+                # --- FIN DE LA CORRECCIÓN ---
+
+                # Ahora validamos. Todos los campos requeridos ya existen en 'data'.
+                validated_data = self.schema.load(data)
+
+                # (El resto del método no necesita cambios)
+                result = self.model.create(validated_data)
+
+                if result.get('success'):
+                    return self.success_response(data=result['data'], message="Lote de producto creado con éxito.")
+                else:
+                    return self.error_response(result.get('error', 'No se pudo crear el lote.'), 500)
+
+            except ValidationError as e:
+                return self.error_response(f"Datos inválidos: {e.messages}", 400)
+            except Exception as e:
+                logger.error(f"Error creando lote de producto: {e}", exc_info=True)
+                return self.error_response(f"Error interno: {str(e)}", 500)
+
+    # --- MÉTODO MODIFICADO ---
+    def obtener_lotes_para_vista(self) -> tuple:
+        """Obtiene todos los lotes de productos con datos enriquecidos para la vista."""
+        try:
+            result = self.model.get_all_lotes_for_view()
+            if result.get('success'):
+                lotes = result.get('data', [])
+
+                # Convertir strings de fecha a objetos datetime
+                for lote in lotes:
+                    if lote.get('created_at') and isinstance(lote['created_at'], str):
+                        lote['created_at'] = datetime.fromisoformat(lote['created_at'])
+                    if lote.get('fecha_vencimiento') and isinstance(lote['fecha_vencimiento'], str):
+                        lote['fecha_vencimiento'] = datetime.fromisoformat(lote['fecha_vencimiento'])
+
+                return self.success_response(data=lotes)
+            else:
+                return self.error_response(result.get('error', 'Error al cargar los lotes.'), 500)
+        except Exception as e:
+            logger.error(f"Error obteniendo lotes para la vista: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
+
+    # --- MÉTODO MODIFICADO ---
+    def obtener_lote_por_id_para_vista(self, id_lote: int) -> tuple:
+        """Obtiene el detalle de un lote de producto para la vista."""
+        try:
+            result = self.model.get_lote_detail_for_view(id_lote)
+            if result.get('success'):
+                lote = result.get('data')
+
+                # Convertir strings de fecha a objetos datetime
+                if lote:
+                    if lote.get('created_at') and isinstance(lote['created_at'], str):
+                        lote['created_at'] = datetime.fromisoformat(lote['created_at'])
+                    if lote.get('fecha_vencimiento') and isinstance(lote['fecha_vencimiento'], str):
+                        lote['fecha_vencimiento'] = datetime.fromisoformat(lote['fecha_vencimiento'])
+
+                return self.success_response(data=lote)
+            else:
+                return self.error_response(result.get('error', 'Lote no encontrado.'), 404)
+        except Exception as e:
+            logger.error(f"Error obteniendo detalle de lote: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
