@@ -255,6 +255,28 @@
     </div>
 </div>
 
+<!-- Modal de Confirmación para Cancelar Edición -->
+<div class="modal fade" id="cancelEditModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-exclamation-circle me-2"></i>Confirmar Cancelación
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Está seguro de que desea cancelar la edición? Todos los cambios no guardados se perderán.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No, seguir editando</button>
+                <button type="button" class="btn btn-primary" id="confirm-cancel-edit">Sí, cancelar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
 <link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/perfil.css') }}">
 
 <script>

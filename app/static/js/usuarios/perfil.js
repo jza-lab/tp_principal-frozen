@@ -538,11 +538,13 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function handleCancelEdit() {
-        if (!confirm('¿Está seguro que desea cancelar los cambios?')) {
-            return;
-        }
-        
-        exitEditMode();
+        const cancelModal = new bootstrap.Modal(document.getElementById('cancelEditModal'));
+        cancelModal.show();
+
+        document.getElementById('confirm-cancel-edit').onclick = function() {
+            cancelModal.hide();
+            exitEditMode();
+        };
     }
 
     function exitEditMode() {
