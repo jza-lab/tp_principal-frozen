@@ -131,10 +131,14 @@ class UsuarioController(BaseController):
                 return {'success': False, 'error': 'Usuario no encontrado'}
 
             address_fields = ['calle', 'altura', 'piso', 'depto', 'localidad', 'provincia', 'codigo_postal']
-            direccion_data_raw = {field: data.get(field) for field in address_fields if data.get(field) is not None}
+            direccion_data_raw = {field: data.get(field) for field in address_fields}
             user_data = {k: v for k, v in data.items() if k not in address_fields}
+            
+            if 'altura' in direccion_data_raw and direccion_data_raw['altura'] == '':
+                direccion_data_raw['altura'] = None
 
-            has_address_data = any(direccion_data_raw.values())
+            # Un usuario tiene dirección si se proporcionan los campos mínimos.
+            has_address_data = all(direccion_data_raw.get(f) for f in ['calle', 'altura', 'localidad', 'provincia'])
             
             sectores_ids = user_data.pop('sectores', None)
             

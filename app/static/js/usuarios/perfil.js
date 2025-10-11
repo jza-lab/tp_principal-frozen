@@ -605,6 +605,23 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function handleSaveChanges() {
+        // --- NUEVA VALIDACIÓN DE DIRECCIÓN ---
+        const calle = document.querySelector('input[name="calle"]')?.value.trim();
+        const altura = document.querySelector('input[name="altura"]')?.value.trim();
+        const localidad = document.querySelector('input[name="localidad"]')?.value.trim();
+        const provincia = document.querySelector('select[name="provincia"]')?.value.trim();
+
+        const hasPartialAddress = calle || localidad || provincia;
+
+        if (hasPartialAddress && !altura) {
+            showNotification('El campo "Altura" es obligatorio si se especifica una dirección.', 'error');
+            const alturaInput = document.querySelector('input[name="altura"]');
+            if (alturaInput) {
+                alturaInput.classList.add('is-invalid');
+                alturaInput.focus();
+            }
+            return;
+        }
         // Validar formulario
         if (!validateForm()) {
             showNotification('Por favor, complete todos los campos requeridos correctamente', 'error');
