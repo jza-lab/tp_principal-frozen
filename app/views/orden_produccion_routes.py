@@ -93,21 +93,27 @@ def crear():
     try:
         datos_json = request.get_json()
         if not datos_json:
-            return jsonify(
-                {"success": False, "error": "No se recibieron datos JSON válidos."}
-            ), 400
+            return jsonify({"success": False, "error": "No se recibieron datos JSON válidos."}), 400
+
         usuario_id_creador = session.get("usuario_id")
         if not usuario_id_creador:
             return jsonify({"success": False, "error": "Usuario no autenticado."}), 401
+
+        # --- INICIO DE LA CORRECCIÓN DE RUTA ---
+        # El controlador puede devolver un dict (éxito) o una tupla (error).
         resultado = controller.crear_orden(datos_json, usuario_id_creador)
-        return jsonify(resultado), 201 if resultado.get("success") else 400
-    except ValidationError as e:
-        return jsonify(
-            {"success": False, "error": "Datos inválidos", "details": e.messages}
-        ), 400
+
+        # Verificamos si es una tupla (caso de error)
+        if isinstance(resultado, tuple):
+            resultado_dict, status_code = resultado
+            return jsonify(resultado_dict), status_code
+        else:
+            # Si no, es un diccionario (caso de éxito)
+            return jsonify(resultado), 201 if resultado.get("success") else 400
+        # --- FIN DE LA CORRECCIÓN DE RUTA ---
+
     except Exception as e:
-        # Reemplazado venv.logger por print o logging estándar
-        print(f"Error inesperado en crear_orden: {str(e)}")
+        logger.error(f"Error inesperado en la ruta crear: {e}", exc_info=True)
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 

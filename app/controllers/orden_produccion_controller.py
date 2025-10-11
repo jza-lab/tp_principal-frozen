@@ -85,14 +85,22 @@ class OrdenProduccionController(BaseController):
 
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """
-        Valida datos y crea una orden en estado PENDIENTE,
-        guardando el ID del supervisor si está asignado.
+        Valida datos y crea una orden en estado PENDIENTE.
         """
         from app.models.receta import RecetaModel
         receta_model = RecetaModel()
 
         try:
-            # --- Limpieza de datos (sin cambios) ---
+            # --- INICIO DE LA CORRECCIÓN DE VALIDACIÓN ---
+
+            # Si el supervisor_id está presente pero vacío, lo eliminamos
+            # para que no cause un error de validación de tipo entero.
+            if 'supervisor_responsable_id' in form_data and not form_data['supervisor_responsable_id']:
+                form_data.pop('supervisor_responsable_id')
+
+            # --- FIN DE LA CORRECCIÓN DE VALIDACIÓN ---
+
+            # El resto de la lógica de búsqueda de receta que ya corregimos
             producto_id = form_data.get('producto_id')
             if not producto_id:
                 return self.error_response('El campo producto_id es requerido.', 400)
@@ -100,39 +108,21 @@ class OrdenProduccionController(BaseController):
             if 'cantidad' in form_data:
                 form_data['cantidad_planificada'] = form_data.pop('cantidad')
 
-            supervisor_id = form_data.get('supervisor_responsable_id')
-            if supervisor_id:
-                form_data['supervisor_responsable_id'] = int(supervisor_id)
-
-            form_data.pop('usuario_id', None)
-            form_data.pop('estado', None)
-            form_data.pop('receta_id', None)
-
-            # --- INICIO DE LA CORRECCIÓN ---
-            # Desempaquetamos la tupla para obtener el diccionario de resultados
-            receta_result_dict, _ = receta_model.find_all({
-                'producto_id': int(producto_id),
-                'activa': True
-            }, limit=1)
-
-            # Ahora usamos el diccionario 'receta_result_dict' para las validaciones
-            if not receta_result_dict.get('success') or not receta_result_dict.get('data'):
+            # ... resto de la lógica hasta la creación ...
+            receta_result = receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
+            if not receta_result.get('success') or not receta_result.get('data'):
                 return self.error_response(f'No se encontró una receta activa para el producto seleccionado (ID: {producto_id}).', 404)
-
-            receta = receta_result_dict['data'][0]
-            # --- FIN DE LA CORRECCIÓN ---
-
+            receta = receta_result['data'][0]
             form_data['receta_id'] = receta['id']
 
-            # --- Resto del método (sin cambios) ---
             validated_data = self.schema.load(form_data)
             validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
             validated_data['estado'] = 'PENDIENTE'
             validated_data['usuario_creador_id'] = usuario_id
 
             result = self.model.create(validated_data)
-            if result.get('success'):
-                result['data'] = self.schema.dump(result['data'])
+##            if result.get('success'):
+##                result['data'] = self.schema.dump(result['data'])
             return result
 
         except ValidationError as e:
