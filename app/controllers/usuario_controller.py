@@ -12,7 +12,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 import logging
 from app.controllers.direccion_controller import GeorefController
-from app.models.direccion import DireccionModel
 
 logger = logging.getLogger(__name__)
 
@@ -32,18 +31,15 @@ class UsuarioController(BaseController):
         self.turno_model = UsuarioTurnoModel()
         self.schema = UsuarioSchema()
         self.usuario_direccion_controller = GeorefController()
-        self.direccion_model = DireccionModel()
 
-    def _handle_direccion(self, data: Dict) -> Dict:
+    def _normalizar_y_preparar_direccion(self, direccion_data: Dict) -> Optional[Dict]:
         """
-        Helper privado para manejar la normalización y almacenamiento de direcciones.
+        Helper privado para normalizar datos de dirección usando GeorefController.
+        Devuelve un diccionario con la dirección lista para ser guardada en la BD.
         """
-        address_fields = ['calle', 'altura', 'piso', 'depto', 'localidad', 'provincia', 'codigo_postal']
-        direccion_data = {field: data.get(field) for field in address_fields}
-
-        if not all([direccion_data['calle'], direccion_data['altura'], direccion_data['localidad'],
-                    direccion_data['provincia']]):
-            return {'success': True, 'direccion_id': None}  # Not enough data to process, skip
+        if not all(direccion_data.get(k) for k in ['calle', 'altura', 'localidad', 'provincia']):
+            logger.warning("Datos de dirección insuficientes para normalizar.")
+            return direccion_data
 
         full_street = f"{direccion_data['calle']} {direccion_data['altura']}"
         norm_result = self.usuario_direccion_controller.normalizar_direccion(
@@ -54,67 +50,46 @@ class UsuarioController(BaseController):
 
         if not norm_result.get('success'):
             logger.warning(f"GEOREF normalization failed: {norm_result.get('message')}. Using user-provided address.")
-            db_address_data = direccion_data
-        else:
-            norm_data = norm_result['data']
-            db_address_data = {
-                "calle": norm_data['calle']['nombre'],
-                "altura": norm_data['altura']['valor'],
-                "piso": direccion_data.get('piso'),
-                "depto": direccion_data.get('depto'),
-                "codigo_postal": norm_data.get('codigo_postal', direccion_data.get('codigo_postal')),
-                "localidad": norm_data['localidad_censal']['nombre'],
-                "provincia": norm_data['provincia']['nombre'],
-                "latitud": norm_data['ubicacion']['lat'],
-                "longitud": norm_data['ubicacion']['lon']
-            }
-
-        existing_address = self.direccion_model.find_by_full_address(
-            calle=db_address_data['calle'],
-            altura=db_address_data['altura'],
-            piso=db_address_data.get('piso'),
-            depto=db_address_data.get('depto'),
-            localidad=db_address_data['localidad'],
-            provincia=db_address_data['provincia']
-        )
-
-        if existing_address.get('success'):
-            return {'success': True, 'direccion_id': existing_address['data']['id']}
-
-        new_address_result = self.direccion_model.create(db_address_data)
-        if not new_address_result.get('success'):
-            return {'success': False, 'error': 'Failed to save the normalized address.'}
-
-        return {'success': True, 'direccion_id': new_address_result['data']['id']}
+            return direccion_data 
+        
+        norm_data = norm_result['data']
+        return {
+            "calle": norm_data['calle']['nombre'],
+            "altura": norm_data['altura']['valor'],
+            "piso": direccion_data.get('piso'),
+            "depto": direccion_data.get('depto'),
+            "codigo_postal": norm_data.get('codigo_postal', direccion_data.get('codigo_postal')),
+            "localidad": norm_data['localidad_censal']['nombre'],
+            "provincia": norm_data['provincia']['nombre'],
+            "latitud": norm_data['ubicacion']['lat'],
+            "longitud": norm_data['ubicacion']['lon']
+        }
 
     def crear_usuario(self, data: Dict) -> Dict:
         """Valida y crea un nuevo usuario, incluyendo dirección y sectores."""
         try:
-            direccion_result = self._handle_direccion(data)
-            if not direccion_result.get('success'):
-                return direccion_result
-            direccion_id = direccion_result.get('direccion_id')
-
-            sectores_ids = data.pop('sectores', [])
-            
             address_fields = ['calle', 'altura', 'piso', 'depto', 'localidad', 'provincia', 'codigo_postal']
-            user_data_for_validation = {k: v for k, v in data.items() if k not in address_fields}
-
-            validated_data = self.schema.load(user_data_for_validation)
+            direccion_data = {field: data.get(field) for field in address_fields if data.get(field) is not None}
+            user_data = {k: v for k, v in data.items() if k not in address_fields}
+            
+            sectores_ids = user_data.pop('sectores', [])
+            validated_data = self.schema.load(user_data)
 
             if self.model.find_by_email(validated_data['email']).get('data'):
                 return {'success': False, 'error': 'El correo electrónico ya está en uso.'}
 
             password = validated_data.pop('password')
             validated_data['password_hash'] = generate_password_hash(password)
-
-            if direccion_id:
-                validated_data['direccion_id'] = direccion_id
+            
+            if any(direccion_data.values()):
+                direccion_normalizada = self._normalizar_y_preparar_direccion(direccion_data)
+                if direccion_normalizada:
+                    direccion_id = self._get_or_create_direccion(direccion_normalizada)
+                    if direccion_id:
+                        validated_data['direccion_id'] = direccion_id
 
             resultado_creacion = self.model.create(validated_data)
             if not resultado_creacion.get('success'):
-                if self.direccion_model.find_by_id(direccion_id):
-                     pass
                 return resultado_creacion
 
             usuario_creado = resultado_creacion['data']
@@ -140,7 +115,6 @@ class UsuarioController(BaseController):
             for sector_id in sectores_ids:
                 resultado = self.usuario_sector_model.asignar_sector(usuario_id, sector_id)
                 if not resultado.get('success'):
-                    # Si falla alguna asignación, eliminar todas las asignaciones
                     self.usuario_sector_model.eliminar_todas_asignaciones(usuario_id)
                     return {'success': False, 'error': f'Error asignando sector ID {sector_id}'}
             
@@ -150,33 +124,50 @@ class UsuarioController(BaseController):
             return {'success': False, 'error': str(e)}
 
     def actualizar_usuario(self, usuario_id: int, data: Dict) -> Dict:
-        """Updates an existing user, including address and sector management."""
+        """Actualiza un usuario existente, incluyendo la gestión de dirección y sectores."""
         try:
-            direccion_result = self._handle_direccion(data)
-            if not direccion_result.get('success'):
-                return direccion_result
-            direccion_id = direccion_result.get('direccion_id')
+            existing = self.model.find_by_id(usuario_id)
+            if not existing.get('success'):
+                return {'success': False, 'error': 'Usuario no encontrado'}
 
-            sectores_ids = data.pop('sectores', None)
-            
-            if 'password' in data and data['password']:
-                password = data.pop('password')
-                data['password_hash'] = generate_password_hash(password)
-            else:
-                data.pop('password', None)
-            
             address_fields = ['calle', 'altura', 'piso', 'depto', 'localidad', 'provincia', 'codigo_postal']
-            user_data_for_validation = {k: v for k, v in data.items() if k not in address_fields}
+            direccion_data_raw = {field: data.get(field) for field in address_fields if data.get(field) is not None}
+            user_data = {k: v for k, v in data.items() if k not in address_fields}
 
-            validated_data = self.schema.load(user_data_for_validation, partial=True)
+            has_address_data = any(direccion_data_raw.values())
+            
+            sectores_ids = user_data.pop('sectores', None)
+            
+            if 'password' in user_data and user_data['password']:
+                password = user_data.pop('password')
+                user_data['password_hash'] = generate_password_hash(password)
+            else:
+                user_data.pop('password', None)
+
+            validated_data = self.schema.load(user_data, partial=True)
             
             if 'email' in validated_data:
-                existing = self.model.find_by_email(validated_data['email']).get('data')
-                if existing and existing['id'] != usuario_id:
+                existing_email = self.model.find_by_email(validated_data['email']).get('data')
+                if existing_email and existing_email['id'] != usuario_id:
                     return {'success': False, 'error': 'El correo electrónico ya está en uso.'}
 
-            if direccion_id:
-                validated_data['direccion_id'] = direccion_id
+            if has_address_data:
+                direccion_normalizada = self._normalizar_y_preparar_direccion(direccion_data_raw)
+                if direccion_normalizada:
+                    id_direccion_vieja = existing['data'].get('direccion_id')
+                    if id_direccion_vieja:
+                        cantidad_misma_direccion = self.model.contar_usuarios_direccion(id_direccion_vieja)
+                        
+                        if cantidad_misma_direccion > 1:
+                            id_nueva_direccion = self._get_or_create_direccion(direccion_normalizada)
+                            if id_nueva_direccion:
+                                validated_data['direccion_id'] = id_nueva_direccion
+                        else: 
+                            self._actualizar_direccion(id_direccion_vieja, direccion_normalizada)
+                    else:
+                        id_nueva_direccion = self._get_or_create_direccion(direccion_normalizada)
+                        if id_nueva_direccion:
+                            validated_data['direccion_id'] = id_nueva_direccion
 
             resultado_actualizacion = self.model.update(usuario_id, validated_data)
             if not resultado_actualizacion.get('success'):

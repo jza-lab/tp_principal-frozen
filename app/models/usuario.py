@@ -62,6 +62,22 @@ class UsuarioModel(BaseModel):
     def get_table_name(self) -> str:
         return 'usuarios'
 
+    def contar_usuarios_direccion(self,direccion_id: int) -> int:
+        """
+        Cuenta el número de usuarios que tienen asignada una dirección específica.
+        """
+        try:
+            response = self.db.table(self.get_table_name()) \
+                .select('id', count='exact') \
+                .eq('direccion_id', direccion_id) \
+                .execute()
+
+            return response.count if response.count is not None else 0
+
+        except Exception as e:
+            logger.error(f"Error contando usuarios por direccion_id {direccion_id}: {e}")
+            return 0
+
     def _find_by(self, field: str, value, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
         """
         Método genérico y privado para buscar un usuario por un campo específico.
