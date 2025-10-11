@@ -126,34 +126,46 @@ class UsuarioController(BaseController):
     def actualizar_usuario(self, usuario_id: int, data: Dict) -> Dict:
         """Actualiza un usuario existente, incluyendo la gestión de dirección y sectores."""
         try:
+            fields_to_sanitize = ['telefono', 'cuil_cuit', 'fecha_nacimiento', 'fecha_ingreso', 'turno_id', 'piso', 'depto', 'codigo_postal']
+            for field in fields_to_sanitize:
+                if field in data and data[field] == '':
+                    data[field] = None
+            
+
             existing = self.model.find_by_id(usuario_id)
             if not existing.get('success'):
                 return {'success': False, 'error': 'Usuario no encontrado'}
 
+            # --- 1. Separar datos: dirección, sectores y datos de usuario ---
             address_fields = ['calle', 'altura', 'piso', 'depto', 'localidad', 'provincia', 'codigo_postal']
             direccion_data_raw = {field: data.get(field) for field in address_fields}
-            user_data = {k: v for k, v in data.items() if k not in address_fields}
-            
-            if 'altura' in direccion_data_raw and direccion_data_raw['altura'] == '':
-                direccion_data_raw['altura'] = None
+            sectores_ids = data.get('sectores') # No lo quitamos de `data` todavía
 
-            # Un usuario tiene dirección si se proporcionan los campos mínimos.
-            has_address_data = all(direccion_data_raw.get(f) for f in ['calle', 'altura', 'localidad', 'provincia'])
+            # --- 2. Filtrar datos del usuario para validación ---
+            # Solo incluimos campos que el schema puede cargar (no dump_only)
+            loadable_fields = {k for k, v in self.schema.fields.items() if not v.dump_only}
+            user_data_for_validation = {k: v for k, v in data.items() if k in loadable_fields}
+
+            # --- 3. Validar los datos filtrados ---
+            validated_data = self.schema.load(user_data_for_validation, partial=True)
             
-            sectores_ids = user_data.pop('sectores', None)
-            
-            if 'password' in user_data and user_data['password']:
-                password = user_data.pop('password')
-                user_data['password_hash'] = generate_password_hash(password)
+            # --- 4. Manejar el password POST-validación ---
+            if 'password' in validated_data and validated_data['password']:
+                password = validated_data.pop('password')
+                validated_data['password_hash'] = generate_password_hash(password)
             else:
-                user_data.pop('password', None)
+                validated_data.pop('password', None) # Asegurarse de quitarlo si está vacío
 
-            validated_data = self.schema.load(user_data, partial=True)
-            
+            # --- 5. Validaciones de negocio (ej. email único) ---
             if 'email' in validated_data:
                 existing_email = self.model.find_by_email(validated_data['email']).get('data')
                 if existing_email and existing_email['id'] != usuario_id:
                     return {'success': False, 'error': 'El correo electrónico ya está en uso.'}
+
+            # --- 6. Procesar la dirección ---
+            if 'altura' in direccion_data_raw and direccion_data_raw['altura'] == '':
+                direccion_data_raw['altura'] = None
+            has_address_data = all(direccion_data_raw.get(f) for f in ['calle', 'altura', 'localidad', 'provincia'])
 
             if has_address_data:
                 direccion_normalizada = self._normalizar_y_preparar_direccion(direccion_data_raw)
@@ -166,20 +178,27 @@ class UsuarioController(BaseController):
                             id_nueva_direccion = self._get_or_create_direccion(direccion_normalizada)
                             if id_nueva_direccion:
                                 validated_data['direccion_id'] = id_nueva_direccion
-                        else: 
-                            self._actualizar_direccion(id_direccion_vieja, direccion_normalizada)
+                        else:                     
+                            # Actualizar la dirección existente y VERIFICAR el resultado
+                            actualizacion_exitosa = self._actualizar_direccion(id_direccion_vieja, direccion_normalizada)
+                            if not actualizacion_exitosa: # <-- AHORA COMPRUEBA EL BOOLEANO DIRECTAMENTE
+                                # Si la actualización de la dirección falla, detener todo y devolver el error.
+                                return {'success': False, 'error': "Ocurrió un error al intentar actualizar la dirección."}
                     else:
                         id_nueva_direccion = self._get_or_create_direccion(direccion_normalizada)
                         if id_nueva_direccion:
                             validated_data['direccion_id'] = id_nueva_direccion
 
+            # --- 7. Actualizar el usuario en la BD ---
             resultado_actualizacion = self.model.update(usuario_id, validated_data)
             if not resultado_actualizacion.get('success'):
                 return resultado_actualizacion
 
+            # --- 8. Procesar los sectores ---
             if sectores_ids is not None:
                 self.usuario_sector_model.eliminar_todas_asignaciones(usuario_id)
                 if sectores_ids:
+                    # 'sectores' viene de la ruta como lista de ints
                     resultado_sectores = self._asignar_sectores_usuario(usuario_id, sectores_ids)
                     if not resultado_sectores.get('success'):
                         return resultado_sectores
