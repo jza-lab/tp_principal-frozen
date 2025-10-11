@@ -1,5 +1,7 @@
 from marshmallow import Schema, fields, post_load, validate, validates_schema, ValidationError
 
+from app.schemas.proveedor_schema import ProveedorSchema
+
 class InsumosCatalogoSchema(Schema):
     """Esquema para validación de insumos del catálogo"""
 
@@ -79,6 +81,7 @@ class InsumosCatalogoSchema(Schema):
         allow_none=True,
         load_default=None
     )
+    proveedor = fields.Nested(ProveedorSchema, allow_none=True)
 
 
     @post_load

@@ -1,4 +1,4 @@
-from datetime import datetime, date
+
 from app.controllers.base_controller import BaseController
 from app.models.cliente import ClienteModel
 from app.schemas.cliente_schema import ClienteSchema
