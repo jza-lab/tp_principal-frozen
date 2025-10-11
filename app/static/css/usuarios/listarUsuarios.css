@@ -373,11 +373,18 @@
 
 .usuario-card .btn-primary {
     transition: all 0.3s ease;
+    background: #ffffff;
+    color: #000000;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .usuario-card .btn-primary:hover {
+    background: #f8f9fa;
+    color: #000000;
+    border-color: #ced4da;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(var(--app-primary-rgb, 49, 49, 49), 0.3);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .usuario-card .btn-primary:active {
