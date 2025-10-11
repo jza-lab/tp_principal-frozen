@@ -119,7 +119,7 @@ Agregar nuevo insumo al catálogo
                             <select class="form-select" name="proveedor" id="proveedor" required>
                                 <option value="">Seleccionar unidad...</option>
                                 {% for proveedor in proveedores %}
-                                <option value="{{ proveedor.id }}" {% if producto and producto.id_proveedor== proveedor.id %}selected{% endif %}>
+                                <option value="{{ proveedor.id }}" {% if insumo and insumo.id_proveedor== proveedor.id %}selected{% endif %}>
                                     {{ proveedor.nombre }}
                                 </option>
                                 {% endfor %}

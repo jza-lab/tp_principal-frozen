@@ -18,7 +18,6 @@ class LoteProductoController(BaseController):
         self.model = LoteProductoModel()
         self.producto_model = ProductoModel()
         self.schema = LoteProductoSchema()
-        # --- NUEVOS MODELOS ---
         self.reserva_model = ReservaProductoModel()
         self.reserva_schema = ReservaProductoSchema()
 
@@ -157,20 +156,16 @@ class LoteProductoController(BaseController):
     def reservar_stock_para_item(self, pedido_id: int, pedido_item_id: int, producto_id: int, cantidad_necesaria: float, usuario_id: int) -> dict:
         """
         Intenta reservar la cantidad necesaria de un producto para un item de pedido.
-        Utiliza una estrategia FIFO (First-In, First-Out) sobre los lotes.
+        Utiliza una estrategia FIFO y actualiza el estado del lote a 'AGOTADO' si se vacía.
         """
         try:
-            # 1. Obtener todos los lotes disponibles, ordenados por fecha (FIFO)
+            # 1. Obtener lotes disponibles (sin cambios)
             filtros = {
                 'producto_id': producto_id,
                 'estado': 'DISPONIBLE',
-                'cantidad_actual': ('gt', 0) # El nuevo find_all SÍ entiende esto
+                'cantidad_actual': ('gt', 0)
             }
-
-            lotes_disponibles_res = self.model.find_all(
-                filters=filtros,
-                order_by='created_at.asc' # La nueva lógica también maneja .asc y .desc
-)
+            lotes_disponibles_res = self.model.find_all(filters=filtros, order_by='created_at.asc')
 
             if not lotes_disponibles_res.get('success'):
                 return {'success': False, 'error': 'No se pudieron obtener los lotes de productos.'}
@@ -179,7 +174,7 @@ class LoteProductoController(BaseController):
             cantidad_restante_a_reservar = cantidad_necesaria
             cantidad_total_reservada = 0
 
-            # 2. Iterar sobre los lotes y reservar stock
+            # 2. Iterar sobre los lotes y reservar
             for lote in lotes_disponibles:
                 if cantidad_restante_a_reservar <= 0:
                     break
@@ -187,7 +182,7 @@ class LoteProductoController(BaseController):
                 cantidad_en_lote = lote.get('cantidad_actual', 0)
                 cantidad_a_reservar_de_este_lote = min(cantidad_en_lote, cantidad_restante_a_reservar)
 
-                # a. Crear el registro de reserva
+                # a. Crear el registro de reserva (sin cambios)
                 datos_reserva = {
                     'lote_producto_id': lote['id_lote'],
                     'pedido_id': pedido_id,
@@ -195,28 +190,120 @@ class LoteProductoController(BaseController):
                     'cantidad_reservada': cantidad_a_reservar_de_este_lote,
                     'usuario_reserva_id': usuario_id
                 }
-                self.reserva_model.create(self.reserva_schema.load(datos_reserva))
+                # Verificamos que la reserva se crea antes de continuar
+                resultado_reserva = self.reserva_model.create(self.reserva_schema.load(datos_reserva))
+                if not resultado_reserva.get('success'):
+                    raise Exception(f"No se pudo crear el registro de reserva para el lote {lote['id_lote']}.")
 
-                # b. Actualizar (decrementar) la cantidad en el lote
+                # --- INICIO DE LA LÓGICA MEJORADA ---
+                # b. Calcular la nueva cantidad y preparar la actualización
                 nueva_cantidad_lote = cantidad_en_lote - cantidad_a_reservar_de_este_lote
-                self.model.update(lote['id_lote'], {'cantidad_actual': nueva_cantidad_lote}, 'id_lote')
+                datos_actualizacion_lote = {'cantidad_actual': nueva_cantidad_lote}
 
-                # c. Actualizar contadores
+                # c. Si la cantidad llega a cero, cambiar el estado a 'AGOTADO'
+                if nueva_cantidad_lote <= 0:
+                    datos_actualizacion_lote['estado'] = 'AGOTADO'
+                    logger.info(f"El lote {lote['numero_lote']} ha sido marcado como AGOTADO.")
+
+                # d. Realizar la actualización del lote en la base de datos
+                self.model.update(lote['id_lote'], datos_actualizacion_lote, 'id_lote')
+                # --- FIN DE LA LÓGICA MEJORADA ---
+
+                # Actualizar contadores (sin cambios)
                 cantidad_total_reservada += cantidad_a_reservar_de_este_lote
                 cantidad_restante_a_reservar -= cantidad_a_reservar_de_este_lote
 
-            # 3. Devolver el resultado
+            # 3. Devolver resultado (sin cambios)
             cantidad_faltante = cantidad_necesaria - cantidad_total_reservada
             return {
                 'success': True,
-                'data': {
-                    'cantidad_reservada': cantidad_total_reservada,
-                    'cantidad_faltante': cantidad_faltante
-                }
+                'data': {'cantidad_reservada': cantidad_total_reservada, 'cantidad_faltante': cantidad_faltante}
             }
 
         except Exception as e:
-            # Aquí se debería implementar un rollback de la transacción
-            logging.error(f"Error crítico al reservar stock: {e}", exc_info=True)
+            logger.error(f"Error crítico al reservar stock: {e}", exc_info=True)
             return {'success': False, 'error': f'Error interno al reservar stock: {str(e)}'}
 
+
+    def crear_lote_desde_formulario(self, form_data: dict, usuario_id: int) -> tuple:
+            """Crea un nuevo lote de producto desde un formulario web."""
+            try:
+                # Preparamos los datos ANTES de la validación
+                data = {key: value for key, value in form_data.items() if value}
+
+                # --- INICIO DE LA CORRECCIÓN ---
+
+                # 1. Asignar cantidad_actual si existe cantidad_inicial
+                if 'cantidad_inicial' in data:
+                    data['cantidad_actual'] = data['cantidad_inicial']
+
+                # 2. Generar número de lote si no viene del formulario
+                if 'numero_lote' not in data or not data['numero_lote']:
+                     data['numero_lote'] = f"LP-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+                # 3. Añadir la fecha de producción (asumimos que es hoy)
+                if 'fecha_produccion' not in data:
+                    data['fecha_produccion'] = datetime.now().date().isoformat()
+
+                # --- FIN DE LA CORRECCIÓN ---
+
+                # Ahora validamos. Todos los campos requeridos ya existen en 'data'.
+                validated_data = self.schema.load(data)
+
+                # (El resto del método no necesita cambios)
+                result = self.model.create(validated_data)
+
+                if result.get('success'):
+                    return self.success_response(data=result['data'], message="Lote de producto creado con éxito.")
+                else:
+                    return self.error_response(result.get('error', 'No se pudo crear el lote.'), 500)
+
+            except ValidationError as e:
+                return self.error_response(f"Datos inválidos: {e.messages}", 400)
+            except Exception as e:
+                logger.error(f"Error creando lote de producto: {e}", exc_info=True)
+                return self.error_response(f"Error interno: {str(e)}", 500)
+
+    # --- MÉTODO MODIFICADO ---
+    def obtener_lotes_para_vista(self) -> tuple:
+        """Obtiene todos los lotes de productos con datos enriquecidos para la vista."""
+        try:
+            result = self.model.get_all_lotes_for_view()
+            if result.get('success'):
+                lotes = result.get('data', [])
+
+                # Convertir strings de fecha a objetos datetime
+                for lote in lotes:
+                    if lote.get('created_at') and isinstance(lote['created_at'], str):
+                        lote['created_at'] = datetime.fromisoformat(lote['created_at'])
+                    if lote.get('fecha_vencimiento') and isinstance(lote['fecha_vencimiento'], str):
+                        lote['fecha_vencimiento'] = datetime.fromisoformat(lote['fecha_vencimiento'])
+
+                return self.success_response(data=lotes)
+            else:
+                return self.error_response(result.get('error', 'Error al cargar los lotes.'), 500)
+        except Exception as e:
+            logger.error(f"Error obteniendo lotes para la vista: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
+
+    # --- MÉTODO MODIFICADO ---
+    def obtener_lote_por_id_para_vista(self, id_lote: int) -> tuple:
+        """Obtiene el detalle de un lote de producto para la vista."""
+        try:
+            result = self.model.get_lote_detail_for_view(id_lote)
+            if result.get('success'):
+                lote = result.get('data')
+
+                # Convertir strings de fecha a objetos datetime
+                if lote:
+                    if lote.get('created_at') and isinstance(lote['created_at'], str):
+                        lote['created_at'] = datetime.fromisoformat(lote['created_at'])
+                    if lote.get('fecha_vencimiento') and isinstance(lote['fecha_vencimiento'], str):
+                        lote['fecha_vencimiento'] = datetime.fromisoformat(lote['fecha_vencimiento'])
+
+                return self.success_response(data=lote)
+            else:
+                return self.error_response(result.get('error', 'Lote no encontrado.'), 404)
+        except Exception as e:
+            logger.error(f"Error obteniendo detalle de lote: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)

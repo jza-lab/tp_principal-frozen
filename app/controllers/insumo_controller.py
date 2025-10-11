@@ -1,4 +1,4 @@
-import datetime
+
 import re
 from app.controllers.base_controller import BaseController
 from app.models.insumo import InsumoModel
@@ -130,12 +130,12 @@ class InsumoController(BaseController):
         try:
             # 1. Obtener los datos del insumo
             insumo_result = self.insumo_model.find_by_id(id_insumo, 'id_insumo')
-
+            
             if not insumo_result.get('success'):
                 return self.error_response(insumo_result.get('error', 'Insumo no encontrado'), 404)
 
             insumo_data = self.schema.dump(insumo_result['data'])
-
+            
             # 2. Obtener los lotes asociados
             # Usamos el modelo de inventario que ya está instanciado en el controlador
             lotes_result = self.inventario_model.find_by_insumo(id_insumo, solo_disponibles=False)
@@ -172,10 +172,10 @@ class InsumoController(BaseController):
             result = self.insumo_model.update(id_insumo, validated_data, 'id_insumo')
 
             if result['success']:
-                validated_data['updated_at'] = datetime.now().isoformat()
+                
                 logger.info(f"Insumo actualizado exitosamente: {id_insumo}")
                 return self.success_response(
-                    data=self.schema.dump(result['data']),
+                    data=result['data'],
                     message='Insumo actualizado exitosamente'
                 )
             else:

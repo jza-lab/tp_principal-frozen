@@ -254,9 +254,10 @@ class PedidoModel(BaseModel):
         enriquecidos con el nombre del producto y el cliente.
         """
         try:
-            # Seleccionamos campos de pedido_items, el nombre del producto y el nombre del cliente del pedido.
+            # --- CONSULTA CORREGIDA ---
+            # Añadimos '!pedido_items_pedido_id_fkey' para desambiguar la relación con la tabla 'pedidos'.
             query = self.db.table('pedido_items').select(
-                "*, producto_nombre:productos(nombre), pedido:pedidos(nombre_cliente)"
+                '*, producto_nombre:productos(nombre), pedido:pedidos!pedido_items_pedido_id_fkey(nombre_cliente, id)'
             )
 
             if filters:

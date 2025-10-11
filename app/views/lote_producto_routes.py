@@ -1,32 +1,76 @@
 # app/routes/lote_producto_routes.py
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from app.controllers.lote_producto_controller import LoteProductoController
+from app.controllers.producto_controller import ProductoController # Para el formulario
 from app.utils.decorators import roles_required
 import logging
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
 lote_producto_bp = Blueprint("lote_producto", __name__)
+
 controller = LoteProductoController()
+producto_controller = ProductoController() # Para obtener la lista de productos
 
-@lote_producto_bp.route("/lotes", methods=["POST"])
-##@roles_required(allowed_roles=["GERENTE", "SUPERVISOR", "ALMACEN"])
-def crear_lote():
-    """Crea un nuevo lote de producto."""
-    try:
-        if not request.is_json:
-            return jsonify({"success": False, "error": "Content-Type debe ser application/json"}), 400
+@lote_producto_bp.route('/')
+##@permission_required(sector_codigo='LOGISTICA', accion='leer')
+def listar_lotes():
+    response, _ = controller.obtener_lotes_para_vista()
+    lotes = response.get('data', [])
+    return render_template('lotes_productos/listar.html', lotes=lotes)
 
-        data = request.get_json()
-        if not data:
-            return jsonify({"success": False, "error": "No se recibieron datos JSON"}), 400
+@lote_producto_bp.route('/<int:id_lote>/detalle')
+##@permission_required(sector_codigo='LOGISTICA', accion='leer')
+def detalle_lote(id_lote):
+    response, _ = controller.obtener_lote_por_id_para_vista(id_lote)
+    if not response.get('success'):
+        flash(response.get('error'), 'error')
+        return redirect(url_for('lote_producto.listar_lotes'))
 
-        response, status = controller.crear_lote(data)
-        return jsonify(response), status
+    return render_template('lotes_productos/detalle.html', lote=response.get('data'))
 
-    except Exception as e:
-        logger.error(f"Error inesperado en crear_lote: {str(e)}")
-        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+@lote_producto_bp.route('/nuevo', methods=['GET', 'POST'])
+##@permission_required(sector_codigo='LOGISTICA', accion='crear')
+def nuevo_lote():
+    if request.method == 'POST':
+        usuario_id = session.get('usuario_id')
+        response, status_code = controller.crear_lote_desde_formulario(request.form, usuario_id)
+        if response.get('success'):
+            flash(response.get('message'), 'success')
+            return redirect(url_for('lote_producto.listar_lotes'))
+        else:
+            flash(response.get('error'), 'error')
+
+    # --- LÓGICA CORREGIDA ---
+    # Unpack the tuple to get the dictionary and the status code (which we ignore here with _)
+    productos_resp_dict, _ = producto_controller.obtener_todos_los_productos()
+    productos = productos_resp_dict.get('data', [])
+    # --------------------------
+
+    return render_template('lotes_productos/formulario.html',
+                           productos=productos,
+                           today=date.today().isoformat())
+
+##@lote_producto_bp.route("/lotes", methods=["POST"])
+####@roles_required(allowed_roles=["GERENTE", "SUPERVISOR", "ALMACEN"])
+##def crear_lote():
+##    """Crea un nuevo lote de producto."""
+##    try:
+##        if not request.is_json:
+##            return jsonify({"success": False, "error": "Content-Type debe ser application/json"}), 400
+##
+##        data = request.get_json()
+##        if not data:
+##            return jsonify({"success": False, "error": "No se recibieron datos JSON"}), 400
+##
+##        response, status = controller.crear_lote(data)
+##        return jsonify(response), status
+##
+##    except Exception as e:
+##        logger.error(f"Error inesperado en crear_lote: {str(e)}")
+##        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 @lote_producto_bp.route("/lotes", methods=["GET"])
 ##@roles_required(min_level=2, allowed_roles=["EMPLEADO"])

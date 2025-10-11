@@ -1,0 +1,30 @@
+{% extends 'layouts/base.html' %}
+{% block title %}Detalle del Lote - {{ lote.numero_lote or 'N/A' }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">Detalle del Lote de Producto</h1>
+        <p class="text-muted mb-0">Lote: <code class="text-muted">{{ lote.numero_lote or 'N/A' }}</code></p>
+    </div>
+    <a href="{{ url_for('lote_producto.listar_lotes') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Volver al Inventario
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">Información del Lote</h5>
+        <span class="badge bg-success fs-6">{{ lote.estado | title }}</span>
+    </div>
+    <div class="card-body">
+        <div class="row g-4">
+            <div class="col-md-6"><div class="small text-muted">Producto</div><div class="fw-bold h5">{{ lote.producto_nombre or 'No disponible' }}</div></div>
+            <div class="col-md-6"><div class="small text-muted">Cantidad Inicial</div><div class="fw-bold">{{ lote.cantidad_inicial | round(2) }} unidades</div></div>
+            <div class="col-md-6"><div class="small text-muted">Cantidad Actual</div><div class="fw-bold h5">{{ lote.cantidad_actual | round(2) }} unidades</div></div>
+            <div class="col-md-6"><div class="small text-muted">Fecha de Creación</div><div class="fw-bold">{{ lote.created_at.strftime('%Y-%m-%d %H:%M') if lote.created_at else 'N/A' }}</div></div>
+            <div class="col-md-6"><div class="small text-muted">Fecha de Vencimiento</div><div class="fw-bold">{{ lote.fecha_vencimiento.strftime('%Y-%m-%d') if lote.fecha_vencimiento else 'No aplica' }}</div></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
