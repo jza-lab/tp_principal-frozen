@@ -1,18 +1,18 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}Gestión de Usuarios - Sistema Frozen{% endblock %}
+{% block title %}Gestión de Empleados - Sistema Frozen{% endblock %}
 
 {% block content %}
 <div class="usuarios-container">
     <!-- Header Principal -->
     <div class="d-flex justify-content-between align-items-center pb-2 mb-4 border-bottom">
         <div>
-            <h1 class="h2 mb-1">Gestión de Usuarios</h1>
+            <h1 class="h2 mb-1">Gestión de Empleados</h1>
             <p class="text-muted mb-0">Administración de personal y roles del sistema</p>
         </div>
         <div class="btn-toolbar">
             <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary">
-                <i class="bi bi-person-plus me-1"></i>Crear Nuevo Usuario
+                <i class="bi bi-person-plus me-1"></i>Crear Nuevo Empleado
             </a>
         </div>
     </div>
@@ -22,7 +22,7 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link-custom active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users-panel" type="button" role="tab">
                 <i class="bi bi-people me-2"></i>
-                <span>Todos los Usuarios</span>
+                <span>Todos los Empleados</span>
                 <span class="tab-indicator"></span>
             </button>
         </li>
@@ -38,7 +38,7 @@
     <!-- Contenido de las Pestañas -->
     <div class="tab-content" id="userTabsContent">
 
-        <!-- Panel de Todos los Usuarios -->
+        <!-- Panel de Todos los Empleados -->
         <div class="tab-pane fade show active" id="users-panel" role="tabpanel">
             <!-- Barra de búsqueda y filtros -->
             <div class="search-filter-bar">
@@ -66,7 +66,7 @@
                 </div>
             </div>
 
-            <!-- Tarjetas de Usuarios -->
+            <!-- Tarjetas de Empleados -->
             <div class="row" id="all-users-container">
                 {% for usuario in usuarios %}
                 <div class="col-md-4 mb-4 user-card-wrapper" 
@@ -117,12 +117,12 @@
                                     {% if usuario.activo %}
                                         <a href="{{ url_for('admin_usuario.ver_perfil', id=usuario.id) }}" 
                                            class="btn btn-sm btn-primary w-100">
-                                            <i class="bi bi-person-gear me-2"></i>Gestionar Usuario
+                                            <i class="bi bi-person-gear me-2"></i>Gestionar Empleado
                                         </a>
                                     {% else %}
                                         <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="w-100">
                                             <button type="submit" class="btn btn-sm btn-outline-success w-100">
-                                                <i class="bi bi-person-check me-1"></i>Activar Usuario
+                                                <i class="bi bi-person-check me-1"></i>Activar Empleado
                                             </button>
                                         </form>
                                     {% endif %}
@@ -135,10 +135,10 @@
                 <div class="col-12">
                     <div class="empty-state large">
                         <i class="bi bi-people"></i>
-                        <h4>No hay usuarios registrados</h4>
-                        <p>Comience agregando el primer usuario al sistema</p>
+                        <h4>No hay empleados registrados</h4>
+                        <p>Comience agregando el primer empleado al sistema</p>
                         <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary mt-3">
-                            <i class="bi bi-person-plus me-1"></i>Crear Primer Usuario
+                            <i class="bi bi-person-plus me-1"></i>Crear Primer Empleado
                         </a>
                     </div>
                 </div>
@@ -222,17 +222,13 @@
                             <div id="no-web-activity" class="empty-state" style="display: none;">
                                 <i class="bi bi-laptop"></i>
                                 <h4>Sin Actividad en Web</h4>
-                                <p>Ningún usuario ha iniciado sesión en la web hoy.</p>
+                                <p>Ningún empleado ha iniciado sesión en la web hoy.</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- Panel de Todos los Usuarios -->
-        
-
     </div>
 </div>
 

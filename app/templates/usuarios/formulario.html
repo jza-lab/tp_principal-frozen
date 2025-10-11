@@ -1,7 +1,7 @@
 {% extends "layouts/base.html" %}
 
 {% block title %}
-{% if is_new %}Nuevo Usuario{% else %}Editar Usuario{% endif %} - Sistema Frozen
+{% if is_new %}Nuevo Empleado{% else %}Editar Empleado{% endif %} - Sistema Frozen
 {% endblock %}
 
 {% block extra_css %}
@@ -14,14 +14,14 @@
         <div class="form-header">
             <i class="bi bi-person-badge fs-1 mb-3"></i>
             <h2 class="mb-1">
-                {% if is_new %}Crear Nuevo Usuario{% else %}Editar Usuario{% endif %}
+                {% if is_new %}Crear Nuevo Empleado{% else %}Editar Empleado{% endif %}
             </h2>
             <p class="mb-0 opacity-75">
-                {% if is_new %}Complete la información en 3 simples pasos{% else %}Modificar información del usuario {% endif %}
+                {% if is_new %}Complete la información en 3 simples pasos{% else %}Modificar información del empleado {% endif %}
             </p>
         </div>
         <div class="form-body">
-            <!-- Indicador de pasos (solo para usuarios nuevos) -->
+            <!-- Indicador de pasos (solo para empleados nuevos) -->
             {% if is_new %}
             <div class="step-indicator">
                 <div class="step-item">
@@ -149,7 +149,7 @@
                             <!-- Selector de Rol Interactivo -->
                             <div class="col-12">
                                 <label class="form-label fw-bold">
-                                    <i class="bi bi-shield-check me-1"></i>Rol del Usuario
+                                    <i class="bi bi-shield-check me-1"></i>Rol del Empleado
                                 </label>
                                 <div class="roles-grid" id="rolesGrid">
                                     {% for rol in roles %}
@@ -205,7 +205,7 @@
                                 <div class="sectores-info">
                                     <i class="bi bi-info-circle-fill"></i>
                                     <div class="sectores-info-text">
-                                        <strong>Seleccione hasta 2 sectores</strong> a los que tendrá acceso el usuario
+                                        <strong>Seleccione hasta 2 sectores</strong> a los que tendrá acceso el empleado
                                     </div>
                                     <div class="sectores-counter" id="sectoresCounter">
                                         <i class="bi bi-check-circle-fill me-1"></i>
@@ -330,7 +330,7 @@
                 </div>
 
 
-                <!-- Paso 3: Registro de rostro (solo para usuarios nuevos) -->
+                <!-- Paso 3: Registro de rostro (solo para empleados nuevos) -->
                 {% if is_new %}
                 <div id="faceRegistration" class="form-section" style="display: none;">
                     <div class="section-title">
@@ -424,7 +424,7 @@
                             Siguiente <i class="bi bi-arrow-right ms-1"></i>
                         </button>
                         <button type="submit" class="btn btn-success" id="submitForm" style="display: none;">
-                            <i class="bi bi-check-circle me-1"></i>Crear Usuario
+                            <i class="bi bi-check-circle me-1"></i>Crear Empleado
                         </button>
                         {% else %}
                         <button type="submit" class="btn btn-primary">
