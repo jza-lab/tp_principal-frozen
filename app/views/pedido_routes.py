@@ -1,4 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
+from matplotlib.dates import relativedelta
 from app.controllers.pedido_controller import PedidoController
 from app.permisos import permission_required
 import re
@@ -65,7 +66,8 @@ def nueva():
 
     # Calculamos la fecha de hoy en formato AAAA-MM-DD
     hoy = datetime.now().strftime('%Y-%m-%d')
-
+    fecha_limite= (datetime.now() + relativedelta(months=3)).strftime('%Y-%m-%d')
+    
     if request.method == 'POST':
         form_data = _parse_form_data(request.form.to_dict())
         response, status_code = controller.crear_pedido_con_items(form_data)
@@ -81,7 +83,7 @@ def nueva():
             return render_template('orden_venta/formulario.html',
                                     productos=form_data_resp.get('data', {}).get('productos', []),
                                     pedido=form_data,
-                                    today=hoy)
+                                    today=hoy, fecha_limite=fecha_limite)
 
     # Método GET
     response, status_code = controller.obtener_datos_para_formulario()
@@ -94,7 +96,9 @@ def nueva():
     return render_template('orden_venta/formulario.html',
                            productos=productos,
                            pedido=None,
-                           today=hoy)
+                           today=hoy,
+                           fecha_limite=fecha_limite)
+
 @orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
 @permission_required(sector_codigo='LOGISTICA', accion='actualizar')
 def editar(id):

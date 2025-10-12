@@ -5,10 +5,13 @@ from app.controllers.base_controller import BaseController
 # --- IMPORTACIONES NUEVAS ---
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
+
 # -------------------------
 from app.models.cliente import ClienteModel
 from app.models.pedido import PedidoModel
 from app.models.producto import ProductoModel
+from app.models.direccion import DireccionModel
+from app.schemas.direccion_schema import DireccionSchema
 from app.schemas.cliente_schema import ClienteSchema
 from app.schemas.pedido_schema import PedidoSchema
 from typing import Dict, Optional
@@ -27,7 +30,9 @@ class PedidoController(BaseController):
         self.schema = PedidoSchema()
         self.producto_model = ProductoModel()
         self.cliente_model = ClienteModel()
+        self.direccion_model= DireccionModel()
         self.dcliente_schema = ClienteSchema()
+        self.direccion_schema= DireccionSchema()
         # --- INSTANCIAS NUEVAS ---
         self.lote_producto_controller = LoteProductoController()
         self.orden_produccion_controller = OrdenProduccionController()
@@ -107,10 +112,19 @@ class PedidoController(BaseController):
                 form_data['items'] = self._consolidar_items(form_data['items'])
 
 
+            direccion_data = {
+                'calle': form_data['calle'], 'altura': form_data['altura'],
+                'provincia': form_data['provincia'], 'localidad': form_data['localidad'],
+                'piso': form_data['piso'], 'depto': form_data['depto'], 'codigo_postal': form_data['codigo_postal']
+            }
+            direccion_id = self._get_or_create_direccion(direccion_data)
+
+
             data ={
                 'nombre_cliente': form_data['nombre_cliente'], 'fecha_solicitud': form_data['fecha_solicitud'],
                 'items': form_data['items'], 'id_cliente': int(form_data['id_cliente']),
-                'precio_orden': float(form_data['total'])
+                'precio_orden': float(form_data['total']), 'fecha_requerido' : form_data['fecha_requerido'], 
+                'id_direccion_entrega': direccion_id, 'comentarios_adicionales': form_data['comentarios_adicionales']
             }
 
             validated_data = self.schema.load(data)
@@ -121,7 +135,7 @@ class PedidoController(BaseController):
 
 
             # --- INICIO: Verificación de Stock ---
-            logging.info("Iniciando verificación de stock para nuevo pedido...")
+
             for item in items_data:
                 producto_id = item['producto_id']
                 cantidad_solicitada = item['cantidad']

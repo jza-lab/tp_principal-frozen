@@ -16,32 +16,32 @@
         </div>
     </div>
 
-    
-<!-- Filtros -->
-<div class="card mb-4">
-    <div class="card-body card-filter">
-        <form id="filter-form" method="get" action="{{ url_for('clientes_proveedores.listar_clientes') }}">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label for="busqueda" class="form-label">Buscar</label>
-                    <input type="text" name="busqueda" id="busqueda" class="form-control"
-                        placeholder="Nombre o código..." value="{{ request.args.get('busqueda', '') }}">
-                </div>
-                     <div class="col-md-2 align-self-end">
-                    <button type="submit" class="btn btn-outline-secondary w-100">
-                        <i class="bi bi-search"></i> Buscar
-                    </button>
-                </div>
 
-                <div class="col-md-3">
-                    <div class="text-muted small text-end">
-                        <p>{{ clientes|length }} clientes encontrados</p>
+    <!-- Filtros -->
+    <div class="card mb-4">
+        <div class="card-body card-filter">
+            <form id="filter-form" method="get" action="{{ url_for('clientes_proveedores.listar_clientes') }}">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label for="busqueda" class="form-label">Buscar</label>
+                        <input type="text" name="busqueda" id="busqueda" class="form-control"
+                            placeholder="Nombre o código..." value="{{ request.args.get('busqueda', '') }}">
+                    </div>
+                    <div class="col-md-2 align-self-end">
+                        <button type="submit" class="btn btn-outline-secondary w-100">
+                            <i class="bi bi-search"></i> Buscar
+                        </button>
+                    </div>
+
+                    <div class="col-md-3">
+                        <div class="text-muted small text-end">
+                            <p>{{ clientes|length }} clientes encontrados</p>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </form>
+            </form>
+        </div>
     </div>
-</div>
 
 
     <!-- Tarjetas de clientes -->
@@ -53,16 +53,18 @@
                     <h5 class="card-title">
                         {{ cliente.nombre }} {{ cliente.apellido }}
                         {% if not cliente.activo %}
-                            <span class="badge bg-secondary">Inactivo</span>
+                        <span class="badge bg-secondary">Inactivo</span>
                         {% endif %}
                     </h5>
-                    
+
                     <div class="card-secondary-details mb-3">
                         <span><i class="bi bi-hash"></i> {{ cliente.codigo }}</span>
                         <span><i class="bi bi-person-vcard"></i> {{ cliente.cuit }}</span>
                         <span><i class="bi bi-envelope"></i> {{ cliente.email }}</span>
                         <span><i class="bi bi-phone"></i> {{ cliente.telefono }}</span>
-                        <span class="'d-block"><i class="bi bi-house"></i> {{cliente.direccion.calle }} {{ cliente.direccion.altura}}, {{cliente.direccion. localidad}}, {{cliente.direccion.provincia}}</span>
+                        <span class="'d-block"><i class="bi bi-house"></i> {{cliente.direccion.calle }} {{
+                            cliente.direccion.altura}}, {{cliente.direccion. localidad}},
+                            {{cliente.direccion.provincia}}</span>
                     </div>
 
                     <div class="mt-auto">
@@ -77,40 +79,39 @@
                             </div>
                             <div>
                                 {% if cliente.activo %}
-                                    <span class="badge bg-success-soft text-success">
-                                        <i class="bi bi-check-circle me-1"></i>Activo
-                                    </span>
+                                <span class="badge bg-success-soft text-success">
+                                    <i class="bi bi-check-circle me-1"></i>Activo
+                                </span>
                                 {% else %}
-                                    <span class="badge bg-danger-soft text-danger">
-                                        <i class="bi bi-x-circle me-1"></i>Inactivo
-                                    </span>
+                                <span class="badge bg-danger-soft text-danger">
+                                    <i class="bi bi-x-circle me-1"></i>Inactivo
+                                </span>
                                 {% endif %}
                             </div>
                         </div>
 
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
                             {% if cliente.activo %}
-                                <a href="{{ url_for('clientes_proveedores.editar_cliente', id=cliente.id) }}" 
-                                   class="btn btn-sm btn-outline-primary" title="Editar cliente">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
+                            <a href="{{ url_for('clientes_proveedores.editar_cliente', id=cliente.id) }}"
+                                class="btn btn-sm btn-outline-primary" title="Editar cliente">
+                                <i class="bi bi-pencil"></i>
+                            </a>
 
-                                <a href="{{ url_for('clientes_proveedores.ver_perfil_cliente', id=cliente.id) }}" class="btn btn-sm btn-outline-primary" title="Ver detalle">
-                                    <i class="bi bi-eye"></i>
-                                </a>
+                            <a href="{{ url_for('clientes_proveedores.ver_perfil_cliente', id=cliente.id) }}"
+                                class="btn btn-sm btn-outline-primary" title="Ver detalle">
+                                <i class="bi bi-eye"></i>
+                            </a>
 
-                                <form method="POST" action="{{ url_for('clientes_proveedores.eliminar_cliente', id=cliente.id) }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">
-                                        <i class="bi bi-person-x"></i> Desactivar
-                                    </button>
-                                </form>
+                            <a class="btn btn-sm btn-outline-danger" title="Inhabilitar cliente"
+                                onClick="eliminarCliente('{{ cliente.id }}')">
+                                <i class="bi bi-person-x"></i> Desactivar
+                            </a>
 
                             {% else %}
-                                <form method="POST" action="{{ url_for('clientes_proveedores.habilitar_cliente', id=cliente.id) }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-success">
-                                        <i class="bi bi-person-check"></i> Activar
-                                    </button>
-                                </form>
+                            <a class="btn btn-sm btn-outline-success" title="Habilitar cliente"
+                                onClick="habilitarCliente('{{ cliente.id }}')">
+                                <i class="bi bi-person-check"></i> Activar
+                            </a>
                             {% endif %}
                         </div>
                     </div>
@@ -131,4 +132,5 @@
         {% endfor %}
     </div>
 </div>
+<script src="{{ url_for('static', filename='js/clientes/eliminarCliente.js') }}"></script>
 {% endblock %}

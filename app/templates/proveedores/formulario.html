@@ -34,8 +34,8 @@ Agregar nuevo proveedor
                             <div class="form-floating">
                                 <input type="text" class="form-control" name="codigo" id="codigo"
                                     placeholder="Código único para identificar el proveedor"
-                                    value="{{ proveedor.codigo if proveedor else '' }}" required {% if proveedor %}readonly{%
-                                    endif %}>
+                                    value="{{ proveedor.codigo if proveedor else '' }}" required {% if proveedor
+                                    %}readonly{% endif %}>
                                 <label for="codigo">
                                     <i class="bi bi-key-fill me-1"></i>Código<span class="text-danger">*</span>
                                 </label>
@@ -47,18 +47,19 @@ Agregar nuevo proveedor
                         <div class="col-md-6">
                             <div class="form-floating">
                                 <input type="text" class="form-control" id="nombre" name="nombre"
-                                    placeholder="Nombre del Proveedor" value="{{ proveedor.nombre if proveedor else '' }}"
-                                    required>
+                                    placeholder="Nombre del Proveedor"
+                                    value="{{ proveedor.nombre if proveedor else '' }}" required>
                                 <label for="nombre">
                                     <i class="bi bi-person-circle me-1"></i>Nombre <span class="text-danger">*</span>
                                 </label>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <div class="input-group">
-                                {% set cuit_parts = proveedor.cuit.split('-') if proveedor and proveedor.cuit else ['', '', ''] %}
-                                
+                                {% set cuit_parts = proveedor.cuit.split('-') if proveedor and proveedor.cuit else ['',
+                                '', ''] %}
+
                                 <input type="text" class="form-control text-center" id="cuit_parte1" name="cuit_parte1"
                                     maxlength="2" pattern="\d{2}" placeholder="XX" value="{{ cuit_parts[0] }}" required
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
@@ -68,8 +69,8 @@ Agregar nuevo proveedor
 
                                 <div class="form-floating" style="flex-grow: 4;">
                                     <input type="text" class="form-control text-center" id="cuit_parte2"
-                                        name="cuit_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX"
-                                        required value="{{ cuit_parts[1] }}">
+                                        name="cuit_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX" required
+                                        value="{{ cuit_parts[1] }}">
                                     <label for="cuit_parte2">
                                         <i class="bi bi-person-badge me-1"></i>CUIT
                                     </label>
@@ -80,8 +81,7 @@ Agregar nuevo proveedor
                                 <input type="text" class="form-control text-center" id="cuit_parte3" name="cuit_parte3"
                                     maxlength="1" pattern="\d{1}" placeholder="X" required
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
-                                    aria-label="Dígito verificador"
-                                    value="{{ cuit_parts[2] }}">
+                                    aria-label="Dígito verificador" value="{{ cuit_parts[2] }}">
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -105,16 +105,30 @@ Agregar nuevo proveedor
                                 </label>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <div class="form-floating">
-                                <input type="text" class="form-control" name="condicion_iva" id="condicion_iva"
-                                    placeholder="Condición IVA" value="{{ proveedor.condicion_iva if proveedor else '' }}">
-                                <label for="condicion_iva">
-                                    <i class="bi bi-file-text me-1"></i>Condición IVA
+                                <select class="form-select" id="condicion-iva" name="condicion_iva" required>
+                                    <option value="" disabled selected>Seleccione una opción...</option>
+
+                                    <option value="1" {{ 'selected' if proveedor and proveedor.condicion_iva|string=='1'
+                                        }}>Responsable Inscripto</option>
+                                    <option value="2" {{ 'selected' if proveedor and proveedor.condicion_iva|string=='2'
+                                        }}>Monotributista</option>
+                                    <option value="3" {{ 'selected' if proveedor and proveedor.condicion_iva|string=='3'
+                                        }}>IVA Exento</option>
+                                    <option value="4" {{ 'selected' if proveedor and proveedor.condicion_iva|string=='4'
+                                        }}>Consumidor Final</option>
+                                </select>
+
+                                <label for="condicion-iva">
+                                    <i class="bi bi-file-earmark-person me-1"></i>Condición de IVA <span
+                                        class="text-danger">*</span>
                                 </label>
                             </div>
-                            <div class="form-text">Condición IVA del proveedor</div>
+                            <div class="invalid-feedback">
+                                Por favor, seleccione una condición de IVA.
+                            </div>
                         </div>
                         <div class="form-subsection">
 
@@ -122,8 +136,10 @@ Agregar nuevo proveedor
                             <div class="row g-3">
                                 <div class="col-md-8">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="calle" name="calle" minlength="3" maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
-                                            placeholder="Calle" value="{{ proveedor.direccion.calle if proveedor and proveedor.direccion }}" required>
+                                        <input type="text" class="form-control" id="calle" name="calle" minlength="3"
+                                            maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" placeholder="Calle"
+                                            value="{{ proveedor.direccion.calle if proveedor and proveedor.direccion }}"
+                                            required>
                                         <label for="calle">
                                             <i class="bi bi-signpost me-1"></i>Calle
                                         </label>
@@ -133,8 +149,10 @@ Agregar nuevo proveedor
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="number" class="form-control" id="altura" name="altura" pattern="\d{1,5}" maxlength="5" max="99999" min="1"
-                                            placeholder="Altura" value="{{ proveedor.direccion.altura if proveedor and proveedor.direccion }}" required>
+                                        <input type="number" class="form-control" id="altura" name="altura"
+                                            pattern="\d{1,5}" maxlength="5" max="99999" min="1" placeholder="Altura"
+                                            value="{{ proveedor.direccion.altura if proveedor and proveedor.direccion }}"
+                                            required>
                                         <label for="altura">
                                             <i class="bi bi-123 me-1"></i>Altura
                                         </label>
@@ -153,7 +171,8 @@ Agregar nuevo proveedor
                                             Fuego",
                                             "Tucumán"] %}
                                             {% for p in provincias %}
-                                            <option value="{{ p }}" {{ 'selected' if proveedor and proveedor.direccion and proveedor.direccion.provincia == p }}>{{ p }}</option>
+                                            <option value="{{ p }}" {{ 'selected' if proveedor and proveedor.direccion
+                                                and proveedor.direccion.provincia==p }}>{{ p }}</option>
                                             {% endfor %}
                                         </select>
                                         <label for="provincia">
@@ -165,8 +184,12 @@ Agregar nuevo proveedor
 
                                 <div class="col-md-6">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="localidad" name="localidad" minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" title="Ingresá un nombre de localidad válido (solo letras y espacios)."
-                                            placeholder="Localidad" value="{{ proveedor.direccion.localidad if proveedor and proveedor.direccion }}" required>
+                                        <input type="text" class="form-control" id="localidad" name="localidad"
+                                            minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
+                                            title="Ingresá un nombre de localidad válido (solo letras y espacios)."
+                                            placeholder="Localidad"
+                                            value="{{ proveedor.direccion.localidad if proveedor and proveedor.direccion }}"
+                                            required>
                                         <label for="localidad">
                                             <i class="bi bi-pin-map me-1"></i>Localidad
                                         </label>
@@ -176,8 +199,11 @@ Agregar nuevo proveedor
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="10"  pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
-                                            placeholder="Piso (Opcional)" value="{{ (proveedor.direccion or {}).get('piso', '') if proveedor and proveedor.direccion }}">
+                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="10"
+                                            pattern="[A-Za-z0-9\s]*"
+                                            title="Solo se permiten letras, números y espacios."
+                                            placeholder="Piso (Opcional)"
+                                            value="{{ (proveedor.direccion or {}).get('piso', '') if proveedor and proveedor.direccion }}">
                                         <label for="piso">
                                             <i class="bi bi-building me-1"></i>Piso (Opcional)
                                         </label>
@@ -186,8 +212,11 @@ Agregar nuevo proveedor
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="depto" name="depto" maxlength="5" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
-                                            placeholder="Dto (Opcional)" value="{{ (proveedor.direccion or {}).get('depto', '') if proveedor and proveedor.direccion }}">
+                                        <input type="text" class="form-control" id="depto" name="depto" maxlength="5"
+                                            pattern="[A-Za-z0-9\s]*"
+                                            title="Solo se permiten letras, números y espacios."
+                                            placeholder="Dto (Opcional)"
+                                            value="{{ (proveedor.direccion or {}).get('depto', '') if proveedor and proveedor.direccion }}">
                                         <label for="depto">
                                             <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
                                         </label>
@@ -196,8 +225,11 @@ Agregar nuevo proveedor
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"  minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}" title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
-                                            placeholder="Código Postal" value="{{ (proveedor.direccion or {}).get('codigo_postal', '') if proveedor and proveedor.direccion }}">
+                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                                            minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}"
+                                            title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
+                                            placeholder="Código Postal"
+                                            value="{{ (proveedor.direccion or {}).get('codigo_postal', '') if proveedor and proveedor.direccion }}">
                                         <label for="codigo_postal">
                                             <i class="bi bi-mailbox me-1"></i>Código Postal
                                         </label>
@@ -205,11 +237,12 @@ Agregar nuevo proveedor
                                 </div>
                             </div>
                         </div>
-                        </div>
+                    </div>
 
 
                     <div class="d-flex justify-content-end gap-2 mt-4">
-                        <a href="{{ url_for('clientes_proveedores.listar_proveedores') }}" class="btn btn-outline-secondary">
+                        <a href="{{ url_for('clientes_proveedores.listar_proveedores') }}"
+                            class="btn btn-outline-secondary">
                             Cancelar
                         </a>
                         <button type="submit" class="btn btn-primary">

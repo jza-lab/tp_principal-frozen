@@ -14,13 +14,11 @@ document.querySelectorAll('.product-selector option[data-precio]').forEach(optio
 window.calculateOrderTotals = function () {
     const itemsContainer = document.getElementById('items-container');
     const noItemsMsg = document.getElementById('no-items-msg');
-    const ivaCheckbox = document.getElementById('iva-checkbox');
-    const subtotalNetoInput = document.getElementById('subtotal-neto');
     const totalFinalInput = document.getElementById('total-final');
 
     let subtotalNeto = 0;
 
-    if (!itemsContainer || !subtotalNetoInput || !totalFinalInput) return;
+    if (!itemsContainer || !totalFinalInput) return;
 
     document.querySelectorAll('#items-container .item-row').forEach(row => {
         const productSelect = row.querySelector('.product-selector');
@@ -56,10 +54,6 @@ window.calculateOrderTotals = function () {
     });
 
     let totalFinal = subtotalNeto;
-    if (ivaCheckbox && ivaCheckbox.checked) {
-        totalFinal *= (1 + IVA_RATE);
-    }
-    if (subtotalNetoInput) subtotalNetoInput.value = subtotalNeto.toFixed(2);
     if (totalFinalInput) totalFinalInput.value = totalFinal.toFixed(2);
 
     const visibleRows = itemsContainer.querySelectorAll('.item-row').length;
