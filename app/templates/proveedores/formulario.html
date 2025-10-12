@@ -86,10 +86,10 @@ Agregar nuevo proveedor
                         </div>
                         <div class="col-md-6">
                             <div class="form-floating">
-                                <input type="text" class="form-control" name="telefono" id="telefono"
+                                <input type="text" class="form-control" name="telefono" id="telefono" maxlength="13"
                                     placeholder="Teléfono" value="{{ proveedor.telefono if proveedor else '' }}"
-                                    pattern="\d{6,10}"
-                                    title="El número debe ser de hasta 9 dígitos (sin espacios ni guiones)." required>
+                                    pattern="\d{7,11}"
+                                    title="El número debe ser de hasta 11 dígitos (sin espacios ni guiones)." required>
                                 <label for="telefono">
                                     <i class="bi bi-phone me-1"></i>Teléfono <span class="text-danger">*</span>
                                 </label>
