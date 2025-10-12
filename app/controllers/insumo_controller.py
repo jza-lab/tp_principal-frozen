@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 import re
 from app.controllers.base_controller import BaseController
 from app.models.insumo import InsumoModel
