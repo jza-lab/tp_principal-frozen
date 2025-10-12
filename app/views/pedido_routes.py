@@ -78,12 +78,7 @@ def nueva():
             return redirect(url_for('orden_venta.listar'))
         else:
             flash(response.get('error', 'Error al crear el pedido.'), 'error')
-            # Volver a cargar los datos y AÑADIR 'today'
-            form_data_resp, _ = controller.obtener_datos_para_formulario()
-            return render_template('orden_venta/formulario.html',
-                                    productos=form_data_resp.get('data', {}).get('productos', []),
-                                    pedido=form_data,
-                                    today=hoy, fecha_limite=fecha_limite)
+            return
 
     # Método GET
     response, status_code = controller.obtener_datos_para_formulario()
@@ -95,7 +90,8 @@ def nueva():
 
     return render_template('orden_venta/formulario.html',
                            productos=productos,
-                           pedido=None,
+                           pedido=None, cliente=None,
+                           is_edit=False,
                            today=hoy,
                            fecha_limite=fecha_limite)
 
@@ -117,9 +113,10 @@ def editar(id):
             form_data_resp, _ = controller.obtener_datos_para_formulario()
             # Añadimos el ID al diccionario para que el template sepa que estamos editando
             form_data['id'] = id
+            
             return render_template('orden_venta/formulario.html',
                                    productos=form_data_resp.get('data', {}).get('productos', []),
-                                   pedido=form_data,
+                                   pedido=form_data, is_edit=True, cliente=None,
                                    today=hoy)
 
     # Método GET
