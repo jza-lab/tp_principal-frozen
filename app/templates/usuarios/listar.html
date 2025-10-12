@@ -1,18 +1,18 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}Gestión de Usuarios - Sistema Frozen{% endblock %}
+{% block title %}Gestión de Empleados - Sistema Frozen{% endblock %}
 
 {% block content %}
 <div class="usuarios-container">
     <!-- Header Principal -->
     <div class="d-flex justify-content-between align-items-center pb-2 mb-4 border-bottom">
         <div>
-            <h1 class="h2 mb-1">Gestión de Usuarios</h1>
+            <h1 class="h2 mb-1">Gestión de Empleados</h1>
             <p class="text-muted mb-0">Administración de personal y roles del sistema</p>
         </div>
         <div class="btn-toolbar">
             <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary">
-                <i class="bi bi-person-plus me-1"></i>Crear Nuevo Usuario
+                <i class="bi bi-person-plus me-1"></i>Crear Nuevo Empleado
             </a>
         </div>
     </div>
@@ -22,14 +22,21 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link-custom active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users-panel" type="button" role="tab">
                 <i class="bi bi-people me-2"></i>
-                <span>Todos los Usuarios</span>
+                <span>Todos los Empleados</span>
                 <span class="tab-indicator"></span>
             </button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link-custom" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity-panel" type="button" role="tab">
                 <i class="bi bi-activity me-2"></i>
-                <span>Actividad del Día</span>
+                <span>Actividad de todo el tiempo</span>
+                <span class="tab-indicator"></span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link-custom" id="authorizations-tab" data-bs-toggle="tab" data-bs-target="#authorizations-panel" type="button" role="tab">
+                <i class="bi bi-patch-check me-2"></i>
+                <span>Autorizaciones</span>
                 <span class="tab-indicator"></span>
             </button>
         </li>
@@ -38,7 +45,7 @@
     <!-- Contenido de las Pestañas -->
     <div class="tab-content" id="userTabsContent">
 
-        <!-- Panel de Todos los Usuarios -->
+        <!-- Panel de Todos los Empleados -->
         <div class="tab-pane fade show active" id="users-panel" role="tabpanel">
             <!-- Barra de búsqueda y filtros -->
             <div class="search-filter-bar">
@@ -66,7 +73,7 @@
                 </div>
             </div>
 
-            <!-- Tarjetas de Usuarios -->
+            <!-- Tarjetas de Empleados -->
             <div class="row" id="all-users-container">
                 {% for usuario in usuarios %}
                 <div class="col-md-4 mb-4 user-card-wrapper" 
@@ -116,13 +123,13 @@
                                 <div class="d-grid gap-2 action-buttons">
                                     {% if usuario.activo %}
                                         <a href="{{ url_for('admin_usuario.ver_perfil', id=usuario.id) }}" 
-                                           class="btn btn-sm btn-secundary w-100">
-                                            <i class="bi bi-person-gear me-2"></i>Gestionar Usuario
+                                           class="btn btn-sm btn-primary w-100">
+                                            <i class="bi bi-person-gear me-2"></i>Gestionar Empleado
                                         </a>
                                     {% else %}
                                         <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="w-100">
                                             <button type="submit" class="btn btn-sm btn-outline-success w-100">
-                                                <i class="bi bi-person-check me-1"></i>Activar Usuario
+                                                <i class="bi bi-person-check me-1"></i>Activar Empleado
                                             </button>
                                         </form>
                                     {% endif %}
@@ -135,10 +142,10 @@
                 <div class="col-12">
                     <div class="empty-state large">
                         <i class="bi bi-people"></i>
-                        <h4>No hay usuarios registrados</h4>
-                        <p>Comience agregando el primer usuario al sistema</p>
+                        <h4>No hay empleados registrados</h4>
+                        <p>Comience agregando el primer empleado al sistema</p>
                         <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary mt-3">
-                            <i class="bi bi-person-plus me-1"></i>Crear Primer Usuario
+                            <i class="bi bi-person-plus me-1"></i>Crear Primer Empleado
                         </a>
                     </div>
                 </div>
@@ -155,6 +162,30 @@
         
         <!-- Panel de Actividad -->
         <div class="tab-pane fade" id="activity-panel" role="tabpanel">
+            <!-- Barra de Filtros de Actividad -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-md-4">
+                            <label for="filter-sector" class="form-label">Filtrar por Sector</label>
+                            <select id="filter-sector" class="form-select">
+                                <option value="">Todos los Sectores</option>
+                                {% for sector in sectores %}
+                                <option value="{{ sector.id }}">{{ sector.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="filter-fecha-desde" class="form-label">Desde</label>
+                            <input type="date" id="filter-fecha-desde" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="filter-fecha-hasta" class="form-label">Hasta</label>
+                            <input type="date" id="filter-fecha-hasta" class="form-control">
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="row">
                 <!-- Actividad en Fábrica -->
                 <div class="col-lg-6 mb-4">
@@ -222,17 +253,27 @@
                             <div id="no-web-activity" class="empty-state" style="display: none;">
                                 <i class="bi bi-laptop"></i>
                                 <h4>Sin Actividad en Web</h4>
-                                <p>Ningún usuario ha iniciado sesión en la web hoy.</p>
+                                <p>Ningún empleado ha iniciado sesión en la web hoy.</p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- Panel de Todos los Usuarios -->
         
-
+        <!-- Panel de Autorizaciones -->
+        <div class="tab-pane fade" id="authorizations-panel" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h4 mb-0">Autorizaciones Pendientes</h2>
+                <a href="{{ url_for('admin_usuario.nueva_autorizacion') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i>
+                    Nueva Autorización
+                </a>
+            </div>
+            <div id="authorizations-container" class="row">
+                <!-- Las tarjetas de autorización se cargarán aquí -->
+            </div>
+        </div>
     </div>
 </div>
 
@@ -242,5 +283,7 @@
 </script>
 <script src="{{ url_for('static', filename='js/usuarios/habilitarUsuario.js') }}"></script>
 <script src="{{ url_for('static', filename='js/usuarios/listarUsuarios.js') }}"></script>
+<script src="{{ url_for('static', filename='js/usuarios/autorizaciones.js') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/listarUsuarios.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/autorizaciones.css') }}">
 {% endblock %}

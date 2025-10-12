@@ -1,6 +1,6 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}Perfil de Usuario - {{ usuario.nombre }} {{ usuario.apellido }}{% endblock %}
+{% block title %}Perfil de Empleado - {{ usuario.nombre }} {{ usuario.apellido }}{% endblock %}
 
 {% block content %}
 <div class="profile-container">
@@ -12,8 +12,8 @@
                     <i class="bi bi-arrow-left"></i>
                 </a>
                 <div>
-                    <h1 class="profile-main-title mb-1">Perfil de Usuario</h1>
-                    <p class="profile-subtitle mb-0">Información detallada y gestión de usuario</p>
+                    <h1 class="profile-main-title mb-1">Perfil de Empleado</h1>
+                    <p class="profile-subtitle mb-0">Información detallada y gestión de empleado</p>
                 </div>
             </div>
             
@@ -64,12 +64,12 @@
             </button>
             {% if usuario.activo %}
                 <button class="btn btn-outline-danger btn-action" onclick="showDeactivateModal()">
-                    <i class="bi bi-person-x me-2"></i>Desactivar Usuario
+                    <i class="bi bi-person-x me-2"></i>Desactivar Empleado
                 </button>
             {% else %}
                 <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="d-inline">
                     <button type="submit" class="btn btn-outline-success btn-action">
-                        <i class="bi bi-person-check me-2"></i>Activar Usuario
+                        <i class="bi bi-person-check me-2"></i>Activar Empleado
                     </button>
                 </form>
             {% endif %}
@@ -115,6 +115,10 @@
                     <div class="info-item" data-field="legajo">
                         <label class="info-label">Legajo</label>
                         <div class="info-value" id="value-legajo">{{ usuario.legajo or 'N/A' }}</div>
+                    </div>
+                    <div class="info-item" data-field="fecha_ingreso">
+                        <label class="info-label">Fecha de Ingreso</label>
+                    <div class="info-value" id="value-fecha_ingreso">{{ usuario.fecha_ingreso.strftime('%d/%m/%Y') if usuario.fecha_ingreso else 'No especificada' }}</div>
                     </div>
                 </div>
             </div>
@@ -208,7 +212,7 @@
                         <div class="info-value" id="value-turno_id">{{ usuario.turno.nombre if usuario.turno else 'Sin turno' }}</div>
                     </div>
                     
-                    <div class="info-item full-width" data-field="sectores">
+                    <div class="info-item" data-field="sectores">
                         <label class="info-label">Sectores Asignados</label>
                         <div class="info-value" id="value-sectores">
                             {% if usuario.sectores and usuario.sectores|length > 0 %}
@@ -217,11 +221,6 @@
                                 Sin sectores
                             {% endif %}
                         </div>
-                    </div>
-                    
-                    <div class="info-item" data-field="fecha_ingreso">
-                        <label class="info-label">Fecha de Ingreso</label>
-                        <div class="info-value" id="value-fecha_ingreso">{{ usuario.fecha_ingreso.strftime('%d/%m/%Y') if usuario.fecha_ingreso else 'No especificada' }}</div>
                     </div>
                 </div>
             </div>
@@ -247,7 +246,7 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <form method="POST" action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}" class="d-inline">
                     <button type="submit" class="btn btn-danger">
-                        <i class="bi bi-person-x me-2"></i>Desactivar Usuario
+                        <i class="bi bi-person-x me-2"></i>Desactivar Empleado
                     </button>
                 </form>
             </div>
