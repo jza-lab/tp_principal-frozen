@@ -116,6 +116,10 @@
                         <label class="info-label">Legajo</label>
                         <div class="info-value" id="value-legajo">{{ usuario.legajo or 'N/A' }}</div>
                     </div>
+                    <div class="info-item" data-field="fecha_ingreso">
+                        <label class="info-label">Fecha de Ingreso</label>
+                    <div class="info-value" id="value-fecha_ingreso">{{ usuario.fecha_ingreso.strftime('%d/%m/%Y') if usuario.fecha_ingreso else 'No especificada' }}</div>
+                    </div>
                 </div>
             </div>
 
@@ -208,7 +212,7 @@
                         <div class="info-value" id="value-turno_id">{{ usuario.turno.nombre if usuario.turno else 'Sin turno' }}</div>
                     </div>
                     
-                    <div class="info-item full-width" data-field="sectores">
+                    <div class="info-item" data-field="sectores">
                         <label class="info-label">Sectores Asignados</label>
                         <div class="info-value" id="value-sectores">
                             {% if usuario.sectores and usuario.sectores|length > 0 %}
@@ -217,11 +221,6 @@
                                 Sin sectores
                             {% endif %}
                         </div>
-                    </div>
-                    
-                    <div class="info-item" data-field="fecha_ingreso">
-                        <label class="info-label">Fecha de Ingreso</label>
-                        <div class="info-value" id="value-fecha_ingreso">{{ usuario.fecha_ingreso.strftime('%d/%m/%Y') if usuario.fecha_ingreso else 'No especificada' }}</div>
                     </div>
                 </div>
             </div>
