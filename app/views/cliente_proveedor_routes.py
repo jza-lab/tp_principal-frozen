@@ -172,6 +172,10 @@ def editar_proveedor(id):
     """Gestiona la edición de un proveedor existente"""
     proveedor_result, status = proveedor_controller.obtener_proveedor(id)
     proveedor= proveedor_result.get('data') if proveedor_result.get('success') else None
+    if proveedor:
+        print(f"ID del Proveedor: {proveedor['id']}")
+        print(f"Valor de condicion_iva: {proveedor['condicion_iva']}")
+        print(f"TIPO de condicion_iva: {type(proveedor['condicion_iva'])}")
     if not proveedor:
         return redirect(url_for('clientes_proveedores.listar_proveedores'))
     try:
