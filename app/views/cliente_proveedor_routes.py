@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from venv import logger
 from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
 
 from app.controllers.usuario_controller import UsuarioController
@@ -97,30 +98,26 @@ def editar_cliente(id):
 @permission_required(sector_codigo='ADMINISTRACION', accion='eliminar')
 def eliminar_cliente(id):
     """Desactiva un cliente."""
-    resultado, status = cliente_controller.eliminar_cliente(id)
-    if request.is_json:
-        return jsonify(resultado)
-    
-    if resultado.get('success'):
-        flash('Cliente desactivado exitosamente.', 'success')
-    else:
-        flash(f"Error al desactivar el cliente: {resultado.get('error')}", 'error')
-    return redirect(url_for('clientes_proveedores.listar_clientes'))
+    try:
+        resultado, status = cliente_controller.eliminar_cliente(id)
+        return jsonify(resultado), status
+    except Exception as e:
+        logger.error(f"Error inesperado en eliminar_cliente: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+
     
 @cliente_proveedor.route('/clientes/<int:id>/habilitar', methods=['POST'])
 @permission_required(sector_codigo='ADMINISTRACION', accion='actualizar')
 def habilitar_cliente(id):
     """Reactiva un cliente."""
-    resultado, status = cliente_controller.habilitar_cliente(id)
-    if request.is_json:
-        return jsonify(resultado)
-    
-    if resultado.get('success'):
-        flash('Cliente activado exitosamente.', 'success')
-    else:
-        flash(f"Error al activar el cliente: {resultado.get('error')}", 'error')
-    return redirect(url_for('clientes_proveedores.listar_clientes'))
-    
+    try:
+        resultado, status = cliente_controller.habilitar_cliente(id)
+        return jsonify(resultado), status
+    except Exception as e:
+        logger.error(f"Error inesperado en habilitar_proveedor: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
 #------------------- Proveedores ------------------#
 
 @cliente_proveedor.route('/proveedores/')
@@ -194,28 +191,21 @@ def editar_proveedor(id):
 @permission_required(sector_codigo='ADMINISTRACION', accion='eliminar')
 def eliminar_proveedor(id):
     """Desactiva un proveedor."""
-    resultado, status = proveedor_controller.eliminar_proveedor(id)
-    if request.is_json:
-        return jsonify(resultado)
-    
-    if resultado.get('success'):
-        flash('Proveedor desactivado exitosamente.', 'success')
-    else:
-        flash(f"Error al desactivar el proveedor: {resultado.get('error')}", 'error')
-    return redirect(url_for('clientes_proveedores.listar_proveedores'))
-    
+    try:
+        resultado, status = proveedor_controller.eliminar_proveedor(id)
+        return jsonify(resultado), status
+    except Exception as e:
+        logger.error(f"Error inesperado en eliminar_proveedor: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
 
 @cliente_proveedor.route('/proveedores/<int:id>/habilitar', methods=['POST'])
 @permission_required(sector_codigo='ADMINISTRACION', accion='actualizar')
 def habilitar_proveedor(id):
     """Reactiva un proveedor."""
-    resultado, status = proveedor_controller.habilitar_proveedor(id)
-    if request.is_json:
-        return jsonify(resultado)
-    
-    if resultado.get('success'):
-        flash('Proveedor activado exitosamente.', 'success')
-    else:
-        flash(f"Error al activar el proveedor: {resultado.get('error')}", 'error')
-    return redirect(url_for('clientes_proveedores.listar_proveedores'))
-    
+    try:
+        resultado, status = proveedor_controller.habilitar_proveedor(id)
+        return jsonify(resultado), status
+    except Exception as e:
+        logger.error(f"Error inesperado en habilitar_proveedor: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
