@@ -187,24 +187,24 @@ class ClienteController(BaseController):
         try:
             direccion_data = data.pop('direccion', None)
             data['codigo'] = self.generar_codigo_unico()
-            validated_data = self.schema.load(data)
             
-            
-            if validated_data.get('email'):
-                respuesta, _ = self.model.buscar_por_email(validated_data['email'])
-                if respuesta:
+            if data.get('email'):
+                respuesta= self.model.buscar_por_email(data['email'])
+                
+                if respuesta.get('success'):
                     return self.error_response('El email ya está registrado para otro cliente', 400)
             
-            if validated_data.get('cuit'):
-                respuesta, _ = self.model.buscar_por_cuit(validated_data['cuit'])
-                if respuesta:
+            if data.get('cuit'):
+                respuesta= self.model.buscar_por_cuit(data['cuit'])
+                
+                if respuesta.get('success'):
                     return self.error_response('El CUIT/CUIL ya está registrado para otro cliente', 400)
             
             direccion_id = self._get_or_create_direccion(direccion_data)
             if direccion_id:
-                validated_data['direccion_id'] = direccion_id
+                data['direccion_id'] = direccion_id
 
-            result = self.model.create(validated_data)
+            result = self.model.create(data)
 
             if result['success']:
                 return self.success_response(data=result['data'], message='Cliente creado exitosamente', status_code=201)
