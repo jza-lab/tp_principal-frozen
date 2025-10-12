@@ -88,7 +88,7 @@ Agregar nuevo cliente
 
                         <div class="col-md-6">
                             <div class="form-floating">
-                                <input type="text" class="form-control" name="telefono" id="telefono" maxlength="13"
+                                <input type="text" class="form-control" name="telefono" id="telefono" maxlength="11"
                                     placeholder="Teléfono" value="{{ cliente.telefono if cliente else '' }}"
                                     pattern="\d{7,11}"
                                     title="El número debe ser de hasta 11 dígitos (sin espacios ni guiones)." required>
