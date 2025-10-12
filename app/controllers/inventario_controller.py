@@ -407,3 +407,22 @@ class InventarioController(BaseController):
         except Exception as e:
             logger.error(f"Error obteniendo lotes para la vista: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+        
+    def obtener_insumos_bajo_stock(self) -> tuple:
+        """
+        Obtiene la lista de insumos con estado de stock 'BAJO'.
+        Retorna (response_dict, status_code)
+        """
+        try:
+            # Reutilizamos el método del modelo, filtrando por 'BAJO'
+            stock_bajo_result = self.inventario_model.obtener_stock_consolidado({'estado_stock': 'BAJO'})
+
+            if stock_bajo_result.get('success'):
+                insumos_bajo_stock = stock_bajo_result.get('data', [])
+                return self.success_response(data=insumos_bajo_stock)
+            
+            return self.error_response(stock_bajo_result.get('error', 'Error al obtener insumos bajo stock'), 500)
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo lista de insumos bajo stock: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)

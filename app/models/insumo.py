@@ -29,7 +29,8 @@ class InsumoModel(BaseModel):
         Sobrescribe find_all para manejar la búsqueda de texto junto con otros filtros.
         """
         try:
-            query = self.db.table(self.get_table_name()).select('*')
+            query_select = "*, proveedor:id_proveedor(*)"
+            query = self.db.table(self.get_table_name()).select(query_select)
 
             filters_copy = filters.copy() if filters else {}
 
@@ -67,7 +68,8 @@ class InsumoModel(BaseModel):
         """Buscar insumo por código interno o EAN"""
         try:
             campo = 'codigo_interno' if tipo_codigo == 'interno' else 'codigo_ean'
-            result = self.db.table(self.table_name).select('*').eq(campo, codigo).execute()
+            query_select = "*, proveedor:id_proveedor(*)"
+            result = self.db.table(self.table_name).select(query_select).eq(campo, codigo).execute()
 
             if result.data:
                 return {'success': True, 'data': self._convert_timestamps(result.data[0])}
@@ -134,10 +136,9 @@ class InsumoModel(BaseModel):
             if not codigo_interno:
                 return None
 
-            print(codigo_interno)
-
+            query_select = "*, proveedor:id_proveedor(*)"
             response = self.db.table(self.get_table_name())\
-                           .select('*')\
+                           .select(query_select)\
                            .eq('codigo_interno', codigo_interno.strip().upper())\
                            .execute()
 
@@ -173,9 +174,9 @@ class InsumoModel(BaseModel):
         try:
             if not codigo_proveedor:
                 return None
-
+            query_select = "*, proveedor:id_proveedor(*)"
             query = self.db.table(self.get_table_name())\
-                          .select('*')\
+                          .select(query_select)\
                           .eq('codigo_proveedor', codigo_proveedor.strip())
 
             # Si se proporciona proveedor_id, filtrar también por proveedor

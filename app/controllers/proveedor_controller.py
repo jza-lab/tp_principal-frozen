@@ -1,8 +1,6 @@
 from app.controllers.base_controller import BaseController
 from app.models.proveedor import ProveedorModel
 from app.schemas.proveedor_schema import ProveedorSchema
-from app.models.direccion import DireccionModel
-from app.schemas.direccion_schema import DireccionSchema
 from typing import Dict, Optional
 import logging
 
@@ -15,32 +13,6 @@ class ProveedorController(BaseController):
         super().__init__()
         self.model = ProveedorModel()
         self.schema = ProveedorSchema()
-        self.direccion_model = DireccionModel()
-        self.direccion_schema = DireccionSchema()
-
-    def _get_or_create_direccion(self, direccion_data: Dict) -> Optional[int]:
-        """Busca una dirección existente o crea una nueva si no se encuentra."""
-        if not direccion_data:
-            return None
-
-        validated_address = self.direccion_schema.load(direccion_data)
-
-        existing_address_result = self.direccion_model.find_by_full_address(
-            calle=validated_address['calle'],
-            altura=validated_address['altura'],
-            piso=validated_address.get('piso'),
-            depto=validated_address.get('depto'),
-            localidad=validated_address['localidad'],
-            provincia=validated_address['provincia']
-        )
-
-        if existing_address_result['success']:
-            return existing_address_result['data']['id']
-        else:
-            new_address_result = self.direccion_model.create(validated_address)
-            if new_address_result['success']:
-                return new_address_result['data']['id']
-        return None
 
     def obtener_proveedores_activos(self) -> tuple:
         """Obtener lista de proveedores activos"""
@@ -54,10 +26,12 @@ class ProveedorController(BaseController):
             logger.error(f"Error obteniendo proveedores: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
-    def obtener_proveedores(self) -> tuple:
+    def obtener_proveedores(self, filtros: Optional[Dict] = None) -> tuple: # <-- ACEPTA FILTROS
         """Obtener lista de proveedores"""
         try:
-            result = self.model.get_all(include_direccion=True)
+            filtros = filtros or {} # Inicializar si es None
+            # Pasar los filtros, incluyendo 'busqueda', al modelo
+            result = self.model.get_all(include_direccion=True, filtros=filtros) 
             if not result['success']:
                 return self.error_response(result['error'])
             
@@ -80,6 +54,19 @@ class ProveedorController(BaseController):
             return self.success_response(data=serialized_data)
         except Exception as e:
             logger.error(f"Error obteniendo proveedor {proveedor_id}: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def obtener_proveedor_cuil(self, proveedor_cuil: str) -> tuple:
+        """Obtener un proveedor por su ID"""
+        try:
+            result = self.model.buscar_por_cuit(proveedor_cuil, include_direccion=True)
+            if not result['success']:
+                return self.error_response(result['error'], 404)
+            
+            serialized_data = self.schema.dump(result['data'])
+            return self.success_response(data=result['data'])
+        except Exception as e:
+            logger.error(f"Error obteniendo proveedor {proveedor_cuil}: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def eliminar_proveedor(self, proveedor_id: int) -> tuple:
@@ -132,20 +119,18 @@ class ProveedorController(BaseController):
             validated_data = self.schema.load(data)
 
             if validated_data.get('email'):
-                respuesta, _ = self.model.buscar_por_email(validated_data['email'])
-                if respuesta:
+                respuesta= self.model.buscar_por_email(validated_data['email'])
+                if respuesta.get('success'):
                     return self.error_response('El email ya está registrado para otro proveedor', 400)
 
             if validated_data.get('cuit'):
-                respuesta, _ = self.model.buscar_por_cuit(validated_data['cuit'])
-                if respuesta:
+                respuesta = self.model.buscar_por_cuit(validated_data['cuit'])
+                if respuesta.get('success'):
                     return self.error_response('El CUIT/CUIL ya está registrado para otro proveedor', 400)
 
             direccion_id = self._get_or_create_direccion(direccion_data)
             if direccion_id:
                 validated_data['direccion_id'] = direccion_id
-
-            
 
             result = self.model.create(validated_data)
 
@@ -160,28 +145,45 @@ class ProveedorController(BaseController):
 
     def actualizar_proveedor(self, proveedor_id: int, data: Dict) -> tuple:
         try:
-            existing_result = self.model.find_by_id(proveedor_id)
-            if not existing_result.get('success'):
+            existing = self.model.find_by_id(proveedor_id)
+            if not existing.get('success'):
                 return self.error_response('Proveedor no encontrado', 404)
 
-            existing_data = existing_result['data']
+    
             direccion_data = data.pop('direccion', None)
             validated_data = self.schema.load(data, partial=True)
 
-            if validated_data.get('email') and validated_data['email'] != existing_data.get('email'):
+            if validated_data.get('email') and validated_data['email'] != existing['data'].get('email'):
                 respuesta, _ = self.model.buscar_por_email(validated_data['email'])
                 if respuesta:
                     return self.error_response('El email ya está registrado para otro proveedor', 400)
 
-            if validated_data.get('cuit') and validated_data['cuit'] != existing_data.get('cuit'):
+            if validated_data.get('cuit') and validated_data['cuit'] != existing['data'].get('cuit'):
                 respuesta, _ = self.model.buscar_por_cuit(validated_data['cuit'])
                 if respuesta:
                     return self.error_response('El CUIT/CUIL ya está registrado para otro proveedor', 400)
 
             if direccion_data:
-                direccion_id = self._get_or_create_direccion(direccion_data)
-                if direccion_id:
-                    validated_data['direccion_id'] = direccion_id
+                
+                # 1. Obtener el ID de la dirección que el proveedor tiene ANTES de la actualización.
+                id_direccion_vieja = existing['data'].get('direccion_id')
+                
+                if id_direccion_vieja:
+                    cantidad_misma_direccion = self.model.contar_proveedores_direccion(id_direccion_vieja)
+                    
+                    if cantidad_misma_direccion > 1:
+                        id_nueva_direccion = self._get_or_create_direccion(direccion_data)
+                        if id_nueva_direccion:
+                            validated_data['direccion_id'] = id_nueva_direccion
+                    else: 
+                        
+                        self._actualizar_direccion(id_direccion_vieja, direccion_data)
+
+                else:
+                    id_nueva_direccion = self._get_or_create_direccion(direccion_data)
+                    if id_nueva_direccion:
+                        validated_data['direccion_id'] = id_nueva_direccion
+
 
             update_result = self.model.update(proveedor_id, validated_data, 'id')
             if not update_result.get('success'):

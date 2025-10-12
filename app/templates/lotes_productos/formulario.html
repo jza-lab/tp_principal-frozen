@@ -19,23 +19,36 @@
             <div class="card-body">
                 <form method="POST" action="{{ url_for('lote_producto.nuevo_lote') }}">
                     <div class="row g-3">
+                        
                         <div class="col-md-6">
                             <label for="producto_id" class="form-label">Producto <span class="text-danger">*</span></label>
-                            <select class="form-select" id="producto_id" name="producto_id" required>
-                                <option value="" disabled selected>Seleccione un producto...</option>
-                                {% for producto in productos %}
-                                <option value="{{ producto.id }}">{{ producto.nombre }} ({{ producto.codigo }})</option>
-                                {% endfor %}
-                            </select>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-box-seam-fill"></i></span>
+                                <select class="form-select" id="producto_id" name="producto_id" required>
+                                    <option value="" disabled selected>Seleccione un producto...</option>
+                                    {% for producto in productos %}
+                                    <option value="{{ producto.id }}">{{ producto.nombre }} ({{ producto.codigo }})</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
                         </div>
+                        
                         <div class="col-md-6">
                             <label for="cantidad_inicial" class="form-label">Cantidad Producida <span class="text-danger">*</span></label>
-                            <input type="number" min="1" class="form-control" id="cantidad_inicial" name="cantidad_inicial" required>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-journal-check"></i></span>
+                                <input type="number" min="1" class="form-control" id="cantidad_inicial" name="cantidad_inicial" required>
+                            </div>
                         </div>
+                        
                         <div class="col-md-6">
                             <label for="fecha_vencimiento" class="form-label">Fecha de Vencimiento</label>
-                            <input type="date" class="form-control" id="fecha_vencimiento" name="fecha_vencimiento" min="{{ today }}">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-calendar-x"></i></span>
+                                <input type="date" class="form-control" id="fecha_vencimiento" name="fecha_vencimiento" min="{{ today }}">
+                            </div>
                         </div>
+                        
                         <div class="col-12 text-end">
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-plus-circle me-1"></i> Registrar Lote

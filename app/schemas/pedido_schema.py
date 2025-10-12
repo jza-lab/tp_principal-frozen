@@ -1,7 +1,7 @@
 from marshmallow import Schema, fields, validate
 
 from app.schemas.cliente_schema import ClienteSchema
-
+from app.schemas.direccion_schema import DireccionSchema
 ITEM_ESTADOS_VALIDOS = [
     'PENDIENTE',      # Recién agregado al pedido
     'EN_PRODUCCION',  # El producto está siendo fabricado/preparado
@@ -54,6 +54,11 @@ class PedidoSchema(Schema):
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
 
-    id_cliente = fields.Int(required=True, allow_none=True, error_messages={"required": "El ID del cliente es obligatorio."})
+    id_cliente = fields.Int(required=True, allow_none=False, error_messages={"required": "El ID del cliente es obligatorio."})
     
     cliente= fields.Nested(ClienteSchema, allow_none=True)
+
+    id_direccion_entrega = fields.Int(required=True, allow_none=False, error_messages={"required": "El ID de la direccion es obligatorio."})
+    direccion_entrega= fields.Nested(DireccionSchema, allow_none=True)
+
+    comentarios_adicionales= fields.Str(allow_none=True)

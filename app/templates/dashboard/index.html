@@ -7,15 +7,16 @@
     <h1 class="h2">Dashboard</h1>
 </div>
 
-<!-- Tarjetas de Estadísticas -->
 <div class="row mb-4">
+    
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card stat-card h-100">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="stat-label mb-1">Desempeño</div>
-                        <div class="stat-value">{{ ordenes_pendientes }} en proceso</div>
+                        <div class="stat-label mb-1">Órdenes en Proceso</div>
+                        <div class="stat-value">{{ ordenes_pendientes }} en curso</div>
+                        <div class="small text-muted">Órdenes en estado EN PROCESO</div>
                     </div>
                     <div class="text-muted">
                         <i class="bi bi-gear-fill fs-1 opacity-25"></i>
@@ -27,60 +28,84 @@
 
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card stat-card h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="stat-label mb-1">Órdenes Planificadas</div>
-                        <div class="stat-value">0</div>
-                    </div>
-                    <div class="text-muted">
-                        <i class="bi bi-calendar-check-fill fs-1 opacity-25"></i>
+            <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        {% if productos_sin_lotes_count == 0 %}
+                            <div>
+                                <div class="stat-label mb-1 text-success">Stock Productos Finales</div>
+                                <div class="small text-muted">Productos sin lotes asociados</div>
+                                <div class="stat-value text-success">{{ productos_sin_lotes_count }}</div>
+                                <div class="small text-success">¡Inventario de productos completo!</div>
+                            </div>
+                            <div class="text-muted">
+                                <i class="bi bi-check-circle-fill fs-1 opacity-25 text-success"></i>
+                            </div>
+                        {% else %}
+                            <div>
+                                <div class="stat-label mb-1 text-danger">PRODUCTOS SIN STOCK</div>
+                                <div class="small text-muted">Se requieren lotes para:</div>
+                                <div class="stat-value text-danger">{{ productos_sin_lotes_count }}</div>
+                                
+                                <ul class="text-danger small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                {% for producto in productos_sin_lotes_list[:3] %}
+                                    <li class="text-truncate" title="{{ producto.nombre }}">{{ producto.nombre }}</li>
+                                {% endfor %}
+                                {% if productos_sin_lotes_count > 3 %}
+                                    <li class="small">y {{ productos_sin_lotes_count - 3 }} más...</li>
+                                {% endif %}
+                                </ul>
+
+                            </div>
+                            <div class="text-muted">
+                                <i class="bi bi-box-fill fs-1 opacity-25 text-danger"></i>
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
     </div>
 
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card stat-card h-100">
-            <a href="{{ url_for('insumos_api.obtener_insumos') }}" style="text-decoration: none;">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    {% if alertas_stock_count == 0 %}
-                        <div>
-                            <div class="stat-label mb-1 text-success">Alertas de Stock</div>
-                            <div class="small text-muted">Insumos por debajo del stock mínimo</div>
-                            <div class="stat-value text-success">{{ alertas_stock_count }}</div>
-                            <div class="small text-success">¡Todo en orden, contas con stock para producir!</div>
-                        </div>
-                        <div class="text-muted">
-                            <i class="bi bi-check-circle fs-1 opacity-25 text-success"></i>
-                        </div>
-                    {% else %}
-                    {% if alertas_stock_count <= 10 %}
-                        <div>
-                            <div class="stat-label mb-1 text-warning">Alertas de Stock</div>
-                            <div class="small text-muted">Insumos por debajo del stock mínimo</div>
-                            <div class="stat-value text-warning">{{ alertas_stock_count }}</div>
-                        </div>
-                        <div class="text-muted">
-                            <i class="bi bi-exclamation-triangle-fill fs-1 opacity-25 text-warning"></i>
-                            <div class="small text-warning">¡Tenes algunos insumos faltantes!</div>
-                        </div>
-                    {% else %} 
-                        <div>
-                            <div class="stat-label mb-1 text-danger">Alertas de Stock</div>
-                            <div class="small text-muted">Insumos por debajo del stock mínimo</div>
-                            <div class="stat-value text-danger">{{ alertas_stock_count }}</div>
-                            <div class="small text-danger">¡Cuidado, tenes muchos insumos faltantes!</div>
-                        </div>
+            <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" style="text-decoration: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        {% if alertas_stock_count == 0 %}
+                            <div>
+                                <div class="stat-label mb-1 text-success">Alertas de Stock Insumos</div>
+                                <div class="small text-muted">Insumos por debajo del mínimo</div>
+                                <div class="stat-value text-success">{{ alertas_stock_count }}</div>
+                                <div class="small text-success">¡Todo en orden, contas con stock!</div>
+                            </div>
                             <div class="text-muted">
-                            <i class="bi bi-exclamation-triangle-fill fs-1 opacity-25 text-danger"></i>
-                        </div>
-                    {% endif %}
-                    {% endif %}
+                                <i class="bi bi-check-circle fs-1 opacity-25 text-success"></i>
+                            </div>
+                        {% else %}
+                            <div>
+                                <div class="stat-label mb-1 text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }}">Alertas de Stock Insumos</div>
+                                <div class="small text-muted">Insumos con stock bajo/crítico:</div>
+                                <div class="stat-value text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }}">{{ alertas_stock_count }}</div>
+                                
+                                <ul class="text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }} small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                {% for insumo in insumos_bajo_stock_list[:3] %}
+                                    <li class="text-truncate" title="{{ insumo.nombre }}">
+                                        {{ insumo.nombre }} (Min: {{ insumo.stock_min|round(0) }})
+                                    </li>
+                                {% endfor %}
+                                {% if alertas_stock_count > 3 %}
+                                    <li class="small">y {{ alertas_stock_count - 3 }} más...</li>
+                                {% endif %}
+                                </ul>
+
+                            </div>
+                            <div class="text-muted">
+                                <i class="bi bi-exclamation-triangle-fill fs-1 opacity-25 text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }}"></i>
+                            </div>
+                        {% endif %}
+                    </div>
                 </div>
-            </div>
             </a>
         </div>
     </div>
@@ -90,192 +115,145 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="stat-label mb-1">Asistencia general</div>
-                        {% if asistencia >= 80 %}
-                        <div class="stat-value text-success"> {{ asistencia }}%</div>
-                        {% else %}
-                        {% if asistencia <= 50 %} <div class="stat-value text-danger"> {{ asistencia }}%
+                        <div class="stat-label mb-1">ASISTENCIA GENERAL HOY</div>
+                        <div class="stat-value text-{{ 'success' if asistencia >= 80 else 'warning' if asistencia > 50 else 'danger' }}"> 
+                            {{ asistencia }}%
+                        </div>
+                        <div class="small text-muted">Porcentaje de personal en planta</div>
                     </div>
-                    {% else %}
-                    <div class="stat-value text-warning"> {{ asistencia }}% </div>
-                    {% endif %}
-                    {% endif %}
-                </div>
-                <div class="text-muted">
-                    <i class="bi bi-person-check-fill fs-1 opacity-25"></i>
+                    <div class="text-muted">
+                        <i class="bi bi-person-check-fill fs-1 opacity-25"></i>
+                    </div>
                 </div>
             </div>
         </div>
-
-            <div class="col-lg-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title">Notificaciones Recientes</h5>
-                    </div>
-                    <div class="card-body">
-                        {% if notificaciones %}
-                        <ul class="list-group list-group-flush">
-                            {% for notificacion in notificaciones %}
-                            <li class="list-group-item">
-                                <div class="d-flex w-100 justify-content-between">
-                                    <h6 class="mb-1">{{ notificacion.tipo }}</h6>
-                                    <small>{{ notificacion.created_at | format_datetime }}</small>
-                                </div>
-                                <p class="mb-1">{{ notificacion.mensaje }}</p>
-                            </li>
-                            {% endfor %}
-                        </ul>
-                        {% else %}
-                        <p class="text-center text-muted">No hay notificaciones nuevas.</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
     </div>
 </div>
-</div>
 
-{% if ordenes_aprobadas %}
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="card">
+<div class="row">
+    <div class="col-lg-8 mb-4">
+        <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
-                    <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
-                    Ordenes a producir para esta semana
+                    <i class="bi bi-clock-history text-primary me-2"></i>
+                    Órdenes de Producción Aprobadas
                 </h5>
                 <a href="{{ url_for('orden_produccion.listar') }}" class="btn btn-outline-primary btn-sm">
                     Ver todas
                 </a>
             </div>
             <div class="card-body p-0">
+                {% if ordenes_aprobadas %}
                 <div class="list-group list-group-flush">
                     {% for orden in ordenes_aprobadas %}
-                    <div class="col-md-4 mb-4">
-                        <div
-                            class="card h-100 insumo-card {% if orden.estado == 'CANCELADA' %}orden-rechazada{% endif %}">
-                            <!-- Reutilizamos la clase 'insumo-card' para consistencia -->
-                            <div class="card-body d-flex flex-column">
-                                <div class="d-flex justify-content-between">
-                                    <i class="bi bi-bell fs-2 me-3"></i>
-                                    <h5 class="card-title">{{ orden.producto_nombre or 'Producto no definido' }}</h5>
-                                    {% set estado_config = {
-                                    'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon':
-                                    'calendar-check'},
-                                    'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
-                                    'PLANIFICADA': {'class': 'bg-light text-dark', 'icon': 'calendar3'},
-                                    'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                                    'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon':
-                                    'check-circle-fill'},
-                                    'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
-                                    } %}
-                                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark',
-                                    'icon':
-                                    'question-circle'}) %}
-                                    <span class="badge {{ config.class }}">
-                                        <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado.replace('_', ' ') }}
-                                    </span>
-                                </div>
-
-                                <div class="card-secondary-details mb-3">
-                                    <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
-                                    <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b>
-                                        unidades</span>
-                                    <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
-                                </div>
-
-                                <div class="mt-auto">
-                                    <div class="d-flex justify-content-between align-items-center mb-3 stock-info">
-                                        
-                                        <div>
-                                            {% if orden.prioridad and orden.prioridad != 'NORMAL' %}
-                                            {% set prioridad_config = {
-                                            'BAJA': {'class': 'bg-light text-dark', 'icon': 'arrow-down'},
-                                            'ALTA': {'class': 'bg-warning-soft text-warning', 'icon': 'arrow-up'},
-                                            'URGENTE': {'class': 'bg-danger-soft text-danger', 'icon':
-                                            'exclamation-triangle'}
-                                            } %}
-                                            {% set pconfig = prioridad_config.get(orden.prioridad, {'class':
-                                            'bg-secondary', 'icon':
-                                            'dash'}) %}
-                                            <span class="badge {{ pconfig.class }}">
-                                                <i class="bi bi-{{ pconfig.icon }} me-1"></i>{{ orden.prioridad }}
-                                            </span>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-
-                                    <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}"
-                                        class="btn btn-sm btn-outline-primary" title="Ver Detalle">
-                                        <i class="bi bi-eye"></i>
-                                    </a>
+                    <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" class="list-group-item list-group-item-action py-3 d-flex justify-content-between align-items-center">
                         
-                                    <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}"
-                                        style="display: inline;" class="confirm-form" data-title="Confirmar Inicio"
-                                        data-message="¿Está seguro de que desea iniciar esta orden de producción?"
-                                        data-button-type="success">
-                                        <button type="submit" class="btn btn-sm btn-outline-success"
-                                            title="Iniciar Orden">
-                                            <i class="bi bi-play-fill"></i>
-                                        </button>
-                                    </form>
-
-                                </div>
-                            </div>
+                        <div class="me-3" style="flex-grow: 1;">
+                            <h6 class="mb-1 fw-bold text-truncate">{{ orden.producto_nombre or 'Producto no definido' }}</h6>
+                            <p class="mb-1 small text-muted">
+                                <span class="badge bg-secondary-soft me-2">
+                                    <i class="bi bi-box-seam me-1"></i> {{ orden.cantidad_planificada }} uds.
+                                </span>
+                                <span class="badge bg-primary-soft">
+                                    <i class="bi bi-person me-1"></i> {{ orden.supervisor_nombre or 'N/A' }}
+                                </span>
+                            </p>
+                            <small class="text-muted">
+                                <i class="bi bi-calendar-event me-1"></i> Planificada: {{ orden.fecha_planificada }}
+                            </small>
                         </div>
-                    </div>
+                        
+                        <div>
+                            <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}"
+                                style="display: inline;" class="confirm-form" data-title="Confirmar Inicio"
+                                data-message="¿Está seguro de que desea iniciar esta orden de producción?"
+                                data-button-type="success">
+                                <button type="submit" class="btn btn-sm btn-success shadow-sm" title="Iniciar Orden" style="min-width: 80px;">
+                                    <i class="bi bi-play-fill"></i> Iniciar
+                                </button>
+                            </form>
+                        </div>
+                    </a>
                     {% endfor %}
                 </div>
+                {% else %}
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
+                    <h5>Sistema en Orden</h5>
+                    <p class="text-muted mb-0">No ordenes aprobadas para su inicio en este momento</p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
-</div>
-{% else %}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
-                <h5>Sistema en Orden</h5>
-                <p class="text-muted mb-0">No ordenes aprobadas para su inicio en este momento</p>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
 
-<!-- Alertas Recientes -->
-{% if alertas %}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
-                    Alertas de Stock Bajo
+    <div class="col-lg-4 mb-4">
+        <div class="card mb-4" style="height: 48%;"> 
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-bell-fill me-2"></i>
+                    Notificaciones Recientes
+                    <span class="badge bg-danger ms-2">{{ notificaciones|length }}</span>
                 </h5>
-                <a href="{{ url_for('insumo.alertas') }}" class="btn btn-outline-primary btn-sm">
-                    Ver todas
-                </a>
             </div>
-            <div class="card-body p-0">
-                <div class="list-group list-group-flush">
+            <div class="card-body p-0" style="max-height: 250px; overflow-y: auto;">
+                {% if notificaciones %}
+                <ul class="list-group list-group-flush list-group-compact">
+                    {% for notificacion in notificaciones %}
+                    <li class="list-group-item d-flex align-items-start py-2">
+                        <span class="me-2 text-{{ 'danger' if notificacion.tipo == 'TARDANZA' else 'info' }}">
+                            <i class="bi bi-{{ 'clock-fill' if notificacion.tipo == 'TARDANZA' else 'info-circle' }} mt-1"></i>
+                        </span>
+                        <div class="flex-grow-1">
+                            <small class="d-block fw-bold text-truncate-2" title="{{ notificacion.mensaje }}">
+                                {{ notificacion.tipo | title }}: {{ notificacion.mensaje }}
+                            </small>
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">
+                                {{ notificacion.created_at | format_datetime('%d/%m %H:%M') }}
+                            </small>
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-center text-muted py-3">No hay notificaciones nuevas.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card" style="height: 48%;">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-exclamation-octagon-fill text-warning me-2"></i>
+                    Resumen de Riesgos
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush small">
+                    <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center">
+                        <span class="text-muted">Insumos Críticos con Stock Bajo:</span>
+                        <span class="badge bg-{{ 'danger' if alertas_stock_count > 0 else 'success' }} rounded-pill">
+                            {{ alertas_stock_count }}
+                        </span>
+                    </a>
+                    <a href="{{ url_for('lote_producto.listar_lotes') }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center">
+                        <span class="text-muted">Productos sin Lotes (Producción Requerida):</span>
+                        <span class="badge bg-{{ 'danger' if productos_sin_lotes_count > 0 else 'success' }} rounded-pill">
+                            {{ productos_sin_lotes_count }}
+                        </span>
+                    </a>
+                    <div class="list-group-item p-2 d-flex justify-content-between align-items-center">
+                        <span class="text-muted">Asistencia Hoy (&lt;80%):</span>
+                        <span class="badge bg-{{ 'danger' if asistencia < 80 else 'success' }} rounded-pill">
+                            {{ asistencia }}%
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
-{% else %}
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
-                <h5>Sistema en Orden</h5>
-                <p class="text-muted mb-0">No hay alertas críticas en este momento</p>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
+
+{% if alertas %}
+    {% endif %}
 {% endblock %}

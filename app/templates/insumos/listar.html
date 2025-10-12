@@ -34,20 +34,37 @@
                         {% endfor %}
                     </select>
                 </div>
-                     <div class="col-md-2 align-self-end">
-                    <button type="submit" class="btn btn-outline-secondary w-100">
+            
+                <div class="col-md-5 align-self-end">
+                    <div class="d-flex gap-4">
+                    <button type="submit" class="btn btn-sm flex-fill btn-light">
                         <i class="bi bi-search"></i> Buscar
                     </button>
-                </div>
-                <div class="col-md-3">
-                    <div class="text-muted small text-end">
-                        <p>{{ insumos|length }} insumos encontrados</p>
+                    
+                        {% set is_bajo = request.args.get('stock_status') == 'bajo' %}
+                        {% set current_busqueda = request.args.get('busqueda', '') %}
+                        {% set current_categoria = request.args.get('categoria', '') %}
+                        
+                        <a href="{{ url_for('insumos_api.obtener_insumos', busqueda=current_busqueda, categoria=current_categoria, stock_status='' if is_bajo else 'bajo') }}" 
+                           class="btn btn-sm flex-fill btn-{{ 'outline-danger' if is_bajo else 'danger' }}">
+                            <i class="bi bi-exclamation-triangle me-1"></i> Stock Bajo
+                        </a>
+
+                        <a href="{{ url_for('insumos_api.obtener_insumos') }}" 
+                           class="btn btn-sm flex-fill btn-light">
+                            <i class="bi bi-x-circle me-1"></i> Limpiar Filtros
+                        </a>
                     </div>
+                </div>
+                <div class="text-muted small">
+                        <p>{{ insumos|length }} insumos encontrados</p>
+                </div>
                 </div>
             </div>
         </form>
     </div>
 </div>
+
 
 <!-- Tarjetas de Insumos -->
 <div class="row">
@@ -61,6 +78,7 @@
                     <span><i class="bi bi-upc-scan"></i> <code>{{ insumo['codigo_interno'] }}</code></span>
                     <span><i class="bi bi-rulers"></i> {{ insumo['unidad_medida'] }}</span>
                     <span><i class="bi bi-currency-dollar"></i> {{ insumo['precio_unitario'] }}</span>
+                    <span><i class="bi bi-box"></i> {{ insumo.proveedor.nombre }}</span>
                 </div>
 
                 <div class="mt-auto">

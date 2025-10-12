@@ -5,7 +5,7 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">Detalle del Lote de Producto</h1>
-        <p class="text-muted mb-0">Lote: <code class="text-muted">{{ lote.numero_lote or 'N/A' }}</code></p>
+        <p class="text-muted mb-0">Lote N°: <code class="text-muted">{{ lote.numero_lote or 'N/A' }}</code></p>
     </div>
     <a href="{{ url_for('lote_producto.listar_lotes') }}" class="btn btn-outline-secondary">
         <i class="bi bi-arrow-left me-1"></i>Volver al Inventario
@@ -19,11 +19,57 @@
     </div>
     <div class="card-body">
         <div class="row g-4">
-            <div class="col-md-6"><div class="small text-muted">Producto</div><div class="fw-bold h5">{{ lote.producto_nombre or 'No disponible' }}</div></div>
-            <div class="col-md-6"><div class="small text-muted">Cantidad Inicial</div><div class="fw-bold">{{ lote.cantidad_inicial | round(2) }} unidades</div></div>
-            <div class="col-md-6"><div class="small text-muted">Cantidad Actual</div><div class="fw-bold h5">{{ lote.cantidad_actual | round(2) }} unidades</div></div>
-            <div class="col-md-6"><div class="small text-muted">Fecha de Creación</div><div class="fw-bold">{{ lote.created_at.strftime('%Y-%m-%d %H:%M') if lote.created_at else 'N/A' }}</div></div>
-            <div class="col-md-6"><div class="small text-muted">Fecha de Vencimiento</div><div class="fw-bold">{{ lote.fecha_vencimiento.strftime('%Y-%m-%d') if lote.fecha_vencimiento else 'No aplica' }}</div></div>
+            
+            <div class="col-md-4">
+                <div class="d-flex align-items-center border-start border-3 border-primary ps-3">
+                    <i class="bi bi-box-seam-fill fs-4 text-primary me-3"></i>
+                    <div>
+                        <div class="small text-muted">Producto</div>
+                        <div class="fw-bold">{{ lote.producto_nombre or 'No disponible' }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-journal-check fs-4 text-muted me-3"></i>
+                    <div>
+                        <div class="small text-muted">Cantidad Inicial</div>
+                        <div class="fw-bold h5 mb-0">{{ lote.cantidad_inicial | round(2) }} unidades</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="d-flex align-items-center border-start border-3 border-success ps-3">
+                    <i class="bi bi-arrow-clockwise fs-4 text-success me-3"></i>
+                    <div>
+                        <div class="small text-muted">Cantidad Actual</div>
+                        <div class="fw-bold h5 mb-0">{{ lote.cantidad_actual | round(2) }} unidades</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-calendar-event fs-4 text-muted me-3"></i>
+                    <div>
+                        <div class="small text-muted">Fecha de Creación</div>
+                        <div class="fw-bold">{{ lote.created_at.strftime('%Y-%m-%d %H:%M') if lote.created_at else 'N/A' }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-calendar-x fs-4 text-danger me-3"></i>
+                    <div>
+                        <div class="small text-muted">Fecha de Vencimiento</div>
+                        <div class="fw-bold">{{ lote.fecha_vencimiento.strftime('%Y-%m-%d') if lote.fecha_vencimiento else 'No aplica' }}</div>
+                    </div>
+                </div>
+            </div>
+            
         </div>
     </div>
 </div>

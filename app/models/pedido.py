@@ -78,7 +78,7 @@ class PedidoModel(BaseModel):
         try:
             # --- LÍNEA CORREGIDA ---
             result = self.db.table(self.get_table_name()).select(
-                '*, items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre))'
+                '*, cliente:clientes(*), items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre)), direccion:usuario_direccion(*)'
             ).eq('id', pedido_id).single().execute()
             # ------------------------
 

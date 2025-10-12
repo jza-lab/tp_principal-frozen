@@ -16,8 +16,7 @@
         </div>
     </div>
 
-    
-<!-- Filtros -->
+
 <div class="card mb-4">
     <div class="card-body card-filter">
         <form id="filter-form" method="get" action="{{ url_for('clientes_proveedores.listar_clientes') }}">
@@ -25,68 +24,63 @@
                 <div class="col-md-4">
                     <label for="busqueda" class="form-label">Buscar</label>
                     <input type="text" name="busqueda" id="busqueda" class="form-control"
-                        placeholder="Nombre o código..." value="{{ request.args.get('busqueda', '') }}">
+                        placeholder="Nombre, código o CUIT..." value="{{ busqueda_actual }}">
                 </div>
-                     <div class="col-md-2 align-self-end">
-                    <button type="submit" class="btn btn-outline-secondary w-100">
-                        <i class="bi bi-search"></i> Buscar
-                    </button>
+                <div class="col-md-2 align-self-end">
+                    <a href="{{ url_for('clientes_proveedores.listar_clientes') }}" 
+                        class="btn btn-sm flex-fill btn-light">
+                        <i class="bi bi-x-circle me-1"></i> Limpiar Stock
+                    </a>
                 </div>
-
-                <div class="col-md-3">
-                    <div class="text-muted small text-end">
-                        <p>{{ clientes|length }} clientes encontrados</p>
-                    </div>
+                <div class="text-muted small">
+                    <p>{{ clientes|length }} clientes encontrados</p>
                 </div>
             </div>
-        </form>
     </div>
 </div>
 
 
-    <!-- Tarjetas de clientes -->
-    <div class="row">
+    <div class="row" id="client-cards-container">
         {% for cliente in clientes %}
-        <div class="col-md-4 mb-4">
+        <div class="col-md-4 mb-4 client-card-wrapper"
+             data-nombre="{{ cliente.nombre.lower() }}"
+             data-codigo="{{ cliente.codigo.lower() or '' }}"
+             data-cuit="{{ cliente.cuit.lower() or '' }}"
+             data-status="{{ 'active' if cliente.activo else 'inactive' }}">
             <div class="card h-100 cliente-card {% if not cliente.activo %}insumo-inactivo{% endif %}">
                 <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">
-                        {{ cliente.nombre }} {{ cliente.apellido }}
-                        {% if not cliente.activo %}
-                            <span class="badge bg-secondary">Inactivo</span>
-                        {% endif %}
-                    </h5>
                     
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="card-title mb-0">{{ cliente.nombre }}</h5>
+                            <p class="text-muted small mb-0">CUIT: <code>{{ cliente.cuit }}</code></p>
+                        </div>
+                        {% if cliente.activo %}
+                            <span class="badge bg-success-soft text-success"><i class="bi bi-check-circle me-1"></i>Activo</span>
+                        {% else %}
+                            <span class="badge bg-danger-soft text-danger"><i class="bi bi-x-circle me-1"></i>Inactivo</span>
+                        {% endif %}
+                    </div>
                     <div class="card-secondary-details mb-3">
-                        <span><i class="bi bi-hash"></i> {{ cliente.codigo }}</span>
-                        <span><i class="bi bi-person-vcard"></i> {{ cliente.cuit }}</span>
-                        <span><i class="bi bi-envelope"></i> {{ cliente.email }}</span>
-                        <span><i class="bi bi-phone"></i> {{ cliente.telefono }}</span>
-                        <span class="'d-block"><i class="bi bi-house"></i> {{cliente.direccion.calle }} {{ cliente.direccion.altura}}, {{cliente.direccion. localidad}}, {{cliente.direccion.provincia}}</span>
+                        <h6 class="text-muted small fw-bold mt-2 mb-1">Contacto y Entrega</h6>
+                        
+                        <span class="fw-semibold"><i class="bi bi-envelope"></i> {{ cliente.email }}</span>
+                        <span class="fw-semibold"><i class="bi bi-phone"></i> {{ cliente.telefono }}</span>
+                        
+                        {% set direccion = cliente.direccion %}
+                        <span class="text-truncate">
+                            <i class="bi bi-house"></i> 
+                            {% if direccion %}
+                                {{ direccion.calle or '' }} {{ direccion.altura or '' }}, {{ direccion.localidad or '' }}
+                            {% else %}
+                                No especificada
+                            {% endif %}
+                        </span>
+                        <span><i class="bi bi-tag-fill"></i> Cód. Cliente: <code>{{ cliente.codigo or 'N/A' }}</code></span>
                     </div>
 
                     <div class="mt-auto">
                         <hr class="card-divider">
-
-                        <div class="d-flex justify-content-between align-items-center mb-3 user-info">
-                            <div>
-                                <span class="user-label">Estado</span>
-                                <span class="user-value">
-                                    {% if cliente.activo %}Activo{% else %}Inactivo{% endif %}
-                                </span>
-                            </div>
-                            <div>
-                                {% if cliente.activo %}
-                                    <span class="badge bg-success-soft text-success">
-                                        <i class="bi bi-check-circle me-1"></i>Activo
-                                    </span>
-                                {% else %}
-                                    <span class="badge bg-danger-soft text-danger">
-                                        <i class="bi bi-x-circle me-1"></i>Inactivo
-                                    </span>
-                                {% endif %}
-                            </div>
-                        </div>
 
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
                             {% if cliente.activo %}
@@ -99,18 +93,16 @@
                                     <i class="bi bi-eye"></i>
                                 </a>
 
-                                <form method="POST" action="{{ url_for('clientes_proveedores.eliminar_cliente', id=cliente.id) }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">
-                                        <i class="bi bi-person-x"></i> Desactivar
-                                    </button>
-                                </form>
+                                <a class="btn btn-sm btn-outline-danger" title="Inhabilitar cliente"
+                                    onClick="eliminarCliente('{{ cliente.id }}')">
+                                    <i class="bi bi-person-x"></i> Desactivar
+                                </a>
 
                             {% else %}
-                                <form method="POST" action="{{ url_for('clientes_proveedores.habilitar_cliente', id=cliente.id) }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-success">
-                                        <i class="bi bi-person-check"></i> Activar
-                                    </button>
-                                </form>
+                                <a class="btn btn-sm btn-outline-success" title="Habilitar cliente"
+                                    onClick="habilitarCliente('{{ cliente.id }}')">
+                                    <i class="bi bi-person-check"></i> Activar
+                                </a>
                             {% endif %}
                         </div>
                     </div>
@@ -118,7 +110,7 @@
             </div>
         </div>
         {% else %}
-        <div class="col-12">
+        <div class="col-12" id="no-search-results">
             <div class="text-center text-muted py-5">
                 <i class="bi bi-people fs-1 d-block mb-2 opacity-50"></i>
                 <h4>No hay clientes registrados</h4>
@@ -131,4 +123,69 @@
         {% endfor %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('busqueda');
+            const form = searchInput ? searchInput.closest('form') : null;
+            const allCardWrappers = document.querySelectorAll('.client-card-wrapper');
+            const noSearchResults = document.getElementById('no-search-results');
+            
+            let timeout = null;
+            const DEBOUNCE_DELAY = 100;
+
+            if (!searchInput || !form) return;
+
+            function filterClients() {
+                const searchTerm = searchInput.value.toLowerCase().trim();
+                let visibleCount = 0;
+
+                allCardWrappers.forEach(wrapper => {
+                    const nombre = wrapper.dataset.nombre;
+                    const codigo = wrapper.dataset.codigo;
+                    const cuit = wrapper.dataset.cuit;
+
+                    const matchesSearch = nombre.includes(searchTerm) || 
+                                          codigo.includes(searchTerm) ||
+                                          cuit.includes(searchTerm);
+
+                    if (matchesSearch) {
+                        wrapper.style.display = '';
+                        visibleCount++;
+                    } else {
+                        wrapper.style.display = 'none';
+                    }
+                });
+
+                if (noSearchResults) {
+                    if (visibleCount === 0 && allCardWrappers.length > 0) {
+                        noSearchResults.style.display = 'flex';
+                    } else {
+                        noSearchResults.style.display = 'none';
+                    }
+                }
+            }
+            
+            const delayedFilter = function () {
+                clearTimeout(timeout);
+                timeout = setTimeout(filterClients, DEBOUNCE_DELAY); 
+            };
+
+            searchInput.addEventListener('input', delayedFilter);
+
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault(); 
+                    filterClients(); 
+                });
+            }
+
+            if (searchInput.value.length > 0) {
+                filterClients();
+            }
+        });
+    </script>
+    <script src="{{ url_for('static', filename='js/clientes/formularioCliente.js') }}"></script>
 {% endblock %}

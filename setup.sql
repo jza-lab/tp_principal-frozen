@@ -7,12 +7,13 @@ CREATE TABLE public.clientes (
   nombre character varying NOT NULL,
   telefono character varying,
   email character varying UNIQUE,
-  direccion character varying,
   cuit character varying NOT NULL UNIQUE,
   activo boolean DEFAULT true,
   updated_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT clientes_pkey PRIMARY KEY (id)
+  direccion_id integer,
+  CONSTRAINT clientes_pkey PRIMARY KEY (id),
+  CONSTRAINT clientes_direccion_id_fkey FOREIGN KEY (direccion_id) REFERENCES public.usuario_direccion(id)
 );
 CREATE TABLE public.insumos_catalogo (
   id_insumo uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -77,6 +78,17 @@ CREATE TABLE public.lotes_productos (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT lotes_productos_pkey PRIMARY KEY (id_lote, producto_id),
   CONSTRAINT lotes_productos_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES public.productos(id)
+);
+CREATE TABLE public.notificaciones (
+  id integer NOT NULL DEFAULT nextval('notificaciones_id_seq'::regclass),
+  usuario_id integer NOT NULL,
+  mensaje text NOT NULL,
+  tipo character varying DEFAULT 'INFO'::character varying,
+  leida boolean NOT NULL DEFAULT false,
+  url_destino character varying,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT notificaciones_pkey PRIMARY KEY (id),
+  CONSTRAINT notificaciones_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id)
 );
 CREATE TABLE public.orden_compra_items (
   id integer NOT NULL DEFAULT nextval('orden_compra_items_id_seq'::regclass),
@@ -168,7 +180,11 @@ CREATE TABLE public.pedidos (
   updated_at timestamp with time zone DEFAULT now(),
   fecha_requerido date,
   precio_orden real,
-  CONSTRAINT pedidos_pkey PRIMARY KEY (id)
+  id_cliente integer,
+  id_direccion_entrega integer,
+  CONSTRAINT pedidos_pkey PRIMARY KEY (id),
+  CONSTRAINT pedidos_id_cliente_fkey FOREIGN KEY (id_cliente) REFERENCES public.clientes(id),
+  CONSTRAINT pedidos_id_direccion_entrega_fkey FOREIGN KEY (id_direccion_entrega) REFERENCES public.usuario_direccion(id)
 );
 CREATE TABLE public.productos (
   id integer NOT NULL DEFAULT nextval('productos_id_seq'::regclass),
@@ -198,7 +214,9 @@ CREATE TABLE public.proveedores (
   activo boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT proveedores_pkey PRIMARY KEY (id)
+  direccion_id integer,
+  CONSTRAINT proveedores_pkey PRIMARY KEY (id),
+  CONSTRAINT proveedores_direccion_id_fkey FOREIGN KEY (direccion_id) REFERENCES public.usuario_direccion(id)
 );
 CREATE TABLE public.recepcion_items (
   id integer NOT NULL DEFAULT nextval('recepcion_items_id_seq'::regclass),
@@ -268,6 +286,21 @@ CREATE TABLE public.registros_acceso (
   CONSTRAINT registros_acceso_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id),
   CONSTRAINT registros_acceso_sesion_totem_id_fkey FOREIGN KEY (sesion_totem_id) REFERENCES public.totem_sesiones(id)
 );
+CREATE TABLE public.reservas_insumos (
+  id integer NOT NULL DEFAULT nextval('reservas_insumos_id_seq'::regclass),
+  orden_produccion_id integer NOT NULL,
+  lote_inventario_id uuid NOT NULL,
+  insumo_id uuid NOT NULL,
+  cantidad_reservada numeric NOT NULL,
+  estado character varying NOT NULL DEFAULT 'RESERVADO'::character varying,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  usuario_reserva_id integer,
+  CONSTRAINT reservas_insumos_pkey PRIMARY KEY (id),
+  CONSTRAINT reservas_insumos_insumo_id_fkey FOREIGN KEY (insumo_id) REFERENCES public.insumos_catalogo(id_insumo),
+  CONSTRAINT reservas_insumos_usuario_reserva_id_fkey FOREIGN KEY (usuario_reserva_id) REFERENCES public.usuarios(id),
+  CONSTRAINT reservas_insumos_orden_produccion_id_fkey FOREIGN KEY (orden_produccion_id) REFERENCES public.ordenes_produccion(id),
+  CONSTRAINT reservas_insumos_lote_inventario_id_fkey FOREIGN KEY (lote_inventario_id) REFERENCES public.insumos_inventario(id_lote)
+);
 CREATE TABLE public.reservas_productos (
   id integer NOT NULL DEFAULT nextval('reservas_productos_id_seq'::regclass),
   lote_producto_id integer NOT NULL,
@@ -279,8 +312,10 @@ CREATE TABLE public.reservas_productos (
   fecha_reserva timestamp with time zone DEFAULT now(),
   fecha_despacho timestamp with time zone,
   usuario_reserva_id integer,
-  CONSTRAINT reservas_productos_pkey PRIMARY KEY (pedido_id, id, lote_producto_id, pedido_item_id),
-  CONSTRAINT reservas_productos_lote_producto_id_fkey FOREIGN KEY (lote_producto_id) REFERENCES public.lotes_productos(id_lote)
+  CONSTRAINT reservas_productos_pkey PRIMARY KEY (id, lote_producto_id, pedido_id, pedido_item_id),
+  CONSTRAINT reservas_productos_lote_producto_id_fkey FOREIGN KEY (lote_producto_id) REFERENCES public.lotes_productos(id_lote),
+  CONSTRAINT reservas_productos_pedido_id_fkey FOREIGN KEY (pedido_id) REFERENCES public.pedidos(id),
+  CONSTRAINT reservas_productos_pedido_item_id_fkey FOREIGN KEY (pedido_item_id) REFERENCES public.pedido_items(id)
 );
 CREATE TABLE public.roles (
   id integer NOT NULL DEFAULT nextval('roles_id_seq'::regclass),

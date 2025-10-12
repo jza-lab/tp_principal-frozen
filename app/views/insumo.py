@@ -105,6 +105,7 @@ def actualizar_insumo(id_insumo):
             response, status = insumo_controller.actualizar_insumo(
                 id_insumo, datos_json
             )
+
             return jsonify(response), status
         response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
         insumo = response["data"]

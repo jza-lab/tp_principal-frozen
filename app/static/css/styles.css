@@ -1040,3 +1040,20 @@ h1.h2 {
     margin-right: 0.5rem;
     color: var(--app-primary); 
 }
+
+/* Estilos para elementos de navegación deshabilitados por permisos */
+.navbar-custom .nav-link.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.navbar-custom .nav-link.disabled:hover {
+    color: var(--header-text) !important; /* Evita que cambie de color en hover */
+    background-color: transparent !important;
+    box-shadow: none;
+}
+.navbar-custom .nav-link.disabled::after {
+    transform: translateX(-100%); /* Asegura que la animación de hover no se active */
+}
+

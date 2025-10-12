@@ -119,4 +119,28 @@ def create_app():
 
     app.jinja_env.filters['format_datetime'] = format_datetime_filter
 
+    # --- Context Processors ---
+    from app.models.permisos import PermisosModel
+
+    @app.context_processor
+    def inject_user_permissions():
+        """
+        Inyecta los permisos del usuario en el contexto de todas las plantillas.
+        Esto permite verificaciones como: {% if 'PRODUCCION' in user_permissions and 'crear' in user_permissions['PRODUCCION'] %}
+        """
+        if 'rol_id' not in session:
+            return {'user_permissions': {}}
+
+        role_id = session['rol_id']
+        # GERENTE tiene acceso a todo, devolvemos un objeto especial
+        if session.get('rol') == 'GERENTE':
+             return {'user_permissions': {'is_gerente': True}}
+
+
+        permisos_model = PermisosModel()
+        user_permissions = permisos_model.get_user_permissions(role_id)
+        
+        return {'user_permissions': user_permissions}
+
+
     return app

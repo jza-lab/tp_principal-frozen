@@ -31,150 +31,172 @@ Agregar nuevo insumo al catálogo
                     <div class="row g-3">
                         {% if insumo %}
                         <div class="col-md-6">
-
-                            <label for="codigo_interno" class="form-label">Código Interno <span
-                                    class="text-danger">*</span></label>
-
-                            <input type="text" class="form-control" name="codigo_interno" id="codigo_interno"
-                                value="{{ insumo.codigo_interno if insumo else '' }}" required {% if insumo %}readonly{%
-                                endif %}>
-
+                            <div class="form-floating">
+                                <input type="text" class="form-control" name="codigo_interno" id="codigo_interno"
+                                    value="{{ insumo.codigo_interno if insumo else '' }}" required {% if insumo %}readonly{%
+                                    endif %}>
+                                <label for="codigo_interno">
+                                    <i class="bi bi-key-fill me-1"></i>Código Interno <span class="text-danger">*</span>
+                                </label>
+                            </div>
                             <div class="form-text">Código único para identificar el insumo</div>
-
                         </div>
                         {% endif %}
                         <div class="col-md-6">
-                            <label for="nombre" class="form-label">Nombre <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="nombre" id="nombre"
-                                value="{{ insumo.nombre if insumo else '' }}" required>
+                            <div class="form-floating">
+                                <input type="text" class="form-control" name="nombre" id="nombre"
+                                    value="{{ insumo.nombre if insumo else '' }}" required placeholder="Nombre">
+                                <label for="nombre">
+                                    <i class="bi bi-tag-fill me-1"></i>Nombre <span class="text-danger">*</span>
+                                </label>
+                            </div>
                         </div>
 
                         <div class="col-md-6">
-                            <label for="categoria" class="form-label">Categoría <span
-                                    class="text-danger">*</span></label>
-                            <select class="form-select" name="categoria" id="categoria" required>
-                                <option value="">Seleccionar unidad...</option>
-                                <option value="Carnes" {% if insumo and insumo.categoria=="Carnes" %}selected{% endif
-                                    %}>
-                                    Carnes (Pollo, Cerdo, etc...)
-                                </option>
-                                <option value="Verduras" {% if insumo and insumo.categoria=='Verduras' %}selected{%
-                                    endif %}>
-                                    Verduras (Choclo, patata, etc...)
-                                </option>
-                                <option value="Harinas" {% if insumo and insumo.categoria=='Harinas' %}selected{% endif
-                                    %}>
-                                    Harinas (Pan rallado, harina, derivados de cereal, etc...)
-                                </option>
-                                <option value="Aditivos" {% if insumo and insumo.categoria=='Aditivos' %}selected{%
-                                    endif %}>
-                                    Aditivos autorizados (Conservantes, Antioxidantes, etc...)
-                                </option>
-                                <option value="Complementarios" {% if insumo and insumo.categoria=='Complementarios'
-                                    %}selected{% endif %}>
-                                    Complementarios (Condimentos, aceites, huevos, etc...)
-                                </option>
-                                <option value="Envases" {% if insumo and insumo.categoria=='Envases' %}selected{% endif
-                                    %}>
-                                    Envases (Bandejas, bolsas, etc...)
-                                </option>
-                                <option value="Lacteos y Derivados" {% if insumo and
-                                    insumo.categoria=='Lacteos y Derivados' %}selected{% endif %}>
-                                    Lácteos y Derivados (Leche, queso etc...)
-                                </option>
-                                <option value="Otros" {% if insumo and insumo.categoria=='Otros' %}selected{% endif %}>
-                                    Otros
-                                </option>
-                            </select>
+                            <div class="form-floating">
+                                <select class="form-select" name="categoria" id="categoria" required>
+                                    <option value="" disabled>Seleccionar unidad...</option>
+                                    <option value="Carnes" {% if insumo and insumo.categoria=="Carnes" %}selected{% endif
+                                        %}>
+                                        Carnes (Pollo, Cerdo, etc...)
+                                    </option>
+                                    <option value="Verduras" {% if insumo and insumo.categoria=='Verduras' %}selected{%
+                                        endif %}>
+                                        Verduras (Choclo, patata, etc...)
+                                    </option>
+                                    <option value="Harinas" {% if insumo and insumo.categoria=='Harinas' %}selected{% endif
+                                        %}>
+                                        Harinas (Pan rallado, harina, derivados de cereal, etc...)
+                                    </option>
+                                    <option value="Aditivos" {% if insumo and insumo.categoria=='Aditivos' %}selected{%
+                                        endif %}>
+                                        Aditivos autorizados (Conservantes, Antioxidantes, etc...)
+                                    </option>
+                                    <option value="Complementarios" {% if insumo and insumo.categoria=='Complementarios'
+                                        %}selected{% endif %}>
+                                        Complementarios (Condimentos, aceites, huevos, etc...)
+                                    </option>
+                                    <option value="Envases" {% if insumo and insumo.categoria=='Envases' %}selected{% endif
+                                        %}>
+                                        Envases (Bandejas, bolsas, etc...)
+                                    </option>
+                                    <option value="Lacteos y Derivados" {% if insumo and
+                                        insumo.categoria=='Lacteos y Derivados' %}selected{% endif %}>
+                                        Lácteos y Derivados (Leche, queso etc...)
+                                    </option>
+                                    <option value="Otros" {% if insumo and insumo.categoria=='Otros' %}selected{% endif %}>
+                                        Otros
+                                    </option>
+                                </select>
+                                <label for="categoria">
+                                    <i class="bi bi-boxes me-1"></i>Categoría <span class="text-danger">*</span>
+                                </label>
+                            </div>
                         </div>
 
                         <div class="col-md-6">
-                            <label for="unidad_medida" class="form-label">Unidad de Medida <span
-                                    class="text-danger">*</span></label>
-                            <select class="form-select" name="unidad_medida" id="unidad_medida" required>
-                                <option value="">Seleccionar unidad...</option>
-                                <option value="t" {% if insumo and insumo.unidad_medida=='t' %}selected{% endif %}>
-                                    Toneladas (t)
-                                </option>
-                                <option value="kg" {% if insumo and insumo.unidad_medida=='kg' %}selected{% endif %}>
-                                    Kilogramos (kg)
-                                </option>
-                                <option value="g" {% if insumo and insumo.unidad_medida=='g' %}selected{% endif %}>
-                                    Gramos (g)
-                                </option>
-                                <option value="litros" {% if insumo and insumo.unidad_medida=='litros' %}selected{%
-                                    endif %}>
-                                    Litros (g)
-                                </option>
-                                <option value="unidades" {% if insumo and insumo.unidad_medida=='unidades' %}selected{%
-                                    endif %}>
-                                    Unidades
-                                </option>
-
-                            </select>
+                            <div class="form-floating">
+                                <select class="form-select" name="unidad_medida" id="unidad_medida" required>
+                                    <option value="">Seleccionar unidad...</option>
+                                    <option value="t" {% if insumo and insumo.unidad_medida=='t' %}selected{% endif %}>
+                                        Toneladas (t)
+                                    </option>
+                                    <option value="kg" {% if insumo and insumo.unidad_medida=='kg' %}selected{% endif %}>
+                                        Kilogramos (kg)
+                                    </option>
+                                    <option value="g" {% if insumo and insumo.unidad_medida=='g' %}selected{% endif %}>
+                                        Gramos (g)
+                                    </option>
+                                    <option value="litros" {% if insumo and insumo.unidad_medida=='litros' %}selected{%
+                                        endif %}>
+                                        Litros (g)
+                                    </option>
+                                    <option value="unidades" {% if insumo and insumo.unidad_medida=='unidades' %}selected{%
+                                        endif %}>
+                                        Unidades
+                                    </option>
+                                </select>
+                                <label for="unidad_medida">
+                                    <i class="bi bi-rulers me-1"></i>Unidad de Medida <span
+                                        class="text-danger">*</span>
+                                </label>
+                            </div>
                         </div>
                         <div class="col-md-6">
-                            <label for="proveedor" class="form-label">Proveedor del Insumo <span
-                                    class="text-danger">*</span></label>
-                            <select class="form-select" name="proveedor" id="proveedor" required>
-                                <option value="">Seleccionar unidad...</option>
-                                {% for proveedor in proveedores %}
-                                <option value="{{ proveedor.id }}" {% if producto and producto.id_proveedor== proveedor.id %}selected{% endif %}>
-                                    {{ proveedor.nombre }}
-                                </option>
-                                {% endfor %}
-
-
-                            </select>
+                            <div class="form-floating">
+                                <select class="form-select" name="proveedor" id="proveedor" required>
+                                    <option value="">Seleccionar proveedor...</option>
+                                    {% for proveedor in proveedores %}
+                                    <option value="{{ proveedor.id }}" {% if insumo and insumo.id_proveedor== proveedor.id %}selected{% endif %}>
+                                        {{ proveedor.nombre }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <label for="proveedor">
+                                    <i class="bi bi-truck me-1"></i>Proveedor del Insumo <span
+                                        class="text-danger">*</span>
+                                </label>
+                            </div>
                         </div>
 
                         <div class="col-md-6">
-                            <label for="stock_min" class="form-label">Stock Mínimo <span
-                                    class="text-danger">*</span></label>
-                            <input type="number" step="1" min="0" max="5000" class="form-control" name="stock_min"
-                                id="stock_min" value="{{ insumo.stock_min if insumo else '' }}" required>
+                            <label for="stock_min" class="form-label">Stock Mínimo</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-dash-circle"></i></span>
+                                <input type="number" step="1" min="0" max="5000" class="form-control" name="stock_min"
+                                    id="stock_min" value="{{ insumo.stock_min if insumo else '' }}" required>   
+                            </div>
                             <div class="form-text">Cantidad mínima que debe mantenerse</div>
+                        </div>
 
-                            <label for="stock_max" class="form-label">Stock Máximo <span
-                                    class="text-danger">*</span></label>
-                            <input type="number" step="1" min="0" max="5000" class="form-control" name="stock_max"
-                                id="stock_max" value="{{ insumo.stock_max if insumo else '' }}" required>
+                        <div class="col-md-6">
+                            <label for="stock_max" class="form-label">Stock Máximo</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-plus-circle"></i></span>
+                                <input type="number" step="1" min="0" max="5000" class="form-control" name="stock_max"
+                                    id="stock_max" value="{{ insumo.stock_max if insumo else '' }}" required>
+                            </div>
                             <div class="form-text">Cantidad máxima que debe mantenerse</div>
                         </div>
 
                         <div class="col-md-6">
-                            <label for="precio_unitario" class="form-label" required>Precio Unitario</label>
+                            <label for="precio_unitario" class="form-label">Precio Unitario</label>
                             <div class="input-group">
-                                <span class="input-group-text">$</span>
+                                <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
                                 <input type="number" step="0.01" class="form-control" name="precio_unitario"
                                     id="precio_unitario" min="1" max="10000"
-                                    value="{{ insumo.precio_unitario if insumo else '' }}">
+                                    value="{{ insumo.precio_unitario if insumo else '' }}" required>
                             </div>
                         </div>
 
                         <div class="col-md-6">
-                            <label for="dias_vida_util" class="form-label">Días de Vida Útil</label>
-                            <input type="number" step="1" class="form-control" name="dias_vida_util" id="dias_vida_util"
-                                required min="1" max="10000" value="{{ insumo.vida_util_dias if insumo else '' }}">
+                            <div class="form-floating">
+                                <input type="number" step="1" class="form-control" name="dias_vida_util" id="dias_vida_util"
+                                    required min="1" max="10000" value="{{ insumo.vida_util_dias if insumo else '' }}"
+                                    placeholder="Días de Vida Útil">
+                                <label for="dias_vida_util">
+                                    <i class="bi bi-calendar-date me-1"></i>Días de Vida Útil
+                                </label>
+                            </div>
                             <div class="form-text">Duración promedio antes del vencimiento</div>
                         </div>
 
                         <div class="col-md-6">
-                            <label for="temperatura_conservacion" class="form-label">Temperatura de Conservación
-                                (°C)</label>
-                            <input type="number" step="0.1" min="-100" max="100" class="form-control"
-                                name="temperatura_conservacion" id="temperatura_conservacion"
-                                value="{{ insumo.tem_recomendada if insumo else '' }}">
-                        </div>
-                        <div>
-
-                            <div class="col-md-8 mx-auto">
-                                <label for="descripcion" class="form-label">Descripcion</label>
-                                <input type="text" class="form-control" name="descripcion" id="descripcion"
-                                    value="{{ insumo.descripcion if insumo else '' }}">
-                                <div class="form-text">Opcional - Ingrese una descipción del insumo</div>
+                            <label for="temperatura_conservacion" class="form-label">Temperatura de Conservación (°C)</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-thermometer-half"></i></span>
+                                <input type="number" step="0.1" min="-100" max="100" class="form-control"
+                                    name="temperatura_conservacion" id="temperatura_conservacion"
+                                    value="{{ insumo.tem_recomendada if insumo else '' }}">
                             </div>
                         </div>
+                        
+                        <div class="col-12">
+                            <label for="descripcion" class="form-label">Descripcion</label>
+                            <textarea class="form-control" name="descripcion" id="descripcion" rows="3">{{ insumo.descripcion if insumo else '' }}</textarea>
+                            <div class="form-text">Opcional - Ingrese una descipción del insumo</div>
+                        </div>
+
 
                         <div class="col-12">
                             <div class="form-check">

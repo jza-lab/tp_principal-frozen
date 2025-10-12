@@ -55,3 +55,45 @@ def permission_required(sector_codigo: str, accion: str):
             return f(*args, **kwargs)
         return decorated_function
     return decorator
+
+def admin_permission_required(accion: str):
+    """
+    Decorator para funciones administrativas.
+    Verifica que el rol del usuario tenga el permiso especificado en el sector 'ADMINISTRACION'.
+    NO verifica la asignación del usuario a dicho sector, ya que son permisos de rol.
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            # 1. Verificar login básico
+            if 'rol_id' not in session or 'rol' not in session:
+                flash('Acceso no autorizado. Por favor, inicie sesión.', 'error')
+                return redirect(url_for('auth.login'))
+
+            # 2. Obtener datos de la sesión
+            role_id = session.get('rol_id')
+            user_role_code = session.get('rol')
+
+            # 3. Acceso universal para GERENTE
+            if user_role_code == 'GERENTE':
+                return f(*args, **kwargs)
+
+            # 4. Obtener ID del sector 'ADMINISTRACION'
+            sector_model = SectorModel()
+            sector_result = sector_model.find_by_codigo('ADMINISTRACION')
+            if not sector_result.get('success') or not sector_result.get('data'):
+                flash('Error de configuración: El sector "ADMINISTRACION" no existe.', 'error')
+                return redirect(get_redirect_url_by_role(user_role_code))
+            admin_sector_id = sector_result['data']['id']
+
+            # 5. VERIFICACIÓN DE PERMISO DEL ROL
+            permission_model = PermisosModel()
+            rol_tiene_permiso = permission_model.check_permission(role_id, admin_sector_id, accion)
+            if not rol_tiene_permiso:
+                flash(f'Su rol no tiene permisos para "{accion}".', 'error')
+                return redirect(get_redirect_url_by_role(user_role_code))
+
+            # 6. Si la verificación pasa, continuar.
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
