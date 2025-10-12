@@ -178,28 +178,48 @@ class UsuarioModel(BaseModel):
             logger.error(f"Error actualizando en usuarios: {e}")
             return {'success': False, 'error': str(e)}
 
-    def find_by_web_login_today(self) -> Dict:
+    def find_by_web_login_filtrado(self, filtros: Optional[Dict] = None) -> Dict:
         """
-        Encuentra a todos los usuarios que han iniciado sesión en la web hoy.
+        Encuentra usuarios que han iniciado sesión en la web, con filtros opcionales.
+        Filtros: 'fecha_desde', 'fecha_hasta', 'sector_id'.
         """
         try:
             from datetime import date, datetime, time
-            hoy = date.today()
-            start_of_day = datetime.combine(hoy, time.min).isoformat()
-            end_of_day = datetime.combine(hoy, time.max).isoformat()
-
-            response = self.db.table(self.get_table_name())\
-                .select("id, nombre, apellido, legajo, ultimo_login_web, roles(nombre)")\
-                .gte('ultimo_login_web', start_of_day)\
-                .lte('ultimo_login_web', end_of_day)\
-                .order('ultimo_login_web', desc=True)\
-                .execute()
-
-            if response.data:
-                return {'success': True, 'data': response.data}
             
-            return {'success': True, 'data': []}
+            query = self.db.table(self.get_table_name())\
+                .select("id, nombre, apellido, legajo, ultimo_login_web, roles(nombre)")
+
+            if filtros:
+                if filtros.get('fecha_desde'):
+                    start_date = datetime.fromisoformat(filtros['fecha_desde']).combine(time.min)
+                    query = query.gte('ultimo_login_web', start_date.isoformat())
+                if filtros.get('fecha_hasta'):
+                    end_date = datetime.fromisoformat(filtros['fecha_hasta']).combine(time.max)
+                    query = query.lte('ultimo_login_web', end_date.isoformat())
+                
+                if filtros.get('sector_id'):
+                    user_ids_in_sector = self.db.table('usuario_sectores')\
+                        .select('usuario_id')\
+                        .eq('sector_id', filtros['sector_id'])\
+                        .execute()
+                    
+                    if user_ids_in_sector.data:
+                        user_ids = [item['usuario_id'] for item in user_ids_in_sector.data]
+                        query = query.in_('id', user_ids)
+                    else:
+                        return {'success': True, 'data': []}
+
+            if not filtros or (not filtros.get('fecha_desde') and not filtros.get('fecha_hasta')):
+                hoy = date.today()
+                start_of_day = datetime.combine(hoy, time.min).isoformat()
+                end_of_day = datetime.combine(hoy, time.max).isoformat()
+                query = query.gte('ultimo_login_web', start_of_day)
+                query = query.lte('ultimo_login_web', end_of_day)
+
+            response = query.order('ultimo_login_web', desc=True).execute()
+
+            return {'success': True, 'data': response.data or []}
 
         except Exception as e:
-            logger.error(f"Error buscando usuarios con login web hoy: {str(e)}", exc_info=True)
+            logger.error(f"Error buscando usuarios con login web (filtrado): {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}

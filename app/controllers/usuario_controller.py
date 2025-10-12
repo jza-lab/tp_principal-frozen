@@ -499,23 +499,23 @@ class UsuarioController(BaseController):
         
         return round(porcentaje, 0)
     
-    def obtener_actividad_totem(self) -> Dict:
+    def obtener_actividad_totem(self, filtros: Optional[Dict] = None) -> Dict:
         """
-        Obtiene la lista de actividad del tótem (ingresos/egresos) de hoy.
+        Obtiene la lista de actividad del tótem (ingresos/egresos), potencialmente filtrada.
         """
         try:
-            resultado = self.totem_sesion.obtener_actividad_totem_hoy()
+            resultado = self.totem_sesion.obtener_actividad_filtrada(filtros)
             return resultado
         except Exception as e:
             logger.error(f"Error obteniendo actividad del tótem: {str(e)}", exc_info=True)
             return {'success': False, 'error': f'Error interno: {str(e)}'}
 
-    def obtener_actividad_web(self) -> Dict:
+    def obtener_actividad_web(self, filtros: Optional[Dict] = None) -> Dict:
         """
-        Obtiene la lista de usuarios que iniciaron sesión en la web hoy.
+        Obtiene la lista de usuarios que iniciaron sesión en la web, potencialmente filtrada.
         """
         try:
-            resultado = self.model.find_by_web_login_today()
+            resultado = self.model.find_by_web_login_filtrado(filtros)
             return resultado
         except Exception as e:
             logger.error(f"Error obteniendo actividad web: {str(e)}", exc_info=True)
