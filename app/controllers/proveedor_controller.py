@@ -26,10 +26,12 @@ class ProveedorController(BaseController):
             logger.error(f"Error obteniendo proveedores: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
-    def obtener_proveedores(self) -> tuple:
+    def obtener_proveedores(self, filtros: Optional[Dict] = None) -> tuple: # <-- ACEPTA FILTROS
         """Obtener lista de proveedores"""
         try:
-            result = self.model.get_all(include_direccion=True)
+            filtros = filtros or {} # Inicializar si es None
+            # Pasar los filtros, incluyendo 'busqueda', al modelo
+            result = self.model.get_all(include_direccion=True, filtros=filtros) 
             if not result['success']:
                 return self.error_response(result['error'])
             

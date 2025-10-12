@@ -28,21 +28,23 @@ class ClienteController(BaseController):
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def obtener_clientes(self, filtros: Optional[Dict] = None) -> tuple:
-        """Obtener lista de Clientes"""
+        """Obtener lista de Clientees activos"""
         try:
             filtros = filtros or {}
+            # Pasar los filtros, incluyendo 'busqueda', al modelo
+            result = self.model.get_all(filtros=filtros) 
 
-            result = self.model.get_all(include_direccion=True, filtros=filtros)
             if not result['success']:
                 return self.error_response(result['error'])
-            
+
             datos = result['data']
             sorted_data = sorted(datos, key=lambda x: x.get('activo', False), reverse=True)
 
             serialized_data = self.schema.dump(sorted_data, many=True)
             return self.success_response(data=serialized_data)
+
         except Exception as e:
-            logger.error(f"Error obteniendo clientes: {str(e)}")
+            logger.error(f"Error obteniendo clientees: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def obtener_cliente(self, cliente_id: int) -> tuple:

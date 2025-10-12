@@ -17,7 +17,6 @@
     </div>
 
 
-    <!-- Filtros -->
     <div class="card mb-4">
         <div class="card-body card-filter">
             <form id="filter-form" method="get" action="{{ url_for('clientes_proveedores.listar_proveedores') }}">
@@ -25,12 +24,13 @@
                     <div class="col-md-4">
                         <label for="busqueda" class="form-label">Buscar</label>
                         <input type="text" name="busqueda" id="busqueda" class="form-control"
-                            placeholder="Nombre o código..." value="{{ request.args.get('busqueda', '') }}">
+                            placeholder="Nombre o código..." value="{{ busqueda_actual }}">
                     </div>
                     <div class="col-md-2 align-self-end">
-                        <button type="submit" class="btn btn-outline-secondary w-100">
-                            <i class="bi bi-search"></i> Buscar
-                        </button>
+                        <a href="{{ url_for('clientes_proveedores.listar_proveedores') }}" 
+                           class="btn btn-sm flex-fill btn-light">
+                            <i class="bi bi-x-circle me-1"></i> Limpiar Stock
+                        </a>
                     </div>
 
                     <div class="col-md-3">
@@ -44,52 +44,48 @@
     </div>
 </div>
 
-<!-- Tarjetas de proveedores -->
 <div class="row">
     {% for proveedor in proveedores %}
-    <div class="col-md-4 mb-4">
+    <div class="col-md-4 mb-4 proveedor-card-wrapper"
+         data-nombre="{{ proveedor.nombre.lower() }}"
+         data-codigo="{{ proveedor.codigo.lower() or '' }}"
+         data-cuit="{{ proveedor.cuit.lower() or '' }}"
+         data-status="{{ 'active' if proveedor.activo else 'inactive' }}">
+         
         <div class="card h-100 proveedor-card {% if not proveedor.activo %}insumo-inactivo{% endif %}">
             <div class="card-body d-flex flex-column">
-                <h5 class="card-title">
-                    {{ proveedor.nombre }} {{ proveedor.apellido }}
-                    {% if not proveedor.activo %}
-                    <span class="badge bg-secondary">Inactivo</span>
+                
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h5 class="card-title mb-0">{{ proveedor.nombre }}</h5>
+                        <p class="text-muted small mb-0">CUIT: <code>{{ proveedor.cuit }}</code></p>
+                    </div>
+                    {% if proveedor.activo %}
+                        <span class="badge bg-success-soft text-success"><i class="bi bi-check-circle me-1"></i>Activo</span>
+                    {% else %}
+                        <span class="badge bg-danger-soft text-danger"><i class="bi bi-x-circle me-1"></i>Inactivo</span>
                     {% endif %}
-                </h5>
-
+                </div>
                 <div class="card-secondary-details mb-3">
-                    <span><i class="bi bi-hash"></i> {{ proveedor.codigo or 'N/A' }}</span>
-                    <span><i class="bi bi-person-vcard"></i> {{ proveedor.cuit }}</span>
-                    <span><i class="bi bi-envelope"></i> {{ proveedor.email }}</span>
-                    <span><i class="bi bi-phone"></i> {{ proveedor.telefono }}</span>
-                    <span class="'d-block"><i class="bi bi-house"></i> {{proveedor.direccion.calle }} {{
-                        proveedor.direccion.altura}}, {{proveedor.direccion. localidad}},
-                        {{proveedor.direccion.provincia}}</span>
+                    <h6 class="text-muted small fw-bold mt-2 mb-1">Contacto y Dirección</h6>
+                    
+                    <span class="fw-semibold"><i class="bi bi-envelope"></i> {{ proveedor.email }}</span>
+                    <span class="fw-semibold"><i class="bi bi-phone"></i> {{ proveedor.telefono }}</span>
+                    
+                    {% set direccion = proveedor.direccion %}
+                    <span class="text-truncate">
+                        <i class="bi bi-house"></i> 
+                        {% if direccion %}
+                            {{ direccion.calle or '' }} {{ direccion.altura or '' }}, {{ direccion.localidad or '' }}
+                        {% else %}
+                            No especificada
+                        {% endif %}
+                    </span>
+                    <span><i class="bi bi-tag-fill"></i> Cód. Interno: <code>{{ proveedor.codigo or 'N/A' }}</code></span>
                 </div>
 
                 <div class="mt-auto">
                     <hr class="card-divider">
-
-                    <div class="d-flex justify-content-between align-items-center mb-3 user-info">
-                        <div>
-                            <span class="user-label">Estado</span>
-                            <span class="user-value">
-                                {% if proveedor.activo %}Activo{% else %}Inactivo{% endif %}
-                            </span>
-                        </div>
-                        <div>
-                            {% if proveedor.activo %}
-                            <span class="badge bg-success-soft text-success">
-                                <i class="bi bi-check-circle me-1"></i>Activo
-                            </span>
-                            {% else %}
-                            <span class="badge bg-danger-soft text-danger">
-                                <i class="bi bi-x-circle me-1"></i>Inactivo
-                            </span>
-                            {% endif %}
-                        </div>
-                    </div>
-
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
                         {% if proveedor.activo %}
                         <a href="{{ url_for('clientes_proveedores.editar_proveedor', id=proveedor.id) }}"
@@ -119,7 +115,7 @@
         </div>
     </div>
     {% else %}
-    <div class="col-12">
+    <div class="col-12" id="no-search-results">
         <div class="text-center text-muted py-5">
             <i class="bi bi-people fs-1 d-block mb-2 opacity-50"></i>
             <h4>No hay proveedors registrados</h4>
@@ -131,5 +127,69 @@
     </div>
     {% endfor %}
 </div>
-<script src="{{ url_for('static', filename='js/proveedores/eliminarProveedor.js') }}"></script>
+{% endblock %}
+
+{% block extra_js %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('busqueda');
+            const form = searchInput ? searchInput.closest('form') : null;
+            const allCardWrappers = document.querySelectorAll('.proveedor-card-wrapper');
+            const noSearchResults = document.getElementById('no-search-results');
+            
+            let timeout = null;
+            const DEBOUNCE_DELAY = 100;
+
+            if (!form || !searchInput) return;
+
+            function filterProviders() {
+                const searchTerm = searchInput.value.toLowerCase().trim();
+                let visibleCount = 0;
+
+                allCardWrappers.forEach(wrapper => {
+                    const nombre = wrapper.dataset.nombre.toLowerCase();
+                    const codigo = wrapper.dataset.codigo.toLowerCase();
+                    const cuit = wrapper.dataset.cuit.toLowerCase();
+
+                    const matchesSearch = nombre.includes(searchTerm) || 
+                                          codigo.includes(searchTerm) ||
+                                          cuit.includes(searchTerm);
+
+                    if (matchesSearch) {
+                        wrapper.style.display = '';
+                        visibleCount++;
+                    } else {
+                        wrapper.style.display = 'none';
+                    }
+                });
+
+                if (noSearchResults) {
+                    if (visibleCount === 0 && allCardWrappers.length > 0) {
+                        noSearchResults.style.display = 'flex';
+                    } else {
+                        noSearchResults.style.display = 'none';
+                    }
+                }
+            }
+            
+            const delayedFilter = function () {
+                clearTimeout(timeout);
+                timeout = setTimeout(filterProviders, DEBOUNCE_DELAY);
+            };
+
+            searchInput.addEventListener('input', delayedFilter);
+
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault(); 
+                    filterProviders();
+                });
+            }
+            if (searchInput.value.length > 0) {
+                filterProviders();
+            }
+        });
+    </script>
+    <script src="{{ url_for('static', filename='js/proveedores/eliminarProveedor.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/proveedores/habilitarProveedor.js') }}"></script>
 {% endblock %}

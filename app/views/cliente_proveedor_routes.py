@@ -22,9 +22,16 @@ cliente_controller = ClienteController()
 @cliente_proveedor.route('/clientes/')
 @permission_required(sector_codigo='ADMINISTRACION', accion='leer')
 def listar_clientes():
-    clientes_result, status = cliente_controller.obtener_clientes()
+    # Extraer todos los filtros de la solicitud (incluye 'busqueda')
+    filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
+    clientes_result, status = cliente_controller.obtener_clientes(filtros=filtros)
+    
     clientes= clientes_result.get('data', []) if clientes_result.get('success') else []
-    return render_template('clientes/listar.html', clientes=clientes)
+    
+    # Pasar el término de búsqueda actual al template
+    busqueda_actual = request.args.get('busqueda', '')
+
+    return render_template('clientes/listar.html', clientes=clientes, busqueda_actual=busqueda_actual)
 
 @cliente_proveedor.route('/clientes/<int:id>')
 @permission_required(sector_codigo='ADMINISTRACION', accion='leer')
@@ -123,10 +130,16 @@ def habilitar_cliente(id):
 @cliente_proveedor.route('/proveedores/')
 @permission_required(sector_codigo='ADMINISTRACION', accion='leer')
 def listar_proveedores():
-    """Muestra la lista de todos los proveedores del sistema."""
-    proveedores_result, status = proveedor_controller.obtener_proveedores()
+    # Extraer todos los filtros de la solicitud (incluye 'busqueda')
+    filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
+    proveedores_result, status = proveedor_controller.obtener_proveedores(filtros=filtros)
+
     proveedores= proveedores_result.get('data', []) if proveedores_result.get('success') else []
-    return render_template('proveedores/listar.html', proveedores=proveedores)
+    
+    # Pasar el término de búsqueda actual al template
+    busqueda_actual = request.args.get('busqueda', '')
+
+    return render_template('proveedores/listar.html', proveedores=proveedores, busqueda_actual=busqueda_actual)
 
 @cliente_proveedor.route('/proveedores/<int:id>')
 @permission_required(sector_codigo='ADMINISTRACION', accion='leer')

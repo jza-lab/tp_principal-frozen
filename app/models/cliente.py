@@ -29,23 +29,27 @@ class ClienteModel(BaseModel):
             # En caso de error, retornamos 0 para evitar fallos.
             return 0
 
-    def get_all(self, include_direccion: bool = False, filtros: Optional[Dict] = None) -> Dict:
-        """Obtener todos los clientes, opcionalmente con su dirección."""
+    def get_all(self, filtros: Optional[Dict] = None) -> Dict:
+        """Obtener todos los clientes, con filtros opcionales de búsqueda y activos."""
         try:
-            query_select = "*, direccion:direccion_id(*)" if include_direccion else "*"
-            query = self.db.table(self.get_table_name()).select(query_select)
-
+            query = self.db.table(self.get_table_name()).select("*")
+            
             filtros_copy = filtros.copy() if filtros else {}
             texto_busqueda = filtros_copy.pop('busqueda', None)
+
+            # Lógica de búsqueda avanzada (para el filtro de servidor si se usa)
             if texto_busqueda:
                 busqueda_pattern = f"%{texto_busqueda}%"
+                # Buscar en nombre, codigo, o cuit (ilike)
                 query = query.or_(f"nombre.ilike.{busqueda_pattern},codigo.ilike.{busqueda_pattern},cuit.ilike.{busqueda_pattern}")
-
+            
+            # Aplicar filtros restantes (e.g., 'activo')
             for key, value in filtros_copy.items():
                 if value is not None:
                     query = query.eq(key, value)
 
-            response = query.execute()
+            # Ordenar por activo descendente por defecto
+            response = query.order('activo', desc=True).execute() 
             
             return {'success': True, 'data': response.data}
         except Exception as e:
