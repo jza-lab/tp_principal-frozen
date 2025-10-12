@@ -69,7 +69,7 @@
 
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card stat-card h-100">
-            <a href="{{ url_for('insumos_api.obtener_insumos') }}" style="text-decoration: none;">
+            <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" style="text-decoration: none;">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         {% if alertas_stock_count == 0 %}
@@ -230,7 +230,7 @@
             </div>
             <div class="card-body">
                 <div class="list-group list-group-flush small">
-                    <a href="{{ url_for('insumos_api.obtener_insumos') }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center">
                         <span class="text-muted">Insumos Críticos con Stock Bajo:</span>
                         <span class="badge bg-{{ 'danger' if alertas_stock_count > 0 else 'success' }} rounded-pill">
                             {{ alertas_stock_count }}

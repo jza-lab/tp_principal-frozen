@@ -34,13 +34,33 @@
                         {% endfor %}
                     </select>
                 </div>
-                     <div class="col-md-2 align-self-end">
+                
+                <div class="col-md-2 align-self-end">
                     <button type="submit" class="btn btn-outline-secondary w-100">
                         <i class="bi bi-search"></i> Buscar
                     </button>
                 </div>
-                <div class="col-md-3">
-                    <div class="text-muted small text-end">
+                
+                <div class="col-md-3 align-self-end">
+                    <div class="d-flex gap-2">
+                        {% set is_bajo = request.args.get('stock_status') == 'bajo' %}
+                        {% set current_busqueda = request.args.get('busqueda', '') %}
+                        {% set current_categoria = request.args.get('categoria', '') %}
+                        
+                        <a href="{{ url_for('insumos_api.obtener_insumos', busqueda=current_busqueda, categoria=current_categoria, stock_status='' if is_bajo else 'bajo') }}" 
+                           class="btn btn-sm flex-fill btn-{{ 'outline-danger' if is_bajo else 'danger' }}">
+                            <i class="bi bi-exclamation-triangle me-1"></i> Stock Bajo
+                        </a>
+
+                        <a href="{{ url_for('insumos_api.obtener_insumos') }}" 
+                           class="btn btn-sm flex-fill btn-light">
+                            <i class="bi bi-x-circle me-1"></i> Limpiar
+                        </a>
+                    </div>
+                </div>
+
+                <div class="col-12 text-end mt-3">
+                    <div class="text-muted small">
                         <p>{{ insumos|length }} insumos encontrados</p>
                     </div>
                 </div>
@@ -48,6 +68,7 @@
         </form>
     </div>
 </div>
+
 
 <!-- Tarjetas de Insumos -->
 <div class="row">
