@@ -307,3 +307,46 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error obteniendo detalle de lote: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
+
+    def obtener_conteo_productos_sin_lotes(self) -> tuple:
+        """
+        Calcula y devuelve el conteo y la lista de productos activos que no tienen lotes asociados.
+        Un producto sin lotes es considerado 'SIN STOCK' para esta alerta.
+        """
+        try:
+            # 1. Obtener todos los productos activos y crear un mapa {id: producto}
+            productos_activos_result = self.producto_model.find_all(filters={'activo': True})
+            if not productos_activos_result.get('success'):
+                raise Exception("Error al obtener productos activos.")
+            
+            # Mapeamos ID a un objeto con ID y Nombre
+            productos_map = {
+                p['id']: {'id': p['id'], 'nombre': p['nombre']} 
+                for p in productos_activos_result['data']
+            }
+            
+            # 2. Obtener IDs de productos que tienen al menos un lote
+            productos_con_lotes_result = self.model.find_all() 
+            if not productos_con_lotes_result.get('success'):
+                raise Exception("Error al obtener lotes.")
+
+            # Filtrar IDs únicos de productos que ya tienen lote
+            productos_con_lotes_ids = {lote['producto_id'] for lote in productos_con_lotes_result['data']}
+            
+            # 3. Calcular la diferencia y obtener la lista de objetos de producto
+            productos_sin_lotes_list = []
+            
+            for prod_id, prod_data in productos_map.items():
+                if prod_id not in productos_con_lotes_ids:
+                    productos_sin_lotes_list.append(prod_data)
+            
+            conteo = len(productos_sin_lotes_list)
+
+            return self.success_response(data={
+                'conteo_sin_lotes': conteo,
+                'productos_sin_lotes': productos_sin_lotes_list
+            })
+        
+        except Exception as e:
+            logger.error(f"Error contando productos sin lotes: {str(e)}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
