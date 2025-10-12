@@ -26,20 +26,16 @@
                     <input type="text" name="busqueda" id="busqueda" class="form-control"
                         placeholder="Nombre, código o CUIT..." value="{{ busqueda_actual }}">
                 </div>
-                    <div class="col-md-2 align-self-end">
-                        <a href="{{ url_for('clientes_proveedores.listar_clientes') }}" 
-                           class="btn btn-sm flex-fill btn-light">
-                            <i class="bi bi-x-circle me-1"></i> Limpiar Stock
-                        </a>
-                    </div>
-
-                <div class="col-md-3">
-                    <div class="text-muted small text-end">
-                        <p>{{ clientes|length }} clientes encontrados</p>
-                    </div>
+                <div class="col-md-2 align-self-end">
+                    <a href="{{ url_for('clientes_proveedores.listar_clientes') }}" 
+                        class="btn btn-sm flex-fill btn-light">
+                        <i class="bi bi-x-circle me-1"></i> Limpiar Stock
+                    </a>
+                </div>
+                <div class="text-muted small">
+                    <p>{{ clientes|length }} clientes encontrados</p>
                 </div>
             </div>
-        </form>
     </div>
 </div>
 

@@ -37,20 +37,24 @@
                         <div class="col-md-6">
                             <label for="producto_id" class="form-label">Producto <span
                                     class="text-danger">*</span></label>
-                            <select class="form-select" id="producto_id" name="producto_id" required>
-                                <option value="">Seleccione un producto...</option>
-                                {% for producto in productos %}
-                                <option value="{{ producto.id }}" {% if orden and orden.producto_id==producto.id
-                                    %}selected{% endif %}>
-                                    {{ producto.nombre }}
-                                </option>
-                                {% endfor %}
-                            </select>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-box-seam-fill"></i></span>
+                                <select class="form-select" id="producto_id" name="producto_id" required>
+                                    <option value="">Seleccione un producto...</option>
+                                    {% for producto in productos %}
+                                    <option value="{{ producto.id }}" {% if orden and orden.producto_id==producto.id
+                                        %}selected{% endif %}>
+                                        {{ producto.nombre }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
                         </div>
 
                         <div class="col-md-6">
                             <label for="cantidad" class="form-label">Cantidad <span class="text-danger">*</span></label>
                             <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-hash"></i></span>
                                 <input type="number" step="0.1" min="1" max="5000" class="form-control" id="cantidad" name="cantidad"
                                     value="{{ orden.cantidad if orden else '' }}" required min="1">
                                 <span class="input-group-text">unidades</span>
@@ -60,48 +64,60 @@
                         <div class="col-md-6">
                             <label for="fecha_planificada" class="form-label">Fecha Planificada <span
                                     class="text-danger">*</span></label>
-                            <input type="date" class="form-control" id="fecha_planificada" name="fecha_planificada"
-                                value="{{ orden.fecha_planificada if orden else '' }}" required>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-calendar-date"></i></span>
+                                <input type="date" class="form-control" id="fecha_planificada" name="fecha_planificada"
+                                    value="{{ orden.fecha_planificada if orden else '' }}" required>
+                            </div>
                         </div>
 
                         <div class="col-md-6">
                             <label for="prioridad" class="form-label">Prioridad</label>
-                            <select class="form-select" id="prioridad" name="prioridad">
-                                <option value="NORMAL" {% if not orden or orden.prioridad=='NORMAL' %}selected{% endif
-                                    %}>
-                                    Normal
-                                </option>
-                                <option value="BAJA" {% if orden and orden.prioridad=='BAJA' %}selected{% endif %}>
-                                    Baja
-                                </option>
-                                <option value="ALTA" {% if orden and orden.prioridad=='ALTA' %}selected{% endif %}>
-                                    Alta
-                                </option>
-                                <option value="URGENTE" {% if orden and orden.prioridad=='URGENTE' %}selected{% endif
-                                    %}>
-                                    Urgente
-                                </option>
-                            </select>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-arrow-up-right-square"></i></span>
+                                <select class="form-select" id="prioridad" name="prioridad">
+                                    <option value="NORMAL" {% if not orden or orden.prioridad=='NORMAL' %}selected{% endif
+                                        %}>
+                                        Normal
+                                    </option>
+                                    <option value="BAJA" {% if orden and orden.prioridad=='BAJA' %}selected{% endif %}>
+                                        Baja
+                                    </option>
+                                    <option value="ALTA" {% if orden and orden.prioridad=='ALTA' %}selected{% endif %}>
+                                        Alta
+                                    </option>
+                                    <option value="URGENTE" {% if orden and orden.prioridad=='URGENTE' %}selected{% endif
+                                        %}>
+                                        Urgente
+                                    </option>
+                                </select>
+                            </div>
                         </div>
 
                         <div class="col-md-6">
                             <label for="supervisor_responsable_id" class="form-label">Supervisor Asignado</label>
-                            <select class="form-select" id="supervisor_responsable_id" name="supervisor_responsable_id">
-                                <option value="">Sin asignar</option>
-                                {% for supervisor in supervisores %}
-                                <option value="{{ supervisor.id }}"
-                                    {% if orden and orden.supervisor_responsable_id == supervisor.id %}selected{% endif %}>
-                                    {{ supervisor.nombre }} {{ supervisor.apellido }}
-                                </option>
-                                {% endfor %}
-                            </select>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
+                                <select class="form-select" id="supervisor_responsable_id" name="supervisor_responsable_id">
+                                    <option value="">Sin asignar</option>
+                                    {% for supervisor in supervisores %}
+                                    <option value="{{ supervisor.id }}"
+                                        {% if orden and orden.supervisor_responsable_id == supervisor.id %}selected{% endif %}>
+                                        {{ supervisor.nombre }} {{ supervisor.apellido }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
                             <div class="form-text">Opcional - Puede asignar un supervisor más tarde.</div>
                         </div>
 
                         <div class="col-md-6">
                             <label for="observaciones" class="form-label">Observaciones</label>
-                            <textarea class="form-control" name="observaciones" id="observaciones"
-                                rows="3">{{ orden.observaciones if orden else '' }}</textarea>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-chat-dots"></i></span>
+                                <textarea class="form-control" name="observaciones" id="observaciones"
+                                    rows="3">{{ orden.observaciones if orden else '' }}</textarea>
+                            </div>
                             <div class="form-text">Opcional - Ingrese detalles adicionales.</div>
                         </div>
                     </div>
