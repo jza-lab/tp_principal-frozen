@@ -8,6 +8,7 @@ from app.controllers.notificación_controller import NotificacionController
 from app.controllers.inventario_controller import InventarioController
 from app.permisos import admin_permission_required
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
+from app.controllers.lote_producto_controller import LoteProductoController
 
 # Blueprint para la administración de usuarios
 admin_usuario_bp = Blueprint('admin_usuario', __name__, url_prefix='/admin')
@@ -19,6 +20,7 @@ orden_produccion_controller=OrdenProduccionController()
 autorizacion_model = AutorizacionIngresoModel()
 notificacion_controller = NotificacionController()
 inventario_controller = InventarioController()
+lote_producto_controller = LoteProductoController()
 
 @admin_usuario_bp.route('/')
 @admin_permission_required(accion='leer')
@@ -65,15 +67,28 @@ def index():
 
     asistencia = usuario_controller.obtener_porcentaje_asistencia()
     notificaciones = notificacion_controller.obtener_notificaciones_no_leidas()
-
+    
+    # 1. Obtener insumos con stock bajo (la lista y el conteo)
+    insumos_bajo_stock_resp, _ = inventario_controller.obtener_insumos_bajo_stock()
+    insumos_bajo_stock_list = insumos_bajo_stock_resp.get('data', [])
+    alertas_stock_count = len(insumos_bajo_stock_list)
     alertas_stock_count = inventario_controller.obtener_conteo_alertas_stock()
+
+    # 2. Obtener productos sin lotes (la lista y el conteo)
+    productos_sin_lotes_resp, _ = lote_producto_controller.obtener_conteo_productos_sin_lotes()
+    data_sin_lotes = productos_sin_lotes_resp.get('data', {})
+    productos_sin_lotes_count = data_sin_lotes.get('conteo_sin_lotes', 0) 
+    productos_sin_lotes_list = data_sin_lotes.get('productos_sin_lotes', [])
 
     return render_template('dashboard/index.html', asistencia=asistencia,
                             ordenes_pendientes = ordenes_pendientes,
                             ordenes_aprobadas = ordenes_aprobadas,
                             ordenes_totales = ordenes_totales,
                             notificaciones=notificaciones,
-                            alertas_stock_count=alertas_stock_count)
+                            alertas_stock_count=alertas_stock_count,
+                            insumos_bajo_stock_list=insumos_bajo_stock_list,
+                            productos_sin_lotes_count=productos_sin_lotes_count,
+                            productos_sin_lotes_list=productos_sin_lotes_list) 
 
 @admin_usuario_bp.route('/usuarios')
 @admin_permission_required(accion='leer')
@@ -278,6 +293,7 @@ def editar_usuario(id):
     if not usuario:
         flash('Usuario no encontrado.', 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
+        
     
     roles = usuario_controller.obtener_todos_los_roles()
     sectores = usuario_controller.obtener_todos_los_sectores()

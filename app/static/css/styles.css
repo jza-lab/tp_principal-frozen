@@ -1056,3 +1056,4 @@ h1.h2 {
 .navbar-custom .nav-link.disabled::after {
     transform: translateX(-100%); /* Asegura que la animación de hover no se active */
 }
+

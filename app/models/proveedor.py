@@ -62,44 +62,41 @@ class ProveedorModel(BaseModel):
             logger.error(f"Error buscando proveedor por ID {proveedor_id}: {e}")
             return {'success': False, 'error': str(e)}
 
-    def buscar_por_cuit(self, cuit: str) -> tuple:
+    def buscar_por_cuit(self, cuit: str, include_direccion: bool = False) -> tuple:
         """Busca un proveedor por su CUIT/CUIL."""
-        try:
             # Ejecutamos la consulta
-            result = self.db.table(self.get_table_name()).select("*").eq("cuit", cuit).execute()
+        try:
 
-            # --- LÓGICA CORREGIDA ---
-            # En lugar de verificar result.status_code, verificamos si se encontraron datos.
-            # Si .execute() no lanza una excepción, la petición fue exitosa (código 2xx).
-            if result.data:
-                # Se encontró un proveedor, devolvemos sus datos y un código 200 OK
-                return result.data[0], 200
-            else:
-                # No se encontró, devolvemos None y un código 404 Not Found
-                return None, 404
-
+            query = "*, direccion:direccion_id(*)" if include_direccion else "*"
+            response = self.db.table(self.get_table_name())\
+                           .select(query)\
+                           .eq("cuit", cuit.strip())\
+                           .execute()
+            if response.data:
+                return {'success': True, 'data': response.data}
+            return {'success': False, 'error': 'Cliente no encontrado'}
         except Exception as e:
-            logger.error(f"Error buscando proveedor por CUIT {cuit}: {e}")
-            return None, 500
+            logger.error(f"Error buscando cliente por CUIT {cuit}: {e}")
+            return {'success': False, 'error': 'Ocurrió un error inesperado al buscar el cliente.'}
 
 
-    def buscar_por_email(self, email: str) -> tuple:
+    def buscar_por_email(self, email: str,  include_direccion: bool = False) -> tuple:
         """Busca un proveedor por su email."""
         try:
-            # Ejecutamos la consulta
-            result = self.db.table(self.get_table_name()).select("*").eq("email", email).execute()
+            query = "*, direccion:direccion_id(*)" if include_direccion else "*"
+            response = self.db.table(self.get_table_name())\
+                           .select(query)\
+                           .eq("email", email.strip().lower())\
+                           .execute()
+            
+            if len(response.data)>=1:    
+                return {'success': True, 'data': response.data}
 
-            # --- LÓGICA CORREGIDA ---
-            if result.data:
-                # Se encontró un proveedor
-                return result.data[0], 200
-            else:
-                # No se encontró
-                return None, 404
-
+            return {'success': False, 'error': 'Cliente no encontrado'}
         except Exception as e:
-            logger.error(f"Error buscando proveedor por email {email}: {e}")
-            return None, 500
+            logger.error(f"Error buscando cliente por email {email}: {e}")
+            return {'success': False, 'error': 'Ocurrió un error inesperado al buscar el cliente.'}
+
 
     def buscar_por_identificacion(self, fila: Dict) -> Optional[Dict]:
         """

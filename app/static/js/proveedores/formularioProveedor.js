@@ -5,12 +5,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const alturaInput = document.getElementById('altura');
     const provinciaSelect = document.getElementById('provincia');
     const localidadInput = document.getElementById('localidad');
-    
+
     async function enviarDatos() {
-        
+
         const formData = new FormData(form);
         const cuit = `${formData.get('cuit_parte1')}-${formData.get('cuit_parte2')}-${formData.get('cuit_parte3')}`;
-        
+
         const proveedorData = {
             nombre: formData.get('nombre'),
             codigo: formData.get('codigo'),
@@ -41,15 +41,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const resultado = await respuesta.json();
 
             if (respuesta.ok && resultado.success) {
-                const mensaje = isEditBoolean? 'Los datos del proveedor se actualizaron correctamente.' : 'Se creó un nuevo proveedor exitosamente';
+                const mensaje = isEditBoolean ? 'Los datos del proveedor se actualizaron correctamente.' : 'Se creó un nuevo proveedor exitosamente';
                 showNotificationModal(resultado.message || 'Operación exitosa', mensaje);
-                setTimeout(() => { window.location.href = proveedorS_LISTA_URL; }, 1500); 
+                setTimeout(() => { window.location.href = proveedorS_LISTA_URL; }, 1500);
             } else {
                 let errorMessage = 'Ocurrió un error.';
                 if (resultado && resultado.error) {
                     errorMessage = typeof resultado.error === 'object' ? Object.values(resultado.error).flat().join('\n') : resultado.error;
                 }
-                const mensaje = isEditBoolean? 'Hubo un fallo al actualizar los datos del proveedor.' : 'Hubo un fallo al crear al proveedor.';
+                const mensaje = isEditBoolean ? 'Hubo un fallo al actualizar los datos del proveedor.' : 'Hubo un fallo al crear al proveedor.';
                 showNotificationModal(errorMessage, mensaje);
             }
         } catch (error) {
@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotificationModal('No se pudo conectar con el servidor.', '');
         }
     };
-    
+
     async function verifyAddress() {
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const response = await fetch('/admin/usuarios/verificar_direccion', { 
+            const response = await fetch('/admin/usuarios/verificar_direccion', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -86,20 +86,20 @@ document.addEventListener('DOMContentLoaded', function () {
                     errorMessage = verificationResult.error;
                 }
                 showNotificationModal(errorMessage, 'Error al verificar la dirección');
-                form.classList.add('was-validated');
+                
             }
         } catch (error) {
             console.error('Error de red al verificar la direccion:', error);
             showNotificationModal('No se pudo conectar con el servidor de verificación.', 'error');
         }
     }
-    
+
     form.addEventListener('submit', async function (event) {
         event.preventDefault();
         event.stopPropagation();
-        
+
+        form.classList.add('was-validated');
         if (!form.checkValidity()) {
-            form.classList.add('was-validated');
             return;
         }
 

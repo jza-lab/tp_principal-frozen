@@ -78,7 +78,7 @@ Agregar nuevo proveedor
                                 <span class="input-group-text">-</span>
 
                                 <input type="text" class="form-control text-center" id="cuit_parte3" name="cuit_parte3"
-                                    maxlength="2" pattern="\d{1,2}" placeholder="X" required
+                                    maxlength="1" pattern="\d{1}" placeholder="X" required
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
                                     aria-label="Dígito verificador"
                                     value="{{ cuit_parts[2] }}">
@@ -122,7 +122,7 @@ Agregar nuevo proveedor
                             <div class="row g-3">
                                 <div class="col-md-8">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="calle" name="calle"
+                                        <input type="text" class="form-control" id="calle" name="calle" minlength="3" maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
                                             placeholder="Calle" value="{{ proveedor.direccion.calle if proveedor and proveedor.direccion }}" required>
                                         <label for="calle">
                                             <i class="bi bi-signpost me-1"></i>Calle
@@ -133,7 +133,7 @@ Agregar nuevo proveedor
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="number" class="form-control" id="altura" name="altura"
+                                        <input type="number" class="form-control" id="altura" name="altura" pattern="\d{1,5}" maxlength="5" max="99999" min="1"
                                             placeholder="Altura" value="{{ proveedor.direccion.altura if proveedor and proveedor.direccion }}" required>
                                         <label for="altura">
                                             <i class="bi bi-123 me-1"></i>Altura
@@ -165,7 +165,7 @@ Agregar nuevo proveedor
 
                                 <div class="col-md-6">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="localidad" name="localidad"
+                                        <input type="text" class="form-control" id="localidad" name="localidad" minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" title="Ingresá un nombre de localidad válido (solo letras y espacios)."
                                             placeholder="Localidad" value="{{ proveedor.direccion.localidad if proveedor and proveedor.direccion }}" required>
                                         <label for="localidad">
                                             <i class="bi bi-pin-map me-1"></i>Localidad
@@ -176,7 +176,7 @@ Agregar nuevo proveedor
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="piso" name="piso"
+                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="10"  pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
                                             placeholder="Piso (Opcional)" value="{{ (proveedor.direccion or {}).get('piso', '') if proveedor and proveedor.direccion }}">
                                         <label for="piso">
                                             <i class="bi bi-building me-1"></i>Piso (Opcional)
@@ -186,8 +186,8 @@ Agregar nuevo proveedor
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="depto" name="depto"
-                                            placeholder="Dto (Opcional)" value="{{ (proveedor.direccion or {}).get('departamento', '') if proveedor and proveedor.direccion }}">
+                                        <input type="text" class="form-control" id="depto" name="depto" maxlength="5" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
+                                            placeholder="Dto (Opcional)" value="{{ (proveedor.direccion or {}).get('depto', '') if proveedor and proveedor.direccion }}">
                                         <label for="depto">
                                             <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
                                         </label>
@@ -196,7 +196,7 @@ Agregar nuevo proveedor
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"  minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}" title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
                                             placeholder="Código Postal" value="{{ (proveedor.direccion or {}).get('codigo_postal', '') if proveedor and proveedor.direccion }}">
                                         <label for="codigo_postal">
                                             <i class="bi bi-mailbox me-1"></i>Código Postal

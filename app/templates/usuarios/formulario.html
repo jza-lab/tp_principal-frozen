@@ -254,8 +254,8 @@
 
                             <div class="col-md-4">
                                 <div class="form-floating">
-                                    <input type="number" class="form-control" id="altura" name="altura"
-                                        placeholder="Altura" value="{{ (usuario.get('direccion') or {}).get('altura', '') }}" required>
+                                    <input type="number" class="form-control"  id="altura" name="altura"
+                                        placeholder="Altura" value="{{ (usuario.get('direccion') or {}).get('altura', '') }}"  max="999999" required>
                                     <label for="altura">
                                         <i class="bi bi-123 me-1"></i>Altura
                                     </label>
@@ -297,7 +297,7 @@
 
                             <div class="col-md-4">
                                 <div class="form-floating">
-                                    <input type="text" class="form-control" id="piso" name="piso"
+                                    <input type="text" class="form-control" id="piso" name="piso" min="0" max="100"
                                         placeholder="Piso (Opcional)" value="{{ (usuario.get('direccion') or {}).get('piso', '') }}">
                                     <label for="piso">
                                         <i class="bi bi-building me-1"></i>Piso (Opcional)

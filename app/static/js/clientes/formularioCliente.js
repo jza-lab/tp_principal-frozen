@@ -6,20 +6,20 @@ document.addEventListener('DOMContentLoaded', function () {
     const provinciaSelect = document.getElementById('provincia');
     const localidadInput = document.getElementById('localidad');
 
-    
+
     async function enviarDatos() {
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
             return;
         }
-        
+
         const formData = new FormData(form);
         const cuit = `${formData.get('cuit_parte1')}-${formData.get('cuit_parte2')}-${formData.get('cuit_parte3')}`;
         const clienteData = {
             nombre: formData.get('nombre'),
             cuit: cuit,
             email: formData.get('email'),
-            telefono:formData.get('telefono'),
+            telefono: formData.get('telefono'),
             direccion: {
                 calle: formData.get('calle'),
                 altura: formData.get('altura'),
@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 depto: formData.get('depto') || null
             }
         };
+
         const url = isEditBoolean ? `/administrar/clientes/${ID_cliente}/editar` : '/administrar/clientes/nuevo';
         const method = isEditBoolean ? 'PUT' : 'POST';
 
@@ -42,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const resultado = await respuesta.json();
 
             if (respuesta.ok && resultado.success) {
-                const mensaje = isEditBoolean? 'Los datos del cliente se actualizaron correctamente.' : 'Se creó un nuevo cliente exitosamente';
+                const mensaje = isEditBoolean ? 'Los datos del cliente se actualizaron correctamente.' : 'Se creó un nuevo cliente exitosamente';
                 showNotificationModal(resultado.message || 'Operación exitosa', mensaje);
                 setTimeout(() => { window.location.href = clienteS_LISTA_URL; }, 1500);
             } else {
@@ -50,7 +51,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (resultado && resultado.error) {
                     errorMessage = typeof resultado.error === 'object' ? Object.values(resultado.error).flat().join('\n') : resultado.error;
                 }
-                const mensaje = isEditBoolean? 'Hubo un fallo al actualizar los datos del cliente.' : 'Hubo un fallo al crear al cliente.';
+                const mensaje = isEditBoolean ? 'Hubo un fallo al actualizar los datos del cliente.' : 'Hubo un fallo al crear al cliente.';
                 showNotificationModal(errorMessage, mensaje);
             }
         } catch (error) {
@@ -58,7 +59,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotificationModal('No se pudo conectar con el servidor.', 'error');
         }
     };
-    
+
     async function verifyAddress() {
         try {
             const response = await fetch('/admin/usuarios/verificar_direccion', {
@@ -75,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const verificationResult = await response.json();
 
             if (response.ok && verificationResult.success) {
-                await enviarDatos(); 
+                await enviarDatos();
             } else {
                 let errorMessage = 'Dirección no válida o error de verificación.';
                 if (verificationResult && verificationResult.error) {
@@ -89,11 +90,11 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotificationModal('No se pudo conectar con el servidor de verificación.', 'error');
         }
     }
-    
+
     form.addEventListener('submit', async function (event) {
         event.preventDefault();
         event.stopPropagation();
-        
+
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
             return;

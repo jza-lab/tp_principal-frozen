@@ -54,6 +54,19 @@ class ProveedorController(BaseController):
             logger.error(f"Error obteniendo proveedor {proveedor_id}: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
+    def obtener_proveedor_cuil(self, proveedor_cuil: str) -> tuple:
+        """Obtener un proveedor por su ID"""
+        try:
+            result = self.model.buscar_por_cuit(proveedor_cuil, include_direccion=True)
+            if not result['success']:
+                return self.error_response(result['error'], 404)
+            
+            serialized_data = self.schema.dump(result['data'])
+            return self.success_response(data=result['data'])
+        except Exception as e:
+            logger.error(f"Error obteniendo proveedor {proveedor_cuil}: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
     def eliminar_proveedor(self, proveedor_id: int) -> tuple:
         """Elimina (desactiva) un proveedor por su ID"""
         try:
@@ -104,20 +117,18 @@ class ProveedorController(BaseController):
             validated_data = self.schema.load(data)
 
             if validated_data.get('email'):
-                respuesta, _ = self.model.buscar_por_email(validated_data['email'])
-                if respuesta:
+                respuesta= self.model.buscar_por_email(validated_data['email'])
+                if respuesta.get('success'):
                     return self.error_response('El email ya está registrado para otro proveedor', 400)
 
             if validated_data.get('cuit'):
-                respuesta, _ = self.model.buscar_por_cuit(validated_data['cuit'])
-                if respuesta:
+                respuesta = self.model.buscar_por_cuit(validated_data['cuit'])
+                if respuesta.get('success'):
                     return self.error_response('El CUIT/CUIL ya está registrado para otro proveedor', 400)
 
             direccion_id = self._get_or_create_direccion(direccion_data)
             if direccion_id:
                 validated_data['direccion_id'] = direccion_id
-
-            
 
             result = self.model.create(validated_data)
 
