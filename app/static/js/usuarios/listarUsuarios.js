@@ -17,6 +17,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const noSearchResults = document.getElementById('no-search-results');
     const filterButtons = document.querySelectorAll('.filter-btn');
 
+    // Elementos para filtros de actividad
+    const filterSector = document.getElementById('filter-sector');
+    const filterFechaDesde = document.getElementById('filter-fecha-desde');
+    const filterFechaHasta = document.getElementById('filter-fecha-hasta');
+    const applyFiltersBtn = document.getElementById('apply-filters');
+
     let currentFilter = 'all';
 
     // --- FUNCIONES DE RENDERIZADO ---
@@ -85,6 +91,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 loadingEl.style.display = 'none';
                 if (result.success && result.data.length > 0) {
                     container.innerHTML = '';
+                    notFoundEl.style.display = 'none';
                     result.data.forEach((item, index) => {
                         setTimeout(() => {
                             container.innerHTML += cardFn(item);
@@ -92,6 +99,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                     updateCounter(counterEl, result.data.length);
                 } else {
+                    container.innerHTML = '';
                     notFoundEl.style.display = 'flex';
                     updateCounter(counterEl, 0, false);
                 }
@@ -102,12 +110,41 @@ document.addEventListener('DOMContentLoaded', function() {
                 container.innerHTML = `<div class="text-center text-danger py-3"><p>No se pudo cargar la actividad.</p></div>`;
             });
     }
+    
+    function applyActivityFilters() {
+        // Mostrar spinners y limpiar contenido actual
+        loadingTotem.style.display = 'block';
+        loadingWeb.style.display = 'block';
+        totemContainer.innerHTML = '';
+        webContainer.innerHTML = '';
+        noTotemMsg.style.display = 'none';
+        noWebMsg.style.display = 'none';
 
-    // Cargar datos de actividad
-    fetchAndRender(URL_TOTEM_ACTIVITY, totemContainer, loadingTotem, noTotemMsg, createTotemActivityCard, totemCounter);
-    fetchAndRender(URL_WEB_ACTIVITY, webContainer, loadingWeb, noWebMsg, createWebActivityCard, webCounter);
+        // Obtener valores de los filtros
+        const sectorId = filterSector.value;
+        const fechaDesde = filterFechaDesde.value;
+        const fechaHasta = filterFechaHasta.value;
 
-    // --- LÓGICA DE BÚSQUEDA Y FILTROS ---
+        // Construir la query string
+        const params = new URLSearchParams();
+        if (sectorId) params.append('sector_id', sectorId);
+        if (fechaDesde) params.append('fecha_desde', fechaDesde);
+        if (fechaHasta) params.append('fecha_hasta', fechaHasta);
+        const queryString = params.toString();
+
+        // Construir las URLs finales
+        const totemUrl = `${URL_TOTEM_ACTIVITY}?${queryString}`;
+        const webUrl = `${URL_WEB_ACTIVITY}?${queryString}`;
+
+        // Realizar la búsqueda con los nuevos filtros
+        fetchAndRender(totemUrl, totemContainer, loadingTotem, noTotemMsg, createTotemActivityCard, totemCounter);
+        fetchAndRender(webUrl, webContainer, loadingWeb, noWebMsg, createWebActivityCard, webCounter);
+    }
+    
+    // Cargar datos iniciales de actividad (hoy por defecto)
+    applyActivityFilters();
+
+    // --- LÓGICA DE BÚSQUEDA Y FILTROS DE USUARIOS ---
     function updateUserCounts() {
         const all = userCards.length;
         let active = 0;
@@ -156,7 +193,8 @@ document.addEventListener('DOMContentLoaded', function() {
         clearSearchBtn.style.display = searchTerm ? 'flex' : 'none';
     }
 
-    // Event listeners para búsqueda
+    // --- EVENT LISTENERS ---
+    // Búsqueda de usuarios
     searchInput.addEventListener('input', filterAndSearch);
     
     clearSearchBtn.addEventListener('click', function() {
@@ -165,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
         searchInput.focus();
     });
 
-    // Event listeners para filtros
+    // Filtros de estado de usuarios
     filterButtons.forEach(btn => {
         btn.addEventListener('click', function() {
             filterButtons.forEach(b => b.classList.remove('active'));
@@ -174,8 +212,12 @@ document.addEventListener('DOMContentLoaded', function() {
             filterAndSearch();
         });
     });
+    
+    // Filtros de actividad
+    applyFiltersBtn.addEventListener('click', applyActivityFilters);
 
-    // Inicializar contadores
+
+    // --- INICIALIZACIÓN ---
     updateUserCounts();
 
     // Animación de entrada para las tarjetas al cambiar de pestaña
