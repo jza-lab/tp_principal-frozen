@@ -164,7 +164,7 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="piso_facturacion"
+                                        <input type="text" class="form-control" id="piso_facturacion" maxlength="3"
                                             name="piso_facturacion" placeholder="Piso (Opcional)" value="" readonly>
                                         <label for="piso_facturacion">
                                             <i class="bi bi-building me-1"></i>Piso (Opcional)
@@ -210,7 +210,7 @@
                                 <div class="col-md-8">
                                     <div class="form-floating">
                                         <input type="text" class="form-control" id="calle" name="calle"  minlength="3" maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
-                                            placeholder="Calle" value="">
+                                            placeholder="Calle" value="{{ pedido.direccion.calle if pedido else ''}}">
                                         <label for="calle">
                                             <i class="bi bi-signpost me-1"></i>Calle
                                         </label>
@@ -221,7 +221,7 @@
                                 <div class="col-md-4">
                                     <div class="form-floating">
                                         <input type="number" class="form-control" id="altura" name="altura" pattern="\d{1,5}" maxlength="5" max="99999" min="1"
-                                            placeholder="Altura" value="">
+                                            placeholder="Altura" value="{{ pedido.direccion.altura if pedido else '' }}">
                                         <label for="altura">
                                             <i class="bi bi-123 me-1"></i>Altura
                                         </label>
@@ -231,7 +231,7 @@
 
                                 <div class="col-md-6">
                                     <div class="form-floating">
-                                        <select class="form-select" id="provincia" name="provincia">
+                                        <select class="form-select" id="provincia" name="provincia" required>
                                             <option value="">Seleccionar provincia...</option>
                                             {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
                                             "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
@@ -239,8 +239,9 @@
                                             "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del
                                             Fuego",
                                             "Tucumán"] %}
+                                            
                                             {% for p in provincias %}
-                                            <option value="{{ p }}">{{ p }}</option>
+                                            <option value="{{ p }}" {% if pedido and pedido.direccion.provincia == p %}selected{% endif %}>{{ p }}</option>
                                             {% endfor %}
                                         </select>
                                         <label for="provincia">
@@ -253,7 +254,7 @@
                                 <div class="col-md-6">
                                     <div class="form-floating">
                                         <input type="text" class="form-control" id="localidad" name="localidad" minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" title="Ingresá un nombre de localidad válido (solo letras y espacios)."
-                                            placeholder="Localidad" value="">
+                                            placeholder="Localidad" value="{{ pedido.direccion.localidad if pedido else ''}}">
                                         <label for="localidad">
                                             <i class="bi bi-pin-map me-1"></i>Localidad
                                         </label>
@@ -263,8 +264,8 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="10" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
-                                            placeholder="Piso (Opcional)" value="">
+                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="3" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
+                                            placeholder="Piso (Opcional)" value="{{ pedido.direccion.piso if pedido else ''}}">
                                         <label for="piso">
                                             <i class="bi bi-building me-1"></i>Piso (Opcional)
                                         </label>
@@ -274,7 +275,7 @@
                                 <div class="col-md-4">
                                     <div class="form-floating">
                                         <input type="text" class="form-control" id="depto" name="depto" maxlength="5" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
-                                            placeholder="Dto (Opcional)" value="">
+                                            placeholder="Dto (Opcional)" value="{{ pedido.direccion.depto if pedido else ''}}">
                                         <label for="depto">
                                             <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
                                         </label>
@@ -284,7 +285,7 @@
                                 <div class="col-md-4">
                                     <div class="form-floating">
                                         <input type="text" class="form-control" id="codigo_postal" name="codigo_postal" minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}" title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
-                                            placeholder="Código Postal" value="">
+                                            placeholder="Código Postal" value="{{ pedido.direccion.codigo_postal if pedido else '' }}" required>
                                         <label for="codigo_postal">
                                             <i class="bi bi-mailbox me-1"></i>Código Postal
                                         </label>
@@ -293,29 +294,26 @@
                             </div>
                         </div>
 
-
                         <div class="col-md-6">
                             <label for="fecha_solicitud" class="form-label">Fecha de Solicitud <span
                                     class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_solicitud" name="fecha_solicitud"
-                                value="{{ (pedido.fecha_solicitud | string)[:10] if is_edit else today }}" required
-                                {{ 'readonly' if is_edit }} min="2025-01-01" max="{{ today }}">
+                                value="{{ pedido.fecha_solicitud[:10] if  pedido and pedido.fecha_solicitud else today }}" required
+                                {% if pedido %}readonly{% endif %} min="2025-01-01" max="{{ today }}">
                         </div>
-
                         
                         <div class="col-md-6">
                             <label for="fecha_requerido" class="form-label">Fecha requerida de Entrega <span
                                     class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_requerido" name="fecha_requerido"
-                                value="{{ (pedido.fecha_requerido | string)[:10] if is_edit else today }}" required
-                                {{ 'readonly' if is_edit }} max="{{ fecha_limite }}" min="{{ today }}"> 
+                                value="{{ pedido.fecha_requerido[:10] if pedido and pedido.fecha_requerido else today}}" required
+                                {% if pedido %}readonly{% endif %} max="{{ fecha_limite }}" min="{{ today }}"> 
                         </div>
-
 
                         <div class="col-12">
                             <label for="comentarios_adicionales" class="form-label">Comentarios Adicionales</label>
                             <textarea class="form-control" name="comentarios_adicionales" id="comentarios_adicionales"
-                                rows="3" maxlength="500"></textarea>
+                                rows="3" maxlength="500"> {{ pedido.comentarios_adicionales if pedido and pedido.comentarios_adicionales else ''}}</textarea>
                             <div class="form-text">Opcional - Ingrese comentarios adicionales sobre el pedido</div>
                         </div>
                     </div>
@@ -519,7 +517,6 @@
 <script src="{{ url_for('static', filename='js/orden_venta/gestionClientes.js') }}"></script>
 
 <script src="{{ url_for('static', filename='js/orden_venta/gestionCalculos.js') }}"></script>
-
 
 <script src="{{ url_for('static', filename='js/orden_venta/formularioVenta.js') }}"></script>
 {% endblock extra_js %}
