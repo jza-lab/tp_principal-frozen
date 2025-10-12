@@ -2,8 +2,6 @@
 from app.controllers.base_controller import BaseController
 from app.models.cliente import ClienteModel
 from app.schemas.cliente_schema import ClienteSchema
-from app.models.direccion import DireccionModel
-from app.schemas.direccion_schema import DireccionSchema
 from typing import Dict, Optional
 import logging
 
@@ -16,69 +14,6 @@ class ClienteController(BaseController):
         super().__init__()
         self.model = ClienteModel()
         self.schema = ClienteSchema()
-        self.direccion_model = DireccionModel()
-        self.direccion_schema = DireccionSchema()
-
-    def _devolver_id_direccion(self, direccion_data: Dict) -> Optional[int]:
-        """Devuelve el ID de una dirección existente o None si no se encuentra."""
-        if not direccion_data:
-            return None
-        
-        # Validar datos de la dirección
-        validated_address = self.direccion_schema.load(direccion_data)
-
-        # Buscar si la dirección ya existe
-        existing_address_result = self.direccion_model.find_by_full_address(
-            calle=validated_address['calle'],
-            altura=validated_address['altura'],
-            piso=validated_address.get('piso'),
-            depto=validated_address.get('depto'),
-            localidad=validated_address['localidad'],
-            provincia=validated_address['provincia']
-        )
-
-        if existing_address_result['success']:
-            return existing_address_result['data']['id']
-        return None
-    
-    def _actualizar_direccion(self, direccion_id: int, direccion_data: Dict) -> bool:
-        """Actualiza una dirección existente."""
-        if not direccion_data or not direccion_id:
-            return False
-        
-        # Validar datos de la dirección
-        validated_address = self.direccion_schema.load(direccion_data)
-
-        # Actualizar la dirección
-        update_result = self.direccion_model.update(direccion_id, validated_address, 'id')
-        return update_result.get('success', False)
-        
-    def _get_or_create_direccion(self, direccion_data: Dict) -> Optional[int]:
-        """Busca una dirección existente o crea una nueva si no se encuentra."""
-        if not direccion_data:
-            return None
-        
-        # Validar datos de la dirección
-        validated_address = self.direccion_schema.load(direccion_data)
-
-        # Buscar si la dirección ya existe
-        existing_address_result = self.direccion_model.find_by_full_address(
-            calle=validated_address['calle'],
-            altura=validated_address['altura'],
-            piso=validated_address.get('piso'),
-            depto=validated_address.get('depto'),
-            localidad=validated_address['localidad'],
-            provincia=validated_address['provincia']
-        )
-
-        if existing_address_result['success']:
-            return existing_address_result['data']['id']
-        else:
-            # Si no existe, crearla
-            new_address_result = self.direccion_model.create(validated_address)
-            if new_address_result['success']:
-                return new_address_result['data']['id']
-        return None
 
     def obtener_clientes_activos(self) -> tuple:
         """Obtener lista de Clientes activos"""
@@ -220,7 +155,6 @@ class ClienteController(BaseController):
             if not existing.get('success'):
                 return self.error_response('Cliente no encontrado', 404)
 
-    
             direccion_data = data.pop('direccion', None)
             validated_data = self.schema.load(data, partial=True)
 
@@ -235,8 +169,6 @@ class ClienteController(BaseController):
                     return self.error_response('El CUIT/CUIL ya está registrado para otro cliente', 400)
 
             if direccion_data:
-                
-                # 1. Obtener el ID de la dirección que el cliente tiene ANTES de la actualización.
                 id_direccion_vieja = existing['data'].get('direccion_id')
                 
                 if id_direccion_vieja:
@@ -247,9 +179,7 @@ class ClienteController(BaseController):
                         if id_nueva_direccion:
                             validated_data['direccion_id'] = id_nueva_direccion
                     else: 
-                        
                         self._actualizar_direccion(id_direccion_vieja, direccion_data)
-
                 else:
                     id_nueva_direccion = self._get_or_create_direccion(direccion_data)
                     if id_nueva_direccion:

@@ -95,7 +95,9 @@ def index():
 def listar_usuarios():
     """Muestra la lista de todos los usuarios del sistema."""
     usuarios = usuario_controller.obtener_todos_los_usuarios()
-    return render_template('usuarios/listar.html', usuarios=usuarios)
+    turnos = usuario_controller.obtener_todos_los_turnos()
+    sectores = usuario_controller.obtener_todos_los_sectores()
+    return render_template('usuarios/listar.html', usuarios=usuarios, turnos=turnos, sectores=sectores)
 
 @admin_usuario_bp.route('/usuarios/<int:id>')
 @admin_permission_required(accion='leer')
@@ -226,6 +228,7 @@ def editar_usuario(id):
 
     if request.method == 'POST':
         datos_actualizados = request.form.to_dict()
+        print(f"DEBUG: Datos recibidos en la ruta: {datos_actualizados}")
         
         # --- Procesamiento de Datos ---
         # Sectores: AJAX los envía como un string JSON, el form normal como una lista
@@ -343,7 +346,12 @@ def obtener_actividad_totem():
     """
     Devuelve una lista en formato JSON de la actividad del tótem (ingresos/egresos) de hoy.
     """
-    resultado = usuario_controller.obtener_actividad_totem()
+    filtros = {
+        'sector_id': request.args.get('sector_id'),
+        'fecha_desde': request.args.get('fecha_desde'),
+        'fecha_hasta': request.args.get('fecha_hasta')
+    }
+    resultado = usuario_controller.obtener_actividad_totem(filtros)
     if resultado.get('success'):
         return jsonify(success=True, data=resultado.get('data', []))
     else:
@@ -355,7 +363,12 @@ def obtener_actividad_web():
     """
     Devuelve una lista en formato JSON de los usuarios que iniciaron sesión en la web hoy.
     """
-    resultado = usuario_controller.obtener_actividad_web()
+    filtros = {
+        'sector_id': request.args.get('sector_id'),
+        'fecha_desde': request.args.get('fecha_desde'),
+        'fecha_hasta': request.args.get('fecha_hasta')
+    }
+    resultado = usuario_controller.obtener_actividad_web(filtros)
     if resultado.get('success'):
         return jsonify(success=True, data=resultado.get('data', []))
     else:
@@ -467,3 +480,38 @@ def nueva_autorizacion():
                          usuarios=usuarios,
                          turnos=turnos,
                          autorizacion={})
+
+@admin_usuario_bp.route('/autorizaciones', methods=['GET'])
+@admin_permission_required(accion='leer')
+def listar_autorizaciones():
+    """
+    Obtiene todas las autorizaciones de ingreso pendientes.
+    """
+    resultado = autorizacion_model.find_all_pending()
+    if resultado.get('success'):
+        return jsonify(success=True, data=resultado.get('data', []))
+    else:
+        # Devuelve un array vacío si no hay autorizaciones pendientes, en lugar de un error.
+        if "no se encontraron" in resultado.get('error', '').lower():
+            return jsonify(success=True, data=[])
+        return jsonify(success=False, error=resultado.get('error', 'Error al obtener las autorizaciones.')), 500
+
+@admin_usuario_bp.route('/autorizaciones/<int:id>/estado', methods=['POST'])
+@admin_permission_required(accion='actualizar')
+def actualizar_estado_autorizacion(id):
+    """
+    Actualiza el estado de una autorización de ingreso (APROBADO o RECHAZADO).
+    """
+    data = request.get_json()
+    nuevo_estado = data.get('estado')
+    comentario = data.get('comentario')
+
+    if not nuevo_estado or nuevo_estado not in ['APROBADO', 'RECHAZADO']:
+        return jsonify(success=False, error='Estado no válido.'), 400
+
+    resultado = autorizacion_model.update_estado(id, nuevo_estado, comentario)
+
+    if resultado.get('success'):
+        return jsonify(success=True, message='Autorización actualizada exitosamente.')
+    else:
+        return jsonify(success=False, error=resultado.get('error', 'Error al actualizar la autorización.')), 500

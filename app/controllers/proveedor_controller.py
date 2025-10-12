@@ -1,8 +1,6 @@
 from app.controllers.base_controller import BaseController
 from app.models.proveedor import ProveedorModel
 from app.schemas.proveedor_schema import ProveedorSchema
-from app.models.direccion import DireccionModel
-from app.schemas.direccion_schema import DireccionSchema
 from typing import Dict, Optional
 import logging
 
@@ -15,44 +13,6 @@ class ProveedorController(BaseController):
         super().__init__()
         self.model = ProveedorModel()
         self.schema = ProveedorSchema()
-        self.direccion_model = DireccionModel()
-        self.direccion_schema = DireccionSchema()
-
-    def _get_or_create_direccion(self, direccion_data: Dict) -> Optional[int]:
-        """Busca una dirección existente o crea una nueva si no se encuentra."""
-        if not direccion_data:
-            return None
-
-        validated_address = self.direccion_schema.load(direccion_data)
-
-        existing_address_result = self.direccion_model.find_by_full_address(
-            calle=validated_address['calle'],
-            altura=validated_address['altura'],
-            piso=validated_address.get('piso'),
-            depto=validated_address.get('depto'),
-            localidad=validated_address['localidad'],
-            provincia=validated_address['provincia']
-        )
-
-        if existing_address_result['success']:
-            return existing_address_result['data']['id']
-        else:
-            new_address_result = self.direccion_model.create(validated_address)
-            if new_address_result['success']:
-                return new_address_result['data']['id']
-        return None
-  
-    def _actualizar_direccion(self, direccion_id: int, direccion_data: Dict) -> bool:
-        """Actualiza una dirección existente."""
-        if not direccion_data or not direccion_id:
-            return False
-        
-        # Validar datos de la dirección
-        validated_address = self.direccion_schema.load(direccion_data)
-
-        # Actualizar la dirección
-        update_result = self.direccion_model.update(direccion_id, validated_address, 'id')
-        return update_result.get('success', False)
 
     def obtener_proveedores_activos(self) -> tuple:
         """Obtener lista de proveedores activos"""
@@ -187,21 +147,25 @@ class ProveedorController(BaseController):
             if not existing.get('success'):
                 return self.error_response('Proveedor no encontrado', 404)
 
+    
             direccion_data = data.pop('direccion', None)
             validated_data = self.schema.load(data, partial=True)
 
-            if validated_data.get('email') and validated_data['email'] != existing.get('data').get('email'):
-                respuesta= self.model.buscar_por_email(validated_data['email'])
-                if respuesta.get('success'):
+            if validated_data.get('email') and validated_data['email'] != existing['data'].get('email'):
+                respuesta, _ = self.model.buscar_por_email(validated_data['email'])
+                if respuesta:
                     return self.error_response('El email ya está registrado para otro proveedor', 400)
 
-            if validated_data.get('cuit') and validated_data['cuit'] != existing.get('data').get('cuit'):
-                respuesta= self.model.buscar_por_cuit(validated_data['cuit'])
-                if respuesta.get('success'):
+            if validated_data.get('cuit') and validated_data['cuit'] != existing['data'].get('cuit'):
+                respuesta, _ = self.model.buscar_por_cuit(validated_data['cuit'])
+                if respuesta:
                     return self.error_response('El CUIT/CUIL ya está registrado para otro proveedor', 400)
 
             if direccion_data:
+                
+                # 1. Obtener el ID de la dirección que el proveedor tiene ANTES de la actualización.
                 id_direccion_vieja = existing['data'].get('direccion_id')
+                
                 if id_direccion_vieja:
                     cantidad_misma_direccion = self.model.contar_proveedores_direccion(id_direccion_vieja)
                     
@@ -217,6 +181,7 @@ class ProveedorController(BaseController):
                     id_nueva_direccion = self._get_or_create_direccion(direccion_data)
                     if id_nueva_direccion:
                         validated_data['direccion_id'] = id_nueva_direccion
+
 
             update_result = self.model.update(proveedor_id, validated_data, 'id')
             if not update_result.get('success'):
