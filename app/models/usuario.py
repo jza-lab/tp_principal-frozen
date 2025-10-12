@@ -187,7 +187,7 @@ class UsuarioModel(BaseModel):
             from datetime import date, datetime, time
             
             query = self.db.table(self.get_table_name())\
-                .select("id, nombre, apellido, legajo, ultimo_login_web, roles(nombre)")
+                .select("id, nombre, apellido, legajo, ultimo_login_web, roles(nombre), sectores:usuario_sectores(sectores(nombre))")
 
             if filtros:
                 if filtros.get('fecha_desde'):

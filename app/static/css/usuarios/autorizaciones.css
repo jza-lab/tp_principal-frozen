@@ -1,0 +1,23 @@
+.authorization-card {
+    border: 1px solid #dee2e6;
+    border-radius: .25rem;
+    margin-bottom: 1rem;
+}
+
+.authorization-card .card-body {
+    padding: 1.25rem;
+}
+
+.authorization-card .card-title {
+    font-size: 1.25rem;
+    font-weight: 500;
+}
+
+.authorization-card .card-text {
+    font-size: .875rem;
+}
+
+.authorization-card .btn {
+    font-size: .875rem;
+    padding: .375rem .75rem;
+}

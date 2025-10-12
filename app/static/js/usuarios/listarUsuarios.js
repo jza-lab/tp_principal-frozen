@@ -28,13 +28,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- FUNCIONES DE RENDERIZADO ---
     function createTotemActivityCard(sesion) {
         const user = sesion.usuario;
-        const loginTime = new Date(sesion.fecha_inicio + 'Z').toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+        const loginDate = new Date(sesion.fecha_inicio + 'Z');
+        const formattedDate = loginDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const loginTime = loginDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
         const logoutTime = sesion.fecha_fin ? new Date(sesion.fecha_fin + 'Z').toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : null;
 
         const statusClass = logoutTime ? 'status-exit' : 'status-enter';
         const statusIcon = logoutTime ? 'box-arrow-left' : 'box-arrow-in-right';
         const statusText = logoutTime ? `Egreso ${logoutTime}` : `Ingreso ${loginTime}`;
         
+        const sector = user.sectores && user.sectores.length > 0 && user.sectores[0].sectores ? user.sectores[0].sectores.nombre : 'Sin sector';
+
         return `
             <div class="activity-card fade-in">
                 <div class="activity-card-avatar">
@@ -45,6 +49,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="activity-card-details">
                         <span><i class="bi bi-hash"></i>${user.legajo || 'N/A'}</span>
                         <span><i class="bi bi-shield-check"></i>${user.roles ? user.roles.nombre : 'Sin rol'}</span>
+                        <span><i class="bi bi-briefcase"></i>${sector}</span>
+                        <span><i class="bi bi-calendar-event"></i>${formattedDate}</span>
                     </div>
                 </div>
                 <div class="activity-card-status ${statusClass}">
@@ -55,7 +61,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function createWebActivityCard(user) {
-        const loginTime = new Date(user.ultimo_login_web + 'Z').toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+        let formattedDate = 'Sin registro';
+        let loginTimeText = 'Sin registro de login';
+
+        if (user.ultimo_login_web) {
+            const loginDate = new Date(user.ultimo_login_web + 'Z');
+            if (!isNaN(loginDate.getTime())) {
+                formattedDate = loginDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                const loginTime = loginDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+                loginTimeText = `Último login ${loginTime}`;
+            }
+        }
+        
+        const sector = user.sectores && user.sectores.length > 0 && user.sectores[0].sectores ? user.sectores[0].sectores.nombre : 'Sin sector';
+
         return `
             <div class="activity-card fade-in">
                 <div class="activity-card-avatar">
@@ -66,11 +85,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="activity-card-details">
                         <span><i class="bi bi-hash"></i>${user.legajo || 'N/A'}</span>
                         <span><i class="bi bi-shield-check"></i>${user.roles ? user.roles.nombre : 'Sin rol'}</span>
+                        <span><i class="bi bi-briefcase"></i>${sector}</span>
+                        <span><i class="bi bi-calendar-event"></i>${formattedDate}</span>
                     </div>
                 </div>
                 <div class="activity-card-status status-online">
                     <i class="bi bi-clock-history"></i>
-                    <span>Último login ${loginTime}</span>
+                    <span>${loginTimeText}</span>
                 </div>
             </div>`;
     }
@@ -214,7 +235,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Filtros de actividad
-    applyFiltersBtn.addEventListener('click', applyActivityFilters);
+    filterSector.addEventListener('input', applyActivityFilters);
+    filterFechaDesde.addEventListener('input', applyActivityFilters);
+    filterFechaHasta.addEventListener('input', applyActivityFilters);
 
 
     // --- INICIALIZACIÓN ---

@@ -464,3 +464,38 @@ def nueva_autorizacion():
                          usuarios=usuarios,
                          turnos=turnos,
                          autorizacion={})
+
+@admin_usuario_bp.route('/autorizaciones', methods=['GET'])
+@admin_permission_required(accion='leer')
+def listar_autorizaciones():
+    """
+    Obtiene todas las autorizaciones de ingreso pendientes.
+    """
+    resultado = autorizacion_model.find_all_pending()
+    if resultado.get('success'):
+        return jsonify(success=True, data=resultado.get('data', []))
+    else:
+        # Devuelve un array vacío si no hay autorizaciones pendientes, en lugar de un error.
+        if "no se encontraron" in resultado.get('error', '').lower():
+            return jsonify(success=True, data=[])
+        return jsonify(success=False, error=resultado.get('error', 'Error al obtener las autorizaciones.')), 500
+
+@admin_usuario_bp.route('/autorizaciones/<int:id>/estado', methods=['POST'])
+@admin_permission_required(accion='actualizar')
+def actualizar_estado_autorizacion(id):
+    """
+    Actualiza el estado de una autorización de ingreso (APROBADO o RECHAZADO).
+    """
+    data = request.get_json()
+    nuevo_estado = data.get('estado')
+    comentario = data.get('comentario')
+
+    if not nuevo_estado or nuevo_estado not in ['APROBADO', 'RECHAZADO']:
+        return jsonify(success=False, error='Estado no válido.'), 400
+
+    resultado = autorizacion_model.update_estado(id, nuevo_estado, comentario)
+
+    if resultado.get('success'):
+        return jsonify(success=True, message='Autorización actualizada exitosamente.')
+    else:
+        return jsonify(success=False, error=resultado.get('error', 'Error al actualizar la autorización.')), 500

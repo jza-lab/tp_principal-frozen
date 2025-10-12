@@ -100,7 +100,7 @@ class TotemSesionModel(BaseModel):
         """
         try:
             query = self.db.table(self.get_table_name())\
-                .select('*, usuario:usuarios(id, nombre, apellido, legajo, roles(nombre))')
+                .select('*, usuario:usuarios(id, nombre, apellido, legajo, roles(nombre), sectores:usuario_sectores(sectores(nombre)))')
 
             if filtros:
                 if filtros.get('fecha_desde'):

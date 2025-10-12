@@ -175,16 +175,13 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label for="filter-fecha-desde" class="form-label">Desde</label>
                             <input type="date" id="filter-fecha-desde" class="form-control">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label for="filter-fecha-hasta" class="form-label">Hasta</label>
                             <input type="date" id="filter-fecha-hasta" class="form-control">
-                        </div>
-                        <div class="col-md-2 d-flex align-items-end">
-                            <button id="apply-filters" class="btn btn-primary w-100">Aplicar</button>
                         </div>
                     </div>
                 </div>
@@ -266,62 +263,15 @@
         
         <!-- Panel de Autorizaciones -->
         <div class="tab-pane fade" id="authorizations-panel" role="tabpanel">
-            <div class="card">
-                <div class="card-header">
-                    <h2 class="card-title h4">Crear Nueva Autorización de Ingreso</h2>
-                    <p class="card-subtitle text-muted">Permitir que un empleado ingrese fuera de su turno habitual.</p>
-                </div>
-                <div class="card-body">
-                    <form method="POST" action="{{ url_for('admin_usuario.nueva_autorizacion') }}">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="usuario_id" class="form-label">Empleado</label>
-                                <select class="form-select" id="usuario_id" name="usuario_id" required>
-                                    <option value="" disabled selected>Seleccione un empleado...</option>
-                                    {% for usuario in usuarios %}
-                                    <option value="{{ usuario.id }}">
-                                        {{ usuario.nombre }} {{ usuario.apellido }} (Legajo: {{ usuario.legajo }})
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="fecha_autorizada" class="form-label">Fecha de Autorización</label>
-                                <input type="date" class="form-control" id="fecha_autorizada" name="fecha_autorizada" required>
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="tipo" class="form-label">Tipo de Autorización</label>
-                                <select class="form-select" id="tipo" name="tipo" required>
-                                    <option value="TURNO_ESPECIAL" selected>Turno Especial</option>
-                                    <option value="TARDANZA">Llegada Tarde</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="turno_autorizado_id" class="form-label">Turno Autorizado</label>
-                                <select class="form-select" id="turno_autorizado_id" name="turno_autorizado_id" required>
-                                    <option value="" disabled selected>Seleccione el turno a autorizar...</option>
-                                    {% for turno in turnos %}
-                                    <option value="{{ turno.id }}">
-                                        {{ turno.nombre }} ({{ turno.hora_inicio[:5] }} - {{ turno.hora_fin[:5] }})
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="motivo" class="form-label">Motivo (Opcional)</label>
-                            <textarea class="form-control" id="motivo" name="motivo" rows="3" placeholder="Escriba el motivo de la autorización..."></textarea>
-                        </div>
-                        <div class="d-flex justify-content-end">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-circle me-1"></i>
-                                Guardar Autorización
-                            </button>
-                        </div>
-                    </form>
-                </div>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h4 mb-0">Autorizaciones Pendientes</h2>
+                <a href="{{ url_for('admin_usuario.nueva_autorizacion') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i>
+                    Nueva Autorización
+                </a>
+            </div>
+            <div id="authorizations-container" class="row">
+                <!-- Las tarjetas de autorización se cargarán aquí -->
             </div>
         </div>
     </div>
@@ -333,5 +283,7 @@
 </script>
 <script src="{{ url_for('static', filename='js/usuarios/habilitarUsuario.js') }}"></script>
 <script src="{{ url_for('static', filename='js/usuarios/listarUsuarios.js') }}"></script>
+<script src="{{ url_for('static', filename='js/usuarios/autorizaciones.js') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/listarUsuarios.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/autorizaciones.css') }}">
 {% endblock %}
