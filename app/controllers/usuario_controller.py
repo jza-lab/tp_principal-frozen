@@ -11,6 +11,7 @@ from marshmallow import ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 import logging
+import json
 from app.controllers.direccion_controller import GeorefController
 
 logger = logging.getLogger(__name__)
@@ -123,79 +124,137 @@ class UsuarioController(BaseController):
             logger.error(f"Error asignando sectores: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    def actualizar_usuario(self, usuario_id: int, data: Dict) -> Dict:
-        """Actualiza un usuario existente, incluyendo la gestión de dirección y sectores."""
+    def _actualizar_datos_principales(self, usuario_id: int, user_data: Dict, existing_user: Dict, new_direccion_id: int) -> Dict:
+        """Valida y actualiza los campos principales de un usuario."""
+        # Comparar con datos existentes para ver si hay cambios
+        user_data_changed = any(str(user_data.get(k) or '') != str(existing_user.get(k) or '') for k in user_data)
+        
+        if not user_data_changed and new_direccion_id == existing_user.get('direccion_id'):
+            return {'success': True}
+
+        # Validar los datos que se van a cargar
+        loadable_fields = {k for k, v in self.schema.fields.items() if not v.dump_only}
+        user_data_for_validation = {k: v for k, v in user_data.items() if k in loadable_fields}
+        
         try:
+            validated_data = self.schema.load(user_data_for_validation, partial=True)
+        except ValidationError as e:
+            return {'success': False, 'error': f"Datos de usuario inválidos: {e.messages}"}
+
+        # Manejar password
+        if 'password' in validated_data and validated_data['password']:
+            validated_data['password_hash'] = generate_password_hash(validated_data.pop('password'))
+        else:
+            validated_data.pop('password', None)
+
+        # Validar email único
+        if 'email' in validated_data:
+            existing_email = self.model.find_by_email(validated_data['email']).get('data')
+            if existing_email and existing_email['id'] != usuario_id:
+                return {'success': False, 'error': 'El correo electrónico ya está en uso.'}
+
+        # Añadir el ID de la dirección si ha cambiado
+        validated_data['direccion_id'] = new_direccion_id
+        
+        # Actualizar en la BD
+        return self.model.update(usuario_id, validated_data)
+
+    def _actualizar_direccion_usuario(self, usuario_id: int, direccion_data: Dict, existing_user: Dict) -> Dict:
+        """Actualiza la dirección de un usuario si ha cambiado."""
+        # Comprobar si hay datos de dirección para procesar
+        if 'altura' in direccion_data and direccion_data['altura'] == '':
+            direccion_data['altura'] = None
+        
+        has_new_address_data = all(direccion_data.get(f) for f in ['calle', 'altura', 'localidad', 'provincia'])
+        
+        # Si no hay datos nuevos, no hay nada que hacer
+        if not has_new_address_data:
+            return {'success': True, 'direccion_id': existing_user.get('direccion_id')}
+
+        # Comparar con la dirección existente para ver si hay cambios
+        existing_address = existing_user.get('direccion') or {}
+        address_changed = any(str(direccion_data.get(k) or '') != str(existing_address.get(k) or '') for k in direccion_data)
+
+        if not address_changed:
+            return {'success': True, 'direccion_id': existing_user.get('direccion_id')}
+
+        # Si hay cambios, procesar la nueva dirección
+        direccion_normalizada = self._normalizar_y_preparar_direccion(direccion_data)
+        if direccion_normalizada:
+            id_nueva_direccion = self._get_or_create_direccion(direccion_normalizada)
+            if id_nueva_direccion:
+                return {'success': True, 'direccion_id': id_nueva_direccion}
+        
+        return {'success': False, 'error': "No se pudo procesar la dirección proporcionada."}
+
+    def _actualizar_sectores_usuario(self, usuario_id: int, sectores_ids: List[int], existing_user: Dict) -> Dict:
+        """Actualiza los sectores de un usuario si han cambiado."""
+        if sectores_ids is None:
+            return {'success': True}
+
+        existing_sector_ids = {s['id'] for s in existing_user.get('sectores', [])}
+        if set(sectores_ids) == existing_sector_ids:
+            return {'success': True}
+
+        self.usuario_sector_model.eliminar_todas_asignaciones(usuario_id)
+        if sectores_ids:
+            resultado = self._asignar_sectores_usuario(usuario_id, sectores_ids)
+            if not resultado.get('success'):
+                return resultado
+        
+        return {'success': True}
+
+    def actualizar_usuario(self, usuario_id: int, data: Dict) -> Dict:
+        """
+        Orquesta la actualización de un usuario, delegando a métodos especializados.
+        """
+        try:
+            # 1. Sanear datos de entrada
             fields_to_sanitize = ['telefono', 'cuil_cuit', 'fecha_nacimiento', 'fecha_ingreso', 'turno_id', 'piso', 'depto', 'codigo_postal']
             for field in fields_to_sanitize:
                 if field in data and (data[field] == '' or data[field] == 'None'):
                     data[field] = None
-            
-            existing = self.model.find_by_id(usuario_id)
-            if not existing.get('success'):
-                return {'success': False, 'error': 'Usuario no encontrado'}
 
-            # --- 1. Separar datos de sectores ANTES de la validación ---
-            # Extraemos 'sectores' del diccionario principal. El método .pop() lo extrae y lo elimina.
+            # 2. Obtener estado actual del usuario
+            existing_result = self.model.find_by_id(usuario_id, include_sectores=True, include_direccion=True)
+            if not existing_result.get('success'):
+                return existing_result
+            existing_user = existing_result['data']
+
+            # 3. Preparar y separar los datos de entrada
             sectores_ids = data.pop('sectores', None)
+            if isinstance(sectores_ids, str):
+                try:
+                    sectores_ids = json.loads(sectores_ids)
+                except json.JSONDecodeError:
+                    return {'success': False, 'error': 'El formato de sectores es inválido.'}
 
-            # --- 2. Separar datos de dirección ---
             address_fields = ['calle', 'altura', 'piso', 'depto', 'localidad', 'provincia', 'codigo_postal']
-            direccion_data_raw = {field: data.get(field) for field in address_fields}
-            
-            # --- 3. Filtrar y validar los datos restantes del usuario ---
-            # El diccionario `data` ahora solo contiene campos de usuario, ya no tiene 'sectores'.
-            loadable_fields = {k for k, v in self.schema.fields.items() if not v.dump_only}
-            user_data_for_validation = {k: v for k, v in data.items() if k in loadable_fields}
-            validated_data = self.schema.load(user_data_for_validation, partial=True)
-            
-            # --- 4. Manejar el password POST-validación ---
-            if 'password' in validated_data and validated_data['password']:
-                password = validated_data.pop('password')
-                validated_data['password_hash'] = generate_password_hash(password)
-            else:
-                validated_data.pop('password', None) # Asegurarse de quitarlo si está vacío
+            direccion_data = {field: data.get(field) for field in address_fields}
+            user_data = {k: v for k, v in data.items() if k not in address_fields}
 
-            # --- 5. Validaciones de negocio (ej. email único) ---
-            if 'email' in validated_data:
-                existing_email = self.model.find_by_email(validated_data['email']).get('data')
-                if existing_email and existing_email['id'] != usuario_id:
-                    return {'success': False, 'error': 'El correo electrónico ya está en uso.'}
+            # 4. Orquestar las actualizaciones
+            # Actualizar sectores
+            sectores_result = self._actualizar_sectores_usuario(usuario_id, sectores_ids, existing_user)
+            if not sectores_result.get('success'):
+                return sectores_result
 
-            # --- 6. Procesar la dirección ---
-            if 'altura' in direccion_data_raw and direccion_data_raw['altura'] == '':
-                direccion_data_raw['altura'] = None
-            has_address_data = all(direccion_data_raw.get(f) for f in ['calle', 'altura', 'localidad', 'provincia'])
+            # Actualizar dirección
+            direccion_result = self._actualizar_direccion_usuario(usuario_id, direccion_data, existing_user)
+            if not direccion_result.get('success'):
+                return direccion_result
+            new_direccion_id = direccion_result.get('direccion_id')
 
-            if has_address_data:
-                direccion_normalizada = self._normalizar_y_preparar_direccion(direccion_data_raw)
-                if direccion_normalizada:
+            # Actualizar datos principales del usuario
+            user_result = self._actualizar_datos_principales(usuario_id, user_data, existing_user, new_direccion_id)
+            if not user_result.get('success'):
+                return user_result
 
-                    id_nueva_direccion = self._get_or_create_direccion(direccion_normalizada)
-                    if id_nueva_direccion:
-                        validated_data['direccion_id'] = id_nueva_direccion
-                    else:
-                        # Si la dirección no se pudo procesar, devolvemos un error claro.
-                        return {'success': False, 'error': "No se pudo procesar la dirección proporcionada."}
-
-            # --- 7. Actualizar el usuario en la BD ---
-            resultado_actualizacion = self.model.update(usuario_id, validated_data)
-            if not resultado_actualizacion.get('success'):
-                return resultado_actualizacion
-
-            # --- 8. Procesar los sectores ---
-            if sectores_ids is not None:
-                self.usuario_sector_model.eliminar_todas_asignaciones(usuario_id)
-                if sectores_ids:
-                    # 'sectores' viene de la ruta como lista de ints
-                    resultado_sectores = self._asignar_sectores_usuario(usuario_id, sectores_ids)
-                    if not resultado_sectores.get('success'):
-                        return resultado_sectores
-
+            # 5. Devolver el estado final del usuario
             return self.model.find_by_id(usuario_id, include_sectores=True, include_direccion=True)
 
-        except ValidationError as e:
-            return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
+        except Exception as e:
+            logger.error(f"Error en la orquestación de actualizar_usuario: {str(e)}", exc_info=True)
         except Exception as e:
             logger.error(f"Error updating user: {str(e)}", exc_info=True)
             return {'success': False, 'error': f'Error interno: {str(e)}'}
