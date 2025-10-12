@@ -138,7 +138,6 @@ class ClienteController(BaseController):
             logger.error(f"Error obteniendo Cliente {cliente_cuil}: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
-
     def eliminar_cliente(self, cliente_id: int) -> tuple:
         """Elimina (desactiva) un Cliente por su ID"""
         try:
@@ -226,13 +225,13 @@ class ClienteController(BaseController):
             validated_data = self.schema.load(data, partial=True)
 
             if validated_data.get('email') and validated_data['email'] != existing['data'].get('email'):
-                respuesta, _ = self.model.buscar_por_email(validated_data['email'])
-                if respuesta:
+                respuesta= self.model.buscar_por_email(validated_data['email'])
+                if respuesta.get('success'):
                     return self.error_response('El email ya está registrado para otro cliente', 400)
 
             if validated_data.get('cuit') and validated_data['cuit'] != existing['data'].get('cuit'):
-                respuesta, _ = self.model.buscar_por_cuit(validated_data['cuit'])
-                if respuesta:
+                respuesta= self.model.buscar_por_cuit(validated_data['cuit'])
+                if respuesta.get('success'):
                     return self.error_response('El CUIT/CUIL ya está registrado para otro cliente', 400)
 
             if direccion_data:
@@ -255,7 +254,6 @@ class ClienteController(BaseController):
                     id_nueva_direccion = self._get_or_create_direccion(direccion_data)
                     if id_nueva_direccion:
                         validated_data['direccion_id'] = id_nueva_direccion
-
 
             update_result = self.model.update(cliente_id, validated_data, 'id')
             if not update_result.get('success'):

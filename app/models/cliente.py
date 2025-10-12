@@ -75,11 +75,12 @@ class ClienteModel(BaseModel):
             logger.error(f"Error buscando cliente por ID {cliente_id}: {e}")
             return {'success': False, 'error': str(e)}
 
-    def buscar_por_email(self, email: str, include_direccion: bool = False) -> Dict:
-        """Buscar cliente por email"""
+    def buscar_por_email(self, email: str,  include_direccion: bool = False) -> tuple:
+        """Busca un cliente por su email."""
         try:
+            query = "*, direccion:direccion_id(*)" if include_direccion else "*"
             response = self.db.table(self.get_table_name())\
-                           .select("*")\
+                           .select(query)\
                            .eq("email", email.strip().lower())\
                            .execute()
             

@@ -114,7 +114,7 @@ Agregar nuevo cliente
                             <div class="row g-3">
                                 <div class="col-md-8">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="calle" name="calle"
+                                        <input type="text" class="form-control" id="calle" name="calle"  minlength="3" maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
                                             placeholder="Calle" value="{{ cliente.direccion.calle if cliente and cliente.direccion }}" required>
                                         <label for="calle">
                                             <i class="bi bi-signpost me-1"></i>Calle
@@ -125,7 +125,7 @@ Agregar nuevo cliente
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="number" class="form-control" id="altura" name="altura"
+                                        <input type="number" class="form-control" id="altura" name="altura" pattern="\d{1,5}" maxlength="5" max="99999" min="1"
                                             placeholder="Altura" value="{{ cliente.direccion.altura if cliente and cliente.direccion }}" required>
                                         <label for="altura">
                                             <i class="bi bi-123 me-1"></i>Altura
@@ -157,7 +157,7 @@ Agregar nuevo cliente
 
                                 <div class="col-md-6">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="localidad" name="localidad"
+                                        <input type="text" class="form-control" id="localidad" name="localidad" minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" title="Ingresá un nombre de localidad válido (solo letras y espacios)."
                                             placeholder="Localidad" value="{{ cliente.direccion.localidad if cliente and cliente.direccion }}" required>
                                         <label for="localidad">
                                             <i class="bi bi-pin-map me-1"></i>Localidad
@@ -168,7 +168,7 @@ Agregar nuevo cliente
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="piso" name="piso"
+                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="10" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
                                             placeholder="Piso (Opcional)" value="{{ (cliente.get('direccion') or {}).get('piso', '') if cliente and cliente.direccion }}">
                                         <label for="piso">
                                             <i class="bi bi-building me-1"></i>Piso (Opcional)
@@ -178,8 +178,8 @@ Agregar nuevo cliente
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="depto" name="depto"
-                                            placeholder="Dto (Opcional)" value="{{ (cliente.get('depto') or {}).get('piso', '') if cliente and cliente.direccion }}">
+                                        <input type="text" class="form-control" id="depto" name="depto" maxlength="5" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
+                                            placeholder="Dto (Opcional)" value="{{ (cliente.get('direccion') or {}).get('depto', '') if cliente and cliente.direccion }}">
                                         <label for="depto">
                                             <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
                                         </label>
@@ -188,7 +188,7 @@ Agregar nuevo cliente
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"  minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}" title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
                                             placeholder="Código Postal" value="{{ (cliente.get('depto') or {}).get('piso', '') if cliente and cliente.direccion }}">
                                         <label for="codigo_postal">
                                             <i class="bi bi-mailbox me-1"></i>Código Postal
