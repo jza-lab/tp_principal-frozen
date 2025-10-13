@@ -1,6 +1,6 @@
 from dataclasses import dataclass, asdict
 from typing import Optional, Dict, List
-from datetime import datetime, date
+from datetime import datetime, date, time
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.models.base_model import BaseModel
 import logging
@@ -183,18 +183,18 @@ class UsuarioModel(BaseModel):
         Encuentra usuarios que han iniciado sesión en la web, con filtros opcionales.
         Filtros: 'fecha_desde', 'fecha_hasta', 'sector_id'.
         """
-        try:
-            from datetime import date, datetime, time
-            
+        try:            
             query = self.db.table(self.get_table_name())\
                 .select("id, nombre, apellido, legajo, ultimo_login_web, roles(nombre), sectores:usuario_sectores(sectores(nombre))")
 
             if filtros:
                 if filtros.get('fecha_desde'):
-                    start_date = datetime.fromisoformat(filtros['fecha_desde']).combine(time.min)
+                    fecha_desde_obj = datetime.fromisoformat(filtros['fecha_desde']).date()
+                    start_date = datetime.combine(fecha_desde_obj, time.min)
                     query = query.gte('ultimo_login_web', start_date.isoformat())
                 if filtros.get('fecha_hasta'):
-                    end_date = datetime.fromisoformat(filtros['fecha_hasta']).combine(time.max)
+                    fecha_hasta_obj = datetime.fromisoformat(filtros['fecha_hasta']).date()
+                    end_date = datetime.combine(fecha_hasta_obj, time.max)
                     query = query.lte('ultimo_login_web', end_date.isoformat())
                 
                 if filtros.get('sector_id'):
@@ -208,13 +208,6 @@ class UsuarioModel(BaseModel):
                         query = query.in_('id', user_ids)
                     else:
                         return {'success': True, 'data': []}
-
-            if not filtros or (not filtros.get('fecha_desde') and not filtros.get('fecha_hasta')):
-                hoy = date.today()
-                start_of_day = datetime.combine(hoy, time.min).isoformat()
-                end_of_day = datetime.combine(hoy, time.max).isoformat()
-                query = query.gte('ultimo_login_web', start_of_day)
-                query = query.lte('ultimo_login_web', end_of_day)
 
             response = query.order('ultimo_login_web', desc=True).execute()
 
