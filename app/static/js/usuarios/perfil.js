@@ -859,18 +859,35 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const originalContent = btnSaveChanges.innerHTML;
 
+        // 2. Obtener inputs de Dirección
         const calleInput = document.querySelector('input[name="calle"]');
         const alturaInput = document.querySelector('input[name="altura"]');
         const localidadInput = document.querySelector('input[name="localidad"]');
         const provinciaInput = document.querySelector('select[name="provincia"]');
 
-        const calle = calleInput?.value.trim() || '';
-        const altura = alturaInput?.value.trim() || '';
-        const localidad = localidadInput?.value.trim() || '';
-        const provincia = provinciaInput?.value.trim() || '';
+        // 3. Obtener valores actuales (con sintaxis robusta para evitar errores de .trim())
+        const calle = calleInput ? (calleInput.value || '').trim() : '';
+        const altura = alturaInput ? (alturaInput.value || '').trim() : '';
+        const localidad = localidadInput ? (localidadInput.value || '').trim() : '';
+        const provincia = provinciaInput ? (provinciaInput.value || '') : ''; // select
 
         const hasPartialAddress = calle || localidad || provincia;
 
+        // 4. CHEQUEAR SI LA DIRECCIÓN FUE MODIFICADA
+        const originalCalle = originalValues['calle'] || '';
+        const originalAltura = originalValues['altura'] || '';
+        const originalLocalidad = originalValues['localidad'] || '';
+        const originalProvincia = originalValues['provincia'] || '';
+
+        const addressWasModified = (
+            calle !== originalCalle ||
+            altura !== originalAltura ||
+            localidad !== originalLocalidad ||
+            provincia !== originalProvincia
+        );
+        // ------------------------------------------------------------
+
+        // 5. Validación de Altura Requerida
         if (hasPartialAddress && !altura) {
             showNotification('El campo "Altura" es obligatorio si se especifica una dirección.', 'error');
             if (alturaInput) {
@@ -879,19 +896,27 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             return;
         }
-        // Validar formulario
+
+        // 6. Validación de Formato (síncrona)
         if (!validateForm()) {
             showNotification('Por favor, complete todos los campos requeridos correctamente', 'error');
             return;
         }
 
-        btnSaveChanges.disabled = true;
-        btnSaveChanges.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Verificando...';
+        // 7. VERIFICACIÓN ASÍNCRONA DE DIRECCIÓN
+        let isAddressValid = true; // Por defecto, asumimos que es válida si no se toca
 
-        const isAddressValid = await verifyAddress(calleInput, alturaInput, localidadInput, provinciaInput);
+        if (hasPartialAddress && addressWasModified) {
+            // Solo ejecutamos la verificación si hay datos Y si fueron modificados
+            btnSaveChanges.disabled = true;
+            btnSaveChanges.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Verificando...';
 
+            isAddressValid = await verifyAddress(calleInput, alturaInput, localidadInput, provinciaInput);
+        }
+
+        // 8. BLOQUEAR GUARDADO si la verificación falló
         if (hasPartialAddress && !isAddressValid) {
-            // Restaurar el botón con mensaje de error si la dirección no pasa
+            // Restaurar el botón con mensaje de error si la verificación falló
             btnSaveChanges.disabled = false;
             btnSaveChanges.innerHTML = originalContent;
             showNotification('La dirección ingresada no pudo ser verificada. Revise los datos e intente nuevamente.', 'error');
@@ -900,6 +925,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // 9. Continuar con el guardado si la dirección pasó o se saltó
         btnSaveChanges.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
 
         // Recopilar datos del formulario
@@ -987,6 +1013,18 @@ document.addEventListener('DOMContentLoaded', function () {
     function validateForm() {
         let isValid = true;
 
+        // Estas validaciones deben ser ejecutadas sí o sí antes de enviar.
+        const nombreInput = document.querySelector('input[name="nombre"]');
+        const apellidoInput = document.querySelector('input[name="apellido"]');
+
+        // El '&&' asegura que no intentamos llamar a la función si el input no existe
+        if (nombreInput && !validateNombre(nombreInput)) {
+            isValid = false;
+        }
+        if (apellidoInput && !validateApellido(apellidoInput)) {
+            isValid = false;
+        }
+
         // Iterar sobre la configuración de campos para asegurar que todos se validen
         for (const field in fieldConfig) {
             const config = fieldConfig[field];
@@ -1004,6 +1042,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Elemento visual al que adjuntar el error. Para los selectores personalizados,
             // el input puede estar oculto, así que buscamos el contenedor visual.
             const visualElement = item.querySelector('.form-control-inline, select, .roles-grid-perfil, .turno-grid-perfil, .sectores-grid-perfil') || input;
+
 
             // 1. Validar campos requeridos
             if (config.required && !value) {
@@ -1030,6 +1069,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     showError(visualElement, `${config.label} no cumple con el formato esperado.`);
                     continue;
                 }
+            }
+        }
+
+        if (document.querySelector('.form-control-inline.is-invalid, .cuit-input-group.is-invalid')) {
+            isValid = false;
+        }
+
+        if (!isValid) {
+            const firstInvalid = document.querySelector('.form-control-inline.is-invalid, .cuit-input-group.is-invalid');
+            if (firstInvalid) {
+                // Scroll hasta el error y enfocar
+                firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                firstInvalid.focus();
             }
         }
 
