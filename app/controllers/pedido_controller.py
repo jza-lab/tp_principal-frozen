@@ -1,6 +1,8 @@
 # app/controllers/pedido_controller.py
 import logging
 from datetime import datetime, date
+
+from flask import jsonify
 from app.controllers.base_controller import BaseController
 # --- IMPORTACIONES NUEVAS ---
 from app.controllers.lote_producto_controller import LoteProductoController
@@ -574,4 +576,17 @@ class PedidoController(BaseController):
 
         except Exception as e:
             logging.error(f"Error en completar_pedido: {e}", exc_info=True)
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+        
+    def get_ordenes_by_cliente(self, id_cliente):
+        try:
+            result = self.model.find_by_cliente(id_cliente)
+            if result['success']:
+                return self.success_response(
+                    data=result.get('data'),
+                    message="Pedidos por cliente cargados"
+                )
+            else:
+                return self.error_response(result.get('error', 'No se pudo cargar los pedidos.'),404)
+        except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)

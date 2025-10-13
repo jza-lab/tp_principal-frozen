@@ -325,3 +325,14 @@ class PedidoModel(BaseModel):
         except Exception as e:
             logging.error(f"Error actualizando pedido_item {item_id}: {e}")
             return {'success': False, 'error': str(e)}
+        
+    def find_by_cliente(self, id_cliente: int):
+        try:
+            result = self.db.table(self.get_table_name()).select('*').eq('id_cliente', id_cliente).execute()
+            if result.data:
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': False, 'error': 'Orden no encontrada'}
+        except Exception as e:
+            logger.error(f"Error buscando orden por código: {str(e)}")
+            return {'success': False, 'error': str(e)}
