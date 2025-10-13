@@ -11,7 +11,7 @@ orden_produccion_controller = OrdenProduccionController()
 pedido_model = PedidoModel()
 
 @planificacion_bp.route('/')
-@permission_required(sector_codigo='PRODUCCION', accion='ver_ordenes_produccion')
+@permission_required(sectores=['PRODUCCION'], accion='ver_ordenes_produccion')
 def index():
     """
     Muestra los items de pedidos pendientes de planificación.
@@ -30,7 +30,7 @@ def index():
     return render_template('planificacion/index.html', items=items)
 
 @planificacion_bp.route('/crear_orden', methods=['POST'])
-@permission_required(sector_codigo='PRODUCCION', accion='crear_ordenes_produccion')
+@permission_required(sectores=['PRODUCCION'], accion='crear_ordenes_produccion')
 def crear_orden():
     """
     Crea órdenes de producción a partir de los items de pedido seleccionados.

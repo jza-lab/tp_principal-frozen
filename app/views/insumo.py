@@ -31,7 +31,7 @@ usuario_controller = UsuarioController()
 
 
 @insumos_bp.route("/catalogo/nuevo", methods=["GET", "POST"])
-@permission_required(sector_codigo='ALMACEN', accion='crear_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='crear_materias_primas')
 def crear_insumo():
     try:
         if request.method == "POST":
@@ -52,7 +52,7 @@ def crear_insumo():
 
 
 @insumos_bp.route("/catalogo", methods=["GET"])
-@permission_required(sector_codigo='ALMACEN', accion='ver_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='ver_materias_primas')
 def obtener_insumos():
     try:
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
@@ -71,7 +71,7 @@ def obtener_insumos():
 
 
 @insumos_bp.route("/catalogo/<string:id_insumo>", methods=["GET"])
-@permission_required(sector_codigo='ALMACEN', accion='ver_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='ver_materias_primas')
 def obtener_insumo_por_id(id_insumo):
     try:
         if not validate_uuid(id_insumo):
@@ -91,7 +91,7 @@ def obtener_insumo_por_id(id_insumo):
 @insumos_bp.route(
     "/catalogo/actualizar/<string:id_insumo>", methods=["GET", "POST", "PUT"]
 )
-@permission_required(sector_codigo='ALMACEN', accion='modificar_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='modificar_materias_primas')
 def actualizar_insumo(id_insumo):
     try:
         if not validate_uuid(id_insumo):
@@ -119,7 +119,7 @@ def actualizar_insumo(id_insumo):
 
 
 @insumos_bp.route("/catalogo/eliminar/<string:id_insumo>", methods=["DELETE"])
-@permission_required(sector_codigo='ALMACEN', accion='eliminar_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='eliminar_materias_primas')
 def eliminar_insumo(id_insumo):
     try:
         if not validate_uuid(id_insumo):
@@ -132,7 +132,7 @@ def eliminar_insumo(id_insumo):
 
 
 @insumos_bp.route("/catalogo/habilitar/<string:id_insumo>", methods=["POST"])
-@permission_required(sector_codigo='ALMACEN', accion='modificar_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='modificar_materias_primas')
 def habilitar_insumo(id_insumo):
     try:
         if not validate_uuid(id_insumo):
@@ -145,7 +145,7 @@ def habilitar_insumo(id_insumo):
 
 
 @insumos_bp.route("/catalogo/lote/nuevo/<string:id_insumo>", methods=["GET", "POST"])
-@permission_required(sector_codigo='ALMACEN', accion='registrar_ingresos_stock')
+@permission_required(sectores=['ALMACEN'], accion='registrar_ingresos_stock')
 def agregar_lote(id_insumo):
     proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
     proveedores = proveedores_resp.get("data", [])
@@ -170,7 +170,7 @@ def agregar_lote(id_insumo):
 @insumos_bp.route(
     "/catalogo/lote/nuevo/<string:id_insumo>/crear", methods=["GET", "POST"]
 )
-@permission_required(sector_codigo='ALMACEN', accion='registrar_ingresos_stock')
+@permission_required(sectores=['ALMACEN'], accion='registrar_ingresos_stock')
 def crear_lote(id_insumo):
     try:
         datos_json = request.get_json()
@@ -189,7 +189,7 @@ def crear_lote(id_insumo):
 @insumos_bp.route(
     "/catalogo/lote/editar/<string:id_insumo>/<string:id_lote>", methods=["GET"]
 )
-@permission_required(sector_codigo='ALMACEN', accion='gestionar_lotes_vencimientos')
+@permission_required(sectores=['ALMACEN'], accion='gestionar_lotes_vencimientos')
 def editar_lote(id_insumo, id_lote):
     def parse_date(date_str):
         if not date_str:
@@ -231,7 +231,7 @@ def editar_lote(id_insumo, id_lote):
 @insumos_bp.route(
     "/catalogo/lote/editar/<string:id_insumo>/<string:id_lote>", methods=["PUT"]
 )
-@permission_required(sector_codigo='ALMACEN', accion='gestionar_lotes_vencimientos')
+@permission_required(sectores=['ALMACEN'], accion='gestionar_lotes_vencimientos')
 def actualizar_lote_api(id_insumo, id_lote):
     try:
         if not validate_uuid(id_lote):
@@ -251,7 +251,7 @@ def actualizar_lote_api(id_insumo, id_lote):
 @insumos_bp.route(
     "/catalogo/lote/eliminar/<string:id_insumo>/<string:id_lote>", methods=["POST"]
 )
-@permission_required(sector_codigo='ALMACEN', accion='gestionar_lotes_vencimientos')
+@permission_required(sectores=['ALMACEN'], accion='gestionar_lotes_vencimientos')
 def eliminar_lote(id_insumo, id_lote):
     try:
         if not validate_uuid(id_lote) or not validate_uuid(id_insumo):
@@ -275,7 +275,7 @@ def eliminar_lote(id_insumo, id_lote):
 
 
 @insumos_bp.route("/stock", methods=["GET"])
-@permission_required(sector_codigo='ALMACEN', accion='ver_stock_actual')
+@permission_required(sectores=['ALMACEN'], accion='ver_stock_actual')
 def obtener_stock_consolidado():
     try:
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
@@ -287,7 +287,7 @@ def obtener_stock_consolidado():
 
 
 @insumos_bp.route("/catalogo/actualizar-stock/<string:id_insumo>", methods=["POST"])
-@permission_required(sector_codigo='ALMACEN', accion='modificar_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='modificar_materias_primas')
 def actualizar_stock_insumo(id_insumo):
     """
     Endpoint para calcular y actualizar el stock de un insumo.

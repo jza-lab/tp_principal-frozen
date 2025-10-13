@@ -34,7 +34,7 @@ usuario_controller = UsuarioController()
 
 
 @productos_bp.route("/catalogo/nuevo", methods=["GET", "POST"])
-@permission_required(sector_codigo='ALMACEN', accion='crear_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='crear_materias_primas')
 def crear_producto():
     try:
         if request.method == "POST":
@@ -57,7 +57,7 @@ def crear_producto():
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 @productos_bp.route("/catalogo", methods=["GET"])
-@permission_required(sector_codigo='ALMACEN', accion='ver_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='ver_materias_primas')
 def obtener_productos():
     try:
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
@@ -85,7 +85,7 @@ def obtener_productos():
 
 
 @productos_bp.route("/catalogo/<int:id_producto>", methods=["GET"])
-@permission_required(sector_codigo='ALMACEN', accion='ver_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='ver_materias_primas')
 def obtener_producto_por_id(id_producto):
     try:
         producto= producto_controller.obtener_producto_por_id(id_producto)
@@ -121,7 +121,7 @@ def obtener_producto_por_id(id_producto):
 @productos_bp.route(
     "/catalogo/actualizar/<int:id_producto>", methods=["GET", "PUT"]
 )
-@permission_required(sector_codigo='ALMACEN', accion='modificar_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='modificar_materias_primas')
 def actualizar_producto(id_producto):
     try:
         if request.method == "PUT":
@@ -171,7 +171,7 @@ def actualizar_producto(id_producto):
 @productos_bp.route(
     "/catalogo/actualizar-precio/<string:id_producto>", methods=["GET","PUT"]
 )
-@permission_required(sector_codigo='ALMACEN', accion='modificar_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='modificar_materias_primas')
 def actualizar_precio(id_producto):
     try:
         respuesta, status = producto_controller.actualizar_costo_producto(id_producto)
@@ -181,7 +181,7 @@ def actualizar_precio(id_producto):
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 @productos_bp.route("/catalogo/eliminar/<string:id_producto>", methods=["DELETE"])
-@permission_required(sector_codigo='ALMACEN', accion='eliminar_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='eliminar_materias_primas')
 def eliminar_producto(id_producto):
     try:
         response, status = producto_controller.eliminar_producto_logico(id_producto)
@@ -192,7 +192,7 @@ def eliminar_producto(id_producto):
 
 
 @productos_bp.route("/catalogo/habilitar/<string:id_producto>", methods=["POST"])
-@permission_required(sector_codigo='ALMACEN', accion='modificar_materias_primas')
+@permission_required(sectores=['ALMACEN'], accion='modificar_materias_primas')
 def habilitar_producto(id_producto):
     try:
         response, status = producto_controller.habilitar_producto(id_producto)

@@ -12,7 +12,7 @@ insumo_controller = InsumoController()
 proveedor_controller = ProveedorController()
 
 @inventario_view_bp.route('/')
-@permission_required(sector_codigo='ALMACEN', accion='ver_stock_actual')
+@permission_required(sectores=['ALMACEN'], accion='ver_stock_actual')
 def listar_lotes():
     """
     Muestra la lista de todos los lotes en el inventario.
@@ -29,7 +29,7 @@ def listar_lotes():
     return render_template('inventario/listar.html', lotes=lotes)
 
 @inventario_view_bp.route('/lote/nuevo', methods=['GET', 'POST'])
-@permission_required(sector_codigo='ALMACEN', accion='registrar_ingresos_stock')
+@permission_required(sectores=['ALMACEN'], accion='registrar_ingresos_stock')
 def nuevo_lote():
     """
     Gestiona la creación de un nuevo lote en el inventario.
@@ -69,7 +69,7 @@ def nuevo_lote():
                            today=today)
 
 @inventario_view_bp.route('/lote/<id_lote>')
-@permission_required(sector_codigo='ALMACEN', accion='ver_stock_actual')
+@permission_required(sectores=['ALMACEN'], accion='ver_stock_actual')
 def detalle_lote(id_lote):
     """
     Muestra la página de detalle para un lote específico.

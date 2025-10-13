@@ -13,7 +13,7 @@ insumo_controller = InsumoController()
 
 
 @orden_compra_bp.route("/")
-@permission_required(sector_codigo='LOGISTICA', accion='ver_ordenes_compra')
+@permission_required(sectores=['LOGISTICA'], accion='ver_ordenes_compra')
 def listar():
     """Muestra la lista de órdenes de compra."""
     estado = request.args.get("estado")
@@ -30,7 +30,7 @@ def listar():
 
 
 @orden_compra_bp.route("/nueva", methods=["GET", "POST"])
-@permission_required(sector_codigo='LOGISTICA', accion='crear_ordenes_compra')
+@permission_required(sectores=['LOGISTICA'], accion='crear_ordenes_compra')
 def nueva():
     if request.method == "POST":
         usuario_id = session.get("usuario_id")
@@ -58,7 +58,7 @@ def nueva():
 
 
 @orden_compra_bp.route("/detalle/<int:id>")
-@permission_required(sector_codigo='LOGISTICA', accion='ver_ordenes_compra')
+@permission_required(sectores=['LOGISTICA'], accion='ver_ordenes_compra')
 def detalle(id):
     response_data, status_code = controller.get_orden(id)
     if response_data.get("success"):
@@ -70,7 +70,7 @@ def detalle(id):
 
 
 @orden_compra_bp.route("/<int:id>/aprobar", methods=["POST"])
-@permission_required(sector_codigo='LOGISTICA', accion='aprobar_ordenes_compra')
+@permission_required(sectores=['LOGISTICA'], accion='aprobar_ordenes_compra')
 def aprobar(id):
     usuario_id = session.get("usuario_id")
     resultado = controller.aprobar_orden(id, usuario_id)
@@ -84,7 +84,7 @@ def aprobar(id):
 
 
 @orden_compra_bp.route("/<int:id>/editar", methods=["GET", "POST"])
-@permission_required(sector_codigo='LOGISTICA', accion='modificar_ordenes_compra')
+@permission_required(sectores=['LOGISTICA'], accion='modificar_ordenes_compra')
 def editar(id):
     if request.method == "POST":
         resultado = controller.actualizar_orden(id, request.form)
@@ -116,7 +116,7 @@ def editar(id):
 
 
 @orden_compra_bp.route("/<int:id>/rechazar", methods=["POST"])
-@permission_required(sector_codigo='LOGISTICA', accion='aprobar_ordenes_compra')
+@permission_required(sectores=['LOGISTICA'], accion='aprobar_ordenes_compra')
 def rechazar(id):
     motivo = request.form.get("motivo", "No especificado")
     resultado = controller.rechazar_orden(id, motivo)
@@ -130,7 +130,7 @@ def rechazar(id):
 
 
 @orden_compra_bp.route("/<int:id>/marcar-en-transito", methods=["POST"])
-@permission_required(sector_codigo='LOGISTICA', accion='registrar_envios')
+@permission_required(sectores=['LOGISTICA'], accion='registrar_envios')
 def marcar_en_transito(id):
     resultado = controller.marcar_en_transito(id)
     if resultado.get("success"):
@@ -144,7 +144,7 @@ def marcar_en_transito(id):
 
 
 @orden_compra_bp.route("/recepcion/<int:orden_id>", methods=["POST"])
-@permission_required(sector_codigo='LOGISTICA', accion='recepcionar_compras')
+@permission_required(sectores=['LOGISTICA'], accion='recepcionar_compras')
 def procesar_recepcion(orden_id):
     usuario_id = session.get("usuario_id")
     if not usuario_id:

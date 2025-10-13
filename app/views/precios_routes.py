@@ -21,12 +21,12 @@ historial_controller = HistorialPreciosController()
 producto_controller = ProductoController()
 
 @precios_bp.route('/actualizar-precios')
-@permission_required(sector_codigo='LOGISTICA', accion='actualizar')
+@permission_required(sectores=['LOGISTICA'], accion='actualizar')
 def index():
     return render_template('precios_proveedores_files/actualizar_precios_proveedores.html')
 
 @precios_bp.route('/api/precios/cargar-archivo-proveedor', methods=['POST'])
-@permission_required(sector_codigo='LOGISTICA', accion='actualizar')
+@permission_required(sectores=['LOGISTICA'], accion='actualizar')
 def cargar_archivo_precios_proveedor():
     """
     Endpoint para cargar archivo Excel con precios de proveedores - VERSIÓN SIMPLIFICADA
@@ -282,7 +282,7 @@ def generar_reporte_consolidado(resultados):
 
 # Otros endpoints (plantillas, catálogo, etc.)
 @precios_bp.route('/api/precios/plantilla', methods=['GET'])
-@permission_required(sector_codigo='LOGISTICA', accion='leer')
+@permission_required(sectores=['LOGISTICA'], accion='leer')
 def descargar_plantilla():
     """Descarga plantilla para carga de precios"""
     # Obtener catálogo usando controller

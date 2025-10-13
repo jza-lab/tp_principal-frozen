@@ -5,10 +5,9 @@ from app.models.sector import SectorModel
 from app.models.usuario_sector import UsuarioSectorModel
 from app.utils.roles import get_redirect_url_by_role
 
-def permission_required(sector_codigo: str, accion: str):
+def permission_required(sectores: list, accion: str):
     """
-    Decorator que verifica si un usuario tiene permiso para una acción en un sector.
-    Prioriza la verificación contra los permisos guardados en la sesión.
+    Decorator que verifica si un usuario tiene permiso para una acción en al menos uno de los sectores especificados.
     """
     def decorator(f):
         @wraps(f)
@@ -17,41 +16,18 @@ def permission_required(sector_codigo: str, accion: str):
                 flash('Acceso no autorizado. Por favor, inicie sesión.', 'error')
                 return redirect(url_for('auth.login'))
 
-            usuario_id = session.get('usuario_id')
-            role_id = session.get('rol_id')
             user_role_code = session.get('rol')
-
             if user_role_code == 'GERENTE':
                 return f(*args, **kwargs)
 
-            # Verificación de permiso del rol (priorizando sesión)
             user_permissions = session.get('permisos', {})
-            rol_tiene_permiso = user_permissions.get(sector_codigo) and accion in user_permissions[sector_codigo]
+            
+            has_permission_in_any_sector = any(
+                s in user_permissions and accion in user_permissions[s] for s in sectores
+            )
 
-            if not rol_tiene_permiso:
-                # Fallback a la base de datos si no está en la sesión (por si acaso)
-                sector_model = SectorModel()
-                sector_result = sector_model.find_by_codigo(sector_codigo)
-                if not sector_result.get('success') or not sector_result.get('data'):
-                    flash(f'Error de configuración: El sector "{sector_codigo}" no existe.', 'error')
-                    return redirect(get_redirect_url_by_role(user_role_code))
-                sector_id = sector_result['data']['id']
-                
-                permission_model = PermisosModel()
-                if not permission_model.check_permission(role_id, sector_id, accion):
-                    flash(f'Su rol no tiene permisos para "{accion}" en el sector de {sector_codigo}.', 'error')
-                    return redirect(get_redirect_url_by_role(user_role_code))
-
-            # Verificación de asignación del usuario al sector (esto no cambia)
-            sector_model = SectorModel()
-            sector_result = sector_model.find_by_codigo(sector_codigo)
-            if not sector_result.get('success') or not sector_result.get('data'):
-                 flash(f'Error de configuración: El sector "{sector_codigo}" no existe.', 'error')
-                 return redirect(get_redirect_url_by_role(user_role_code))
-            sector_id = sector_result['data']['id']
-            usuario_sector_model = UsuarioSectorModel()
-            if not usuario_sector_model.check_user_sector_assignment(usuario_id, sector_id):
-                flash(f'No tiene acceso al sector de {sector_codigo}. Contacte a un administrador.', 'error')
+            if not has_permission_in_any_sector:
+                flash(f'Su rol no tiene los permisos necesarios ({accion}) para acceder a esta sección.', 'error')
                 return redirect(get_redirect_url_by_role(user_role_code))
 
             return f(*args, **kwargs)
