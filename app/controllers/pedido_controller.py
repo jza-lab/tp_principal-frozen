@@ -107,35 +107,36 @@ class PedidoController(BaseController):
             if 'items-TOTAL_FORMS' in form_data:
                 form_data.pop('items-TOTAL_FORMS')
 
-
             if 'items' in form_data:
                 form_data['items'] = self._consolidar_items(form_data['items'])
 
-
+            # <-- AQUÍ REEMPLAZAS EL BLOQUE ANTERIOR CON ESTE NUEVO CÓDIGO.
+            # Primero, obtenemos el diccionario anidado de la dirección.
+            # Usamos .get('direccion_entrega', {}) para que no falle si no viene.
+            direccion_payload = form_data.get('direccion_entrega', {})
+            
+            # Ahora, extraemos los datos de ESE diccionario anidado.
             direccion_data = {
-                'calle': form_data['calle'], 'altura': form_data['altura'],
-                'provincia': form_data['provincia'], 'localidad': form_data['localidad'],
-                'piso': form_data['piso'], 'depto': form_data['depto'], 'codigo_postal': form_data['codigo_postal']
+                'calle': direccion_payload.get('calle'),
+                'altura': direccion_payload.get('altura'),
+                'provincia': direccion_payload.get('provincia'),
+                'localidad': direccion_payload.get('localidad'),
+                'piso': direccion_payload.get('piso'),
+                'depto': direccion_payload.get('depto'),
+                'codigo_postal': direccion_payload.get('codigo_postal')
             }
             direccion_id = self._get_or_create_direccion(direccion_data)
+            
+            # Añadimos el id de la dirección al payload principal para la validación/creación.
+            form_data['id_direccion_entrega'] = direccion_id
+            form_data.pop('direccion_entrega', None)
+            
 
 
-            data ={
-                'nombre_cliente': form_data['nombre_cliente'], 'fecha_solicitud': form_data['fecha_solicitud'],
-                'items': form_data['items'], 'id_cliente': int(form_data['id_cliente']),
-                'precio_orden': float(form_data['total']), 'fecha_requerido' : form_data['fecha_requerido'], 
-                'id_direccion_entrega': direccion_id, 'comentarios_adicionales': form_data['comentarios_adicionales']
-            }
+            items_data = form_data.pop('items')
+            pedido_data = form_data
 
-            validated_data = self.schema.load(data)
-
-            items_data = validated_data.pop('items')
-
-            pedido_data = validated_data
-
-
-            # --- INICIO: Verificación de Stock ---
-
+            # --- Verificación de Stock (tu código aquí no cambia) ---
             for item in items_data:
                 producto_id = item['producto_id']
                 cantidad_solicitada = item['cantidad']
@@ -157,10 +158,10 @@ class PedidoController(BaseController):
                     logging.info(f"STOCK SUFICIENTE para '{nombre_producto}': Solicitados: {cantidad_solicitada}, Disponible: {stock_disponible}")
                 else:
                     logging.warning(f"STOCK INSUFICIENTE para '{nombre_producto}': Solicitados: {cantidad_solicitada}, Disponible: {stock_disponible}")
-            # --- FIN: Verificación de Stock ---
 
             if 'estado' not in pedido_data:
                 pedido_data['estado'] = 'PENDIENTE'
+                
             result = self.model.create_with_items(pedido_data, items_data)
 
             if result.get('success'):
@@ -169,17 +170,11 @@ class PedidoController(BaseController):
                 return self.error_response(result.get('error', 'No se pudo crear el pedido.'), 400)
 
         except ValidationError as e:
-            if 'items' in e.messages and isinstance(e.messages['items'], list):
-                error_message = e.messages['items'][0]
-            else:
-                error_message = "Por favor, revise los campos del formulario. Se encontraron errores de validación."
-
-            return self.error_response(error_message, 400)
+            return self.error_response(str(e.messages), 400)
+        
         except Exception as e:
             logging.error(f"Error interno en crear_pedido_con_items: {e}", exc_info=True)
-            # La variable 'e' ya contiene el error original.
             return self.error_response(f'Error interno: {str(e)}', 500)
-
 
     def aprobar_pedido(self, pedido_id: int, usuario_id: int) -> tuple:
         """
@@ -262,6 +257,8 @@ class PedidoController(BaseController):
             logging.error(f"Error en aprobar_pedido: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
+    
+
     def actualizar_pedido_con_items(self, pedido_id: int, form_data: Dict) -> tuple:
         """
         Valida y actualiza un pedido existente y sus items.
@@ -271,9 +268,45 @@ class PedidoController(BaseController):
                 form_data.pop('items-TOTAL_FORMS')
             if 'items' in form_data:
                 form_data['items'] = self._consolidar_items(form_data['items'])
-            validated_data = self.schema.load(form_data)
-            items_data = validated_data.pop('items')
-            pedido_data = validated_data
+
+            items_data = form_data.pop('items')
+            pedido_data = form_data
+            
+            direccion_payload = form_data.get('direccion_entrega', {})
+            direccion_data = {
+                'calle': direccion_payload.get('calle'),
+                'altura': direccion_payload.get('altura'),
+                'provincia': direccion_payload.get('provincia'),
+                'localidad': direccion_payload.get('localidad'),
+                'piso': direccion_payload.get('piso'),
+                'depto': direccion_payload.get('depto'),
+                'codigo_postal': direccion_payload.get('codigo_postal')
+            }
+
+            pedido_actual_resp, estado= self.obtener_pedido_por_id(pedido_id)
+            pedido_actual = pedido_actual_resp.get('data')
+
+            id_direccion_vieja = pedido_actual['id_direccion_entrega']
+            
+
+            if(id_direccion_vieja):
+                cantidad_misma_direccion = self.model.contar_pedidos_direccion(id_direccion_vieja)
+
+                if(cantidad_misma_direccion>1):
+                    direccion_id = self._get_or_create_direccion(direccion_data)
+                    if direccion_id:
+                            pedido_data['direccion_id'] = direccion_id
+                else:
+                    self._actualizar_direccion(id_direccion_vieja, direccion_data)
+                    pedido_data['direccion_id'] = id_direccion_vieja
+            else:
+                direccion_id = self._get_or_create_direccion(direccion_data)
+                if direccion_id:
+                    pedido_data['direccion_id'] = direccion_id
+            
+            form_data['id_direccion_entrega'] = direccion_id
+            form_data.pop('direccion_entrega', None)
+            
             result = self.model.update_with_items(pedido_id, pedido_data, items_data)
 
             if result.get('success'):

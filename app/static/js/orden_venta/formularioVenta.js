@@ -231,49 +231,181 @@ document.addEventListener('DOMContentLoaded', function () {
 const form = document.getElementById('pedido-form'); // Usamos el ID del formulario en tu HTML
 const itemsContainer = document.getElementById('items-container');
 
-form.addEventListener('submit', function (event) {
-    event.preventDefault();
 
-    const totalFinalInput = document.getElementById('total-final');
-
-
-    const cuilParte1 = document.getElementById('cuil_parte1');
-    const cuilParte2 = document.getElementById('cuil_parte2');
-    const cuilParte3 = document.getElementById('cuil_parte3');
-    const cuil = document.getElementById('cuil'); // El campo oculto que enviará el CUIL
-
-
-    if (cuilParte1 && cuilParte2 && cuilParte3 && cuil) {
-        // Concatenamos el CUIL con guiones, asumiendo que tu backend lo espera así.
-        // Si tu backend SOLO espera dígitos, usa solo: cuilParte1.value + cuilParte2.value + cuilParte3.value
-        const cuilConcatenado = cuilParte1.value + "-" + cuilParte2.value + "-" + cuilParte3.value;
-
-        // Asignamos el valor al campo oculto. Este es el valor que se enviará.
-        cuil.value = cuilConcatenado;
-
-        cuilParte1.disabled = true;
-        cuilParte2.disabled = true;
-        cuilParte3.disabled = true;
-    }
-
-
-    // 1. Validación de HTML5 (campos 'required', min/max, etc.)
-    if (!form.checkValidity()) {
-        form.classList.add('was-validated');
+// Espera a que el DOM esté completamente cargado para ejecutar el script.
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('pedido-form');
+    if (!form) {
+        console.error("No se encontró el formulario con id 'pedido-form'.");
         return;
     }
 
-    // 2. Validación de Ítems Mínimos
-    const itemRows = itemsContainer.querySelectorAll('.item-row');
+    // Asociamos la función handleSubmit al evento 'submit' del formulario.
+    form.addEventListener('submit', handleSubmit);
+});
 
+
+/**
+ * Función ASÍNCRONA que maneja el envío del formulario.
+ * Previene la recarga de la página, valida los datos y los envía al backend.
+ * @param {Event} event - El evento 'submit' del formulario.
+ */
+async function handleSubmit(event) {
+    // 1. Prevenimos que la página se recargue (comportamiento por defecto del formulario).
+    event.preventDefault();
+
+    // --- VALIDACIONES DEL LADO DEL CLIENTE ---
+    const form = event.target; // Obtenemos el formulario desde el evento
+    const itemsContainer = document.getElementById('items-container');
+
+    // Validación A: Campos requeridos, patrones, etc. de HTML5
+    if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        // MODIFICADO: Usamos el modal personalizado
+        showNotificationModal('Campos Incompletos', 'Por favor, complete todos los campos obligatorios correctamente.', 'warning');
+        return;
+    }
+
+    // Validación B: Asegurarse de que haya al menos un ítem
+    const itemRows = itemsContainer.querySelectorAll('.item-row');
     if (itemRows.length === 0) {
-        // Asumiendo que 'showNotificationModal' es una función que existe en tu proyecto
-        showNotificationModal('Error al crear el pedido', 'Debe añadir al menos un producto al pedido de venta.', 'error');
+        // MODIFICADO: Usamos el modal personalizado
+        showNotificationModal('Faltan Productos', 'Debe añadir al menos un producto al pedido.', 'error');
         itemsContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
     }
 
-    // 3. ENVÍO DEL FORMULARIO
+    // Si las validaciones pasan, removemos la clase para futuros envíos.
     form.classList.remove('was-validated');
-    form.submit();
-});
+
+    // 2. Construimos el objeto JSON (payload) que enviaremos al backend.
+    const payload = buildPayload();
+    console.log("Enviando Payload:", JSON.stringify(payload, null, 2));
+
+    // 4. Damos feedback visual al usuario en el botón de envío.
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...`;
+
+
+    try {
+        const direccionParaVerificar = payload.direccion_entrega;
+        const verificationUrl = "/admin/usuarios/verificar_direccion";
+
+        const verificationResponse = await fetch(verificationUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(direccionParaVerificar),
+        });
+
+
+        const verificationResult = await verificationResponse.json();
+
+        if (verificationResponse.ok && verificationResult.success) {
+            await enviarDatos(payload);
+        } else {
+            let errorMessage = 'Dirección no válida o error de verificación.';
+            if (verificationResult && verificationResult.error) {
+                errorMessage = verificationResult.error;
+            }
+            showNotificationModal(errorMessage, 'Error al verificar la dirección');
+            form.classList.remove('was-validated');
+            submitButton.disabled = false;
+            submitButton.innerHTML = `<i class="bi bi-save me-1"></i> ${isEditing ? 'Actualizar Pedido' : 'Guardar Pedido'}`;
+        }
+    } catch (error) {
+        console.error('Error de red al verificar la direccion:', error);
+        showNotificationModal('No se pudo conectar con el servidor de verificación.', 'error');
+        submitButton.disabled = false;
+        submitButton.innerHTML = `<i class="bi bi-save me-1"></i> ${isEditing ? 'Actualizar Pedido' : 'Guardar Pedido'}`;
+        return;
+    }
+
+
+}
+
+async function enviarDatos(payload) {
+    const submitButton = form.querySelector('button[type="submit"]');
+    const url = isEditing ? `/orden-venta/${pedidoId}/editar` : '/orden-venta/nueva';
+    const method = isEditing ? 'PUT' : 'POST';
+
+    let response;
+    try {
+        response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+
+            showNotificationModal('Éxito', '¡Pedido guardado correctamente!', 'success');
+
+            setTimeout(() => {
+                window.location.href = result.redirect_url || "{{ url_for('orden_venta.listar') }}";
+            }, 1500);
+        } else {
+            showNotificationModal('Error al Guardar', 'No se pudo guardar el pedido. Por favor, revise los errores.', 'error');
+        }
+
+    } catch (error) {
+
+        console.error('Error en la petición fetch:', error);
+
+        showNotificationModal('Error de Conexión', 'Ocurrió un error inesperado al conectar con el servidor.', 'error');
+    } finally {
+
+        if (!response || !response.ok) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = `<i class="bi bi-save me-1"></i> ${isEditing ? 'Actualizar Pedido' : 'Guardar Pedido'}`;
+        }
+    }
+}
+
+function buildPayload() {
+
+    const cuilParte1 = document.getElementById('cuil_parte1').value;
+    const cuilParte2 = document.getElementById('cuil_parte2').value;
+    const cuilParte3 = document.getElementById('cuil_parte3').value;
+    document.getElementById('cuil').value = `${cuilParte1}-${cuilParte2}-${cuilParte3}`;
+
+    const payload = {
+        id_cliente: parseInt(document.getElementById('id_cliente').value),
+        nombre_cliente: document.getElementById('nombre_cliente').value,
+        fecha_solicitud: document.getElementById('fecha_solicitud').value,
+        fecha_requerido: document.getElementById('fecha_requerido').value,
+        estado: document.getElementById('estado') ? document.getElementById('estado').value : 'PENDIENTE',
+        precio_orden: parseFloat(document.getElementById('total-final').value) || 0,
+        comentarios_adicionales: document.getElementById('comentarios_adicionales').value,
+        direccion_entrega: {
+            calle: document.getElementById('calle').value,
+            altura: document.getElementById('altura').value,
+            piso: document.getElementById('piso').value || null,
+            depto: document.getElementById('depto').value || null,
+            localidad: document.getElementById('localidad').value,
+            provincia: document.getElementById('provincia').value,
+            codigo_postal: document.getElementById('codigo_postal').value
+        },
+        items: []
+    };
+
+    const itemRows = document.querySelectorAll('#items-container .item-row');
+    itemRows.forEach(row => {
+        const productoSelect = row.querySelector('select[name*="producto_id"]');
+        const cantidadInput = row.querySelector('input[name*="cantidad"]');
+        const idInput = row.querySelector('input[name*="id"]');
+        if (productoSelect && cantidadInput && productoSelect.value) {
+            payload.items.push({
+                id: idInput && idInput.value ? parseInt(idInput.value) : null,
+                producto_id: parseInt(productoSelect.value),
+                cantidad: parseInt(cantidadInput.value)
+            });
+        }
+    });
+
+    return payload;
+}

@@ -1,4 +1,5 @@
 {% extends 'layouts/base.html' %}
+{% set is_edit = pedido and pedido.id %}
 
 {% block title %}
 {% if pedido %}Editar{% else %}Nuevo{% endif %} Pedido de Venta - Sistema Frozen
@@ -33,7 +34,7 @@
 </div>
 
 <form method="POST" id="pedido-form">
-    <input type="hidden" id="id_cliente" name="id_cliente" value="">
+    <input type="hidden" id="id_cliente" name="id_cliente" value="{{ cliente.id if cliente else ''}}">
     <input type="hidden" id="cuil" name="cuil" value="">
     <div class="row">
         <!-- Columna principal del formulario -->
@@ -50,14 +51,15 @@
                                 <input type="text" class="form-control text-center" id="cuil_parte1" name="cuil_parte1"
                                     maxlength="2" pattern="\d{2}" placeholder="XX" required
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
-                                    aria-label="Código de provincia">
+                                    value="{{ cliente.cuit[:2] if cliente and cliente.cuit else '' }}"
+                                    aria-label="Código de provincia" {% if cliente and pedido %} readonly{% endif %}>
 
                                 <span class="input-group-text">-</span>
 
                                 <div class="form-floating" style="flex-grow: 4;">
                                     <input type="text" class="form-control text-center" id="cuil_parte2"
                                         name="cuil_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX"
-                                        required>
+                                        value="{{ cliente.cuit[2:10] if cliente and cliente.cuit else '' }}" required {% if cliente and pedido %} readonly {% endif %}>
                                     <label for="cuil_parte2">
                                         <i class="bi bi-person-badge me-1"></i>CUIL
                                     </label>
@@ -66,10 +68,10 @@
                                 <span class="input-group-text">-</span>
 
                                 <input type="text" class="form-control text-center" id="cuil_parte3" name="cuil_parte3"
-                                    maxlength="2" pattern="\d{1,2}" placeholder="XX" required
+                                    value="{{ cliente.cuit[10:] if cliente and cliente.cuit else ''}}" maxlength="1"
+                                    pattern="\d{1}" placeholder="X" required {% if cliente and pedido %} readonly{% endif %}
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
                                     aria-label="Dígito verificador">
-
                             </div>
                         </div>
 
@@ -110,7 +112,7 @@
                                 <div class="col-md-8">
                                     <div class="form-floating">
                                         <input type="text" class="form-control" id="calle_facturacion"
-                                            name="calle_facturacion" placeholder="Calle" value="" readonly>
+                                            name="calle_facturacion" placeholder="Calle" value="{{ cliente.direccion.calle if cliente and cliente.direccion else '' }}" readonly>
                                         <label for="calle_facturacion">
                                             <i class="bi bi-signpost me-1"></i>Calle
                                         </label>
@@ -120,7 +122,7 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="number" class="form-control" id="altura_facturacion"
+                                        <input type="number" class="form-control" id="altura_facturacion" value="{{ cliente.direccion.altura if cliente and cliente.direccion else '' }}"
                                             name="altura_facturacion" placeholder="Altura" value="" readonly>
                                         <label for="altura_facturacion">
                                             <i class="bi bi-123 me-1"></i>Altura
@@ -141,7 +143,8 @@
                                             Fuego",
                                             "Tucumán"] %}
                                             {% for p in provincias %}
-                                            <option value="{{ p }}">{{ p }}</option>
+                                            <option value="{{ p }}" {% if cliente and cliente.direccion.provincia==p
+                                                %}selected{% endif %}>{{ p }}</option>
                                             {% endfor %}
                                         </select>
                                         <label for="provincia">
@@ -153,7 +156,7 @@
 
                                 <div class="col-md-6">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="localidad_facturacion"
+                                        <input type="text" class="form-control" id="localidad_facturacion" value="{{ cliente.direccion.localidad if cliente and cliente.direccion else '' }}"
                                             name="localidad_facturacion" placeholder="Localidad" value="" readonly>
                                         <label for="localidad_facturacion">
                                             <i class="bi bi-pin-map me-1"></i>Localidad
@@ -164,7 +167,7 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="piso_facturacion" maxlength="3"
+                                        <input type="text" class="form-control" id="piso_facturacion" maxlength="3" value="{{ cliente.direccion.piso if cliente and cliente.direccion and cliente.direccion.piso else '' }}"
                                             name="piso_facturacion" placeholder="Piso (Opcional)" value="" readonly>
                                         <label for="piso_facturacion">
                                             <i class="bi bi-building me-1"></i>Piso (Opcional)
@@ -174,7 +177,7 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="depto_facturacion"
+                                        <input type="text" class="form-control" id="depto_facturacion" alue="{{ cliente.direccion.depto if cliente and cliente.direccion and cliente.direccion.depto else '' }}"
                                             name="depto_facturacion" placeholder="Dto (Opcional)" value="" readonly>
                                         <label for="depto_facturacion">
                                             <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
@@ -184,7 +187,7 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="codigo_postal_facturacion"
+                                        <input type="text" class="form-control" id="codigo_postal_facturacion" alue="{{ cliente.direccion.codigo_postal if cliente and cliente.direccion else '' }}"
                                             name="codigo_postal_facturacion" placeholder="Código Postal" value=""
                                             readonly>
                                         <label for="codigo_postal_facturacion">
@@ -209,8 +212,9 @@
                             <div class="row g-3">
                                 <div class="col-md-8">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="calle" name="calle"  minlength="3" maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
-                                            placeholder="Calle" value="{{ pedido.direccion.calle if pedido else ''}}">
+                                        <input type="text" class="form-control" id="calle" name="calle" minlength="3"
+                                            maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" placeholder="Calle"
+                                            value="{{ pedido.direccion.calle if pedido else ''}}">
                                         <label for="calle">
                                             <i class="bi bi-signpost me-1"></i>Calle
                                         </label>
@@ -220,8 +224,9 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="number" class="form-control" id="altura" name="altura" pattern="\d{1,5}" maxlength="5" max="99999" min="1"
-                                            placeholder="Altura" value="{{ pedido.direccion.altura if pedido else '' }}">
+                                        <input type="number" class="form-control" id="altura" name="altura"
+                                            pattern="\d{1,5}" maxlength="5" max="99999" min="1" placeholder="Altura"
+                                            value="{{ pedido.direccion.altura if pedido else '' }}">
                                         <label for="altura">
                                             <i class="bi bi-123 me-1"></i>Altura
                                         </label>
@@ -239,9 +244,10 @@
                                             "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del
                                             Fuego",
                                             "Tucumán"] %}
-                                            
+
                                             {% for p in provincias %}
-                                            <option value="{{ p }}" {% if pedido and pedido.direccion.provincia == p %}selected{% endif %}>{{ p }}</option>
+                                            <option value="{{ p }}" {% if pedido and pedido.direccion.provincia==p
+                                                %}selected{% endif %}>{{ p }}</option>
                                             {% endfor %}
                                         </select>
                                         <label for="provincia">
@@ -253,8 +259,11 @@
 
                                 <div class="col-md-6">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="localidad" name="localidad" minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" title="Ingresá un nombre de localidad válido (solo letras y espacios)."
-                                            placeholder="Localidad" value="{{ pedido.direccion.localidad if pedido else ''}}">
+                                        <input type="text" class="form-control" id="localidad" name="localidad"
+                                            minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
+                                            title="Ingresá un nombre de localidad válido (solo letras y espacios)."
+                                            placeholder="Localidad"
+                                            value="{{ pedido.direccion.localidad if pedido else ''}}">
                                         <label for="localidad">
                                             <i class="bi bi-pin-map me-1"></i>Localidad
                                         </label>
@@ -264,8 +273,11 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="3" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
-                                            placeholder="Piso (Opcional)" value="{{ pedido.direccion.piso if pedido else ''}}">
+                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="3"
+                                            pattern="[A-Za-z0-9\s]*"
+                                            title="Solo se permiten letras, números y espacios."
+                                            placeholder="Piso (Opcional)"
+                                            value="{{ pedido.direccion.piso if pedido and pedido.direccion.piso and pedido.direccion.piso != 'None' else ''}}">
                                         <label for="piso">
                                             <i class="bi bi-building me-1"></i>Piso (Opcional)
                                         </label>
@@ -274,8 +286,11 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="depto" name="depto" maxlength="5" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
-                                            placeholder="Dto (Opcional)" value="{{ pedido.direccion.depto if pedido else ''}}">
+                                        <input type="text" class="form-control" id="depto" name="depto" maxlength="5"
+                                            pattern="[A-Za-z0-9\s]*"
+                                            title="Solo se permiten letras, números y espacios."
+                                            placeholder="Dto (Opcional)"
+                                            value="{{ pedido.direccion.depto if pedido and pedido.direccion.depto else ''}}">
                                         <label for="depto">
                                             <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
                                         </label>
@@ -284,8 +299,11 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal" minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}" title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
-                                            placeholder="Código Postal" value="{{ pedido.direccion.codigo_postal if pedido else '' }}" required>
+                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                                            minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}"
+                                            title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
+                                            placeholder="Código Postal"
+                                            value="{{ pedido.direccion.codigo_postal if pedido else '' }}" required>
                                         <label for="codigo_postal">
                                             <i class="bi bi-mailbox me-1"></i>Código Postal
                                         </label>
@@ -298,22 +316,23 @@
                             <label for="fecha_solicitud" class="form-label">Fecha de Solicitud <span
                                     class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_solicitud" name="fecha_solicitud"
-                                value="{{ pedido.fecha_solicitud[:10] if  pedido and pedido.fecha_solicitud else today }}" required
-                                {% if pedido %}readonly{% endif %} min="2025-01-01" max="{{ today }}">
+                                value="{{ pedido.fecha_solicitud[:10] if  pedido and pedido.fecha_solicitud else today }}"
+                                required {% if pedido %}readonly{% endif %} min="2025-01-01" max="{{ today }}">
                         </div>
-                        
+
                         <div class="col-md-6">
                             <label for="fecha_requerido" class="form-label">Fecha requerida de Entrega <span
                                     class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_requerido" name="fecha_requerido"
-                                value="{{ pedido.fecha_requerido[:10] if pedido and pedido.fecha_requerido else today}}" required
-                                {% if pedido %}readonly{% endif %} max="{{ fecha_limite }}" min="{{ today }}"> 
+                                value="{{ pedido.fecha_requerido[:10] if pedido and pedido.fecha_requerido else today}}"
+                                required {% if pedido %}readonly{% endif %} max="{{ fecha_limite }}" min="{{ today }}">
                         </div>
 
                         <div class="col-12">
                             <label for="comentarios_adicionales" class="form-label">Comentarios Adicionales</label>
                             <textarea class="form-control" name="comentarios_adicionales" id="comentarios_adicionales"
-                                rows="3" maxlength="500"> {{ pedido.comentarios_adicionales if pedido and pedido.comentarios_adicionales else ''}}</textarea>
+                                rows="3"
+                                maxlength="500"> {{ pedido.comentarios_adicionales if pedido and pedido.comentarios_adicionales else ''}}</textarea>
                             <div class="form-text">Opcional - Ingrese comentarios adicionales sobre el pedido</div>
                         </div>
                     </div>
@@ -356,14 +375,12 @@
 
                                 {% if pedido and pedido['items'] %}
                                 {% for item in pedido['items'] %}
-                                {% set is_editable = item.estado == 'PENDIENTE' %}
-                                <tr class="item-row {% if not is_editable %}table-light text-muted{% endif %}">
+                                <tr class="item-row {% if pedido and not pedido.estado=='PENDIENTE' %}table-light text-muted{% endif %}">
                                     <td>
                                         <input type="hidden" name="items-{{ loop.index0 }}-id"
                                             value="{{ item.id if item.id else '' }}">
                                         <select class="form-select form-select-sm product-selector"
-                                            name="items-{{ loop.index0 }}-producto_id" required {% if not is_editable
-                                            %}disabled{% endif %}>
+                                            name="items-{{ loop.index0 }}-producto_id" required {% if pedido and  pedido.estado !='PENDIENTE' %}disabled{% endif %}>
                                             <option value="">Seleccione...</option>
                                             {% for producto in productos %}
                                             <option value="{{ producto.id }}"
@@ -377,14 +394,12 @@
                                     </td>
                                     <td>
 
-                                        <input type="number" class="form-control form-control-sm item-quantity"
-                                            name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10" min="1"
-                                            max="5000" step="1" value="{{ item.get('cantidad', 0) }}" required {% if not
-                                            is_editable %}disabled{% endif %}>
+                                        <input type="number" class="form-control form-control-sm item-quantity" oninput="limitarDigitos(this, 4)"
+                                            name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10" min="1" 
+                                            max="5000" step="1" value="{{ item.get('cantidad', 0) }}" required {% if pedido and pedido.estado !='PENDIENTE' %}disabled{% endif %}>
                                     </td>
 
                                     <td>
-
                                         <input type="text" class="form-control form-control-sm price-display"
                                             value="{{ '%.2f' | format(item.get('precio_unitario', 0)) }}" readonly>
                                     </td>
@@ -396,11 +411,9 @@
                                             readonly>
                                     </td>
 
-                                    <td>
-
                                     <td class="text-center">
                                         <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn"
-                                            title="Eliminar ítem" {% if not is_editable %}disabled{% endif %}><i
+                                            title="Eliminar ítem" {% if pedido and not pedido.estado=='PENDIENTE' %}disabled{% endif %}><i
                                                 class="bi bi-trash"></i></button>
                                     </td>
                                 </tr>
@@ -439,6 +452,8 @@
                         <label for="estado" class="form-label">Estado del Pedido Global</label>
                         <select class="form-select" id="estado" name="estado">
                             <option value="PENDIENTE" {% if pedido.estado=='PENDIENTE' %}selected{% endif %}>Pendiente
+                            </option>
+                            <option value="APROBADO" {% if pedido.estado=='APROBADO' %}selected{% endif %}>Aprobado
                             </option>
                             <option value="EN_PROCESO" {% if pedido.estado=='EN_PROCESO' %}selected{% endif %}>En
                                 Proceso</option>
@@ -488,7 +503,7 @@
             </select>
         </td>
         <td>
-            <input type="number" min="1" max="5000" step="1" class="form-control form-control-sm item-quantity"
+            <input type="number" min="1" max="5000" step="1" class="form-control form-control-sm item-quantity" oninput="limitarDigitos(this, 4)"
                 name="items-__prefix__-cantidad" placeholder="Ej: 10" required>
         </td>
         <!-- <td>
@@ -512,6 +527,21 @@
 
 <script>
     window.CLIENTE_API_URL_BASE = "{{ url_for('clientes_proveedores.buscar_por_cuil', cliente_cuil='0') }}";
+    const pedidoId = "{{ pedido.id }}"
+    const isEditing = {{ is_edit | tojson }};
+
+</script>
+
+<script>
+
+function limitarDigitos(input, maxLength) {
+  // Asegurarnos de que el valor es un string para poder medir su longitud
+  if (input.value.length > maxLength) {
+    // Si se pasa, lo cortamos
+    input.value = input.value.slice(0, maxLength);
+  }
+}
+
 </script>
 
 <script src="{{ url_for('static', filename='js/orden_venta/gestionClientes.js') }}"></script>
