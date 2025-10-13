@@ -286,7 +286,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     const part2 = valueDiv.querySelector('#cuit_parte2');
                     const part3 = valueDiv.querySelector('#cuit_parte3');
                     const hiddenInput = valueDiv.querySelector('#cuil_cuit_hidden');
-                    // El elemento visual para mostrar el error es el contenedor del grupo
                     const inputGroup = valueDiv.querySelector('.cuit-input-group');
 
                     const syncAndValidateCuit = () => {
@@ -301,8 +300,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         validateField('cuil_cuit', valueForValidation, inputGroup);
                     };
 
-                    // Agregamos el listener al evento 'input' de cada parte del CUIT
-                    // 'input' es mejor que 'blur' para una validación en tiempo real.
                     part1.addEventListener('input', syncAndValidateCuit);
                     part2.addEventListener('input', syncAndValidateCuit);
                     part3.addEventListener('input', syncAndValidateCuit);
@@ -310,6 +307,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     // Opcional: Mejorar la experiencia de usuario (auto-foco)
                     part1.addEventListener('keyup', () => { if (part1.value.length === 2) part2.focus(); });
                     part2.addEventListener('keyup', () => { if (part2.value.length === 8) part3.focus(); });
+
+                    // ✅ SOLUCIÓN: Llama a la función una vez para inicializar el valor
+                    syncAndValidateCuit();
                 }
 
                 // Listener para el campo nombre
@@ -714,8 +714,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const localidad = localidadInput ? localidadInput.value.trim() : '';
         const provincia = provinciaInput ? provinciaInput.value : '';
 
-        if (!calle || !altura || !localidad || !provincia) {
-            return;
+        if (!calle && !altura && !localidad && !provincia) {
+
+            const feedbackDiv = document.getElementById('address-feedback-perfil');
+            if (feedbackDiv) feedbackDiv.remove();
+            return true;
+        }
+
+        if ((calle || localidad || provincia) && !altura) {
+            return false;
         }
 
         const feedbackDiv = document.getElementById('address-feedback-perfil');
@@ -738,9 +745,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 const normalizedAddress = `${normalized.calle.nombre} ${normalized.altura.valor}, ${normalized.localidad_censal.nombre}, ${normalized.provincia.nombre}`;
                 feedbackDiv.className = 'address-feedback-perfil success';
                 feedbackDiv.innerHTML = `<i class="bi bi-check-circle-fill"></i>Dirección verificada: ${normalizedAddress}`;
+                return true;
             } else if (feedbackDiv) {
                 feedbackDiv.className = 'address-feedback-perfil error';
                 feedbackDiv.innerHTML = `<i class="bi bi-x-circle-fill"></i>${result.message || 'No se pudo verificar la dirección'}`;
+                return false;
             }
         } catch (error) {
             console.error('Error al verificar dirección:', error);
@@ -748,7 +757,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 feedbackDiv.className = 'address-feedback-perfil error';
                 feedbackDiv.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i>Error de red al verificar la dirección';
             }
+            return false;
         }
+
+        return false;
     }
 
     const debouncedVerifyAddress = debounce(verifyAddress, 800);
@@ -843,29 +855,78 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    function handleSaveChanges() {
-        // --- NUEVA VALIDACIÓN DE DIRECCIÓN ---
-        const calle = document.querySelector('input[name="calle"]')?.value.trim();
-        const altura = document.querySelector('input[name="altura"]')?.value.trim();
-        const localidad = document.querySelector('input[name="localidad"]')?.value.trim();
-        const provincia = document.querySelector('select[name="provincia"]')?.value.trim();
+    async function handleSaveChanges() {
+
+        const originalContent = btnSaveChanges.innerHTML;
+
+        // 2. Obtener inputs de Dirección
+        const calleInput = document.querySelector('input[name="calle"]');
+        const alturaInput = document.querySelector('input[name="altura"]');
+        const localidadInput = document.querySelector('input[name="localidad"]');
+        const provinciaInput = document.querySelector('select[name="provincia"]');
+
+        // 3. Obtener valores actuales (con sintaxis robusta para evitar errores de .trim())
+        const calle = calleInput ? (calleInput.value || '').trim() : '';
+        const altura = alturaInput ? (alturaInput.value || '').trim() : '';
+        const localidad = localidadInput ? (localidadInput.value || '').trim() : '';
+        const provincia = provinciaInput ? (provinciaInput.value || '') : ''; // select
 
         const hasPartialAddress = calle || localidad || provincia;
 
+        // 4. CHEQUEAR SI LA DIRECCIÓN FUE MODIFICADA
+        const originalCalle = originalValues['calle'] || '';
+        const originalAltura = originalValues['altura'] || '';
+        const originalLocalidad = originalValues['localidad'] || '';
+        const originalProvincia = originalValues['provincia'] || '';
+
+        const addressWasModified = (
+            calle !== originalCalle ||
+            altura !== originalAltura ||
+            localidad !== originalLocalidad ||
+            provincia !== originalProvincia
+        );
+        // ------------------------------------------------------------
+
+        // 5. Validación de Altura Requerida
         if (hasPartialAddress && !altura) {
             showNotification('El campo "Altura" es obligatorio si se especifica una dirección.', 'error');
-            const alturaInput = document.querySelector('input[name="altura"]');
             if (alturaInput) {
                 alturaInput.classList.add('is-invalid');
                 alturaInput.focus();
             }
             return;
         }
-        // Validar formulario
+
+        // 6. Validación de Formato (síncrona)
         if (!validateForm()) {
             showNotification('Por favor, complete todos los campos requeridos correctamente', 'error');
             return;
         }
+
+        // 7. VERIFICACIÓN ASÍNCRONA DE DIRECCIÓN
+        let isAddressValid = true; // Por defecto, asumimos que es válida si no se toca
+
+        if (hasPartialAddress && addressWasModified) {
+            // Solo ejecutamos la verificación si hay datos Y si fueron modificados
+            btnSaveChanges.disabled = true;
+            btnSaveChanges.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Verificando...';
+
+            isAddressValid = await verifyAddress(calleInput, alturaInput, localidadInput, provinciaInput);
+        }
+
+        // 8. BLOQUEAR GUARDADO si la verificación falló
+        if (hasPartialAddress && !isAddressValid) {
+            // Restaurar el botón con mensaje de error si la verificación falló
+            btnSaveChanges.disabled = false;
+            btnSaveChanges.innerHTML = originalContent;
+            showNotification('La dirección ingresada no pudo ser verificada. Revise los datos e intente nuevamente.', 'error');
+            // Enfocar el primer campo de dirección para el error
+            if (calleInput) calleInput.focus();
+            return;
+        }
+
+        // 9. Continuar con el guardado si la dirección pasó o se saltó
+        btnSaveChanges.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
 
         // Recopilar datos del formulario
         const formData = new FormData();
@@ -895,17 +956,15 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
+
         // Si no hay cambios, salir del modo edición
         if (!hasChanges) {
+            btnSaveChanges.disabled = false;
+            btnSaveChanges.innerHTML = originalContent;
             showNotification('No se detectaron cambios', 'info');
             exitEditMode();
             return;
         }
-
-        // Mostrar loading en el botón
-        const originalContent = btnSaveChanges.innerHTML;
-        btnSaveChanges.disabled = true;
-        btnSaveChanges.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
 
         // Obtener la URL de edición desde el botón o un data attribute
         const editUrl = btnSaveChanges.dataset.url || window.location.href.replace('/ver/', '/editar/');
@@ -954,6 +1013,18 @@ document.addEventListener('DOMContentLoaded', function () {
     function validateForm() {
         let isValid = true;
 
+        // Estas validaciones deben ser ejecutadas sí o sí antes de enviar.
+        const nombreInput = document.querySelector('input[name="nombre"]');
+        const apellidoInput = document.querySelector('input[name="apellido"]');
+
+        // El '&&' asegura que no intentamos llamar a la función si el input no existe
+        if (nombreInput && !validateNombre(nombreInput)) {
+            isValid = false;
+        }
+        if (apellidoInput && !validateApellido(apellidoInput)) {
+            isValid = false;
+        }
+
         // Iterar sobre la configuración de campos para asegurar que todos se validen
         for (const field in fieldConfig) {
             const config = fieldConfig[field];
@@ -971,6 +1042,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Elemento visual al que adjuntar el error. Para los selectores personalizados,
             // el input puede estar oculto, así que buscamos el contenedor visual.
             const visualElement = item.querySelector('.form-control-inline, select, .roles-grid-perfil, .turno-grid-perfil, .sectores-grid-perfil') || input;
+
 
             // 1. Validar campos requeridos
             if (config.required && !value) {
@@ -997,6 +1069,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     showError(visualElement, `${config.label} no cumple con el formato esperado.`);
                     continue;
                 }
+            }
+        }
+
+        if (document.querySelector('.form-control-inline.is-invalid, .cuit-input-group.is-invalid')) {
+            isValid = false;
+        }
+
+        if (!isValid) {
+            const firstInvalid = document.querySelector('.form-control-inline.is-invalid, .cuit-input-group.is-invalid');
+            if (firstInvalid) {
+                // Scroll hasta el error y enfocar
+                firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                firstInvalid.focus();
             }
         }
 

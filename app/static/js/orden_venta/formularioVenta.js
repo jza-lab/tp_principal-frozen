@@ -42,11 +42,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     // Habilitar la opción por defecto (limpiar el estado anterior)
                     option.disabled = false;
+                    option.style.display = 'block';
 
                     // 3. Lógica de Inhabilitación:
                     // Deshabilita la opción si ha sido seleccionada, Y NO es la opción actual de ESTA fila.
                     if (selectedProductIds.has(optionId) && optionId !== currentValue) {
-                        option.disabled = true;
+                        option.style.display = 'none'; 
                     }
                 });
             });

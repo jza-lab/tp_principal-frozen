@@ -195,7 +195,6 @@ class LoteProductoController(BaseController):
                 if not resultado_reserva.get('success'):
                     raise Exception(f"No se pudo crear el registro de reserva para el lote {lote['id_lote']}.")
 
-                # --- INICIO DE LA LÓGICA MEJORADA ---
                 # b. Calcular la nueva cantidad y preparar la actualización
                 nueva_cantidad_lote = cantidad_en_lote - cantidad_a_reservar_de_este_lote
                 datos_actualizacion_lote = {'cantidad_actual': nueva_cantidad_lote}
@@ -231,26 +230,20 @@ class LoteProductoController(BaseController):
                 # Preparamos los datos ANTES de la validación
                 data = {key: value for key, value in form_data.items() if value}
 
-                # --- INICIO DE LA CORRECCIÓN ---
-
-                # 1. Asignar cantidad_actual si existe cantidad_inicial
+                # Asignar cantidad_actual si existe cantidad_inicial
                 if 'cantidad_inicial' in data:
                     data['cantidad_actual'] = data['cantidad_inicial']
 
-                # 2. Generar número de lote si no viene del formulario
+                # Generar número de lote si no viene del formulario
                 if 'numero_lote' not in data or not data['numero_lote']:
                      data['numero_lote'] = f"LP-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
-                # 3. Añadir la fecha de producción (asumimos que es hoy)
+                # Añadir la fecha de producción (asumimos que es hoy)
                 if 'fecha_produccion' not in data:
                     data['fecha_produccion'] = datetime.now().date().isoformat()
 
-                # --- FIN DE LA CORRECCIÓN ---
-
-                # Ahora validamos. Todos los campos requeridos ya existen en 'data'.
                 validated_data = self.schema.load(data)
 
-                # (El resto del método no necesita cambios)
                 result = self.model.create(validated_data)
 
                 if result.get('success'):
@@ -264,7 +257,6 @@ class LoteProductoController(BaseController):
                 logger.error(f"Error creando lote de producto: {e}", exc_info=True)
                 return self.error_response(f"Error interno: {str(e)}", 500)
 
-    # --- MÉTODO MODIFICADO ---
     def obtener_lotes_para_vista(self) -> tuple:
         """Obtiene todos los lotes de productos con datos enriquecidos para la vista."""
         try:
@@ -286,7 +278,6 @@ class LoteProductoController(BaseController):
             logger.error(f"Error obteniendo lotes para la vista: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
-    # --- MÉTODO MODIFICADO ---
     def obtener_lote_por_id_para_vista(self, id_lote: int) -> tuple:
         """Obtiene el detalle de un lote de producto para la vista."""
         try:
@@ -311,7 +302,6 @@ class LoteProductoController(BaseController):
     def obtener_conteo_productos_sin_lotes(self) -> tuple:
         """
         Calcula y devuelve el conteo y la lista de productos activos que no tienen lotes asociados.
-        Un producto sin lotes es considerado 'SIN STOCK' para esta alerta.
         """
         try:
             # 1. Obtener todos los productos activos y crear un mapa {id: producto}
@@ -350,3 +340,72 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error contando productos sin lotes: {str(e)}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
+        
+    def despachar_stock_directo_por_pedido(self, pedido_id: int, items_del_pedido: list) -> dict:
+        """
+        Despacha el stock directamente de los lotes de productos para un pedido,
+        ignorando la tabla de reservas de productos. Consumo FIFO de lotes DISPONIBLES.
+        """
+        try:
+            if not items_del_pedido:
+                return {'success': True, 'message': 'Pedido sin items para despachar.'}
+
+            # 1. Iterar sobre los ítems del pedido
+            for item in items_del_pedido:
+                producto_id = item['producto_id']
+                cantidad_necesaria = float(item['cantidad'])
+                cantidad_restante_a_consumir = cantidad_necesaria
+
+                # 2. Obtener lotes disponibles (FIFO)
+                filtros = {
+                    'producto_id': producto_id,
+                    'estado': 'DISPONIBLE', # Solo lotes disponibles
+                    'cantidad_actual': ('gt', 0)
+                }
+                lotes_disponibles_res = self.model.find_all(filters=filtros, order_by='created_at.asc')
+
+                if not lotes_disponibles_res.get('success'):
+                    logger.error(f"Fallo al obtener lotes para producto {producto_id} del pedido {pedido_id}.")
+                    continue
+
+                lotes_disponibles = lotes_disponibles_res.get('data', [])
+
+                # 3. Consumir stock de los lotes
+                for lote in lotes_disponibles:
+                    if cantidad_restante_a_consumir <= 0:
+                        break
+
+                    cantidad_en_lote = lote.get('cantidad_actual', 0)
+                    cantidad_a_consumir_de_este_lote = min(cantidad_en_lote, cantidad_restante_a_consumir)
+                    
+                    # a. Calcular la nueva cantidad y preparar la actualización
+                    nueva_cantidad_lote = cantidad_en_lote - cantidad_a_consumir_de_este_lote
+                    datos_actualizacion_lote = {'cantidad_actual': nueva_cantidad_lote}
+
+                    # b. Si la cantidad llega a cero, cambiar el estado a 'AGOTADO'
+                    if nueva_cantidad_lote <= 0:
+                        datos_actualizacion_lote['estado'] = 'AGOTADO'
+                        logger.info(f"El lote {lote['numero_lote']} ha sido marcado como AGOTADO por despacho directo.")
+
+                    # c. Realizar la actualización del lote en la base de datos (descuento permanente)
+                    update_result = self.model.update(lote['id_lote'], datos_actualizacion_lote, 'id_lote')
+                    
+                    if not update_result.get('success'):
+                        # Si falla la actualización, se detiene el proceso de despacho.
+                        raise Exception(f"Fallo al descontar stock del lote {lote['id_lote']}: {update_result.get('error')}")
+
+                    cantidad_restante_a_consumir -= cantidad_a_consumir_de_este_lote
+
+                if cantidad_restante_a_consumir > 0:
+                    # Si al final no se pudo consumir todo el stock necesario, el despacho falla
+                    # y el PedidoController no podrá completar la orden.
+                    raise Exception(f"Stock insuficiente para el producto {producto_id}. Faltaron {cantidad_restante_a_consumir} unidades.")
+
+            # Si todos los ítems se procesaron sin levantar la excepción, es éxito.
+            return {'success': True}
+
+        except Exception as e:
+            logger.error(f"Error crítico al despachar stock directo del pedido {pedido_id}: {e}", exc_info=True)
+            # Devolvemos el error específico para el PedidoController
+            return {'success': False, 'error': f'Error interno al despachar stock: {str(e)}'}
+

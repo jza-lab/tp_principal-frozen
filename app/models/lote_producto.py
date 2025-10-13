@@ -1,4 +1,5 @@
 # app/models/lote_producto.py
+from datetime import datetime
 from app.models.base_model import BaseModel
 from typing import Dict, List, Optional
 import logging
@@ -105,3 +106,44 @@ class LoteProductoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo detalle de lote de producto {id_lote}: {e}")
             return {'success': False, 'error': str(e)}
+        
+    def update_lote_cantidad_por_despacho(self, lote_id: int, cantidad_despachada: float) -> dict:
+        """
+        Reduce la cantidad_actual y la cantidad_reservada de un lote 
+        al completar un pedido.
+        """
+        try:
+            # 1. Obtener el lote para verificar el stock
+            lote_result = self.find_by_id(lote_id)
+            if not lote_result.get('data'):
+                return {'success': False, 'error': f"Lote de producto ID {lote_id} no encontrado."}
+            
+            lote = lote_result['data']
+            
+            # 2. Calcular nuevas cantidades (deben ser >= 0)
+            cantidad_actual_nueva = lote.get('cantidad_actual', 0.0) - cantidad_despachada
+            cantidad_reservada_nueva = lote.get('cantidad_reservada', 0.0) - cantidad_despachada
+            
+            if cantidad_actual_nueva < 0 or cantidad_reservada_nueva < 0:
+                # Esto no debería ocurrir si el sistema de reservas funciona bien, pero es una protección
+                return {'success': False, 'error': 'Intento de despachar más cantidad de la reservada o disponible en el lote.'}
+
+            # 3. Datos a actualizar
+            update_data = {
+                'cantidad_actual': cantidad_actual_nueva,
+                'cantidad_reservada': cantidad_reservada_nueva,
+                'fecha_actualizacion': datetime.now().isoformat()
+            }
+            
+            # 4. Actualizar en la base de datos
+            # Asumo que self.update() es el método de la clase base para actualizar el registro en la DB
+            update_result = self.update(lote_id, update_data, 'id') 
+            
+            if update_result.get('success'):
+                return {'success': True, 'data': update_result['data']}
+            else:
+                return {'success': False, 'error': update_result.get('error', 'Error desconocido al actualizar lote.')}
+
+        except Exception as e:
+            logger.error(f"Error al despachar lote {lote_id}: {str(e)}")
+            return {'success': False, 'error': f"Error interno en la BD al actualizar lote: {str(e)}"}

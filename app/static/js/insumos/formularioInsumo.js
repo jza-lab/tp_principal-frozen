@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await response.json();
 
             if (response.ok && result.success) {
+                showNotificationModal(result.message || 'Operación exitosa', "Se creó el insumo correctamente.");
                 setTimeout(() => {
                     window.location.href = INSUMOS_LISTA_URL;
                 }, 1500);

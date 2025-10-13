@@ -2,7 +2,7 @@
 window.PRODUCT_PRICES = {};
 const IVA_RATE = 0.21; // Mantenemos esta constante global
 
-document.querySelectorAll('.product-selector option[data-precio]').forEach(option => {
+document.querySelectorAll('.producto-selector option[data-precio]').forEach(option => {
     const productId = option.value;
     const price = parseFloat(option.getAttribute('data-precio')) || 0;
     if (productId) {
@@ -21,7 +21,7 @@ window.calculateOrderTotals = function () {
     if (!itemsContainer || !totalFinalInput) return;
 
     document.querySelectorAll('#items-container .item-row').forEach(row => {
-        const productSelect = row.querySelector('.product-selector');
+        const productSelect = row.querySelector('.producto-selector');
         const quantityInput = row.querySelector('.item-quantity');
         const subtotalItemInput = row.querySelector('.subtotal-item');
 
@@ -62,7 +62,7 @@ window.calculateOrderTotals = function () {
 
 // Función Global para adjuntar listeners (llamada por el script del FormSet)
 window.attachItemListeners = function (row) {
-    const productSelect = row.querySelector('.product-selector');
+    const productSelect = row.querySelector('.producto-selector');
     const quantityInput = row.querySelector('.item-quantity');
     const removeBtn = row.querySelector('.remove-item-btn');
 
@@ -83,7 +83,7 @@ window.attachItemListeners = function (row) {
 document.addEventListener('DOMContentLoaded', function () {
 
     // Cargar precios en el objeto global
-    document.querySelectorAll('.product-selector option[data-precio]').forEach(option => {
+    document.querySelectorAll('.producto-selector option[data-precio]').forEach(option => {
         const productId = option.value;
         const price = parseFloat(option.getAttribute('data-precio')) || 0;
         if (productId) {

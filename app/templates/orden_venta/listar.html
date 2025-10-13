@@ -88,9 +88,23 @@
                     </div>
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
                         <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}" class="btn btn-sm btn-outline-primary" title="Ver Detalle"><i class="bi bi-eye"></i></a>
-                        {% if pedido.estado != 'CANCELADO' %}
-                        <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}" class="btn btn-sm btn-outline-primary" title="Editar Pedido"><i class="bi bi-pencil"></i></a>
+                        
+                        {% if pedido.estado != 'CANCELADO' and pedido.estado != 'COMPLETADO' %}
+                            <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}" class="btn btn-sm btn-outline-primary" title="Editar Pedido"><i class="bi bi-pencil"></i></a>
                         {% endif %}
+
+                        {% if pedido.estado == 'LISTO_PARA_ENTREGA' %}
+                        <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}" 
+                              class="confirm-form d-inline" 
+                              data-title="Confirmar Despacho"
+                              data-message="¿Está seguro de completar y despachar este pedido? Esta acción descontará el stock de productos finales."
+                              data-button-type="success">
+                            <button type="submit" class="btn btn-sm btn-success" title="Completar Pedido">
+                                <i class="bi bi-check-lg me-1"></i>Completar
+                            </button>
+                        </form>
+                        {% endif %}
+
                     </div>
                 </div>
             </div>

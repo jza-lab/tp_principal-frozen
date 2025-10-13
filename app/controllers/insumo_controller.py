@@ -90,7 +90,7 @@ class InsumoController(BaseController):
                 logger.info(f"Insumo creado exitosamente: {result['data']['id_insumo']}")
 
                 return self.success_response(
-                    data=self.schema.dump(result['data']),  # Marshmallow se encarga
+                    data=result['data'],  # Marshmallow se encarga
                     message='Insumo creado exitosamente',
                     status_code=201
                 )
@@ -415,7 +415,7 @@ class InsumoController(BaseController):
 
             # 4. Devolver el insumo actualizado.
             return self.success_response(
-                data=self.schema.dump(update_result['data']),
+                data=update_result['data'],
                 message='Stock del insumo actualizado correctamente.'
             )
 
