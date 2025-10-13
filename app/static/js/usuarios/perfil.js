@@ -15,6 +15,7 @@ function showError(inputElement, message) {
     if (!errorDiv) {
         errorDiv = document.createElement('div');
         errorDiv.className = 'invalid-feedback';
+        // Insert after the input element itself
         inputElement.parentNode.insertBefore(errorDiv, inputElement.nextSibling);
     }
 
@@ -24,7 +25,7 @@ function showError(inputElement, message) {
     inputElement.classList.add('is-invalid');
 }
 
-function showSuccess(inputElement, message) {
+function showSuccess(inputElement, message = 'Válido.') {
     if (!inputElement) return;
     const formField = inputElement.closest('.info-item');
     if (!formField) return;
@@ -50,16 +51,42 @@ function showSuccess(inputElement, message) {
     inputElement.classList.add('is-valid');
 }
 
-async function validateUniqueField(field, value, inputElement) {
+async function validateField(field, value, inputElement) {
     const saveButton = document.getElementById('btn-save-changes');
     const url = saveButton.dataset.url;
     const userId = url.split('/').slice(-2, -1)[0];
 
+    // --- Validaciones de formato ---
     if (!value || !value.trim()) {
-        showError(inputElement, 'Este campo no puede estar vacío.');
+        showError(inputElement, 'Este campo es obligatorio.');
         return false;
     }
 
+    if (field === 'email') {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(value)) {
+            showError(inputElement, 'Por favor, ingrese un email válido (ejemplo: usuario@dominio.com).');
+            return false;
+        }
+    }
+
+    if (field === 'cuil_cuit') {
+        const cuilRegex = /^\d{11}$/;
+        if (!cuilRegex.test(value)) {
+            showError(inputElement, 'El CUIL/CUIT debe contener exactamente 11 dígitos numéricos.');
+            return false;
+        }
+    }
+
+    if (field === 'telefono') {
+        const telefonoRegex = /^\d{7,15}$/;
+        if (!telefonoRegex.test(value)) {
+            showError(inputElement, 'El teléfono debe contener solo números y tener entre 7 y 15 dígitos.');
+            return false;
+        }
+    }
+
+    // --- Validación asíncrona (unicidad) ---
     try {
         const response = await fetch('/admin/usuarios/validar', {
             method: 'POST',
@@ -67,37 +94,56 @@ async function validateUniqueField(field, value, inputElement) {
             body: JSON.stringify({ field, value, user_id: userId })
         });
 
-        if (!response.ok) throw new Error('Error de servidor');
+        if (!response.ok) throw new Error('Error en la validación del servidor');
 
         const result = await response.json();
 
         if (!result.valid) {
-            showError(inputElement, result.message || 'Este valor ya está en uso.');
+            showError(inputElement, result.message || 'Valor ya en uso.');
             return false;
         } else {
             showSuccess(inputElement, 'Valor disponible.');
             return true;
         }
     } catch (error) {
-        console.error('Error al validar:', error);
-        showError(inputElement, 'Error de red al validar.');
+        console.error('Error al validar campo:', error);
+        showError(inputElement, 'Error de red al validar. Intente nuevamente.');
         return false;
     }
 }
 
-function validateNameField(inputElement) {
-    const value = inputElement.value.trim();
-    if (!value) {
-        showError(inputElement, 'Este campo no puede estar vacío.');
+function validateNombre(inputElement) {
+    const nombre = inputElement.value.trim();
+    
+    if (!nombre) {
+        showError(inputElement, 'El nombre es obligatorio.');
         return false;
-    } else if (/\d/.test(value)) {
-        showError(inputElement, 'No se permiten números en este campo.');
+    } else if (/\d/.test(nombre)) {
+        showError(inputElement, 'El nombre no puede contener números.');
         return false;
-    } else if (value.length < 2) {
-        showError(inputElement, 'Debe tener al menos 2 caracteres.');
+    } else if (nombre.length < 2) {
+        showError(inputElement, 'El nombre debe tener al menos 2 caracteres.');
         return false;
     } else {
-        showSuccess(inputElement, 'Válido.');
+        showSuccess(inputElement);
+        return true;
+    }
+}
+
+function validateApellido(inputElement) {
+    const apellido = inputElement.value.trim();
+    
+    if (!apellido) {
+        showError(inputElement, 'El apellido es obligatorio.');
+        return false;
+    } else if (/\d/.test(apellido)) {
+        showError(inputElement, 'El apellido no puede contener números.');
+        return false;
+    } else if (apellido.length < 2) {
+        showError(inputElement, 'El apellido debe tener al menos 2 caracteres.');
+        return false;
+    } else {
+        showSuccess(inputElement);
         return true;
     }
 }
@@ -223,19 +269,29 @@ document.addEventListener('DOMContentLoaded', function() {
             valueDiv.innerHTML = inputHTML;
             valueDiv.classList.add('editing');
 
-            // Adjuntar event listeners para validación de unicidad
+            // Adjuntar event listeners para validación
             const inputElement = valueDiv.querySelector('.form-control-inline');
             if (inputElement) {
                 const fieldName = inputElement.name;
+
+                // Listener para campos con validación de unicidad y formato
                 if (['legajo', 'email', 'cuil_cuit', 'telefono'].includes(fieldName)) {
                     inputElement.addEventListener('blur', (e) => {
-                        validateUniqueField(fieldName, e.target.value, e.target);
+                        validateField(fieldName, e.target.value, e.target);
                     });
                 }
-                // Añadir validación para nombre y apellido
-                if (['nombre', 'apellido'].includes(fieldName)) {
+                
+                // Listener para el campo nombre
+                if (fieldName === 'nombre') {
                     inputElement.addEventListener('blur', (e) => {
-                        validateNameField(e.target);
+                        validateNombre(e.target);
+                    });
+                }
+
+                // Listener para el campo apellido
+                if (fieldName === 'apellido') {
+                    inputElement.addEventListener('blur', (e) => {
+                        validateApellido(e.target);
                     });
                 }
             }
