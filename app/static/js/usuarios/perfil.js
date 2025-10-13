@@ -714,8 +714,15 @@ document.addEventListener('DOMContentLoaded', function () {
         const localidad = localidadInput ? localidadInput.value.trim() : '';
         const provincia = provinciaInput ? provinciaInput.value : '';
 
-        if (!calle || !altura || !localidad || !provincia) {
-            return;
+        if (!calle && !altura && !localidad && !provincia) {
+
+            const feedbackDiv = document.getElementById('address-feedback-perfil');
+            if (feedbackDiv) feedbackDiv.remove();
+            return true;
+        }
+
+        if ((calle || localidad || provincia) && !altura) {
+            return false;
         }
 
         const feedbackDiv = document.getElementById('address-feedback-perfil');
@@ -738,9 +745,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 const normalizedAddress = `${normalized.calle.nombre} ${normalized.altura.valor}, ${normalized.localidad_censal.nombre}, ${normalized.provincia.nombre}`;
                 feedbackDiv.className = 'address-feedback-perfil success';
                 feedbackDiv.innerHTML = `<i class="bi bi-check-circle-fill"></i>Dirección verificada: ${normalizedAddress}`;
+                return true;
             } else if (feedbackDiv) {
                 feedbackDiv.className = 'address-feedback-perfil error';
                 feedbackDiv.innerHTML = `<i class="bi bi-x-circle-fill"></i>${result.message || 'No se pudo verificar la dirección'}`;
+                return false;
             }
         } catch (error) {
             console.error('Error al verificar dirección:', error);
@@ -748,7 +757,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 feedbackDiv.className = 'address-feedback-perfil error';
                 feedbackDiv.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i>Error de red al verificar la dirección';
             }
+            return false;
         }
+
+        return false;
     }
 
     const debouncedVerifyAddress = debounce(verifyAddress, 800);
@@ -843,18 +855,24 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    function handleSaveChanges() {
-        // --- NUEVA VALIDACIÓN DE DIRECCIÓN ---
-        const calle = document.querySelector('input[name="calle"]')?.value.trim();
-        const altura = document.querySelector('input[name="altura"]')?.value.trim();
-        const localidad = document.querySelector('input[name="localidad"]')?.value.trim();
-        const provincia = document.querySelector('select[name="provincia"]')?.value.trim();
+    async function handleSaveChanges() {
+
+        const originalContent = btnSaveChanges.innerHTML;
+
+        const calleInput = document.querySelector('input[name="calle"]');
+        const alturaInput = document.querySelector('input[name="altura"]');
+        const localidadInput = document.querySelector('input[name="localidad"]');
+        const provinciaInput = document.querySelector('select[name="provincia"]');
+
+        const calle = calleInput?.value.trim() || '';
+        const altura = alturaInput?.value.trim() || '';
+        const localidad = localidadInput?.value.trim() || '';
+        const provincia = provinciaInput?.value.trim() || '';
 
         const hasPartialAddress = calle || localidad || provincia;
 
         if (hasPartialAddress && !altura) {
             showNotification('El campo "Altura" es obligatorio si se especifica una dirección.', 'error');
-            const alturaInput = document.querySelector('input[name="altura"]');
             if (alturaInput) {
                 alturaInput.classList.add('is-invalid');
                 alturaInput.focus();
@@ -866,6 +884,23 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotification('Por favor, complete todos los campos requeridos correctamente', 'error');
             return;
         }
+
+        btnSaveChanges.disabled = true;
+        btnSaveChanges.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Verificando...';
+
+        const isAddressValid = await verifyAddress(calleInput, alturaInput, localidadInput, provinciaInput);
+
+        if (hasPartialAddress && !isAddressValid) {
+            // Restaurar el botón con mensaje de error si la dirección no pasa
+            btnSaveChanges.disabled = false;
+            btnSaveChanges.innerHTML = originalContent;
+            showNotification('La dirección ingresada no pudo ser verificada. Revise los datos e intente nuevamente.', 'error');
+            // Enfocar el primer campo de dirección para el error
+            if (calleInput) calleInput.focus();
+            return;
+        }
+
+        btnSaveChanges.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
 
         // Recopilar datos del formulario
         const formData = new FormData();
@@ -895,17 +930,15 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
+
         // Si no hay cambios, salir del modo edición
         if (!hasChanges) {
+            btnSaveChanges.disabled = false;
+            btnSaveChanges.innerHTML = originalContent;
             showNotification('No se detectaron cambios', 'info');
             exitEditMode();
             return;
         }
-
-        // Mostrar loading en el botón
-        const originalContent = btnSaveChanges.innerHTML;
-        btnSaveChanges.disabled = true;
-        btnSaveChanges.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
 
         // Obtener la URL de edición desde el botón o un data attribute
         const editUrl = btnSaveChanges.dataset.url || window.location.href.replace('/ver/', '/editar/');
