@@ -1,6 +1,5 @@
 {% extends 'layouts/base.html' %}
 
-{% set is_edit = producto and producto.id %}
 {% set form_title = 'Editar producto' if is_edit else 'Agregar Nuevo producto' %}
 
 {% block title %}{{ form_title }} - Sistema Frozen{% endblock %}

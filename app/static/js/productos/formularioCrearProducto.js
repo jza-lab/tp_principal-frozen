@@ -169,7 +169,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const result = await response.json();
 
             if (response.ok && result.success) {
-                showNotificationModal(result.message || 'Operación exitosa', 'success');
+                let mensaje;
+                if(isEditBoolean){
+                     mensaje= 'Se ha modificado el producto correctamente.'
+                }
+                else{
+                    mensaje= 'Se creó el producto exitosamente.'
+                }
+                showNotificationModal(result.message || 'Operación exitosa', mensaje);
                 setTimeout(() => { window.location.href = productoS_LISTA_URL; }, 1500);
             } else {
                 let errorMessage = 'Ocurrió un error.';
@@ -180,7 +187,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (error) {
             console.error('Error en el fetch:', error);
-            showNotificationModal('No se pudo conectar con el servidor.', 'error');
+            showNotificationModal('No se pudo conectar con el servidor.', 'Por favor, intente nuevamente más tarde o contacte a administración.');
         }
     });
 });
