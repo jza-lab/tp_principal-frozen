@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from matplotlib.dates import relativedelta
 from app.controllers.pedido_controller import PedidoController
+from app.controllers.cliente_controller import ClienteController
 from app.permisos import permission_required
 import re
 from datetime import datetime
@@ -8,7 +9,7 @@ from datetime import datetime
 orden_venta_bp = Blueprint('orden_venta', __name__, url_prefix='/orden-venta')
 
 controller = PedidoController()
-
+cliente_controller = ClienteController()
 def _parse_form_data(form_dict):
     """
     Convierte los datos planos del formulario en una estructura anidada para el schema.
@@ -69,16 +70,27 @@ def nueva():
     fecha_limite= (datetime.now() + relativedelta(months=3)).strftime('%Y-%m-%d')
     
     if request.method == 'POST':
-        form_data = _parse_form_data(request.form.to_dict())
-        response, status_code = controller.crear_pedido_con_items(form_data)
+        json_data = request.get_json()
+        if not json_data:
+            return jsonify({"success": False, "error": "No se recibieron datos JSON válidos"}), 400
 
-        if response.get('success'):
-            flash(response.get('message', 'Pedido creado con éxito.'), 'success')
-            flash('Ahora puede planificar la producción desde la sección de Planificación.', 'info')
-            return redirect(url_for('orden_venta.listar'))
-        else:
-            flash(response.get('error', 'Error al crear el pedido.'), 'error')
-            return
+        response, status_code = controller.crear_pedido_con_items(json_data)
+
+        if status_code < 300: # Éxito (e.g., 201 Created)
+                nuevo_pedido_id = response.get('data', {}).get('id')
+                return jsonify({
+                    'success': True,
+                    'message': response.get('message', 'Pedido creado con éxito.'),
+                    # Envía la URL para que JS redirija
+                    'redirect_url': url_for('orden_venta.detalle', id=nuevo_pedido_id)
+                }), 201
+        
+        else: # Error de validación
+                return jsonify({
+                    'success': False,
+                    'message': response.get('message', 'Error al crear el pedido.'),
+                    'errors': response.get('errors', {})
+                }), status_code
 
     # Método GET
     response, status_code = controller.obtener_datos_para_formulario()
@@ -95,32 +107,55 @@ def nueva():
                            today=hoy,
                            fecha_limite=fecha_limite)
 
-@orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
+@orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST','PUT'])
 @permission_required(sector_codigo='LOGISTICA', accion='actualizar')
 def editar(id):
-    hoy = datetime.now().strftime('%Y-%m-%d')
+    
     """Gestiona la edición de un pedido de venta existente."""
-    if request.method == 'POST':
-        form_data = _parse_form_data(request.form.to_dict())
-        response, status_code = controller.actualizar_pedido_con_items(id, form_data)
 
-        if response.get('success'):
-            flash(response.get('message', 'Pedido actualizado con éxito.'), 'success')
-            return redirect(url_for('orden_venta.detalle', id=id))
-        else:
-            flash(response.get('error', 'Error al actualizar el pedido.'), 'error')
-            # Si falla la actualización, volvemos a renderizar el formulario con los datos enviados
-            form_data_resp, _ = controller.obtener_datos_para_formulario()
-            # Añadimos el ID al diccionario para que el template sepa que estamos editando
-            form_data['id'] = id
+    hoy = datetime.now().strftime('%Y-%m-%d')
+    if request.method == 'PUT':
+        try:
+            # 1. Lee los datos JSON
+            json_data = request.get_json()
+            if not json_data:
+                return jsonify({"success": False, "error": "No se recibieron datos JSON válidos"}), 400
+
+            # 2. Llama a tu controlador para crear el pedido
+            # Este controlador ahora debe saber cómo manejar el diccionario json_data
+            response_data, status_code = controller.crear_pedido_con_items(json_data)
+
+            # 3. Responde con JSON, no con redirect/flash
+            if status_code < 300: # Éxito (e.g., 201 Created)
+                    nuevo_pedido_id = response_data.get('data', {}).get('id')
+                    return jsonify({
+                        'success': True,
+                        'message': response_data.get('message', 'Pedido actualizado con éxito.'),
+                        # Envía la URL para que JS redirija
+                        'redirect_url': url_for('orden_venta.detalle', id=nuevo_pedido_id)
+                    }), 201
+            else: # Error de validación
+                    return jsonify({
+                        'success': False,
+                        'message': response_data.get('message', 'Error al actualizar el pedido.'),
+                        'errors': response_data.get('errors', {})
+                    }), status_code
             
-            return render_template('orden_venta/formulario.html',
-                                   productos=form_data_resp.get('data', {}).get('productos', []),
-                                   pedido=form_data, is_edit=True, cliente=None,
-                                   today=hoy)
+        except Exception as e:
+                print(f"Error inesperado en POST /nueva: {e}") # Esto aparecerá en tu terminal de Flask
+                return jsonify({"success": False, "error": "Ocurrió un error interno en el servidor."}), 500
+       
 
     # Método GET
     pedido_resp, _ = controller.obtener_pedido_por_id(id)
+    pedido= pedido_resp.get('data')
+
+    cliente_resp, _ = cliente_controller.obtener_cliente(pedido['id_cliente'])
+    cliente=cliente_resp.get('data')
+
+    if(cliente and cliente['cuit']):
+        cliente['cuit'] = cliente['cuit'].replace('-', '')
+
     form_data_resp, _ = controller.obtener_datos_para_formulario()
 
     if not pedido_resp.get('success'):
@@ -132,10 +167,10 @@ def editar(id):
         productos = form_data_resp.get('data', {}).get('productos', [])
     else:
         flash(form_data_resp.get('error', 'Error cargando datos del formulario.'), 'warning')
-
+    
     return render_template('orden_venta/formulario.html',
-                           pedido=pedido_resp.get('data'),
-                           productos=productos,
+                           pedido=pedido,
+                           productos=productos,is_edit=True, cliente=cliente,
                            today=hoy)
 
 @orden_venta_bp.route('/<int:id>/detalle')
