@@ -92,18 +92,16 @@
 
                         {% set can_view_admin = user_permissions.is_gerente or ('ADMINISTRACION' in user_permissions and 'leer' in user_permissions['ADMINISTRACION']) %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle
-                                {% if 'admin_usuario' in request.endpoint and request.endpoint != 'admin_usuario.index' %}active{% endif %} {% if not can_view_admin %}disabled{% endif %}"
-                               href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false" {% if not can_view_admin %}aria-disabled="true" tabindex="-1"{% endif %}>
+                            <a class="nav-link dropdown-toggle {% if is_admin_section %}active{% endif %} {% if not can_view_admin %}disabled{% endif %}"
+                            href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false" {% if not can_view_admin %}aria-disabled="true" tabindex="-1"{% endif %}>
                                 <i class="bi bi-gear-fill me-1"></i> Administración
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownAdmin">
-                                <li><a class="dropdown-item {% if 'listar_usuarios' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_usuario.listar_usuarios') }}"><i class="bi bi-people-fill me-2"></i> Gestión de Empleados</a></li>
-                                <li><a class="dropdown-item {% if 'listar_usuarios' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_clientes') }}"><i class="bi bi-person-rolodex me-2"></i> Gestión de Clientes</a></li>
-                                <li><a class="dropdown-item {% if 'listar_usuarios' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_proveedores') }}"><i class="bi  bi-briefcase-fill me-2"></i> Gestión de Proveedores</a></li>
+                                <li><a class="dropdown-item {% if 'admin_usuario' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_usuario.listar_usuarios') }}"><i class="bi bi-people-fill me-2"></i> Gestión de Empleados</a></li>
+                                <li><a class="dropdown-item {% if 'listar_clientes' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_clientes') }}"><i class="bi bi-person-rolodex me-2"></i> Gestión de Clientes</a></li>
+                                <li><a class="dropdown-item {% if 'listar_proveedores' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_proveedores') }}"><i class="bi  bi-briefcase-fill me-2"></i> Gestión de Proveedores</a></li>
                             </ul>
                         </li>
-
                     </ul>
                     <ul class="navbar-nav ms-auto">
                         <li class="nav-item dropdown">
