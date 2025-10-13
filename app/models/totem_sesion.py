@@ -138,3 +138,21 @@ class TotemSesionModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo la actividad del tótem filtrada: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def find_all_active(self) -> Dict:
+        """
+        Obtiene todas las sesiones de tótem que están actualmente activas.
+        """
+        try:
+            response = self.db.table(self.get_table_name())\
+                .select('*')\
+                .eq('activa', True)\
+                .execute()
+
+            if response.data:
+                return {'success': True, 'data': response.data}
+            else:
+                return {'success': False, 'error': 'No hay sesiones activas'}
+        except Exception as e:
+            logger.error(f"Error obteniendo todas las sesiones activas: {str(e)}")
+            return {'success': False, 'error': str(e)}
