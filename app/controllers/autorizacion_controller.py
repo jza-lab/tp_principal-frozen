@@ -42,6 +42,9 @@ class AutorizacionController(BaseController):
         usuario_id = data.get('usuario_id')
         tipo_autorizacion = data.get('tipo')
 
+        if tipo_autorizacion == 'HORAS_EXTRAS' and 'tarde' in nombre_turno:
+            return {'success': False, 'error': 'No se pueden crear autorizaciones de horas extras para el turno tarde.'}
+
         if tipo_autorizacion == 'LLEGADA_TARDIA':
             sesion_activa = self.totem_sesion.verificar_sesion_activa_hoy(usuario_id)
             if sesion_activa:
