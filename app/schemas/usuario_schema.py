@@ -30,8 +30,8 @@ class UsuarioSchema(Schema):
     cuil_cuit = fields.Str(
         allow_none=True,
         validate=validate.Regexp(
-            r'^\d{11}$',
-            error='El CUIL/CUIT debe contener exactamente 11 dígitos numéricos.'
+            r'^\d{2}-\d{8}-\d{1}$',
+            error='El formato del CUIL/CUIT debe ser XX-XXXXXXXX-X.'
         )
     )
     telefono = fields.Str(

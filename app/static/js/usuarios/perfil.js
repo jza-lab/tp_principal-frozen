@@ -43,7 +43,7 @@ function showSuccess(inputElement, message = 'Válido.') {
         successDiv.className = 'valid-feedback';
         inputElement.parentNode.insertBefore(successDiv, inputElement.nextSibling);
     }
-    
+
     successDiv.textContent = message;
     successDiv.style.display = 'block';
 
@@ -62,6 +62,7 @@ async function validateField(field, value, inputElement) {
         return false;
     }
 
+
     if (field === 'email') {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(value)) {
@@ -71,9 +72,9 @@ async function validateField(field, value, inputElement) {
     }
 
     if (field === 'cuil_cuit') {
-        const cuilRegex = /^\d{11}$/;
+        const cuilRegex = /^\d{2}-\d{8}-\d{1}$/;
         if (!cuilRegex.test(value)) {
-            showError(inputElement, 'El CUIL/CUIT debe contener exactamente 11 dígitos numéricos.');
+            showError(inputElement, 'El formato del CUIL/CUIT no es válido.');
             return false;
         }
     }
@@ -114,7 +115,7 @@ async function validateField(field, value, inputElement) {
 
 function validateNombre(inputElement) {
     const nombre = inputElement.value.trim();
-    
+
     if (!nombre) {
         showError(inputElement, 'El nombre es obligatorio.');
         return false;
@@ -132,7 +133,7 @@ function validateNombre(inputElement) {
 
 function validateApellido(inputElement) {
     const apellido = inputElement.value.trim();
-    
+
     if (!apellido) {
         showError(inputElement, 'El apellido es obligatorio.');
         return false;
@@ -149,7 +150,7 @@ function validateApellido(inputElement) {
 }
 
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const btnEditMode = document.getElementById('btn-edit-mode');
     const btnSaveChanges = document.getElementById('btn-save-changes');
     const btnCancelEdit = document.getElementById('btn-cancel-edit');
@@ -175,7 +176,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const fieldConfig = {
         nombre: { type: 'text', required: true, label: 'Nombre' },
         apellido: { type: 'text', required: true, label: 'Apellido' },
-        cuil_cuit: { type: 'text', required: false, label: 'CUIL/CUIT', pattern: '\\d{11}' },
+        cuil_cuit: { type: 'text', required: true, label: 'CUIL/CUIT', pattern: '\\d{2}-\\d{8}-\\d{1}' },
         legajo: { type: 'text', required: false, label: 'Legajo' },
         email: { type: 'email', required: true, label: 'Email' },
         telefono: { type: 'tel', required: false, label: 'Teléfono' },
@@ -206,7 +207,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Detectar teclas ESC para cancelar y Ctrl+S para guardar
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (isEditMode) {
             if (e.key === 'Escape') {
                 e.preventDefault();
@@ -221,7 +222,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function handleEnterEditMode() {
         isEditMode = true;
-        
+
         // Cambiar barras de acción con animación
         actionBarView.style.opacity = '0';
         setTimeout(() => {
@@ -232,13 +233,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 actionBarEdit.style.opacity = '1';
             }, 10);
         }, 300);
-        
+
         // Agregar clase al perfil
         profileContent.classList.add('edit-mode');
-        
+
         // Guardar valores originales y convertir a inputs
         convertFieldsToInputs();
-        
+
         setTimeout(() => {
             const firstInput = profileContent.querySelector('.form-control-inline');
             if (firstInput) firstInput.focus();
@@ -250,22 +251,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const field = item.dataset.field;
             const valueDiv = item.querySelector('.info-value');
             const config = fieldConfig[field];
-            
+
             // Si no hay configuración o es fecha_ingreso, no convertir
             if (!config) return;
-            
+
             let originalValue = valueDiv.textContent.trim();
-            
+
             // Limpiar valores "vacíos"
             if (['No especificado', 'N/A', 'Sin rol', 'Nunca', 'No especificada', 'Sin turno', 'Sin sectores'].includes(originalValue)) {
                 originalValue = '';
             }
-            
+
             originalValues[field] = originalValue;
-            
+
             // Crear input según el tipo de campo
             let inputHTML = createInputHTML(field, originalValue, config);
-            
+
             valueDiv.innerHTML = inputHTML;
             valueDiv.classList.add('editing');
 
@@ -275,12 +276,42 @@ document.addEventListener('DOMContentLoaded', function() {
                 const fieldName = inputElement.name;
 
                 // Listener para campos con validación de unicidad y formato
-                if (['legajo', 'email', 'cuil_cuit', 'telefono'].includes(fieldName)) {
+                if (['legajo', 'email', 'telefono'].includes(fieldName)) {
                     inputElement.addEventListener('blur', (e) => {
                         validateField(fieldName, e.target.value, e.target);
                     });
                 }
-                
+                if (field === 'cuil_cuit') {
+                    const part1 = valueDiv.querySelector('#cuit_parte1');
+                    const part2 = valueDiv.querySelector('#cuit_parte2');
+                    const part3 = valueDiv.querySelector('#cuit_parte3');
+                    const hiddenInput = valueDiv.querySelector('#cuil_cuit_hidden');
+                    // El elemento visual para mostrar el error es el contenedor del grupo
+                    const inputGroup = valueDiv.querySelector('.cuit-input-group');
+
+                    const syncAndValidateCuit = () => {
+                        const part1Value = part1.value.trim();
+                        const part2Value = part2.value.trim();
+                        const part3Value = part3.value.trim();
+                        const combinedFormattedValue = `${part1Value}-${part2Value}-${part3Value}`;
+
+                        const valueForValidation = (part1Value || part2Value || part3Value) ? combinedFormattedValue : '';
+                        hiddenInput.value = valueForValidation;
+
+                        validateField('cuil_cuit', valueForValidation, inputGroup);
+                    };
+
+                    // Agregamos el listener al evento 'input' de cada parte del CUIT
+                    // 'input' es mejor que 'blur' para una validación en tiempo real.
+                    part1.addEventListener('input', syncAndValidateCuit);
+                    part2.addEventListener('input', syncAndValidateCuit);
+                    part3.addEventListener('input', syncAndValidateCuit);
+
+                    // Opcional: Mejorar la experiencia de usuario (auto-foco)
+                    part1.addEventListener('keyup', () => { if (part1.value.length === 2) part2.focus(); });
+                    part2.addEventListener('keyup', () => { if (part2.value.length === 8) part3.focus(); });
+                }
+
                 // Listener para el campo nombre
                 if (fieldName === 'nombre') {
                     inputElement.addEventListener('blur', (e) => {
@@ -295,7 +326,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                 }
             }
-            
+
             // Aplicar animación de entrada con delay
             setTimeout(() => {
                 const input = valueDiv.querySelector('.form-control-inline, .roles-grid-perfil, .turno-grid-perfil, .sectores-grid-perfil');
@@ -305,7 +336,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 10);
         });
     }
-
     function createInputHTML(field, value, config) {
         const commonAttrs = `
             class="form-control-inline" 
@@ -313,35 +343,66 @@ document.addEventListener('DOMContentLoaded', function() {
             ${config.required ? 'required' : ''}
             ${config.pattern ? `pattern="${config.pattern}"` : ''}
         `;
+        if (field === 'cuil_cuit') {
+            // El valor viene como "XX-XXXXXXXX-X". Lo separamos.
+            const parts = value.includes('-') ? value.split('-') : ['', '', ''];
+            const part1 = parts[0];
+            const part2 = parts[1];
+            const part3 = parts[2];
+
+            // Creamos el valor numérico combinado para el campo oculto
+            const combinedNumericValue = part1 + part2 + part3;
+
+            return `
+                <div class="input-group cuit-input-group">
+                    <input type="text" class="form-control text-center" id="cuit_parte1" name="cuit_parte1"
+                        maxlength="2" pattern="\\d{2}" placeholder="XX" value="${part1}"
+                        style="width: 3em; flex-grow: 0;" aria-label="Prefijo CUIL/CUIT">
+                    
+                    <span class="input-group-text">-</span>
+                    
+                    <input type="text" class="form-control text-center" id="cuit_parte2" name="cuit_parte2"
+                        maxlength="8" pattern="\\d{8}" placeholder="XXXXXXXX" value="${part2}"
+                        style="flex-grow: 4;" aria-label="Número DNI">
+                    
+                    <span class="input-group-text">-</span>
+                    
+                    <input type="text" class="form-control text-center" id="cuit_parte3" name="cuit_parte3"
+                        maxlength="1" pattern="\\d{1}" placeholder="X" value="${part3}"
+                        style="width: 3em; flex-grow: 0;" aria-label="Dígito verificador">
+                </div>
+                <input type="hidden" class="form-control-inline" name="cuil_cuit" id="cuil_cuit_hidden" value="${combinedNumericValue}">
+            `;
+        }
 
         switch (config.type) {
             case 'textarea':
                 return `<textarea ${commonAttrs} rows="3" placeholder="Ingrese ${config.label.toLowerCase()}">${value}</textarea>`;
-            
+
             case 'role-selector':
                 return createRoleSelector(value);
-            
+
             case 'turno-selector':
                 return createTurnoSelector(value);
-            
+
             case 'sector-selector':
                 return createSectorSelector(value);
-            
+
             case 'provincia':
                 return createProvinciaSelect(value, commonAttrs);
-            
+
             case 'date':
                 return `<input type="date" ${commonAttrs} value="${value}">`;
-            
+
             case 'email':
                 return `<input type="email" ${commonAttrs} value="${value}" placeholder="correo@ejemplo.com">`;
-            
+
             case 'tel':
                 return `<input type="tel" ${commonAttrs} value="${value}" placeholder="Ingrese teléfono">`;
-            
+
             case 'number':
                 return `<input type="number" ${commonAttrs} value="${value}" placeholder="Ingrese ${config.label.toLowerCase()}">`;
-            
+
             default:
                 return `<input type="text" ${commonAttrs} value="${value}" placeholder="Ingrese ${config.label.toLowerCase()}">`;
         }
@@ -364,11 +425,11 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedRol = currentRole ? currentRole.id : null;
 
         let html = '<div class="roles-grid-perfil" id="roles-grid-perfil">';
-        
+
         rolesDisponibles.forEach(rol => {
             const isSelected = selectedRol && rol.id === selectedRol;
             const iconClass = roleIcons[rol.nombre.toLowerCase()] || roleIcons['default'];
-            
+
             html += `
                 <div class="rol-card-perfil ${isSelected ? 'selected' : ''}" 
                      data-rol-id="${rol.id}" 
@@ -383,11 +444,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             `;
         });
-        
+
         html += `</div><input type="hidden" name="role_id" id="role_id_input" value="${selectedRol || ''}">`;
-        
+
         setTimeout(() => initRoleSelector(), 100);
-        
+
         return html;
     }
 
@@ -405,11 +466,11 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedTurno = currentTurno ? currentTurno.id : null;
 
         let html = '<div class="turno-grid-perfil" id="turno-grid-perfil">';
-        
+
         turnosDisponibles.forEach(turno => {
             const isSelected = selectedTurno && turno.id === selectedTurno;
             const iconClass = turnoIcons[turno.nombre.toLowerCase()] || turnoIcons['default'];
-            
+
             html += `
                 <div class="turno-card-perfil ${isSelected ? 'selected' : ''}" 
                      data-turno-id="${turno.id}" 
@@ -430,11 +491,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             `;
         });
-        
+
         html += `</div><input type="hidden" name="turno_id" id="turno_id_input" value="${selectedTurno || ''}">`;
-        
+
         setTimeout(() => initTurnoSelector(), 100);
-        
+
         return html;
     }
 
@@ -476,12 +537,12 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             <div class="sectores-grid-perfil" id="sectores-grid-perfil">
         `;
-        
+
         sectoresDisponibles.forEach((sector, index) => {
             const isSelected = selectedSectores.includes(sector.id);
             const iconClass = sectorIcons[sector.nombre.toLowerCase()] || sectorIcons['default'];
             const order = isSelected ? selectedSectores.indexOf(sector.id) + 1 : 1;
-            
+
             html += `
                 <div class="sector-card-perfil ${isSelected ? 'selected' : ''}" 
                      data-sector-id="${sector.id}" 
@@ -494,14 +555,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             `;
         });
-        
+
         html += `</div><input type="hidden" name="sectores" id="sectores_input" value="${JSON.stringify(selectedSectores)}">`;
-        
+
         setTimeout(() => {
             initSectorSelector();
             updateSectoresCounter();
         }, 100);
-        
+
         return html;
     }
 
@@ -513,13 +574,13 @@ document.addEventListener('DOMContentLoaded', function() {
             "Río Negro", "Salta", "San Juan", "San Luis", "Santa Cruz",
             "Santa Fe", "Santiago del Estero", "Tierra del Fuego", "Tucumán"
         ];
-        
+
         let options = '<option value="">Seleccionar provincia...</option>';
         provincias.forEach(provincia => {
             const selected = provincia === value ? 'selected' : '';
             options += `<option value="${provincia}" ${selected}>${provincia}</option>`;
         });
-        
+
         return `<select ${commonAttrs}>${options}</select>`;
     }
 
@@ -528,17 +589,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function initRoleSelector() {
         const rolCards = document.querySelectorAll('.rol-card-perfil');
         const rolInput = document.getElementById('role_id_input');
-        
+
         rolCards.forEach(card => {
-            card.addEventListener('click', function() {
+            card.addEventListener('click', function () {
                 // Remover selección anterior
                 rolCards.forEach(c => c.classList.remove('selected'));
-                
+
                 // Seleccionar nuevo rol
                 this.classList.add('selected');
                 selectedRol = parseInt(this.dataset.rolId);
                 if (rolInput) rolInput.value = selectedRol;
-                
+
                 console.log('Rol seleccionado:', selectedRol);
             });
         });
@@ -547,17 +608,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function initTurnoSelector() {
         const turnoCards = document.querySelectorAll('.turno-card-perfil');
         const turnoInput = document.getElementById('turno_id_input');
-        
+
         turnoCards.forEach(card => {
-            card.addEventListener('click', function() {
+            card.addEventListener('click', function () {
                 // Remover selección anterior
                 turnoCards.forEach(c => c.classList.remove('selected'));
-                
+
                 // Seleccionar nuevo turno
                 this.classList.add('selected');
                 selectedTurno = parseInt(this.dataset.turnoId);
                 if (turnoInput) turnoInput.value = selectedTurno;
-                
+
                 console.log('Turno seleccionado:', selectedTurno);
             });
         });
@@ -566,13 +627,13 @@ document.addEventListener('DOMContentLoaded', function() {
     function initSectorSelector() {
         const sectorCards = document.querySelectorAll('.sector-card-perfil');
         const sectoresInput = document.getElementById('sectores_input');
-        
+
         sectorCards.forEach(card => {
-            card.addEventListener('click', function() {
+            card.addEventListener('click', function () {
                 if (this.classList.contains('disabled')) return;
-                
+
                 const sectorId = parseInt(this.dataset.sectorId);
-                
+
                 if (this.classList.contains('selected')) {
                     // Deseleccionar
                     this.classList.remove('selected');
@@ -587,11 +648,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         return;
                     }
                 }
-                
+
                 updateSectorOrder();
                 updateSectoresCounter();
                 if (sectoresInput) sectoresInput.value = JSON.stringify(selectedSectores);
-                
+
                 console.log('Sectores seleccionados:', selectedSectores);
             });
         });
@@ -612,19 +673,19 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateSectoresCounter() {
         const counterText = document.getElementById('counter-text-perfil');
         const sectoresCounter = document.getElementById('sectores-counter-perfil');
-        
+
         if (counterText) {
             counterText.textContent = `${selectedSectores.length}/${MAX_SECTORES}`;
         }
-        
+
         if (sectoresCounter) {
             sectoresCounter.classList.remove('warning');
-            
+
             if (selectedSectores.length === MAX_SECTORES) {
                 sectoresCounter.classList.add('warning');
             }
         }
-        
+
         // Deshabilitar/habilitar cards
         const sectorCards = document.querySelectorAll('.sector-card-perfil');
         sectorCards.forEach(card => {
@@ -640,7 +701,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function debounce(func, delay) {
         let timeout;
-        return function(...args) {
+        return function (...args) {
             const context = this;
             clearTimeout(timeout);
             timeout = setTimeout(() => func.apply(context, args), delay);
@@ -693,7 +754,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const debouncedVerifyAddress = debounce(verifyAddress, 800);
 
     // Agregar verificación de dirección cuando se editen campos de dirección
-    document.addEventListener('input', function(e) {
+    document.addEventListener('input', function (e) {
         if (!isEditMode) return;
 
         const fieldName = e.target.name;
@@ -719,7 +780,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const cancelModal = new bootstrap.Modal(document.getElementById('cancelEditModal'));
         cancelModal.show();
 
-        document.getElementById('confirm-cancel-edit').onclick = function() {
+        document.getElementById('confirm-cancel-edit').onclick = function () {
             cancelModal.hide();
             exitEditMode();
         };
@@ -727,7 +788,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function exitEditMode() {
         isEditMode = false;
-        
+
         // Cambiar barras de acción con animación
         actionBarEdit.style.opacity = '0';
         setTimeout(() => {
@@ -738,13 +799,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 actionBarView.style.opacity = '1';
             }, 10);
         }, 300);
-        
+
         // Quitar clase del perfil
         profileContent.classList.remove('edit-mode');
-        
+
         // Restaurar valores originales
         restoreOriginalValues();
-        
+
         originalValues = {};
         selectedRol = null;
         selectedTurno = null;
@@ -756,7 +817,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const field = item.dataset.field;
             const valueDiv = item.querySelector('.info-value');
             let originalValue = originalValues[field];
-            
+
             // Si es un valor vacío, mostrar texto apropiado
             if (!originalValue || originalValue === '') {
                 const emptyTexts = {
@@ -768,7 +829,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
                 originalValue = emptyTexts[field] || 'No especificado';
             }
-            
+
             // Para fechas, formatear
             if (field === 'fecha_ingreso' && originalValue !== 'No especificada' && originalValue.includes('-')) {
                 const parts = originalValue.split('-');
@@ -776,7 +837,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     originalValue = `${parts[2]}/${parts[1]}/${parts[0]}`;
                 }
             }
-            
+
             valueDiv.innerHTML = originalValue;
             valueDiv.classList.remove('editing');
         });
@@ -805,50 +866,50 @@ document.addEventListener('DOMContentLoaded', function() {
             showNotification('Por favor, complete todos los campos requeridos correctamente', 'error');
             return;
         }
-        
+
         // Recopilar datos del formulario
         const formData = new FormData();
         let hasChanges = false;
-        
+
         document.querySelectorAll('.info-item[data-field]').forEach(item => {
             const field = item.dataset.field;
             let input = item.querySelector('.form-control-inline');
-            
+
             // Para selectores especiales, obtener el input hidden
             if (!input) {
                 if (field === 'role_id') input = document.getElementById('role_id_input');
                 if (field === 'turno_id') input = document.getElementById('turno_id_input');
                 if (field === 'sectores') input = document.getElementById('sectores_input');
             }
-            
+
             if (input) {
                 const newValue = input.value.trim();
                 const oldValue = originalValues[field] || '';
-                
+
                 // Verificar si hay cambios
                 if (newValue !== oldValue) {
                     hasChanges = true;
                 }
-                
+
                 formData.append(field, newValue);
             }
         });
-        
+
         // Si no hay cambios, salir del modo edición
         if (!hasChanges) {
             showNotification('No se detectaron cambios', 'info');
             exitEditMode();
             return;
         }
-        
+
         // Mostrar loading en el botón
         const originalContent = btnSaveChanges.innerHTML;
         btnSaveChanges.disabled = true;
         btnSaveChanges.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Guardando...';
-        
+
         // Obtener la URL de edición desde el botón o un data attribute
         const editUrl = btnSaveChanges.dataset.url || window.location.href.replace('/ver/', '/editar/');
-        
+
         // Enviar datos
         fetch(editUrl, {
             method: 'POST',
@@ -857,37 +918,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 'X-Requested-With': 'XMLHttpRequest'
             }
         })
-        .then(response => {
-            // Si la respuesta no es OK, intentamos leer el JSON para obtener el mensaje de error específico.
-            if (!response.ok) {
-                return response.json().then(errorData => {
-                    // Lanzamos un error que contiene el mensaje del servidor.
-                    throw new Error(errorData.message || 'Error en la respuesta del servidor');
-                }).catch(() => {
-                    // Si no se puede parsear el JSON, lanzamos un error genérico.
-                    throw new Error(`Error ${response.status}: ${response.statusText}`);
-                });
-            }
-            return response.json();
-        })
-        .then(data => {
-            // El `data` aquí siempre será de una respuesta exitosa (response.ok).
-            showNotification('Cambios guardados exitosamente', 'success');
-            
-            // Recargar la página para mostrar los cambios
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
-        })
-        .catch(error => {
-            // El `catch` ahora recibirá los errores específicos que lanzamos.
-            console.error('Error al guardar:', error);
-            showNotification(error.message || 'Ocurrió un error inesperado.', 'error');
-            
-            // Restaurar el botón
-            btnSaveChanges.disabled = false;
-            btnSaveChanges.innerHTML = originalContent;
-        });
+            .then(response => {
+                // Si la respuesta no es OK, intentamos leer el JSON para obtener el mensaje de error específico.
+                if (!response.ok) {
+                    return response.json().then(errorData => {
+                        // Lanzamos un error que contiene el mensaje del servidor.
+                        throw new Error(errorData.message || 'Error en la respuesta del servidor');
+                    }).catch(() => {
+                        // Si no se puede parsear el JSON, lanzamos un error genérico.
+                        throw new Error(`Error ${response.status}: ${response.statusText}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                // El `data` aquí siempre será de una respuesta exitosa (response.ok).
+                showNotification('Cambios guardados exitosamente', 'success');
+
+                // Recargar la página para mostrar los cambios
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            })
+            .catch(error => {
+                // El `catch` ahora recibirá los errores específicos que lanzamos.
+                console.error('Error al guardar:', error);
+                showNotification(error.message || 'Ocurrió un error inesperado.', 'error');
+
+                // Restaurar el botón
+                btnSaveChanges.disabled = false;
+                btnSaveChanges.innerHTML = originalContent;
+            });
     }
 
     function validateForm() {
@@ -897,11 +958,11 @@ document.addEventListener('DOMContentLoaded', function() {
         for (const field in fieldConfig) {
             const config = fieldConfig[field];
             const item = document.querySelector(`.info-item[data-field="${field}"]`);
-            
+
             if (!item) continue;
 
             // Encontrar el elemento de input correspondiente
-            let input = item.querySelector('input, select, textarea');
+            let input = item.querySelector(`[name="${field}"]`);
 
             if (!input) continue;
 
@@ -917,7 +978,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showError(visualElement, `${config.label} es un campo requerido.`);
                 continue; // Pasar al siguiente campo
             }
-            
+
             // 2. Validar email (si tiene valor)
             if (config.type === 'email' && value) {
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -927,7 +988,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     continue;
                 }
             }
-            
+
             // 3. Validar patrón (si tiene valor)
             if (config.pattern && value) {
                 const regex = new RegExp(config.pattern);
@@ -938,7 +999,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         }
-        
+
         return isValid;
     }
 
@@ -949,28 +1010,28 @@ document.addEventListener('DOMContentLoaded', function() {
             warning: 'exclamation-triangle-fill',
             info: 'info-circle-fill'
         };
-        
+
         const bgMap = {
             success: 'alert-success',
             error: 'alert-danger',
             warning: 'alert-warning',
             info: 'alert-info'
         };
-        
+
         const notification = document.createElement('div');
         notification.className = `alert ${bgMap[type]} alert-notification`;
         notification.innerHTML = `
             <i class="bi bi-${iconMap[type]} me-2"></i>
             <span>${message}</span>
         `;
-        
+
         document.body.appendChild(notification);
-        
+
         // Trigger animation
         setTimeout(() => {
             notification.classList.add('show');
         }, 10);
-        
+
         // Auto remove after 4 seconds
         setTimeout(() => {
             notification.classList.remove('show');
@@ -978,7 +1039,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 4000);
     }
 
-    window.showDeactivateModal = function() {
+    window.showDeactivateModal = function () {
         const modal = new bootstrap.Modal(document.getElementById('deactivateModal'));
         modal.show();
     };
@@ -1017,27 +1078,27 @@ function showNotification(message, type = 'info') {
         warning: 'exclamation-triangle-fill',
         info: 'info-circle-fill'
     };
-    
+
     const bgMap = {
         success: 'alert-success',
         error: 'alert-danger',
         warning: 'alert-warning',
         info: 'alert-info'
     };
-    
+
     const notification = document.createElement('div');
     notification.className = `alert ${bgMap[type]} alert-notification`;
     notification.innerHTML = `
         <i class="bi bi-${iconMap[type]} me-2"></i>
         <span>${message}</span>
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         notification.classList.add('show');
     }, 10);
-    
+
     setTimeout(() => {
         notification.classList.remove('show');
         setTimeout(() => notification.remove(), 400);

@@ -17,7 +17,8 @@
                 {% if is_new %}Crear Nuevo Empleado{% else %}Editar Empleado{% endif %}
             </h2>
             <p class="mb-0 opacity-75">
-                {% if is_new %}Complete la información en 3 simples pasos{% else %}Modificar información del empleado {% endif %}
+                {% if is_new %}Complete la información en 3 simples pasos{% else %}Modificar información del empleado {%
+                endif %}
             </p>
         </div>
         <div class="form-body">
@@ -92,18 +93,39 @@
                             </div>
 
                             <div class="col-md-6">
-                                <div class="form-floating">
-                                    <input type="text" class="form-control" id="cuil_cuit" name="cuil_cuit"
-                                        value="{{ usuario.cuil_cuit or '' }}" placeholder="CUIL/CUIT (11 dígitos)"
-                                        pattern="\\d{11}" title="Debe contener 11 dígitos numéricos." required>
-                                    <label for="cuil_cuit">
-                                        <i class="bi bi-person-vcard me-1"></i>CUIL/CUIT
-                                    </label>
-                                </div>
-                                <small id="cuil-helper" class="form-text text-muted ms-2"></small>
+                                <div class="input-group cuit-input-group">
+                                    <input type="hidden" name="cuil_cuit" id="cuil_cuit_hidden">
+                                    <input type="text" class="form-control text-center" id="cuit_parte1"
+                                         maxlength="2" pattern="\d{2}" placeholder="XX" required
+                                        value="{{ usuario.cuil_cuit.split('-')[0] if usuario and usuario.cuil_cuit else '' }}"
+                                        style="width: 3.5em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
+                                        aria-label="Prefijo del CUIT">
+
+                                    <span class="input-group-text">-</span>
+
+                                    <div class="form-floating" style="flex-grow: 4;">
+                                        <input type="text" class="form-control text-center" id="cuit_parte2"
+                                             maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX"
+                                            required
+                                            value="{{ usuario.cuil_cuit.split('-')[1] if usuario and usuario.cuil_cuit else '' }}">
+                                        <label for="cuit_parte2">
+                                            <i class="bi bi-person-badge me-1"></i>Cuit
+                                        </label>
+                                    </div>
+
+                                    <span class="input-group-text">-</span>
+
+                                    <input type="text" class="form-control text-center" id="cuit_parte3"
+                                         maxlength="1" pattern="\d{1}" placeholder="X" required
+                                        value="{{ usuario.cuil_cuit.split('-')[2] if usuario and usuario.cuil_cuit else '' }}"
+                                        style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
+                                        aria-label="Dígito verificador">
+
+                                </div> <small id="cuil-helper" class="form-text text-muted ms-2"></small>
                                 <div class="invalid-feedback"></div>
                             </div>
-
+                            <small id="cuil-helper" class="form-text text-muted ms-2"></small>
+                            <div class="invalid-feedback"></div>
                             <div class="col-12">
                                 <div class="form-floating">
                                     <input type="email" class="form-control" id="email" name="email"
@@ -153,10 +175,11 @@
                                 </label>
                                 <div class="roles-grid" id="rolesGrid">
                                     {% for rol in roles %}
-                                    <div class="rol-card" data-rol-id="{{ rol.id }}"
-                                         {% if usuario and usuario.role_id == rol.id %}data-selected="true"{% endif %}>
+                                    <div class="rol-card" data-rol-id="{{ rol.id }}" {% if usuario and
+                                        usuario.role_id==rol.id %}data-selected="true" {% endif %}>
                                         <div class="rol-icon">
-                                            <i class="bi bi-{% if 'admin' in rol.nombre.lower() %}shield-fill-check{% elif 'supervisor' in rol.nombre.lower() %}person-badge{% elif 'operario' in rol.nombre.lower() %}person-gear{% elif 'rrhh' in rol.nombre.lower() or 'recursos' in rol.nombre.lower() %}people-fill{% else %}person-circle{% endif %}"></i>
+                                            <i
+                                                class="bi bi-{% if 'admin' in rol.nombre.lower() %}shield-fill-check{% elif 'supervisor' in rol.nombre.lower() %}person-badge{% elif 'operario' in rol.nombre.lower() %}person-gear{% elif 'rrhh' in rol.nombre.lower() or 'recursos' in rol.nombre.lower() %}people-fill{% else %}person-circle{% endif %}"></i>
                                         </div>
                                         <p class="rol-nombre">{{ rol.nombre }}</p>
                                         <div class="rol-check">
@@ -165,7 +188,8 @@
                                     </div>
                                     {% endfor %}
                                 </div>
-                                <input type="hidden" id="role_id" name="role_id" value="{{ usuario.role_id or '' }}" required>
+                                <input type="hidden" id="role_id" name="role_id" value="{{ usuario.role_id or '' }}"
+                                    required>
                                 <div class="invalid-feedback"></div>
                             </div>
 
@@ -176,11 +200,12 @@
                                 </label>
                                 <div class="turno-grid" id="turnoGrid">
                                     {% for turno in turnos %}
-                                    <div class="turno-card" data-turno-id="{{ turno.id }}" 
-                                         {% if usuario and usuario.turno_id == turno.id %}data-selected="true"{% endif %}>
+                                    <div class="turno-card" data-turno-id="{{ turno.id }}" {% if usuario and
+                                        usuario.turno_id==turno.id %}data-selected="true" {% endif %}>
                                         <div class="turno-header">
                                             <div class="turno-nombre">
-                                                <i class="bi bi-{% if 'mañana' in turno.nombre.lower() or 'manana' in turno.nombre.lower() %}sunrise{% elif 'tarde' in turno.nombre.lower() %}sun{% elif 'noche' in turno.nombre.lower() %}moon-stars{% else %}clock{% endif %}"></i>
+                                                <i
+                                                    class="bi bi-{% if 'mañana' in turno.nombre.lower() or 'manana' in turno.nombre.lower() %}sunrise{% elif 'tarde' in turno.nombre.lower() %}sun{% elif 'noche' in turno.nombre.lower() %}moon-stars{% else %}clock{% endif %}"></i>
                                                 {{ turno.nombre }}
                                             </div>
                                             <div class="turno-check">
@@ -189,7 +214,8 @@
                                         </div>
                                         <div class="turno-horario">
                                             <i class="bi bi-clock"></i>
-                                            <span class="turno-time">{{ turno.hora_inicio[:5] }} - {{ turno.hora_fin[:5] }}</span>
+                                            <span class="turno-time">{{ turno.hora_inicio[:5] }} - {{ turno.hora_fin[:5]
+                                                }}</span>
                                         </div>
                                     </div>
                                     {% endfor %}
@@ -214,10 +240,11 @@
                                 </div>
                                 <div class="sectores-grid" id="sectoresGrid">
                                     {% for sector in sectores %}
-                                    <div class="sector-card" data-sector-id="{{ sector.id }}"
-                                         {% if sector.id in usuario_sectores_ids %}data-selected="true"{% endif %}>
+                                    <div class="sector-card" data-sector-id="{{ sector.id }}" {% if sector.id in
+                                        usuario_sectores_ids %}data-selected="true" {% endif %}>
                                         <div class="sector-icon">
-                                            <i class="bi bi-{% if 'produccion' in sector.nombre.lower() or 'producción' in sector.nombre.lower() %}gear-fill{% elif 'almacen' in sector.nombre.lower() or 'almacén' in sector.nombre.lower() %}box-seam{% elif 'logistica' in sector.nombre.lower() or 'logística' in sector.nombre.lower() %}truck{% elif 'administracion' in sector.nombre.lower() or 'administración' in sector.nombre.lower() %}building{% elif 'calidad' in sector.nombre.lower() %}clipboard-check{% elif 'mantenimiento' in sector.nombre.lower() %}tools{% else %}grid-3x3-gap{% endif %}"></i>
+                                            <i
+                                                class="bi bi-{% if 'produccion' in sector.nombre.lower() or 'producción' in sector.nombre.lower() %}gear-fill{% elif 'almacen' in sector.nombre.lower() or 'almacén' in sector.nombre.lower() %}box-seam{% elif 'logistica' in sector.nombre.lower() or 'logística' in sector.nombre.lower() %}truck{% elif 'administracion' in sector.nombre.lower() or 'administración' in sector.nombre.lower() %}building{% elif 'calidad' in sector.nombre.lower() %}clipboard-check{% elif 'mantenimiento' in sector.nombre.lower() %}tools{% else %}grid-3x3-gap{% endif %}"></i>
                                         </div>
                                         <p class="sector-nombre">{{ sector.nombre }}</p>
                                         <div class="sector-badge">1</div>
@@ -230,7 +257,7 @@
                     </div>
                 </div>
 
-               <!-- PASO 2: Dirección -->
+                <!-- PASO 2: Dirección -->
                 <div id="addressInfo" class="form-section" {% if is_new %}style="display: none;" {% else %}
                     style="margin-top: 2rem;" {% endif %}>
                     <div class="section-title">
@@ -254,8 +281,10 @@
 
                             <div class="col-md-4">
                                 <div class="form-floating">
-                                    <input type="number" class="form-control"  id="altura" name="altura"
-                                        placeholder="Altura" value="{{ (usuario.get('direccion') or {}).get('altura', '') }}"  max="999999" required>
+                                    <input type="number" class="form-control" id="altura" name="altura"
+                                        placeholder="Altura"
+                                        value="{{ (usuario.get('direccion') or {}).get('altura', '') }}" max="999999"
+                                        required>
                                     <label for="altura">
                                         <i class="bi bi-123 me-1"></i>Altura
                                     </label>
@@ -273,7 +302,8 @@
                                         "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del Fuego",
                                         "Tucumán"] %}
                                         {% for p in provincias %}
-                                        <option value="{{ p }}" {% if (usuario.get('direccion') or {}).get('provincia') == p %}selected{% endif %}>{{ p }}</option>
+                                        <option value="{{ p }}" {% if (usuario.get('direccion') or
+                                            {}).get('provincia')==p %}selected{% endif %}>{{ p }}</option>
                                         {% endfor %}
                                     </select>
                                     <label for="provincia">
@@ -286,8 +316,8 @@
                             <div class="col-md-6">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="localidad" name="localidad"
-                                        placeholder="Localidad" value="{{ (usuario.get('direccion') or {}).get('localidad', '') }}"
-                                        required>
+                                        placeholder="Localidad"
+                                        value="{{ (usuario.get('direccion') or {}).get('localidad', '') }}" required>
                                     <label for="localidad">
                                         <i class="bi bi-pin-map me-1"></i>Localidad
                                     </label>
@@ -298,7 +328,8 @@
                             <div class="col-md-4">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="piso" name="piso" min="0" max="100"
-                                        placeholder="Piso (Opcional)" value="{{ (usuario.get('direccion') or {}).get('piso', '') }}">
+                                        placeholder="Piso (Opcional)"
+                                        value="{{ (usuario.get('direccion') or {}).get('piso', '') }}">
                                     <label for="piso">
                                         <i class="bi bi-building me-1"></i>Piso (Opcional)
                                     </label>
@@ -308,7 +339,8 @@
                             <div class="col-md-4">
                                 <div class="form-floating">
                                     <input type="text" class="form-control" id="depto" name="depto"
-                                        placeholder="Dto (Opcional)" value="{{ (usuario.get('direccion') or {}).get('depto', '') }}">
+                                        placeholder="Dto (Opcional)"
+                                        value="{{ (usuario.get('direccion') or {}).get('depto', '') }}">
                                     <label for="depto">
                                         <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
                                     </label>
@@ -440,7 +472,7 @@
 
 <script>
     // Inyecta la variable 'is_new' de Jinja2 a JavaScript
-    const IS_NEW = {{ is_new|tojson }};
+    const IS_NEW = {{ is_new| tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/usuarios/formularioCrearUsuario.js') }}"></script>
 
