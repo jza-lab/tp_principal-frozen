@@ -79,6 +79,8 @@ def index():
     data_sin_lotes = productos_sin_lotes_resp.get('data', {})
     productos_sin_lotes_count = data_sin_lotes.get('conteo_sin_lotes', 0) 
     productos_sin_lotes_list = data_sin_lotes.get('productos_sin_lotes', [])
+    
+    user_permissions = session.get('permisos', {})
 
     return render_template('dashboard/index.html', asistencia=asistencia,
                             ordenes_pendientes = ordenes_pendientes,
@@ -88,7 +90,8 @@ def index():
                             alertas_stock_count=alertas_stock_count,
                             insumos_bajo_stock_list=insumos_bajo_stock_list,
                             productos_sin_lotes_count=productos_sin_lotes_count,
-                            productos_sin_lotes_list=productos_sin_lotes_list) 
+                            productos_sin_lotes_list=productos_sin_lotes_list,
+                            user_permissions=user_permissions)
 
 @admin_usuario_bp.route('/usuarios')
 @admin_permission_any_of('ver_info_empleados', 'modificar_usuarios', 'crear_usuarios')

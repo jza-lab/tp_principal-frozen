@@ -9,6 +9,7 @@
 
 <div class="row mb-4">
     
+    {% if user_permissions.is_gerente or ('PRODUCCION' in user_permissions and 'ver_ordenes_produccion' in user_permissions['PRODUCCION']) %}
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card stat-card h-100">
             <div class="card-body">
@@ -25,7 +26,9 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
+    {% if user_permissions.is_gerente or ('PRODUCCION' in user_permissions and 'ver_ordenes_produccion' in user_permissions['PRODUCCION']) %}
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card stat-card h-100">
             <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
@@ -66,7 +69,8 @@
             </a>
         </div>
     </div>
-
+    {% endif %}
+    {% if user_permissions.is_gerente or ('ALMACEN' in user_permissions and 'ver_stock_actual' in user_permissions['ALMACEN']) %}
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card stat-card h-100">
             <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" style="text-decoration: none;">
@@ -109,7 +113,8 @@
             </a>
         </div>
     </div>
-
+    {% endif %}
+    {% if user_permissions.is_gerente or ('ADMINISTRACION' in user_permissions and ('ver_info_empleados' in user_permissions['ADMINISTRACION'] or 'gestionar_turnos' in user_permissions['ADMINISTRACION'])) %}
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card stat-card h-100">
             <div class="card-body">
@@ -128,9 +133,11 @@
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
 
 <div class="row">
+    {% if user_permissions.is_gerente or ('PRODUCCION' in user_permissions and 'ver_ordenes_produccion' in user_permissions['PRODUCCION']) %}
     <div class="col-lg-8 mb-4">
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -186,6 +193,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <div class="col-lg-4 mb-4">
         <div class="card mb-4" style="height: 48%;"> 
@@ -230,24 +238,30 @@
             </div>
             <div class="card-body">
                 <div class="list-group list-group-flush small">
+                    {% if user_permissions.is_gerente or ('ALMACEN' in user_permissions and 'ver_stock_actual' in user_permissions['ALMACEN']) %}
                     <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center">
                         <span class="text-muted">Insumos Críticos con Stock Bajo:</span>
                         <span class="badge bg-{{ 'danger' if alertas_stock_count > 0 else 'success' }} rounded-pill">
                             {{ alertas_stock_count }}
                         </span>
                     </a>
+                    {% endif %}
+                    {% if user_permissions.is_gerente or ('PRODUCCION' in user_permissions and 'ver_ordenes_produccion' in user_permissions['PRODUCCION']) %}
                     <a href="{{ url_for('lote_producto.listar_lotes') }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center">
                         <span class="text-muted">Productos sin Lotes (Producción Requerida):</span>
                         <span class="badge bg-{{ 'danger' if productos_sin_lotes_count > 0 else 'success' }} rounded-pill">
                             {{ productos_sin_lotes_count }}
                         </span>
                     </a>
+                    {% endif %}
+                    {% if user_permissions.is_gerente or ('ADMINISTRACION' in user_permissions and ('ver_info_empleados' in user_permissions['ADMINISTRACION'] or 'gestionar_turnos' in user_permissions['ADMINISTRACION'])) %}
                     <div class="list-group-item p-2 d-flex justify-content-between align-items-center">
                         <span class="text-muted">Asistencia Hoy (&lt;80%):</span>
                         <span class="badge bg-{{ 'danger' if asistencia < 80 else 'success' }} rounded-pill">
                             {{ asistencia }}%
                         </span>
                     </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

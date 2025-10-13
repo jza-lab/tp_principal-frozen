@@ -41,44 +41,67 @@
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         
-                        {% set can_view_logistica = user_permissions.is_gerente or ('LOGISTICA' in user_permissions and 'leer' in user_permissions['LOGISTICA']) %}
+                        
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle {% if 'insumo' in request.endpoint or 'orden_compra' in request.endpoint or 'inventario' in request.endpoint %}active{% endif %} {% if not can_view_logistica %}disabled{% endif %}"
-                               href="#" id="navbarDropdownLogistica" role="button" data-bs-toggle="dropdown" aria-expanded="false" {% if not can_view_logistica %}aria-disabled="true" tabindex="-1"{% endif %}>
+                            <a class="nav-link dropdown-toggle {% if 'insumo' in request.endpoint or 'orden_compra' in request.endpoint or 'inventario' in request.endpoint %}active{% endif %}"
+                               href="#" id="navbarDropdownLogistica" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-box-seam me-1"></i> Logística
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownLogistica">
+                                {% if user_permissions.is_gerente or ('ALMACEN' in user_permissions and 'ver_materias_primas' in user_permissions['ALMACEN']) %}
                                 <li><a class="dropdown-item {% if 'insumo' in request.endpoint %}active{% endif %}" href="{{ url_for('insumos_api.obtener_insumos') }}"><i class="fas fa-cubes me-2"></i> Insumos</a></li>
+                                {% endif %}
+                            
+                                {% if user_permissions.is_gerente or ('LOGISTICA' in user_permissions and 'ver_ordenes_compra' in user_permissions['LOGISTICA']) %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if 'orden_compra' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_compra.listar') }}"><i class="bi bi-truck me-2"></i> Compras (Ordenes)</a></li>
+                                {% endif %}
+                            
+                                {% if user_permissions.is_gerente or ('ALMACEN' in user_permissions and 'ver_stock_actual' in user_permissions['ALMACEN']) %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if 'inventario' in request.endpoint %}active{% endif %}" href="{{ url_for('inventario_view.listar_lotes') }}"><i class="bi bi-boxes me-2"></i> Inventario (Insumos)</a></li>
+                                {% endif %}
+                            
+                                {% if user_permissions.is_gerente or ('LOGISTICA' in user_permissions and 'leer' in user_permissions['LOGISTICA']) %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if 'reservas' in request.endpoint %}active{% endif %}" href="{{ url_for('reservas.listar') }}"><i class="bi bi-signpost-split-fill me-2"></i> Trazabilidad de Reservas</a></li>
+                                {% endif %}
+                            
+                                {% if user_permissions.is_gerente or ('LOGISTICA' in user_permissions and 'actualizar' in user_permissions['LOGISTICA']) %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if 'precios' in request.endpoint %}active{% endif %}" href="{{ url_for('precios.index') }}"><i class="bi bi-tag-fill me-2"></i> Actualizar Precios</a></li>
+                                {% endif %}
                             </ul>
                         </li>
 
-                        {% set can_view_comercial = user_permissions.is_gerente or ('COMERCIAL' in user_permissions and 'leer' in user_permissions['COMERCIAL']) %}
+                        
                         <li class="nav-item dropdown">
-                             <a class="nav-link dropdown-toggle {% if 'producto' in request.endpoint or 'orden_venta' in request.endpoint %}active{% endif %} {% if not can_view_comercial %}disabled{% endif %}"
-                               href="#" id="navbarDropdownComercial" role="button" data-bs-toggle="dropdown" aria-expanded="false" {% if not can_view_comercial %}aria-disabled="true" tabindex="-1"{% endif %}>
+                             <a class="nav-link dropdown-toggle {% if 'producto' in request.endpoint or 'orden_venta' in request.endpoint %}active{% endif %}"
+                               href="#" id="navbarDropdownComercial" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-cart-fill me-1"></i> Comercial
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownComercial">
+                            
+                                {% if user_permissions.is_gerente or ('ALMACEN' in user_permissions and 'ver_materias_primas' in user_permissions['ALMACEN']) %}
                                 <li><a class="dropdown-item {% if 'producto' in request.endpoint %}active{% endif %}" href="{{ url_for('productos.obtener_productos') }}"><i class="bi bi-bag-fill me-2"></i> Productos</a></li>
+                                {% endif %}
+                            
+                                {% if user_permissions.is_gerente or ('LOGISTICA' in user_permissions and 'ver_ordenes_venta' in user_permissions['LOGISTICA']) %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if 'orden_venta' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_venta.listar') }}"><i class="bi bi-currency-dollar me-2"></i> Ventas (Ordenes)</a></li>
+                                {% endif %}
+                            
+                                {% if user_permissions.is_gerente or ('CALIDAD' in user_permissions and 'realizar_control_calidad' in user_permissions['CALIDAD']) %}
                             	<li><hr class="dropdown-divider"></li>
         			<li><a class="dropdown-item {% if 'lote_producto' in request.endpoint %}active{% endif %}" href="{{ url_for('lote_producto.listar_lotes') }}"><i class="bi bi-box-seam me-2"></i> Inventario (Productos)</a></li>
-			    </ul>
+			    {% endif %}
+                            </ul>
                         </li>
 
-                        {% set can_view_produccion = user_permissions.is_gerente or ('PRODUCCION' in user_permissions and 'leer' in user_permissions['PRODUCCION']) %}
+                        
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle {% if 'planificacion' in request.endpoint or 'orden_produccion' in request.endpoint %}active{% endif %} {% if not can_view_produccion %}disabled{% endif %}"
-                               href="#" id="navbarDropdownProduccion" role="button" data-bs-toggle="dropdown" aria-expanded="false" {% if not can_view_produccion %}aria-disabled="true" tabindex="-1"{% endif %}>
+                            <a class="nav-link dropdown-toggle {% if 'planificacion' in request.endpoint or 'orden_produccion' in request.endpoint %}active{% endif %}"
+                               href="#" id="navbarDropdownProduccion" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fas fa-industry me-1"></i> Producción
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownProduccion">
@@ -86,20 +109,29 @@
                                 {# <li><a class="dropdown-item {% if 'planificacion' in request.endpoint %}active{% endif %}" href="{{ url_for('planificacion.index') }}"><i class="bi bi-calendar-check me-2"></i> Planificación</a></li> #}
                                 {# <li><hr class="dropdown-divider"></li> #}
                                 {# --- FIN DEL CÓDIGO COMENTADO --- #}
+                            
+                                {% if user_permissions.is_gerente or ('PRODUCCION' in user_permissions and 'ver_ordenes_produccion' in user_permissions['PRODUCCION']) %}
                                 <li><a class="dropdown-item {% if 'orden_produccion' in request.endpoint %}active{% endif %}" href="{{ url_for('orden_produccion.listar') }}"><i class="fas fa-clipboard-list me-2"></i> Ordenes de Producción</a></li>
+                                {% endif %}
                             </ul>
                         </li>
 
-                        {% set can_view_admin = user_permissions.is_gerente or ('ADMINISTRACION' in user_permissions and 'leer' in user_permissions['ADMINISTRACION']) %}
+                        
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle {% if is_admin_section %}active{% endif %} {% if not can_view_admin %}disabled{% endif %}"
-                            href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false" {% if not can_view_admin %}aria-disabled="true" tabindex="-1"{% endif %}>
+                            <a class="nav-link dropdown-toggle {% if is_admin_section %}active{% endif %}"
+                            href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-gear-fill me-1"></i> Administración
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownAdmin">
+                            
+                                {% if user_permissions.is_gerente or ('ADMINISTRACION' in user_permissions and ('ver_info_empleados' in user_permissions['ADMINISTRACION'] or 'modificar_usuarios' in user_permissions['ADMINISTRACION'] or 'crear_usuarios' in user_permissions['ADMINISTRACION'])) %}
                                 <li><a class="dropdown-item {% if 'admin_usuario' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_usuario.listar_usuarios') }}"><i class="bi bi-people-fill me-2"></i> Gestión de Empleados</a></li>
+                                {% endif %}
+                            
+                                {% if user_permissions.is_gerente or ('ADMINISTRACION' in user_permissions and 'gestionar_proveedores' in user_permissions['ADMINISTRACION']) %}
                                 <li><a class="dropdown-item {% if 'listar_clientes' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_clientes') }}"><i class="bi bi-person-rolodex me-2"></i> Gestión de Clientes</a></li>
                                 <li><a class="dropdown-item {% if 'listar_proveedores' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_proveedores') }}"><i class="bi  bi-briefcase-fill me-2"></i> Gestión de Proveedores</a></li>
+                                {% endif %}
                             </ul>
                         </li>
                     </ul>
