@@ -2,11 +2,13 @@ from flask import Blueprint, jsonify, session, request, redirect, url_for, flash
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
 from app.utils.roles import get_redirect_url_by_role
+from app.models.permisos import PermisosModel
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 usuario_controller = UsuarioController()
 facial_controller = FacialController()
+permisos_model = PermisosModel()
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
@@ -29,6 +31,10 @@ def login():
             session['user_level'] = rol_nivel
             session['usuario_nombre'] = f"{usuario['nombre']}"
             session['user_data'] = usuario
+            
+            # Cargar y guardar permisos en la sesión
+            permisos = permisos_model.get_user_permissions(usuario.get('role_id'))
+            session['permisos'] = permisos
 
             flash(f"Bienvenido {usuario['nombre']}", 'success')
             return redirect(get_redirect_url_by_role(rol_codigo))
@@ -61,6 +67,10 @@ def identificar_rostro():
         session['user_level'] = rol_nivel
         session['usuario_nombre'] = f"{usuario.get('nombre')} {usuario.get('apellido')}"
         session['user_data'] = usuario
+        
+        # Cargar y guardar permisos en la sesión
+        permisos = permisos_model.get_user_permissions(usuario.get('role_id'))
+        session['permisos'] = permisos
 
         return jsonify({
             'success': True, 

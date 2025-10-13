@@ -42,7 +42,7 @@ def _parse_form_data(form_dict):
     return parsed_data
 
 @orden_venta_bp.route('/')
-@permission_required(sector_codigo='LOGISTICA', accion='leer')
+@permission_required(sector_codigo='LOGISTICA', accion='ver_ordenes_venta')
 def listar():
     """Muestra la lista de todos los pedidos de venta."""
     estado = request.args.get('estado')
@@ -61,7 +61,7 @@ def listar():
     return render_template('orden_venta/listar.html', pedidos=pedidos, titulo="Pedidos de Venta")
 
 @orden_venta_bp.route('/nueva', methods=['GET', 'POST'])
-@permission_required(sector_codigo='LOGISTICA', accion='crear')
+@permission_required(sector_codigo='LOGISTICA', accion='crear_ordenes_venta')
 def nueva():
     """Gestiona la creación de un nuevo pedido de venta."""
 
@@ -84,25 +84,18 @@ def nueva():
         if status_code < 300: # Éxito (e.g., 201 Created)
                 nuevo_pedido_id = response.get('data', {}).get('id')
                 
-                # --- Lógica de Manejo de Creación Inmediata (COMPLETADO) ---
                 is_completed_immediately = response.get('data', {}).get('estado_completado_inmediato', False)
                 
                 if is_completed_immediately:
-                    # Mensaje específico solicitado por el usuario
                     success_message = "STOCK EXISTENTE Y RESERVADO, OV LISTA Y COMPLETADA."
-                    # Redirigir a la lista de órdenes de venta después de completar inmediatamente
                     redirect_url = url_for('orden_venta.listar') 
                 else:
-                    # Flujo normal a PENDIENTE
                     success_message = response.get('message', 'Pedido creado con éxito.')
-                    # Redirigir al detalle del nuevo pedido
                     redirect_url = url_for('orden_venta.detalle', id=nuevo_pedido_id)
-                # --- Fin Lógica Modificada ---
 
                 return jsonify({
                     'success': True,
                     'message': success_message,
-                    # Envía la URL para que JS redirija
                     'redirect_url': redirect_url
                 }), 201
         
@@ -129,7 +122,7 @@ def nueva():
                            fecha_limite=fecha_limite)
 
 @orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST','PUT'])
-@permission_required(sector_codigo='LOGISTICA', accion='actualizar')
+@permission_required(sector_codigo='LOGISTICA', accion='modificar_ordenes_venta')
 def editar(id):
     
     """Gestiona la edición de un pedido de venta existente."""
@@ -137,20 +130,16 @@ def editar(id):
     hoy = datetime.now().strftime('%Y-%m-%d')
     if request.method == 'PUT':
         try:
-            # 1. Lee los datos JSON
             json_data = request.get_json()
             if not json_data:
                 return jsonify({"success": False, "error": "No se recibieron datos JSON válidos"}), 400
 
-            # 2. Llama a tu controlador para actualizar el pedido
             response_data, status_code = controller.actualizar_pedido_con_items(id, json_data)
 
-            # 3. Responde con JSON, no con redirect/flash
             if status_code < 300: # Éxito
                     return jsonify({
                         'success': True,
                         'message': response_data.get('message', 'Pedido actualizado con éxito.'),
-                        # Envía la URL para que JS redirija
                         'redirect_url': url_for('orden_venta.detalle', id=id)
                     }), 200
             else: # Error de validación
@@ -194,14 +183,13 @@ def editar(id):
                            today=hoy)
 
 @orden_venta_bp.route('/<int:id>/detalle')
-@permission_required(sector_codigo='LOGISTICA', accion='leer')
+@permission_required(sector_codigo='LOGISTICA', accion='ver_ordenes_venta')
 def detalle(id):
     """Muestra la página de detalle de un pedido de venta."""
     response, status_code = controller.obtener_pedido_por_id(id)
 
     if response.get('success'):
         pedido_data = response.get('data')
-        # Convertir cadenas de fecha a objetos datetime para formatear en la plantilla
         if pedido_data and pedido_data.get('created_at') and isinstance(pedido_data['created_at'], str):
             pedido_data['created_at'] = datetime.fromisoformat(pedido_data['created_at'])
         if pedido_data and pedido_data.get('updated_at') and isinstance(pedido_data['updated_at'], str):
@@ -213,7 +201,7 @@ def detalle(id):
         return redirect(url_for('orden_venta.listar'))
 
 @orden_venta_bp.route('/<int:id>/cancelar', methods=['POST'])
-@permission_required(sector_codigo='LOGISTICA', accion='eliminar')
+@permission_required(sector_codigo='LOGISTICA', accion='cancelar_ordenes_venta')
 def cancelar(id):
     """Endpoint para cambiar el estado de un pedido a 'CANCELADO'."""
     response, status_code = controller.cancelar_pedido(id)
@@ -227,7 +215,7 @@ def cancelar(id):
 
 
 @orden_venta_bp.route('/<int:id>/completar', methods=['POST'])
-@permission_required(sector_codigo='LOGISTICA', accion='actualizar')
+@permission_required(sector_codigo='LOGISTICA', accion='modificar_ordenes_venta')
 def completar(id):
         """Endpoint para completar el pedido (despacho de stock)."""
         try:
@@ -249,28 +237,22 @@ def completar(id):
             flash(f"Ocurrió un error inesperado al completar el pedido: {str(e)}", 'error')
             return redirect(url_for('orden_venta.detalle', id=id))
 
-# --- RUTA DE APROBACIÓN REHECHA AL ESTILO API ---
 @orden_venta_bp.route('/<int:id>/aprobar', methods=['POST'])
-##@permission_required(sector_codigo='LOGISTICA', accion='actualizar')
+@permission_required(sector_codigo='LOGISTICA', accion='aprobar_ordenes_venta')
 def aprobar(id):
     """
     Endpoint de API para aprobar un pedido. Devuelve una respuesta JSON.
     """
     try:
-        # Obtenemos el usuario de la sesión, igual que en tu ruta crear()
         usuario_id = session.get("usuario_id")
         if not usuario_id:
             return jsonify({"success": False, "error": "Usuario no autenticado."}), 401
 
-        # Llamamos al controlador pasándole el id del pedido y del usuario
         response, status_code = controller.aprobar_pedido(id, usuario_id)
 
-        # --- LÓGICA MODIFICADA PARA MANEJAR REDIRECCIÓN A OC (STATUS 202) ---
         if status_code == 202 and response.get('oc_generada'):
-            # Si el estado es 202, se creó una OC y el Pedido de Venta queda PENDIENTE.
             oc_codigo = response['orden_compra_creada']['codigo_oc']
             
-            # Devolver respuesta para que el frontend muestre el modal y redirija
             return jsonify({
                 "success": True,
                 "message": response.get('message'),
@@ -279,9 +261,7 @@ def aprobar(id):
                 "oc_codigo": oc_codigo,
                 "data": response.get('data')
             }), 202
-        # --- FIN LÓGICA MODIFICADA ---
 
-        # Devolvemos la respuesta del controlador en formato JSON (para 200 OK y otros errores)
         return jsonify(response), status_code
 
     except Exception as e:
