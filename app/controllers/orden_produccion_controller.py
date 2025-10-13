@@ -12,6 +12,7 @@ import logging
 # --- NUEVAS IMPORTACIONES Y DEPENDENCIAS ---
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.orden_compra_controller import OrdenCompraController
+from app.controllers.insumo_controller import InsumoController
 from datetime import date
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class OrdenProduccionController(BaseController):
         # --- NUEVOS CONTROLADORES ---
         self.inventario_controller = InventarioController()
         self.orden_compra_controller = OrdenCompraController()
+        self.insumo_controller = InsumoController()
 
 
     def obtener_ordenes(self, filtros: Optional[Dict] = None) -> tuple:
@@ -205,10 +207,12 @@ class OrdenProduccionController(BaseController):
 
         items_oc = []
         for insumo in insumos_faltantes:
+            response_data, status_code = self.insumo_controller.obtener_insumo_por_id(insumo['insumo_id'])
+            precio = response_data['data']['precio_unitario'] if status_code < 400 else 0
             items_oc.append({
                 'insumo_id': insumo['insumo_id'],
                 'cantidad_solicitada': insumo['cantidad_faltante'],
-                'precio_unitario': 0  # El precio se deberá negociar/actualizar después
+                'precio_unitario': precio
             })
 
         datos_oc = {
