@@ -247,24 +247,28 @@ def aprobar(id):
             flash("Error de autenticación. Por favor, inicie sesión.", "danger")
             return redirect(url_for("auth.login"))
 
-        # --- LÍNEA CORREGIDA ---
-        # Desempaquetamos la tupla (diccionario, codigo_http) que devuelve el controlador
         resultado_dict, status_code = controller.aprobar_orden(id, usuario_id)
-        # ------------------------
 
-        # --- LÓGICA MEJORADA PARA MOSTRAR MENSAJES ESPECIALIZADOS ---
-        if resultado_dict.get("success"):
+        # Si el código de estado es 409, devolvemos el JSON al frontend para mostrar el modal.
+        if status_code == 409 and not resultado_dict.get("success"):
+            return jsonify(resultado_dict), 409
+
+        # FIX: Lógica Robusta para Manejar la Respuesta con Posible None (siempre necesario)
+        if isinstance(resultado_dict, dict) and resultado_dict.get("success"):
             message = resultado_dict.get("message", "Orden aprobada exitosamente.")
-            orden_compra_generada = resultado_dict.get("data", {}).get("orden_compra_generada")
+            
+            data = resultado_dict.get("data")
+            orden_compra_generada = data.get("orden_compra_generada") if isinstance(data, dict) else None
 
             if orden_compra_generada and isinstance(orden_compra_generada, dict):
                 codigo_oc = orden_compra_generada.get('codigo_oc', 'N/A')
                 message = f"Orden de Producción aprobada. Se generó la Orden de Compra {codigo_oc} para cubrir insumos faltantes."
-                flash(message, "warning") # Usamos 'warning' para llamar la atención sobre la OC
+                flash(message, "warning") 
             else:
                 flash(message, "success")
         else:
-            flash(resultado_dict.get("error", "Ocurrió un error al aprobar la orden."), "error")
+            error_message = resultado_dict.get("error", "Ocurrió un error al aprobar la orden.") if isinstance(resultado_dict, dict) else "Error al procesar la aprobación."
+            flash(error_message, "error")
 
         return redirect(url_for("orden_produccion.listar"))
 
@@ -272,6 +276,68 @@ def aprobar(id):
         logger.error(f"Error inesperado en la ruta aprobar OP: {e}", exc_info=True)
         flash("Ocurrió un error interno al procesar la solicitud.", "danger")
         return redirect(url_for("orden_produccion.listar"))
+
+    except Exception as e:
+        logger.error(f"Error inesperado en la ruta aprobar OP: {e}", exc_info=True)
+        flash("Ocurrió un error interno al procesar la solicitud.", "danger")
+        return redirect(url_for("orden_produccion.listar"))
+
+@orden_produccion_bp.route("/<int:orden_id>/crear_oc_op", methods=["POST"])
+@permission_required(sector_codigo='PRODUCCION', accion='aprobar')
+def crear_oc_op(orden_id):
+    """
+    Crea la OC y aprueba la OP después de la confirmación manual del usuario.
+    """
+    try:
+        usuario_id = session.get("usuario_id")
+        if not usuario_id:
+            return jsonify({"success": False, "error": "Usuario no autenticado."}), 401
+
+        datos_json = request.get_json()
+        insumos_faltantes = datos_json.get('insumos_faltantes')
+        
+        if not insumos_faltantes:
+            return jsonify({"success": False, "error": "No se recibieron datos de insumos faltantes."}), 400
+
+        # 1. Crear la Orden de Compra (OC)
+        resultado_oc = controller.generar_orden_de_compra_automatica(insumos_faltantes, usuario_id)
+        resultado_oc_dict = resultado_oc[0] if isinstance(resultado_oc, tuple) else resultado_oc
+
+        if not resultado_oc_dict.get('success'):
+            return jsonify({
+                "success": False,
+                "error": resultado_oc_dict.get('error', 'Fallo al crear la Orden de Compra.')
+            }), 500
+
+        orden_compra_creada = resultado_oc_dict.get('data')
+        oc_codigo = orden_compra_creada.get('codigo_oc', 'N/A')
+        oc_id = orden_compra_creada.get('id')
+
+        # 2. Aprobar y reservar stock (Ahora la reserva no fallará, solo se asocia la OC)
+        # Re-obtenemos la OP para trabajar con datos frescos
+        orden_result = controller.obtener_orden_por_id(orden_id)
+        orden_produccion = orden_result['data']
+        
+        # Asocia el ID de la OC a la OP
+        orden_produccion['orden_compra_id'] = oc_id
+        
+        # Actualizamos el estado y forzamos la reserva (que no consumirá stock, solo registrará la reserva)
+        resultado_aprobacion, status_code = controller.aprobar_orden_con_oc(orden_id, usuario_id, oc_id)
+
+
+        if resultado_aprobacion.get('success'):
+            return jsonify({
+                "success": True,
+                "message": f"OP aprobada. Se creó la OC {oc_codigo} para insumos. Se recomienda ir a Compras.",
+                "oc_codigo": oc_codigo,
+                "redirect_url": url_for('orden_compra.listar')
+            }), 200
+        else:
+            return jsonify(resultado_aprobacion), status_code
+
+    except Exception as e:
+        logger.error(f"Error inesperado en crear_oc_op: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "Error interno del servidor."}), 500
 
 
 @orden_produccion_bp.route("/<int:id>/rechazar", methods=["POST"])
@@ -285,6 +351,7 @@ def rechazar(id):
         "warning" if resultado.get("success") else "error",
     )
     return redirect(url_for("orden_produccion.listar"))
+
 
 
 @orden_produccion_bp.route("/<int:id>/asignar_supervisor", methods=["POST"])

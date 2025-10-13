@@ -278,19 +278,20 @@
                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                     Procesando...
                 `;
-
                     fetch(form.action, {
                         method: 'POST',
                         headers: { 'X-Requested-With': 'XMLHttpRequest' }
                     })
                         .then(response => {
-                            if (!response.ok) { throw new Error('Error en la respuesta del servidor.'); }
-                            return response.json();
+                            // Capturamos el status code aquí
+                            const statusCode = response.status;
+                            if (!response.ok && statusCode !== 202) { throw new Error('Error en la respuesta del servidor.'); }
+                            return response.json().then(data => ({ data, statusCode }));
                         })
-                        .then(data => {
+                        .then(({ data, statusCode }) => {
                             if (data.success) {
-                                // 3. Si todo va bien, muestra el modal de éxito final
-                                mostrarModalExito(data);
+                                // Pasamos el status code aquí
+                                mostrarModalExito(data, statusCode);
                             } else {
                                 showNotificationModal('Error', data.error || 'No se pudo aprobar el pedido.', 'error');
                             }
@@ -322,10 +323,67 @@
         });
     });
 
-    /**
-     * Función que construye y muestra el "mensaje bonito" en el modal de éxito.
-     * (Esta función no cambia)
-     */
+     function mostrarModalExito(respuestaJson, status_code) {
+    const modalBody = document.getElementById('resultadoModalBody');
+    const modalElement = document.getElementById('resultadoAprobacionModal');
+    const modalTitle = modalElement.querySelector('.modal-title');
+    const modalAceptarBtn = modalElement.querySelector('#confirm-cancel-edit'); // Este ID no existe en base.html, usar el botón de "Cerrar" como marcador
+    const modalIrAProduccionBtn = modalElement.querySelector('a[href*="orden_produccion"]');
+    
+    // --- Lógica AGREGADA para OC ---
+    if (status_code === 202 && respuestaJson.oc_generada) {
+        modalTitle.innerHTML = `<i class="bi bi-truck-flatbed text-warning me-2"></i>Atención Requerida`;
+        modalBody.innerHTML = `
+            <p class="text-danger fw-bold">STOCK DE INSUMOS INSUFICIENTE</p>
+            <p>${respuestaJson.message}</p>
+            <hr>
+            <p><strong>Siguiente Paso:</strong> Debe aprobar la Orden de Compra <code>${respuestaJson.oc_codigo}</code> para iniciar la producción.</p>
+        `;
+        modalIrAProduccionBtn.textContent = 'Ir a Órdenes de Compra';
+        // Se asume que el botón de "Ir a Producción" ya apunta a la lista de OP.
+
+        // Al cerrarse el modal, redirigimos a la lista de órdenes de compra.
+        modalElement.addEventListener('hidden.bs.modal', () => {
+             // Redirigir a la lista de OC
+             window.location.href = respuestaJson.redirect_url;
+        }, { once: true });
+
+    } else {
+        // --- Lógica ORIGINAL de OP (status 200 OK) ---
+        modalTitle.innerHTML = `<i class="bi bi-check-circle-fill text-success me-2"></i>¡Éxito!`;
+        let contenidoHtml = `<p>${respuestaJson.message}</p>`;
+        // ... (el resto de la lógica para listar OP creadas) ...
+        const ordenesCreadas = respuestaJson.data.ordenes_creadas;
+        // ... (la misma lógica de la línea 140 en adelante para mostrar OP) ...
+        
+        if (ordenesCreadas && ordenesCreadas.length > 0) {
+            contenidoHtml += '<h6>Órdenes de Producción Generadas:</h6>';
+            contenidoHtml += '<ul class="list-group">';
+            ordenesCreadas.forEach(orden => {
+                const urlOrden = `/ordenes/${orden.id}/detalle`;
+                contenidoHtml += `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <a href="${urlOrden}" target="_blank"><strong>${orden.codigo}</strong></a>
+                        <small class="d-block text-muted">Cantidad: ${orden.cantidad_planificada} unidades</small>
+                    </div>
+                    <a href="${urlOrden}" target="_blank" class="btn btn-sm btn-outline-secondary">Ver</a>
+                </li>
+            `;
+            });
+            contenidoHtml += '</ul>';
+        }
+
+        modalBody.innerHTML = contenidoHtml;
+        modalIrAProduccionBtn.textContent = 'Ir a Producción';
+
+        // Al cerrarse el modal, recargamos la página (lógica original)
+        modalElement.addEventListener('hidden.bs.modal', () => window.location.reload(), { once: true });
+    }
+    
+    const bootstrapModal = new bootstrap.Modal(modalElement);
+    bootstrapModal.show();
+}
     function mostrarModalExito(respuestaJson) {
         const modalBody = document.getElementById('resultadoModalBody');
         const modalElement = document.getElementById('resultadoAprobacionModal');

@@ -312,5 +312,143 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 });
+document.addEventListener('DOMContentLoaded', function () {
+    const forms = document.querySelectorAll('.confirm-form');
+    
+    // Función para manejar la creación de OC + OP
+    async function handleCreateOcOp(ordenId, insumosFaltantes) {
+        const url = `/ordenes/${ordenId}/crear_oc_op`;
+        
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ insumos_faltantes: insumosFaltantes })
+            });
+
+            // 1. Manejo robusto de la respuesta: lee texto y luego parsea JSON
+            const text = await response.text();
+            let result;
+            let status = response.status;
+            
+            try {
+                result = JSON.parse(text);
+            } catch (e) {
+                // Si falla el parseo, pero el status es de éxito, inyecta un resultado de éxito simulado
+                if (status >= 200 && status < 300) {
+                    result = { success: true, message: "Operación completada, pero con respuesta vacía.", oc_codigo: 'N/A' };
+                } else {
+                    // Si falla el parseo y es un error (4xx/5xx), utiliza el texto como error.
+                    result = { success: false, error: text || `Error ${status} del servidor.` };
+                }
+            }
+            
+            if (result.success) {
+                // Éxito: OC y OP creadas. Redirigir a la lista de Compras.
+                showNotificationModal(
+                    'OP Aprobada y OC Creada',
+                    result.message || `Se creó la OC ${result.oc_codigo} para cubrir faltantes.`,
+                    'success',
+                    () => { window.location.href = result.redirect_url; }
+                );
+            } else {
+                showNotificationModal('Error Crítico', result.error || 'No se pudo crear la OC/OP. Intente de nuevo.', 'error');
+            }
+        } catch (error) {
+            console.error('Error de red/Parseo al crear OC/OP:', error);
+            showNotificationModal('Error de Red', 'Fallo de conexión o error de parseo irrecuperable.', 'error');
+        }
+    }
+
+    forms.forEach(form => {
+        if (form.action.includes('/aprobar')) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                
+                // Extraer el ID de la orden de la URL de acción del formulario
+                const match = form.action.match(/\/(\d+)\/aprobar$/);
+                if (!match) return;
+                const ordenId = parseInt(match[1]);
+
+                const title = form.dataset.title || 'Confirmar Aprobación';
+                const message = form.dataset.message || '¿Está seguro de que desea realizar esta acción?';
+                const buttonType = form.dataset.buttonType || 'primary';
+
+                showConfirmationModal(title, message, () => {
+                    // Muestra spinner
+                    const btn = form.querySelector('button[type="submit"]');
+                    const originalContent = btn.innerHTML;
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando...';
+
+                    fetch(form.action, {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(response => {
+                        const status = response.status;
+                        
+                        // 1. Manejo robusto de la respuesta: lee texto y luego parsear JSON
+                        return response.text().then(text => {
+                            let data;
+                            try {
+                                data = JSON.parse(text);
+                            } catch (e) {
+                                // Si falla el parseo, pero el status es de éxito, inyecta un resultado de éxito simulado
+                                if (status >= 200 && status < 300) {
+                                    data = { success: true, message: "Operación exitosa (respuesta sin JSON)." };
+                                } else {
+                                    // Si falla el parseo y es un error (4xx/5xx), utiliza el texto como error.
+                                    data = { success: false, error: text || `Error ${status} del servidor.` };
+                                }
+                            }
+                            return { data, status };
+                        });
+                    })
+                    .then(({ data, status }) => {
+                        // Restaurar el botón base
+                        const btn = form.querySelector('button[type="submit"]');
+                        btn.disabled = false;
+                        btn.innerHTML = originalContent;
+                        
+                        if (status === 409) {
+                            // --- FLUJO ESPECIAL: Faltante de Stock Detectado ---
+                            
+                            // Los datos faltantes vienen anidados en data.data.insumos_faltantes
+                            const faltantes = data.data.insumos_faltantes;
+                            // El mensaje de error viene en data.error, reemplazamos los <br> para HTML
+                            const faltantesHtml = data.error.replace(/<br>/g, '');
+
+                            showConfirmationModal(
+                                'Faltante de Stock', 
+                                `${faltantesHtml} ¿Desea crear una Orden de Compra para solicitar estos insumos y luego aprobar la Orden de Producción?`,
+                                () => {
+                                    // Si el usuario confirma, llamar a la nueva ruta
+                                    // Pasamos el ID de la Orden y los insumos faltantes
+                                    handleCreateOcOp(ordenId, faltantes);
+                                },
+                                'warning'
+                            );
+                        } else if (data.success) {
+                            showNotificationModal('Éxito', 'Accion exitosa', 'success', () => { 
+                                window.location.reload(); 
+                            });
+                        } else {
+                            showNotificationModal('Error', data.error || 'Ocurrió un error al aprobar la OP.', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error en la petición AJAX (Final Catch):', error);
+                        showNotificationModal('Error de Red', 'Fallo de conexión.', 'error');
+                        // Restaurar el botón en caso de fallo de red
+                        const btn = form.querySelector('button[type="submit"]');
+                        btn.disabled = false;
+                        btn.innerHTML = originalContent;
+                    });
+                }, buttonType);
+            });
+        }
+    });
+});
 </script>
 {% endblock %}

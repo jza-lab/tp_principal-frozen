@@ -58,12 +58,15 @@ class BaseController:
 
     def success_response(self, data=None, message=None, status_code=200):
         """Devuelve una respuesta exitosa"""
+        # --- FIX: Asegurar que el mensaje sea una cadena vacía si es None ---
+        message_to_use = str(message) if message is not None else "Acción exitosa"
+        # --------------------------------------------------------------------
         response = {
             'success': True,
             'data': data,
-            'message': message
+            'message': message_to_use
         }
-        return response, status_code  # ✅ Tupla (dict, int)
+        return response, status_code 
 
     def error_response(self, error_message, status_code=400):
         """Devuelve una respuesta de error"""

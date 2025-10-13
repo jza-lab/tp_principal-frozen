@@ -6,13 +6,15 @@ from marshmallow import ValidationError
 from app.controllers.producto_controller import ProductoController
 from app.controllers.receta_controller import RecetaController
 from app.controllers.usuario_controller import UsuarioController
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
+import math # <--- IMPORTACIÓN NECESARIA PARA math.ceil()
 
 # --- NUEVAS IMPORTACIONES Y DEPENDENCIAS ---
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.insumo_controller import InsumoController
+from app.controllers.lote_producto_controller import LoteProductoController
 from datetime import date
 
 logger = logging.getLogger(__name__)
@@ -33,6 +35,7 @@ class OrdenProduccionController(BaseController):
         self.inventario_controller = InventarioController()
         self.orden_compra_controller = OrdenCompraController()
         self.insumo_controller = InsumoController()
+        self.lote_producto_controller = LoteProductoController()
 
 
     def obtener_ordenes(self, filtros: Optional[Dict] = None) -> tuple:
@@ -83,8 +86,6 @@ class OrdenProduccionController(BaseController):
         """
         return self.model.obtener_desglose_origen(orden_id)
 
-# app/controllers/orden_produccion_controller.py
-
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """
         Valida datos y crea una orden en estado PENDIENTE.
@@ -93,16 +94,10 @@ class OrdenProduccionController(BaseController):
         receta_model = RecetaModel()
 
         try:
-            # --- INICIO DE LA CORRECCIÓN DE VALIDACIÓN ---
-
-            # Si el supervisor_id está presente pero vacío, lo eliminamos
-            # para que no cause un error de validación de tipo entero.
+            # Si el supervisor_responsable_id está presente pero vacío, lo eliminamos
             if 'supervisor_responsable_id' in form_data and not form_data['supervisor_responsable_id']:
                 form_data.pop('supervisor_responsable_id')
 
-            # --- FIN DE LA CORRECCIÓN DE VALIDACIÓN ---
-
-            # El resto de la lógica de búsqueda de receta que ya corregimos
             producto_id = form_data.get('producto_id')
             if not producto_id:
                 return self.error_response('El campo producto_id es requerido.', 400)
@@ -110,7 +105,6 @@ class OrdenProduccionController(BaseController):
             if 'cantidad' in form_data:
                 form_data['cantidad_planificada'] = form_data.pop('cantidad')
 
-            # ... resto de la lógica hasta la creación ...
             receta_result = receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
             if not receta_result.get('success') or not receta_result.get('data'):
                 return self.error_response(f'No se encontró una receta activa para el producto seleccionado (ID: {producto_id}).', 404)
@@ -123,8 +117,6 @@ class OrdenProduccionController(BaseController):
             validated_data['usuario_creador_id'] = usuario_id
 
             result = self.model.create(validated_data)
-##            if result.get('success'):
-##                result['data'] = self.schema.dump(result['data'])
             return result
 
         except ValidationError as e:
@@ -150,68 +142,135 @@ class OrdenProduccionController(BaseController):
                     return self.error_response('Error al asignar supervisor.', 500)
             except Exception as e:
                 return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+    
+    # --- WRAPPER PARA DELEGAR VERIFICACIÓN DE STOCK (FIX de AttributeError) ---
+    def verificar_stock_para_op(self, orden_simulada: Dict) -> Dict:
+        """
+        Wrapper que delega la verificación de stock de insumos al controlador de inventario.
+        """
+        return self.inventario_controller.verificar_stock_para_op(orden_simulada)
+
+    # --- MÉTODO PARA APROBACIÓN FORZADA (VINCULACIÓN OC) ---
+    def aprobar_orden_con_oc(self, orden_id: int, usuario_id: int, oc_id: int) -> tuple:
+        """
+        Aprueba la OP cuando se sabe que se ha generado la OC (flujo manual).
+        """
+        try:
+            orden_result = self.obtener_orden_por_id(orden_id)
+            orden_produccion = orden_result['data']
+            
+            # 1. Asocia la OC a la OP
+            update_oc = self.model.update(orden_id, {'orden_compra_id': oc_id}, 'id')
+            if not update_oc.get('success'):
+                return self.error_response("Fallo al vincular la OP con la OC.", 500)
+
+            # 2. Cambiar a APROBADA
+            cambio_estado_result, status_code = self.cambiar_estado_orden(orden_id, 'APROBADA')
+
+            if status_code != 200:
+                 return cambio_estado_result, status_code
+
+            # 3. Reservar stock (esto registrará que se intentó usar el stock que no existe).
+            reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
+            
+            if not reserva_result.get('success'):
+                logger.warning(f"Reserva falló para OP {orden_id} después de crear OC: {reserva_result.get('error')}. Se continúa.")
+            
+            return self.success_response(None, "Orden aprobada y vinculada a OC. Pendiente de recepción de insumos.")
+
+        except Exception as e:
+            logger.error(f"Error en aprobar_orden_con_oc para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
 
     def aprobar_orden(self, orden_id: int, usuario_id: int) -> Dict:
-            """
-            Aprueba una orden, reserva insumos y si faltan, crea una Orden de Compra.
-            """
-            try:
-                # 1. Obtener la orden de producción completa
-                orden_result = self.obtener_orden_por_id(orden_id)
-                if not orden_result.get('success'):
-                    return self.error_response("Orden de producción no encontrada.", 404)
-                orden_produccion = orden_result['data']
+        """
+        Aprueba una orden SOLO SI HAY STOCK SUFICIENTE. Si no hay, retorna un error
+        indicando la acción de crear OC.
+        """
+        try:
+            # 1. Obtener la orden de producción completa
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden_produccion = orden_result['data']
 
-                if orden_produccion['estado'] != 'PENDIENTE':
-                    return self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
+            if orden_produccion['estado'] != 'PENDIENTE':
+                return self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
 
-                # 2. Cambiar el estado a APROBADA
-                self.cambiar_estado_orden(orden_id, 'APROBADA')
+            # 2. Dry Run: Verificar si hay stock suficiente SIN RESERVAR NADA
+            verificacion_result = self.inventario_controller.verificar_stock_para_op(orden_produccion)
+            
+            if not verificacion_result.get('success'):
+                return self.error_response(f"Error del sistema al verificar stock: {verificacion_result.get('error')}", 500)
 
-                # 3. Intentar reservar los insumos necesarios
-                reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
+            insumos_faltantes = verificacion_result['data']['insumos_faltantes']
+            
+            # 3. SI HAY FALTANTES: Detener y retornar un código especial (409) con los datos.
+            if insumos_faltantes:
+                mensaje_error = "No se puede aprobar la producción por **falta de stock** de los siguientes insumos:"
+                detalles = [f"{insumo['nombre']} (falta: {insumo['cantidad_faltante']})" for insumo in insumos_faltantes]
+                
+                # Prepara el mensaje de error para el frontend (con saltos de línea y guiones)
+                mensaje_error += " - " + " - ".join(detalles)
+                
+                # Retorno directo del diccionario de error con los datos necesarios
+                return (
+                    {
+                        'success': False,
+                        'error': mensaje_error,
+                        'data': {'insumos_faltantes': insumos_faltantes} 
+                    }, 
+                    409
+                )
+                
+            # 4. SI NO HAY FALTANTES: Continuar con la aprobación y reserva.
+            
+            # A. Cambiar el estado a APROBADA (Esto actualiza fechas de aprobación y estimadas)
+            cambio_estado_result, status_code = self.cambiar_estado_orden(orden_id, 'APROBADA')
+            
+            if status_code != 200:
+                 return cambio_estado_result, status_code
 
-                if not reserva_result.get('success'):
-                    # Si la reserva falla, podríamos revertir el estado o simplemente notificar
-                    return self.error_response(f"Se aprobó la orden, pero falló la reserva de insumos: {reserva_result.get('error')}", 500)
+            # B. Intentar reservar los insumos necesarios (Reserva real)
+            reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
 
-                # 4. Verificar si hay insumos faltantes y crear Orden de Compra
-                insumos_faltantes = reserva_result['data']['insumos_faltantes']
-                orden_compra_creada = None
+            if not reserva_result.get('success'):
+                # Error crítico: la verificación pasó, pero la reserva falló.
+                return self.error_response(f"Fallo crítico: La orden se aprobó pero la reserva de insumos falló: {reserva_result.get('error')}", 500)
+                
+            # Se ha aprobado y reservado.
+            return self.success_response(None, "Orden aprobada y stock de insumos reservado.")
 
-                if insumos_faltantes:
-                    logger.info(f"Faltan insumos para la OP {orden_id}. Generando Orden de Compra automática.")
-                    resultado_oc = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id)
-                    if resultado_oc.get('success'):
-                        orden_compra_creada = resultado_oc.get('data')
-
-                # 5. Devolver una respuesta completa
-                message = "Orden de Producción aprobada y stock de insumos reservado."
-                if orden_compra_creada:
-                    message += f" Se generó la Orden de Compra {orden_compra_creada['codigo_oc']} para cubrir faltantes."
-
-                return self.success_response({'orden_compra_generada': orden_compra_creada}, message)
-
-            except Exception as e:
-                logger.error(f"Error en el proceso de aprobación de OP {orden_id}: {e}", exc_info=True)
-                return self.error_response(f"Error interno: {str(e)}", 500)
+        except Exception as e:
+            logger.error(f"Error en el proceso de aprobación de OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
 
     def _generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int) -> Dict:
         """
         Helper para crear una OC a partir de una lista de insumos faltantes.
-        NOTA: Esta es una implementación simple. Una versión avanzada podría agrupar por proveedor.
+        Aplica redondeo hacia arriba (ceil) en las cantidades solicitadas.
         """
         # Simplificación: Asumimos un proveedor por defecto o el primero que encontremos.
-        # Aquí deberías implementar tu lógica para seleccionar al proveedor adecuado.
-        proveedor_id_por_defecto = 1 # ¡¡IMPORTANTE: CAMBIAR ESTO!!
+        proveedor_id_por_defecto = 1 
 
-        items_oc = []
+        items_oc_para_form = []
         for insumo in insumos_faltantes:
-            response_data, status_code = self.insumo_controller.obtener_insumo_por_id(insumo['insumo_id'])
-            precio = response_data['data']['precio_unitario'] if status_code < 400 else 0
-            items_oc.append({
+            # FIX: Aplicar math.ceil() al faltante
+            cantidad_redondeada = math.ceil(insumo['cantidad_faltante'])
+            
+            if cantidad_redondeada == 0:
+                continue 
+            
+            try:
+                response_data, status_code = self.insumo_controller.obtener_insumo_por_id(insumo['insumo_id'])
+                precio = response_data['data']['precio_unitario'] if status_code < 400 else 0
+            except Exception as e:
+                 logger.error(f"Error obteniendo precio para insumo {insumo.get('insumo_id')}: {e}")
+                 precio = 0
+                 
+            items_oc_para_form.append({
                 'insumo_id': insumo['insumo_id'],
-                'cantidad_solicitada': insumo['cantidad_faltante'],
+                'cantidad_faltante': cantidad_redondeada, # Usamos la cantidad redondeada
                 'precio_unitario': precio
             })
 
@@ -225,12 +284,17 @@ class OrdenProduccionController(BaseController):
         # Simulamos los datos como si vinieran de un form para reusar el método del controlador
         form_data_simulado = {
             **datos_oc,
-            'insumo_id[]': [item['insumo_id'] for item in items_oc],
-            'cantidad_solicitada[]': [item['cantidad_solicitada'] for item in items_oc],
-            'precio_unitario[]': [item['precio_unitario'] for item in items_oc]
+            'insumo_id[]': [item['insumo_id'] for item in items_oc_para_form],
+            'cantidad_solicitada[]': [item['cantidad_faltante'] for item in items_oc_para_form],
+            'precio_unitario[]': [item['precio_unitario'] for item in items_oc_para_form]
         }
 
         return self.orden_compra_controller.crear_orden(form_data_simulado, usuario_id)
+    
+    def generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int) -> Dict:
+        """Wrapper publico para el helper privado _generar_orden_de_compra_automatica."""
+        return self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id)
+
 
     def rechazar_orden(self, orden_id: int, motivo: str) -> Dict:
         """
@@ -239,50 +303,82 @@ class OrdenProduccionController(BaseController):
         return self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=f"Rechazada: {motivo}")
 
     def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str) -> tuple:
-        """
-        Cambia el estado de una orden (ej. 'EN_PROCESO', 'COMPLETADA').
-        Si el nuevo estado es 'EN_PROCESO', verifica el stock antes de cambiarlo.
-        """
-        try:
-            if nuevo_estado == 'EN_PROCESO':
-                # 1. Obtener la orden de producción completa
+            """
+            Cambia el estado de una orden.
+            Si el estado es 'COMPLETADA', genera el lote de producto terminado.
+            """
+            try:
                 orden_result = self.obtener_orden_por_id(orden_id)
                 if not orden_result.get('success'):
                     return self.error_response("Orden de producción no encontrada.", 404)
                 orden_produccion = orden_result['data']
+                
+                # 1. Validación de estado para INICIAR
+                if nuevo_estado == 'EN_PROCESO':
+                    if orden_produccion['estado'] != 'APROBADA':
+                        return self.error_response(f"La orden debe estar en estado 'APROBADA' para poder iniciarla. Estado actual: {orden_produccion['estado']}", 400)
+                    # Lógica de reserva/verificación de stock eliminada.
 
-                # Solo se puede iniciar si está APROBADA
-                if orden_produccion['estado'] != 'APROBADA':
-                    return self.error_response(f"La orden debe estar en estado 'APROBADA' para poder iniciarla. Estado actual: {orden_produccion['estado']}", 400)
+                # 2. Lógica para COMPLETAR la OP
+                if nuevo_estado == 'COMPLETADA':
+                    if orden_produccion['estado'] != 'EN_PROCESO':
+                        return self.error_response(f"La orden debe estar en estado 'EN_PROCESO' para poder completarla. Estado actual: {orden_produccion['estado']}", 400)
+                    
+                    # A. Obtener el origen de la orden para la trazabilidad del lote
+                    # El campo 'pedido_id' en la OP es nuestra referencia principal (si existe).
+                    referencia_pedido_id = orden_produccion.get('pedido_id') 
+                    
+                    # B. Determinar la fuente del lote (Pedido vs. Stock)
+                    if referencia_pedido_id:
+                        origen_lote = f"Pedido PED-{referencia_pedido_id}"
+                    else:
+                        origen_lote = "Stock Interno"
 
-                # 2. Verificar si hay stock suficiente
-                verificacion_result = self.inventario_controller.verificar_stock_para_op(orden_produccion)
-                if not verificacion_result.get('success'):
-                    return self.error_response(f"No se pudo verificar el stock: {verificacion_result.get('error')}", 500)
+                    # C. Preparar los datos del nuevo lote
+                    datos_lote = {
+                        'producto_id': orden_produccion['producto_id'],
+                        'cantidad_inicial': orden_produccion['cantidad_planificada'],
+                        'orden_produccion_id': orden_id,
+                        'fecha_produccion': date.today().isoformat(),
+                        'observaciones': f"Origen: {origen_lote}. " + (orden_produccion.get('observaciones') or ''),
+                        # Se asume una vida útil por defecto si el producto no la tiene o el modelo de lote la infiere.
+                        'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat() # Usamos 90 días por defecto
+                    }
+                    
+                    # D. Crear el lote de producto terminado
+                    # El método `crear_lote` de LoteProductoController espera {cantidad_inicial, producto_id, etc.}
+                    resultado_lote, status_lote = self.lote_producto_controller.crear_lote_desde_formulario(
+                        datos_lote,
+                        usuario_id=orden_produccion.get('usuario_creador_id', 1) # Usar ID del creador o 1 si es None
+                    )
 
-                insumos_faltantes = verificacion_result['data']['insumos_faltantes']
-                if insumos_faltantes:
-                    mensaje_error = "No se puede iniciar la producción por falta de stock de los siguientes insumos: "
-                    detalles = [f"{insumo['nombre']} (falta: {insumo['cantidad_faltante']})" for insumo in insumos_faltantes]
-                    mensaje_error += ", ".join(detalles)
-                    return self.error_response(mensaje_error, 409)
+                    if status_lote >= 400:
+                        # Detener el cambio de estado si falla la creación del lote
+                        return self.error_response(f"Fallo al registrar el lote de producto terminado: {resultado_lote.get('error', 'Error desconocido')}", 500)
+                    
+                # 3. Cambiar el estado en la base de datos (y actualizar fechas)
+                result = self.model.cambiar_estado(orden_id, nuevo_estado)
 
-            # Si pasa la validación o el estado no es 'EN_PROCESO', cambiamos el estado.
-            result = self.model.cambiar_estado(orden_id, nuevo_estado)
+                if result.get('success'):
+                    # Inyectar un mensaje más informativo para el frontend
+                    if nuevo_estado == 'COMPLETADA' and 'resultado_lote' in locals() and resultado_lote.get('success'):
+                        message_to_use = f"Orden completada. Lote N° {resultado_lote['data']['numero_lote']} registrado en Inventario de Productos ({origen_lote})."
+                    elif nuevo_estado == 'EN_PROCESO':
+                        message_to_use = "Producción iniciada correctamente. Insumos reservados."
+                    else:
+                        message_to_use = f"Estado actualizado a {nuevo_estado.replace('_', ' ')}."
+                    
+                    return self.success_response(data=result.get('data'), message=message_to_use)
+                else:
+                    return self.error_response(result.get('error', 'Error al cambiar el estado.'), 500)
 
-            if result.get('success'):
-                return self.success_response(data=result.get('data'), message=result.get('message'))
-            else:
-                return self.error_response(result.get('error', 'Error al cambiar el estado.'), 500)
-
-        except Exception as e:
-            logger.error(f"Error en cambiar_estado_orden para la orden {orden_id}: {e}", exc_info=True)
-            return self.error_response(f"Error interno: {str(e)}", 500)
+            except Exception as e:
+                logger.error(f"Error en cambiar_estado_orden para la orden {orden_id}: {e}", exc_info=True)
+                return self.error_response(f"Error interno: {str(e)}", 500)
 
     def crear_orden_desde_planificacion(self, producto_id: int, item_ids: List[int], usuario_id: int) -> Dict:
         """
         Orquesta la creación de una orden consolidada desde el módulo de planificación.
-        CORREGIDO: Opera sobre item_ids y actualiza los ítems en lote.
         """
         from app.models.pedido import PedidoModel
         from app.models.receta import RecetaModel
@@ -300,6 +396,11 @@ class OrdenProduccionController(BaseController):
             items = items_result['data']
             cantidad_total = sum(item['cantidad'] for item in items)
 
+            # --- NUEVA LÓGICA: Obtener el ID del Pedido (Orden de Venta) de referencia ---
+            # Se toma el ID del primer ítem como referencia principal para el campo.
+            primer_pedido_id = items[0].get('pedido_id') if items else None
+            # ---------------------------------------------------------------------------
+
             # 2. Encontrar receta activa
             receta_result = receta_model.find_all({'producto_id': producto_id, 'activa': True}, limit=1)
             if not receta_result.get('data'):
@@ -312,7 +413,10 @@ class OrdenProduccionController(BaseController):
                 'cantidad_planificada': cantidad_total,
                 'fecha_planificada': date.today().isoformat(),
                 'receta_id': receta['id'],
-                'prioridad': 'NORMAL'
+                'prioridad': 'NORMAL',
+                # --- INCLUIR EL CAMPO pedido_id EN LOS DATOS ---
+                'pedido_id': primer_pedido_id 
+                # -----------------------------------------------
             }
             resultado_creacion = self.crear_orden(datos_orden, usuario_id)
 
@@ -332,7 +436,6 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             return {'success': False, 'error': f'Error en el proceso de consolidación: {str(e)}'}
 
-
     def obtener_datos_para_formulario(self) -> Dict:
         """
         Obtiene los datos necesarios para popular los menús desplegables
@@ -341,8 +444,8 @@ class OrdenProduccionController(BaseController):
         try:
             productos = self.producto_controller.obtener_todos_los_productos()
             recetas = self.receta_controller.obtener_recetas({'activa': True})
-            todos_los_usuarios = self.usuario_controller.obtener_todos()
-            operarios = [u for u in todos_los_usuarios if u.get('rol') in ['OPERARIO', 'SUPERVISOR']]
+            todos_los_usuarios = self.usuario_controller.obtener_todos_los_usuarios()
+            operarios = [u for u in todos_los_usuarios if u.get('roles', {}).get('codigo') in ['OPERARIO', 'SUPERVISOR']]
 
             return {
                 'productos': productos,

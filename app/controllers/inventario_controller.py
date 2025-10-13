@@ -99,47 +99,65 @@ class InventarioController(BaseController):
             return {'success': False, 'error': str(e)}
 
     def verificar_stock_para_op(self, orden_produccion: Dict) -> dict:
-        """
-        "Dry Run": Verifica si hay stock suficiente para una OP sin reservar.
-        Devuelve una lista de insumos faltantes. No modifica la base de datos.
-        """
-        receta_model = RecetaModel()
-        try:
-            receta_id = orden_produccion['receta_id']
-            cantidad_a_producir = orden_produccion['cantidad_planificada']
+            """
+            "Dry Run": Verifica si hay stock suficiente para una OP sin reservar.
+            Devuelve una lista de insumos faltantes. No modifica la base de datos.
+            Añade tolerancia para errores de punto flotante.
+            """
+            receta_model = RecetaModel()
+            try:
+                receta_id = orden_produccion['receta_id']
+                cantidad_a_producir = orden_produccion['cantidad_planificada']
 
-            ingredientes_result = receta_model.get_ingredientes(receta_id)
-            if not ingredientes_result.get('success'):
-                raise Exception("No se pudieron obtener los ingredientes de la receta.")
+                ingredientes_result = receta_model.get_ingredientes(receta_id)
+                if not ingredientes_result.get('success'):
+                    raise Exception("No se pudieron obtener los ingredientes de la receta.")
 
-            ingredientes = ingredientes_result.get('data', [])
-            insumos_faltantes = []
+                ingredientes = ingredientes_result.get('data', [])
+                insumos_faltantes = []
+                
+                # Definir un umbral de tolerancia para errores de punto flotante
+                TOLERANCE = 1e-9 # 0.000000001 - Cualquier cosa menor a esto es 0
 
-            for ingrediente in ingredientes:
-                insumo_id = ingrediente['id_insumo']
-                cantidad_necesaria = ingrediente['cantidad'] * cantidad_a_producir
+                for ingrediente in ingredientes:
+                    insumo_id = ingrediente['id_insumo']
+                    cantidad_necesaria = ingrediente['cantidad'] * cantidad_a_producir
 
-                stock_disponible_result = self.insumo_model.find_by_id(insumo_id, 'id_insumo')
+                    stock_disponible_result = self.insumo_model.find_by_id(insumo_id, 'id_insumo')
 
-                if stock_disponible_result.get('success'):
-                    stock_actual = stock_disponible_result['data'].get('stock_actual', 0)
-                else:
-                    stock_actual = 0
+                    if stock_disponible_result.get('success'):
+                        stock_actual = stock_disponible_result['data'].get('stock_actual', 0)
+                    else:
+                        stock_actual = 0
 
-                if stock_actual < cantidad_necesaria:
-                    insumos_faltantes.append({
-                        'insumo_id': insumo_id,
-                        'nombre': ingrediente.get('nombre_insumo', 'N/A'),
-                        'cantidad_necesaria': cantidad_necesaria,
-                        'stock_disponible': stock_actual,
-                        'cantidad_faltante': cantidad_necesaria - stock_actual
-                    })
+                    # Calcular el faltante
+                    cantidad_faltante = cantidad_necesaria - stock_actual
 
-            return {'success': True, 'data': {'insumos_faltantes': insumos_faltantes}}
+                    # --- LÓGICA DE CORRECCIÓN DE PUNTO FLOTANTE ---
+                    # 1. Si la cantidad faltante es positiva pero menor a la tolerancia, la tratamos como cero.
+                    if 0 < cantidad_faltante < TOLERANCE:
+                        cantidad_faltante = 0
 
-        except Exception as e:
-            logger.error(f"Error verificando stock para OP {orden_produccion.get('id', 'N/A')}: {e}", exc_info=True)
-            return {'success': False, 'error': str(e)}
+                    # 2. Si la cantidad faltante es negativa (hay sobrestock), la tratamos como cero.
+                    if cantidad_faltante < 0:
+                        cantidad_faltante = 0
+                    # -----------------------------------------------
+
+
+                    if cantidad_faltante > 0:
+                        insumos_faltantes.append({
+                            'insumo_id': insumo_id,
+                            'nombre': ingrediente.get('nombre_insumo', 'N/A'),
+                            'cantidad_necesaria': cantidad_necesaria,
+                            'stock_disponible': stock_actual,
+                            'cantidad_faltante': cantidad_faltante
+                        })
+
+                return {'success': True, 'data': {'insumos_faltantes': insumos_faltantes}}
+
+            except Exception as e:
+                logger.error(f"Error verificando stock para OP {orden_produccion.get('id', 'N/A')}: {e}", exc_info=True)
+                return {'success': False, 'error': str(e)}
 
     def obtener_lotes(self, filtros: Optional[Dict] = None) -> tuple:
         """Obtener todos los lotes con filtros opcionales"""
