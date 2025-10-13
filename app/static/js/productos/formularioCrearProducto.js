@@ -156,6 +156,11 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
+        if(productoData.receta_items.length==0){
+             showNotificationModal('No se ha asignado una receta al producto', 'Por favor, ingrese al menos un ingrediente para crear el producto.');
+             return;
+        }
+
         const url = isEditBoolean ? `/api/productos/catalogo/actualizar/${ID_producto}` : '/api/productos/catalogo/nuevo';
         const method = isEditBoolean ? 'PUT' : 'POST';
 
