@@ -28,8 +28,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const nombreInput = document.getElementById('nombre');
     const apellidoInput = document.getElementById('apellido');
     const rolSelect = document.getElementById('role_id');
-    const cuilInput = document.getElementById('cuil_cuit');
     const telefonoInput = document.getElementById('telefono');
+    const parte1_cuil = document.getElementById('cuit_parte1');
+    const parte2_cuil = document.getElementById('cuit_parte2');
+    const parte3_cuil = document.getElementById('cuit_parte3');
+    const cuilGroup = document.querySelector('.cuit-input-group'); // Contenedor visual para errores
+    const cuilHiddenInput = document.getElementById('cuil_cuit_hidden'); // El campo que guarda el valor final
     const cuilHelper = document.getElementById('cuil-helper');
     const requiredInputsStep1 = personalInfoSection ? personalInfoSection.querySelectorAll('input[required], select[required]') : [];
 
@@ -98,18 +102,18 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     rolCards.forEach(card => {
-        card.addEventListener('click', function() {
+        card.addEventListener('click', function () {
             // Remover selección anterior
             rolCards.forEach(c => c.classList.remove('selected'));
-            
+
             // Seleccionar nuevo rol
             this.classList.add('selected');
             selectedRol = this.dataset.rolId;
             if (rolInput) rolInput.value = selectedRol;
-            
+
             validationState.rol = true;
             updateStepButtonState();
-            
+
             console.log('Rol seleccionado:', selectedRol);
         });
     });
@@ -130,18 +134,18 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     turnoCards.forEach(card => {
-        card.addEventListener('click', function() {
+        card.addEventListener('click', function () {
             // Remover selección anterior
             turnoCards.forEach(c => c.classList.remove('selected'));
-            
+
             // Seleccionar nuevo turno
             this.classList.add('selected');
             selectedTurno = this.dataset.turnoId;
             if (turnoInput) turnoInput.value = selectedTurno;
-            
+
             validationState.turno = true;
             updateStepButtonState();
-            
+
             console.log('Turno seleccionado:', selectedTurno);
         });
     });
@@ -149,7 +153,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // ==================== SELECTOR DE SECTORES ====================
     const MAX_SECTORES = 2;
     let selectedSectores = [];
-    
+
     const sectorCards = document.querySelectorAll('.sector-card');
     const sectoresInput = document.getElementById('sectores');
     const counterText = document.getElementById('counterText');
@@ -172,9 +176,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function updateSectoresCounter() {
         if (!counterText) return;
-        
+
         counterText.textContent = `${selectedSectores.length}/${MAX_SECTORES}`;
-        
+
         if (selectedSectores.length === MAX_SECTORES) {
             sectoresCounter.classList.add('warning');
             // Deshabilitar cards no seleccionadas
@@ -207,11 +211,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     sectorCards.forEach(card => {
-        card.addEventListener('click', function() {
+        card.addEventListener('click', function () {
             if (this.classList.contains('disabled')) return;
-            
+
             const sectorId = this.dataset.sectorId;
-            
+
             if (this.classList.contains('selected')) {
                 // Deseleccionar
                 this.classList.remove('selected');
@@ -223,11 +227,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     selectedSectores.push(sectorId);
                 }
             }
-            
+
             updateSectorOrder();
             updateSectoresCounter();
             if (sectoresInput) sectoresInput.value = JSON.stringify(selectedSectores);
-            
+
             console.log('Sectores seleccionados:', selectedSectores);
         });
     });
@@ -242,11 +246,21 @@ document.addEventListener('DOMContentLoaded', function () {
         const formField = inputElement.closest('.col-md-6, .col-md-8, .col-md-4, .col-12');
         if (!formField) return;
 
+        // Ocultar mensaje de éxito si existe
+        const successDiv = formField.querySelector('.valid-feedback');
+        if (successDiv) successDiv.style.display = 'none';
+
         let errorDiv = formField.querySelector('.invalid-feedback');
         if (!errorDiv) {
             errorDiv = document.createElement('div');
             errorDiv.className = 'invalid-feedback';
-            inputElement.parentNode.appendChild(errorDiv);
+
+            // Lógica para insertar el error en el lugar correcto
+            if (inputElement.classList.contains('cuit-input-group')) {
+                inputElement.insertAdjacentElement('afterend', errorDiv);
+            } else {
+                inputElement.parentNode.appendChild(errorDiv);
+            }
         }
 
         errorDiv.textContent = message;
@@ -260,14 +274,81 @@ document.addEventListener('DOMContentLoaded', function () {
         const formField = inputElement.closest('.col-md-6, .col-md-8, .col-md-4, .col-12');
         if (!formField) return;
 
+        // Ocultar mensaje de error
         const errorDiv = formField.querySelector('.invalid-feedback');
         if (errorDiv) {
             errorDiv.style.display = 'none';
             errorDiv.textContent = '';
         }
 
+        // Lógica para crear y mostrar el mensaje de éxito
+        let successDiv = formField.querySelector('.valid-feedback');
+        if (!successDiv) {
+            successDiv = document.createElement('div');
+            successDiv.className = 'valid-feedback';
+
+            if (inputElement.classList.contains('cuit-input-group')) {
+                inputElement.insertAdjacentElement('afterend', successDiv);
+            } else {
+                inputElement.parentNode.appendChild(successDiv);
+            }
+        }
+        successDiv.textContent = 'Válido.';
+        successDiv.style.display = 'block';
+
         inputElement.classList.remove('is-invalid');
         inputElement.classList.add('is-valid');
+    }
+
+    function handleCuitChange() {
+        // Sanitizar: solo números en cada campo
+        if (parte1_cuil) parte1_cuil.value = parte1_cuil.value.replace(/\D/g, '');
+        if (parte2_cuil) parte2_cuil.value = parte2_cuil.value.replace(/\D/g, '');
+        if (parte3_cuil) parte3_cuil.value = parte3_cuil.value.replace(/\D/g, '');
+
+        const val1 = parte1_cuil.value;
+        const val2 = parte2_cuil.value;
+        const val3 = parte3_cuil.value;
+        const totalLength = (val1 + val2 + val3).length;
+        const remaining = 11 - totalLength;
+
+        if (totalLength > 0 && remaining > 0) {
+            if (cuilHelper) {
+                cuilHelper.textContent = `Faltan ${remaining} dígito(s).`;
+                cuilHelper.style.display = 'block';
+            }
+        } else {
+            if (cuilHelper) cuilHelper.style.display = 'none';
+        }
+
+        const combinedFormattedValue = `${val1}-${val2}-${val3}`;
+        const valueForValidation = (val1 || val2 || val3) ? combinedFormattedValue : '';
+
+        // 3. Asigna ese string al campo oculto que se enviará al backend
+        if (cuilHiddenInput) {
+            cuilHiddenInput.value = valueForValidation;
+        }
+        
+        validateCuit(); // Llama a la validación específica
+    }
+
+    function validateCuit() {
+        const value = cuilHiddenInput ? cuilHiddenInput.value : '';
+
+        if (!value) {
+            showError(cuilGroup, 'El CUIL/CUIT es un campo obligatorio.');
+            validationState.cuil_cuit = false;
+        } else {
+            const cuilRegex = /^\d{2}-\d{8}-\d{1}$/;
+            if (!cuilRegex.test(value)) {
+                showError(cuilGroup, 'El formato del CUIL/CUIT no es válido o está incompleto.');
+                validationState.cuil_cuit = false;
+            } else {
+                showSuccess(cuilGroup);
+                validationState.cuil_cuit = true;
+            }
+        }
+        updateStepButtonState();
     }
 
     function clearError(inputElement) {
@@ -287,7 +368,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function debounce(func, delay) {
         let timeout;
-        return function(...args) {
+        return function (...args) {
             const context = this;
             clearTimeout(timeout);
             timeout = setTimeout(() => func.apply(context, args), delay);
@@ -299,12 +380,12 @@ document.addEventListener('DOMContentLoaded', function () {
         validationState.addressVerified = false;
 
         if (!calleInput.value || !alturaInput.value || !localidadInput.value || !provinciaSelect.value) {
-            if(addressFeedback) addressFeedback.innerHTML = '';
+            if (addressFeedback) addressFeedback.innerHTML = '';
             updateStepButtonState(); // Update button state immediately
             return;
         }
 
-        if(addressFeedback) {
+        if (addressFeedback) {
             addressFeedback.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Verificando dirección...';
             addressFeedback.className = 'form-text text-muted my-2';
         }
@@ -329,7 +410,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 addressFeedback.innerHTML = `<i class="bi bi-check-circle-fill text-success me-2"></i>Dirección verificada: ${normalizedAddress}`;
                 addressFeedback.className = 'form-text text-success my-2';
                 validationState.addressVerified = true;
-            } else if(addressFeedback) {
+            } else if (addressFeedback) {
                 addressFeedback.innerHTML = `<i class="bi bi-x-circle-fill text-danger me-2"></i>Error: ${result.message || 'No se pudo verificar la dirección.'}`;
                 addressFeedback.className = 'form-text text-danger my-2';
                 validationState.addressVerified = false;
@@ -337,7 +418,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         } catch (error) {
             console.error('Error al verificar dirección:', error);
-            if(addressFeedback) {
+            if (addressFeedback) {
                 addressFeedback.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Error de red al verificar la dirección.';
                 addressFeedback.className = 'form-text text-warning my-2';
             }
@@ -368,7 +449,7 @@ document.addEventListener('DOMContentLoaded', function () {
             default:
                 return;
         }
-        
+
         // --- Validaciones de formato ---
         if (!value || !value.trim()) {
             showError(inputElement, 'Este campo es obligatorio.');
@@ -431,13 +512,13 @@ document.addEventListener('DOMContentLoaded', function () {
             showError(inputElement, 'Error de red al validar. Intente nuevamente.');
             validationState[field] = false;
         }
-        
+
         updateStepButtonState();
     }
 
     function validateNombre() {
         const nombre = nombreInput.value.trim();
-        
+
         if (!nombre) {
             showError(nombreInput, 'El nombre es obligatorio.');
             validationState.nombre = false;
@@ -451,13 +532,13 @@ document.addEventListener('DOMContentLoaded', function () {
             showSuccess(nombreInput);
             validationState.nombre = true;
         }
-        
+
         updateStepButtonState();
     }
 
     function validateApellido() {
         const apellido = apellidoInput.value.trim();
-        
+
         if (!apellido) {
             showError(apellidoInput, 'El apellido es obligatorio.');
             validationState.apellido = false;
@@ -471,7 +552,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showSuccess(apellidoInput);
             validationState.apellido = true;
         }
-        
+
         updateStepButtonState();
     }
 
@@ -483,7 +564,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showSuccess(rolSelect);
             validationState.rol = true;
         }
-        
+
         updateStepButtonState();
     }
 
@@ -492,9 +573,9 @@ document.addEventListener('DOMContentLoaded', function () {
             validationState.password = true;
             return;
         }
-        
+
         const password = passwordInput.value;
-        
+
         if (!password) {
             showError(passwordInput, 'La contraseña es obligatoria.');
             validationState.password = false;
@@ -505,14 +586,14 @@ document.addEventListener('DOMContentLoaded', function () {
             showSuccess(passwordInput);
             validationState.password = true;
         }
-        
+
         updateStepButtonState();
     }
 
     function validateAddressField(field) {
         let inputElement, fieldName;
-        
-        switch(field) {
+
+        switch (field) {
             case 'calle':
                 inputElement = calleInput;
                 fieldName = 'La calle';
@@ -530,11 +611,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 fieldName = 'La localidad';
                 break;
         }
-        
+
         if (!inputElement) return;
-        
+
         const value = inputElement.value.trim();
-        
+
         if (!value) {
             showError(inputElement, `${fieldName} es obligatoria.`);
             validationState[field] = false;
@@ -542,51 +623,51 @@ document.addEventListener('DOMContentLoaded', function () {
             showSuccess(inputElement);
             validationState[field] = true;
         }
-        
+
         updateStepButtonState();
     }
 
     function checkStep1Complete() {
         let allFilled = true;
-        
+
         requiredInputsStep1.forEach(input => {
             if (!input.value || !input.value.trim()) {
                 allFilled = false;
             }
         });
-        
-        const isStep1Valid = validationState.legajo && 
-                            validationState.email && 
-                            validationState.nombre && 
-                            validationState.apellido && 
-                            validationState.rol && 
-                            validationState.password &&
-                            validationState.cuil_cuit &&
-                            validationState.telefono &&
-                            validationState.turno &&
-                            validationState.sectores &&
-                            allFilled;
-        
+
+        const isStep1Valid = validationState.legajo &&
+            validationState.email &&
+            validationState.nombre &&
+            validationState.apellido &&
+            validationState.rol &&
+            validationState.password &&
+            validationState.cuil_cuit &&
+            validationState.telefono &&
+            validationState.turno &&
+            validationState.sectores &&
+            allFilled;
+
         validationState.step1Complete = isStep1Valid;
         return isStep1Valid;
     }
 
     function checkStep2Complete() {
         let allFilled = true;
-        
+
         requiredInputsStep2.forEach(input => {
             if (!input.value || !input.value.trim()) {
                 allFilled = false;
             }
         });
-        
-        const isStep2Valid = validationState.calle && 
-                            validationState.altura && 
-                            validationState.provincia && 
-                            validationState.localidad &&
-                            allFilled &&
-                            validationState.addressVerified;
-        
+
+        const isStep2Valid = validationState.calle &&
+            validationState.altura &&
+            validationState.provincia &&
+            validationState.localidad &&
+            allFilled &&
+            validationState.addressVerified;
+
         validationState.step2Complete = isStep2Valid;
         return isStep2Valid;
     }
@@ -595,7 +676,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (currentStep === 1) {
             const isValid = checkStep1Complete();
             nextStepBtn.disabled = !isValid;
-            
+
             if (isValid) {
                 nextStepBtn.classList.remove('btn-secondary');
                 nextStepBtn.classList.add('btn-primary');
@@ -606,7 +687,7 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (currentStep === 2) {
             const isValid = checkStep2Complete();
             nextStepBtn.disabled = !isValid;
-            
+
             if (isValid) {
                 nextStepBtn.classList.remove('btn-secondary');
                 nextStepBtn.classList.add('btn-primary');
@@ -621,7 +702,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (nombreInput) {
         nombreInput.addEventListener('blur', validateNombre);
-        nombreInput.addEventListener('input', function() {
+        nombreInput.addEventListener('input', function () {
             if (this.value.trim().length > 0) {
                 validateNombre();
             }
@@ -630,11 +711,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (apellidoInput) {
         apellidoInput.addEventListener('blur', validateApellido);
-        apellidoInput.addEventListener('input', function() {
+        apellidoInput.addEventListener('input', function () {
             if (this.value.trim().length > 0) {
                 validateApellido();
             }
         });
+    }
+
+    if (parte1_cuil && parte2_cuil && parte3_cuil) {
+        parte1_cuil.addEventListener('input', handleCuitChange);
+        parte2_cuil.addEventListener('input', handleCuitChange);
+        parte3_cuil.addEventListener('input', handleCuitChange);
+
+        parte1_cuil.addEventListener('keyup', () => { if (parte1_cuil.value.length === 2) parte2_cuil.focus(); });
+        parte2_cuil.addEventListener('keyup', () => { if (parte2_cuil.value.length === 8) parte3_cuil.focus(); });
     }
 
     if (rolSelect) {
@@ -643,55 +733,32 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (legajoInput) {
-        legajoInput.addEventListener('blur', function() {
+        legajoInput.addEventListener('blur', function () {
             validateField('legajo', this.value);
         });
     }
 
     if (emailInput) {
-        emailInput.addEventListener('blur', function() {
+        emailInput.addEventListener('blur', function () {
             validateField('email', this.value);
         });
     }
 
-    if (cuilInput) {
-        cuilInput.addEventListener('input', function () {
-            // Sanitizar: solo números y máximo 11
-            this.value = this.value.replace(/\D/g, '').slice(0, 11);
-            
-            const remaining = 11 - this.value.length;
-            if (this.value.length > 0 && this.value.length < 11) {
-                cuilHelper.textContent = `Faltan ${remaining} dígito(s).`;
-                cuilHelper.style.display = 'inline';
-            } else {
-                cuilHelper.textContent = '';
-                cuilHelper.style.display = 'none';
-            }
-        });
-
-        cuilInput.addEventListener('blur', function() {
-            validateField('cuil_cuit', this.value);
-            // Ocultar helper si el campo es válido o está vacío
-            if (this.value.length === 11 || this.value.length === 0) {
-                 cuilHelper.style.display = 'none';
-            }
-        });
-    }
 
     if (telefonoInput) {
-        telefonoInput.addEventListener('input', function() {
+        telefonoInput.addEventListener('input', function () {
             // Sanitizar: solo números
             this.value = this.value.replace(/\D/g, '');
         });
 
-        telefonoInput.addEventListener('blur', function() {
+        telefonoInput.addEventListener('blur', function () {
             validateField('telefono', this.value);
         });
     }
 
     if (passwordInput) {
         passwordInput.addEventListener('blur', validatePassword);
-        passwordInput.addEventListener('input', function() {
+        passwordInput.addEventListener('input', function () {
             if (this.value.length >= 8) {
                 validatePassword();
             }
@@ -759,25 +826,25 @@ document.addEventListener('DOMContentLoaded', function () {
             step1Element.classList.remove('completed');
             step2Element.classList.remove('active', 'completed');
             step3Element.classList.remove('active', 'completed');
-            
+
             personalInfoSection.style.display = 'block';
             if (addressInfoSection) addressInfoSection.style.display = 'none';
             if (faceRegistrationSection) faceRegistrationSection.style.display = 'none';
-            
+
             nextStepBtn.style.display = 'inline-block';
             nextStepBtn.innerHTML = 'Siguiente <i class="bi bi-arrow-right ms-1"></i>';
             prevStepBtn.style.display = 'none';
             submitFormBtn.style.display = 'none';
             cancelBtn.style.display = 'inline-block';
-            
+
             updateStepButtonState();
-            
+
         } else if (step === 2) {
             if (nextStepBtn.disabled) {
                 showNotificationModal('Formulario Incompleto', 'Por favor, complete todos los campos obligatorios antes de continuar.', 'warning');
                 return;
             }
-            
+
             currentStep = 2;
             step1Element.classList.remove('active');
             step1Element.classList.add('completed');
@@ -794,18 +861,18 @@ document.addEventListener('DOMContentLoaded', function () {
             prevStepBtn.style.display = 'inline-block';
             submitFormBtn.style.display = 'none';
             cancelBtn.style.display = 'none';
-            
+
             updateStepButtonState();
-            
+
         } else if (step === 3) {
             if (!checkStep2Complete()) {
-                const message = !validationState.addressVerified 
+                const message = !validationState.addressVerified
                     ? 'La dirección ingresada no pudo ser verificada. Por favor, corrÃ­jala antes de continuar.'
                     : 'Por favor, complete todos los campos de dirección obligatorios antes de continuar.';
                 showNotificationModal('Dirección Inválida', message, 'warning');
                 return;
             }
-            
+
             currentStep = 3;
             step1Element.classList.add('completed');
             step2Element.classList.remove('active');
@@ -823,7 +890,7 @@ document.addEventListener('DOMContentLoaded', function () {
             cancelBtn.style.display = 'none';
         }
     }
-    
+
     if (nextStepBtn) {
         nextStepBtn.addEventListener('click', () => {
             if (currentStep === 1) {
@@ -833,7 +900,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
-    
+
     if (prevStepBtn) {
         prevStepBtn.addEventListener('click', () => {
             if (currentStep === 2) {
@@ -852,27 +919,27 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.log('Foto ya confirmada, no se puede iniciar la cámara nuevamente');
                 return;
             }
-            
+
             try {
                 videoStream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        width: { ideal: 640 }, 
-                        height: { ideal: 480 }, 
-                        facingMode: 'user' 
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user'
                     }
                 });
-                
+
                 videoElement.srcObject = videoStream;
-                
+
                 const cameraInactive = document.getElementById('cameraInactive');
                 const cameraActive = document.getElementById('cameraActive');
-                
+
                 if (cameraInactive) cameraInactive.style.display = 'none';
                 if (cameraActive) cameraActive.style.display = 'block';
-                
+
                 this.disabled = true;
                 this.innerHTML = '<i class="bi bi-camera-video-fill me-2"></i>Cámara Activa';
-                
+
             } catch (error) {
                 console.error('Error al acceder a la cámara:', error);
                 showNotificationModal('Error de Cámara', 'No se pudo acceder a la cámara. Verifique los permisos y que no esté siendo usada por otra aplicación.', 'error');
@@ -886,27 +953,27 @@ document.addEventListener('DOMContentLoaded', function () {
                 console.log('Foto ya confirmada, no se puede capturar nuevamente');
                 return;
             }
-            
+
             if (!videoStream || !videoElement.srcObject) {
                 showNotificationModal('Cámara no Iniciada', 'Por favor, inicie la cámara antes de capturar una foto.', 'warning');
                 return;
             }
-            
+
             const context = canvasElement.getContext('2d');
             canvasElement.width = videoElement.videoWidth;
             canvasElement.height = videoElement.videoHeight;
             context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-            
+
             const imageData = canvasElement.toDataURL('image/jpeg', 0.8);
-            
+
             this.disabled = true;
             this.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Verificando rostro...';
-            
+
             if (prevStepBtn) {
                 prevStepBtn.disabled = true;
                 prevStepBtn.title = 'No puede volver después de capturar una foto';
             }
-            
+
             try {
                 const response = await fetch('/admin/usuarios/validar_rostro', {
                     method: 'POST',
@@ -919,55 +986,55 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
 
                 const result = await response.json();
-                
+
                 if (!result.valid) {
                     const errorMessage = result.message || 'Error al validar el rostro';
                     showNotificationModal('Error de Validación Facial', errorMessage, 'error');
-                    
+
                     const photoPreview = document.getElementById('photoPreview');
                     if (photoPreview) {
                         const errorDiv = document.createElement('div');
                         errorDiv.className = 'alert alert-danger mt-3';
                         errorDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-2"></i>${errorMessage}`;
                         photoPreview.appendChild(errorDiv);
-                        
+
                         setTimeout(() => errorDiv.remove(), 5000);
                     }
-                    
+
                     this.disabled = false;
                     this.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar Foto';
-                    
+
                     if (prevStepBtn) {
                         prevStepBtn.disabled = false;
                         prevStepBtn.title = '';
                     }
-                    
+
                     faceDataInput.value = '';
-                    
+
                     return;
                 }
-                
+
                 capturedImage.src = imageData;
                 faceDataInput.value = imageData;
-                
+
                 const cameraActive = document.getElementById('cameraActive');
                 const photoPreview = document.getElementById('photoPreview');
-                
+
                 if (cameraActive) cameraActive.style.display = 'none';
                 if (photoPreview) photoPreview.style.display = 'block';
-                
+
                 photoTaken = true;
-                
+
                 this.disabled = false;
                 this.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar Foto';
-                
+
             } catch (error) {
                 console.error('Error al validar rostro:', error);
                 showNotificationModal('Error de Conexión', 'No se pudo validar el rostro. Verifique su conexión e intente nuevamente.', 'error');
-                
+
                 this.disabled = false;
                 this.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar Foto';
-                
+
                 if (prevStepBtn) {
                     prevStepBtn.disabled = false;
                     prevStepBtn.title = '';
@@ -992,7 +1059,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 videoStream.getTracks().forEach(track => track.stop());
                 videoStream = null;
             }
-            
+
             photoConfirmed = true;
             step3Element.classList.add('completed');
 
@@ -1005,13 +1072,13 @@ document.addEventListener('DOMContentLoaded', function () {
             this.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Foto Confirmada';
             this.classList.remove('btn-success');
             this.classList.add('btn-secondary');
-            
+
             if (submitFormBtn) {
                 submitFormBtn.disabled = false;
                 submitFormBtn.classList.remove('btn-secondary');
                 submitFormBtn.classList.add('btn-success');
             }
-            
+
             showNotificationModal('Éxito', 'Rostro confirmado correctamente. Ahora puede finalizar la creación del usuario.', 'success');
         });
     }
@@ -1021,21 +1088,21 @@ document.addEventListener('DOMContentLoaded', function () {
             console.log('No se puede retomar la foto después de confirmar');
             return;
         }
-        
+
         const photoPreview = document.getElementById('photoPreview');
         const cameraActive = document.getElementById('cameraActive');
-        
+
         if (photoPreview) photoPreview.style.display = 'none';
         if (cameraActive) cameraActive.style.display = 'block';
-        
+
         photoTaken = false;
         faceDataInput.value = '';
-        
+
         if (prevStepBtn) {
             prevStepBtn.disabled = false;
             prevStepBtn.title = '';
         }
-        
+
         if (!videoStream || !videoStream.active) {
             if (startCameraBtn) {
                 startCameraBtn.disabled = false;
@@ -1043,11 +1110,11 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     }
-    
+
     if (retakePhotoBtn) {
         retakePhotoBtn.addEventListener('click', retakePhoto);
     }
-    
+
     if (retakePhotoBtn2) {
         retakePhotoBtn2.addEventListener('click', retakePhoto);
     }
@@ -1061,13 +1128,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 showNotificationModal('Rostro no Confirmado', 'Por favor, capture y confirme su rostro antes de crear el usuario.', 'warning');
                 return false;
             }
-            
+
             if (!faceDataInput || !faceDataInput.value) {
                 e.preventDefault();
                 showNotificationModal('Foto Requerida', 'No se ha capturado ninguna foto. Por favor, capture su rostro para continuar.', 'warning');
                 return false;
             }
-            
+
             if (submitFormBtn) {
                 submitFormBtn.disabled = true;
                 submitFormBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Creando usuario...';
@@ -1076,8 +1143,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- LIMPIEZA AL SALIR ---
-    
-    window.addEventListener('beforeunload', function() {
+
+    window.addEventListener('beforeunload', function () {
         if (videoStream) {
             videoStream.getTracks().forEach(track => track.stop());
         }
@@ -1085,7 +1152,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- INICIALIZACIÓN ---
     updateStepButtonState();
-    
+
     // Validar campos iniciales si tienen valores
     if (nombreInput && nombreInput.value.trim()) validateNombre();
     if (apellidoInput && apellidoInput.value.trim()) validateApellido();
@@ -1093,8 +1160,10 @@ document.addEventListener('DOMContentLoaded', function () {
     if (legajoInput && legajoInput.value.trim()) validateField('legajo', legajoInput.value);
     if (emailInput && emailInput.value.trim()) validateField('email', emailInput.value);
     if (passwordInput && passwordInput.value) validatePassword();
-    if (cuilInput && cuilInput.value.trim()) validateField('cuil_cuit', cuilInput.value);
+    if (parte1_cuil && (parte1_cuil.value || parte2_cuil.value || parte3_cuil.value)) {
+        handleCuitChange();
+    }
     if (telefonoInput && telefonoInput.value.trim()) validateField('telefono', telefonoInput.value);
-    
+
     console.log('Formulario de usuario mejorado inicializado correctamente');
 });

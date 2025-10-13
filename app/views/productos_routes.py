@@ -53,7 +53,7 @@ def crear_producto():
         producto = None
         insumos_resp, _ = insumo_controller.obtener_insumos()
         insumos = insumos_resp.get("data", [])
-        return render_template("productos/formulario.html", producto=producto, receta_items=[], insumos=insumos)
+        return render_template("productos/formulario.html", producto=producto, receta_items=[], is_edit=False, insumos=insumos)
     except Exception as e:
         logger.error(f"Error inesperado en crear_producto: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
@@ -169,12 +169,13 @@ def actualizar_producto(id_producto):
             insumo = insumos_dict.get(str(item['id_insumo']))
             if insumo:
                 item['precio_unitario'] = insumo.get('precio_unitario', 0)
+                
                 item['unidad_medida'] = insumo.get('unidad_medida', '')
             else:
                 item['precio_unitario'] = 0
                 item['unidad_medida'] = ''
 
-        return render_template("productos/formulario.html", producto=producto, insumos=insumos, receta_items=receta_items)
+        return render_template("productos/formulario.html", producto=producto, insumos=insumos, is_edit=True, receta_items=receta_items)
     except Exception as e:
         logger.error(f"Error inesperado en actualizar_producto: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500

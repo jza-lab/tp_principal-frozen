@@ -118,7 +118,7 @@
                     </div>
                     <div class="info-item" data-field="fecha_ingreso">
                         <label class="info-label">Fecha de Ingreso</label>
-                    <div class="info-value" id="value-fecha_ingreso">{{ usuario.fecha_ingreso.strftime('%d/%m/%Y') if usuario.fecha_ingreso else 'No especificada' }}</div>
+                    <div class="info-value" id="value-fecha_ingreso">{{ usuario.created_at[:10] if usuario.created_at else 'No especificada' }}</div>
                     </div>
                 </div>
             </div>

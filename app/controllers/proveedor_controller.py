@@ -26,13 +26,15 @@ class ProveedorController(BaseController):
             logger.error(f"Error obteniendo proveedores: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
-    def obtener_proveedores(self) -> tuple:
+    def obtener_proveedores(self, filtros: Optional[Dict] = None) -> tuple: # <-- ACEPTA FILTROS
         """Obtener lista de proveedores"""
         try:
-            result = self.model.get_all(include_direccion=True)
+            filtros = filtros or {} # Inicializar si es None
+            # Pasar los filtros, incluyendo 'busqueda', al modelo
+            result = self.model.get_all(include_direccion=True, filtros=filtros)
             if not result['success']:
                 return self.error_response(result['error'])
-            
+
             datos = result['data']
             sorted_data = sorted(datos, key=lambda x: x.get('activo', False), reverse=True)
 
@@ -60,7 +62,7 @@ class ProveedorController(BaseController):
             result = self.model.buscar_por_cuit(proveedor_cuil, include_direccion=True)
             if not result['success']:
                 return self.error_response(result['error'], 404)
-            
+
             serialized_data = self.schema.dump(result['data'])
             return self.success_response(data=result['data'])
         except Exception as e:
@@ -147,7 +149,7 @@ class ProveedorController(BaseController):
             if not existing.get('success'):
                 return self.error_response('Proveedor no encontrado', 404)
 
-    
+
             direccion_data = data.pop('direccion', None)
             validated_data = self.schema.load(data, partial=True)
 
@@ -162,19 +164,19 @@ class ProveedorController(BaseController):
                     return self.error_response('El CUIT/CUIL ya está registrado para otro proveedor', 400)
 
             if direccion_data:
-                
+
                 # 1. Obtener el ID de la dirección que el proveedor tiene ANTES de la actualización.
                 id_direccion_vieja = existing['data'].get('direccion_id')
-                
+
                 if id_direccion_vieja:
                     cantidad_misma_direccion = self.model.contar_proveedores_direccion(id_direccion_vieja)
-                    
+
                     if cantidad_misma_direccion > 1:
                         id_nueva_direccion = self._get_or_create_direccion(direccion_data)
                         if id_nueva_direccion:
                             validated_data['direccion_id'] = id_nueva_direccion
-                    else: 
-                        
+                    else:
+
                         self._actualizar_direccion(id_direccion_vieja, direccion_data)
 
                 else:
@@ -200,27 +202,29 @@ class ProveedorController(BaseController):
 
 
 
-         # --- MÉTODO NUEVO A AÑADIR ---
     def buscar_por_identificacion(self, data: Dict) -> Optional[Dict]:
         """
-
-        Busca un proveedor por CUIT/CUIL o por email.
-        Ideal para encontrar proveedores desde un archivo externo.
+        Busca un proveedor por CUIT/CUIL o por email y devuelve un único diccionario con los datos del proveedor.
         """
-        # Las columnas en el Excel pueden llamarse 'cuil_proveedor' o 'cuit'
         cuit = data.get('cuil_proveedor') or data.get('cuit')
         if cuit:
-            proveedor_result, _ = self.model.buscar_por_cuit(cuit)
-            if proveedor_result:
-                return proveedor_result # Devuelve el diccionario del proveedor
+            # --- CORRECCIÓN ---
+            # El modelo devuelve un diccionario: {'success': True, 'data': [{...}]}
+            proveedor_respuesta = self.model.buscar_por_cuit(cuit)
 
-        # Si no se encontró por CUIT, intentar por email
+            # Verificamos si la búsqueda fue exitosa y si se encontraron datos
+            if proveedor_respuesta.get('success') and proveedor_respuesta.get('data'):
+                # Devolvemos el primer diccionario de la lista de datos
+                return proveedor_respuesta['data'][0]
+            # ------------------
+
         email = data.get('email_proveedor') or data.get('email')
         if email:
-            proveedor_result, _ = self.model.buscar_por_email(email)
-            if proveedor_result:
-                return proveedor_result # Devuelve el diccionario del proveedor
+            # --- CORRECCIÓN (misma lógica para el email) ---
+            proveedor_respuesta = self.model.buscar_por_email(email)
+            if proveedor_respuesta.get('success') and proveedor_respuesta.get('data'):
+                return proveedor_respuesta['data'][0]
+            # ------------------
 
         # Si no se encontró por ninguno de los dos métodos
         return None
-    # --- FIN DEL MÉTODO NUEVO ---

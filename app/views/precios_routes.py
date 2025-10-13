@@ -120,77 +120,80 @@ def generar_reporte_consolidado(detalles):
 
 def procesar_archivo_proveedor(archivo, usuario):
     """
-    Procesa el archivo Excel usando los controllers - VERSIÓN CON FORMATO FRONTEND
+    Procesa el archivo Excel usando los controllers.
     """
     try:
         datos = pd.read_excel(archivo)
         resultados = []
-        insumos_actualizados = [] 
+        insumos_actualizados = []
+        logger.info("--- Iniciando procesamiento de archivo Excel ---")
 
         for indice, fila in datos.iterrows():
-            # Usar controller para buscar proveedor
-            proveedor = proveedor_controller.buscar_por_identificacion(fila.to_dict())
+            logger.info(f"--- Procesando Fila {indice + 2} ---")
 
+            proveedor = proveedor_controller.buscar_por_identificacion(fila.to_dict())
             if not proveedor:
+                # Esta parte ya maneja bien los errores
                 resultados.append({
-                    'fila': indice + 2,  # +2 porque Excel empieza en 1 y header en 1
+                    'fila': indice + 2,
                     'codigo_interno': fila.get('codigo_interno', 'Desconocido'),
                     'producto': fila.get('descripcion', 'Producto no especificado'),
                     'proveedor': 'No identificado',
-                    'estado': 'ERROR',  # Formato directo para frontend
+                    'estado': 'ERROR',
                     'mensaje': 'Proveedor no encontrado. Verifique email/CUIL'
                 })
                 continue
 
-            # Usar controller para buscar insumo
             codigo_buscar = fila.get('codigo_interno')
-            print('SE ESTA BUSCANDO---', codigo_buscar)
             insumo = insumo_controller.buscar_por_codigo_interno(codigo_buscar)
-
             if not insumo:
+                # Esta parte ya maneja bien los errores
                 resultados.append({
                     'fila': indice + 2,
                     'codigo_interno': codigo_buscar,
                     'producto': fila.get('descripcion', 'Producto no especificado'),
-                    'proveedor': proveedor['nombre'],
-                    'estado': 'ERROR',  # Formato directo para frontend
+                    'proveedor': proveedor.get('nombre', 'N/A'),
+                    'estado': 'ERROR',
                     'mensaje': f'Insumo con código {codigo_buscar} no encontrado en catálogo'
                 })
                 continue
 
-            # Procesar actualización de precio
-            resultado = procesar_actualizacion_precio(insumo, proveedor, fila, usuario)
-            if resultado.get('insumo_actualizado'):
-                insumos_actualizados.append(resultado['insumo_actualizado'])
-            resultado['fila'] = indice + 2
-            resultado['proveedor'] = proveedor['nombre']
-            resultado['codigo_interno'] = insumo['codigo_interno']
-            resultado['producto'] = insumo['nombre']
+            # --- INICIO DE LA CORRECCIÓN ---
 
-            if 'insumo_actualizado' in resultado:
-                 del resultado['insumo_actualizado']
+            # 1. Obtenemos el resultado PARCIAL del procesamiento del precio.
+            resultado_parcial = procesar_actualizacion_precio(insumo, proveedor, fila, usuario)
 
-            resultados.append(resultado)
-            if insumos_actualizados:
-                logger.info(f"Actualizando precios de productos para {len(insumos_actualizados)} insumos únicos.")
-                
-                productos_update_result, status = producto_controller.actualizar_costo_productos_insumo(insumos_actualizados)
-                
-                if not productos_update_result.get('success'):
-                    logger.error(f"Fallo al actualizar costos de productos: {productos_update_result.get('error')}")
-                    
+            # 2. Creamos el diccionario COMPLETO que el frontend espera.
+            resultado_completo = {
+                'fila': indice + 2,
+                'codigo_interno': insumo.get('codigo_interno', 'N/A'),
+                'producto': insumo.get('nombre', 'N/A'),
+                'proveedor': proveedor.get('nombre', 'N/A'),
+                **resultado_parcial # <-- La magia: fusionamos el resultado parcial aquí
+            }
+
+            # 3. Añadimos el diccionario COMPLETO a nuestra lista de resultados.
+            resultados.append(resultado_completo)
+
+            # --- FIN DE LA CORRECCIÓN ---
+
+            if resultado_parcial.get('insumo_actualizado'):
+                insumos_actualizados.append(resultado_parcial['insumo_actualizado'])
+
+        # Lógica para actualizar costos de productos (si aplica)
+        if insumos_actualizados:
+            logger.info(f"Actualizando precios de productos para {len(insumos_actualizados)} insumos únicos.")
+            productos_update_result, status = producto_controller.actualizar_costo_productos_insumo(insumos_actualizados)
+            if not productos_update_result.get('success'):
+                logger.error(f"Fallo al actualizar costos de productos: {productos_update_result.get('error')}")
+
         return resultados
 
     except Exception as e:
-        logger.error(f"Error procesando archivo: {str(e)}")
-        # Devolver un resultado de error en el formato correcto
+        logger.error(f"Error procesando archivo: {str(e)}", exc_info=True)
         return [{
-            'fila': 1,
-            'codigo_interno': 'ERROR',
-            'producto': 'Error en procesamiento',
-            'proveedor': 'Sistema',
-            'estado': 'ERROR',
-            'mensaje': f'Error procesando archivo: {str(e)}'
+            'fila': 1, 'estado': 'ERROR', 'codigo_interno': 'N/A', 'producto': 'N/A', 'proveedor': 'N/A',
+            'mensaje': f'Error crítico procesando el archivo: {str(e)}'
         }]
 
 def procesar_actualizacion_precio(insumo, proveedor, fila, usuario):
@@ -217,7 +220,7 @@ def procesar_actualizacion_precio(insumo, proveedor, fila, usuario):
 
             if exito:
                 # Registrar en historial (si tienes este controller)
-                insumo_actualizado_data = {'id_insumo': insumo['id_insumo']} 
+                insumo_actualizado_data = {'id_insumo': insumo['id_insumo']}
                 try:
                     historial_controller.registrar_cambio({
                         'id_insumo': insumo['id_insumo'],

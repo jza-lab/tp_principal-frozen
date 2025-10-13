@@ -76,7 +76,7 @@
                             </div>
                             <div class="col-6">
                                 <div class="small text-muted">IVA</div>
-                                <div class="fw-bold">$ {{ "%.2f"|format(orden.iva|float) }}</div>
+                                <div class="fw-bold"> {{ 'Aplica' if orden.iva > 0 else 'No aplica' }}</div>
                             </div>
                             <div class="col-12">
                                 <div class="small text-muted">Total</div>

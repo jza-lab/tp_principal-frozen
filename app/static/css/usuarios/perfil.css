@@ -1135,4 +1135,60 @@ select.form-control-inline {
     .section-title {
         font-size: 1.1rem;
     }
+
+    
+}
+.cuit-input-group {
+    display: flex;
+    overflow: hidden;
+    background-color: #fff;
+    border: 2px solid #1a1a1a;
+    border-radius: 0.4rem;
+    transition: border-color .15s ease-in-out;
+}
+
+/* Inputs dentro del grupo */
+.cuit-input-group .form-control {
+    border: none !important;
+    box-shadow: none !important;
+    background-color: transparent;
+    padding: 0.55rem 0.5rem; /* Ajuste de padding */
+    height: auto;
+}
+
+/* Guiones separadores */
+.cuit-input-group .input-group-text {
+    border: none;
+    background-color: transparent;
+    color: #6c757d;
+}
+
+/* * 1. CORRECCIÓN DEL FOCO AZUL
+ * Cambiamos el brillo azul por un borde más oscuro, para que coincida 
+ * con el estilo de los otros campos al seleccionarlos.
+*/
+.cuit-input-group:focus-within {
+    border-color: #495057;  /* Un gris oscuro en lugar del azul */
+    box-shadow: none;       /* Quitamos el resplandor o 'glow' */
+}
+
+/* * 2. CORRECCIÓN DEL AUTOCOMPLETADO OSCURO
+ * Esto fuerza al navegador a usar un fondo blanco y texto oscuro
+ * cuando autocompleta los campos, ignorando el tema oscuro del navegador/OS.
+*/
+.cuit-input-group .form-control:-webkit-autofill,
+.cuit-input-group .form-control:-webkit-autofill:hover, 
+.cuit-input-group .form-control:-webkit-autofill:focus, 
+.cuit-input-group .form-control:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px white inset !important; /* Fondo blanco */
+    -webkit-text-fill-color: #212529 !important;          /* Texto oscuro */
+    transition: background-color 5000s ease-in-out 0s;     /* Evita que el navegador cambie el color */
+}
+
+/* Estilos de validación se mantienen igual */
+.cuit-input-group.is-invalid {
+    border-color: #dc3545 !important;
+}
+.cuit-input-group.is-valid {
+    border-color: #198754 !important;
 }

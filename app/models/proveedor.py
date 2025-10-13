@@ -29,15 +29,34 @@ class ProveedorModel(BaseModel):
             # En caso de error, retornamos 0 para evitar fallos.
             return 0
 
-    def get_all(self, include_direccion: bool = False) -> Dict:
-        """Obtener todos los proveedores, opcionalmente con su dirección."""
+    def get_all(self, include_direccion: bool = False, filtros: Optional[Dict] = None) -> Dict:
+        """Obtener todos los proveedores, opcionalmente con su dirección y filtros de búsqueda."""
         try:
-            query = "*, direccion:direccion_id(*)" if include_direccion else "*"
-            response = self.db.table(self.get_table_name()).select(query).execute()
+            query_select = "*, direccion:direccion_id(*)" if include_direccion else "*"
+            query = self.db.table(self.get_table_name()).select(query_select)
+
+            filtros_copy = filtros.copy() if filtros else {}
+            texto_busqueda = filtros_copy.pop('busqueda', None)
+            
+            # --- LÓGICA DE BÚSQUEDA ---
+            if texto_busqueda:
+                busqueda_pattern = f"%{texto_busqueda}%"
+                # Buscar en nombre, código, o cuit (ilike)
+                query = query.or_(f"nombre.ilike.{busqueda_pattern},codigo.ilike.{busqueda_pattern},cuit.ilike.{busqueda_pattern}")
+            # --- FIN LÓGICA DE BÚSQUEDA ---
+
+            for key, value in filtros_copy.items():
+                if value is not None:
+                    query = query.eq(key, value)
+
+            # Ordenar por activo descendente por defecto para mantener la coherencia
+            response = query.order('activo', desc=True).execute() 
+
             return {'success': True, 'data': response.data}
         except Exception as e:
             logger.error(f"Error obteniendo proveedores: {e}")
             return {'success': False, 'error': str(e)}
+
 
     def get_all_activos(self, include_direccion: bool = False) -> Dict:
         """Obtener todos los proveedores activos, opcionalmente con su dirección."""

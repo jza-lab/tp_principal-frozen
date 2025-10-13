@@ -156,6 +156,11 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
+        if(productoData.receta_items.length==0){
+             showNotificationModal('No se ha asignado una receta al producto', 'Por favor, ingrese al menos un ingrediente para crear el producto.');
+             return;
+        }
+
         const url = isEditBoolean ? `/api/productos/catalogo/actualizar/${ID_producto}` : '/api/productos/catalogo/nuevo';
         const method = isEditBoolean ? 'PUT' : 'POST';
 
@@ -169,7 +174,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const result = await response.json();
 
             if (response.ok && result.success) {
-                showNotificationModal(result.message || 'Operación exitosa', 'success');
+                let mensaje;
+                if(isEditBoolean){
+                     mensaje= 'Se ha modificado el producto correctamente.'
+                }
+                else{
+                    mensaje= 'Se creó el producto exitosamente.'
+                }
+                showNotificationModal(result.message || 'Operación exitosa', mensaje);
                 setTimeout(() => { window.location.href = productoS_LISTA_URL; }, 1500);
             } else {
                 let errorMessage = 'Ocurrió un error.';
@@ -180,7 +192,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (error) {
             console.error('Error en el fetch:', error);
-            showNotificationModal('No se pudo conectar con el servidor.', 'error');
+            showNotificationModal('No se pudo conectar con el servidor.', 'Por favor, intente nuevamente más tarde o contacte a administración.');
         }
     });
 });
