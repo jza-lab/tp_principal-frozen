@@ -7,7 +7,7 @@ from app.controllers.orden_produccion_controller import OrdenProduccionControlle
 from app.controllers.notificación_controller import NotificacionController
 from app.controllers.inventario_controller import InventarioController
 from app.permisos import admin_permission_required, admin_permission_any_of
-from app.models.autorizacion_ingreso import AutorizacionIngresoModel
+from app.controllers.autorizacion_controller import AutorizacionController
 from app.controllers.lote_producto_controller import LoteProductoController
 
 # Blueprint para la administración de usuarios
@@ -17,7 +17,7 @@ admin_usuario_bp = Blueprint('admin_usuario', __name__, url_prefix='/admin')
 usuario_controller = UsuarioController()
 facial_controller = FacialController()
 orden_produccion_controller=OrdenProduccionController()
-autorizacion_model = AutorizacionIngresoModel()
+autorizacion_controller = AutorizacionController()
 notificacion_controller = NotificacionController()
 inventario_controller = InventarioController()
 lote_producto_controller = LoteProductoController()
@@ -462,7 +462,7 @@ def nueva_autorizacion():
         data['usuario_id'] = int(data['usuario_id'])
         data['turno_autorizado_id'] = int(data['turno_autorizado_id']) if data.get('turno_autorizado_id') else None
         
-        resultado = autorizacion_model.create(data)
+        resultado = autorizacion_controller.crear_autorizacion(data)
 
         if resultado.get('success'):
             flash('Autorización creada exitosamente.', 'success')
@@ -490,7 +490,7 @@ def listar_autorizaciones():
     """
     Obtiene todas las autorizaciones de ingreso pendientes.
     """
-    resultado = autorizacion_model.find_all_pending()
+    resultado = autorizacion_controller.obtener_autorizaciones_pendientes()
     if resultado.get('success'):
         return jsonify(success=True, data=resultado.get('data', []))
     else:
@@ -512,7 +512,7 @@ def actualizar_estado_autorizacion(id):
     if not nuevo_estado or nuevo_estado not in ['APROBADO', 'RECHAZADO']:
         return jsonify(success=False, error='Estado no válido.'), 400
 
-    resultado = autorizacion_model.update_estado(id, nuevo_estado, comentario)
+    resultado = autorizacion_controller.actualizar_estado_autorizacion(id, nuevo_estado, comentario)
 
     if resultado.get('success'):
         return jsonify(success=True, message='Autorización actualizada exitosamente.')

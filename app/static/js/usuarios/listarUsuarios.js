@@ -234,11 +234,29 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // --- LÓGICA DE VALIDACIÓN DE FECHAS ---
+    function validateDateFilters() {
+        const fechaDesde = filterFechaDesde.value;
+        const fechaHasta = filterFechaHasta.value;
+
+        if (fechaDesde && fechaHasta && fechaDesde > fechaHasta) {
+            filterFechaDesde.setCustomValidity('La fecha "Desde" no puede ser posterior a la fecha "Hasta".');
+            filterFechaDesde.reportValidity();
+        } else {
+            filterFechaDesde.setCustomValidity('');
+        }
+    }
+    
     // Filtros de actividad
     filterSector.addEventListener('input', applyActivityFilters);
-    filterFechaDesde.addEventListener('input', applyActivityFilters);
-    filterFechaHasta.addEventListener('input', applyActivityFilters);
-
+    filterFechaDesde.addEventListener('input', () => {
+        validateDateFilters();
+        applyActivityFilters();
+    });
+    filterFechaHasta.addEventListener('input', () => {
+        validateDateFilters();
+        applyActivityFilters();
+    });
 
     // --- INICIALIZACIÓN ---
     updateUserCounts();

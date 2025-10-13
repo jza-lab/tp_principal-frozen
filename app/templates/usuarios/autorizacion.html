@@ -35,8 +35,8 @@
                 <div class="mb-3">
                     <label for="tipo" class="form-label">Tipo de Autorización</label>
                     <select class="form-select" id="tipo" name="tipo" required>
-                        <option value="TURNO_ESPECIAL" {% if not autorizacion.tipo or autorizacion.tipo == 'TURNO_ESPECIAL' %}selected{% endif %}>Turno Especial</option>
-                        <option value="TARDANZA" {% if autorizacion.tipo == 'TARDANZA' %}selected{% endif %}>Llegada Tarde</option>
+                        <option value="LLEGADA_TARDIA" {% if not autorizacion.tipo or autorizacion.tipo == 'LLEGADA_TARDIA' %}selected{% endif %}>Llegada Tarde</option>
+                        <option value="HORAS_EXTRAS" {% if autorizacion.tipo == 'HORAS_EXTRAS' %}selected{% endif %}>Horas Extras</option>
                     </select>
                 </div>
 
