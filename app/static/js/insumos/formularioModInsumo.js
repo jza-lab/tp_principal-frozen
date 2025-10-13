@@ -31,19 +31,20 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             body: JSON.stringify(data)
         })
-        .then(async response => {
-            const result = await response.json();
+            .then(async response => {
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    showNotificationModal(result.message || 'Operación exitosa', "Se actualizó el insumo correctamente.");
+                    setTimeout(() => { window.location.href = INSUMOS_LISTA_URL }, 1500);
 
-            if (response.ok && result.success) {
-                window.location.href = INSUMOS_LISTA_URL;
-            } else {
-                mostrarModalError(result.error || 'Ocurrió un error al guardar el insumo.', result.details);
-            }
-        })
-        .catch(err => {
-            mostrarModalError('Error de conexión o del servidor.');
-            console.error('Error en fetch:', err);
-        });
+                } else {
+                    mostrarModalError(result.error || 'Ocurrió un error al guardar el insumo.', result.details);
+                }
+            })
+            .catch(err => {
+                mostrarModalError('Error de conexión o del servidor.');
+                console.error('Error en fetch:', err);
+            });
     });
 
     function mostrarModalError(mensaje, detalles = null) {
