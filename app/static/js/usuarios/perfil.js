@@ -286,7 +286,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     const part2 = valueDiv.querySelector('#cuit_parte2');
                     const part3 = valueDiv.querySelector('#cuit_parte3');
                     const hiddenInput = valueDiv.querySelector('#cuil_cuit_hidden');
-                    // El elemento visual para mostrar el error es el contenedor del grupo
                     const inputGroup = valueDiv.querySelector('.cuit-input-group');
 
                     const syncAndValidateCuit = () => {
@@ -301,8 +300,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         validateField('cuil_cuit', valueForValidation, inputGroup);
                     };
 
-                    // Agregamos el listener al evento 'input' de cada parte del CUIT
-                    // 'input' es mejor que 'blur' para una validación en tiempo real.
                     part1.addEventListener('input', syncAndValidateCuit);
                     part2.addEventListener('input', syncAndValidateCuit);
                     part3.addEventListener('input', syncAndValidateCuit);
@@ -310,6 +307,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     // Opcional: Mejorar la experiencia de usuario (auto-foco)
                     part1.addEventListener('keyup', () => { if (part1.value.length === 2) part2.focus(); });
                     part2.addEventListener('keyup', () => { if (part2.value.length === 8) part3.focus(); });
+
+                    // ✅ SOLUCIÓN: Llama a la función una vez para inicializar el valor
+                    syncAndValidateCuit();
                 }
 
                 // Listener para el campo nombre
