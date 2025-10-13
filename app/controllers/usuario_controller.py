@@ -42,7 +42,13 @@ class UsuarioController(BaseController):
             logger.warning("Datos de dirección insuficientes para normalizar.")
             return direccion_data
 
+        # Construir la dirección completa incluyendo piso y depto si existen
         full_street = f"{direccion_data['calle']} {direccion_data['altura']}"
+        if direccion_data.get('piso'):
+            full_street += f", Piso {direccion_data.get('piso')}"
+        if direccion_data.get('depto'):
+            full_street += f", Depto {direccion_data.get('depto')}"
+
         norm_result = self.usuario_direccion_controller.normalizar_direccion(
             direccion=full_street,
             localidad=direccion_data['localidad'],
@@ -160,32 +166,58 @@ class UsuarioController(BaseController):
         return self.model.update(usuario_id, validated_data)
 
     def _actualizar_direccion_usuario(self, usuario_id: int, direccion_data: Dict, existing_user: Dict) -> Dict:
-        """Actualiza la dirección de un usuario si ha cambiado."""
-        # Comprobar si hay datos de dirección para procesar
+        """
+        Actualiza la dirección de un usuario de forma inteligente:
+        - Si la dirección no cambia, no hace nada.
+        - Si cambia y la dirección original no es compartida, la actualiza .
+        - Si cambia y la dirección original es compartida, busca o crea una nueva.
+        """
+        # 1. Preparar y validar datos de entrada
         if 'altura' in direccion_data and direccion_data['altura'] == '':
             direccion_data['altura'] = None
         
         has_new_address_data = all(direccion_data.get(f) for f in ['calle', 'altura', 'localidad', 'provincia'])
-        
-        # Si no hay datos nuevos, no hay nada que hacer
-        if not has_new_address_data:
-            return {'success': True, 'direccion_id': existing_user.get('direccion_id')}
+        original_direccion_id = existing_user.get('direccion_id')
 
-        # Comparar con la dirección existente para ver si hay cambios
+        # Si no hay datos de dirección nuevos y el usuario ya tenía una, no hay cambios.
+        if not has_new_address_data and original_direccion_id:
+            return {'success': True, 'direccion_id': original_direccion_id}
+        # Si no hay datos nuevos y el usuario no tenía dirección, no hay nada que hacer.
+        if not has_new_address_data:
+            return {'success': True, 'direccion_id': None}
+
+        # 2. Verificar si la dirección realmente ha cambiado
         existing_address = existing_user.get('direccion') or {}
         address_changed = any(str(direccion_data.get(k) or '') != str(existing_address.get(k) or '') for k in direccion_data)
 
         if not address_changed:
-            return {'success': True, 'direccion_id': existing_user.get('direccion_id')}
+            return {'success': True, 'direccion_id': original_direccion_id}
 
-        # Si hay cambios, procesar la nueva dirección
+        # 3. Normalizar la nueva dirección
         direccion_normalizada = self._normalizar_y_preparar_direccion(direccion_data)
-        if direccion_normalizada:
-            id_nueva_direccion = self._get_or_create_direccion(direccion_normalizada)
-            if id_nueva_direccion:
-                return {'success': True, 'direccion_id': id_nueva_direccion}
+        if not direccion_normalizada:
+            return {'success': False, 'error': "No se pudo normalizar la dirección."}
+
+        # 4. Decidir si actualizar  o buscar/crear una nueva
+        # Si el usuario tenía una dirección y no es compartida por nadie más...
+        if original_direccion_id and not self.direccion_model.is_address_shared(original_direccion_id, excluding_user_id=usuario_id):
+            # ...actualizamos la dirección existente en lugar de crear una nueva.
+            logger.info(f"Dirección ID {original_direccion_id} no es compartida. Actualizando .")
+            update_result = self.direccion_model.update(original_direccion_id, direccion_normalizada)
+            if update_result.get('success'):
+                return {'success': True, 'direccion_id': original_direccion_id}
+            else:
+                logger.error(f"Error actualizando dirección : {update_result.get('error')}")
+                # Si falla la actualización, recurrimos a crear/buscar para no bloquear al usuario.
+                pass
         
-        return {'success': False, 'error': "No se pudo procesar la dirección proporcionada."}
+        # 5. Si la dirección es compartida o no existía, buscamos una coincidencia o creamos una nueva.
+        logger.info("La dirección es compartida o nueva. Buscando/Creando...")
+        new_direccion_id = self._get_or_create_direccion(direccion_normalizada)
+        if new_direccion_id:
+            return {'success': True, 'direccion_id': new_direccion_id}
+
+        return {'success': False, 'error': "No se pudo procesar la nueva dirección."}
 
     def _actualizar_sectores_usuario(self, usuario_id: int, sectores_ids: List[int], existing_user: Dict) -> Dict:
         """Actualiza los sectores de un usuario si han cambiado."""
@@ -503,8 +535,19 @@ class UsuarioController(BaseController):
         """Reactiva un usuario que fue desactivado lógicamente."""
         return self.model.update(usuario_id, {'activo': True})
 
-    def validar_campo_unico(self, field: str, value: str) -> Dict:
-        """Verifica si un valor para un campo específico ya existe (legajo, email, cuil_cuit, telefono)."""
+    def validar_campo_unico(self, field: str, value: str, user_id: Optional[int] = None) -> Dict:
+        """
+        Verifica si un valor para un campo específico ya existe (legajo, email, cuil_cuit, telefono),
+        excluyendo el ID de usuario actual si se proporciona.
+        """
+        field_map = {
+            'legajo': 'Legajo',
+            'email': 'Email',
+            'cuil_cuit': 'CUIL/CUIT',
+            'telefono': 'Teléfono'
+        }
+        user_friendly_field = field_map.get(field, field)
+
         find_methods = {
             'legajo': self.model.find_by_legajo,
             'email': self.model.find_by_email,
@@ -521,14 +564,14 @@ class UsuarioController(BaseController):
             result = find_method(value)
 
             if result.get('success'):
-                return {'valid': False, 'message': f'El valor ingresado para {field} ya está en uso.'}
+                if user_id:
+                    found_user_id = result['data']['id']
+                    if str(found_user_id) != str(user_id):
+                        return {'valid': False, 'message': f'El {user_friendly_field} ingresado ya está en uso por otro usuario.'}
+                else:
+                    return {'valid': False, 'message': f'El {user_friendly_field} ingresado ya está en uso.'}
 
-            error_msg = result.get('error', '')
-            if 'no encontrado' in error_msg:
-                return {'valid': True}
-
-            logger.error(f"Validation error for field '{field}': {error_msg}")
-            return {'valid': False, 'error': 'Error al realizar la validación.'}
+            return {'valid': True}
 
         except Exception as e:
             logger.error(f"Exception during field validation for '{field}': {str(e)}", exc_info=True)

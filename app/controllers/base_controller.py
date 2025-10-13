@@ -27,6 +27,10 @@ class BaseController:
         """Busca una dirección existente o crea una nueva si no se encuentra."""
         if not direccion_data:
             return None
+
+        # Extraer latitud y longitud antes de la validación
+        latitud = direccion_data.pop('latitud', None)
+        longitud = direccion_data.pop('longitud', None)
         
         validated_address = self.direccion_schema.load(direccion_data)
 
@@ -42,6 +46,12 @@ class BaseController:
         if existing_address_result['success']:
             return existing_address_result['data']['id']
         else:
+            # Re-agregar latitud y longitud para la creación
+            if latitud is not None:
+                validated_address['latitud'] = latitud
+            if longitud is not None:
+                validated_address['longitud'] = longitud
+
             new_address_result = self.direccion_model.create(validated_address)
             if new_address_result['success']:
                 return new_address_result['data']['id']

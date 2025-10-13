@@ -1,3 +1,108 @@
+// --- Funciones de Utilidad para Validación ---
+
+function showError(inputElement, message) {
+    if (!inputElement) return;
+    const formField = inputElement.closest('.info-item');
+    if (!formField) return;
+
+    // Ocultar mensaje de éxito si existe
+    const successDiv = formField.querySelector('.valid-feedback');
+    if (successDiv) {
+        successDiv.style.display = 'none';
+    }
+
+    let errorDiv = formField.querySelector('.invalid-feedback');
+    if (!errorDiv) {
+        errorDiv = document.createElement('div');
+        errorDiv.className = 'invalid-feedback';
+        inputElement.parentNode.insertBefore(errorDiv, inputElement.nextSibling);
+    }
+
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    inputElement.classList.remove('is-valid');
+    inputElement.classList.add('is-invalid');
+}
+
+function showSuccess(inputElement, message) {
+    if (!inputElement) return;
+    const formField = inputElement.closest('.info-item');
+    if (!formField) return;
+
+    // Ocultar mensaje de error si existe
+    const errorDiv = formField.querySelector('.invalid-feedback');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+
+    // Add or update valid feedback
+    let successDiv = formField.querySelector('.valid-feedback');
+    if (!successDiv) {
+        successDiv = document.createElement('div');
+        successDiv.className = 'valid-feedback';
+        inputElement.parentNode.insertBefore(successDiv, inputElement.nextSibling);
+    }
+    
+    successDiv.textContent = message;
+    successDiv.style.display = 'block';
+
+    inputElement.classList.remove('is-invalid');
+    inputElement.classList.add('is-valid');
+}
+
+async function validateUniqueField(field, value, inputElement) {
+    const saveButton = document.getElementById('btn-save-changes');
+    const url = saveButton.dataset.url;
+    const userId = url.split('/').slice(-2, -1)[0];
+
+    if (!value || !value.trim()) {
+        showError(inputElement, 'Este campo no puede estar vacío.');
+        return false;
+    }
+
+    try {
+        const response = await fetch('/admin/usuarios/validar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ field, value, user_id: userId })
+        });
+
+        if (!response.ok) throw new Error('Error de servidor');
+
+        const result = await response.json();
+
+        if (!result.valid) {
+            showError(inputElement, result.message || 'Este valor ya está en uso.');
+            return false;
+        } else {
+            showSuccess(inputElement, 'Valor disponible.');
+            return true;
+        }
+    } catch (error) {
+        console.error('Error al validar:', error);
+        showError(inputElement, 'Error de red al validar.');
+        return false;
+    }
+}
+
+function validateNameField(inputElement) {
+    const value = inputElement.value.trim();
+    if (!value) {
+        showError(inputElement, 'Este campo no puede estar vacío.');
+        return false;
+    } else if (/\d/.test(value)) {
+        showError(inputElement, 'No se permiten números en este campo.');
+        return false;
+    } else if (value.length < 2) {
+        showError(inputElement, 'Debe tener al menos 2 caracteres.');
+        return false;
+    } else {
+        showSuccess(inputElement, 'Válido.');
+        return true;
+    }
+}
+
+
 document.addEventListener('DOMContentLoaded', function() {
     const btnEditMode = document.getElementById('btn-edit-mode');
     const btnSaveChanges = document.getElementById('btn-save-changes');
@@ -117,6 +222,23 @@ document.addEventListener('DOMContentLoaded', function() {
             
             valueDiv.innerHTML = inputHTML;
             valueDiv.classList.add('editing');
+
+            // Adjuntar event listeners para validación de unicidad
+            const inputElement = valueDiv.querySelector('.form-control-inline');
+            if (inputElement) {
+                const fieldName = inputElement.name;
+                if (['legajo', 'email', 'cuil_cuit', 'telefono'].includes(fieldName)) {
+                    inputElement.addEventListener('blur', (e) => {
+                        validateUniqueField(fieldName, e.target.value, e.target);
+                    });
+                }
+                // Añadir validación para nombre y apellido
+                if (['nombre', 'apellido'].includes(fieldName)) {
+                    inputElement.addEventListener('blur', (e) => {
+                        validateNameField(e.target);
+                    });
+                }
+            }
             
             // Aplicar animación de entrada con delay
             setTimeout(() => {
