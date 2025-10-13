@@ -6,7 +6,7 @@ from app.controllers.facial_controller import FacialController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.notificación_controller import NotificacionController
 from app.controllers.inventario_controller import InventarioController
-from app.permisos import admin_permission_required
+from app.permisos import admin_permission_required, admin_permission_any_of
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.controllers.lote_producto_controller import LoteProductoController
 
@@ -375,19 +375,22 @@ def obtener_actividad_web():
         return jsonify(success=False, error=resultado.get('error', 'Error al obtener la actividad web')), 500
 
 @admin_usuario_bp.route('/usuarios/validar', methods=['POST'])
-@admin_permission_required(accion='crear')
+@admin_permission_any_of('crear', 'actualizar')
 def validar_campo():
     """
-    Valida de forma asíncrona si un campo (legajo o email) ya existe.
+    Valida de forma asíncrona si un campo (legajo, email, etc.) ya existe,
+    excluyendo el usuario actual si se proporciona un user_id.
     """
     data = request.get_json()
     field = data.get('field')
     value = data.get('value')
-    
+    user_id = data.get('user_id')
+
     if not field or not value:
         return jsonify({'valid': False, 'error': 'Campo o valor no proporcionado.'}), 400
 
-    resultado = usuario_controller.validar_campo_unico(field, value)
+    # Aquí pasamos el user_id al controlador. El controlador se encargará de la lógica.
+    resultado = usuario_controller.validar_campo_unico(field, value, user_id)
     return jsonify(resultado)
 
 @admin_usuario_bp.route('/usuarios/validar_rostro', methods=['POST'])

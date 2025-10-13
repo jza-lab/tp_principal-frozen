@@ -563,6 +563,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             validationState.password &&
                             validationState.cuil_cuit &&
                             validationState.telefono &&
+                            validationState.turno &&
                             validationState.sectores &&
                             allFilled;
         

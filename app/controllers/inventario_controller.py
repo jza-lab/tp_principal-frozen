@@ -150,6 +150,10 @@ class InventarioController(BaseController):
 
             if result['success']:
                 logger.info(f"Lote creado exitosamente: {result['data']['id_lote']}")
+                
+                # Actualizar stock de seccion insumo automáticamente
+                self.insumo_controller.actualizar_stock_insumo(validated_data['id_insumo'])
+                
                 serialized_data = self._serialize_data(result['data'])
                 return self.success_response(
                     data=serialized_data,

@@ -1,3 +1,154 @@
+// --- Funciones de Utilidad para Validación ---
+
+function showError(inputElement, message) {
+    if (!inputElement) return;
+    const formField = inputElement.closest('.info-item');
+    if (!formField) return;
+
+    // Ocultar mensaje de éxito si existe
+    const successDiv = formField.querySelector('.valid-feedback');
+    if (successDiv) {
+        successDiv.style.display = 'none';
+    }
+
+    let errorDiv = formField.querySelector('.invalid-feedback');
+    if (!errorDiv) {
+        errorDiv = document.createElement('div');
+        errorDiv.className = 'invalid-feedback';
+        // Insert after the input element itself
+        inputElement.parentNode.insertBefore(errorDiv, inputElement.nextSibling);
+    }
+
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    inputElement.classList.remove('is-valid');
+    inputElement.classList.add('is-invalid');
+}
+
+function showSuccess(inputElement, message = 'Válido.') {
+    if (!inputElement) return;
+    const formField = inputElement.closest('.info-item');
+    if (!formField) return;
+
+    // Ocultar mensaje de error si existe
+    const errorDiv = formField.querySelector('.invalid-feedback');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+
+    // Add or update valid feedback
+    let successDiv = formField.querySelector('.valid-feedback');
+    if (!successDiv) {
+        successDiv = document.createElement('div');
+        successDiv.className = 'valid-feedback';
+        inputElement.parentNode.insertBefore(successDiv, inputElement.nextSibling);
+    }
+    
+    successDiv.textContent = message;
+    successDiv.style.display = 'block';
+
+    inputElement.classList.remove('is-invalid');
+    inputElement.classList.add('is-valid');
+}
+
+async function validateField(field, value, inputElement) {
+    const saveButton = document.getElementById('btn-save-changes');
+    const url = saveButton.dataset.url;
+    const userId = url.split('/').slice(-2, -1)[0];
+
+    // --- Validaciones de formato ---
+    if (!value || !value.trim()) {
+        showError(inputElement, 'Este campo es obligatorio.');
+        return false;
+    }
+
+    if (field === 'email') {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(value)) {
+            showError(inputElement, 'Por favor, ingrese un email válido (ejemplo: usuario@dominio.com).');
+            return false;
+        }
+    }
+
+    if (field === 'cuil_cuit') {
+        const cuilRegex = /^\d{11}$/;
+        if (!cuilRegex.test(value)) {
+            showError(inputElement, 'El CUIL/CUIT debe contener exactamente 11 dígitos numéricos.');
+            return false;
+        }
+    }
+
+    if (field === 'telefono') {
+        const telefonoRegex = /^\d{7,15}$/;
+        if (!telefonoRegex.test(value)) {
+            showError(inputElement, 'El teléfono debe contener solo números y tener entre 7 y 15 dígitos.');
+            return false;
+        }
+    }
+
+    // --- Validación asíncrona (unicidad) ---
+    try {
+        const response = await fetch('/admin/usuarios/validar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ field, value, user_id: userId })
+        });
+
+        if (!response.ok) throw new Error('Error en la validación del servidor');
+
+        const result = await response.json();
+
+        if (!result.valid) {
+            showError(inputElement, result.message || 'Valor ya en uso.');
+            return false;
+        } else {
+            showSuccess(inputElement, 'Valor disponible.');
+            return true;
+        }
+    } catch (error) {
+        console.error('Error al validar campo:', error);
+        showError(inputElement, 'Error de red al validar. Intente nuevamente.');
+        return false;
+    }
+}
+
+function validateNombre(inputElement) {
+    const nombre = inputElement.value.trim();
+    
+    if (!nombre) {
+        showError(inputElement, 'El nombre es obligatorio.');
+        return false;
+    } else if (/\d/.test(nombre)) {
+        showError(inputElement, 'El nombre no puede contener números.');
+        return false;
+    } else if (nombre.length < 2) {
+        showError(inputElement, 'El nombre debe tener al menos 2 caracteres.');
+        return false;
+    } else {
+        showSuccess(inputElement);
+        return true;
+    }
+}
+
+function validateApellido(inputElement) {
+    const apellido = inputElement.value.trim();
+    
+    if (!apellido) {
+        showError(inputElement, 'El apellido es obligatorio.');
+        return false;
+    } else if (/\d/.test(apellido)) {
+        showError(inputElement, 'El apellido no puede contener números.');
+        return false;
+    } else if (apellido.length < 2) {
+        showError(inputElement, 'El apellido debe tener al menos 2 caracteres.');
+        return false;
+    } else {
+        showSuccess(inputElement);
+        return true;
+    }
+}
+
+
 document.addEventListener('DOMContentLoaded', function() {
     const btnEditMode = document.getElementById('btn-edit-mode');
     const btnSaveChanges = document.getElementById('btn-save-changes');
@@ -117,6 +268,33 @@ document.addEventListener('DOMContentLoaded', function() {
             
             valueDiv.innerHTML = inputHTML;
             valueDiv.classList.add('editing');
+
+            // Adjuntar event listeners para validación
+            const inputElement = valueDiv.querySelector('.form-control-inline');
+            if (inputElement) {
+                const fieldName = inputElement.name;
+
+                // Listener para campos con validación de unicidad y formato
+                if (['legajo', 'email', 'cuil_cuit', 'telefono'].includes(fieldName)) {
+                    inputElement.addEventListener('blur', (e) => {
+                        validateField(fieldName, e.target.value, e.target);
+                    });
+                }
+                
+                // Listener para el campo nombre
+                if (fieldName === 'nombre') {
+                    inputElement.addEventListener('blur', (e) => {
+                        validateNombre(e.target);
+                    });
+                }
+
+                // Listener para el campo apellido
+                if (fieldName === 'apellido') {
+                    inputElement.addEventListener('blur', (e) => {
+                        validateApellido(e.target);
+                    });
+                }
+            }
             
             // Aplicar animación de entrada con delay
             setTimeout(() => {
@@ -714,50 +892,51 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function validateForm() {
         let isValid = true;
-        const errors = [];
-        
-        document.querySelectorAll('.info-item[data-field]').forEach(item => {
-            const field = item.dataset.field;
-            const input = item.querySelector('.form-control-inline');
+
+        // Iterar sobre la configuración de campos para asegurar que todos se validen
+        for (const field in fieldConfig) {
             const config = fieldConfig[field];
+            const item = document.querySelector(`.info-item[data-field="${field}"]`);
             
-            if (!input || !config) return;
-            
+            if (!item) continue;
+
+            // Encontrar el elemento de input correspondiente
+            let input = item.querySelector('input, select, textarea');
+
+            if (!input) continue;
+
             const value = input.value.trim();
-            
-            // Validar campos requeridos
+
+            // Elemento visual al que adjuntar el error. Para los selectores personalizados,
+            // el input puede estar oculto, así que buscamos el contenedor visual.
+            const visualElement = item.querySelector('.form-control-inline, select, .roles-grid-perfil, .turno-grid-perfil, .sectores-grid-perfil') || input;
+
+            // 1. Validar campos requeridos
             if (config.required && !value) {
                 isValid = false;
-                errors.push(`${config.label} es requerido`);
-                input.classList.add('is-invalid');
-            } else {
-                input.classList.remove('is-invalid');
+                showError(visualElement, `${config.label} es un campo requerido.`);
+                continue; // Pasar al siguiente campo
             }
             
-            // Validar email
+            // 2. Validar email (si tiene valor)
             if (config.type === 'email' && value) {
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 if (!emailRegex.test(value)) {
                     isValid = false;
-                    errors.push(`${config.label} no es válido`);
-                    input.classList.add('is-invalid');
+                    showError(visualElement, `El formato del email no es válido.`);
+                    continue;
                 }
             }
             
-            // Validar patrón si existe
+            // 3. Validar patrón (si tiene valor)
             if (config.pattern && value) {
                 const regex = new RegExp(config.pattern);
                 if (!regex.test(value)) {
                     isValid = false;
-                    errors.push(`${config.label} no cumple con el formato esperado`);
-                    input.classList.add('is-invalid');
+                    showError(visualElement, `${config.label} no cumple con el formato esperado.`);
+                    continue;
                 }
             }
-        });
-        
-        // Mostrar errores específicos si existen
-        if (errors.length > 0 && errors.length <= 3) {
-            showNotification(errors.join('<br>'), 'error');
         }
         
         return isValid;

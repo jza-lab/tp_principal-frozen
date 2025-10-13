@@ -114,3 +114,63 @@ class DireccionModel(BaseModel):
         except Exception as e:
             logger.error(f"Error buscando dirección por {field}: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def update(self, direccion_id: int, data: Dict) -> Dict:
+        """
+        Actualiza un registro de dirección existente en la base de datos.
+        """
+        try:
+            # Limpiar datos nulos para evitar sobrescribir campos con None accidentalmente
+            update_data = {k: v for k, v in data.items() if v is not None}
+
+            response = self.db.table(self.get_table_name()).update(update_data).eq("id", direccion_id).execute()
+            
+            if response.data:
+                return {'success': True, 'data': response.data[0]}
+            else:
+                return {'success': False, 'error': 'No se encontró la dirección para actualizar.'}
+
+        except Exception as e:
+            logger.error(f"Error actualizando dirección ID {direccion_id}: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def is_address_shared(self, direccion_id: int, excluding_user_id: int) -> bool:
+        """
+        Verifica si una dirección está siendo utilizada por más de una entidad,
+        excluyendo al usuario actual para evitar falsos positivos.
+        """
+        from app.models.usuario import UsuarioModel
+        from app.models.cliente import ClienteModel
+        from app.models.proveedor import ProveedorModel
+
+        user_model = UsuarioModel()
+        client_model = ClienteModel()
+        provider_model = ProveedorModel()
+
+        try:
+            # 1. Contar usuarios en esta dirección, excluyendo al actual
+            # La API de Supabase no permite un "count" con filtro "not.eq" directo,
+            # así que contamos todos y restamos si el usuario actual está ahí.
+            all_users_count = user_model.contar_usuarios_direccion(direccion_id)
+            
+            # Verificamos si el usuario a excluir VIVE en esa dirección.
+            user_to_exclude_res = user_model.find_by_id(excluding_user_id)
+            user_lives_here = (user_to_exclude_res.get('success') and 
+                               user_to_exclude_res['data'].get('direccion_id') == direccion_id)
+
+            user_count = all_users_count
+            if user_lives_here:
+                user_count -= 1
+
+            # 2. Contar clientes y proveedores
+            client_count = client_model.contar_clientes_direccion(direccion_id)
+            provider_count = provider_model.contar_proveedores_direccion(direccion_id)
+            
+            total_shares = user_count + client_count + provider_count
+            
+            return total_shares > 0
+
+        except Exception as e:
+            logger.error(f"Error verificando si la dirección {direccion_id} es compartida: {e}")
+            # En caso de error, asumimos que es compartida para ser cautelosos
+            return True

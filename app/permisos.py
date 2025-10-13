@@ -56,6 +56,49 @@ def permission_required(sector_codigo: str, accion: str):
         return decorated_function
     return decorator
 
+def admin_permission_any_of(*actions):
+    """
+    Decorator para funciones administrativas que requieren al menos UNO de varios permisos.
+    Verifica que el rol del usuario tenga al menos uno de los permisos especificados 
+    en el sector 'ADMINISTRACION'.
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'rol_id' not in session or 'rol' not in session:
+                flash('Acceso no autorizado. Por favor, inicie sesión.', 'error')
+                return redirect(url_for('auth.login'))
+
+            role_id = session.get('rol_id')
+            user_role_code = session.get('rol')
+
+            if user_role_code == 'GERENTE':
+                return f(*args, **kwargs)
+
+            sector_model = SectorModel()
+            sector_result = sector_model.find_by_codigo('ADMINISTRACION')
+            if not sector_result.get('success') or not sector_result.get('data'):
+                flash('Error de configuración: El sector "ADMINISTRACION" no existe.', 'error')
+                return redirect(get_redirect_url_by_role(user_role_code))
+            admin_sector_id = sector_result['data']['id']
+
+            permission_model = PermisosModel()
+            
+            # Verificar si el rol tiene AL MENOS UNO de los permisos requeridos
+            has_any_permission = any(
+                permission_model.check_permission(role_id, admin_sector_id, action)
+                for action in actions
+            )
+
+            if not has_any_permission:
+                action_str = " o ".join(f'"{a}"' for a in actions)
+                flash(f'Su rol no tiene los permisos necesarios ({action_str}).', 'error')
+                return redirect(get_redirect_url_by_role(user_role_code))
+
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
 def admin_permission_required(accion: str):
     """
     Decorator para funciones administrativas.
