@@ -241,6 +241,18 @@ class UsuarioController(BaseController):
         Orquesta la actualización de un usuario, delegando a métodos especializados.
         """
         try:
+            required_fields = {
+                'nombre': 'El nombre no puede estar vacío.',
+                'apellido': 'El apellido no puede estar vacío.',
+                'email': 'El email no puede estar vacío.',
+                'telefono': 'El teléfono no puede estar vacío.',
+                'legajo': 'El legajo no puede estar vacío.',
+                'cuil_cuit': 'El CUIL/CUIT no puede estar vacío.'
+            }
+            for field, message in required_fields.items():
+                if not data.get(field) or not str(data[field]).strip():
+                    return {'success': False, 'error': message}
+
             # 1. Sanear datos de entrada
             fields_to_sanitize = ['telefono', 'cuil_cuit', 'fecha_nacimiento', 'fecha_ingreso', 'turno_id', 'piso', 'depto', 'codigo_postal']
             for field in fields_to_sanitize:

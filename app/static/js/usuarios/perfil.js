@@ -836,50 +836,51 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function validateForm() {
         let isValid = true;
-        const errors = [];
-        
-        document.querySelectorAll('.info-item[data-field]').forEach(item => {
-            const field = item.dataset.field;
-            const input = item.querySelector('.form-control-inline');
+
+        // Iterar sobre la configuración de campos para asegurar que todos se validen
+        for (const field in fieldConfig) {
             const config = fieldConfig[field];
+            const item = document.querySelector(`.info-item[data-field="${field}"]`);
             
-            if (!input || !config) return;
-            
+            if (!item) continue;
+
+            // Encontrar el elemento de input correspondiente
+            let input = item.querySelector('input, select, textarea');
+
+            if (!input) continue;
+
             const value = input.value.trim();
-            
-            // Validar campos requeridos
+
+            // Elemento visual al que adjuntar el error. Para los selectores personalizados,
+            // el input puede estar oculto, así que buscamos el contenedor visual.
+            const visualElement = item.querySelector('.form-control-inline, select, .roles-grid-perfil, .turno-grid-perfil, .sectores-grid-perfil') || input;
+
+            // 1. Validar campos requeridos
             if (config.required && !value) {
                 isValid = false;
-                errors.push(`${config.label} es requerido`);
-                input.classList.add('is-invalid');
-            } else {
-                input.classList.remove('is-invalid');
+                showError(visualElement, `${config.label} es un campo requerido.`);
+                continue; // Pasar al siguiente campo
             }
             
-            // Validar email
+            // 2. Validar email (si tiene valor)
             if (config.type === 'email' && value) {
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 if (!emailRegex.test(value)) {
                     isValid = false;
-                    errors.push(`${config.label} no es válido`);
-                    input.classList.add('is-invalid');
+                    showError(visualElement, `El formato del email no es válido.`);
+                    continue;
                 }
             }
             
-            // Validar patrón si existe
+            // 3. Validar patrón (si tiene valor)
             if (config.pattern && value) {
                 const regex = new RegExp(config.pattern);
                 if (!regex.test(value)) {
                     isValid = false;
-                    errors.push(`${config.label} no cumple con el formato esperado`);
-                    input.classList.add('is-invalid');
+                    showError(visualElement, `${config.label} no cumple con el formato esperado.`);
+                    continue;
                 }
             }
-        });
-        
-        // Mostrar errores específicos si existen
-        if (errors.length > 0 && errors.length <= 3) {
-            showNotification(errors.join('<br>'), 'error');
         }
         
         return isValid;
