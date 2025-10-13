@@ -9,9 +9,9 @@ class HistorialPreciosController:
         logger = logging.getLogger(__name__)
         self.table = 'historial_precios_insumos'
 
-    def registrar_cambio(self, datos: Dict) -> bool:
+    def registrar_cambio(self, datos: Dict) -> Dict: # Cambiado a -> Dict
         """
-        Registra un cambio de precio en el historial
+        Registra un cambio de precio en el historial y devuelve un diccionario de resultado.
         """
         try:
             datos_completos = {
@@ -23,11 +23,17 @@ class HistorialPreciosController:
                            .insert(datos_completos)\
                            .execute()
 
-            return len(response.data) > 0
+            # --- CORRECCIÓN ---
+            # Verificamos si la inserción devolvió datos y devolvemos un diccionario estándar.
+            if response.data:
+                return {'success': True, 'data': response.data[0]}
+            else:
+                return {'success': False, 'error': 'No se pudo registrar el cambio en el historial.'}
+            # ------------------
 
         except Exception as e:
             logging.error(f"Error registrando cambio de precio: {str(e)}")
-            return False
+            return {'success': False, 'error': str(e)} # Devolvemos un diccionario de error
 
     def obtener_historial_insumo(self, id_insumo: str) -> List[Dict]:
         """

@@ -130,22 +130,29 @@ class InsumoModel(BaseModel):
 
     def buscar_por_codigo_interno(self, codigo_interno: str) -> Optional[Dict]:
         """
-        Busca insumo por código interno (exacto)
+        Busca un insumo por su código interno - AHORA CON LOGS
         """
         try:
-            if not codigo_interno:
+            logger.info(f"[Modelo] Ejecutando consulta a DB para código: {codigo_interno}")
+            result = self.db.table(self.get_table_name()).select(
+                "*, proveedor:proveedores(*)"
+            ).eq("codigo_interno", codigo_interno).maybe_single().execute()
+
+            # --- LOGS CLAVE ---
+            if result and hasattr(result, 'data'):
+                logger.debug(f"[Modelo] Datos de la DB: {result.data}")
+                logger.debug(f"[Modelo] TIPO de datos de la DB: {type(result.data)}")
+            else:
+                logger.warning("[Modelo] La consulta a la DB no devolvió datos.")
+            # -------------------
+
+            if result and result.data:
+                return result.data
+            else:
                 return None
 
-            query_select = "*, proveedor:id_proveedor(*)"
-            response = self.db.table(self.get_table_name())\
-                           .select(query_select)\
-                           .eq('codigo_interno', codigo_interno.strip().upper())\
-                           .execute()
-
-            return self._convert_timestamps(response.data[0]) if response.data else None
-
         except Exception as e:
-            logger.error(f"Error buscando insumo {codigo_interno}: {str(e)}")
+            logger.error(f"Error buscando insumo por código interno {codigo_interno}: {e}", exc_info=True)
             return None
 
     def actualizar_precio(self, id_insumo: str, precio_nuevo: float) -> bool:

@@ -326,17 +326,19 @@ class InsumoController(BaseController):
 
     def buscar_por_codigo_interno(self, codigo_interno: str) -> Optional[Dict]:
         """
-        Busca insumo por código interno usando el modelo
-
-        Args:
-            codigo_interno: Código interno del insumo
-
-        Returns:
-            Dict con datos del insumo o None
+        Busca un insumo por su código interno - AHORA CON LOGS
         """
         try:
-            print('SE ESTA BUSCANDO---', codigo_interno)
-            return self.insumo_model.buscar_por_codigo_interno(codigo_interno)
+            logger.info(f"[Controlador] Llamando al modelo para buscar código: {codigo_interno}")
+
+            resultado_del_modelo = self.insumo_model.buscar_por_codigo_interno(codigo_interno)
+
+            # --- LOGS CLAVE ---
+            logger.debug(f"[Controlador] Resultado recibido del modelo: {resultado_del_modelo}")
+            logger.debug(f"[Controlador] TIPO de resultado del modelo: {type(resultado_del_modelo)}")
+            # -------------------
+
+            return resultado_del_modelo
 
         except Exception as e:
             logger.error(f"Error en controlador buscando insumo por código interno: {str(e)}")
