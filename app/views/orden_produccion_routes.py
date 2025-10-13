@@ -187,25 +187,41 @@ def detalle(id):
 @orden_produccion_bp.route("/<int:id>/iniciar", methods=["POST"])
 @permission_required(sector_codigo='PRODUCCION', accion='actualizar')
 def iniciar(id):
-    """Inicia una orden de producción."""
-    resultado = controller.cambiar_estado_orden(id, "EN_PROCESO")
-    flash(
-        resultado.get("message", "Orden iniciada."),
-        "success" if resultado.get("success") else "error",
-    )
-    return redirect(url_for("orden_produccion.listar"))
+    """Inicia una orden de producción, previa validación de stock."""
+    try:
+        resultado_dict, status_code = controller.cambiar_estado_orden(id, "EN_PROCESO")
+
+        if resultado_dict.get("success"):
+            flash(resultado_dict.get("message", "Orden de producción iniciada correctamente."), "success")
+        else:
+            # Mostramos el error específico de falta de stock o cualquier otro.
+            flash(resultado_dict.get("error", "No se pudo iniciar la orden."), "error")
+
+        return redirect(url_for("orden_produccion.listar"))
+
+    except Exception as e:
+        logger.error(f"Error inesperado en la ruta iniciar OP: {e}", exc_info=True)
+        flash("Ocurrió un error interno al intentar iniciar la producción.", "danger")
+        return redirect(url_for("orden_produccion.listar"))
 
 
 @orden_produccion_bp.route("/<int:id>/completar", methods=["POST"])
 @permission_required(sector_codigo='PRODUCCION', accion='actualizar')
 def completar(id):
     """Completa una orden de producción."""
-    resultado = controller.cambiar_estado_orden(id, "COMPLETADA")
-    flash(
-        resultado.get("message", "Orden completada."),
-        "success" if resultado.get("success") else "error",
-    )
-    return redirect(url_for("orden_produccion.detalle", id=id))
+    try:
+        resultado_dict, status_code = controller.cambiar_estado_orden(id, "COMPLETADA")
+
+        if resultado_dict.get("success"):
+            flash(resultado_dict.get("message", "Orden de producción completada."), "success")
+        else:
+            flash(resultado_dict.get("error", "No se pudo completar la orden."), "error")
+
+        return redirect(url_for("orden_produccion.detalle", id=id))
+    except Exception as e:
+        logger.error(f"Error inesperado en la ruta completar OP: {e}", exc_info=True)
+        flash("Ocurrió un error interno al intentar completar la producción.", "danger")
+        return redirect(url_for("orden_produccion.listar"))
 
 
 @orden_produccion_bp.route("/pendientes")
@@ -236,11 +252,20 @@ def aprobar(id):
         resultado_dict, status_code = controller.aprobar_orden(id, usuario_id)
         # ------------------------
 
-        # Usamos el diccionario para obtener los mensajes
-        flash(
-            resultado_dict.get("message", "Acción procesada."),
-            "success" if resultado_dict.get("success") else "error",
-        )
+        # --- LÓGICA MEJORADA PARA MOSTRAR MENSAJES ESPECIALIZADOS ---
+        if resultado_dict.get("success"):
+            message = resultado_dict.get("message", "Orden aprobada exitosamente.")
+            orden_compra_generada = resultado_dict.get("data", {}).get("orden_compra_generada")
+
+            if orden_compra_generada and isinstance(orden_compra_generada, dict):
+                codigo_oc = orden_compra_generada.get('codigo_oc', 'N/A')
+                message = f"Orden de Producción aprobada. Se generó la Orden de Compra {codigo_oc} para cubrir insumos faltantes."
+                flash(message, "warning") # Usamos 'warning' para llamar la atención sobre la OC
+            else:
+                flash(message, "success")
+        else:
+            flash(resultado_dict.get("error", "Ocurrió un error al aprobar la orden."), "error")
+
         return redirect(url_for("orden_produccion.listar"))
 
     except Exception as e:
