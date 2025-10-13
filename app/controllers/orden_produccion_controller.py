@@ -234,11 +234,46 @@ class OrdenProduccionController(BaseController):
         """
         return self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=f"Rechazada: {motivo}")
 
-    def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str) -> Dict:
+    def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str) -> tuple:
         """
         Cambia el estado de una orden (ej. 'EN_PROCESO', 'COMPLETADA').
+        Si el nuevo estado es 'EN_PROCESO', verifica el stock antes de cambiarlo.
         """
-        return self.model.cambiar_estado(orden_id, nuevo_estado)
+        try:
+            if nuevo_estado == 'EN_PROCESO':
+                # 1. Obtener la orden de producción completa
+                orden_result = self.obtener_orden_por_id(orden_id)
+                if not orden_result.get('success'):
+                    return self.error_response("Orden de producción no encontrada.", 404)
+                orden_produccion = orden_result['data']
+
+                # Solo se puede iniciar si está APROBADA
+                if orden_produccion['estado'] != 'APROBADA':
+                    return self.error_response(f"La orden debe estar en estado 'APROBADA' para poder iniciarla. Estado actual: {orden_produccion['estado']}", 400)
+
+                # 2. Verificar si hay stock suficiente
+                verificacion_result = self.inventario_controller.verificar_stock_para_op(orden_produccion)
+                if not verificacion_result.get('success'):
+                    return self.error_response(f"No se pudo verificar el stock: {verificacion_result.get('error')}", 500)
+
+                insumos_faltantes = verificacion_result['data']['insumos_faltantes']
+                if insumos_faltantes:
+                    mensaje_error = "No se puede iniciar la producción por falta de stock de los siguientes insumos: "
+                    detalles = [f"{insumo['nombre']} (falta: {insumo['cantidad_faltante']})" for insumo in insumos_faltantes]
+                    mensaje_error += ", ".join(detalles)
+                    return self.error_response(mensaje_error, 409)
+
+            # Si pasa la validación o el estado no es 'EN_PROCESO', cambiamos el estado.
+            result = self.model.cambiar_estado(orden_id, nuevo_estado)
+
+            if result.get('success'):
+                return self.success_response(data=result.get('data'), message=result.get('message'))
+            else:
+                return self.error_response(result.get('error', 'Error al cambiar el estado.'), 500)
+
+        except Exception as e:
+            logger.error(f"Error en cambiar_estado_orden para la orden {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
 
     def crear_orden_desde_planificacion(self, producto_id: int, item_ids: List[int], usuario_id: int) -> Dict:
         """
