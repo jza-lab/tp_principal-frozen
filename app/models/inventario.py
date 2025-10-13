@@ -242,3 +242,56 @@ class InventarioModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo detalle de lote: {e}")
             return {'success': False, 'error': str(e)}
+
+    def calcular_y_actualizar_stock_general(self) -> Dict:
+        """
+        Calcula el stock actual para todos los insumos sumando los lotes de inventario
+        y lo actualiza en la tabla insumos_catalogo.
+        """
+        try:
+            # 1. Obtener todos los insumos del catálogo
+            catalogo_resp = self.db.table('insumos_catalogo').select('id_insumo', 'stock_actual').execute()
+            if not hasattr(catalogo_resp, 'data'):
+                raise Exception("No se pudo obtener el catálogo de insumos.")
+            
+            insumos_catalogo = {item['id_insumo']: item for item in catalogo_resp.data}
+
+            # 2. Calcular el stock agregado desde el inventario
+            inventario_resp = self.db.table('insumos_inventario').select('id_insumo', 'cantidad_actual').in_('estado', ['disponible', 'reservado']).execute()
+            if not hasattr(inventario_resp, 'data'):
+                raise Exception("No se pudo obtener el inventario de insumos.")
+
+            stock_calculado = {}
+            for lote in inventario_resp.data:
+                insumo_id = lote['id_insumo']
+                cantidad = lote.get('cantidad_actual') or 0
+                stock_calculado[insumo_id] = stock_calculado.get(insumo_id, 0) + cantidad
+
+            # 3. Preparar los datos para la actualización
+            updates = []
+            for insumo_id, insumo_data in insumos_catalogo.items():
+                stock_nuevo = stock_calculado.get(insumo_id, 0)
+                stock_viejo = insumo_data.get('stock_actual') or 0
+
+                # Solo actualizar si el stock ha cambiado
+                if stock_nuevo != stock_viejo:
+                    updates.append({'id_insumo': insumo_id, 'stock_actual': stock_nuevo})
+            
+            # 4. Ejecutar las actualizaciones de forma iterativa si hay cambios
+            if updates:
+                logger.info(f"Actualizando stock para {len(updates)} insumos.")
+                for item in updates:
+                    insumo_id = item['id_insumo']
+                    new_stock = item['stock_actual']
+                    (self.db.table('insumos_catalogo')
+                     .update({'stock_actual': new_stock})
+                     .eq('id_insumo', insumo_id)
+                     .execute())
+            else:
+                logger.info("No se requirieron actualizaciones de stock.")
+
+            return {'success': True}
+
+        except Exception as e:
+            logger.error(f"Error al ejecutar el recálculo de stock general: {str(e)}")
+            return {'success': False, 'error': str(e)}

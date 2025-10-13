@@ -104,6 +104,9 @@ class InsumoController(BaseController):
     def obtener_insumos(self, filtros: Optional[Dict] = None) -> tuple:
         """Obtener lista de insumos con filtros, incluyendo filtro por stock bajo."""
         try:
+            # Primero, actualizamos el stock de todos los insumos
+            self.inventario_model.calcular_y_actualizar_stock_general()
+            
             filtros = filtros or {}
 
             stock_status_filter = filtros.pop('stock_status', None)
@@ -179,13 +182,16 @@ class InsumoController(BaseController):
     def obtener_insumo_por_id(self, id_insumo: str) -> tuple:
         """Obtener un insumo específico por ID, incluyendo sus lotes en inventario."""
         try:
-            # 1. Obtener los datos del insumo
-            insumo_result = self.insumo_model.find_by_id(id_insumo, 'id_insumo')
+            # 1. Actualizar el stock y obtener los datos más recientes del insumo en una sola operación.
+            # Esto evita race conditions y asegura que siempre mostramos la data más fresca.
+            response_data, status_code = self.actualizar_stock_insumo(id_insumo)
 
-            if not insumo_result.get('success'):
-                return self.error_response(insumo_result.get('error', 'Insumo no encontrado'), 404)
+            # Si la actualización/obtención falla, propagamos el error.
+            if status_code >= 400:
+                return response_data, status_code
 
-            insumo_data = self.schema.dump(insumo_result['data'])
+            # Los datos del insumo ya vienen serializados y actualizados.
+            insumo_data = response_data.get('data', {})
 
             # 2. Obtener los lotes asociados
             # Usamos el modelo de inventario que ya está instanciado en el controlador
@@ -383,15 +389,18 @@ class InsumoController(BaseController):
     def actualizar_stock_insumo(self, id_insumo: str) -> tuple:
         """
         Calcula y actualiza el stock de un insumo basado en sus lotes en inventario.
+        Devuelve el insumo actualizado.
         """
         try:
             # 1. Obtener todos los lotes disponibles para el insumo
             lotes_result = self.inventario_model.find_by_insumo(id_insumo, solo_disponibles=True)
 
             if not lotes_result.get('success'):
-                return self.error_response(f"No se pudieron obtener los lotes para el insumo: {lotes_result.get('error')}")
+                # Si no se pueden obtener los lotes, devolvemos un error claro.
+                return self.error_response(f"No se pudieron obtener los lotes: {lotes_result.get('error')}", 500)
 
-            # 2. Calcular el stock sumando la cantidad actual de cada lote
+            # 2. Calcular el stock sumando la cantidad actual de cada lote.
+            # Si no hay lotes, la suma de una lista vacía es 0, lo cual es correcto.
             total_stock = sum(lote.get('cantidad_actual', 0) for lote in lotes_result.get('data', []))
 
             # 3. Actualizar el campo stock_actual en la tabla de insumos
@@ -399,18 +408,19 @@ class InsumoController(BaseController):
             update_result = self.insumo_model.update(id_insumo, update_data, 'id_insumo')
 
             if not update_result.get('success'):
-                return self.error_response(f"Error al actualizar el stock del insumo: {update_result.get('error')}")
+                # Si la actualización en la DB falla, devolvemos error.
+                return self.error_response(f"Error al actualizar el stock: {update_result.get('error')}", 500)
 
             logger.info(f"Stock actualizado para el insumo {id_insumo}: {total_stock}")
 
-            # 4. Devolver el insumo actualizado
+            # 4. Devolver el insumo actualizado.
             return self.success_response(
                 data=self.schema.dump(update_result['data']),
                 message='Stock del insumo actualizado correctamente.'
             )
 
         except Exception as e:
-            logger.error(f"Error actualizando stock de insumo {id_insumo}: {str(e)}")
+            logger.error(f"Error crítico actualizando stock de insumo {id_insumo}: {str(e)}")
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
 
