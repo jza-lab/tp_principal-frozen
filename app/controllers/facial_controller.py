@@ -12,8 +12,8 @@ from app.models.totem_sesion import TotemSesionModel
 from app.models.usuario_turno import UsuarioTurnoModel
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.notificacion import NotificacionModel
-from app.views.auth_routes import _verificar_horario_turno
 from datetime import datetime, timedelta, time
+from app.controllers.usuario_controller import UsuarioController
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ class FacialController:
         self.turno_model = UsuarioTurnoModel()
         self.autorizacion_model = AutorizacionIngresoModel()
         self.notificacion_model = NotificacionModel()
+        self.usuario_controller = UsuarioController()
         self.save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Data")
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -207,7 +208,7 @@ class FacialController:
             logger.info(f"Procesando ENTRADA para {usuario_nombre} a través de {metodo}")
             
             # >>> NUEVA VALIDACIÓN CENTRALIZADA <<<
-            validacion_turno = _verificar_horario_turno(usuario)
+            validacion_turno = self.usuario_controller.verificar_acceso_por_horario(usuario)
             if not validacion_turno.get('success'):
                 # Devolvemos el error de la función de validación para que se muestre en el tótem
                 return {'success': False, 'message': validacion_turno.get('error')}

@@ -9,10 +9,11 @@ from app.schemas.usuario_schema import UsuarioSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, time
 import logging
 import json
 from app.controllers.direccion_controller import GeorefController
+from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 
 logger = logging.getLogger(__name__)
 
@@ -661,3 +662,67 @@ class UsuarioController(BaseController):
             resultado = self.turno_model.find_all()
             
         return resultado.get('data', [])
+
+    def verificar_acceso_por_horario(self, usuario: dict) -> dict:
+        """
+        Verifica si el login es válido según la ventana de fichaje del turno o una autorización.
+        Regla: 15 mins antes hasta 15 mins después del inicio del turno.
+        """
+        if not usuario or usuario.get('roles', {}).get('codigo') == 'GERENTE':
+            return {'success': True}
+
+        hora_actual = datetime.now().time()
+        autorizacion_model = AutorizacionIngresoModel()
+
+        # 1. Verificar la ventana de fichaje normal
+        turno_info = usuario.get('turno')
+        if turno_info and 'hora_inicio' in turno_info:
+            try:
+                hora_inicio = datetime.strptime(turno_info['hora_inicio'], '%H:%M:%S').time()
+                dt_inicio = datetime.combine(datetime.today(), hora_inicio)
+                inicio_permitido = (dt_inicio - timedelta(minutes=15)).time()
+                fin_permitido = (dt_inicio + timedelta(minutes=15)).time()
+
+                if fin_permitido < inicio_permitido:
+                    if hora_actual >= inicio_permitido or hora_actual <= fin_permitido:
+                        return {'success': True}
+                else:
+                    if inicio_permitido <= hora_actual <= fin_permitido:
+                        return {'success': True}
+            except (ValueError, TypeError):
+                pass
+
+        # 2. Si se está fuera de la ventana, buscar autorizaciones
+        usuario_id = usuario.get('id')
+        hoy = datetime.today().date()
+        auth_result = autorizacion_model.find_by_usuario_and_fecha(usuario_id, hoy, estado='APROBADA')
+
+        if not auth_result.get('success'):
+            return {'success': False, 'error': 'Fichaje fuera de horario. Se requiere una autorización.'}
+
+        for autorizacion in auth_result['data']:
+            auth_turno = autorizacion.get('turno')
+            auth_tipo = autorizacion.get('tipo')
+
+            if not auth_turno: continue
+
+            try:
+                auth_inicio = datetime.strptime(auth_turno['hora_inicio'], '%H:%M:%S').time()
+                auth_fin = datetime.strptime(auth_turno['hora_fin'], '%H:%M:%S').time()
+
+                if auth_tipo == 'LLEGADA_TARDIA':
+                    if auth_inicio <= hora_actual <= auth_fin:
+                        return {'success': True}
+                
+                elif auth_tipo == 'HORAS_EXTRAS':
+                    inicio_permitido_he = (datetime.combine(hoy, auth_inicio) - timedelta(minutes=15)).time()
+                    if auth_fin < inicio_permitido_he:
+                        if hora_actual >= inicio_permitido_he or hora_actual <= auth_fin:
+                            return {'success': True}
+                    else:
+                        if inicio_permitido_he <= hora_actual <= auth_fin:
+                            return {'success': True}
+            except (ValueError, TypeError):
+                continue
+
+        return {'success': False, 'error': 'Ninguna de sus autorizaciones es válida para este horario.'}

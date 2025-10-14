@@ -4,8 +4,8 @@ from app.controllers.facial_controller import FacialController
 from app.utils.roles import get_redirect_url_by_role
 from app.models.permisos import PermisosModel
 from datetime import datetime, timedelta, time
-from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.totem_sesion import TotemSesionModel
+from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -14,7 +14,6 @@ facial_controller = FacialController()
 permisos_model = PermisosModel()
 totem_sesion_model = TotemSesionModel()
 autorizacion_model = AutorizacionIngresoModel()
-
 
 @auth_bp.before_app_request
 def before_request_auth():
@@ -70,76 +69,6 @@ def before_request_auth():
     except (ValueError, TypeError):
         return
 
-def _verificar_horario_turno(usuario: dict) -> dict:
-    """
-    Verifica si el login es válido según la ventana de fichaje del turno o una autorización.
-    Regla: 15 mins antes hasta 15 mins después del inicio del turno.
-    """
-    if not usuario or usuario.get('roles', {}).get('codigo') == 'GERENTE':
-        return {'success': True}
-
-    hora_actual = datetime.now().time()
-
-    # 1. Verificar la ventana de fichaje normal
-    turno_info = usuario.get('turno')
-    if turno_info and 'hora_inicio' in turno_info:
-        try:
-            hora_inicio = datetime.strptime(turno_info['hora_inicio'], '%H:%M:%S').time()
-            
-            # Crear objetos datetime para poder sumar/restar tiempos
-            dt_inicio = datetime.combine(datetime.today(), hora_inicio)
-            inicio_permitido = (dt_inicio - timedelta(minutes=15)).time()
-            fin_permitido = (dt_inicio + timedelta(minutes=15)).time()
-
-            # Manejo de ventana que cruza la medianoche (ej. turno empieza 00:00)
-            if fin_permitido < inicio_permitido:
-                if hora_actual >= inicio_permitido or hora_actual <= fin_permitido:
-                    return {'success': True}
-            else: # Ventana normal en el mismo día
-                if inicio_permitido <= hora_actual <= fin_permitido:
-                    return {'success': True}
-        except (ValueError, TypeError):
-            pass  # Si falla, se procede a verificar autorizaciones
-
-    # 2. Si se está fuera de la ventana, buscar autorizaciones
-    usuario_id = usuario.get('id')
-    hoy = datetime.today().date()
-    auth_result = autorizacion_model.find_by_usuario_and_fecha(usuario_id, hoy, estado='APROBADA')
-
-    if not auth_result.get('success'):
-        return {'success': False, 'error': 'Fichaje fuera de horario. Se requiere una autorización.'}
-
-    for autorizacion in auth_result['data']:
-        auth_turno = autorizacion.get('turno')
-        auth_tipo = autorizacion.get('tipo')
-
-        if not auth_turno: 
-            continue
-
-        try:
-            auth_inicio = datetime.strptime(auth_turno['hora_inicio'], '%H:%M:%S').time()
-            auth_fin = datetime.strptime(auth_turno['hora_fin'], '%H:%M:%S').time()
-
-            if auth_tipo == 'LLEGADA_TARDIA':
-                # Permite fichar durante todo el turno autorizado
-                if auth_inicio <= hora_actual <= auth_fin:
-                    return {'success': True}
-            
-            elif auth_tipo == 'HORAS_EXTRAS':
-                # Permite fichar desde 15 mins antes del turno autorizado de HE
-                inicio_permitido_he = (datetime.combine(hoy, auth_inicio) - timedelta(minutes=15)).time()
-                if auth_fin < inicio_permitido_he: # Turno nocturno
-                    if hora_actual >= inicio_permitido_he or hora_actual <= auth_fin:
-                        return {'success': True}
-                else:
-                    if inicio_permitido_he <= hora_actual <= auth_fin:
-                        return {'success': True}
-        except (ValueError, TypeError):
-            continue
-
-    return {'success': False, 'error': 'Ninguna de sus autorizaciones es válida para este horario.'}
-
-
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     """Gestiona el inicio de sesión de los usuarios."""
@@ -155,7 +84,7 @@ def login():
 
         if respuesta.get('success') and usuario and usuario.get('activo'):
             # Verificación de horario de turno
-            verificacion_turno = _verificar_horario_turno(usuario)
+            verificacion_turno = usuario_controller.verificar_acceso_por_horario(usuario)
             if not verificacion_turno.get('success'):
                 flash(verificacion_turno.get('error'), 'error')
                 return redirect(url_for('auth.login'))
@@ -200,7 +129,7 @@ def identificar_rostro():
 
     if respuesta.get('success') and usuario:
         # Verificación de horario de turno
-        verificacion_turno = _verificar_horario_turno(usuario)
+        verificacion_turno = usuario_controller.verificar_acceso_por_horario(usuario)
         if not verificacion_turno.get('success'):
             return jsonify({'success': False, 'message': verificacion_turno.get('error')}), 401
 
