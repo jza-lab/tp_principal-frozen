@@ -38,6 +38,14 @@ if __name__ == "__main__":
 
     # 🌐 Ejecutar Flask sin reloader para evitar doble ejecución
     flask_port = int(os.environ.get("FLASK_PORT", 5000))
-    app.run(host="0.0.0.0", port=flask_port, debug=True)
+
+    # SOLUCIÓN: Desactivar reloader y threaded
+    app.run(
+        host="0.0.0.0",
+        port=flask_port,
+        debug=True,
+        use_reloader=False,  # ⬅️ ESTA ES LA CLAVE
+        threaded=False       # ⬅️ EVITA HILOS MÚLTIPLES
+    )
 
 

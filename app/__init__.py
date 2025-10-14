@@ -7,7 +7,8 @@ from .json_encoder import CustomJSONEncoder
 
 # --- Blueprints ---
 from app.views.insumo import insumos_bp
-from app.views.inventario import inventario_bp
+from app.views.inventario import inventario_bp as inventario_api_bp
+from app.views.inventario_routes import inventario_view_bp
 from app.views.auth_routes import auth_bp
 from app.views.admin_usuario_routes import admin_usuario_bp
 from app.views.orden_produccion_routes import orden_produccion_bp
@@ -15,6 +16,13 @@ from app.views.orden_compra_routes import orden_compra_bp
 from app.views.facial_routes import facial_bp
 from app.views.pedido_routes import orden_venta_bp
 from app.views.planificacion_routes import planificacion_bp
+from app.views.google_forms_routes import google_forms_bp
+from app.views.precios_routes import precios_bp
+from app.views.productos_routes import productos_bp
+from app.views.cliente_proveedor_routes import cliente_proveedor
+from app.views.lote_producto_routes import lote_producto_bp
+from app.views.reservas_routes import reservas_bp
+from app.views.session_routes import session_bp
 
 def create_app():
     """Factory para crear la aplicación Flask"""
@@ -42,7 +50,8 @@ def create_app():
 
     # Registrar blueprints
     app.register_blueprint(insumos_bp)
-    app.register_blueprint(inventario_bp)
+    app.register_blueprint(inventario_api_bp) # API routes
+    app.register_blueprint(inventario_view_bp)
     app.register_blueprint(orden_produccion_bp)
     app.register_blueprint(orden_compra_bp)
     app.register_blueprint(auth_bp, url_prefix='/auth')  # Prefijo opcional
@@ -50,6 +59,15 @@ def create_app():
     app.register_blueprint(facial_bp, url_prefix='/totem')
     app.register_blueprint(orden_venta_bp)
     app.register_blueprint(planificacion_bp)
+    app.register_blueprint(google_forms_bp)
+    app.register_blueprint(precios_bp)
+    app.register_blueprint(productos_bp, url_prefix='/api/productos')
+
+    app.register_blueprint(cliente_proveedor)
+    app.register_blueprint(lote_producto_bp, url_prefix='/api/productos')
+    app.register_blueprint(reservas_bp)
+    app.register_blueprint(session_bp)
+
     # Ruta de health check
     @app.route('/api/health')
     def health_check():
@@ -83,9 +101,38 @@ def create_app():
             'error': 'Error interno del servidor',
             'message': 'Contacte al administrador del sistema'
         }, 500
-    
+
     @app.route('/')
     def index():
         session.clear()
         return redirect(url_for('auth.login'))
+
+    # Registrar filtros de Jinja2
+    from datetime import datetime
+    def format_datetime_filter(value, format='%d/%m/%Y %H:%M'):
+        if value is None:
+            return ""
+        # Intenta parsear la fecha, asumiendo que es un string ISO 8601
+        try:
+            dt_object = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+            return dt_object.strftime(format)
+        except (ValueError, TypeError):
+            return value # Devolver el valor original si no se puede formatear
+
+    app.jinja_env.filters['format_datetime'] = format_datetime_filter
+
+
+
+    ##PARA AUTH SEGUN ROL
+    from app.utils.permission_map import CANONICAL_PERMISSION_MAP
+
+    @app.context_processor
+    def inject_permission_map():
+        """
+        Inyecta el mapa de permisos canónico en el contexto de Jinja2
+        para que esté disponible en todas las plantillas.
+        """
+        return {'CANONICAL_PERMISSION_MAP': CANONICAL_PERMISSION_MAP}
+
+
     return app

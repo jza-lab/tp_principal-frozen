@@ -11,6 +11,11 @@
 {% endblock %}
 
 {% block content %}
+<div class="btn-toolbar">
+        <a href="{{ url_for('insumos_api.obtener_insumos') }}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left me-1"></i>Volver a la Lista
+        </a>
+</div><br>
 <div class="row">
     <div class="col-lg-8 col-xl-9">
         <div class="card">
@@ -27,97 +32,163 @@
 
                 <hr>
 
-                <div class="row g-3">
+                <div class="row g-4">
                     <div class="col-md-4">
-                        <label class="form-label-sm">Unidad de Medida</label>
-                        <p class="form-control-plaintext">{{ insumo.unidad_medida }}</p>
+                        <div class="border-start border-3 border-primary ps-3">
+                            <label class="form-label-sm fw-bold">Stock Actual</label>
+                            <div class="d-flex align-items-center">
+                                <span class="stock-value 
+                                    {% if insumo.stock_actual is not none and insumo.stock_actual < insumo.stock_min %}
+                                        badge text-bg-danger fw-normal py-1 fs-6
+                                    {% elif insumo.stock_actual is not none and insumo.stock_actual >= insumo.stock_min %}
+                                        badge text-bg-success fw-normal py-1 fs-6
+                                    {% else %}
+                                        text-muted
+                                    {% endif %}" 
+                                    id="stock-value-{{ insumo.id_insumo }}">
+                                    {{ insumo.stock_actual if insumo.stock_actual is not none else 'N/A' }}
+                                </span>
+                                <span class="ms-2 text-muted">{{ insumo.unidad_medida }}</span>
+                            </div>
+                        </div>
                     </div>
+                    
                     <div class="col-md-4">
-                        <label class="form-label-sm">Temperatura Recomendada</label>
-                        <p class="form-control-plaintext">{{ insumo.tem_recomendada or 'N/A' }} °C</p>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-rulers fs-4 text-muted me-2"></i>
+                            <div>
+                                <label class="form-label-sm fw-bold">Unidad de Medida</label>
+                                <p class="form-control-plaintext mb-0">{{ insumo.unidad_medida }}</p>
+                            </div>
+                        </div>
                     </div>
+
                     <div class="col-md-4">
-                        <label class="form-label-sm">Vida Útil</label>
-                        <p class="form-control-plaintext">{{ insumo.vida_util_dias or 'N/A' }} días</p>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-currency-dollar fs-4 text-muted me-2"></i>
+                            <div>
+                                <label class="form-label-sm fw-bold">Precio Unitario</label>
+                                <p class="form-control-plaintext mb-0">${{ insumo.precio_unitario }}</p>
+                            </div>
+                        </div>
                     </div>
+
                     <div class="col-md-4">
-                        <label class="form-label-sm">Stock Mínimo</label>
-                        <p class="form-control-plaintext">{{ insumo.stock_min }} {{ insumo.unidad_medida }}</p>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-dash-circle fs-4 text-muted me-2"></i>
+                            <div>
+                                <label class="form-label-sm fw-bold">Stock Mínimo</label>
+                                <p class="form-control-plaintext mb-0">{{ insumo.stock_min }} {{ insumo.unidad_medida }}</p>
+                            </div>
+                        </div>
                     </div>
+                    
                     <div class="col-md-4">
-                        <label class="form-label-sm">Stock Máximo</label>
-                        <p class="form-control-plaintext">{{ insumo.stock_max or 'N/A' }} {{ insumo.unidad_medida }}</p>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-plus-circle fs-4 text-muted me-2"></i>
+                            <div>
+                                <label class="form-label-sm fw-bold">Stock Máximo</label>
+                                <p class="form-control-plaintext mb-0">{{ insumo.stock_max or 'N/A' }} {{ insumo.unidad_medida }}</p>
+                            </div>
+                        </div>
                     </div>
+
                     <div class="col-md-4">
-                        <label class="form-label-sm">¿Es Crítico?</label>
-                        <p class="form-control-plaintext">
-                            <span class="badge bg-{{ 'danger' if insumo.es_critico else 'secondary' }}">
-                                {{ 'Sí' if insumo.es_critico else 'No' }}
-                            </span>
-                        </p>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-calendar-date fs-4 text-muted me-2"></i>
+                            <div>
+                                <label class="form-label-sm fw-bold">Vida Útil</label>
+                                <p class="form-control-plaintext mb-0">{{ insumo.vida_util_dias or 'N/A' }} días</p>
+                            </div>
+                        </div>
                     </div>
+
                     <div class="col-md-4">
-                        <label class="form-label-sm">¿Requiere Certificación?</label>
-                        <p class="form-control-plaintext">
-                            <span class="badge bg-{{ 'info' if insumo.requiere_certificacion else 'secondary' }}">
-                                {{ 'Sí' if insumo.requiere_certificacion else 'No' }}
-                            </span>
-                        </p>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-thermometer-half fs-4 text-muted me-2"></i>
+                            <div>
+                                <label class="form-label-sm fw-bold">Temperatura Recomendada</label>
+                                <p class="form-control-plaintext mb-0">{{ insumo.tem_recomendada or 'N/A' }} °C</p>
+                            </div>
+                        </div>
                     </div>
+
                     <div class="col-md-4">
-                        <label class="form-label-sm">Fecha de Creación</label>
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-{{ 'patch-check-fill text-info' if insumo.requiere_certificacion else 'x-circle text-muted' }} fs-4 me-2"></i>
+                            <div>
+                                <label class="form-label-sm fw-bold">Certificación</label>
+                                <p class="form-control-plaintext mb-0">
+                                    <span class="badge bg-{{ 'info' if insumo.requiere_certificacion else 'secondary' }}">
+                                        {{ 'Sí Requerida' if insumo.requiere_certificacion else 'No Requerida' }}
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-{{ 'exclamation-triangle-fill text-danger' if insumo.es_critico else 'check-circle-fill text-success' }} fs-4 me-2"></i>
+                            <div>
+                                <label class="form-label-sm fw-bold">Es Delicado</label>
+                                <p class="form-control-plaintext mb-0">
+                                    <span class="badge bg-{{ 'danger' if insumo.es_critico else 'success' }}">
+                                        {{ 'Sí' if insumo.es_critico else 'No' }}
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12">
+                        <hr>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label-sm fw-bold"><i class="bi bi-calendar-plus me-1"></i>Fecha de Creación</label>
                         <p class="form-control-plaintext">{{ insumo.created_at.split('T')[0] if insumo.created_at else 'N/A' }}</p>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label-sm">Última Actualización</label>
+                        <label class="form-label-sm fw-bold"><i class="bi bi-calendar-check me-1"></i>Última Actualización</label>
                         <p class="form-control-plaintext">{{ insumo.updated_at.split('T')[0] if insumo.updated_at else 'N/A' }}</p>
                     </div>
                 </div>
                 {% endif %}
             </div>
+            
             <div class="card mt-4">
                 <div class="card-header">
-                    <h5 class="mb-0">Lotes de Inventario</h5>
+                    <h5 class="mb-0">Lotes en Inventario</h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-0">
                     {% if lotes %}
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover">
+                        <table class="table table-striped table-hover mb-0">
                             <thead>
                                 <tr>
-                                    <th>Lote Proveedor</th>
-                                    <th>Cantidad Actual</th>
+                                    <th>N° Lote</th>
+                                    <th class="text-end">Cantidad Actual</th>
                                     <th>Fecha Ingreso</th>
                                     <th>Fecha Vencimiento</th>
                                     <th>Estado</th>
-                                    <th>Acciones</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for lote in lotes %}
-                                <tr>
-                                    <td>{{ lote.numero_lote_proveedor or 'N/A' }}</td>
-                                    <td>{{ lote.cantidad_actual }} {{ insumo.unidad_medida }}</td>
-                                    <td>{{ lote.f_ingreso}}</td>
-                                    <td>{{ lote.f_vencimiento}}</td>
+                                <tr class="align-middle">
+                                    <td><code>{{ lote.numero_lote_proveedor or 'N/A' }}</code></td>
+                                    <td class="text-end fw-bold">{{ lote.cantidad_actual | round(2) }} {{ insumo.unidad_medida }}</td>
+                                    <td>{{ lote.f_ingreso }}</td>
+                                    <td>{{ lote.f_vencimiento or 'No aplica' }}</td>
                                     <td>
-                                        <span
-                                            class="badge bg-{{ 'success' if lote.estado == 'disponible' else 'secondary' }}">
-                                            {{ lote.estado | capitalize }}
-                                        </span>
+                                        <span class="badge bg-success">{{ lote.estado or 'disponible' }}</span>
                                     </td>
-                                    <td>
-                                        <a href="{{ url_for('insumos_api.editar_lote', id_insumo=insumo.id_insumo, id_lote=lote.id_lote) }}"
-                                            class="btn btn-sm btn-outline-primary">
-                                            <i class="bi bi-pencil-square"></i> Editar
+                                    <td class="text-end">
+                                        <a href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-primary" title="Ver Detalle del Lote">
+                                            <i class="bi bi-eye"></i>
                                         </a>
-                                        <button class="btn btn-sm btn-outline-danger" 
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#confirmationModal"
-                                                data-url="{{ url_for('insumos_api.eliminar_lote', id_insumo=insumo.id_insumo, id_lote=lote.id_lote) }}"
-                                                data-message="¿Estás seguro de que deseas eliminar el lote <strong>{{ lote.numero_lote_proveedor or 'N/A' }}</strong>? Esta acción no se puede deshacer.">
-                                            <i class="bi bi-trash"></i> Eliminar
-                                        </button>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -125,8 +196,10 @@
                         </table>
                     </div>
                     {% else %}
-                    <div class="alert alert-info" role="alert">
-                        No hay lotes registrados para este insumo.
+                    <div class="card-body">
+                        <div class="alert alert-light border-0 text-center mb-0">
+                            No hay lotes registrados para este insumo en el inventario.
+                        </div>
                     </div>
                     {% endif %}
                 </div>
@@ -134,26 +207,30 @@
         </div>
 
     </div>
-            <div class="col-lg-4 col-xl-3">
-            <div class="card">
-                <div class="card-header">
-                    <h6 class="mb-0">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Ayuda
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="alert alert-light border">
-                        <h6>Consejos importantes:</h6>
-                        <ul class="mb-0 small">
-                            <li>En caso de algún problema crítico como contaminación, contactar a aquellos que
-                                recibieron
-                                productos</li>
-                            <li>Las fechas de vencimiento son aproximadas según la vida util de la materia</li>
-                            <li>Procure tener el stock por arriba de la cantidad minima fijada</li>
-                        </ul>
-                    </div>
+    <div class="col-lg-4 col-xl-3">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Ayuda
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-light border">
+                    <h6>Consejos importantes:</h6>
+                    <ul class="mb-0 small">
+                        <li>En caso de algún problema crítico como contaminación, contactar a aquellos que
+                            recibieron
+                            productos</li>
+                        <li>Las fechas de vencimiento son aproximadas según la vida util de la materia</li>
+                        <li>Procure tener el stock por arriba de la cantidad minima fijada</li>
+                    </ul>
                 </div>
             </div>
         </div>
-    {% endblock %}
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/insumos/insumo_stock.js') }}"></script>
+{% endblock %}

@@ -1,10 +1,12 @@
 {% extends 'layouts/base.html' %}
+{% set is_edit = pedido and pedido.id %}
 
 {% block title %}
-    {% if pedido %}Editar{% else %}Nuevo{% endif %} Pedido de Venta - Sistema Frozen
+{% if pedido %}Editar{% else %}Nuevo{% endif %} Pedido de Venta - Sistema Frozen
 {% endblock %}
 
 {% block content %}
+
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">
@@ -12,9 +14,9 @@
         </h1>
         <p class="text-muted mb-0">
             {% if pedido and pedido.id %}
-                Modificar pedido <code>PED-{{ pedido.id }}</code> | Cliente: <strong>{{ pedido.nombre_cliente }}</strong>
+            Modificar pedido <code>PED-{{ pedido.id }}</code> | Cliente: <strong>{{ pedido.nombre_cliente }}</strong>
             {% else %}
-                Crear un nuevo pedido para un cliente
+            Crear un nuevo pedido para un cliente
             {% endif %}
         </p>
     </div>
@@ -32,33 +34,323 @@
 </div>
 
 <form method="POST" id="pedido-form">
+    <input type="hidden" id="id_cliente" name="id_cliente" value="{{ cliente.id if cliente else ''}}">
+    <input type="hidden" id="cuil" name="cuil" value="">
     <div class="row">
         <!-- Columna principal del formulario -->
         <div class="col-lg-8">
             <div class="card shadow-sm">
                 <div class="card-header bg-light">
-                    <h5 class="mb-0">Información del Pedido</h5>
+                    <h5 class="mb-0">Información del Cliente</h5>
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label for="nombre_cliente" class="form-label">Nombre del Cliente <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente" 
-                                   value="{{ pedido.nombre_cliente if pedido else '' }}" required>
+                            <div class="input-group">
+
+                                <input type="text" class="form-control text-center" id="cuil_parte1" name="cuil_parte1"
+                                    maxlength="2" pattern="\d{2}" placeholder="XX" required
+                                    style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
+                                    value="{{ cliente.cuit[:2] if cliente and cliente.cuit else '' }}"
+                                    aria-label="Código de provincia" {% if cliente and pedido %} readonly{% endif %}>
+
+                                <span class="input-group-text">-</span>
+
+                                <div class="form-floating" style="flex-grow: 4;">
+                                    <input type="text" class="form-control text-center" id="cuil_parte2"
+                                        name="cuil_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX"
+                                        value="{{ cliente.cuit[2:10] if cliente and cliente.cuit else '' }}" required {% if cliente and pedido %} readonly {% endif %}>
+                                    <label for="cuil_parte2">
+                                        <i class="bi bi-person-badge me-1"></i>CUIL
+                                    </label>
+                                </div>
+
+                                <span class="input-group-text">-</span>
+
+                                <input type="text" class="form-control text-center" id="cuil_parte3" name="cuil_parte3"
+                                    value="{{ cliente.cuit[10:] if cliente and cliente.cuit else ''}}" maxlength="1"
+                                    pattern="\d{1}" placeholder="X" required {% if cliente and pedido %} readonly{% endif %}
+                                    style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
+                                    aria-label="Dígito verificador">
+                            </div>
                         </div>
-                        
+
                         <div class="col-md-6">
-                            <label for="fecha_solicitud" class="form-label">Fecha de Solicitud <span class="text-danger">*</span></label>
-                            <!-- FIX PREVIO: Se usa la conversión a string y el slicing [0:10] para manejar de forma segura datetime/strings. -->
-                            <input type="date" class="form-control" id="fecha_solicitud" name="fecha_solicitud" 
-                                   value="{{ (pedido.fecha_solicitud | string)[:10] if pedido and pedido.fecha_solicitud else '' }}" required>
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente"
+                                    placeholder="Nombre del Cliente"
+                                    value="{{ pedido.nombre_cliente if pedido else '' }}" readonly>
+                                <label for="nombre_cliente">
+                                    <i class="bi bi-person-circle me-1"></i>Nombre <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" name="telefono" id="telefono"
+                                    placeholder="Teléfono" value="{{ cliente.telefono if cliente else '' }}" readonly>
+                                <label for="telefono">
+                                    <i class="bi bi-phone me-1"></i>Teléfono <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="email" class="form-control" name="email" id="email" placeholder="Email"
+                                    value="{{ cliente.email if cliente else '' }}" readonly>
+                                <label for="email">
+                                    <i class="bi bi-envelope me-1"></i>Email <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-subsection">
+                            <label class="form-label">Dirección de Facturacion</label>
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="calle_facturacion"
+                                            name="calle_facturacion" placeholder="Calle" value="{{ cliente.direccion.calle if cliente and cliente.direccion else '' }}" readonly>
+                                        <label for="calle_facturacion">
+                                            <i class="bi bi-signpost me-1"></i>Calle
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="number" class="form-control" id="altura_facturacion" value="{{ cliente.direccion.altura if cliente and cliente.direccion else '' }}"
+                                            name="altura_facturacion" placeholder="Altura" value="" readonly>
+                                        <label for="altura_facturacion">
+                                            <i class="bi bi-123 me-1"></i>Altura
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <select class="form-select" id="provincia_facturacion"
+                                            name="provincia_facturacion" readonly>
+                                            <option value="">Seleccionar provincia...</option>
+                                            {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
+                                            "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
+                                            Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan",
+                                            "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del
+                                            Fuego",
+                                            "Tucumán"] %}
+                                            {% for p in provincias %}
+                                            <option value="{{ p }}" {% if cliente and cliente.direccion.provincia==p
+                                                %}selected{% endif %}>{{ p }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <label for="provincia">
+                                            <i class="bi bi-map me-1"></i>Provincia
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="localidad_facturacion" value="{{ cliente.direccion.localidad if cliente and cliente.direccion else '' }}"
+                                            name="localidad_facturacion" placeholder="Localidad" value="" readonly>
+                                        <label for="localidad_facturacion">
+                                            <i class="bi bi-pin-map me-1"></i>Localidad
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="piso_facturacion" maxlength="3" value="{{ cliente.direccion.piso if cliente and cliente.direccion and cliente.direccion.piso else '' }}"
+                                            name="piso_facturacion" placeholder="Piso (Opcional)" value="" readonly>
+                                        <label for="piso_facturacion">
+                                            <i class="bi bi-building me-1"></i>Piso (Opcional)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="depto_facturacion" alue="{{ cliente.direccion.depto if cliente and cliente.direccion and cliente.direccion.depto else '' }}"
+                                            name="depto_facturacion" placeholder="Dto (Opcional)" value="" readonly>
+                                        <label for="depto_facturacion">
+                                            <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="codigo_postal_facturacion" alue="{{ cliente.direccion.codigo_postal if cliente and cliente.direccion else '' }}"
+                                            name="codigo_postal_facturacion" placeholder="Código Postal" value=""
+                                            readonly>
+                                        <label for="codigo_postal_facturacion">
+                                            <i class="bi bi-mailbox me-1"></i>Código Postal
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
+            <div class="card shadow-sm mt-2">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Información del Pedido</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="form-subsection">
+                            <label class="form-label">Dirección de Entrega</label>
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="calle" name="calle" minlength="3"
+                                            maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" placeholder="Calle"
+                                            value="{{ pedido.direccion.calle if pedido else ''}}">
+                                        <label for="calle">
+                                            <i class="bi bi-signpost me-1"></i>Calle
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="number" class="form-control" id="altura" name="altura"
+                                            pattern="\d{1,5}" maxlength="5" max="99999" min="1" placeholder="Altura"
+                                            value="{{ pedido.direccion.altura if pedido else '' }}">
+                                        <label for="altura">
+                                            <i class="bi bi-123 me-1"></i>Altura
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <select class="form-select" id="provincia" name="provincia" required>
+                                            <option value="">Seleccionar provincia...</option>
+                                            {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
+                                            "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
+                                            Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan",
+                                            "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del
+                                            Fuego",
+                                            "Tucumán"] %}
+
+                                            {% for p in provincias %}
+                                            <option value="{{ p }}" {% if pedido and pedido.direccion.provincia==p
+                                                %}selected{% endif %}>{{ p }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <label for="provincia">
+                                            <i class="bi bi-map me-1"></i>Provincia
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="localidad" name="localidad"
+                                            minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
+                                            title="Ingresá un nombre de localidad válido (solo letras y espacios)."
+                                            placeholder="Localidad"
+                                            value="{{ pedido.direccion.localidad if pedido else ''}}">
+                                        <label for="localidad">
+                                            <i class="bi bi-pin-map me-1"></i>Localidad
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="3"
+                                            pattern="[A-Za-z0-9\s]*"
+                                            title="Solo se permiten letras, números y espacios."
+                                            placeholder="Piso (Opcional)"
+                                            value="{{ pedido.direccion.piso if pedido and pedido.direccion.piso and pedido.direccion.piso != 'None' else ''}}">
+                                        <label for="piso">
+                                            <i class="bi bi-building me-1"></i>Piso (Opcional)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="depto" name="depto" maxlength="5"
+                                            pattern="[A-Za-z0-9\s]*"
+                                            title="Solo se permiten letras, números y espacios."
+                                            placeholder="Dto (Opcional)"
+                                            value="{{ pedido.direccion.depto if pedido and pedido.direccion.depto else ''}}">
+                                        <label for="depto">
+                                            <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                                            minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}"
+                                            title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
+                                            placeholder="Código Postal"
+                                            value="{{ pedido.direccion.codigo_postal if pedido else '' }}" required>
+                                        <label for="codigo_postal">
+                                            <i class="bi bi-mailbox me-1"></i>Código Postal
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="fecha_solicitud" class="form-label">Fecha de Solicitud <span
+                                    class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="fecha_solicitud" name="fecha_solicitud"
+                                value="{{ pedido.fecha_solicitud[:10] if  pedido and pedido.fecha_solicitud else today }}"
+                                required {% if pedido %}readonly{% endif %} min="2025-01-01" max="{{ today }}">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="fecha_requerido" class="form-label">Fecha requerida de Entrega <span
+                                    class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="fecha_requerido" name="fecha_requerido"
+                                value="{{ pedido.fecha_requerido[:10] if pedido and pedido.fecha_requerido else today}}"
+                                required {% if pedido %}readonly{% endif %} max="{{ fecha_limite }}" min="{{ today }}">
+                        </div>
+
+                        <div class="col-12">
+                            <label for="comentarios_adicionales" class="form-label">Comentarios Adicionales</label>
+                            <textarea class="form-control" name="comentarios_adicionales" id="comentarios_adicionales"
+                                rows="3"
+                                maxlength="500"> {{ pedido.comentarios_adicionales if pedido and pedido.comentarios_adicionales else ''}}</textarea>
+                            <div class="form-text">Opcional - Ingrese comentarios adicionales sobre el pedido</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% set total_pedido = 0.0 %}
+            {% if pedido and pedido['items'] %}
+            {% for item in pedido['items'] %}
+            {# CORRECCIÓN CRUCIAL: Usamos .get(key, 0) para manejar ítems sin precio o cantidad #}
+            {% set item_precio = item.get('precio_unitario', 0) %}
+            {% set item_cantidad = item.get('cantidad', 0) %}
+            {% set total_pedido = total_pedido + (item_precio * item_cantidad) %}
+            {% endfor %}
+            {% endif %}
+
             <!-- Items del Pedido -->
-            <div class="card shadow-sm mt-4">
+            <div class="card shadow-sm mt-4 mb-2">
                 <div class="card-header d-flex justify-content-between align-items-center bg-light">
                     <h5 class="mb-0">Productos del Pedido</h5>
                     <button type="button" class="btn btn-sm btn-outline-primary" id="add-item-btn">
@@ -70,59 +362,88 @@
                         <table class="table table-sm align-middle mb-0">
                             <thead class="bg-light">
                                 <tr>
-                                    <th style="width: 45%;">Producto <span class="text-danger">*</span></th>
-                                    <th style="width: 20%;">Cantidad <span class="text-danger">*</span></th>
-                                    <th style="width: 20%;">Stock</th>
-                                    <th style="width: 15%;" class="text-center">Acción</th>
+                                    <th style="width: 35%;">Producto <span class="text-danger">*</span></th>
+                                    <th style="width: 15%;">Cantidad <span class="text-danger">*</span></th>
+                                    <th style="width: 15%;">Precio Unitario</th>
+                                    <th style="width: 15%;">Subtotal</th>
+                                    <th style="width: 10%;" class="text-center">Acción</th>
                                 </tr>
                             </thead>
                             <tbody id="items-container">
-                                <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS" 
-                                       value="{{ pedido['items'] | length if pedido and pedido['items'] else 0 }}">
+                                <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS"
+                                    value="{{ pedido['items'] | length if pedido and pedido['items'] else 0 }}">
 
                                 {% if pedido and pedido['items'] %}
-                                    {% for item in pedido['items'] %}
-                                    <tr class="item-row">
-                                        <td>
-                                            <input type="hidden" name="items-{{ loop.index0 }}-id" value="{{ item.id if item.id else '' }}">
-                                            <select class="form-select form-select-sm" name="items-{{ loop.index0 }}-producto_id" required>
-                                                <option value="">Seleccione...</option>
-                                                {% for producto in productos %}
-                                                    <option value="{{ producto.id }}" data-stock="{{ producto.stock_disponible or 0 }}" {% if item.producto_id == producto.id %}selected{% endif %}>
-                                                        {{ producto.nombre }}
-                                                    </option>
-                                                {% endfor %}
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <input type="number" class="form-control form-control-sm" name="items-{{ loop.index0 }}-cantidad" 
-                                                   placeholder="Ej: 10" min="1" step="1" value="{{ item.cantidad }}" required>
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-secondary text-white stock-display">--</span>
-                                        </td>
-                                        <td class="text-center">
-                                            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem"><i class="bi bi-trash"></i></button>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
+                                {% for item in pedido['items'] %}
+                                <tr class="item-row {% if pedido and not pedido.estado=='PENDIENTE' %}table-light text-muted{% endif %}">
+                                    <td>
+                                        <input type="hidden" name="items-{{ loop.index0 }}-id"
+                                            value="{{ item.id if item.id else '' }}">
+                                        <select class="form-select form-select-sm producto-selector"
+                                            name="items-{{ loop.index0 }}-producto_id" required {% if pedido and  pedido.estado !='PENDIENTE' %}disabled{% endif %}>
+                                            <option value="">Seleccione...</option>
+                                            {% for producto in productos %}
+                                            <option value="{{ producto.id }}"
+                                                data-stock="{{ producto.stock_disponible or 0 }}"
+                                                data-precio="{{ producto.precio_unitario | float or 0 }}" {% if
+                                                item.producto_id==producto.id %}selected{% endif %}>
+                                                {{ producto.nombre }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td>
+
+                                        <input type="number" class="form-control form-control-sm item-quantity" oninput="limitarDigitos(this, 4)"
+                                            name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10" min="1" 
+                                            max="5000" step="1" value="{{ item.get('cantidad', 0) }}" required {% if pedido and pedido.estado !='PENDIENTE' %}disabled{% endif %}>
+                                    </td>
+
+                                    <td>
+                                        <input type="text" class="form-control form-control-sm price-display"
+                                            value="{{ '%.2f' | format(item.get('precio_unitario', 0)) }}" readonly>
+                                    </td>
+
+                                    <td class="text-center">
+
+                                        <input type="number" step="0.01" min="1" class="form-control subtotal-item"
+                                            value="{{ '%.2f' | format(item.get('cantidad', 0) * item.get('precio_unitario', 0)) }}"
+                                            readonly>
+                                    </td>
+
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn"
+                                            title="Eliminar ítem" {% if pedido and not pedido.estado=='PENDIENTE' %}disabled{% endif %}><i
+                                                class="bi bi-trash"></i></button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
                                 {% endif %}
                             </tbody>
                         </table>
                     </div>
                     <!-- FIX para usar la notación de diccionario para consistencia. -->
-                    <div id="no-items-msg" class="text-center text-muted py-3 border-top" {% if pedido and pedido['items'] | length > 0 %}style="display: none;"{% endif %}>
+                    <div id="no-items-msg" class="text-center text-muted py-3 border-top" {% if pedido and
+                        pedido['items'] | length> 0 %}style="display: none;"{% endif %}>
                         <i class="bi bi-box-seam fs-3"></i>
                         <p class="mt-2">Añada productos al pedido.</p>
                     </div>
                 </div>
             </div>
+            <div class="card mb-4">
+                <div class="card-body d-flex justify-content-end">
+                    <div class="w-50">
+                        <label for="total-final" class="form-label fw-bold">Total del Pedido</label>
+                        <input type="text" class="form-control text-end fs-5" id="total-final" name="total"
+                            value="{{ '%.2f' | format(total_pedido) }}" readonly>
+                    </div>
+                </div>
+            </div>
         </div>
-
         <!-- Columna lateral -->
         <div class="col-lg-4">
             <div class="card sticky-top shadow-sm" style="top: 20px;">
-                <div class="card-header bg-primary text-white">
+                <div class="card-header bg-primary text-black">
                     <h5 class="mb-0">Resumen y Acciones</h5>
                 </div>
                 <div class="card-body">
@@ -130,21 +451,28 @@
                     <div class="mb-3">
                         <label for="estado" class="form-label">Estado del Pedido Global</label>
                         <select class="form-select" id="estado" name="estado">
-                            <option value="PENDIENTE" {% if pedido.estado == 'PENDIENTE' %}selected{% endif %}>Pendiente</option>
-                            <option value="EN_PROCESO" {% if pedido.estado == 'EN_PROCESO' %}selected{% endif %}>En Proceso</option>
-                            <option value="LISTO_PARA_ENTREGA" {% if pedido.estado == 'LISTO_PARA_ENTREGA' %}selected{% endif %}>Listo para Entrega</option>
-                            <option value="COMPLETADO" {% if pedido.estado == 'COMPLETADO' %}selected{% endif %}>Completado</option>
-                            <option value="CANCELADO" {% if pedido.estado == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
+                            <option value="PENDIENTE" {% if pedido.estado=='PENDIENTE' %}selected{% endif %}>Pendiente
+                            </option>
+                            <option value="APROBADO" {% if pedido.estado=='APROBADO' %}selected{% endif %}>Aprobado
+                            </option>
+                            <option value="EN_PROCESO" {% if pedido.estado=='EN_PROCESO' %}selected{% endif %}>En
+                                Proceso</option>
+                            <option value="LISTO_PARA_ENTREGA" {% if pedido.estado=='LISTO_PARA_ENTREGA' %}selected{%
+                                endif %}>Listo para Entrega</option>
+                            <option value="COMPLETADO" {% if pedido.estado=='COMPLETADO' %}selected{% endif %}>
+                                Completado</option>
+                            <option value="CANCELADO" {% if pedido.estado=='CANCELADO' %}selected{% endif %}>Cancelado
+                            </option>
                         </select>
                     </div>
                     <hr>
                     {% endif %}
-                    
+
                     <div class="alert alert-info border-0 rounded-3 bg-light p-3">
                         <i class="bi bi-info-circle me-1"></i>
                         Asegúrese de que todos los datos y cantidades son correctos antes de guardar.
                     </div>
-                    
+
                     <div class="d-grid gap-2 mt-4">
                         <button type="submit" class="btn btn-primary btn-lg">
                             <i class="bi bi-save me-1"></i>
@@ -164,28 +492,61 @@
 <template id="item-template">
     <tr class="item-row">
         <td>
-            <input type="hidden" name="items-__prefix__-id" value=""> 
-            <select class="form-select form-select-sm" name="items-__prefix__-producto_id" required>
-                <option value="" selected>Seleccione un producto...</option>
+            <input type="hidden" name="items-__prefix__-id" value="">
+            <select class="form-select form-select-sm producto-selector" name="items-__prefix__-producto_id" required>
+                <option value="" selected data-id="">Seleccione un producto...</option>
                 {% for producto in productos %}
-                    <option value="{{ producto.id }}" data-stock="{{ producto.stock_disponible or 0 }}">{{ producto.nombre }}</option>
+                <option value="{{ producto.id }}" data-id="{{ producto.id }}"
+                    data-precio="{{ producto.precio_unitario | float or 0 }}"
+                    data-stock="{{ producto.stock_disponible or 0 }}">{{ producto.nombre }}</option>
                 {% endfor %}
             </select>
         </td>
         <td>
-            <input type="number" min="1" step="1" class="form-control form-control-sm" name="items-__prefix__-cantidad" 
-                   placeholder="Ej: 10"  required>
+            <input type="number" min="1" max="5000" step="1" class="form-control form-control-sm item-quantity" oninput="limitarDigitos(this, 4)"
+                name="items-__prefix__-cantidad" placeholder="Ej: 10" required>
         </td>
-        <td>
+        <!-- <td>
             <span class="badge bg-secondary text-white stock-display">--</span>
+        </td> -->
+        <td>
+            <input type="text" class="form-control form-control-sm price-display" value="0.00" readonly>
+        </td>
+        <td class="text-end">
+            <input type="text" class="form-control form-control-sm subtotal-item" value="0.00" readonly>
         </td>
         <td class="text-center">
-            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem"><i class="bi bi-trash"></i></button>
+            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar ítem"><i
+                    class="bi bi-trash"></i></button>
         </td>
     </tr>
 </template>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/formularioVenta.js') }}"></script>
+
+<script>
+    window.CLIENTE_API_URL_BASE = "{{ url_for('clientes_proveedores.buscar_por_cuil', cliente_cuil='0') }}";
+    const pedidoId = "{{ pedido.id }}"
+    const isEditing = {{ is_edit | tojson }};
+
+</script>
+
+<script>
+
+function limitarDigitos(input, maxLength) {
+  // Asegurarnos de que el valor es un string para poder medir su longitud
+  if (input.value.length > maxLength) {
+    // Si se pasa, lo cortamos
+    input.value = input.value.slice(0, maxLength);
+  }
+}
+
+</script>
+
+<script src="{{ url_for('static', filename='js/orden_venta/gestionClientes.js') }}"></script>
+
+<script src="{{ url_for('static', filename='js/orden_venta/gestionCalculos.js') }}"></script>
+
+<script src="{{ url_for('static', filename='js/orden_venta/formularioVenta.js') }}"></script>
 {% endblock extra_js %}

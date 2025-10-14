@@ -1,38 +1,38 @@
 from dataclasses import dataclass, asdict
-from typing import Optional, Dict
-from datetime import datetime, date
+from typing import Optional, Dict, List
+from datetime import datetime, date, time
 from werkzeug.security import generate_password_hash, check_password_hash
 from app.models.base_model import BaseModel
 import logging
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class Usuario:
     """
-    Dataclass que representa la estructura de un usuario del sistema.
+    Dataclass que representa la estructura actualizada de un usuario del sistema.
     """
     id: Optional[int]
     email: str
     password_hash: str
     nombre: str
     apellido: str
-    rol: str
+    role_id: int
     activo: bool = True
     created_at: Optional[datetime] = None
-    numero_empleado: Optional[str] = None
-    dni: Optional[str] = None
+    legajo: Optional[str] = None
+    cuil_cuit: Optional[str] = None
     telefono: Optional[str] = None
-    direccion: Optional[str] = None
+    direccion_id: Optional[int] = None
     fecha_nacimiento: Optional[date] = None
     fecha_ingreso: Optional[date] = None
-    departamento: Optional[str] = None
-    puesto: Optional[str] = None
     supervisor_id: Optional[int] = None
     turno: Optional[str] = None
-    ultimo_login: Optional[datetime] = None
+    ultimo_login_web: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     facial_encoding: Optional[str] = None
+    sectores: Optional[List[Dict]] = None
 
     def set_password(self, password: str):
         self.password_hash = generate_password_hash(password)
@@ -47,66 +47,128 @@ class Usuario:
                 d[key] = value.isoformat() if value else None
         return d
 
+    def tiene_sector(self, sector_codigo: str) -> bool:
+        """Verifica si el usuario tiene un sector específico"""
+        if not self.sectores:
+            return False
+        return any(sector.get('codigo') == sector_codigo for sector in self.sectores)
+
 
 class UsuarioModel(BaseModel):
     """
-    Modelo para interactuar con la tabla de usuarios en la base de datos.
+    Modelo actualizado para interactuar con la tabla de usuarios.
     """
+
     def get_table_name(self) -> str:
         return 'usuarios'
 
-    def find_by_email(self, email: str) -> Dict:
+    def contar_usuarios_direccion(self,direccion_id: int) -> int:
         """
-        Busca un usuario por su dirección de correo electrónico.
+        Cuenta el número de usuarios que tienen asignada una dirección específica.
         """
         try:
-            result = self.db.table(self.get_table_name()).select('*').eq('email', email).execute()
-            if result.data:
-                return {'success': True, 'data': result.data[0]}
-            else:
-                return {'success': False, 'error': 'Usuario no encontrado'}
+            response = self.db.table(self.get_table_name()) \
+                .select('id', count='exact') \
+                .eq('direccion_id', direccion_id) \
+                .execute()
+
+            return response.count if response.count is not None else 0
+
         except Exception as e:
-            logger.error(f"Error buscando usuario por email: {str(e)}")
+            logger.error(f"Error contando usuarios por direccion_id {direccion_id}: {e}")
+            return 0
+
+    def _find_by(self, field: str, value, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
+        """
+        Método genérico y privado para buscar un usuario por un campo específico.
+        """
+        try:
+            select_query = "*, roles(codigo, nombre, nivel), turno:turno_id(nombre)"
+            if include_direccion:
+                select_query += ", direccion:usuario_direccion(*)"
+
+            query = self.db.table(self.get_table_name()).select(select_query).eq(field, value)
+            result = query.execute()
+
+            if not result.data:
+                return {'success': False, 'error': 'Usuario no encontrado'}
+
+            usuario_data = result.data[0]
+
+            if include_sectores:
+                from app.models.usuario_sector import UsuarioSectorModel
+                usuario_sector_model = UsuarioSectorModel()
+                sectores_result = usuario_sector_model.find_by_usuario(usuario_data['id'])
+
+                if sectores_result.get('success'):
+                    sectores = [item['sectores'] for item in sectores_result['data'] if item.get('sectores')]
+                    usuario_data['sectores'] = sectores
+                else:
+                    usuario_data['sectores'] = []
+
+            return {'success': True, 'data': usuario_data}
+
+        except Exception as e:
+            logger.error(f"Error buscando usuario por {field}: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
+    def find_by_email(self, email: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
+        """Busca un usuario por email"""
+        return self._find_by('email', email, include_sectores, include_direccion)
 
-    ##GONZA
-
-    def find_by_id(self, usuario_id: int) -> Dict:
+    def find_by_id(self, usuario_id: int, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
         """Busca un usuario por su ID"""
-        try:
-            # CORREGIR: usar 'id' en lugar de 'id_usuario'
-            response = self.db.table("usuarios").select("*").eq("id", usuario_id).execute()
+        return self._find_by('id', usuario_id, include_sectores, include_direccion)
 
-            if response.data:
-                return {'success': True, 'data': response.data[0]}
-            else:
-                return {'success': False, 'error': 'Usuario no encontrado'}
-
-        except Exception as e:
-            logger.error(f"Error buscando por ID: {e}")
-            return {'success': False, 'error': str(e)}
-
-    def find_by_legajo(self, legajo: str) -> Dict:
+    def find_by_legajo(self, legajo: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
         """Busca un usuario por su legajo"""
+        return self._find_by('legajo', legajo, include_sectores, include_direccion)
+
+    def find_by_cuil(self, cuil_cuit: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
+        """Busca un usuario por su CUIL/CUIT"""
+        return self._find_by('cuil_cuit', cuil_cuit, include_sectores, include_direccion)
+
+    def find_by_telefono(self, telefono: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
+        """Busca un usuario por su teléfono"""
+        return self._find_by('telefono', telefono, include_sectores, include_direccion)
+
+    def find_all(self, filtros: Dict = None, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
+        """Obtiene todos los usuarios con opción de incluir sectores y dirección."""
         try:
-            # Seleccionar explícitamente las columnas necesarias para asegurar que se traigan todas.
-            response = self.db.table("usuarios").select(
-                "id, email, nombre, apellido, password_hash, rol, activo, legajo, login_totem_activo, ultimo_login_totem"
-            ).eq("legajo", legajo).execute()
-            
-            if response.data:
-                return {'success': True, 'data': response.data[0]}
-            else:
-                return {'success': False, 'error': 'Usuario no encontrado'}
+            select_query = "*, roles(codigo, nombre, nivel), turno:turno_id(nombre)"
+            if include_direccion:
+                select_query += ", direccion:usuario_direccion(*)"
+
+            query = self.db.table(self.get_table_name()).select(select_query)
+
+            if filtros:
+                for key, value in filtros.items():
+                    query = query.eq(key, value)
+
+            response = query.execute()
+            usuarios = response.data
+
+            if include_sectores and usuarios:
+                from app.models.usuario_sector import UsuarioSectorModel
+                usuario_sector_model = UsuarioSectorModel()
+
+                for usuario in usuarios:
+                    sectores_result = usuario_sector_model.find_by_usuario(usuario['id'])
+                    if sectores_result.get('success'):
+                        sectores = [item['sectores'] for item in sectores_result['data'] if item.get('sectores')]
+                        usuario['sectores'] = sectores
+                    else:
+                        usuario['sectores'] = []
+
+            return {'success': True, 'data': usuarios}
 
         except Exception as e:
-            logger.error(f"Error buscando por legajo: {e}")
+            logger.error(f"Error obteniendo usuarios: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def update(self, usuario_id: int, data: Dict) -> Dict:
+        """Actualiza un usuario"""
         try:
-            # Usar 'id' en lugar de 'id_usuario'
             response = self.db.table("usuarios").update(data).eq("id", usuario_id).execute()
             if response.data:
                 return {'success': True, 'data': response.data[0]}
@@ -114,4 +176,43 @@ class UsuarioModel(BaseModel):
                 return {'success': False, 'error': 'Usuario no encontrado'}
         except Exception as e:
             logger.error(f"Error actualizando en usuarios: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def find_by_web_login_filtrado(self, filtros: Optional[Dict] = None) -> Dict:
+        """
+        Encuentra usuarios que han iniciado sesión en la web, con filtros opcionales.
+        Filtros: 'fecha_desde', 'fecha_hasta', 'sector_id'.
+        """
+        try:            
+            query = self.db.table(self.get_table_name())\
+                .select("id, nombre, apellido, legajo, ultimo_login_web, roles(nombre), sectores:usuario_sectores(sectores(nombre))")
+
+            if filtros:
+                if filtros.get('fecha_desde'):
+                    fecha_desde_obj = datetime.fromisoformat(filtros['fecha_desde']).date()
+                    start_date = datetime.combine(fecha_desde_obj, time.min)
+                    query = query.gte('ultimo_login_web', start_date.isoformat())
+                if filtros.get('fecha_hasta'):
+                    fecha_hasta_obj = datetime.fromisoformat(filtros['fecha_hasta']).date()
+                    end_date = datetime.combine(fecha_hasta_obj, time.max)
+                    query = query.lte('ultimo_login_web', end_date.isoformat())
+                
+                if filtros.get('sector_id'):
+                    user_ids_in_sector = self.db.table('usuario_sectores')\
+                        .select('usuario_id')\
+                        .eq('sector_id', filtros['sector_id'])\
+                        .execute()
+                    
+                    if user_ids_in_sector.data:
+                        user_ids = [item['usuario_id'] for item in user_ids_in_sector.data]
+                        query = query.in_('id', user_ids)
+                    else:
+                        return {'success': True, 'data': []}
+
+            response = query.order('ultimo_login_web', desc=True).execute()
+
+            return {'success': True, 'data': response.data or []}
+
+        except Exception as e:
+            logger.error(f"Error buscando usuarios con login web (filtrado): {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}

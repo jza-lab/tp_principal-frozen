@@ -1,0 +1,95 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Actualizar Precios - Sistema Frozen{% endblock %}
+
+{% block content %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/proveedores/cargaPrecios.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+    <div class="main-content container-fluid"> 
+        <div class="row justify-content-center" style="padding-top: 50px;">
+            <div class="col-12 col-lg-11 col-xl-10 mx-auto"> 
+                <div class="card shadow-lg mb-4"> 
+                    <div class="card-header bg-white border-bottom-0 text-center pt-4 pb-3">
+                        <h1 class="mb-1">Cargar Archivo de Precios</h1>
+                        <p class="subtitulo mb-0">Sube tu archivo Excel para actualizar los precios de proveedor</p>
+                    </div>
+                    
+                    <div class="card-body p-4 p-md-5">
+                        <div class="flash-messages">
+                            <div class="alert alert-danger" id="errorAlert" style="display: none;"></div>
+                            <div class="alert alert-success" id="successAlert" style="display: none;"></div>
+                        </div>
+                        
+                        <div class="upload-area mb-4 border p-4 rounded text-center" id="uploadArea">
+                            <div class="upload-icon display-4 text-muted mb-2">📁</div>
+                            <div class="upload-text">
+                                <h3 class="h5">Selecciona tu archivo Excel</h3>
+                                <p class="text-muted small">Arrastra y suelta tu archivo aquí o haz clic para buscarlo</p>
+                            </div>
+                            <button class="btn btn-outline-secondary browse-btn mt-3" id="browseBtn">Buscar Archivo</button>
+                            <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls" style="display: none;">
+                            
+                            <div class="selected-file mt-3" id="selectedFile" style="display: none;">
+                                <div class="file-info d-flex align-items-center justify-content-between p-3 bg-light rounded">
+                                    <div class="d-flex align-items-center">
+                                        <div class="file-icon me-3 h4 mb-0">📄</div>
+                                        <div class="file-details text-start">
+                                            <div class="file-name text-truncate fw-bold" id="fileName"></div>
+                                            <small class="file-size text-muted" id="fileSize"></small>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-danger remove-file" id="removeFile">×</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-primary w-100 py-3 submit-btn" id="submitBtn" disabled>
+                            <span>Procesar Archivo</span>
+                        </button>
+                        
+                        <div class="loading text-center py-4" id="loadingState" style="display: none;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Procesando archivo, por favor espera...</p>
+                        </div>
+                        
+                        <div class="results mt-5" id="resultsSection" style="display: none;">
+                            <div class="result-card card border-0 shadow-sm p-4"> 
+                                <div class="result-header d-flex justify-content-between align-items-center mb-3">
+                                    <h4 class="result-title mb-0">Resultado del Procesamiento</h4>
+                                    <span class="result-badge badge py-2 px-3" id="resultBadge"></span>
+                                </div>
+                                
+                                <div class="stats row mb-4" id="statsContainer">
+                                    </div>
+                                
+                                <h5 class="subtitulo mt-4">Detalles por Producto:</h5>
+                                <div class="table-container table-responsive">
+                                    <table class="details-table table table-striped table-hover align-middle" id="detailsTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Fila</th>
+                                                <th>Código</th>
+                                                <th>Producto</th>
+                                                <th>Proveedor</th>
+                                                <th>Estado</th>
+                                                <th>Mensaje</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/proveedores/preciosProveedores.js') }}"></script>
+
+{% endblock %}

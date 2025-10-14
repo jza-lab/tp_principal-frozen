@@ -18,47 +18,141 @@
 </div>
 
 <div class="row">
-    <!-- Columna de Información General -->
     <div class="col-lg-8">
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Información General del Pedido</h5>
                 {% set estado_config = {
-                    'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
-                    'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                    'LISTO_PARA_ENTREGA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
-                    'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
-                    'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
+                'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
+                'APROBADO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
+                'LISTO_PARA_ENTREGA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
+                'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
+                'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                 } %}
-                {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon':
+                'question-circle'}) %}
                 <span class="badge {{ config.class }} fs-6">
                     <i class="bi bi-{{ config.icon }} me-1"></i>{{ pedido.estado.replace('_', ' ') }}
                 </span>
             </div>
             <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <div class="small text-muted">Nombre del Cliente</div>
-                        <div class="fw-bold">{{ pedido.nombre_cliente }}</div>
+                <div class="col-md-12">
+
+                    <label class="form-label-sm fw-bold mb-4">
+                        <i class="bi bi-info-circle me-1"></i>Información General
+                    </label>
+
+                    <div class="row g-2">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label-sm fw-bold">
+                                    <i class="bi bi-person-circle me-1"></i>Cliente:
+                                </label>
+                                <p class="form-control-plaintext mb-0">
+                                    {{ pedido.nombre_cliente | default('N/A', true) }}
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label-sm fw-bold">
+                                    <i class="bi bi-person-circle me-1"></i>Cuil:
+                                </label>
+                                <p class="form-control-plaintext mb-0">
+                                    {{ pedido.cliente.cuit | default('N/A', true) }}
+                                </p>
+                            </div>
+                            
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label-sm fw-bold">
+                                    <i class="bi bi-calendar-event me-1"></i>Fecha de Solicitud:
+                                </label>
+                                <p class="form-control-plaintext mb-0">
+                                    {{ pedido.fecha_solicitud | default('N/A', true) }}
+                                </p>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label-sm fw-bold">
+                                    <i class="bi bi-calendar-event me-1"></i>Fecha de Entrega Requerida:
+                                </label>
+                                <p class="form-control-plaintext mb-0">
+                                    {{ pedido.fecha_requerido | default('N/A', true) }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-sm fw-bold">
+                                <i class="bi bi-calendar-plus me-1"></i>Fecha de Creación:
+                            </label>
+                            <p class="form-control-plaintext mb-0">
+                                {{ pedido.created_at.strftime('%Y-%m-%d %H:%M') if pedido.created_at else 'N/A' }}
+                            </p>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label-sm fw-bold">
+                                <i class="bi bi-clock-history me-1"></i>Última Actualización:
+                            </label>
+                            <p class="form-control-plaintext mb-0">
+                                {{ pedido.updated_at.strftime('%Y-%m-%d %H:%M') if pedido.updated_at else 'N/A' }}
+                            </p>
+                        </div>
+
                     </div>
-                    <div class="col-md-6">
-                        <div class="small text-muted">Fecha de Solicitud</div>
-                        <div class="fw-bold">{{ pedido.fecha_solicitud }}</div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="small text-muted">Creado</div>
-                        <div class="fw-bold">{{ pedido.created_at.strftime('%Y-%m-%d %H:%M') if pedido.created_at else 'N/A' }}</div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="small text-muted">Última Actualización</div>
-                        <div class="fw-bold">{{ pedido.updated_at.strftime('%Y-%m-%d %H:%M') if pedido.updated_at else 'N/A' }}</div>
+                </div>
+                <hr>
+                <div class="col-md-12">
+                    <div class="mb-3">
+                        <label class="form-label-sm fw-bold mb-3">
+                            <i class="bi bi-house me-1"></i>Dirección de Entrega
+                        </label>
+                        <div class="row g-2">
+                            <div class="col-sm-6">
+                                <label class="form-label-sm fw-bold">
+                                    <i class="bi bi-signpost me-1"></i>Calle y Altura:
+                                </label>
+                                <p class="form-control-plaintext">
+                                    {{ pedido.direccion.calle | default('N/A', true) }} {{ pedido.direccion.altura |
+                                    default('N/A', true) }}
+                                </p>
+                            </div>
+
+                            <div class="col-sm-6">
+                                <label class="form-label-sm fw-bold">
+                                    <i class="bi bi-geo-alt me-1"></i>Localidad y Provincia:
+                                </label>
+                                <p class="form-control-plaintext">
+                                    {{ pedido.direccion.localidad | default('N/A', true) }}, {{
+                                    pedido.direccion.provincia | default('N/A', true) }}
+                                </p>
+                            </div>
+
+                            <div class="col-sm-6">
+                                <label class="form-label-sm fw-bold">
+                                    <i class="bi bi-building me-1"></i>Piso / Dto (Opcional):
+                                </label>
+                                <p class="form-control-plaintext">
+                                    Piso: {{ pedido.direccion.piso | default('N/A', true) }} | Dto: {{
+                                    pedido.direccion.depto | default('N/A', true) }}
+                                </p>
+                            </div>
+
+                            <div class="col-sm-6">
+                                <label class="form-label-sm fw-bold">
+                                    <i class="bi bi-mailbox2 me-1"></i>Código Postal:
+                                </label>
+                                <p class="form-control-plaintext">
+                                    {{ pedido.direccion.codigo_postal | default('N/A', true) }}
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Tabla de Items del Pedido -->
-        <div class="card">
+        <div class="card mb-5">
             <div class="card-header">
                 <h5 class="mb-0">Productos en este Pedido</h5>
             </div>
@@ -74,30 +168,32 @@
                     </thead>
                     <tbody>
                         {% for item in pedido['items'] %}
+
                         <tr>
                             <td>
-                                <div class="fw-bold">{{ item.producto_nombre or 'Producto no encontrado' }}</div>
+                                <div class="fw-bold">{{ item.producto_nombre.nombre or 'Producto no encontrado' }}</div>
                             </td>
                             <td>{{ item.cantidad }} unidades</td>
                             <td>
                                 {% set item_estado_config = {
-                                    'PENDIENTE': {'class': 'text-secondary', 'icon': 'clock'},
-                                    'EN_PROCESO': {'class': 'text-primary', 'icon': 'play-circle'},
-                                    'COMPLETADO': {'class': 'text-success', 'icon': 'check-circle'},
-                                    'CANCELADO': {'class': 'text-danger', 'icon': 'x-circle'}
+                                'PENDIENTE': {'class': 'text-secondary', 'icon': 'clock'},
+                                'EN_PROCESO': {'class': 'text-primary', 'icon': 'play-circle'},
+                                'COMPLETADO': {'class': 'text-success', 'icon': 'check-circle'},
+                                'CANCELADO': {'class': 'text-danger', 'icon': 'x-circle'}
                                 } %}
-                                {% set item_config = item_estado_config.get(item.estado, {'class': 'text-dark', 'icon': 'question-circle'}) %}
+                                {% set item_config = item_estado_config.get(item.estado, {'class': 'text-dark', 'icon':
+                                'question-circle'}) %}
                                 <span class="{{ item_config.class }}">
                                     <i class="bi bi-{{ item_config.icon }} me-1"></i>{{ item.estado.replace('_', ' ') }}
                                 </span>
                             </td>
                             <td>
                                 {% if item.orden_produccion_id %}
-                                    <a href="{{ url_for('orden_produccion.detalle', id=item.orden_produccion_id) }}">
-                                        OP-{{ item.orden_produccion_id }}
-                                    </a>
+                                <a href="{{ url_for('orden_produccion.detalle', id=item.orden_produccion_id) }}">
+                                    OP-{{ item.orden_produccion_id }}
+                                </a>
                                 {% else %}
-                                    <span class="text-muted">N/A</span>
+                                <span class="text-muted">N/A</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -114,7 +210,6 @@
         </div>
     </div>
 
-    <!-- Columna de Acciones -->
     <div class="col-lg-4">
         <div class="card">
             <div class="card-header">
@@ -122,39 +217,207 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
+                    {% if pedido.estado == 'PENDIENTE' %}
+                    <form method="POST" action="{{ url_for('orden_venta.aprobar', id=pedido.id) }}"
+                        class="confirm-form d-grid" data-title="Confirmar Aprobación"
+                        data-message="¿Está seguro de que desea aprobar este pedido? Se reservará el stock disponible y se crearán las órdenes de producción necesarias."
+                        data-button-type="success">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-circle me-1"></i>Aprobar Pedido
+                        </button>
+                    </form>
+                    {% endif %}
+
                     <button class="btn btn-outline-primary" disabled>
                         <i class="bi bi-truck me-1"></i>Generar Remito
                     </button>
+
                     <button class="btn btn-outline-secondary" disabled>
                         <i class="bi bi-printer me-1"></i>Imprimir Pedido
                     </button>
-                    <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#confirm-cancel-modal">
-                        <i class="bi bi-x-circle me-1"></i>Cancelar Pedido
-                    </button>
+
+                    {% if pedido.estado != 'CANCELADO' %}
+                        {% if has_permission('cancelar_ordenes_venta') %}
+                        <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
+                            class="confirm-form d-grid" data-title="Confirmar Cancelación"
+                            data-message="¿Está seguro de que desea cancelar este pedido? Esta acción no se puede deshacer."
+                            data-button-type="danger">
+                            <button type="submit" class="btn btn-outline-danger">
+                                <i class="bi bi-x-circle me-1"></i>Cancelar Pedido
+                            </button>
+                        </form>
+                        {% endif %}
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
-<!-- Modal de Confirmación de Cancelación -->
-<div class="modal fade" id="confirm-cancel-modal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalLabel">Confirmar Cancelación</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                ¿Está seguro de que desea cancelar este pedido? Esta acción no se puede deshacer.
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                <form action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}" method="POST" style="display: inline;">
-                    <button type="submit" class="btn btn-danger">Sí, Cancelar Pedido</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const formAprobar = document.querySelector('form[action*="/aprobar"]');
+
+        if (formAprobar) {
+            formAprobar.addEventListener('submit', function (e) {
+                e.preventDefault();
+
+                const title = this.dataset.title || 'Confirmar';
+                const message = this.dataset.message || '¿Está seguro?';
+                const buttonType = this.dataset.buttonType || 'primary';
+                const form = this;
+                const submitButton = form.querySelector('button[type="submit"]');
+                const originalButtonContent = submitButton.innerHTML;
+
+                showConfirmationModal(title, message, function () {
+                    // --- INICIO DE LA LÓGICA DE CARGA MEJORADA ---
+
+                    // 1. Desactivar botón y mostrar spinner
+                    submitButton.disabled = true;
+                    submitButton.innerHTML = `
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    Procesando...
+                `;
+                    fetch(form.action, {
+                        method: 'POST',
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                        .then(response => {
+                            // Capturamos el status code aquí
+                            const statusCode = response.status;
+                            if (!response.ok && statusCode !== 202) { throw new Error('Error en la respuesta del servidor.'); }
+                            return response.json().then(data => ({ data, statusCode }));
+                        })
+                        .then(({ data, statusCode }) => {
+                            if (data.success) {
+                                // Pasamos el status code aquí
+                                mostrarModalExito(data, statusCode);
+                            } else {
+                                showNotificationModal('Error', data.error || 'No se pudo aprobar el pedido.', 'error');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error en la petición fetch:', error);
+                            showNotificationModal('Error de Red', 'No se pudo comunicar con el servidor.', 'error');
+                        })
+                        .finally(() => {
+                            // 2. PASE LO QUE PASE, restaura el botón a su estado original
+                            submitButton.disabled = false;
+                            submitButton.innerHTML = originalButtonContent;
+                        });
+                    // --- FIN DE LA LÓGICA MEJORADA ---
+                }, buttonType);
+            });
+        }
+
+        // Lógica para otros formularios de confirmación (como cancelar)
+        const otherForms = document.querySelectorAll('.confirm-form:not([action*="/aprobar"])');
+        otherForms.forEach(form => {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const title = form.dataset.title || 'Confirmar Acción';
+                const message = form.dataset.message || '¿Está seguro?';
+                const buttonType = form.dataset.buttonType || 'primary';
+                showConfirmationModal(title, message, () => form.submit(), buttonType);
+            });
+        });
+    });
+
+     function mostrarModalExito(respuestaJson, status_code) {
+    const modalBody = document.getElementById('resultadoModalBody');
+    const modalElement = document.getElementById('resultadoAprobacionModal');
+    const modalTitle = modalElement.querySelector('.modal-title');
+    const modalAceptarBtn = modalElement.querySelector('#confirm-cancel-edit'); // Este ID no existe en base.html, usar el botón de "Cerrar" como marcador
+    const modalIrAProduccionBtn = modalElement.querySelector('a[href*="orden_produccion"]');
+    
+    // --- Lógica AGREGADA para OC ---
+    if (status_code === 202 && respuestaJson.oc_generada) {
+        modalTitle.innerHTML = `<i class="bi bi-truck-flatbed text-warning me-2"></i>Atención Requerida`;
+        modalBody.innerHTML = `
+            <p class="text-danger fw-bold">STOCK DE INSUMOS INSUFICIENTE</p>
+            <p>${respuestaJson.message}</p>
+            <hr>
+            <p><strong>Siguiente Paso:</strong> Debe aprobar la Orden de Compra <code>${respuestaJson.oc_codigo}</code> para iniciar la producción.</p>
+        `;
+        modalIrAProduccionBtn.textContent = 'Ir a Órdenes de Compra';
+        // Se asume que el botón de "Ir a Producción" ya apunta a la lista de OP.
+
+        // Al cerrarse el modal, redirigimos a la lista de órdenes de compra.
+        modalElement.addEventListener('hidden.bs.modal', () => {
+             // Redirigir a la lista de OC
+             window.location.href = respuestaJson.redirect_url;
+        }, { once: true });
+
+    } else {
+        // --- Lógica ORIGINAL de OP (status 200 OK) ---
+        modalTitle.innerHTML = `<i class="bi bi-check-circle-fill text-success me-2"></i>¡Éxito!`;
+        let contenidoHtml = `<p>${respuestaJson.message}</p>`;
+        // ... (el resto de la lógica para listar OP creadas) ...
+        const ordenesCreadas = respuestaJson.data.ordenes_creadas;
+        // ... (la misma lógica de la línea 140 en adelante para mostrar OP) ...
+        
+        if (ordenesCreadas && ordenesCreadas.length > 0) {
+            contenidoHtml += '<h6>Órdenes de Producción Generadas:</h6>';
+            contenidoHtml += '<ul class="list-group">';
+            ordenesCreadas.forEach(orden => {
+                // LÍNEA CORREGIDa
+                const urlOrden = `/ordenes/${orden.id}/detalle`; 
+                contenidoHtml += `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <a href="${urlOrden}" target="_blank"><strong>${orden.codigo}</strong></a>
+                        <small class="d-block text-muted">Cantidad: ${orden.cantidad_planificada} unidades</small>
+                    </div>
+                    <a href="${urlOrden}" target="_blank" class="btn btn-sm btn-outline-secondary">Ver</a>
+                </li>
+            `;
+            });
+            contenidoHtml += '</ul>';
+        }
+
+        modalBody.innerHTML = contenidoHtml;
+        modalIrAProduccionBtn.textContent = 'Ir a Producción';
+
+        // Al cerrarse el modal, recargamos la página (lógica original)
+        modalElement.addEventListener('hidden.bs.modal', () => window.location.reload(), { once: true });
+    }
+    
+    const bootstrapModal = new bootstrap.Modal(modalElement);
+    bootstrapModal.show();
+}
+    function mostrarModalExito(respuestaJson) {
+        const modalBody = document.getElementById('resultadoModalBody');
+        const modalElement = document.getElementById('resultadoAprobacionModal');
+
+        let contenidoHtml = `<p>${respuestaJson.message}</p>`;
+        const ordenesCreadas = respuestaJson.data.ordenes_creadas;
+
+        if (ordenesCreadas && ordenesCreadas.length > 0) {
+            contenidoHtml += '<h6>Órdenes de Producción Generadas:</h6>';
+            contenidoHtml += '<ul class="list-group">';
+            ordenesCreadas.forEach(orden => {
+                const urlOrden = `/ordenes/${orden.id}/detalle`;
+                contenidoHtml += `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <a href="${urlOrden}" target="_blank"><strong>${orden.codigo}</strong></a>
+                        <small class="d-block text-muted">Cantidad: ${orden.cantidad_planificada} unidades</small>
+                    </div>
+                    <a href="${urlOrden}" target="_blank" class="btn btn-sm btn-outline-secondary">Ver</a>
+                </li>
+            `;
+            });
+            contenidoHtml += '</ul>';
+        }
+
+        modalBody.innerHTML = contenidoHtml;
+
+        const bootstrapModal = new bootstrap.Modal(modalElement);
+        bootstrapModal.show();
+
+        modalElement.addEventListener('hidden.bs.modal', () => window.location.reload(), { once: true });
+    }
+</script>
 {% endblock %}

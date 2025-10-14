@@ -1,6 +1,6 @@
 from app.models.base_model import BaseModel
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 # Importamos el modelo de Pedido para poder invocar su lógica
 from app.models.pedido import PedidoModel
@@ -30,6 +30,12 @@ class OrdenProduccionModel(BaseModel):
                 update_data['fecha_inicio'] = datetime.now().isoformat()
             elif nuevo_estado == 'COMPLETADA':
                 update_data['fecha_fin'] = datetime.now().isoformat()
+            elif nuevo_estado == 'APROBADA':
+                fecha_aprobacion = datetime.now()
+                fecha_fin_esperada = fecha_aprobacion + timedelta(weeks=1)
+                update_data['fecha_aprobacion'] = fecha_aprobacion.isoformat()
+                update_data['fecha_fin_estimada'] = fecha_fin_esperada.isoformat()
+
 
             update_result = self.update(id_value=orden_id, data=update_data, id_field='id')
             if not update_result.get('success'):
@@ -69,37 +75,63 @@ class OrdenProduccionModel(BaseModel):
         (productos, usuarios, etc.) utilizando el cliente de Supabase.
         """
         try:
-            # El string de select indica que queremos todos los campos de ordenes_produccion,
-            # y de las tablas relacionadas 'productos' y 'usuarios', traemos el campo 'nombre'.
-            # Supabase infiere las relaciones por las Foreign Keys.
+            # Se especifica explícitamente la relación para desambiguar entre creador y supervisor.
             query = self.db.table(self.table_name).select(
-                "*, productos(nombre), usuarios(nombre)"
+                "*, productos(nombre), "
+                "creador:usuario_creador_id(nombre, apellido), "
+                "supervisor:supervisor_responsable_id(nombre, apellido)"
             )
             
             # Aplicar filtros
             if filtros:
                 for key, value in filtros.items():
-                    if value is not None:
-                        query = query.eq(key, value)
-            
+                    if value is not None: #Esto es solo para planificar las cosas desde x a y fecha (?
+                        if key == 'fecha_planificada_desde':
+                            query = query.gte('fecha_planificada', value)
+                        elif key == 'fecha_planificada_hasta':
+                            query = query.lte('fecha_planificada', value)
+                        else:
+                            query = query.eq(key, value)
             # Ordenar
             query = query.order("fecha_planificada", desc=True).order("id", desc=True)
 
             result = query.execute()
+            FORMATO_SALIDA = "%Y-%m-%d %H:%M"
 
             if result.data:
                 # Aplanar la respuesta para que coincida con lo que espera la vista/template
                 processed_data = []
                 for item in result.data:
+
+                    for key, value in item.items():
+                        if key.startswith('fecha') and isinstance(value, str) and value:
+                            try:
+                                dt_object = datetime.fromisoformat(value)
+                                if len(value) > 10:
+                                    item[key] = dt_object.strftime(FORMATO_SALIDA)
+                                else:
+                                    item[key] = dt_object.strftime("%Y-%m-%d")
+                            except Exception:
+                                item[key] = 'Error de formato de fecha'
+
                     if item.get('productos'):
                         item['producto_nombre'] = item.pop('productos')['nombre']
                     else:
                         item['producto_nombre'] = 'N/A'
                     
-                    if item.get('usuarios'):
-                        item['creador_nombre'] = item.pop('usuarios')['nombre']
+                    # Aplanar 'creador'
+                    if item.get('creador'):
+                        creador_info = item.pop('creador')
+                        item['creador_nombre'] = f"{creador_info.get('nombre', '')} {creador_info.get('apellido', '')}".strip()
                     else:
                         item['creador_nombre'] = 'No asignado'
+
+                    # Aplanar 'supervisor'
+                    if item.get('supervisor'):
+                        supervisor_info = item.pop('supervisor')
+                        item['supervisor_nombre'] = f"{supervisor_info.get('nombre', '')} {supervisor_info.get('apellido', '')}".strip()
+                    else:
+                        item['supervisor_nombre'] = 'No asignado'
                     
                     processed_data.append(item)
                 return {'success': True, 'data': processed_data}
@@ -118,12 +150,33 @@ class OrdenProduccionModel(BaseModel):
         try:
             # .maybe_single() ejecuta la consulta y devuelve un solo dict o None
             response = self.db.table(self.table_name).select(
-                "*, productos(nombre, descripcion), recetas(id, descripcion, rendimiento, activa), usuarios(nombre)"
+                "*, productos(nombre, descripcion), recetas(id, descripcion, rendimiento, activa), "
+                "creador:usuario_creador_id(nombre, apellido), "
+                "supervisor:supervisor_responsable_id(nombre, apellido)"
             ).eq("id", orden_id).maybe_single().execute()
            
             item = response.data
+            FORMATO_SALIDA = "%Y-%m-%d %H:%M"
            
             if item:
+                for key, value in item.items():
+                    if key.startswith('fecha') and isinstance(value, str) and value:
+                        try:
+                            timestamp_str = item.get(key)
+
+                            if timestamp_str:
+                                try:
+                                    dt_object = datetime.fromisoformat(timestamp_str)
+                                    if len(value) > 10: #para cuando es una fecha con hora 
+                                        item[key] = dt_object.strftime(FORMATO_SALIDA)
+                                    else: #para cuando es solo una fecha
+                                        item[key] = dt_object.strftime("%Y-%m-%d")
+                                    
+                                except ValueError:
+                                    # En caso de que el string no sea un formato de fecha válido
+                                    item[key] = 'Error de formato de fecha' 
+                        except Exception:
+                            item[key] = 'Error de formato de fecha'
                 # Aplanar la respuesta
                 if item.get('productos'):
                     item['producto_nombre'] = item['productos'].get('nombre', 'N/A')
@@ -134,9 +187,17 @@ class OrdenProduccionModel(BaseModel):
                     item['receta_codigo'] = item['recetas'].get('codigo', 'N/A')
                     item.pop('recetas')
 
-                if item.get('usuarios'):
-                    item['creador_nombre'] = item['usuarios'].get('nombre', 'No asignado')
-                    item.pop('usuarios')
+                if item.get('creador'):
+                    creador_info = item.pop('creador')
+                    item['creador_nombre'] = f"{creador_info.get('nombre', '')} {creador_info.get('apellido', '')}".strip()
+                else:
+                    item['creador_nombre'] = 'No asignado'
+
+                if item.get('supervisor'):
+                    supervisor_info = item.pop('supervisor')
+                    item['supervisor_nombre'] = f"{supervisor_info.get('nombre', '')} {supervisor_info.get('apellido', '')}".strip()
+                else:
+                    item['supervisor_nombre'] = 'No asignado'
                 
                 return {'success': True, 'data': item}
             else:
@@ -153,7 +214,7 @@ class OrdenProduccionModel(BaseModel):
         """
         try:
             result = self.db.table('pedido_items').select(
-                '*, pedido:pedidos(id, nombre_cliente)'
+                '*, pedido_detalle:pedidos!pedido_items_pedido_id_fkey(id, nombre_cliente)'
             ).eq('orden_produccion_id', orden_id).execute()
 
             if result.data:

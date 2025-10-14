@@ -3,6 +3,8 @@ from typing import Dict, List, Optional, Any
 from abc import ABC, abstractmethod
 import logging
 from datetime import datetime, date
+from decimal import Decimal
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,7 @@ class BaseModel(ABC):
             clean_data = self._prepare_data_for_db(data)
 
             result = self.db.table(self.table_name).insert(clean_data, returning="representation").execute()
-            
+
             if result.data:
                 logger.info(f"Registro creado en {self.table_name}: {result.data[0]}")
                 return {'success': True, 'data': result.data[0]}
@@ -36,13 +38,25 @@ class BaseModel(ABC):
             logger.error(f"Error creando en {self.table_name}: {str(e)}")
             return {'success': False, 'error': str(e)}
 
+    # --- MÉTODO MODIFICADO Y FINAL ---
     def _prepare_data_for_db(self, data: Dict) -> Dict:
-        """Preparar datos para la base de datos"""
+        """
+        Prepara los datos para la base de datos, convirtiendo tipos especiales
+        de Python (Decimal, datetime, UUID) a formatos compatibles con JSON.
+        """
         clean_data = {}
         for key, value in data.items():
             if value is not None:
-                if isinstance(value, (date, datetime)):
+                # 1. Convertir UUID a string
+                if isinstance(value, UUID):
+                    clean_data[key] = str(value)
+                # 2. Convertir Decimal a string
+                elif isinstance(value, Decimal):
+                    clean_data[key] = str(value)
+                # 3. Convertir date/datetime a string en formato ISO
+                elif isinstance(value, (date, datetime)):
                     clean_data[key] = value.isoformat()
+                # 4. Dejar el resto de los tipos como están
                 else:
                     clean_data[key] = value
         return clean_data
@@ -64,24 +78,55 @@ class BaseModel(ABC):
             logger.error(f"Error buscando en {self.table_name}: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    def find_all(self, filters: Optional[Dict] = None, order_by: str = 'created_at',
-                 limit: Optional[int] = None) -> Dict:
-        """Obtener todos los registros con filtros opcionales"""
+    def find_all(self, filters: Optional[Dict] = None, order_by: str = 'created_at.asc',
+                 limit: Optional[int] = None, extra_params: Optional[Dict] = None) -> Dict:
+        """
+        Obtener todos los registros con filtros avanzados y opcionales.
+        """
         try:
             query = self.db.table(self.table_name).select('*')
 
-            # Aplicar filtros
+            # --- LÓGICA DE FILTROS MEJORADA ---
             if filters:
                 for key, value in filters.items():
-                    if value is not None:
+                    if value is None:
+                        continue
+
+                    # Si el valor es una tupla, la usamos para filtros avanzados (operador, valor)
+                    if isinstance(value, tuple) and len(value) == 2:
+                        operator, filter_value = value
+                        # Mapeamos el operador a la función correspondiente del cliente de Supabase
+                        if operator.lower() == 'eq':
+                            query = query.eq(key, filter_value)
+                        elif operator.lower() == 'gt':
+                            query = query.gt(key, filter_value)
+                        elif operator.lower() == 'gte':
+                            query = query.gte(key, filter_value)
+                        elif operator.lower() == 'lt':
+                            query = query.lt(key, filter_value)
+                        elif operator.lower() == 'lte':
+                            query = query.lte(key, filter_value)
+                        elif operator.lower() == 'in':
+                            query = query.in_(key, filter_value)
+                        # Puedes añadir más operadores como 'like', 'ilike', etc.
+                    else:
+                        # Si no es una tupla, usamos el filtro de igualdad por defecto
                         query = query.eq(key, value)
 
-            # Ordenar
-            query = query.order(order_by)
+            # --- LÓGICA DE ORDEN MEJORADA ---
+            if order_by:
+                column, *direction = order_by.split('.')
+                descending = len(direction) > 0 and direction[0].lower() == 'desc'
+                query = query.order(column, desc=descending)
 
             # Límite
             if limit:
                 query = query.limit(limit)
+
+            # Para casos especiales donde necesitemos pasar un parámetro sin procesar
+            if extra_params:
+                query = query.params(extra_params)
+
 
             result = query.execute()
 

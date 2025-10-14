@@ -47,6 +47,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         confirmationModal.addEventListener('show.bs.modal', function (event) {
             const button = event.relatedTarget;
+            if (!button) {
+                return;
+            }            
             const url = button.getAttribute('data-url');
             const message = button.getAttribute('data-message');
             const title = button.getAttribute('data-title');
@@ -118,7 +121,7 @@ function showNotificationModal(title, body, type = 'info', closeCallback) {
 
     // Asignar contenido y configurar botones
     modalTitle.textContent = title;
-    modalBody.textContent = body;
+    modalBody.innerHTML = body; // Usar innerHTML para permitir contenido HTML
 
     // Cambiar color del botón según el tipo de notificación
     let buttonClass = 'btn btn-primary';

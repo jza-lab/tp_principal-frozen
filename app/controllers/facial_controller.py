@@ -4,20 +4,29 @@ import numpy as np
 import base64
 import re
 from datetime import datetime
-import face_recognition
 import json
 import logging
+from typing import Dict
 from app.database import Database
+from app.models.totem_sesion import TotemSesionModel
+from app.models.usuario_turno import UsuarioTurnoModel
+from app.models.autorizacion_ingreso import AutorizacionIngresoModel
+from app.models.notificacion import NotificacionModel
+from datetime import datetime, timedelta, time
 
 logger = logging.getLogger(__name__)
 
 class FacialController:
     """
-    Controlador de lógica de negocio para todas las operaciones faciales y de registro de asistencia.
+    Controlador actualizado para operaciones faciales usando la nueva estructura de sesiones.
     """
     
     def __init__(self):
         self.db = Database().client
+        self.totem_sesion_model = TotemSesionModel()
+        self.turno_model = UsuarioTurnoModel()
+        self.autorizacion_model = AutorizacionIngresoModel()
+        self.notificacion_model = NotificacionModel()
         self.save_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Data")
         os.makedirs(self.save_dir, exist_ok=True)
 
@@ -36,9 +45,9 @@ class FacialController:
     def identificar_rostro(self, image_data_url):
         """
         Intenta identificar un usuario a partir de una imagen facial.
-        Encuentra el rostro que mejor coincide (menor distancia) en lugar del primero.
-        Devuelve los datos del usuario si se encuentra una coincidencia clara.
+        Ahora solo busca usuarios activos sin depender de flags obsoletos.
         """
+        import face_recognition
         frame = self._get_image_from_data_url(image_data_url)
         if frame is None:
             return {'success': False, 'message': 'Error al procesar la imagen.'}
@@ -53,8 +62,9 @@ class FacialController:
         input_encoding = face_encodings[0]
 
         try:
+            # Solo buscar usuarios activos con encoding facial
             response = self.db.table("usuarios").select(
-                "id, email, nombre, apellido, facial_encoding, rol, activo, login_totem_activo, ultimo_login_totem"
+                "id, email, nombre, apellido, facial_encoding, role_id, roles(codigo, nombre), activo, turno_id"
             ).not_.is_("facial_encoding", "null").eq("activo", True).execute()
             
             usuarios = response.data
@@ -64,7 +74,7 @@ class FacialController:
             known_encodings = []
             usuarios_con_encoding = []
 
-            # 2. Decodificar y recopilar los encodings válidos
+            # Decodificar y recopilar los encodings válidos
             for usuario in usuarios:
                 if usuario.get('facial_encoding'):
                     try:
@@ -85,9 +95,12 @@ class FacialController:
 
             logger.info(f"Distancia mínima encontrada: {min_distance} para el usuario: {usuarios_con_encoding[best_match_index].get('email')}")
 
-            TOLERANCE = 0.6
+            TOLERANCE = 0.5
             if min_distance <= TOLERANCE:
                 best_match_user = usuarios_con_encoding[best_match_index]
+                # Aplanar la estructura del rol para mantener compatibilidad
+                if 'roles' in best_match_user and best_match_user['roles']:
+                    best_match_user['rol'] = best_match_user['roles']['codigo']
                 return {'success': True, 'usuario': best_match_user}
             else:
                 return {'success': False, 'message': 'Rostro no reconocido.'}
@@ -128,11 +141,14 @@ class FacialController:
         Valida que una imagen contenga un único rostro y que no esté ya registrado.
         Devuelve el encoding si la validación es exitosa.
         """
+        import face_recognition
         frame = self._get_image_from_data_url(image_data_url)
         if frame is None:
             return {'success': False, 'message': 'Error al procesar la imagen.'}
 
-        face_encodings = face_recognition.face_encodings(frame)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        face_encodings = face_recognition.face_encodings(rgb_frame)
+
         if not face_encodings:
             return {'success': False, 'message': 'No se pudo detectar un rostro en la imagen. Asegúrese de que la cara esté bien iluminada y centrada.'}
         
@@ -146,8 +162,8 @@ class FacialController:
         new_encoding_json = json.dumps(face_encodings[0].tolist())
         return {'success': True, 'encoding': new_encoding_json}
 
-    def registrar_acceso(self, usuario_id, tipo, metodo, dispositivo, observaciones=None):
-        """Registra entrada/salida en la base de datos"""
+    def registrar_acceso(self, usuario_id, tipo, metodo, dispositivo, sesion_totem_id=None, ubicacion_totem=None, observaciones=None):
+        """Registra entrada/salida en la base de datos con la nueva estructura"""
         try:
             registro_data = {
                 "usuario_id": usuario_id,
@@ -155,6 +171,8 @@ class FacialController:
                 "tipo": tipo,
                 "metodo": metodo,
                 "dispositivo": dispositivo,
+                "sesion_totem_id": sesion_totem_id,
+                "ubicacion_totem": ubicacion_totem,
                 "observaciones": observaciones
             }
 
@@ -173,50 +191,172 @@ class FacialController:
             logger.error(f"❌ Error registrando acceso: {e}")
             return {'success': False, 'error': str(e)}
 
+    def _validar_acceso_por_turno(self, usuario: dict):
+        """
+        Valida el acceso de un usuario según su turno, la hora actual y las autorizaciones.
+        La lógica es más estricta: la tardanza sin autorización deniega el acceso.
+        """
+        usuario_id = usuario['id']
+        turno_id = usuario.get('turno_id')
+
+        if not turno_id:
+            logger.info(f"Usuario {usuario_id} no tiene turno asignado. Acceso permitido por defecto.")
+            return {'success': True}
+
+        turnos_result = self.turno_model.find_all()
+        if not turnos_result.get('success'):
+            return {'success': False, 'message': 'Error del sistema: No se pudo verificar el turno.'}
+        
+        turnos_data = turnos_result['data']
+        turno_asignado = next((t for t in turnos_data if t['id'] == turno_id), None)
+        
+        if not turno_asignado:
+            return {'success': False, 'message': 'Error: Su turno configurado no es válido.'}
+
+        # Excepción para el turno rotativo
+        if turno_asignado.get('nombre').upper() == 'ROTATIVO':
+            logger.info(f"Usuario {usuario_id} tiene turno rotativo. Acceso permitido a cualquier hora.")
+            return {'success': True}
+
+        ahora = datetime.now()
+        hora_actual = ahora.time()
+        fecha_actual = ahora.date()
+        margen_tolerancia = timedelta(minutes=15)
+
+        hora_inicio_turno = datetime.strptime(turno_asignado['hora_inicio'], '%H:%M:%S').time()
+        hora_fin_turno = datetime.strptime(turno_asignado['hora_fin'], '%H:%M:%S').time()
+        
+        inicio_permitido = (datetime.combine(fecha_actual, hora_inicio_turno) - margen_tolerancia).time()
+        limite_tardanza = (datetime.combine(fecha_actual, hora_inicio_turno) + margen_tolerancia).time()
+
+        # 1. Chequeo de acceso dentro del turno normal (con tolerancia de ingreso)
+        if inicio_permitido <= hora_actual <= hora_fin_turno:
+            # Si está después del límite de tardanza, igual se registra. La penalización es lógica.
+            if hora_actual > limite_tardanza:
+                mensaje = f"El empleado {usuario.get('nombre')} {usuario.get('apellido')} (Legajo: {usuario.get('legajo')}) ha llegado tarde a las {hora_actual.strftime('%H:%M:%S')}."
+                self.notificacion_model.create({'usuario_id': usuario_id, 'tipo': 'TARDANZA', 'mensaje': mensaje})
+                logger.info(f"NOTIFICACION CREADA: Usuario {usuario_id} llegó tarde.")
+            
+            logger.info(f"Acceso en turno para usuario {usuario_id}.")
+            return {'success': True}
+
+        # 2. Si está fuera de su turno, buscar autorización para TARDANZA o TURNO_ESPECIAL
+        logger.info(f"Usuario {usuario_id} intenta acceder fuera de su turno. Buscando autorización...")
+
+        # Intenta buscar autorización para tardanza primero
+        auth_tardanza = self.autorizacion_model.find_by_usuario_and_fecha(usuario_id, fecha_actual, tipo='TARDANZA')
+        if auth_tardanza.get('success'):
+            logger.info(f"Acceso permitido para usuario {usuario_id} con autorización de TARDANZA.")
+            return {'success': True}
+
+        # Si no hay de tardanza, busca para turno especial
+        auth_especial = self.autorizacion_model.find_by_usuario_and_fecha(usuario_id, fecha_actual, tipo='TURNO_ESPECIAL')
+        if auth_especial.get('success'):
+            autorizacion = auth_especial['data']
+            turno_autorizado_id = autorizacion.get('turno_autorizado_id')
+            
+            if not turno_autorizado_id:
+                logger.error(f"Autorización ID {autorizacion['id']} no tiene un turno_autorizado_id.")
+                return {'success': False, 'message': 'Error en la configuración de la autorización.'}
+
+            turno_autorizado = next((t for t in turnos_data if t['id'] == turno_autorizado_id), None)
+            if not turno_autorizado:
+                return {'success': False, 'message': 'Error: Turno autorizado inválido.'}
+
+            hora_inicio_auth = datetime.strptime(turno_autorizado['hora_inicio'], '%H:%M:%S').time()
+            hora_fin_auth = datetime.strptime(turno_autorizado['hora_fin'], '%H:%M:%S').time()
+            inicio_permitido_auth = (datetime.combine(fecha_actual, hora_inicio_auth) - margen_tolerancia).time()
+
+            if inicio_permitido_auth <= hora_actual <= hora_fin_auth:
+                logger.info(f"Acceso permitido para usuario {usuario_id} con autorización para el turno '{turno_autorizado['nombre']}'.")
+                return {'success': True}
+            else:
+                logger.warning(f"Acceso denegado. Usuario {usuario_id} con autorización pero fuera de horario del turno autorizado.")
+                return {'success': False, 'message': 'Autorización encontrada, pero intenta acceder fuera del horario permitido.'}
+
+        # 3. Si no hay ninguna autorización válida, denegar acceso.
+        logger.warning(f"Acceso denegado. Usuario {usuario_id} sin autorización válida para hoy.")
+        return {'success': False, 'message': 'Acceso fuera de horario. Requiere autorización de supervisor.'}
+
+    def _manejar_logica_acceso(self, usuario: dict, metodo: str):
+        """
+        Lógica actualizada para registrar entrada/salida usando sesiones de tótem.
+        """
+        usuario_id = usuario['id']
+        usuario_nombre = usuario.get('nombre', 'Usuario')
+
+        # Verificar si ya tiene sesión activa hoy
+        tiene_sesion_activa = self.totem_sesion_model.verificar_sesion_activa_hoy(usuario_id)
+
+        if not tiene_sesion_activa:
+            # Lógica de ENTRADA
+            logger.info(f"Procesando ENTRADA para {usuario_nombre} a través de {metodo}")
+            
+            # Validar acceso por turno
+            validacion_turno = self._validar_acceso_por_turno(usuario)
+            if not validacion_turno.get('success'):
+                return validacion_turno
+
+            # Crear sesión de tótem
+            resultado_sesion = self.totem_sesion_model.crear_sesion(usuario_id, metodo)
+            if not resultado_sesion.get('success'):
+                return {
+                    'success': False,
+                    'message': 'Error al registrar la sesión de entrada'
+                }
+
+            # Registrar acceso de entrada
+            self.registrar_acceso(
+                usuario_id, 
+                "ingreso", 
+                metodo, 
+                "TOTEM",
+                sesion_totem_id=resultado_sesion['data']['id'],
+                ubicacion_totem='TOTEM_PRINCIPAL'
+            )
+            
+            return {
+                'success': True,
+                'tipo_acceso': 'ENTRADA',
+                'message': f"¡Bienvenido, {usuario_nombre}!",
+                'usuario': usuario
+            }
+        else:
+            # Lógica de SALIDA
+            logger.info(f"Procesando SALIDA para {usuario_nombre} a través de {metodo}")
+            
+            # Cerrar sesión de tótem
+            resultado_cierre = self.totem_sesion_model.cerrar_sesion(usuario_id)
+            if not resultado_cierre.get('success'):
+                logger.warning(f"No se pudo cerrar sesión para usuario {usuario_id}")
+
+            # Registrar acceso de salida
+            self.registrar_acceso(
+                usuario_id, 
+                "egreso", 
+                metodo, 
+                "TOTEM",
+                ubicacion_totem='TOTEM_PRINCIPAL'
+            )
+
+            return {
+                'success': True,
+                'tipo_acceso': 'SALIDA',
+                'message': f"👋 ¡Hasta luego, {usuario_nombre}!",
+                'usuario': usuario
+            }
+
     def procesar_acceso_unificado_totem(self, image_data_url):
         """
-        Procesa un acceso desde el tótem de forma unificada.
-        Detecta si es una entrada o una salida y actúa en consecuencia.
+        Procesa un acceso facial desde el tótem, identificando al usuario y registrando la entrada/salida.
         """
         try:
-            # 1. Identificar al usuario
             resultado_identificacion = self.identificar_rostro(image_data_url)
             if not resultado_identificacion.get('success'):
                 return resultado_identificacion
 
             usuario = resultado_identificacion['usuario']
-            usuario_id = usuario['id']
-            usuario_nombre = usuario.get('nombre', 'Usuario')
-            login_activo = usuario.get('login_totem_activo', False)
-
-            from app.controllers.usuario_controller import UsuarioController
-            usuario_controller = UsuarioController()
-
-            # 2. Determinar si es ENTRADA o SALIDA
-            if not login_activo:
-                # --- Lógica de ENTRADA ---
-                logger.info(f"Procesando ENTRADA para {usuario_nombre}")
-                self.registrar_acceso(usuario_id, "ENTRADA", "FACIAL", "TOTEM")
-                usuario_controller.activar_login_totem(usuario_id)
-                
-                return {
-                    'success': True,
-                    'tipo_acceso': 'ENTRADA',
-                    'message': f"¡Bienvenido, {usuario_nombre}!",
-                    'usuario': usuario
-                }
-            else:
-                # --- Lógica de SALIDA ---
-                logger.info(f"Procesando SALIDA para {usuario_nombre}")
-                self.registrar_acceso(usuario_id, "SALIDA", "FACIAL", "TOTEM")
-                usuario_controller.desactivar_login_totem(usuario_id)
-
-                return {
-                    'success': True,
-                    'tipo_acceso': 'SALIDA',
-                    'message': f"👋 ¡Hasta luego, {usuario_nombre}!",
-                    'usuario': usuario
-                }
+            return self._manejar_logica_acceso(usuario, "FACIAL")
 
         except Exception as e:
             logger.error(f"Error en procesar_acceso_unificado_totem: {str(e)}")
@@ -224,51 +364,21 @@ class FacialController:
 
     def procesar_acceso_manual_totem(self, legajo, password):
         """
-        Procesa un acceso manual desde el tótem.
-        Autentica y luego detecta si es entrada o salida.
+        Procesa un acceso manual desde el tótem, autenticando y registrando la entrada/salida.
         """
         try:
-            # 1. Autenticar al usuario
             from app.controllers.usuario_controller import UsuarioController
             usuario_controller = UsuarioController()
             
-            usuario_autenticado = usuario_controller.autenticar_usuario(legajo, password)
-
-            if not usuario_autenticado:
-                return {'success': False, 'message': 'Credenciales inválidas.'}
+            resultado_autenticacion = usuario_controller.autenticar_usuario_para_totem(legajo, password)
+            if not resultado_autenticacion.get('success'):
+                return {'success': False, 'message': resultado_autenticacion.get('error', 'Credenciales inválidas.')}
             
-            # Refrescar datos para obtener el estado más reciente
-            usuario = usuario_controller.obtener_usuario_por_id(usuario_autenticado['id'])
+            usuario = resultado_autenticacion.get('data')
             if not usuario:
-                 return {'success': False, 'message': 'No se pudo encontrar al usuario después de la autenticación.'}
+                return {'success': False, 'message': 'No se pudo obtener datos del usuario.'}
 
-            usuario_id = usuario['id']
-            usuario_nombre = usuario.get('nombre', 'Usuario')
-            login_activo = usuario.get('login_totem_activo', False)
-            
-            # 2. Determinar si es ENTRADA o SALIDA
-            if not login_activo:
-                logger.info(f"Procesando ENTRADA MANUAL para {usuario_nombre}")
-                self.registrar_acceso(usuario_id, "ENTRADA", "MANUAL", "TOTEM")
-                usuario_controller.activar_login_totem(usuario_id)
-                
-                return {
-                    'success': True,
-                    'tipo_acceso': 'ENTRADA',
-                    'message': f"¡Bienvenido, {usuario_nombre}!",
-                    'usuario': usuario
-                }
-            else:
-                logger.info(f"  Procesando SALIDA MANUAL para {usuario_nombre}")
-                self.registrar_acceso(usuario_id, "SALIDA", "MANUAL", "TOTEM")
-                usuario_controller.desactivar_login_totem(usuario_id)
-
-                return {
-                    'success': True,
-                    'tipo_acceso': 'SALIDA',
-                    'message': f"¡Hasta luego, {usuario_nombre}!",
-                    'usuario': usuario
-                }
+            return self._manejar_logica_acceso(usuario, "CREDENCIAL")
 
         except Exception as e:
             logger.error(f"Error en procesar_acceso_manual_totem: {str(e)}")

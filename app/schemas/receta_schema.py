@@ -7,7 +7,7 @@ class RecetaIngredienteSchema(Schema):
     id = fields.Int(dump_only=True)
     receta_id = fields.Int(required=True)
     id_insumo = fields.UUID(required=True)
-    cantidad = fields.Float(required=True, validate=validate.Range(min=0.001, error="La cantidad debe ser mayor que cero."))
+    cantidad = fields.Decimal(as_string=True, required=True, validate=validate.Range(min=0.001, error="La cantidad debe ser mayor que cero."))
     unidad_medida = fields.Str(required=True)
 
 class RecetaSchema(Schema):
@@ -19,7 +19,7 @@ class RecetaSchema(Schema):
     producto_id = fields.Int(required=True)
     version = fields.Str(required=True)
     descripcion = fields.Str(allow_none=True)
-    rendimiento = fields.Float(allow_none=True)
+    rendimiento = fields.Decimal(as_string=True, allow_none=True)
 
     # El campo 'activa' y 'created_at' son gestionados por la base de datos o el modelo.
     activa = fields.Bool(dump_only=True)

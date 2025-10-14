@@ -1,0 +1,249 @@
+{% extends 'layouts/base.html' %}
+
+{% set is_edit = cliente and cliente.id %}
+{% set form_title = 'Editar cliente' if is_edit else 'Agregar Nuevo Cliente' %}
+
+{% block title %}{{ form_title }} - Sistema Frozen{% endblock %}
+
+{% block page_title %}{{ form_title }}{% endblock %}
+{% block page_subtitle %}
+{% if is_edit %}
+Modificar información de {{ cliente.nombre }}
+{% else %}
+Agregar nuevo cliente
+{% endif %}
+{% endblock %}
+{% block page_actions %}
+<a href="{{ url_for('clientes_proveedores.listar_clientes') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Volver a la lista
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 col-xl-9">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Información del cliente</h5>
+            </div>
+            <div class="card-body">
+                <form id="formulario-cliente" method="POST">
+                    <div class="row g-3">
+                        {% if cliente %}
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" name="codigo" id="codigo"
+                                    placeholder="Código único para identificar el cliente"
+                                    value="{{ cliente.codigo if cliente else '' }}" required {% if cliente %}readonly{%
+                                    endif %}>
+                                <label for="codigo">
+                                    <i class="bi bi-key-fill me-1"></i>Código<span class="text-danger">*</span>
+                                </label>
+                            </div>
+                            <div class="form-text">Código único para identificar el cliente</div>
+                        </div>
+                        {% endif %}
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="nombre" name="nombre"
+                                    placeholder="Nombre del Cliente" value="{{ cliente.nombre if cliente else '' }}"
+                                    required>
+                                <label for="nombre">
+                                    <i class="bi bi-person-circle me-1"></i>Nombre <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <input type="text" class="form-control text-center" id="cuit_parte1" name="cuit_parte1"
+                                    maxlength="2" pattern="\d{2}" placeholder="XX" value="{{  cliente.cuit.split('-')[0] if cliente and cliente.cuit else ''  }}" required
+                                    style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
+                                    aria-label="Código de provincia"
+                                    >
+
+                                <span class="input-group-text">-</span>
+
+                                <div class="form-floating" style="flex-grow: 4;">
+                                    <input type="text" class="form-control text-center" id="cuit_parte2"
+                                        name="cuit_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX"
+                                        required value="{{ cliente.cuit.split('-')[1] if cliente and cliente.cuit else '' }}">
+                                    <label for="cuit_parte2">
+                                        <i class="bi bi-person-badge me-1"></i>Cuit
+                                    </label>
+                                </div>
+
+                                <span class="input-group-text">-</span>
+
+                                <input type="text" class="form-control text-center" id="cuit_parte3" name="cuit_parte3"
+                                    maxlength="1" pattern="\d{1}" placeholder="X" required
+                                    style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
+                                    aria-label="Dígito verificador"
+                                    value="{{ cliente.cuit.split('-')[2] if cliente and cliente.cuit else '' }}">
+
+                            </div>
+                        </div>
+
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" name="telefono" id="telefono" maxlength="11"
+                                    placeholder="Teléfono" value="{{ cliente.telefono if cliente else '' }}"
+                                    pattern="\d{7,11}"
+                                    title="El número debe ser de hasta 11 dígitos (sin espacios ni guiones)." required>
+                                <label for="telefono">
+                                    <i class="bi bi-phone me-1"></i>Teléfono <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="email" class="form-control" name="email" id="email" placeholder="Email"
+                                    value="{{ cliente.email if cliente else '' }}" required>
+                                <label for="email">
+                                    <i class="bi bi-envelope me-1"></i>Email <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-subsection">
+
+                            <label class="form-label">Dirección de Facturacion</label>
+                            <div class="row g-3">
+                                <div class="col-md-8">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="calle" name="calle"  minlength="3" maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
+                                            placeholder="Calle" value="{{ cliente.direccion.calle if cliente and cliente.direccion }}" required>
+                                        <label for="calle">
+                                            <i class="bi bi-signpost me-1"></i>Calle
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="number" class="form-control" id="altura" name="altura" pattern="\d{1,5}" maxlength="5" max="99999" min="1"
+                                            placeholder="Altura" value="{{ cliente.direccion.altura if cliente and cliente.direccion }}" required>
+                                        <label for="altura">
+                                            <i class="bi bi-123 me-1"></i>Altura
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <select class="form-select" id="provincia" name="provincia" required>
+                                            <option value="">Seleccionar provincia...</option>
+                                            {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
+                                            "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
+                                            Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan",
+                                            "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del
+                                            Fuego",
+                                            "Tucumán"] %}
+                                            {% for p in provincias %}
+                                            <option value="{{ p }}" {{ 'selected' if cliente and cliente.direccion and cliente.direccion.provincia == p }}>{{ p }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <label for="provincia">
+                                            <i class="bi bi-map me-1"></i>Provincia
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="localidad" name="localidad" minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" title="Ingresá un nombre de localidad válido (solo letras y espacios)."
+                                            placeholder="Localidad" value="{{ cliente.direccion.localidad if cliente and cliente.direccion }}" required>
+                                        <label for="localidad">
+                                            <i class="bi bi-pin-map me-1"></i>Localidad
+                                        </label>
+                                    </div>
+                                    <div class="invalid-feedback"></div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="10" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
+                                            placeholder="Piso (Opcional)" value="{{ (cliente.get('direccion') or {}).get('piso', '') if cliente and cliente.direccion }}">
+                                        <label for="piso">
+                                            <i class="bi bi-building me-1"></i>Piso (Opcional)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="depto" name="depto" maxlength="5" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
+                                            placeholder="Dto (Opcional)" value="{{ (cliente.get('direccion') or {}).get('depto', '') if cliente and cliente.direccion }}">
+                                        <label for="depto">
+                                            <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"  minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}" title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
+                                            placeholder="Código Postal" value="{{ (cliente.get('depto') or {}).get('piso', '') if cliente and cliente.direccion }}">
+                                        <label for="codigo_postal">
+                                            <i class="bi bi-mailbox me-1"></i>Código Postal
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{{ url_for('clientes_proveedores.listar_clientes') }}"
+                            class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle me-1"></i>
+                            {% if cliente %}Actualizar{% else %}Crear{% endif %} cliente
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 col-xl-3">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Ayuda
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-light border">
+                    <h6>Consejos importantes:</h6>
+                    <ul class="mb-0 small">
+                        <li>Revise que sea la información correcta antes de crear/editar al cliente</li>
+                        <li>Los campos con * son obligatorios</li>
+                        <li>El cuit debe tener el formato correcto (XX-XXXXXXXX-X)</li>
+                        <li>El telefono debe incluir el código de área</li>
+                        <li>El email debe ser válido</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    // Crea una variable global de JS con la URL generada por Flask/Jinja
+    const clienteS_LISTA_URL = "{{ url_for('clientes_proveedores.listar_clientes') }}";
+    const ID_cliente = "{{ cliente.id }}"
+    const isEditBoolean = {{ is_edit | tojson }};
+</script>
+
+<script src="{{ url_for('static', filename='js/clientes/formulariocliente.js') }}"></script>
+
+{% endblock %}

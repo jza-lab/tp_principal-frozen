@@ -1,133 +1,295 @@
 {% extends "layouts/base.html" %}
 
-{% block title %}Gestión de Usuarios - Sistema Frozen{% endblock %}
+{% block title %}Gestión de Empleados - Sistema Frozen{% endblock %}
 
 {% block content %}
 <div class="usuarios-container">
+    <!-- Header Principal -->
     <div class="d-flex justify-content-between align-items-center pb-2 mb-4 border-bottom">
         <div>
-            <h1 class="h2 mb-1">Gestión de Usuarios</h1>
+            <h1 class="h2 mb-1">Gestión de Empleados</h1>
             <p class="text-muted mb-0">Administración de personal y roles del sistema</p>
         </div>
         <div class="btn-toolbar">
+            {% if has_permission('crear_usuarios') %}
             <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary">
-                <i class="bi bi-person-plus me-1"></i>Crear Nuevo Usuario
+                <i class="bi bi-person-plus me-1"></i>Crear Nuevo Empleado
             </a>
+            {% endif %}
         </div>
     </div>
 
-    <!-- Estadísticas rápidas -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="stats-card">
-                <div class="stats-number">{{ usuarios|length }}</div>
-                <div class="stats-label">Total Usuarios</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stats-card">
-                <div class="stats-number">{{ usuarios|selectattr('activo')|list|length }}</div>
-                <div class="stats-label">Usuarios Activos</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stats-card">
-                <div class="stats-number">{{ usuarios|selectattr('rol', 'equalto', 'ADMIN')|list|length }}</div>
-                <div class="stats-label">Administradores</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stats-card">
-                <div class="stats-number">{{ usuarios|selectattr('rol', 'equalto', 'OPERARIO')|list|length }}</div>
-                <div class="stats-label">Operarios</div>
-            </div>
-        </div>
-    </div>
+    <!-- Navegación por Pestañas -->
+    <ul class="nav nav-tabs-custom mb-4" id="userTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link-custom active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users-panel" type="button" role="tab">
+                <i class="bi bi-people me-2"></i>
+                <span>Todos los Empleados</span>
+                <span class="tab-indicator"></span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link-custom" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity-panel" type="button" role="tab">
+                <i class="bi bi-activity me-2"></i>
+                <span>Actividad de todo el tiempo</span>
+                <span class="tab-indicator"></span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link-custom" id="authorizations-tab" data-bs-toggle="tab" data-bs-target="#authorizations-panel" type="button" role="tab">
+                <i class="bi bi-patch-check me-2"></i>
+                <span>Autorizaciones</span>
+                <span class="tab-indicator"></span>
+            </button>
+        </li>
+    </ul>
 
-    <!-- Tarjetas de Usuarios -->
-    <div class="row">
-        {% for usuario in usuarios %}
-        <div class="col-md-4 mb-4">
-            <div class="card h-100 usuario-card {% if not usuario.activo %}usuario-inactivo{% endif %}">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">
-                        {{ usuario.nombre }} {{ usuario.apellido }}
-                        {% if not usuario.activo %}
-                            <span class="badge bg-secondary">Inactivo</span>
-                        {% endif %}
-                    </h5>
-                    
-                    <div class="card-secondary-details mb-3">
-                        <span><i class="bi bi-hash"></i> {{ usuario.legajo or 'N/A' }}</span>
-                        <span><i class="bi bi-envelope"></i> {{ usuario.email }}</span>
-                        <span><i class="bi bi-shield-check"></i> {{ usuario.rol }}</span>
-                    </div>
+    <!-- Contenido de las Pestañas -->
+    <div class="tab-content" id="userTabsContent">
+        <div id="flash-container"></div>
+        <!-- Panel de Todos los Empleados -->
+        <div class="tab-pane fade show active" id="users-panel" role="tabpanel">
+            <!-- Barra de búsqueda y filtros -->
+            <div class="search-filter-bar">
+                <div class="search-box-wrapper">
+                    <i class="bi bi-search search-icon"></i>
+                    <input type="text" id="user-search-input" class="search-input" placeholder="Buscar por nombre, apellido o legajo...">
+                    <button class="clear-search" id="clear-search" style="display: none;">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </button>
+                </div>
+                
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all">
+                        <i class="bi bi-people-fill me-1"></i>Todos
+                        <span class="filter-badge" id="count-all">0</span>
+                    </button>
+                    <button class="filter-btn" data-filter="active">
+                        <i class="bi bi-check-circle-fill me-1"></i>Activos
+                        <span class="filter-badge" id="count-active">0</span>
+                    </button>
+                    <button class="filter-btn" data-filter="inactive">
+                        <i class="bi bi-x-circle-fill me-1"></i>Inactivos
+                        <span class="filter-badge" id="count-inactive">0</span>
+                    </button>
+                </div>
+            </div>
 
-                    <div class="mt-auto">
-                        <hr class="card-divider">
-
-                        <div class="d-flex justify-content-between align-items-center mb-3 user-info">
-                            <div>
-                                <span class="user-label">Estado</span>
-                                <span class="user-value">
-                                    {% if usuario.activo %}Activo{% else %}Inactivo{% endif %}
-                                </span>
+            <!-- Tarjetas de Empleados -->
+            <div class="row" id="all-users-container">
+                {% for usuario in usuarios %}
+                <div class="col-md-4 mb-4 user-card-wrapper" 
+                     data-legajo="{{ usuario.legajo or '' }}" 
+                     data-nombre="{{ usuario.nombre }} {{ usuario.apellido }}"
+                     data-status="{{ 'active' if usuario.activo else 'inactive' }}">
+                    <div class="card h-100 usuario-card {% if not usuario.activo %}usuario-inactivo{% endif %}">
+                        <div class="card-body d-flex flex-column">
+                            <div class="user-card-header">
+                                <div class="user-avatar">
+                                    <i class="bi bi-person-circle"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h5 class="card-title mb-1">
+                                        {{ usuario.nombre }} {{ usuario.apellido }}
+                                    </h5>
+                                    <div class="user-status-badge">
+                                        {% if usuario.activo %}
+                                            <span class="badge bg-success-soft text-success">
+                                                <i class="bi bi-circle-fill pulse-dot"></i>Activo
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-danger-soft text-danger">
+                                                <i class="bi bi-circle-fill"></i>Inactivo
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                {% if usuario.activo %}
-                                    <span class="badge bg-success-soft text-success">
-                                        <i class="bi bi-check-circle me-1"></i>Activo
-                                    </span>
-                                {% else %}
-                                    <span class="badge bg-danger-soft text-danger">
-                                        <i class="bi bi-x-circle me-1"></i>Inactivo
-                                    </span>
-                                {% endif %}
+                            
+                            <div class="card-secondary-details mb-3">
+                                <div class="detail-item">
+                                    <i class="bi bi-hash"></i>
+                                    <span>{{ usuario.legajo or 'N/A' }}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <i class="bi bi-envelope"></i>
+                                    <span>{{ usuario.email }}</span>
+                                </div>
+                                <div class="detail-item">
+                                    <i class="bi bi-shield-check"></i>
+                                    <span>{{ usuario.roles.nombre if usuario.roles else 'Sin rol' }}</span>
+                                </div>
+                            </div>
+
+                            <div class="mt-auto">
+                                <div class="d-grid gap-2 action-buttons">
+                                    {% if usuario.activo %}
+                                        <a href="{{ url_for('admin_usuario.ver_perfil', id=usuario.id) }}" 
+                                           class="btn btn-sm btn-primary w-100">
+                                            <i class="bi bi-person-gear me-2"></i>Gestionar Empleado
+                                        </a>
+                                    {% else %}
+                                        {% if has_permission('modificar_usuarios') %}
+                                        <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="w-100">
+                                            <button type="submit" class="btn btn-sm btn-outline-success w-100">
+                                                <i class="bi bi-person-check me-1"></i>Activar Empleado
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="col-12">
+                    <div class="empty-state large">
+                        <i class="bi bi-people"></i>
+                        <h4>No hay empleados registrados</h4>
+                        <p>Comience agregando el primer empleado al sistema</p>
+                        <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary mt-3">
+                            <i class="bi bi-person-plus me-1"></i>Crear Primer Empleado
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
 
-                        <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
-                            {% if usuario.activo %}
-                                <a href="{{ url_for('admin_usuario.editar_usuario', id=usuario.id) }}" 
-                                   class="btn btn-sm btn-outline-primary" title="Editar usuario">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
+            <!-- Mensaje de búsqueda sin resultados -->
+            <div id="no-search-results" class="empty-state large" style="display: none;">
+                <i class="bi bi-search"></i>
+                <h4>No se encontraron resultados</h4>
+                <p>Intenta con otros términos de búsqueda</p>
+            </div>
+        </div>
+        
+        <!-- Panel de Actividad -->
+        <div class="tab-pane fade" id="activity-panel" role="tabpanel">
+            <!-- Barra de Filtros de Actividad -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row g-3 align-items-center">
+                        <div class="col-md-4">
+                            <label for="filter-sector" class="form-label">Filtrar por Sector</label>
+                            <select id="filter-sector" class="form-select">
+                                <option value="">Todos los Sectores</option>
+                                {% for sector in sectores %}
+                                <option value="{{ sector.id }}">{{ sector.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="filter-fecha-desde" class="form-label">Desde</label>
+                            <input type="date" id="filter-fecha-desde" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="filter-fecha-hasta" class="form-label">Hasta</label>
+                            <input type="date" id="filter-fecha-hasta" class="form-control">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <!-- Actividad en Fábrica -->
+                <div class="col-lg-6 mb-4">
+                    <div class="activity-section-card">
+                        <div class="activity-section-header">
+                            <div class="d-flex align-items-center">
+                                <div class="activity-icon totem-icon">
+                                    <i class="bi bi-building-gear"></i>
+                                </div>
+                                <div>
+                                    <h3 class="activity-section-title">Actividad en Fábrica</h3>
+                                    <p class="activity-section-subtitle">Control de acceso por tótem</p>
+                                </div>
+                            </div>
+                            <div class="activity-counter" id="totem-counter">
+                                <span class="counter-number">0</span>
+                                <span class="counter-label">Activos</span>
+                            </div>
+                        </div>
+                        
+                        <div id="totem-activity-container" class="activity-list">
+                            <div id="loading-totem-activity" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <p class="mt-3 text-muted">Cargando actividad del tótem...</p>
+                            </div>
+                            
+                            <div id="no-totem-activity" class="empty-state" style="display: none;">
+                                <i class="bi bi-person-slash"></i>
+                                <h4>Sin Actividad en Fábrica</h4>
+                                <p>Nadie ha fichado hoy en el tótem.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                                <a href="{{ url_for('admin_usuario.ver_perfil', id=usuario.id) }}" class="btn btn-sm btn-outline-primary" title="Ver detalle">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-
-                                <form method="POST" action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">
-                                        <i class="bi bi-person-x"></i> Desactivar
-                                    </button>
-                                </form>
-
-                            {% else %}
-                                <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-success">
-                                        <i class="bi bi-person-check"></i> Activar
-                                    </button>
-                                </form>
-                            {% endif %}
+                <!-- Actividad en Web -->
+                <div class="col-lg-6 mb-4">
+                    <div class="activity-section-card">
+                        <div class="activity-section-header">
+                            <div class="d-flex align-items-center">
+                                <div class="activity-icon web-icon">
+                                    <i class="bi bi-laptop"></i>
+                                </div>
+                                <div>
+                                    <h3 class="activity-section-title">Actividad en Web</h3>
+                                    <p class="activity-section-subtitle">Sesiones activas en el sistema</p>
+                                </div>
+                            </div>
+                            <div class="activity-counter" id="web-counter">
+                                <span class="counter-number">0</span>
+                                <span class="counter-label">Conectados</span>
+                            </div>
+                        </div>
+                        
+                        <div id="web-activity-container" class="activity-list">
+                            <div id="loading-web-activity" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <p class="mt-3 text-muted">Cargando actividad web...</p>
+                            </div>
+                            
+                            <div id="no-web-activity" class="empty-state" style="display: none;">
+                                <i class="bi bi-laptop"></i>
+                                <h4>Sin Actividad en Web</h4>
+                                <p>Ningún empleado ha iniciado sesión en la web hoy.</p>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        {% else %}
-        <div class="col-12">
-            <div class="text-center text-muted py-5">
-                <i class="bi bi-people fs-1 d-block mb-2 opacity-50"></i>
-                <h4>No hay usuarios registrados</h4>
-                <p>Comience agregando el primer usuario al sistema</p>
-                <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary">
-                    <i class="bi bi-person-plus me-1"></i>Crear Primer Usuario
+        
+        <!-- Panel de Autorizaciones -->
+        <div class="tab-pane fade" id="authorizations-panel" role="tabpanel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h4 mb-0">Autorizaciones Pendientes</h2>
+                {% if has_permission('solicitar_permisos') %}
+                <a href="{{ url_for('admin_usuario.nueva_autorizacion') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle me-1"></i>
+                    Nueva Autorización
                 </a>
+                {% endif %}
+            </div>
+            <div id="authorizations-container" class="row">
+                <!-- Las tarjetas de autorización se cargarán aquí -->
             </div>
         </div>
-        {% endfor %}
     </div>
 </div>
-<script src="{{ url_for('static', filename='js/habilitarUsuario.js') }}"></script>
+
+<script>
+    const URL_TOTEM_ACTIVITY = "{{ url_for('admin_usuario.obtener_actividad_totem') }}";
+    const URL_WEB_ACTIVITY = "{{ url_for('admin_usuario.obtener_actividad_web') }}";
+</script>
+<script src="{{ url_for('static', filename='js/usuarios/habilitarUsuario.js') }}"></script>
+<script src="{{ url_for('static', filename='js/usuarios/listarUsuarios.js') }}"></script>
+<script src="{{ url_for('static', filename='js/usuarios/autorizaciones.js') }}"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/listarUsuarios.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/autorizaciones.css') }}">
 {% endblock %}

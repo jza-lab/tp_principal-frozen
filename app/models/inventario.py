@@ -139,19 +139,159 @@ class InventarioModel(BaseModel):
             return {'success': False, 'error': str(e)}
 
     def obtener_stock_consolidado(self, filtros: Optional[Dict] = None) -> Dict:
-        """Obtener stock consolidado por insumo usando la vista"""
+        """Obtener stock consolidado por insumo consultando insumos_catalogo directamente."""
         try:
-            query = self.db.table('vista_stock_actual').select('*')
+            # Consultamos todos los insumos activos que tienen definido un stock mínimo.
+            query = self.db.table('insumos_catalogo').select('*').eq('activo', True).neq('stock_min', 0)
+            
+            result = query.order('nombre').execute()
+            
+            if not result.data:
+                return {'success': True, 'data': []}
+
+            final_data = []
+            target_estado = filtros.get('estado_stock', None)
+            
+            for insumo in result.data:
+                stock_actual = insumo.get('stock_actual', 0.0) or 0.0
+                stock_min = insumo.get('stock_min', 0) or 0
+                
+                # Calcular el estado del stock
+                if stock_min > 0 and stock_actual < stock_min:
+                    insumo['estado_stock'] = 'BAJO'
+                else:
+                    insumo['estado_stock'] = 'OK'
+                    
+                # Aplicar el filtro de estado si fue solicitado (solo para 'BAJO' o 'OK')
+                if target_estado is None or insumo['estado_stock'] == target_estado:
+                    final_data.append(insumo)
+
+            return {'success': True, 'data': final_data}
+
+        except Exception as e:
+            logger.error(f"Error obteniendo stock consolidado (FIXED): {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def get_all_lotes_for_view(self, filtros: Optional[Dict] = None) -> Dict:
+        """
+        Obtiene todos los lotes con detalles del insumo y proveedor para la vista de listado.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select(
+                '*, insumo:insumos_catalogo(nombre, categoria, unidad_medida), proveedor:proveedores(nombre)'
+            )
 
             if filtros:
                 for key, value in filtros.items():
-                    if value is not None:
+                    if value:
                         query = query.eq(key, value)
 
-            result = query.order('nombre').execute()
+            result = query.order('f_ingreso', desc=True).execute()
+
+            # Aplanar los datos para la plantilla
+            for lote in result.data:
+                if lote.get('insumo'):
+                    lote['insumo_nombre'] = lote['insumo']['nombre']
+                    lote['insumo_categoria'] = lote['insumo']['categoria']
+                    lote['insumo_unidad_medida'] = lote['insumo']['unidad_medida']
+                else:
+                    lote['insumo_nombre'] = 'Insumo no encontrado'
+                
+                if lote.get('proveedor'):
+                    lote['proveedor_nombre'] = lote['proveedor']['nombre']
+                else:
+                    lote['proveedor_nombre'] = 'N/A'
 
             return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error obteniendo lotes para la vista: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def get_lote_detail_for_view(self, id_lote: str) -> Dict:
+        """
+        Obtiene un único lote con todos los detalles de insumo y proveedor.
+        Este método es el equivalente de 'find_by_id' pero enriquecido.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select(
+                '*, insumo:insumos_catalogo(nombre, categoria, unidad_medida), proveedor:proveedores(nombre)'
+            ).eq('id_lote', id_lote) 
+
+            result = query.execute()
+
+            if not result.data:
+                return {'success': True, 'data': None}
+
+            lote = result.data[0]
+
+            # Aplanar los datos del primer lote
+            if lote.get('insumo'):
+                lote['insumo_nombre'] = lote['insumo']['nombre']
+                lote['insumo_categoria'] = lote['insumo']['categoria']
+                lote['insumo_unidad_medida'] = lote['insumo']['unidad_medida']
+            else:
+                lote['insumo_nombre'] = 'Insumo no encontrado'
+
+            if lote.get('proveedor'):
+                lote['proveedor_nombre'] = lote['proveedor']['nombre']
+            else:
+                lote['proveedor_nombre'] = 'N/A'
+                
+            return {'success': True, 'data': lote}
 
         except Exception as e:
-            logger.error(f"Error obteniendo stock consolidado: {str(e)}")
+            logger.error(f"Error obteniendo detalle de lote: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def calcular_y_actualizar_stock_general(self) -> Dict:
+        """
+        Calcula el stock actual para todos los insumos sumando los lotes de inventario
+        y lo actualiza en la tabla insumos_catalogo.
+        """
+        try:
+            # 1. Obtener todos los insumos del catálogo
+            catalogo_resp = self.db.table('insumos_catalogo').select('id_insumo', 'stock_actual').execute()
+            if not hasattr(catalogo_resp, 'data'):
+                raise Exception("No se pudo obtener el catálogo de insumos.")
+            
+            insumos_catalogo = {item['id_insumo']: item for item in catalogo_resp.data}
+
+            # 2. Calcular el stock agregado desde el inventario
+            inventario_resp = self.db.table('insumos_inventario').select('id_insumo', 'cantidad_actual').in_('estado', ['disponible', 'reservado']).execute()
+            if not hasattr(inventario_resp, 'data'):
+                raise Exception("No se pudo obtener el inventario de insumos.")
+
+            stock_calculado = {}
+            for lote in inventario_resp.data:
+                insumo_id = lote['id_insumo']
+                cantidad = lote.get('cantidad_actual') or 0
+                stock_calculado[insumo_id] = stock_calculado.get(insumo_id, 0) + cantidad
+
+            # 3. Preparar los datos para la actualización
+            updates = []
+            for insumo_id, insumo_data in insumos_catalogo.items():
+                stock_nuevo = stock_calculado.get(insumo_id, 0)
+                stock_viejo = insumo_data.get('stock_actual') or 0
+
+                # Solo actualizar si el stock ha cambiado
+                if stock_nuevo != stock_viejo:
+                    updates.append({'id_insumo': insumo_id, 'stock_actual': stock_nuevo})
+            
+            # 4. Ejecutar las actualizaciones de forma iterativa si hay cambios
+            if updates:
+                logger.info(f"Actualizando stock para {len(updates)} insumos.")
+                for item in updates:
+                    insumo_id = item['id_insumo']
+                    new_stock = item['stock_actual']
+                    (self.db.table('insumos_catalogo')
+                     .update({'stock_actual': new_stock})
+                     .eq('id_insumo', insumo_id)
+                     .execute())
+            else:
+                logger.info("No se requirieron actualizaciones de stock.")
+
+            return {'success': True}
+
+        except Exception as e:
+            logger.error(f"Error al ejecutar el recálculo de stock general: {str(e)}")
             return {'success': False, 'error': str(e)}

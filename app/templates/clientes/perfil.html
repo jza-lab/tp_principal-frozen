@@ -1,0 +1,196 @@
+{% extends 'layouts/base.html' %}
+
+{% set is_edit = cliente is defined %}
+{% set form_title = 'Detalle de cliente'%}
+
+{% block title %}{{ form_title }} - Sistema Frozen{% endblock %}
+
+{% block page_title %}{{ form_title }}{% endblock %}
+{% block page_subtitle %}
+
+{% endblock %}
+
+{% block content %}
+<div class="btn-toolbar">
+    <a href="{{ url_for('clientes_proveedores.listar_clientes') }}" class="btn btn-outline-secondary me-2">
+        <i class="bi bi-arrow-left me-1"></i>Volver a la Lista
+    </a>
+</div><br>
+<div class="row">
+    <div class="col-lg-8 col-xl-9">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Detalles del cliente</h5>
+            </div>
+            <div class="card-body">
+                {% if cliente %}
+                <h1 class="h2">{{ cliente.nombre }}</h1>
+                <h2 class="h3 subtitulo">{{ cliente.codigo }} / {{ cliente.cuit }}</h2>
+                <hr>
+
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <i class="bi bi-phone fm-bold"></i>
+                        <label class="form-label-sm fw-bold">Telefono</label>
+                        <p class="form-control-plaintext">{{ cliente.telefono }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <i class="bi bi-envelope"></i>
+                        <label class="form-label-sm fw-bold">Correo electronico</label>
+                        <p class="form-control-plaintext">{{ cliente.email }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label-sm fw-bold">
+                                <i class="bi bi-calendar-plus me-1"></i>Fecha de registro
+                            </label>
+                            <p class="form-control-plaintext">
+                                {{ cliente.created_at.split('T')[0] if cliente.created_at else 'N/A' }}
+                            </p>
+                        </div>
+
+                        <div class="mb-0">
+                            <label class="form-label-sm fw-bold">
+                                <i class="bi bi-calendar-check me-1"></i>Última Actualización
+                            </label>
+                            <p class="form-control-plaintext">
+                                {{ cliente.updated_at.split('T')[0] if cliente.updated_at else 'N/A' }}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="col-md-12">
+                        <div class="mb-3">
+                            <label class="form-label-sm fw-bold">
+                                <i class="bi bi-house me-1"></i>Dirección de Facturación
+                            </label>
+
+                            <div class="row g-2">
+                                <div class="col-sm-6">
+                                    <label class="form-label-sm fw-bold">
+                                        <i class="bi bi-signpost me-1"></i>Calle y Altura:
+                                    </label>
+                                    <p class="form-control-plaintext">
+                                        {{ cliente.direccion.calle }} {{ cliente.direccion.altura }}
+                                    </p>
+                                </div>
+
+                                <div class="col-sm-6">
+                                    <label class="form-label-sm fw-bold">
+                                        <i class="bi bi-geo-alt me-1"></i>Localidad y Provincia:
+                                    </label>
+                                    <p class="form-control-plaintext">
+                                        {{ cliente.direccion.localidad }}, {{ cliente.direccion.provincia }}
+                                    </p>
+                                </div>
+
+                                <div class="col-sm-6">
+                                    <label class="form-label-sm fw-bold">
+                                        <i class="bi bi-building me-1"></i>Piso / Dto (Opcional):
+                                    </label>
+                                    <p class="form-control-plaintext">
+                                        Piso: {{ cliente.direccion.piso | default('N/A', true) }} | Dto: {{
+                                        cliente.direccion.depto | default('N/A', true) }}
+                                    </p>
+                                </div>
+
+                                <div class="col-sm-6">
+                                    <label class="form-label-sm fw-bold">
+                                        <i class="bi bi-mailbox2 me-1"></i>Código Postal:
+                                    </label>
+                                    <p class="form-control-plaintext">
+                                        {{ cliente.direccion.codigo_postal | default('N/A', true) }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+                </div>
+                {% endif %}
+
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Pedidos asociados</h5>
+                    </div>
+                    <div class="col-12">
+
+                        {% if pedidos and pedidos | length > 0 %}
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover table-sm">
+                                <thead style="color: black;"> 
+                                    
+                                        <th># ID</th>
+                                        <th>Fecha Solicitud</th>
+                                        <th>Fecha Requerida</th>
+                                        <th>Estado</th>
+                                        <th class="text-end">Precio Total</th>
+                                        <th class="text-center">Acciones</th>
+                                    
+                                </thead>    
+                                <tbody>
+                                    {% for pedido in pedidos %}
+                                    <tr>
+                                        <td>
+                                            ORD-{{ pedido.id }}
+                                        </td>
+                                        <td>{{ pedido.fecha_solicitud }}</td>
+                                        <td>{{ pedido.fecha_requerido }}</td>
+                                        <td>
+                                            <span class="badge 
+                                {% if pedido.estado == 'PENDIENTE' %}bg-warning text-dark
+                                {% elif pedido.estado == 'LISTO_PARA_ENTREGA'  %}bg-info
+                                {% elif pedido.estado == 'COMPLETADO' %}bg-success
+                                {% elif pedido.estado == 'CANCELADO' %}bg-danger
+                                {% else %}bg-secondary
+                                {% endif %}">
+                                                {{ pedido.estado }}
+                                            </span>
+                                        </td>
+                                        <td class="text-end">
+
+                                            $ {{ "{:,.2f}".format(pedido.precio_orden | default(0) ) }}
+                                        </td>
+                                        <td class="text-center">
+                                            <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}"
+                                                class="btn btn-sm btn-outline-info" title="Ver Detalle">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-info" role="alert">
+                            Este cliente no tiene órdenes de compra registradas.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="col-lg-4 col-xl-3">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Ayuda
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-light border">
+                    <h6>Consejos importantes:</h6>
+                    <ul class="mb-0 small">
+                        <li> Consulte periódicamente al cliente sus datos para mantenerlos actualizados. </li>
+                        <li> No deben de quedar pedidos pendientes de un cliente pasada la fecha de solicitud. </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endblock %}

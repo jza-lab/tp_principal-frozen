@@ -1,240 +1,345 @@
 from venv import logger
-from flask import Blueprint, jsonify, render_template, request, redirect, url_for, flash, session
+from flask import (
+    Blueprint,
+    jsonify,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    session,
+)
 from marshmallow import ValidationError
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.producto_controller import ProductoController
 from app.controllers.etapa_produccion_controller import EtapaProduccionController
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
+from app.controllers.pedido_controller import PedidoController
 from app.utils.decorators import roles_required
+from app.permisos import permission_required
 from datetime import date
 
-orden_produccion_bp = Blueprint('orden_produccion', __name__, url_prefix='/ordenes')
+orden_produccion_bp = Blueprint("orden_produccion", __name__, url_prefix="/ordenes")
 
-# Se instancian los controladores necesarios
 controller = OrdenProduccionController()
 producto_controller = ProductoController()
 etapa_controller = EtapaProduccionController()
 usuario_controller = UsuarioController()
 receta_controller = RecetaController()
+pedido_controller = PedidoController()
 
-@orden_produccion_bp.route('/')
+
+@orden_produccion_bp.route("/")
+@permission_required(accion='ver_ordenes_produccion')
 def listar():
-    """
-    Muestra la lista de órdenes de producción.
-    Permite filtrar por estado.
-    """
-    estado = request.args.get('estado')
-    filtros = {'estado': estado} if estado else {}
-    
+    """Muestra la lista de órdenes de producción."""
+    estado = request.args.get("estado")
+    filtros = {"estado": estado} if estado else {}
     response, status_code = controller.obtener_ordenes(filtros)
-    
     ordenes = []
-    if response.get('success'):
-        ordenes_data = response.get('data', [])
-        # Ordenar: no canceladas primero, luego canceladas
-        ordenes = sorted(ordenes_data, key=lambda x: x.get('estado') == 'CANCELADA')
+    if response.get("success"):
+        ordenes_data = response.get("data", [])
+        ordenes = sorted(ordenes_data, key=lambda x: x.get("estado") == "CANCELADA")
     else:
-        flash(response.get('error', 'Error al cargar las órdenes de producción.'), 'error')
-        
-    # El título puede variar según el filtro para dar más contexto
-    titulo = f"Órdenes de Producción"
-    if estado:
-        titulo += f" (Estado: {estado.replace('_', ' ').title()})"
-    else:
-        titulo += " (Todas)"
+        flash(
+            response.get("error", "Error al cargar las órdenes de producción."), "error"
+        )
 
-    return render_template('ordenes_produccion/listar.html', ordenes=ordenes, titulo=titulo)
+    supervisores_response = usuario_controller.obtener_todos_los_usuarios(filtros={'role_id': 4})
+    supervisores = []
+    if isinstance(supervisores_response, dict) and supervisores_response.get("success"):
+        supervisores = supervisores_response.get("data", [])
+    elif isinstance(supervisores_response, list):
+        supervisores = supervisores_response
+    
+    titulo = f"Órdenes de Producción ({'Todas' if not estado else estado.replace('_', ' ').title()})"
+    return render_template(
+        "ordenes_produccion/listar.html", ordenes=ordenes, titulo=titulo, supervisores=supervisores
+    )
 
-@orden_produccion_bp.route('/nueva', methods=['GET', 'POST', 'PUT'])
+
+@orden_produccion_bp.route("/nueva", methods=["GET", "POST", "PUT"])
+@permission_required(accion='crear_ordenes_produccion')
 def nueva():
-    """
-    Muestra la página de detalle de una orden de producción específica,
-    incluyendo sus etapas.
-    """
-    etapas=None 
-    productos =  producto_controller.obtener_todos_los_productos()
-    operarios = usuario_controller.obtener_todos_los_usuarios()
-    return render_template('ordenes_produccion/formulario.html', etapas=etapas, productos=productos, operarios = operarios)
-        
+    """Muestra la página para crear una nueva orden de producción."""
+    productos_tupla = producto_controller.obtener_todos_los_productos()
+    productos_resp = productos_tupla[0] if productos_tupla else {}
+    productos = productos_resp.get('data', [])
 
-@orden_produccion_bp.route('/nueva/crear', methods=['POST'])
+    supervisores_tupla = usuario_controller.obtener_todos_los_usuarios(filtros={'role_id': 4})
+    supervisores_resp = supervisores_tupla[0] if supervisores_tupla else {}
+    supervisores = supervisores_resp.get("data", [])
+
+    return render_template(
+        "ordenes_produccion/formulario.html", productos=productos, supervisores=supervisores
+    )
+
+
+@orden_produccion_bp.route("/nueva/crear", methods=["POST"])
+@permission_required(accion='crear_ordenes_produccion')
 def crear():
     try:
         datos_json = request.get_json()
         if not datos_json:
-            return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos.'}), 400
+            return jsonify({"success": False, "error": "No se recibieron datos JSON válidos."}), 400
 
-        usuario_id_creador = session.get('usuario_id')
-
+        usuario_id_creador = session.get("usuario_id")
         if not usuario_id_creador:
-            return jsonify({'success': False, 'error': 'Usuario no autenticado.'}), 401
+            return jsonify({"success": False, "error": "Usuario no autenticado."}), 401
 
-        # Corregido: Pasar `datos_json` al controlador, no el objeto `request`.
         resultado = controller.crear_orden(datos_json, usuario_id_creador)
-        
-        if resultado.get('success'):
-            # Devolver el objeto creado con el código de estado 201 (Created)
-            return jsonify(resultado), 201
-        else:
-            # Devolver el error específico con el código de estado 400 (Bad Request)
-            return jsonify(resultado), 400
-        
-    except ValidationError as e:
-        return jsonify({
-            'success': False,
-            'error': 'Datos inválidos',
-            'details': e.messages
-        }), 400
-    except Exception as e:
-        logger.error(f"Error inesperado en crear_insumo: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Error interno del servidor'
-        }), 500
-    
 
-@orden_produccion_bp.route('/modificar/<int:id>', methods=['GET', 'POST', 'PUT'])
+        if isinstance(resultado, tuple):
+            resultado_dict, status_code = resultado
+            return jsonify(resultado_dict), status_code
+        else:
+            return jsonify(resultado), 201 if resultado.get("success") else 400
+
+    except Exception as e:
+        logger.error(f"Error inesperado en la ruta crear: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+
+@orden_produccion_bp.route("/modificar/<int:id>", methods=["GET", "POST", "PUT"])
+@permission_required(accion='modificar_ordenes_produccion')
 def modificar(id):
+    """Gestiona la modificación de una orden de producción."""
+    try:
+        if request.method in ["POST", "PUT"]:
+            datos_json = request.get_json()
+            if not datos_json:
+                return jsonify(
+                    {"success": False, "error": "No se recibieron datos JSON válidos"}
+                ), 400
+            response, status = controller.actualizar_orden(id, datos_json)
+            return jsonify(response), status
+        orden = controller.obtener_orden_por_id(id).get("data")
+        productos = producto_controller.obtener_todos_los_productos()
+        operarios = usuario_controller.obtener_todos_los_usuarios()
+       
+
+        if isinstance(operarios, list):
+            operarios_list = operarios
+        elif isinstance(operarios, dict):
+             operarios_list = operarios.get("data", [])
+        else:
+             operarios_list = []
+
+        return render_template(
+            "ordenes_produccion/formulario.html",
+            orden_m=orden,
+            productos=productos,
+            operarios=operarios_list
+        )
+    except Exception as e:
+        print(f"Error inesperado en modificar: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+
+@orden_produccion_bp.route("/<int:id>/detalle")
+@permission_required(accion='ver_ordenes_produccion')
+def detalle(id):
+    """Muestra el detalle de una orden de producción."""
+    respuesta = controller.obtener_orden_por_id(id)
+    if not respuesta.get("success"):
+        flash("Orden no encontrada.", "error")
+        return redirect(url_for("orden_produccion.listar"))
+    orden = respuesta.get("data")
+    desglose_response = controller.obtener_desglose_origen(id)
+    desglose_origen = desglose_response.get("data", [])
+    ingredientes_response = (
+        receta_controller.obtener_ingredientes_para_receta(orden.get("receta_id"))
+        if orden
+        else None
+    )
+    ingredientes = (
+        ingredientes_response.get("data", []) if ingredientes_response and isinstance(ingredientes_response, dict) else []
+    )
+    pedidos_asociados_resp, status= pedido_controller.obtener_pedidos_por_orden_produccion(id)
+    pedidos_asociados=[]
+    if pedidos_asociados_resp.get('data') and len(pedidos_asociados_resp.get('data'))>0:
+        pedidos_asociados=pedidos_asociados_resp.get('data')
+    
+    return render_template(
+        "ordenes_produccion/detalle.html",
+        orden=orden,
+        ingredientes=ingredientes,
+        desglose_origen=desglose_origen,
+        pedidos_asociados=pedidos_asociados
+    )
+
+
+@orden_produccion_bp.route("/<int:id>/iniciar", methods=["POST"])
+@permission_required(accion='iniciar_produccion')
+def iniciar(id):
+    """Inicia una orden de producción, previa validación de stock."""
+    try:
+        resultado_dict, status_code = controller.cambiar_estado_orden(id, "EN_PROCESO")
+
+        if resultado_dict.get("success"):
+            flash(resultado_dict.get("message", "Orden de producción iniciada correctamente."), "success")
+        else:
+            flash(resultado_dict.get("error", "No se pudo iniciar la orden."), "error")
+
+        return redirect(url_for("orden_produccion.listar"))
+
+    except Exception as e:
+        logger.error(f"Error inesperado en la ruta iniciar OP: {e}", exc_info=True)
+        flash("Ocurrió un error interno al intentar iniciar la producción.", "danger")
+        return redirect(url_for("orden_produccion.listar"))
+
+
+@orden_produccion_bp.route("/<int:id>/completar", methods=["POST"])
+@permission_required(accion='registrar_fin_etapa')
+def completar(id):
+    """Completa una orden de producción."""
+    try:
+        resultado_dict, status_code = controller.cambiar_estado_orden(id, "COMPLETADA")
+
+        if resultado_dict.get("success"):
+            flash(resultado_dict.get("message", "Orden de producción completada."), "success")
+        else:
+            flash(resultado_dict.get("error", "No se pudo completar la orden."), "error")
+
+        return redirect(url_for("orden_produccion.detalle", id=id))
+    except Exception as e:
+        logger.error(f"Error inesperado en la ruta completar OP: {e}", exc_info=True)
+        flash("Ocurrió un error interno al intentar completar la producción.", "danger")
+        return redirect(url_for("orden_produccion.listar"))
+
+
+@orden_produccion_bp.route("/pendientes")
+@permission_required(accion='ver_ordenes_produccion')
+def listar_pendientes():
+    """Muestra las órdenes pendientes de aprobación."""
+    response, _ = controller.obtener_ordenes({"estado": "PENDIENTE"})
+    ordenes = response.get("data", [])
+    return render_template(
+        "ordenes_produccion/listar.html",
+        ordenes=ordenes,
+        titulo="Órdenes Pendientes de Aprobación",
+    )
+
+
+@orden_produccion_bp.route("/<int:id>/aprobar", methods=["POST"])
+@permission_required(accion='aprobar_ordenes_produccion')
+def aprobar(id):
+    """Aprueba una orden de producción."""
+    try:
+        usuario_id = session.get("usuario_id")
+        if not usuario_id:
+            flash("Error de autenticación. Por favor, inicie sesión.", "danger")
+            return redirect(url_for("auth.login"))
+
+        resultado_dict, status_code = controller.aprobar_orden(id, usuario_id)
+
+        if status_code == 409 and not resultado_dict.get("success"):
+            return jsonify(resultado_dict), 409
+
+        if isinstance(resultado_dict, dict) and resultado_dict.get("success"):
+            message = resultado_dict.get("message", "Orden aprobada exitosamente.")
+            
+            data = resultado_dict.get("data")
+            orden_compra_generada = data.get("orden_compra_generada") if isinstance(data, dict) else None
+
+            if orden_compra_generada and isinstance(orden_compra_generada, dict):
+                codigo_oc = orden_compra_generada.get('codigo_oc', 'N/A')
+                message = f"Orden de Producción aprobada. Se generó la Orden de Compra {codigo_oc} para cubrir insumos faltantes."
+                flash(message, "warning") 
+            else:
+                flash(message, "success")
+        else:
+            error_message = resultado_dict.get("error", "Ocurrió un error al aprobar la orden.") if isinstance(resultado_dict, dict) else "Error al procesar la aprobación."
+            flash(error_message, "error")
+
+        return redirect(url_for("orden_produccion.listar"))
+
+    except Exception as e:
+        logger.error(f"Error inesperado en la ruta aprobar OP: {e}", exc_info=True)
+        flash("Ocurrió un error interno al procesar la solicitud.", "danger")
+        return redirect(url_for("orden_produccion.listar"))
+
+
+@orden_produccion_bp.route("/<int:orden_id>/crear_oc_op", methods=["POST"])
+@permission_required(accion='aprobar_ordenes_produccion')
+def crear_oc_op(orden_id):
     """
-    Muestra la página de detalle de una orden de producción específica,
-    incluyendo sus etapas.
+    Crea la OC y aprueba la OP después de la confirmación manual del usuario.
     """
     try:
-        if(request.method == 'POST' or request.method == 'PUT'):
-            datos_json = request.get_json(silent=True) 
-            print(datos_json)
-            if(datos_json is None):
-                logger.error("Error: Se esperaba JSON, pero se recibió un cuerpo vacío o sin Content-Type: application/json")
-                return jsonify({'success': False, 'error': 'No se recibieron datos JSON válidos (verifique Content-Type)'}), 400
-            id = session['usuario_id']
-            print(id)
-            response, status = controller.crear_orden(request , 23)
-            return jsonify(response), status
+        usuario_id = session.get("usuario_id")
+        if not usuario_id:
+            return jsonify({"success": False, "error": "Usuario no autenticado."}), 401
 
-        orden = controller.obtener_orden_por_id(id)
-        etapas=None 
-        productos =  producto_controller.obtener_todos_los_productos()
-        operarios = usuario_controller.obtener_todos_los_usuarios()
-        return render_template('ordenes_produccion/formulario.html',orden_m=orden, etapas=etapas, productos=productos, operarios = operarios)
+        datos_json = request.get_json()
+        insumos_faltantes = datos_json.get('insumos_faltantes')
         
-    except ValidationError as e:
-        return jsonify({
-            'success': False,
-            'error': 'Datos inválidos',
-            'details': e.messages
-        }), 400
-    except Exception as e:
-        logger.error(f"Error inesperado en crear_insumo: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Error interno del servidor'
-        }), 500
+        if not insumos_faltantes:
+            return jsonify({"success": False, "error": "No se recibieron datos de insumos faltantes."}), 400
 
-@orden_produccion_bp.route('/<int:id>/detalle')
-def detalle(id):
-    """
-    Muestra la página de detalle de una orden de producción específica,
-    incluyendo sus etapas y el desglose de pedidos de cliente que la componen.
-    """
-    respuesta = controller.obtener_orden_por_id(id)
-    if not respuesta or not respuesta.get('success'):
-        flash('Orden no encontrada.', 'error')
-        return redirect(url_for('orden_produccion.listar'))
-    
-    orden = respuesta.get('data')
-    etapas = None
+        resultado_oc = controller.generar_orden_de_compra_automatica(insumos_faltantes, usuario_id)
+        resultado_oc_dict = resultado_oc[0] if isinstance(resultado_oc, tuple) else resultado_oc
 
-    # Obtener desglose de origen de los pedidos
-    desglose_origen = []
-    desglose_response = controller.obtener_desglose_origen(id)
-    if desglose_response.get('success'):
-        desglose_origen = desglose_response.get('data', [])
-    else:
-        flash('No se pudo cargar el desglose de origen de los pedidos.', 'warning')
+        if not resultado_oc_dict.get('success'):
+            return jsonify({
+                "success": False,
+                "error": resultado_oc_dict.get('error', 'Fallo al crear la Orden de Compra.')
+            }), 500
 
-    ingredientes = []
-    if orden and orden.get('receta_id'):
-        ingredientes_response = receta_controller.obtener_ingredientes_para_receta(orden.get('receta_id'))
-        if ingredientes_response.get('success'):
-            ingredientes = ingredientes_response.get('data', [])
+        orden_compra_creada = resultado_oc_dict.get('data')
+        oc_codigo = orden_compra_creada.get('codigo_oc', 'N/A')
+        oc_id = orden_compra_creada.get('id')
+
+        orden_result = controller.obtener_orden_por_id(orden_id)
+        orden_produccion = orden_result['data']
+        
+        orden_produccion['orden_compra_id'] = oc_id
+        
+        resultado_aprobacion, status_code = controller.aprobar_orden_con_oc(orden_id, usuario_id, oc_id)
+
+        if resultado_aprobacion.get('success'):
+            return jsonify({
+                "success": True,
+                "message": f"OP aprobada. Se creó la OC {oc_codigo} para insumos. Se recomienda ir a Compras.",
+                "oc_codigo": oc_codigo,
+                "redirect_url": url_for('orden_compra.listar')
+            }), 200
         else:
-            flash(ingredientes_response.get('error', 'No se pudieron cargar los ingredientes.'), 'warning')
+            return jsonify(resultado_aprobacion), status_code
 
-    return render_template('ordenes_produccion/detalle.html', 
-                           orden=orden, 
-                           etapas=etapas, 
-                           ingredientes=ingredientes,
-                           desglose_origen=desglose_origen)
+    except Exception as e:
+        logger.error(f"Error inesperado en crear_oc_op: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "Error interno del servidor."}), 500
 
-@orden_produccion_bp.route('/<int:id>/iniciar', methods=['POST'])
-def iniciar(id):
-    """
-    Endpoint para cambiar el estado de una orden a 'EN_PROCESO'.
-    """
-    resultado = controller.cambiar_estado_orden(id, 'EN_PROCESO')
-    if resultado.get('success'):
-        flash('Orden iniciada exitosamente.', 'success')
-    else:
-        flash(f"Error al iniciar la orden: {resultado.get('error', 'Error desconocido')}", 'error')
 
-    return redirect(url_for('orden_produccion.detalle', id=id))
-
-@orden_produccion_bp.route('/<int:id>/completar', methods=['POST'])
-def completar(id):
-    """
-    Endpoint para cambiar el estado de una orden a 'COMPLETADA'.
-    """
-    resultado = controller.cambiar_estado_orden(id, 'COMPLETADA')
-    if resultado.get('success'):
-        flash('Orden completada exitosamente.', 'success')
-    else:
-        flash(f"Error al completar la orden: {resultado.get('error', 'Error desconocido')}", 'error')
-
-    return redirect(url_for('orden_produccion.detalle', id=id))
-
-@orden_produccion_bp.route('/pendientes')
-@roles_required('SUPERVISOR', 'ADMIN', 'GERENTE')
-def listar_pendientes():
-    """
-    Muestra las órdenes de producción pendientes de aprobación para el supervisor.
-    """
-    response, status_code = controller.obtener_ordenes({'estado': 'PENDIENTE'})
-
-    ordenes = []
-    if response.get('success'):
-        ordenes = response.get('data', [])
-    else:
-        flash(response.get('error', 'Error al cargar las órdenes pendientes.'), 'error')
-        
-    return render_template('ordenes_produccion/listar.html', 
-                           ordenes=ordenes, 
-                           titulo="Órdenes Pendientes de Aprobación")
-
-@orden_produccion_bp.route('/<int:id>/aprobar', methods=['POST'])
-@roles_required('SUPERVISOR', 'ADMIN', 'GERENTE')
-def aprobar(id):
-    """
-    Endpoint para que el supervisor apruebe una orden.
-    """
-    usuario_id = session.get('usuario_id') # Asumimos que el ID del supervisor es necesario
-    resultado = controller.aprobar_orden(id, usuario_id)
-    if resultado.get('success'):
-        flash('Orden aprobada y stock reservado.', 'success')
-    else:
-        flash(f"Error al aprobar: {resultado.get('error', 'Error desconocido')}", 'error')
-    return redirect(url_for('orden_produccion.listar'))
-
-@orden_produccion_bp.route('/<int:id>/rechazar', methods=['POST'])
-@roles_required('SUPERVISOR', 'ADMIN', 'GERENTE')
+@orden_produccion_bp.route("/<int:id>/rechazar", methods=["POST"])
+@permission_required(accion='aprobar_ordenes_produccion')
 def rechazar(id):
-    """
-    Endpoint para que el supervisor rechace una orden.
-    """
-    motivo = request.form.get('motivo', 'No especificado')
+    """Rechaza una orden de producción."""
+    motivo = request.form.get("motivo", "No especificado")
     resultado = controller.rechazar_orden(id, motivo)
-    if resultado.get('success'):
-        flash('Orden rechazada exitosamente.', 'warning')
+    flash(
+        resultado.get("message", "Orden rechazada."),
+        "warning" if resultado.get("success") else "error",
+    )
+    return redirect(url_for("orden_produccion.listar"))
+
+
+@orden_produccion_bp.route("/<int:id>/asignar_supervisor", methods=["POST"])
+@permission_required(accion='gestionar_turnos')
+def asignar_supervisor(id):
+    """Asigna un supervisor a una orden de producción."""
+    supervisor_id = request.form.get("supervisor_id")
+    if not supervisor_id:
+        flash("Debe seleccionar un supervisor.", "error")
+        return redirect(url_for("orden_produccion.listar"))
+
+    response, status_code = controller.asignar_supervisor(id, int(supervisor_id))
+
+    if status_code == 200:
+        flash(response.get("message", "Supervisor asignado con éxito."), "success")
     else:
-        flash(f"Error al rechazar: {resultado.get('error', 'Error desconocido')}", 'error')
-    return redirect(url_for('orden_produccion.listar'))
+        flash(response.get("error", "Error al asignar supervisor."), "error")
+
+    return redirect(url_for("orden_produccion.listar"))

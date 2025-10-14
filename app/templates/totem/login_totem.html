@@ -1,7 +1,7 @@
 {% extends "layouts/base.html" %}
 
 {% block extra_css %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/totem.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/totem/totem.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -92,5 +92,5 @@
         </div>
     </div>
 </div>
-<script src="{{ url_for('static', filename='js/totem.js') }}"></script>
+<script src="{{ url_for('static', filename='js/totem/totem.js') }}"></script>
 {% endblock %}

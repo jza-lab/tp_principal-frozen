@@ -1,0 +1,211 @@
+{% extends 'layouts/base.html' %}
+
+{% set form_title = 'Editar producto' if is_edit else 'Agregar Nuevo producto' %}
+
+{% block title %}{{ form_title }} - Sistema Frozen{% endblock %}
+
+{% block page_title %}{{ form_title }}{% endblock %}
+{% block page_subtitle %}
+{% if is_edit %}
+Modificar información de {{ producto.nombre }}
+{% else %}
+Agregar nuevo producto al catálogo
+{% endif %}
+{% endblock %}
+{% block page_actions %}
+<a href="{{ url_for('productos.obtener_productos') }}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Volver a la lista
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 col-xl-9">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Información del Producto</h5>
+            </div>
+            <div class="card-body">
+                <form id="formulario-producto" method="POST">
+                    <div class="row g-3">
+                        {% if is_edit %}
+                        <div class="col-md-6">
+                            <label for="codigo" class="form-label">Código</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
+                                <input type="text" class="form-control" name="codigo" id="codigo"
+                                    value="{{ producto.codigo }}" readonly>
+                            </div>
+                            <div class="form-text">El código de producto no se puede modificar.</div>
+                        </div>
+                        {% endif %}
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" name="nombre" id="nombre"
+                                    value="{{ producto.nombre if producto else '' }}" required placeholder="Nombre">
+                                <label for="nombre">
+                                    <i class="bi bi-box-seam me-1"></i>Nombre <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <select class="form-select" name="categoria" id="categoria" required>
+                                    <option value="">Seleccionar categoría...</option>
+                                    <option value="Congelados" {% if producto and producto.categoria=="Congelados" %}selected{% endif %}>
+                                        Congelados (Milanesas, hamburguesas, etc.)
+                                    </option>
+                                    <option value="Otros" {% if producto and producto.categoria=='Otros' %}selected{% endif %}>
+                                        Otros
+                                    </option>
+                                </select>
+                                <label for="categoria">
+                                    <i class="bi bi-tags-fill me-1"></i>Categoría <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <select class="form-select" name="unidad_medida" id="unidad_medida" required>
+                                    <option value="">Seleccionar unidad...</option>
+                                    <option value="t" {% if producto and producto.unidad_medida=='t' %}selected{% endif %}>Toneladas (t)</option>
+                                    <option value="kg" {% if producto and producto.unidad_medida=='kg' %}selected{% endif %}>Kilogramos (kg)</option>
+                                    <option value="g" {% if producto and producto.unidad_medida=='g' %}selected{% endif %}>Gramos (g)</option>
+                                    <option value="litros" {% if producto and producto.unidad_medida=='litros' %}selected{% endif %}>Litros (l)</option>
+                                    <option value="unidades" {% if producto and producto.unidad_medida=='unidades' %}selected{% endif %}>Unidades</option>
+                                </select>
+                                <label for="unidad_medida">
+                                    <i class="bi bi-rulers me-1"></i>Unidad de Medida <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <label for="descripcion" class="form-label">Descripción</label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-card-text"></i></span>
+                                <textarea class="form-control" name="descripcion" id="descripcion" rows="3">{{ producto.descripcion if producto else '' }}</textarea>
+                            </div>
+                            <div class="form-text">Opcional - Ingrese una descripción detallada del producto.</div>
+                        </div>
+                    </div>
+                    
+                    <div class="card my-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Ítems de la receta del producto</h5>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="addItemBtn">Añadir Ítem</button>
+                        </div>
+                        <div class="card-body">
+                            <div id="itemsContainer">
+                                {% for item in receta_items %}
+                                <div class="row g-3 align-items-end item-row mb-2">
+                                    <div class="col-md-4">
+                                        <label class="form-label">Insumo</label>
+                                        <select class="form-select insumo-selector" name="insumo_id[]" required>
+                                            <option value="">Seleccione un insumo...</option>
+                                            {% for insumo in insumos %}
+                                            <option value="{{ insumo.id }}" data-id="{{ insumo.id }}" data-unidad="{{ insumo.unidad_medida }}" data-precio="{{ insumo.precio_unitario }}" {% if insumo.id_insumo==item.id_insumo %}selected{% endif %}>
+                                                {{ insumo.nombre }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Cantidad</label>
+                                        <input type="number" step="0.01" min="0.01" max="5000" class="form-control cantidad" name="cantidad[]" value="{{ item.cantidad }}" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Precio Unitario</label>
+                                        <input type="number" class="form-control precio_unitario" name="precio_unitario[]" value="{{ item.precio_unitario }}" readonly>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Subtotal</label>
+                                        <input type="number" class="form-control subtotal-item" value="{{ (item.cantidad * item.precio_unitario) | round(2) }}" readonly>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-outline-danger removeItemBtn">Eliminar</button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mb-4">
+                        <div class="card-body d-flex justify-content-end gap-3 align-items-center">
+                            
+                            <div class="w-25">
+                                <label class="form-label">Mano de obra / Ganancia (%)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-percent"></i></span>
+                                    <input type="number" step="0.01" min="0" max="100" class="form-control" id="porcentaje_extra" name="porcentaje_extra" value="{{ producto.porcentaje_extra if producto else '0' }}">
+                                </div>
+                            </div>
+                            
+                            <div class="w-25">
+                                <label class="form-label">Subtotal Receta</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
+                                    <input type="number" step="0.01" class="form-control" id="subtotal" name="subtotal" value="0" readonly>
+                                </div>
+                            </div>
+                            
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="iva" name="iva" value="1" {% if producto and producto.iva %}checked{% endif %}>
+                                <label class="form-check-label" for="iva">Aplicar IVA 21%</label>
+                            </div>
+                            
+                            <div class="w-25">
+                                <label class="form-label fw-bold">Precio Final Producto</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
+                                    <input type="number" step="0.01" class="form-control fw-bold fs-5" id="total" name="total" value="0" readonly>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{{ url_for('productos.obtener_productos') }}" class="btn btn-outline-secondary">Cancelar</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle me-1"></i>
+                            {% if is_edit %}Actualizar{% else %}Crear{% endif %} producto
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 col-xl-3">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="bi bi-info-circle me-1"></i> Ayuda</h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-light border">
+                    <h6>Consejos importantes:</h6>
+                    <ul class="mb-0 small">
+                        <li>Use códigos cortos y descriptivos.</li>
+                        <li>Categorice correctamente para facilitar los filtros.</li>
+                        <li>Asegúrese de que todos los insumos de la receta estén disponibles en el catálogo.</li>
+                        <li>El *Mano de obra/Ganancia* se aplica sobre el costo total de los insumos.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    const productoS_LISTA_URL = "{{ url_for('productos.obtener_productos') }}";
+    const ID_producto = "{{ producto.id if producto else '' }}";
+    const IS_EDIT = '{{ is_edit }}';
+    const isEditBoolean = IS_EDIT == 'True';
+    const INSUMOS_DATA = JSON.parse('{{ insumos | tojson | safe | replace("\n", "") | replace("\r", "") }}');
+</script>
+
+<script src="{{ url_for('static', filename='js/productos/formularioCrearProducto.js') }}"></script>
+{% endblock %}
