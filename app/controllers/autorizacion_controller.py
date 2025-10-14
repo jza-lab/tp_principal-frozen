@@ -82,5 +82,8 @@ class AutorizacionController(BaseController):
     def obtener_autorizaciones_pendientes(self):
         return self.model.find_all_pending()
 
+    def obtener_todas_las_autorizaciones(self):
+        return self.model.find_all_by_status()
+
     def actualizar_estado_autorizacion(self, autorizacion_id: int, estado: str, comentario: str):
         return self.model.update_estado(autorizacion_id, estado, comentario)

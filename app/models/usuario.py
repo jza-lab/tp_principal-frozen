@@ -83,7 +83,7 @@ class UsuarioModel(BaseModel):
         Método genérico y privado para buscar un usuario por un campo específico.
         """
         try:
-            select_query = "*, roles(codigo, nombre, nivel), turno:turno_id(nombre)"
+            select_query = "*, roles(codigo, nombre, nivel), turno:turno_id(nombre, hora_inicio, hora_fin)"
             if include_direccion:
                 select_query += ", direccion:usuario_direccion(*)"
 
@@ -135,7 +135,7 @@ class UsuarioModel(BaseModel):
     def find_all(self, filtros: Dict = None, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
         """Obtiene todos los usuarios con opción de incluir sectores y dirección."""
         try:
-            select_query = "*, roles(codigo, nombre, nivel), turno:turno_id(nombre)"
+            select_query = "*, roles(codigo, nombre, nivel), turno:turno_id(nombre, hora_inicio, hora_fin)"
             if include_direccion:
                 select_query += ", direccion:usuario_direccion(*)"
 

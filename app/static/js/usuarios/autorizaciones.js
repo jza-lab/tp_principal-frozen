@@ -1,25 +1,27 @@
 document.addEventListener('DOMContentLoaded', function() {
-    const authorizationsContainer = document.getElementById('authorizations-container');
+    const pendingContainer = document.getElementById('pending-authorizations-container');
+    const historyContainer = document.getElementById('history-authorizations-container');
 
-    function createAuthorizationCard(auth) {
+    function createPendingCard(auth) {
         return `
             <div class="col-md-4 mb-4">
-                <div class="card" data-auth-id="${auth.id}">
+                <div class="card auth-card pending" data-auth-id="${auth.id}">
                     <div class="card-body">
                         <h5 class="card-title">${auth.usuario.nombre} ${auth.usuario.apellido}</h5>
-                        <p class="card-text">
-                            <strong>Legajo:</strong> ${auth.usuario.legajo}<br>
+                        <h6 class="card-subtitle mb-2 text-muted">Legajo: ${auth.usuario.legajo}</h6>
+                        <p class="card-text mb-2">
                             <strong>Fecha:</strong> ${auth.fecha_autorizada}<br>
                             <strong>Turno:</strong> ${auth.turno.nombre} (${auth.turno.hora_inicio.slice(0, 5)} - ${auth.turno.hora_fin.slice(0, 5)})<br>
+                            <strong>Tipo:</strong> ${auth.tipo.replace('_', ' ')}<br>
                             <strong>Motivo:</strong> ${auth.motivo || 'No especificado'}
                         </p>
                         <div class="mb-3">
-                            <label for="comentario-${auth.id}" class="form-label">Comentario</label>
-                            <textarea class="form-control" id="comentario-${auth.id}" rows="2"></textarea>
+                            <label for="comentario-${auth.id}" class="form-label small">Comentario del Supervisor</label>
+                            <textarea class="form-control form-control-sm" id="comentario-${auth.id}" rows="2" placeholder="Opcional..."></textarea>
                         </div>
                         <div class="d-flex justify-content-between">
-                            <button class="btn btn-success" onclick="updateAuthorization(${auth.id}, 'APROBADO')">Aprobar</button>
-                            <button class="btn btn-danger" onclick="updateAuthorization(${auth.id}, 'RECHAZADO')">Rechazar</button>
+                            <button class="btn btn-sm btn-success" onclick="updateAuthorization(${auth.id}, 'APROBADO')">Aprobar</button>
+                            <button class="btn btn-sm btn-danger" onclick="updateAuthorization(${auth.id}, 'RECHAZADO')">Rechazar</button>
                         </div>
                     </div>
                 </div>
@@ -27,18 +29,69 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
     }
 
+    function createHistoryCard(auth) {
+        const statusClass = auth.estado === 'APROBADO' ? 'success' : 'danger';
+        const statusIcon = auth.estado === 'APROBADO' ? 'check-circle-fill' : 'x-circle-fill';
+        
+        return `
+            <div class="col-md-4 mb-4">
+                <div class="card auth-card history border-${statusClass}">
+                    <div class="card-header bg-light-soft">
+                        <span class="badge bg-${statusClass}-soft text-${statusClass}">
+                            <i class="bi bi-${statusIcon} me-1"></i>
+                            ${auth.estado}
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">${auth.usuario.nombre} ${auth.usuario.apellido}</h5>
+                        <h6 class="card-subtitle mb-2 text-muted">Legajo: ${auth.usuario.legajo}</h6>
+                        <p class="card-text small">
+                            <strong>Fecha:</strong> ${auth.fecha_autorizada}<br>
+                            <strong>Turno:</strong> ${auth.turno.nombre} (${auth.turno.hora_inicio.slice(0, 5)} - ${auth.turno.hora_fin.slice(0, 5)})<br>
+                            <strong>Tipo:</strong> ${auth.tipo.replace('_', ' ')}
+                        </p>
+                        ${auth.comentario_supervisor ? `
+                        <div class="supervisor-comment">
+                            <strong class="small">Comentario:</strong>
+                            <p class="mb-0 fst-italic">"${auth.comentario_supervisor}"</p>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderAuthorizations(data) {
+        // Render pendientes
+        if (data.pendientes && data.pendientes.length > 0) {
+            pendingContainer.innerHTML = data.pendientes.map(createPendingCard).join('');
+        } else {
+            pendingContainer.innerHTML = '<div class="col-12"><div class="empty-state"><i class="bi bi-clock-history"></i><h4>No hay autorizaciones pendientes</h4><p>Todas las solicitudes han sido gestionadas.</p></div></div>';
+        }
+
+        // Render historial
+        if (data.historial && data.historial.length > 0) {
+            historyContainer.innerHTML = data.historial.map(createHistoryCard).join('');
+        } else {
+            historyContainer.innerHTML = '<div class="col-12"><div class="empty-state"><i class="bi bi-collection"></i><h4>No hay historial disponible</h4><p>Aún no se han completado autorizaciones.</p></div></div>';
+        }
+    }
+
     function fetchAuthorizations() {
         fetch('/admin/autorizaciones')
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    authorizationsContainer.innerHTML = '';
-                    result.data.forEach(auth => {
-                        authorizationsContainer.innerHTML += createAuthorizationCard(auth);
-                    });
+                    renderAuthorizations(result.data);
                 } else {
-                    authorizationsContainer.innerHTML = '<p>No hay autorizaciones pendientes.</p>';
+                    pendingContainer.innerHTML = '<p class="text-danger">Error al cargar autorizaciones.</p>';
+                    historyContainer.innerHTML = '<p class="text-danger">Error al cargar el historial.</p>';
                 }
+            })
+            .catch(() => {
+                pendingContainer.innerHTML = '<p class="text-danger">Error de red.</p>';
+                historyContainer.innerHTML = '<p class="text-danger">Error de red.</p>';
             });
     }
 
@@ -62,45 +115,41 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     window.updateAuthorization = function(id, estado) {
-        const card = document.querySelector(`.card[data-auth-id="${id}"]`);
         const comentario = document.getElementById(`comentario-${id}`).value;
+        const actionText = estado === 'APROBADO' ? 'aprobar' : 'rechazar';
+        const confirmation = confirm(`¿Estás seguro de que quieres ${actionText} esta autorización?`);
 
-        fetch(`/admin/autorizaciones/${id}/estado`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({ estado, comentario })
-        })
-        .then(response => response.json())
-        .then(result => {
-            if (result.success) {
-                showFlashMessage(result.message || 'Autorización actualizada.', 'success');
-                
-                // Actualizar la UI de la tarjeta
-                const actions = card.querySelector('.d-flex');
-                
-                // Crear el badge de estado
-                const statusBadge = document.createElement('span');
-                statusBadge.className = `badge bg-${estado === 'APROBADO' ? 'success' : 'danger'}`;
-                statusBadge.textContent = estado;
-
-                // Reemplazar los botones con el badge
-                actions.innerHTML = '';
-                actions.appendChild(statusBadge);
-
-                // Cambiar el estilo de la tarjeta
-                card.classList.add(estado === 'APROBADO' ? 'border-success' : 'border-danger');
-
-            } else {
-                showFlashMessage(result.error || 'Error al actualizar la autorización.', 'danger');
-            }
-        })
-        .catch(() => {
-            showFlashMessage('Error de red al actualizar la autorización.', 'danger');
-        });
+        if (confirmation) {
+            fetch(`/admin/autorizaciones/${id}/estado`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ estado, comentario })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    showFlashMessage(result.message || 'Autorización actualizada.', 'success');
+                    fetchAuthorizations(); // Recargar ambas listas
+                } else {
+                    showFlashMessage(result.error || 'Error al actualizar la autorización.', 'danger');
+                }
+            })
+            .catch(() => {
+                showFlashMessage('Error de red al actualizar la autorización.', 'danger');
+            });
+        }
     }
 
-    fetchAuthorizations();
+    // Carga inicial
+    const authTab = document.getElementById('authorizations-tab');
+    if (authTab) {
+        authTab.addEventListener('shown.bs.tab', fetchAuthorizations);
+    }
+    // Si la pestaña de autorizaciones ya está activa al cargar la página
+    if (document.querySelector('#authorizations-panel.active')) {
+       fetchAuthorizations();
+    }
 });
