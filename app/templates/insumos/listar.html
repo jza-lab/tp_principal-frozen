@@ -7,7 +7,8 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Catálogo de Insumos</h1>
     <div class="btn-toolbar">
-        <a href="{{ url_for('insumos_api.crear_insumo') }}" class="btn btn-primary">
+        {% set can_create = has_permission('crear_materias_primas')|trim == 'True' %}
+        <a href="{{ url_for('insumos_api.crear_insumo') if can_create else '#' }}" class="btn btn-primary {% if not can_create %}disabled{% endif %}">
             <i class="bi bi-plus-circle me-1"></i>Agregar Nuevo Insumo
         </a>
     </div>
@@ -120,12 +121,11 @@
                         <a href="{{ url_for('insumos_api.agregar_lote', id_insumo=insumo.id_insumo) }}" class="btn btn-sm btn-outline-success" title="Registrar Lote">
                             <i class="bi bi-plus-square"></i>
                         </a>
-                        {% if has_permission('modificar_materias_primas') %}
-                        <a href="{{ url_for('insumos_api.actualizar_insumo', id_insumo=insumo.id_insumo) }}"
-                            class="btn btn-sm btn-outline-primary" title="Modificar insumo">
+                        {% set can_edit = has_permission('modificar_materias_primas')|trim == 'True' %}
+                        <a href="{{ url_for('insumos_api.actualizar_insumo', id_insumo=insumo.id_insumo) if can_edit else '#' }}"
+                            class="btn btn-sm btn-outline-primary {% if not can_edit %}disabled{% endif %}" title="Modificar insumo">
                             <i class="bi bi-pencil"></i>
                         </a>
-                        {% endif %}
 
                         <a href="{{ url_for('insumos_api.obtener_insumo_por_id', id_insumo=insumo.id_insumo) }}"
                             class="btn btn-sm btn-outline-primary" title="Detalle">

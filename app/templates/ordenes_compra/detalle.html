@@ -202,10 +202,11 @@
                         <textarea class="form-control" id="observaciones_recepcion" name="observaciones" rows="3" placeholder="Ej: La caja del insumo X llegó dañada."></textarea>
                     </div>
                     <div class="d-flex justify-content-end gap-2">
-                        <button type="submit" name="accion" value="rechazar" class="btn btn-danger">
+                        {% set can_receive = has_permission('recepcionar_compras')|trim == 'True' %}
+                        <button type="submit" name="accion" value="rechazar" class="btn btn-danger {% if not can_receive %}disabled{% endif %}">
                             <i class="bi bi-x-circle me-1"></i>Rechazar Pedido
                         </button>
-                        <button type="submit" name="accion" value="aceptar" class="btn btn-success">
+                        <button type="submit" name="accion" value="aceptar" class="btn btn-success {% if not can_receive %}disabled{% endif %}">
                             <i class="bi bi-check-circle me-1"></i>Aceptar Recepción
                         </button>
                     </div>

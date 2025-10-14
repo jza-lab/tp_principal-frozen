@@ -97,29 +97,32 @@
                             <i class="bi bi-eye"></i>
                         </a>
                         
-                        {% if has_permission('aprobar_ordenes_compra') %}
-                            {% if orden.estado == 'PENDIENTE' %}
-                                <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id) }}"class="confirm-form"
-                                data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de producción?" data-button-type="success">
-                                    <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
-                                        <i class="bi bi-check-lg"></i> Aprobar
-                                    </button>
-                                </form>
-                                <button type="button" class="btn btn-sm btn-outline-danger" title="Rechazar Orden" data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}">
-                                    <i class="bi bi-x-lg"></i> Rechazar
+                        {% if orden.estado == 'PENDIENTE' %}
+                            {% set can_approve = has_permission('aprobar_ordenes_compra')|trim == 'True' %}
+                            <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id) if can_approve else '#' }}" class="confirm-form d-inline"
+                                  data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de compra?" data-button-type="success">
+                                <button type="submit" class="btn btn-sm btn-outline-success {% if not can_approve %}disabled{% endif %}" title="Aprobar Orden">
+                                    <i class="bi bi-check-lg"></i> Aprobar
                                 </button>
-                            
-                            {% elif orden.estado == 'APROBADA' %}
+                            </form>
+
+                            {% set can_cancel = has_permission('cancelar_ordenes_compra')|trim == 'True' %}
+                            <button type="button" class="btn btn-sm btn-outline-danger {% if not can_cancel %}disabled{% endif %}" title="Rechazar Orden"
+                                    {% if can_cancel %}data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}"{% endif %}>
+                                <i class="bi bi-x-lg"></i> Rechazar
+                            </button>
+                        
+                        {% elif orden.estado == 'APROBADA' %}
                                 <form method="POST" action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id) }}" class="d-inline">
                                     <button type="submit" class="btn btn-sm btn-primary" title="Marcar como En Tránsito">
                                         <i class="bi bi-truck"></i> En Tránsito
                                     </button>
                                 </form>
                             {% endif %}
-                        {% endif %}
 
                         {% if orden.estado == 'EN_TRANSITO' %}
-                            <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-info" title="Recibir Mercadería">
+                            {% set can_receive = has_permission('recepcionar_compras')|trim == 'True' %}
+                            <a href="{{ url_for('orden_compra.detalle', id=orden.id) if can_receive else '#' }}" class="btn btn-sm btn-info {% if not can_receive %}disabled{% endif %}" title="Recibir Mercadería">
                                 <i class="bi bi-box-arrow-in-down"></i> Recibir
                             </a>
                         {% endif %}
