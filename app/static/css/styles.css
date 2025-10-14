@@ -1057,3 +1057,18 @@ h1.h2 {
     transform: translateX(-100%); /* Asegura que la animación de hover no se active */
 }
 
+/* Estilos para dropdown items deshabilitados */
+.navbar-custom .dropdown-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+    background-color: transparent;
+    color: var(--frozen-text-secondary); /* Un color de texto más apagado */
+}
+
+.navbar-custom .dropdown-item.disabled:hover {
+    color: var(--frozen-text-secondary); /* Mantiene el color apagado en hover */
+    background-color: transparent;
+    transform: none; /* Evita cualquier transformación en hover */
+}
+
