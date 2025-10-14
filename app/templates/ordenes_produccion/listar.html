@@ -54,14 +54,14 @@
                                         En Proceso
                                     </a>
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='CANCELADA') }}" 
-                                    class="btn btn-sm {% if current_status == 'CANCELADA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        En Espera
-                                    </a>
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
                                     <a href="{{ url_for('orden_produccion.listar', estado='COMPLETADA') }}" 
                                     class="btn btn-sm {% if current_status == 'COMPLETADA' %}btn-primary{% else %}btn-secondary{% endif %}">
                                         Completadas
+                                    </a>
+                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                                    <a href="{{ url_for('orden_produccion.listar', estado='CANCELADA') }}" 
+                                    class="btn btn-sm {% if current_status == 'CANCELADA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        Canceladas
                                     </a>
                                 </div>
                             </div>
