@@ -649,7 +649,15 @@ class UsuarioController(BaseController):
             logger.error(f"Error obteniendo rol por ID: {str(e)}")
             return None
 
-    def obtener_todos_los_turnos(self) -> List[Dict]:
-        """Obtiene una lista de todos los turnos de trabajo disponibles."""
-        resultado = self.turno_model.find_all()
+    def obtener_todos_los_turnos(self, usuario_id: Optional[int] = None) -> List[Dict]:
+        """
+        Obtiene una lista de turnos de trabajo. Si se proporciona un ID de usuario,
+        aplica la lógica de negocio (gerentes ven todo, el resto su turno).
+        Si no, devuelve todos los turnos (útil para formularios de creación).
+        """
+        if usuario_id:
+            resultado = self.model.get_turnos_para_usuario(usuario_id)
+        else:
+            resultado = self.turno_model.find_all()
+            
         return resultado.get('data', [])

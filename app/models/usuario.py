@@ -216,3 +216,34 @@ class UsuarioModel(BaseModel):
         except Exception as e:
             logger.error(f"Error buscando usuarios con login web (filtrado): {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def get_turnos_para_usuario(self, usuario_id: int) -> Dict:
+        """
+        Obtiene los turnos para un usuario específico.
+        Si el usuario es GERENTE, devuelve todos los turnos.
+        De lo contrario, devuelve solo el turno asignado al usuario.
+        """
+        try:
+            usuario_result = self.find_by_id(usuario_id)
+            if not usuario_result.get('success'):
+                return usuario_result
+
+            usuario_data = usuario_result['data']
+            rol = usuario_data.get('roles')
+
+            if rol and rol.get('codigo') == 'GERENTE':
+                from app.models.usuario_turno import UsuarioTurnoModel
+                turno_model = UsuarioTurnoModel()
+                return turno_model.find_all()
+            
+            turno_asignado = usuario_data.get('turno')
+            if turno_asignado:
+                # El formato de find_all devuelve una lista de dicts, lo emulamos
+                return {'success': True, 'data': [turno_asignado]}
+            
+            # Si no es gerente y no tiene turno asignado, devuelve lista vacía
+            return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error obteniendo turnos para el usuario {usuario_id}: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}

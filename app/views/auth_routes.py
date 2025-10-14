@@ -3,16 +3,147 @@ from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
 from app.utils.roles import get_redirect_url_by_role
 from app.models.permisos import PermisosModel
+from datetime import datetime, timedelta, time
+from app.models.autorizacion_ingreso import AutorizacionIngresoModel
+from app.models.totem_sesion import TotemSesionModel
+
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 usuario_controller = UsuarioController()
 facial_controller = FacialController()
 permisos_model = PermisosModel()
+totem_sesion_model = TotemSesionModel()
+autorizacion_model = AutorizacionIngresoModel()
+
+
+@auth_bp.before_app_request
+def before_request_auth():
+    """
+    Se ejecuta antes de cada solicitud para:
+    1. Cerrar la sesión web del usuario si su turno ha expirado.
+    2. Limpiar las sesiones de tótem expiradas de todos los usuarios.
+    """
+    if 'usuario_id' not in session or request.endpoint in ['auth.login', 'auth.logout', 'static']:
+        return
+
+    usuario = session.get('user_data')
+    if not usuario:
+        return
+
+    rol = usuario.get('roles', {})
+    if rol.get('codigo') == 'GERENTE':
+        return
+
+    turno_info = usuario.get('turno')
+    if not turno_info or 'hora_inicio' not in turno_info or 'hora_fin' not in turno_info:
+        return
+
+    try:
+        hora_inicio = datetime.strptime(turno_info['hora_inicio'], '%H:%M:%S').time()
+        hora_fin = datetime.strptime(turno_info['hora_fin'], '%H:%M:%S').time()
+        
+        # Asumimos que la sesión web se inició el día de hoy
+        fecha_sesion = datetime.today().date()
+        
+        limite_dt = datetime.combine(fecha_sesion, hora_fin) + timedelta(minutes=15)
+
+        # Si es un turno nocturno, el límite es al día siguiente
+        if hora_fin < hora_inicio:
+            limite_dt += timedelta(days=1)
+        
+        if datetime.now() > limite_dt:
+            # Antes de cerrar sesión, verificar si hay autorización de horas extras
+            auth_result = autorizacion_model.find_by_usuario_and_fecha(
+                usuario_id=usuario['id'],
+                fecha=fecha_sesion,
+                tipo='HORAS_EXTRAS',
+                estado='APROBADA'
+            )
+            if auth_result.get('success'):
+                # Si hay autorización de extras, no hacemos nada y dejamos la sesión abierta
+                return
+
+            flash('Tu turno ha finalizado. La sesión se ha cerrado automáticamente.', 'info')
+            session.clear()
+            return redirect(url_for('auth.login'))
+
+    except (ValueError, TypeError):
+        return
+
+def _verificar_horario_turno(usuario: dict) -> dict:
+    """
+    Verifica si el login es válido según el turno o una autorización aprobada.
+    """
+    if not usuario or usuario.get('roles', {}).get('codigo') == 'GERENTE':
+        return {'success': True}
+
+    # 1. Verificar horario de turno normal
+    turno_info = usuario.get('turno')
+    if turno_info and 'hora_inicio' in turno_info and 'hora_fin' in turno_info:
+        try:
+            hora_inicio = datetime.strptime(turno_info['hora_inicio'], '%H:%M:%S').time()
+            hora_fin = datetime.strptime(turno_info['hora_fin'], '%H:%M:%S').time()
+            inicio_permitido = (datetime.combine(datetime.today(), hora_inicio) - timedelta(minutes=15)).time()
+            hora_actual = datetime.now().time()
+
+            if hora_fin < inicio_permitido:  # Turno nocturno
+                if hora_actual >= inicio_permitido or hora_actual <= hora_fin:
+                    return {'success': True}
+            else:  # Turno diurno
+                if inicio_permitido <= hora_actual <= hora_fin:
+                    return {'success': True}
+        except (ValueError, TypeError):
+            pass  # Falla silenciosamente y procede a verificar autorizaciones
+
+    # 2. Si falla el turno normal, buscar autorizaciones aprobadas
+    usuario_id = usuario.get('id')
+    hoy = datetime.today().date()
+    
+    auth_result = autorizacion_model.find_by_usuario_and_fecha(usuario_id, hoy, estado='APROBADA')
+
+    if not auth_result.get('success'):
+        return {'success': False, 'error': 'Acceso fuera de su horario de turno y no se encontró una autorización válida.'}
+
+    # Iterar sobre todas las autorizaciones aprobadas del día
+    for autorizacion in auth_result['data']:
+        auth_turno_info = autorizacion.get('turno')
+        auth_tipo = autorizacion.get('tipo')
+
+        if not auth_turno_info:
+            continue  # Si una autorización está mal formada, la ignoramos y probamos la siguiente
+
+        try:
+            auth_hora_inicio = datetime.strptime(auth_turno_info['hora_inicio'], '%H:%M:%S').time()
+            auth_hora_fin = datetime.strptime(auth_turno_info['hora_fin'], '%H:%M:%S').time()
+            hora_actual = datetime.now().time()
+
+            if auth_tipo == 'LLEGADA_TARDIA':
+                if auth_hora_inicio <= hora_actual <= auth_hora_fin:
+                    return {'success': True}  # Login válido
+            
+            elif auth_tipo == 'HORAS_EXTRAS':
+                inicio_permitido_auth = (datetime.combine(datetime.today(), auth_hora_inicio) - timedelta(minutes=15)).time()
+                if auth_hora_fin < inicio_permitido_auth:  # Turno nocturno
+                    if hora_actual >= inicio_permitido_auth or hora_actual <= auth_hora_fin:
+                        return {'success': True}  # Login válido
+                else:  # Turno diurno
+                    if inicio_permitido_auth <= hora_actual <= auth_hora_fin:
+                        return {'success': True}  # Login válido
+
+        except (ValueError, TypeError):
+            continue # Ignorar autorizaciones con formato de hora incorrecto
+
+    # Si el bucle termina sin encontrar una autorización válida
+    return {'success': False, 'error': 'Ninguna de sus autorizaciones aprobadas es válida para la hora actual.'}
+
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     """Gestiona el inicio de sesión de los usuarios."""
+    # Optimización: limpiar sesiones de tótem solo en el login
+    totem_sesion_model.cerrar_sesiones_expiradas()
+    
     if request.method == 'POST':
         legajo = request.form['legajo']
         password = request.form['password']
@@ -21,6 +152,12 @@ def login():
         usuario = respuesta.get('data')
 
         if respuesta.get('success') and usuario and usuario.get('activo'):
+            # Verificación de horario de turno
+            verificacion_turno = _verificar_horario_turno(usuario)
+            if not verificacion_turno.get('success'):
+                flash(verificacion_turno.get('error'), 'error')
+                return redirect(url_for('auth.login'))
+
             rol = usuario.get('roles', {})
             rol_codigo = rol.get('codigo')
             rol_nivel = rol.get('nivel', 0)
@@ -48,6 +185,9 @@ def login():
 @auth_bp.route("/identificar_rostro", methods=["POST"])
 def identificar_rostro():
     """Gestiona el inicio de sesión web mediante reconocimiento facial."""
+    # Optimización: limpiar sesiones de tótem solo en el login
+    totem_sesion_model.cerrar_sesiones_expiradas()
+
     data = request.get_json()
     if not data or "image" not in data:
         return jsonify({"success": False, "message": "No se proporcionó imagen."}), 400
@@ -57,6 +197,11 @@ def identificar_rostro():
     usuario = respuesta.get('data')
 
     if respuesta.get('success') and usuario:
+        # Verificación de horario de turno
+        verificacion_turno = _verificar_horario_turno(usuario)
+        if not verificacion_turno.get('success'):
+            return jsonify({'success': False, 'message': verificacion_turno.get('error')}), 401
+
         rol = usuario.get('roles', {})
         rol_codigo = rol.get('codigo')
         rol_nivel = rol.get('nivel', 0)

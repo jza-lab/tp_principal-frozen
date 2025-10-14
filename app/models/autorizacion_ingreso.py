@@ -11,19 +11,21 @@ class AutorizacionIngresoModel(BaseModel):
     def get_table_name(self) -> str:
         return 'u_autorizaciones_ingreso'
 
-    def find_by_usuario_and_fecha(self, usuario_id: int, fecha: date, tipo: str = None):
+    def find_by_usuario_and_fecha(self, usuario_id: int, fecha: date, tipo: str = None, estado: str = None):
         """
-        Busca una autorización de ingreso para un usuario en una fecha específica,
-        con la opción de filtrar por tipo de autorización.
+        Busca una autorización para un usuario y fecha, con filtros opcionales de tipo y estado.
         """
         try:
             query = self.db.table(self.table_name)\
-                .select("*")\
+                .select("*, turno:turno_autorizado_id(nombre, hora_inicio, hora_fin)")\
                 .eq("usuario_id", usuario_id)\
                 .eq("fecha_autorizada", fecha.isoformat())
 
             if tipo:
                 query = query.eq('tipo', tipo)
+            
+            if estado:
+                query = query.eq('estado', estado)
 
             response = query.execute()
             
