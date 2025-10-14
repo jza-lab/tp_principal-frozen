@@ -715,10 +715,10 @@ class UsuarioController(BaseController):
                 auth_fin = datetime.strptime(auth_turno['hora_fin'], '%H:%M:%S').time()
 
                 # Lógica específica por tipo de autorización
-                if auth_tipo == 'LLEGADA_TARDIA':
+                if auth_tipo == 'TARDANZA':
                     # Válido desde el inicio del turno autorizado hasta el fin del mismo
                     if auth_inicio <= hora_actual <= auth_fin:
-                        logger.info(f"Acceso permitido para {usuario.get('legajo')} por autorización de LLEGADA_TARDIA.")
+                        logger.info(f"Acceso permitido para {usuario.get('legajo')} por autorización de TARDANZA.")
                         return {'success': True}
                 
                 elif auth_tipo == 'HORAS_EXTRAS':

@@ -235,28 +235,32 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // --- LÓGICA DE VALIDACIÓN DE FECHAS ---
-    function validateDateFilters() {
-        const fechaDesde = filterFechaDesde.value;
-        const fechaHasta = filterFechaHasta.value;
+    function setupDateFilters() {
+        const fechaDesdeInput = filterFechaDesde;
+        const fechaHastaInput = filterFechaHasta;
 
-        if (fechaDesde && fechaHasta && fechaDesde > fechaHasta) {
-            filterFechaDesde.setCustomValidity('La fecha "Desde" no puede ser posterior a la fecha "Hasta".');
-            filterFechaDesde.reportValidity();
-        } else {
-            filterFechaDesde.setCustomValidity('');
-        }
+        fechaDesdeInput.addEventListener('change', () => {
+            // Si se elige una fecha "desde" posterior a la "hasta", se resetea la "hasta"
+            if (fechaHastaInput.value && fechaDesdeInput.value > fechaHastaInput.value) {
+                fechaHastaInput.value = '';
+            }
+            // La fecha "hasta" no puede ser anterior a la "desde"
+            fechaHastaInput.min = fechaDesdeInput.value;
+            applyActivityFilters();
+        });
+
+        fechaHastaInput.addEventListener('change', () => {
+             // Si se elige una fecha "hasta" anterior a la "desde", se resetea la "desde"
+            if (fechaDesdeInput.value && fechaHastaInput.value < fechaDesdeInput.value) {
+                fechaDesdeInput.value = '';
+            }
+            applyActivityFilters();
+        });
     }
     
     // Filtros de actividad
     filterSector.addEventListener('input', applyActivityFilters);
-    filterFechaDesde.addEventListener('input', () => {
-        validateDateFilters();
-        applyActivityFilters();
-    });
-    filterFechaHasta.addEventListener('input', () => {
-        validateDateFilters();
-        applyActivityFilters();
-    });
+    setupDateFilters();
 
     // --- INICIALIZACIÓN ---
     updateUserCounts();
