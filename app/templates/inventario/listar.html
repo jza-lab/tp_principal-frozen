@@ -6,7 +6,8 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Inventario de Insumos</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
-        <a href="{{ url_for('inventario_view.nuevo_lote') }}" class="btn btn-primary">
+        {% set can_create = has_permission('registrar_ingresos_stock')|trim == 'True' %}
+        <a href="{{ url_for('inventario_view.nuevo_lote') if can_create else '#' }}" class="btn btn-primary {% if not can_create %}disabled{% endif %}">
             <i class="bi bi-plus-circle me-1"></i>
             Registrar Nuevo Lote
         </a>

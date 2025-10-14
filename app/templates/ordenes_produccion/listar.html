@@ -10,9 +10,11 @@
     </div>
     <div class="btn-toolbar">
         {# El botón de crear nueva orden está deshabilitado. Las órdenes se crean desde Planificación. #}
+        {% if has_permission('crear_ordenes_produccion') %}
         <a href="{{ url_for('orden_produccion.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
         </a>
+        {% endif %}
     </div>
 </div>
 
@@ -237,34 +239,42 @@
                     </a>
 
                     {% if orden.estado == 'PLANIFICADA' or orden.estado == 'APROBADA' %}
-                    <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
-                        data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
-                        <button type="submit" class="btn btn-sm btn-outline-success" title="Iniciar Orden">Iniciar
-                            <i class="bi bi-play-fill"></i>
-                        </button>
-                    </form>
+                        {% if has_permission('iniciar_produccion') %}
+                        <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+                            data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
+                            <button type="submit" class="btn btn-sm btn-outline-success" title="Iniciar Orden">Iniciar
+                                <i class="bi bi-play-fill"></i>
+                            </button>
+                        </form>
+                        {% endif %}
                     {% endif %}
                     {% if orden.estado == 'EN_PROCESO' %}
-                    <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;" class="confirm-form"
-                        data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
-                        <button type="submit" class="btn btn-sm btn-outline-success" title="Completar Orden">Completar
-                            <i class="bi bi-check-circle-fill"></i>
-                        </button>
-                    </form>
+                        {% if has_permission('pausar_produccion') %}
+                        <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+                            data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
+                            <button type="submit" class="btn btn-sm btn-outline-success" title="Completar Orden">Completar
+                                <i class="bi bi-check-circle-fill"></i>
+                            </button>
+                        </form>
+                        {% endif %}
                     {% endif %}
                     {% if orden.estado == 'PENDIENTE' %}
-                    <form method="POST" action="{{ url_for('orden_produccion.aprobar', id=orden.id) }}" style="display: inline;" class="confirm-form"
-                        data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de producción?" data-button-type="success">
-                        <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">Aprobar
-                            <i class="bi bi-check-circle"></i>
-                        </button>
-                    </form>
-                    <form method="POST" action="{{ url_for('orden_produccion.rechazar', id=orden.id) }}" style="display: inline;" class="confirm-form"
-                        data-title="Confirmar Rechazo" data-message="¿Está seguro de que desea rechazar esta orden de producción? Esta acción no se puede deshacer." data-button-type="danger">
-                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Rechazar Orden">Rechazar
-                            <i class="bi bi-x-circle"></i>
-                        </button>
-                    </form>
+                        {% if has_permission('aprobar_ordenes_produccion') %}
+                        <form method="POST" action="{{ url_for('orden_produccion.aprobar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+                            data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de producción?" data-button-type="success">
+                            <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">Aprobar
+                                <i class="bi bi-check-circle"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                        {% if has_permission('cancelar_ordenes_produccion') %}
+                        <form method="POST" action="{{ url_for('orden_produccion.rechazar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+                            data-title="Confirmar Rechazo" data-message="¿Está seguro de que desea rechazar esta orden de producción? Esta acción no se puede deshacer." data-button-type="danger">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Rechazar Orden">Rechazar
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </form>
+                        {% endif %}
                     {% endif %}
                 </div>
             </div>

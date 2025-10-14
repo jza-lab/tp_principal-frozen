@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function createAuthorizationCard(auth) {
         return `
             <div class="col-md-4 mb-4">
-                <div class="card">
+                <div class="card" data-auth-id="${auth.id}">
                     <div class="card-body">
                         <h5 class="card-title">${auth.usuario.nombre} ${auth.usuario.apellido}</h5>
                         <p class="card-text">
@@ -42,22 +42,63 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
+    function showFlashMessage(message, category) {
+        const container = document.getElementById('flash-container');
+        if (!container) return;
+
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${category} alert-dismissible fade show`;
+        alert.role = 'alert';
+        alert.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        container.appendChild(alert);
+
+        setTimeout(() => {
+            alert.classList.remove('show');
+            alert.addEventListener('transitionend', () => alert.remove());
+        }, 5000);
+    }
+
     window.updateAuthorization = function(id, estado) {
+        const card = document.querySelector(`.card[data-auth-id="${id}"]`);
         const comentario = document.getElementById(`comentario-${id}`).value;
+
         fetch(`/admin/autorizaciones/${id}/estado`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             },
             body: JSON.stringify({ estado, comentario })
         })
         .then(response => response.json())
         .then(result => {
             if (result.success) {
-                fetchAuthorizations();
+                showFlashMessage(result.message || 'Autorización actualizada.', 'success');
+                
+                // Actualizar la UI de la tarjeta
+                const actions = card.querySelector('.d-flex');
+                
+                // Crear el badge de estado
+                const statusBadge = document.createElement('span');
+                statusBadge.className = `badge bg-${estado === 'APROBADO' ? 'success' : 'danger'}`;
+                statusBadge.textContent = estado;
+
+                // Reemplazar los botones con el badge
+                actions.innerHTML = '';
+                actions.appendChild(statusBadge);
+
+                // Cambiar el estilo de la tarjeta
+                card.classList.add(estado === 'APROBADO' ? 'border-success' : 'border-danger');
+
             } else {
-                alert('Error al actualizar la autorización.');
+                showFlashMessage(result.error || 'Error al actualizar la autorización.', 'danger');
             }
+        })
+        .catch(() => {
+            showFlashMessage('Error de red al actualizar la autorización.', 'danger');
         });
     }
 

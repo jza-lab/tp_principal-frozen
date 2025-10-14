@@ -14,7 +14,7 @@ from app.controllers.inventario_controller import InventarioController
 from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
-from app.utils.decorators import roles_required
+from app.permisos import permission_required
 from app.utils.validators import validate_uuid
 from marshmallow import ValidationError
 import logging
@@ -34,9 +34,7 @@ usuario_controller = UsuarioController()
 
 
 @productos_bp.route("/catalogo/nuevo", methods=["GET", "POST"])
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(accion='crear_materias_primas')
 def crear_producto():
     try:
         if request.method == "POST":
@@ -59,23 +57,19 @@ def crear_producto():
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 @productos_bp.route("/catalogo", methods=["GET"])
-@roles_required(min_level=2, allowed_roles=["EMPLEADO"])
+@permission_required(accion='ver_materias_primas')
 def obtener_productos():
     try:
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
         
-        # Corregido: Desempaquetar la tupla de respuesta del controlador
         response, status = producto_controller.obtener_todos_los_productos(filtros)
         
-        # Asegurarse de que la respuesta fue exitosa antes de obtener los datos
         if status == 200:
             productos = response.get("data", [])
         else:
-            # Si hay un error, mostrar un mensaje y una lista vacía
             flash(response.get("error", "Error al cargar los productos."), "error")
             productos = []
 
-        # Obtener categorías distintas para el filtro
         categorias_response, _ = producto_controller.obtener_categorias_distintas()
         categorias = categorias_response.get("data", [])
         
@@ -86,13 +80,12 @@ def obtener_productos():
         )
     except Exception as e:
         logger.error(f"Error inesperado en obtener_productos: {str(e)}")
-        # En caso de una excepción grave, es mejor redirigir a una página de error o a la principal
         flash("Ocurrió un error inesperado al cargar la página de productos.", "error")
         return redirect(url_for('productos.obtener_productos'))
 
 
 @productos_bp.route("/catalogo/<int:id_producto>", methods=["GET"])
-@roles_required(min_level=2, allowed_roles=["EMPLEADO"])
+@permission_required(accion='ver_materias_primas')
 def obtener_producto_por_id(id_producto):
     try:
         producto= producto_controller.obtener_producto_por_id(id_producto)
@@ -100,7 +93,6 @@ def obtener_producto_por_id(id_producto):
         response_insumos, status_insumo = insumo_controller.obtener_insumos()
         insumos = response_insumos.get("data", [])
 
-        # Correctly fetch recipe and then its ingredients
         receta_items = []
         receta_response = receta_controller.model.db.table('recetas').select('id').eq('producto_id', id_producto).execute()
         if receta_response.data:
@@ -129,9 +121,7 @@ def obtener_producto_por_id(id_producto):
 @productos_bp.route(
     "/catalogo/actualizar/<int:id_producto>", methods=["GET", "PUT"]
 )
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(accion='modificar_materias_primas')
 def actualizar_producto(id_producto):
     try:
         if request.method == "PUT":
@@ -140,13 +130,11 @@ def actualizar_producto(id_producto):
                 return jsonify(
                     {"success": False, "error": "No se recibieron datos JSON válidos"}
                 ), 400
-            # Correctly unpack the response
             response, status = producto_controller.actualizar_producto(
                 id_producto, datos_json
             )
             return jsonify(response), status
 
-        # GET Request Logic
         producto = producto_controller.obtener_producto_por_id(id_producto)
         if not producto:
             flash("Producto no encontrado.", "error")
@@ -155,7 +143,6 @@ def actualizar_producto(id_producto):
         response_insumos, status_insumo = insumo_controller.obtener_insumos()
         insumos = response_insumos.get("data", [])
 
-        # Correctly fetch recipe and then its ingredients
         receta_items = []
         receta_response = receta_controller.model.db.table('recetas').select('id').eq('producto_id', id_producto).execute()
         if receta_response.data:
@@ -184,9 +171,7 @@ def actualizar_producto(id_producto):
 @productos_bp.route(
     "/catalogo/actualizar-precio/<string:id_producto>", methods=["GET","PUT"]
 )
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(accion='modificar_materias_primas')
 def actualizar_precio(id_producto):
     try:
         respuesta, status = producto_controller.actualizar_costo_producto(id_producto)
@@ -196,9 +181,7 @@ def actualizar_precio(id_producto):
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 @productos_bp.route("/catalogo/eliminar/<string:id_producto>", methods=["DELETE"])
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(accion='eliminar_materias_primas')
 def eliminar_producto(id_producto):
     try:
         response, status = producto_controller.eliminar_producto_logico(id_producto)
@@ -209,9 +192,7 @@ def eliminar_producto(id_producto):
 
 
 @productos_bp.route("/catalogo/habilitar/<string:id_producto>", methods=["POST"])
-@roles_required(
-    allowed_roles=["GERENTE", "SUPERVISOR", "COMERCIAL"]
-)
+@permission_required(accion='modificar_materias_primas')
 def habilitar_producto(id_producto):
     try:
         response, status = producto_controller.habilitar_producto(id_producto)

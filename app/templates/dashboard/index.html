@@ -8,9 +8,13 @@
 </div>
 
 <div class="row mb-4">
-    
+{% set can_ver_produccion = user_permissions.is_gerente or ('PRODUCCION' in user_permissions and 'ver_ordenes_produccion' in user_permissions['PRODUCCION']) %}
+{% set can_ver_almacen = user_permissions.is_gerente or ('ALMACEN' in user_permissions and 'ver_stock_actual' in user_permissions['ALMACEN']) %}
+{% set can_ver_admin = user_permissions.is_gerente or ('ADMINISTRACION' in user_permissions and ('ver_info_empleados' in user_permissions['ADMINISTRACION'] or 'gestionar_turnos' in user_permissions['ADMINISTRACION'])) %}
+
+<div class="row mb-4">
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card h-100">
+        <div class="card stat-card h-100 {% if not can_ver_produccion %}disabled{% endif %}">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
@@ -27,8 +31,8 @@
     </div>
 
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card h-100">
-            <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
+        <div class="card stat-card h-100 {% if not can_ver_produccion %}disabled{% endif %}">
+            <a href="{{ url_for('lote_producto.listar_lotes') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         {% if productos_sin_lotes_count == 0 %}
@@ -68,8 +72,8 @@
     </div>
 
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card h-100">
-            <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" style="text-decoration: none;">
+        <div class="card stat-card h-100 {% if not can_ver_almacen %}disabled{% endif %}">
+            <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') if can_ver_almacen else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_almacen else 'false' }}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         {% if alertas_stock_count == 0 %}
@@ -111,7 +115,7 @@
     </div>
 
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card h-100">
+        <div class="card stat-card h-100 {% if not can_ver_admin %}disabled{% endif %}">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
@@ -132,13 +136,13 @@
 
 <div class="row">
     <div class="col-lg-8 mb-4">
-        <div class="card h-100">
+        <div class="card h-100 {% if not can_ver_produccion %}disabled{% endif %}">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
                     <i class="bi bi-clock-history text-primary me-2"></i>
                     Órdenes de Producción Aprobadas
                 </h5>
-                <a href="{{ url_for('orden_produccion.listar') }}" class="btn btn-outline-primary btn-sm">
+                <a href="{{ url_for('orden_produccion.listar') if can_ver_produccion else '#' }}" class="btn btn-outline-primary btn-sm {% if not can_ver_produccion %}disabled{% endif %}" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
                     Ver todas
                 </a>
             </div>
@@ -146,7 +150,7 @@
                 {% if ordenes_aprobadas %}
                 <div class="list-group list-group-flush">
                     {% for orden in ordenes_aprobadas %}
-                    <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" class="list-group-item list-group-item-action py-3 d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('orden_produccion.detalle', id=orden.id) if can_ver_produccion else '#' }}" class="list-group-item list-group-item-action py-3 d-flex justify-content-between align-items-center {% if not can_ver_produccion %}disabled{% endif %}" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
                         
                         <div class="me-3" style="flex-grow: 1;">
                             <h6 class="mb-1 fw-bold text-truncate">{{ orden.producto_nombre or 'Producto no definido' }}</h6>
@@ -168,7 +172,7 @@
                                 style="display: inline;" class="confirm-form" data-title="Confirmar Inicio"
                                 data-message="¿Está seguro de que desea iniciar esta orden de producción?"
                                 data-button-type="success">
-                                <button type="submit" class="btn btn-sm btn-success shadow-sm" title="Iniciar Orden" style="min-width: 80px;">
+                                <button type="submit" class="btn btn-sm btn-success shadow-sm" title="Iniciar Orden" style="min-width: 80px;" {% if not can_ver_produccion %}disabled{% endif %}>
                                     <i class="bi bi-play-fill"></i> Iniciar
                                 </button>
                             </form>
@@ -230,19 +234,19 @@
             </div>
             <div class="card-body">
                 <div class="list-group list-group-flush small">
-                    <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') if can_ver_almacen else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center {% if not can_ver_almacen %}disabled{% endif %}" aria-disabled="{{ 'true' if not can_ver_almacen else 'false' }}">
                         <span class="text-muted">Insumos Críticos con Stock Bajo:</span>
                         <span class="badge bg-{{ 'danger' if alertas_stock_count > 0 else 'success' }} rounded-pill">
                             {{ alertas_stock_count }}
                         </span>
                     </a>
-                    <a href="{{ url_for('lote_producto.listar_lotes') }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('lote_producto.listar_lotes') if can_ver_produccion else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center {% if not can_ver_produccion %}disabled{% endif %}" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
                         <span class="text-muted">Productos sin Lotes (Producción Requerida):</span>
                         <span class="badge bg-{{ 'danger' if productos_sin_lotes_count > 0 else 'success' }} rounded-pill">
                             {{ productos_sin_lotes_count }}
                         </span>
                     </a>
-                    <div class="list-group-item p-2 d-flex justify-content-between align-items-center">
+                    <div class="list-group-item p-2 d-flex justify-content-between align-items-center {% if not can_ver_admin %}disabled{% endif %}">
                         <span class="text-muted">Asistencia Hoy (&lt;80%):</span>
                         <span class="badge bg-{{ 'danger' if asistencia < 80 else 'success' }} rounded-pill">
                             {{ asistencia }}%

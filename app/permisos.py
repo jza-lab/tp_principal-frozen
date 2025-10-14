@@ -1,142 +1,62 @@
 from functools import wraps
 from flask import session, flash, redirect, url_for
-from app.models.permisos import PermisosModel
-from app.models.sector import SectorModel
-from app.models.usuario_sector import UsuarioSectorModel
 from app.utils.roles import get_redirect_url_by_role
+from app.utils.permission_map import get_allowed_roles_for_action
 
-def permission_required(sector_codigo: str, accion: str):
+def permission_required(accion: str):
     """
-    Decorator que verifica si un usuario tiene permiso para una acción en un sector.
-    Realiza una doble verificación:
-    1. El ROL del usuario tiene el permiso para esa acción en ese sector.
-    2. El USUARIO específico está asignado a ese sector.
+    Decorator que verifica si un usuario tiene permiso para una acción.
+    Utiliza el mapa canónico de permisos para determinar qué ROLES pueden realizar la acción,
+    y luego comprueba el ROL del usuario en sesión contra esa lista.
     """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            # 1. Verificar login básico
-            if 'usuario_id' not in session or 'rol_id' not in session or 'rol' not in session:
+            if 'usuario_id' not in session or 'rol' not in session:
                 flash('Acceso no autorizado. Por favor, inicie sesión.', 'error')
                 return redirect(url_for('auth.login'))
 
-            # 2. Obtener datos de la sesión
-            usuario_id = session.get('usuario_id')
-            role_id = session.get('rol_id')
             user_role_code = session.get('rol')
-
-            # 3. Acceso universal para GERENTE
-            if user_role_code == 'GERENTE':
+            if user_role_code == 'GERENTE_GENERAL': # El Gerente General tiene acceso a todo
                 return f(*args, **kwargs)
 
-            # 4. Obtener ID del sector
-            sector_model = SectorModel()
-            sector_result = sector_model.find_by_codigo(sector_codigo)
-            if not sector_result.get('success') or not sector_result.get('data'):
-                flash(f'Error de configuración: El sector "{sector_codigo}" no existe.', 'error')
-                return redirect(get_redirect_url_by_role(user_role_code))
-            sector_id = sector_result['data']['id']
+            allowed_roles = get_allowed_roles_for_action(accion)
 
-            # 5. VERIFICACIÓN DE PERMISO DEL ROL
-            permission_model = PermisosModel()
-            rol_tiene_permiso = permission_model.check_permission(role_id, sector_id, accion)
-            if not rol_tiene_permiso:
-                flash(f'Su rol no tiene permisos para "{accion}" en el sector de {sector_codigo}.', 'error')
+            if not allowed_roles:
+                # Si la acción no está en el mapa, denegar por seguridad.
+                flash(f'Acceso denegado. La acción "{accion}" no está configurada en el mapa de permisos.', 'error')
                 return redirect(get_redirect_url_by_role(user_role_code))
 
-            # 6. VERIFICACIÓN DE ASIGNACIÓN DEL USUARIO AL SECTOR
-            usuario_sector_model = UsuarioSectorModel()
-            usuario_asignado_al_sector = usuario_sector_model.check_user_sector_assignment(usuario_id, sector_id)
-            if not usuario_asignado_al_sector:
-                flash(f'No tiene acceso al sector de {sector_codigo}. Contacte a un administrador.', 'error')
+            if user_role_code not in allowed_roles:
+                flash(f'Su rol ({user_role_code}) no tiene los permisos necesarios ({accion}) para acceder a esta sección.', 'error')
                 return redirect(get_redirect_url_by_role(user_role_code))
 
-            # 7. Si ambas verificaciones pasan, continuar.
             return f(*args, **kwargs)
         return decorated_function
     return decorator
 
-def admin_permission_any_of(*actions):
+def permission_any_of(*actions):
     """
-    Decorator para funciones administrativas que requieren al menos UNO de varios permisos.
-    Verifica que el rol del usuario tenga al menos uno de los permisos especificados 
-    en el sector 'ADMINISTRACION'.
+    Decorator que verifica si el rol tiene al menos UNO de varios permisos.
     """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            if 'rol_id' not in session or 'rol' not in session:
+            if 'rol' not in session:
                 flash('Acceso no autorizado. Por favor, inicie sesión.', 'error')
                 return redirect(url_for('auth.login'))
 
-            role_id = session.get('rol_id')
             user_role_code = session.get('rol')
-
-            if user_role_code == 'GERENTE':
+            if user_role_code == 'GERENTE_GENERAL':
                 return f(*args, **kwargs)
 
-            sector_model = SectorModel()
-            sector_result = sector_model.find_by_codigo('ADMINISTRACION')
-            if not sector_result.get('success') or not sector_result.get('data'):
-                flash('Error de configuración: El sector "ADMINISTRACION" no existe.', 'error')
-                return redirect(get_redirect_url_by_role(user_role_code))
-            admin_sector_id = sector_result['data']['id']
-
-            permission_model = PermisosModel()
-            
-            # Verificar si el rol tiene AL MENOS UNO de los permisos requeridos
-            has_any_permission = any(
-                permission_model.check_permission(role_id, admin_sector_id, action)
-                for action in actions
-            )
+            has_any_permission = any(user_role_code in get_allowed_roles_for_action(action) for action in actions)
 
             if not has_any_permission:
                 action_str = " o ".join(f'"{a}"' for a in actions)
-                flash(f'Su rol no tiene los permisos necesarios ({action_str}).', 'error')
+                flash(f'Su rol ({user_role_code}) no tiene los permisos necesarios ({action_str}).', 'error')
                 return redirect(get_redirect_url_by_role(user_role_code))
 
-            return f(*args, **kwargs)
-        return decorated_function
-    return decorator
-
-def admin_permission_required(accion: str):
-    """
-    Decorator para funciones administrativas.
-    Verifica que el rol del usuario tenga el permiso especificado en el sector 'ADMINISTRACION'.
-    NO verifica la asignación del usuario a dicho sector, ya que son permisos de rol.
-    """
-    def decorator(f):
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            # 1. Verificar login básico
-            if 'rol_id' not in session or 'rol' not in session:
-                flash('Acceso no autorizado. Por favor, inicie sesión.', 'error')
-                return redirect(url_for('auth.login'))
-
-            # 2. Obtener datos de la sesión
-            role_id = session.get('rol_id')
-            user_role_code = session.get('rol')
-
-            # 3. Acceso universal para GERENTE
-            if user_role_code == 'GERENTE':
-                return f(*args, **kwargs)
-
-            # 4. Obtener ID del sector 'ADMINISTRACION'
-            sector_model = SectorModel()
-            sector_result = sector_model.find_by_codigo('ADMINISTRACION')
-            if not sector_result.get('success') or not sector_result.get('data'):
-                flash('Error de configuración: El sector "ADMINISTRACION" no existe.', 'error')
-                return redirect(get_redirect_url_by_role(user_role_code))
-            admin_sector_id = sector_result['data']['id']
-
-            # 5. VERIFICACIÓN DE PERMISO DEL ROL
-            permission_model = PermisosModel()
-            rol_tiene_permiso = permission_model.check_permission(role_id, admin_sector_id, accion)
-            if not rol_tiene_permiso:
-                flash(f'Su rol no tiene permisos para "{accion}".', 'error')
-                return redirect(get_redirect_url_by_role(user_role_code))
-
-            # 6. Si la verificación pasa, continuar.
             return f(*args, **kwargs)
         return decorated_function
     return decorator

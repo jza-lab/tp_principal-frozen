@@ -6,8 +6,8 @@ from app.controllers.facial_controller import FacialController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.notificación_controller import NotificacionController
 from app.controllers.inventario_controller import InventarioController
-from app.permisos import admin_permission_required, admin_permission_any_of
-from app.models.autorizacion_ingreso import AutorizacionIngresoModel
+from app.permisos import permission_required, permission_any_of
+from app.controllers.autorizacion_controller import AutorizacionController
 from app.controllers.lote_producto_controller import LoteProductoController
 
 # Blueprint para la administración de usuarios
@@ -17,13 +17,13 @@ admin_usuario_bp = Blueprint('admin_usuario', __name__, url_prefix='/admin')
 usuario_controller = UsuarioController()
 facial_controller = FacialController()
 orden_produccion_controller=OrdenProduccionController()
-autorizacion_model = AutorizacionIngresoModel()
+autorizacion_controller = AutorizacionController()
 notificacion_controller = NotificacionController()
 inventario_controller = InventarioController()
 lote_producto_controller = LoteProductoController()
 
 @admin_usuario_bp.route('/')
-@admin_permission_required(accion='leer')
+@permission_required(accion='ver_dashboard')
 def index():
     hoy = date.today()
 
@@ -79,6 +79,8 @@ def index():
     data_sin_lotes = productos_sin_lotes_resp.get('data', {})
     productos_sin_lotes_count = data_sin_lotes.get('conteo_sin_lotes', 0) 
     productos_sin_lotes_list = data_sin_lotes.get('productos_sin_lotes', [])
+    
+    user_permissions = session.get('permisos', {})
 
     return render_template('dashboard/index.html', asistencia=asistencia,
                             ordenes_pendientes = ordenes_pendientes,
@@ -88,10 +90,11 @@ def index():
                             alertas_stock_count=alertas_stock_count,
                             insumos_bajo_stock_list=insumos_bajo_stock_list,
                             productos_sin_lotes_count=productos_sin_lotes_count,
-                            productos_sin_lotes_list=productos_sin_lotes_list) 
+                            productos_sin_lotes_list=productos_sin_lotes_list,
+                            user_permissions=user_permissions)
 
 @admin_usuario_bp.route('/usuarios')
-@admin_permission_required(accion='leer')
+@permission_any_of('ver_info_empleados', 'modificar_usuarios', 'crear_usuarios')
 def listar_usuarios():
     """Muestra la lista de todos los usuarios del sistema."""
     usuarios = usuario_controller.obtener_todos_los_usuarios()
@@ -100,7 +103,7 @@ def listar_usuarios():
     return render_template('usuarios/listar.html', usuarios=usuarios, turnos=turnos, sectores=sectores)
 
 @admin_usuario_bp.route('/usuarios/<int:id>')
-@admin_permission_required(accion='leer')
+@permission_any_of('ver_info_empleados', 'modificar_usuarios')
 def ver_perfil(id):
     """Muestra el perfil de un usuario específico, incluyendo su dirección."""
     usuario = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)
@@ -137,7 +140,7 @@ def ver_perfil(id):
                            turnos_disponibles=turnos_disponibles)
 
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
-@admin_permission_required(accion='crear')
+@permission_required(accion='crear_usuarios')
 def nuevo_usuario():
     """
     Gestiona la creación de un nuevo usuario, incluyendo la asignación de sectores.
@@ -217,7 +220,7 @@ def nuevo_usuario():
                          usuario_sectores_ids=[])
 
 @admin_usuario_bp.route('/usuarios/<int:id>/editar', methods=['GET', 'POST'])
-@admin_permission_required(accion='actualizar')
+@permission_any_of('modificar_usuarios', 'modificar_info_empleados')
 def editar_usuario(id):
     """
     Gestiona la edición de un usuario. Responde con JSON a peticiones AJAX
@@ -310,7 +313,7 @@ def editar_usuario(id):
                          usuario_sectores_ids=usuario_sectores_ids)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/eliminar', methods=['POST'])
-@admin_permission_required(accion='eliminar')
+@permission_required(accion='inactivar_usuarios')
 def eliminar_usuario(id):
     if session.get('usuario_id') == id:
         msg = 'No puedes desactivar tu propia cuenta.'
@@ -330,7 +333,7 @@ def eliminar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/usuarios/<int:id>/habilitar', methods=['POST'])
-@admin_permission_required(accion='actualizar')
+@permission_any_of('modificar_usuarios', 'inactivar_usuarios')
 def habilitar_usuario(id):
     """Reactiva un usuario."""
     resultado = usuario_controller.habilitar_usuario(id)
@@ -341,7 +344,7 @@ def habilitar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/usuarios/actividad_totem', methods=['GET'])
-@admin_permission_required(accion='leer')
+@permission_any_of('registrar_asistencias', 'ver_reportes_basicos')
 def obtener_actividad_totem():
     """
     Devuelve una lista en formato JSON de la actividad del tótem (ingresos/egresos) de hoy.
@@ -358,7 +361,7 @@ def obtener_actividad_totem():
         return jsonify(success=False, error=resultado.get('error', 'Error al obtener la actividad del tótem')), 500
 
 @admin_usuario_bp.route('/usuarios/actividad_web', methods=['GET'])
-@admin_permission_required(accion='leer')
+@permission_any_of('registrar_asistencias', 'ver_reportes_basicos')
 def obtener_actividad_web():
     """
     Devuelve una lista en formato JSON de los usuarios que iniciaron sesión en la web hoy.
@@ -375,7 +378,7 @@ def obtener_actividad_web():
         return jsonify(success=False, error=resultado.get('error', 'Error al obtener la actividad web')), 500
 
 @admin_usuario_bp.route('/usuarios/validar', methods=['POST'])
-@admin_permission_any_of('crear', 'actualizar')
+@permission_any_of('crear_usuarios', 'modificar_usuarios', 'modificar_info_empleados')
 def validar_campo():
     """
     Valida de forma asíncrona si un campo (legajo, email, etc.) ya existe,
@@ -394,7 +397,7 @@ def validar_campo():
     return jsonify(resultado)
 
 @admin_usuario_bp.route('/usuarios/validar_rostro', methods=['POST'])
-@admin_permission_required(accion='crear')
+@permission_required(accion='crear_usuarios')
 def validar_rostro():
     """
     Valida si el rostro en la imagen es válido y no está duplicado.
@@ -420,7 +423,7 @@ def validar_rostro():
         })
 
 @admin_usuario_bp.route('/usuarios/verificar_direccion', methods=['POST'])
-@admin_permission_required(accion='crear')
+@permission_any_of('crear_usuarios', 'modificar_usuarios', 'modificar_info_empleados')
 def verificar_direccion():
     """
     Verifica una dirección en tiempo real usando la API de Georef.
@@ -449,7 +452,7 @@ def verificar_direccion():
     return jsonify(resultado)
 
 @admin_usuario_bp.route('/autorizaciones/nueva', methods=['GET', 'POST'])
-@admin_permission_required(accion='crear')
+@permission_required(accion='aprobar_permisos')
 def nueva_autorizacion():
     """
     Muestra el formulario para crear una nueva autorización de ingreso y la procesa.
@@ -462,7 +465,7 @@ def nueva_autorizacion():
         data['usuario_id'] = int(data['usuario_id'])
         data['turno_autorizado_id'] = int(data['turno_autorizado_id']) if data.get('turno_autorizado_id') else None
         
-        resultado = autorizacion_model.create(data)
+        resultado = autorizacion_controller.crear_autorizacion(data)
 
         if resultado.get('success'):
             flash('Autorización creada exitosamente.', 'success')
@@ -485,12 +488,12 @@ def nueva_autorizacion():
                          autorizacion={})
 
 @admin_usuario_bp.route('/autorizaciones', methods=['GET'])
-@admin_permission_required(accion='leer')
+@permission_required(accion='aprobar_permisos')
 def listar_autorizaciones():
     """
     Obtiene todas las autorizaciones de ingreso pendientes.
     """
-    resultado = autorizacion_model.find_all_pending()
+    resultado = autorizacion_controller.obtener_autorizaciones_pendientes()
     if resultado.get('success'):
         return jsonify(success=True, data=resultado.get('data', []))
     else:
@@ -500,7 +503,7 @@ def listar_autorizaciones():
         return jsonify(success=False, error=resultado.get('error', 'Error al obtener las autorizaciones.')), 500
 
 @admin_usuario_bp.route('/autorizaciones/<int:id>/estado', methods=['POST'])
-@admin_permission_required(accion='actualizar')
+@permission_required(accion='aprobar_permisos')
 def actualizar_estado_autorizacion(id):
     """
     Actualiza el estado de una autorización de ingreso (APROBADO o RECHAZADO).
@@ -512,7 +515,7 @@ def actualizar_estado_autorizacion(id):
     if not nuevo_estado or nuevo_estado not in ['APROBADO', 'RECHAZADO']:
         return jsonify(success=False, error='Estado no válido.'), 400
 
-    resultado = autorizacion_model.update_estado(id, nuevo_estado, comentario)
+    resultado = autorizacion_controller.actualizar_estado_autorizacion(id, nuevo_estado, comentario)
 
     if resultado.get('success'):
         return jsonify(success=True, message='Autorización actualizada exitosamente.')

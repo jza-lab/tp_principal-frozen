@@ -59,19 +59,25 @@
 
         <!-- Barra de Acción (Modo Vista) -->
         <div class="profile-action-bar" id="action-bar-view">
+            {% if has_permission('modificar_usuarios') %}
             <button class="btn btn-primary btn-action" id="btn-edit-mode">
                 <i class="bi bi-pencil-square me-2"></i>Editar Información
             </button>
+            {% endif %}
             {% if usuario.activo %}
+                {% if has_permission('inactivar_usuarios') %}
                 <button class="btn btn-outline-danger btn-action" onclick="showDeactivateModal()">
                     <i class="bi bi-person-x me-2"></i>Desactivar Empleado
                 </button>
+                {% endif %}
             {% else %}
+                {% if has_permission('modificar_usuarios') %}
                 <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="d-inline">
                     <button type="submit" class="btn btn-outline-success btn-action">
                         <i class="bi bi-person-check me-2"></i>Activar Empleado
                     </button>
                 </form>
+                {% endif %}
             {% endif %}
         </div>
 

@@ -22,3 +22,16 @@ class UsuarioTurnoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error al buscar todos los turnos: {e}", exc_info=True)
             return {'success': False, 'error': f"Error en la base de datos: {e}"}
+
+    def find_by_id(self, turno_id: int):
+        """
+        Busca un turno por su ID.
+        """
+        try:
+            response = self.db.table(self.table_name).select("*").eq("id", turno_id).execute()
+            if response.data:
+                return {'success': True, 'data': response.data[0]}
+            return {'success': False, 'error': 'Turno no encontrado.'}
+        except Exception as e:
+            logger.error(f"Error al buscar turno por ID {turno_id}: {e}", exc_info=True)
+            return {'success': False, 'error': f"Error en la base de datos: {e}"}

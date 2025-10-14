@@ -35,8 +35,8 @@
                 <div class="mb-3">
                     <label for="tipo" class="form-label">Tipo de Autorización</label>
                     <select class="form-select" id="tipo" name="tipo" required>
-                        <option value="TURNO_ESPECIAL" {% if not autorizacion.tipo or autorizacion.tipo == 'TURNO_ESPECIAL' %}selected{% endif %}>Turno Especial</option>
-                        <option value="TARDANZA" {% if autorizacion.tipo == 'TARDANZA' %}selected{% endif %}>Llegada Tarde</option>
+                        <option value="LLEGADA_TARDIA" {% if not autorizacion.tipo or autorizacion.tipo == 'LLEGADA_TARDIA' %}selected{% endif %}>Llegada Tarde</option>
+                        <option value="HORAS_EXTRAS" {% if autorizacion.tipo == 'HORAS_EXTRAS' %}selected{% endif %}>Horas Extras</option>
                     </select>
                 </div>
 
@@ -71,4 +71,101 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const fechaInput = document.getElementById('fecha_autorizada');
+    const tipoInput = document.getElementById('tipo');
+    const turnoInput = document.getElementById('turno_autorizado_id');
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    // --- Error Div for Fecha ---
+    const fechaErrorDiv = document.createElement('div');
+    fechaErrorDiv.className = 'invalid-feedback';
+    fechaInput.parentNode.insertBefore(fechaErrorDiv, fechaInput.nextSibling);
+
+    // --- Error Div for Turno/Tipo ---
+    const turnoErrorDiv = document.createElement('div');
+    turnoErrorDiv.className = 'invalid-feedback';
+    turnoInput.parentNode.insertBefore(turnoErrorDiv, turnoInput.nextSibling);
+
+    let isFechaValid = true;
+    let isTurnoValid = true;
+
+    function updateSubmitButtonState() {
+        submitButton.disabled = !isFechaValid || !isTurnoValid;
+    }
+
+    function validateFecha() {
+        const selectedDateStr = fechaInput.value;
+        if (!selectedDateStr) {
+            fechaInput.classList.remove('is-invalid');
+            fechaErrorDiv.style.display = 'none';
+            isFechaValid = true; 
+            updateSubmitButtonState();
+            return;
+        }
+
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const todayStr = `${year}-${month}-${day}`;
+
+        if (selectedDateStr < todayStr) {
+            fechaInput.classList.add('is-invalid');
+            fechaErrorDiv.textContent = 'La fecha no puede ser anterior a la actual.';
+            fechaErrorDiv.style.display = 'block';
+            isFechaValid = false;
+        } else if (selectedDateStr > todayStr) {
+            fechaInput.classList.add('is-invalid');
+            fechaErrorDiv.textContent = 'La fecha no puede ser posterior a la actual.';
+            fechaErrorDiv.style.display = 'block';
+            isFechaValid = false;
+        } else {
+            fechaInput.classList.remove('is-invalid');
+            fechaErrorDiv.style.display = 'none';
+            isFechaValid = true;
+        }
+        updateSubmitButtonState();
+    }
+
+    function validateTurnoYTipo() {
+        const tipoValue = tipoInput.value;
+        const selectedTurnoOption = turnoInput.options[turnoInput.selectedIndex];
+        
+        if (!selectedTurnoOption || !selectedTurnoOption.text) {
+             turnoInput.classList.remove('is-invalid');
+             turnoErrorDiv.style.display = 'none';
+             isTurnoValid = true;
+             updateSubmitButtonState();
+             return;
+        }
+
+        const turnoText = selectedTurnoOption.text.toLowerCase();
+
+        if (tipoValue === 'HORAS_EXTRAS' && turnoText.includes('tarde')) {
+            turnoInput.classList.add('is-invalid');
+            turnoErrorDiv.textContent = 'No se pueden autorizar horas extras para el turno tarde.';
+            turnoErrorDiv.style.display = 'block';
+            isTurnoValid = false;
+        } else {
+            turnoInput.classList.remove('is-invalid');
+            turnoErrorDiv.style.display = 'none';
+            isTurnoValid = true;
+        }
+        updateSubmitButtonState();
+    }
+
+    fechaInput.addEventListener('input', validateFecha);
+    tipoInput.addEventListener('input', validateTurnoYTipo);
+    turnoInput.addEventListener('input', validateTurnoYTipo);
+
+    validateFecha();
+    validateTurnoYTipo();
+});
+</script>
 {% endblock %}

@@ -11,12 +11,11 @@ orden_produccion_controller = OrdenProduccionController()
 pedido_model = PedidoModel()
 
 @planificacion_bp.route('/')
-@permission_required(sector_codigo='PRODUCCION', accion='leer')
+@permission_required(accion='ver_ordenes_produccion')
 def index():
     """
     Muestra los items de pedidos pendientes de planificación.
     """
-    # Filtramos los items que están 'PENDIENTE' y no tienen una orden de producción asignada.
     items_result = pedido_model.find_all_items(filters={
         'estado': ('eq', 'PENDIENTE'),
         'orden_produccion_id': ('is', 'null')
@@ -31,7 +30,7 @@ def index():
     return render_template('planificacion/index.html', items=items)
 
 @planificacion_bp.route('/crear_orden', methods=['POST'])
-@permission_required(sector_codigo='PRODUCCION', accion='crear')
+@permission_required(accion='crear_ordenes_produccion')
 def crear_orden():
     """
     Crea órdenes de producción a partir de los items de pedido seleccionados.
@@ -41,10 +40,8 @@ def crear_orden():
         flash('No se seleccionó ningún ítem para planificar.', 'warning')
         return redirect(url_for('planificacion.index'))
 
-    # Convertir IDs a enteros
     selected_items_ids = [int(id) for id in selected_items_ids]
 
-    # Obtener los detalles completos de los items seleccionados
     items_result = pedido_model.find_all_items(filters={'id': ('in', selected_items_ids)})
     if not items_result.get('success'):
         flash('Error al obtener los detalles de los ítems seleccionados.', 'error')
@@ -52,7 +49,6 @@ def crear_orden():
 
     all_items = items_result['data']
 
-    # Agrupar items por producto_id
     all_items.sort(key=itemgetter('producto_id'))
     grouped_items = {k: list(v) for k, v in groupby(all_items, key=itemgetter('producto_id'))}
 
@@ -64,7 +60,6 @@ def crear_orden():
     ordenes_creadas = 0
     errores = []
 
-    # Crear una orden de producción por cada grupo de producto
     for producto_id, items_del_producto in grouped_items.items():
         item_ids_del_producto = [item['id'] for item in items_del_producto]
 
