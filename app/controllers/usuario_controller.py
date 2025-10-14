@@ -683,16 +683,17 @@ class UsuarioController(BaseController):
                 inicio_permitido = (dt_inicio - timedelta(minutes=15)).time()
                 fin_permitido = (dt_inicio + timedelta(minutes=15)).time()
 
-                if fin_permitido < inicio_permitido:
+                if fin_permitido < inicio_permitido: # Turno transnoche
                     if hora_actual >= inicio_permitido or hora_actual <= fin_permitido:
                         return {'success': True}
-                else:
+                else: # Turno normal
                     if inicio_permitido <= hora_actual <= fin_permitido:
                         return {'success': True}
             except (ValueError, TypeError):
-                pass
+                logger.warning(f"No se pudo parsear la hora de inicio del turno para el usuario {usuario.get('legajo')}")
+                pass # Continuar para verificar autorizaciones
 
-        # 2. Si se está fuera de la ventana, buscar autorizaciones
+        # 2. Si se está fuera de la ventana, buscar autorizaciones APROBADAS para hoy
         usuario_id = usuario.get('id')
         hoy = datetime.today().date()
         auth_result = autorizacion_model.find_by_usuario_and_fecha(usuario_id, hoy, estado='APROBADA')
@@ -700,34 +701,46 @@ class UsuarioController(BaseController):
         if not auth_result.get('success'):
             return {'success': False, 'error': 'Fichaje fuera de horario. Se requiere una autorización.'}
 
-        # auth_result['data'] ahora es una lista de autorizaciones
-        for autorizacion in auth_result['data']:
+        # 3. Iterar sobre las autorizaciones y aplicar la lógica correcta para cada tipo
+        for autorizacion in auth_result.get('data', []):
             auth_turno = autorizacion.get('turno')
             auth_tipo = autorizacion.get('tipo')
 
-            if not auth_turno or 'hora_inicio' not in auth_turno or 'hora_fin' not in auth_turno:
+            if not all(k in auth_turno for k in ['hora_inicio', 'hora_fin']):
+                logger.warning(f"Autorización ID {autorizacion.get('id')} para usuario {usuario_id} no tiene horas de turno válidas.")
                 continue
 
             try:
                 auth_inicio = datetime.strptime(auth_turno['hora_inicio'], '%H:%M:%S').time()
                 auth_fin = datetime.strptime(auth_turno['hora_fin'], '%H:%M:%S').time()
 
-                inicio_ventana = (datetime.combine(date.today(), auth_inicio) - timedelta(minutes=15)).time() if auth_tipo == 'HORAS_EXTRAS' else auth_inicio
-                fin_ventana = auth_fin
+                # Lógica específica por tipo de autorización
+                if auth_tipo == 'LLEGADA_TARDIA':
+                    # Válido desde el inicio del turno autorizado hasta el fin del mismo
+                    if auth_inicio <= hora_actual <= auth_fin:
+                        logger.info(f"Acceso permitido para {usuario.get('legajo')} por autorización de LLEGADA_TARDIA.")
+                        return {'success': True}
+                
+                elif auth_tipo == 'HORAS_EXTRAS':
+                    # Válido desde 15 mins antes del inicio de las horas extras hasta el fin de las mismas
+                    inicio_ventana_he = (datetime.combine(date.today(), auth_inicio) - timedelta(minutes=15)).time()
+                    fin_ventana_he = auth_fin
 
-                # Lógica para turnos que cruzan la medianoche (ej. 22:00 a 06:00)
-                if fin_ventana < inicio_ventana:
-                    if hora_actual >= inicio_ventana or hora_actual <= fin_ventana:
-                        logger.info(f"Acceso permitido para {usuario.get('legajo')} por autorización de tipo '{auth_tipo}' en turno transnoche.")
-                        return {'success': True}
-                # Lógica para turnos en el mismo día
-                else:
-                    if inicio_ventana <= hora_actual <= fin_ventana:
-                        logger.info(f"Acceso permitido para {usuario.get('legajo')} por autorización de tipo '{auth_tipo}'.")
-                        return {'success': True}
+                    if fin_ventana_he < inicio_ventana_he: # Horas extras transnoche
+                        if hora_actual >= inicio_ventana_he or hora_actual <= fin_ventana_he:
+                            logger.info(f"Acceso permitido para {usuario.get('legajo')} por autorización de HORAS_EXTRAS (transnoche).")
+                            return {'success': True}
+                    else: # Horas extras en el mismo día
+                        if inicio_ventana_he <= hora_actual <= fin_ventana_he:
+                            logger.info(f"Acceso permitido para {usuario.get('legajo')} por autorización de HORAS_EXTRAS.")
+                            return {'success': True}
+                
+                # Puedes añadir más tipos de autorización aquí si es necesario
+                # elif auth_tipo == 'SALIDA_ANTICIPADA': ...
 
             except (ValueError, TypeError) as e:
                 logger.warning(f"Error al procesar turno de autorización para {usuario.get('legajo')}: {e}")
                 continue
-
-        return {'success': False, 'error': 'Ninguna de sus autorizaciones es válida para este horario.'}
+        
+        # 4. Si ninguna autorización coincide
+        return {'success': False, 'error': 'Fichaje fuera de horario y sin autorización válida para este momento.'}

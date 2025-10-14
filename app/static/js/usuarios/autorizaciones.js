@@ -117,9 +117,31 @@ document.addEventListener('DOMContentLoaded', function() {
     window.updateAuthorization = function(id, estado) {
         const comentario = document.getElementById(`comentario-${id}`).value;
         const actionText = estado === 'APROBADO' ? 'aprobar' : 'rechazar';
-        const confirmation = confirm(`¿Estás seguro de que quieres ${actionText} esta autorización?`);
+        
+        const confirmationModal = new bootstrap.Modal(document.getElementById('confirmationModal'));
+        const modalTitle = document.getElementById('confirmationModalLabel');
+        const modalText = document.getElementById('confirmationModalText');
+        const confirmBtn = document.getElementById('confirmActionBtn');
 
-        if (confirmation) {
+        modalTitle.textContent = `Confirmar ${estado === 'APROBADO' ? 'Aprobación' : 'Rechazo'}`;
+        modalText.textContent = `¿Estás seguro de que quieres ${actionText} esta autorización?`;
+        
+        // Clases del botón de confirmación
+        if (estado === 'APROBADO') {
+            confirmBtn.classList.remove('btn-danger');
+            confirmBtn.classList.add('btn-success');
+            confirmBtn.textContent = 'Aprobar';
+        } else {
+            confirmBtn.classList.remove('btn-success');
+            confirmBtn.classList.add('btn-danger');
+            confirmBtn.textContent = 'Rechazar';
+        }
+
+        // Usamos .off('click').on('click') o .replaceWith para evitar listeners duplicados
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+        
+        newConfirmBtn.addEventListener('click', function() {
             fetch(`/admin/autorizaciones/${id}/estado`, {
                 method: 'POST',
                 headers: {
@@ -139,8 +161,13 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(() => {
                 showFlashMessage('Error de red al actualizar la autorización.', 'danger');
+            })
+            .finally(() => {
+                confirmationModal.hide();
             });
-        }
+        });
+
+        confirmationModal.show();
     }
 
     // Carga inicial
