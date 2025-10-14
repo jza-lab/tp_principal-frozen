@@ -26,7 +26,7 @@ class AutorizacionController(BaseController):
             return {'success': False, 'error': 'Formato de fecha inválido.'}
 
         turno_id = data.get('turno_autorizado_id')
-        if not turno_id:
+        if not turno_id: 
             return {'success': False, 'error': 'Debe seleccionar un turno.'}
         
         turno_auth_result = self.turno_model.find_by_id(int(turno_id))
@@ -50,7 +50,7 @@ class AutorizacionController(BaseController):
         # Reglas para 'HORAS_EXTRAS'
         if tipo_autorizacion == 'HORAS_EXTRAS':
             user_result = self.usuario_model.find_by_id(usuario_id)
-            if not user_result.get('success'): 
+            if not user_result.get('success'):
                 return {'success': False, 'error': 'Usuario no encontrado.'}
             
             usuario = user_result['data']
@@ -70,14 +70,14 @@ class AutorizacionController(BaseController):
             # Regla para Turno Tarde
             if 'tarde' in nombre_turno_habitual:
                 hora_inicio_habitual = datetime.strptime(turno_habitual['hora_inicio'], '%H:%M:%S').time()
-                hora_inicio_autorizada = datetime.strptime(turno_autorizado_details['hora_inicio'], '%H:%M:%S').time()
                 hora_fin_autorizada = datetime.strptime(turno_autorizado_details['hora_fin'], '%H:%M:%S').time()
 
-                if hora_inicio_autorizada > hora_inicio_habitual:
-                    return {'success': False, 'error': 'Las horas extras para el turno tarde deben ser anteriores a su turno habitual.'}
+                if hora_fin_autorizada > hora_inicio_habitual:
+                    return {'success': False, 'error': 'Las horas extras para el turno tarde deben finalizar antes del inicio de su turno habitual.'}
 
+                # La regla de las 23:00 hs ya no es necesaria con la lógica anterior, pero la mantenemos por si acaso
                 if hora_fin_autorizada > time(23, 0, 0):
-                    return {'success': False, 'error': 'Las horas extras para el turno tarde no pueden extenderse más allá de las 23:00 hs.'}
+                    return {'success': False, 'error': 'Las horas extras no pueden extenderse más allá de las 23:00 hs.'}
 
         # 3. Si todas las validaciones pasan, crear la autorización
         return self.model.create(data)

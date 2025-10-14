@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, time
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.totem_sesion import TotemSesionModel
 
-
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 usuario_controller = UsuarioController()
@@ -73,69 +72,72 @@ def before_request_auth():
 
 def _verificar_horario_turno(usuario: dict) -> dict:
     """
-    Verifica si el login es válido según el turno o una autorización aprobada.
+    Verifica si el login es válido según la ventana de fichaje del turno o una autorización.
+    Regla: 15 mins antes hasta 15 mins después del inicio del turno.
     """
     if not usuario or usuario.get('roles', {}).get('codigo') == 'GERENTE':
         return {'success': True}
 
-    # 1. Verificar horario de turno normal
+    hora_actual = datetime.now().time()
+
+    # 1. Verificar la ventana de fichaje normal
     turno_info = usuario.get('turno')
-    if turno_info and 'hora_inicio' in turno_info and 'hora_fin' in turno_info:
+    if turno_info and 'hora_inicio' in turno_info:
         try:
             hora_inicio = datetime.strptime(turno_info['hora_inicio'], '%H:%M:%S').time()
-            hora_fin = datetime.strptime(turno_info['hora_fin'], '%H:%M:%S').time()
-            inicio_permitido = (datetime.combine(datetime.today(), hora_inicio) - timedelta(minutes=15)).time()
-            hora_actual = datetime.now().time()
+            
+            # Crear objetos datetime para poder sumar/restar tiempos
+            dt_inicio = datetime.combine(datetime.today(), hora_inicio)
+            inicio_permitido = (dt_inicio - timedelta(minutes=15)).time()
+            fin_permitido = (dt_inicio + timedelta(minutes=15)).time()
 
-            if hora_fin < inicio_permitido:  # Turno nocturno
-                if hora_actual >= inicio_permitido or hora_actual <= hora_fin:
+            # Manejo de ventana que cruza la medianoche (ej. turno empieza 00:00)
+            if fin_permitido < inicio_permitido:
+                if hora_actual >= inicio_permitido or hora_actual <= fin_permitido:
                     return {'success': True}
-            else:  # Turno diurno
-                if inicio_permitido <= hora_actual <= hora_fin:
+            else: # Ventana normal en el mismo día
+                if inicio_permitido <= hora_actual <= fin_permitido:
                     return {'success': True}
         except (ValueError, TypeError):
-            pass  # Falla silenciosamente y procede a verificar autorizaciones
+            pass  # Si falla, se procede a verificar autorizaciones
 
-    # 2. Si falla el turno normal, buscar autorizaciones aprobadas
+    # 2. Si se está fuera de la ventana, buscar autorizaciones
     usuario_id = usuario.get('id')
     hoy = datetime.today().date()
-    
     auth_result = autorizacion_model.find_by_usuario_and_fecha(usuario_id, hoy, estado='APROBADA')
 
     if not auth_result.get('success'):
-        return {'success': False, 'error': 'Acceso fuera de su horario de turno y no se encontró una autorización válida.'}
+        return {'success': False, 'error': 'Fichaje fuera de horario. Se requiere una autorización.'}
 
-    # Iterar sobre todas las autorizaciones aprobadas del día
     for autorizacion in auth_result['data']:
-        auth_turno_info = autorizacion.get('turno')
+        auth_turno = autorizacion.get('turno')
         auth_tipo = autorizacion.get('tipo')
 
-        if not auth_turno_info:
-            continue  # Si una autorización está mal formada, la ignoramos y probamos la siguiente
+        if not auth_turno: 
+            continue
 
         try:
-            auth_hora_inicio = datetime.strptime(auth_turno_info['hora_inicio'], '%H:%M:%S').time()
-            auth_hora_fin = datetime.strptime(auth_turno_info['hora_fin'], '%H:%M:%S').time()
-            hora_actual = datetime.now().time()
+            auth_inicio = datetime.strptime(auth_turno['hora_inicio'], '%H:%M:%S').time()
+            auth_fin = datetime.strptime(auth_turno['hora_fin'], '%H:%M:%S').time()
 
             if auth_tipo == 'LLEGADA_TARDIA':
-                if auth_hora_inicio <= hora_actual <= auth_hora_fin:
-                    return {'success': True}  # Login válido
+                # Permite fichar durante todo el turno autorizado
+                if auth_inicio <= hora_actual <= auth_fin:
+                    return {'success': True}
             
             elif auth_tipo == 'HORAS_EXTRAS':
-                inicio_permitido_auth = (datetime.combine(datetime.today(), auth_hora_inicio) - timedelta(minutes=15)).time()
-                if auth_hora_fin < inicio_permitido_auth:  # Turno nocturno
-                    if hora_actual >= inicio_permitido_auth or hora_actual <= auth_hora_fin:
-                        return {'success': True}  # Login válido
-                else:  # Turno diurno
-                    if inicio_permitido_auth <= hora_actual <= auth_hora_fin:
-                        return {'success': True}  # Login válido
-
+                # Permite fichar desde 15 mins antes del turno autorizado de HE
+                inicio_permitido_he = (datetime.combine(hoy, auth_inicio) - timedelta(minutes=15)).time()
+                if auth_fin < inicio_permitido_he: # Turno nocturno
+                    if hora_actual >= inicio_permitido_he or hora_actual <= auth_fin:
+                        return {'success': True}
+                else:
+                    if inicio_permitido_he <= hora_actual <= auth_fin:
+                        return {'success': True}
         except (ValueError, TypeError):
-            continue # Ignorar autorizaciones con formato de hora incorrecto
+            continue
 
-    # Si el bucle termina sin encontrar una autorización válida
-    return {'success': False, 'error': 'Ninguna de sus autorizaciones aprobadas es válida para la hora actual.'}
+    return {'success': False, 'error': 'Ninguna de sus autorizaciones es válida para este horario.'}
 
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
