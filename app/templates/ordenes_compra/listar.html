@@ -9,9 +9,11 @@
         <p class="text-muted mb-0">Gestión y seguimiento de órdenes de compra a proveedores</p>
     </div>
     <div class="btn-toolbar">
+        {% if 'COMPRAS' in session.permisos and 'crear_ordenes_compra' in session.permisos['COMPRAS'] %}
         <a href="{{ url_for('orden_compra.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
         </a>
+        {% endif %}
     </div>
 </div>
 

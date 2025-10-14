@@ -237,14 +237,16 @@
                     </button>
 
                     {% if pedido.estado != 'CANCELADO' %}
-                    <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
-                        class="confirm-form d-grid" data-title="Confirmar Cancelación"
-                        data-message="¿Está seguro de que desea cancelar este pedido? Esta acción no se puede deshacer."
-                        data-button-type="danger">
-                        <button type="submit" class="btn btn-outline-danger">
-                            <i class="bi bi-x-circle me-1"></i>Cancelar Pedido
-                        </button>
-                    </form>
+                        {% if 'VENTAS' in session.permisos and 'cancelar_ordenes_venta' in session.permisos['VENTAS'] %}
+                        <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
+                            class="confirm-form d-grid" data-title="Confirmar Cancelación"
+                            data-message="¿Está seguro de que desea cancelar este pedido? Esta acción no se puede deshacer."
+                            data-button-type="danger">
+                            <button type="submit" class="btn btn-outline-danger">
+                                <i class="bi bi-x-circle me-1"></i>Cancelar Pedido
+                            </button>
+                        </form>
+                        {% endif %}
                     {% endif %}
                 </div>
             </div>

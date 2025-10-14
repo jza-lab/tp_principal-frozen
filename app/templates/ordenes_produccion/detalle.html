@@ -15,19 +15,23 @@
             <i class="bi bi-arrow-left me-1"></i>Volver
         </a>
         {% if orden.estado == 'PLANIFICADA' %}
-        <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
-            data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
-            <button type="submit" class="btn btn-success">
-                <i class="bi bi-play-fill me-1"></i>Iniciar Producción
-            </button>
-        </form>
+            {% if 'PRODUCCION' in session.permisos and 'iniciar_produccion' in session.permisos['PRODUCCION'] %}
+            <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+                data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-play-fill me-1"></i>Iniciar Producción
+                </button>
+            </form>
+            {% endif %}
         {% elif orden.estado == 'EN_PROCESO' %}
-        <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;" class="confirm-form"
-            data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
-            <button type="submit" class="btn btn-success">
-                <i class="bi bi-check-circle me-1"></i>Completar Orden
-            </button>
-        </form>
+            {% if 'PRODUCCION' in session.permisos and 'pausar_produccion' in session.permisos['PRODUCCION'] %}
+            <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+                data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-check-circle me-1"></i>Completar Orden
+                </button>
+            </form>
+            {% endif %}
         {% endif %}
     </div>
 </div>

@@ -10,9 +10,11 @@
             <p class="text-muted mb-0">Administración de clientes registrados en el sistema</p>
         </div>
         <div class="btn-toolbar">
+            {% if 'ADMINISTRACION' in session.permisos and 'gestionar_proveedores' in session.permisos['ADMINISTRACION'] %}
             <a href="{{ url_for('clientes_proveedores.nuevo_cliente') }}" class="btn btn-primary">
                 <i class="bi bi-person-plus me-1"></i>Crear Nuevo Cliente
             </a>
+            {% endif %}
         </div>
     </div>
 
@@ -84,25 +86,31 @@
 
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
                             {% if cliente.activo %}
+                                {% if 'ADMINISTRACION' in session.permisos and 'gestionar_proveedores' in session.permisos['ADMINISTRACION'] %}
                                 <a href="{{ url_for('clientes_proveedores.editar_cliente', id=cliente.id) }}" 
                                    class="btn btn-sm btn-outline-primary" title="Editar cliente">
                                     <i class="bi bi-pencil"></i>
                                 </a>
+                                {% endif %}
 
                                 <a href="{{ url_for('clientes_proveedores.ver_perfil_cliente', id=cliente.id) }}" class="btn btn-sm btn-outline-primary" title="Ver detalle">
                                     <i class="bi bi-eye"></i>
                                 </a>
 
+                                {% if 'ADMINISTRACION' in session.permisos and 'gestionar_proveedores' in session.permisos['ADMINISTRACION'] %}
                                 <a class="btn btn-sm btn-outline-danger" title="Inhabilitar cliente"
                                     onClick="eliminarCliente('{{ cliente.id }}')">
                                     <i class="bi bi-person-x"></i> Desactivar
                                 </a>
+                                {% endif %}
 
                             {% else %}
+                                {% if 'ADMINISTRACION' in session.permisos and 'gestionar_proveedores' in session.permisos['ADMINISTRACION'] %}
                                 <a class="btn btn-sm btn-outline-success" title="Habilitar cliente"
                                     onClick="habilitarCliente('{{ cliente.id }}')">
                                     <i class="bi bi-person-check"></i> Activar
                                 </a>
+                                {% endif %}
                             {% endif %}
                         </div>
                     </div>
