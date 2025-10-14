@@ -17,7 +17,7 @@ def permission_required(accion: str):
                 return redirect(url_for('auth.login'))
 
             user_role_code = session.get('rol')
-            if user_role_code == 'GERENTE_GENERAL': # El Gerente General tiene acceso a todo
+            if user_role_code == 'GERENTE': # El Gerente General tiene acceso a todo
                 return f(*args, **kwargs)
 
             allowed_roles = get_allowed_roles_for_action(accion)
@@ -47,7 +47,7 @@ def permission_any_of(*actions):
                 return redirect(url_for('auth.login'))
 
             user_role_code = session.get('rol')
-            if user_role_code == 'GERENTE_GENERAL':
+            if user_role_code == 'GERENTE':
                 return f(*args, **kwargs)
 
             has_any_permission = any(user_role_code in get_allowed_roles_for_action(action) for action in actions)

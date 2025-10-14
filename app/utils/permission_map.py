@@ -37,7 +37,7 @@ CANONICAL_PERMISSION_MAP = {
     'ver_reportes_stock': ['VENDEDOR', 'SUPERVISOR', 'GERENTE'],
     'ver_reportes_financieros': ['VENDEDOR', 'GERENTE'],
     'exportar_reportes': ['VENDEDOR', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'],
-    'ver_dashboard': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'],
+    'ver_dashboard': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE','ADMIN', 'IT', 'RRHH'],
     'actualizar_precios_proveedor': ['VENDEDOR'],
     'ver_materias_primas': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'],
     'ver_stock_actual': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'GERENTE'],
