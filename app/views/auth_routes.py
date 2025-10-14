@@ -59,15 +59,28 @@ def before_request_auth():
                 estado='APROBADA'
             )
             if auth_result.get('success'):
-                # Si hay autorización de extras, no hacemos nada y dejamos la sesión abierta
-                return
+                # Iterar sobre todas las autorizaciones de HE para ver si alguna justifica la sesión activa
+                for autorizacion in auth_result['data']:
+                    auth_turno_info = autorizacion.get('turno')
+                    if auth_turno_info:
+                        auth_hora_inicio = datetime.strptime(auth_turno_info['hora_inicio'], '%H:%M:%S').time()
+                        auth_hora_fin = datetime.strptime(auth_turno_info['hora_fin'], '%H:%M:%S').time()
+                        
+                        limite_he_dt = datetime.combine(fecha_sesion, auth_hora_fin) + timedelta(minutes=15)
+                        
+                        if auth_hora_fin < auth_hora_inicio: # Turno nocturno
+                            limite_he_dt += timedelta(days=1)
 
+                        if datetime.now() < limite_he_dt:
+                            return  # La sesión está justificada por al menos una autorización, no hacer nada.
+                
             flash('Tu turno ha finalizado. La sesión se ha cerrado automáticamente.', 'info')
             session.clear()
             return redirect(url_for('auth.login'))
 
     except (ValueError, TypeError):
         return
+
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
