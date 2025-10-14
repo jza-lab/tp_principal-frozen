@@ -120,11 +120,6 @@ document.addEventListener('DOMContentLoaded', function() {
             fechaErrorDiv.textContent = 'La fecha no puede ser anterior a la actual.';
             fechaErrorDiv.style.display = 'block';
             isFechaValid = false;
-        } else if (selectedDateStr > todayStr) {
-            fechaInput.classList.add('is-invalid');
-            fechaErrorDiv.textContent = 'La fecha no puede ser posterior a la actual.';
-            fechaErrorDiv.style.display = 'block';
-            isFechaValid = false;
         } else {
             fechaInput.classList.remove('is-invalid');
             fechaErrorDiv.style.display = 'none';
