@@ -4,10 +4,13 @@ from app.models.permisos import PermisosModel
 from app.models.sector import SectorModel
 from app.models.usuario_sector import UsuarioSectorModel
 from app.utils.roles import get_redirect_url_by_role
+from app.utils.permission_map import get_allowed_roles_for_action
 
-def permission_required(sectores: list, accion: str):
+def permission_required(accion: str):
     """
-    Decorator que verifica si un usuario tiene permiso para una acción en al menos uno de los sectores especificados.
+    Decorator que verifica si un usuario tiene permiso para una acción.
+    Utiliza el mapa canónico de permisos para determinar qué sectores pueden realizar la acción,
+    y luego comprueba los permisos del usuario en sesión contra esa lista.
     """
     def decorator(f):
         @wraps(f)
@@ -17,16 +20,25 @@ def permission_required(sectores: list, accion: str):
                 return redirect(url_for('auth.login'))
 
             user_role_code = session.get('rol')
-            if user_role_code == 'GERENTE':
+            # El Gerente General tiene acceso a todo
+            if user_role_code == 'GERENTE_GENERAL':
                 return f(*args, **kwargs)
 
             user_permissions = session.get('permisos', {})
-            
-            has_permission_in_any_sector = any(
-                s in user_permissions and accion in user_permissions[s] for s in sectores
+            allowed_sectors = get_allowed_roles_for_action(accion)
+
+            if not allowed_sectors:
+                # Si la acción no está en el mapa, denegar por seguridad.
+                flash(f'Acceso denegado. La acción "{accion}" no está configurada.', 'error')
+                return redirect(get_redirect_url_by_role(user_role_code))
+
+            # Comprueba si el usuario tiene el permiso en CUALQUIERA de los sectores permitidos
+            has_permission = any(
+                sector in user_permissions and accion in user_permissions[sector]
+                for sector in allowed_sectors
             )
 
-            if not has_permission_in_any_sector:
+            if not has_permission:
                 flash(f'Su rol no tiene los permisos necesarios ({accion}) para acceder a esta sección.', 'error')
                 return redirect(get_redirect_url_by_role(user_role_code))
 
@@ -47,7 +59,7 @@ def admin_permission_any_of(*actions):
                 return redirect(url_for('auth.login'))
 
             user_role_code = session.get('rol')
-            if user_role_code == 'GERENTE':
+            if user_role_code == 'GERENTE_GENERAL':
                 return f(*args, **kwargs)
 
             user_permissions = session.get('permisos', {})
@@ -90,7 +102,7 @@ def admin_permission_required(accion: str):
                 return redirect(url_for('auth.login'))
 
             user_role_code = session.get('rol')
-            if user_role_code == 'GERENTE':
+            if user_role_code == 'GERENTE_GENERAL':
                 return f(*args, **kwargs)
 
             user_permissions = session.get('permisos', {})

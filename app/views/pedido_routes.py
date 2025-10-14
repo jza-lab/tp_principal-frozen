@@ -42,7 +42,7 @@ def _parse_form_data(form_dict):
     return parsed_data
 
 @orden_venta_bp.route('/')
-@permission_required(sectores=['LOGISTICA', 'VENTAS'], accion='ver_ordenes_venta')
+@permission_required(accion='ver_ordenes_venta')
 def listar():
     """Muestra la lista de todos los pedidos de venta."""
     estado = request.args.get('estado')
@@ -61,7 +61,7 @@ def listar():
     return render_template('orden_venta/listar.html', pedidos=pedidos, titulo="Pedidos de Venta")
 
 @orden_venta_bp.route('/nueva', methods=['GET', 'POST'])
-@permission_required(sectores=['LOGISTICA', 'VENTAS'], accion='crear_ordenes_venta')
+@permission_required(accion='crear_ordenes_venta')
 def nueva():
     """Gestiona la creación de un nuevo pedido de venta."""
 
@@ -122,7 +122,7 @@ def nueva():
                            fecha_limite=fecha_limite)
 
 @orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST','PUT'])
-@permission_required(sectores=['LOGISTICA', 'VENTAS'], accion='modificar_ordenes_venta')
+@permission_required(accion='modificar_ordenes_venta')
 def editar(id):
     
     """Gestiona la edición de un pedido de venta existente."""
@@ -183,7 +183,7 @@ def editar(id):
                            today=hoy)
 
 @orden_venta_bp.route('/<int:id>/detalle')
-@permission_required(sectores=['LOGISTICA', 'VENTAS'], accion='ver_ordenes_venta')
+@permission_required(accion='ver_ordenes_venta')
 def detalle(id):
     """Muestra la página de detalle de un pedido de venta."""
     response, status_code = controller.obtener_pedido_por_id(id)
@@ -201,7 +201,7 @@ def detalle(id):
         return redirect(url_for('orden_venta.listar'))
 
 @orden_venta_bp.route('/<int:id>/cancelar', methods=['POST'])
-@permission_required(sectores=['LOGISTICA', 'VENTAS'], accion='cancelar_ordenes_venta')
+@permission_required(accion='cancelar_ordenes_venta')
 def cancelar(id):
     """Endpoint para cambiar el estado de un pedido a 'CANCELADO'."""
     response, status_code = controller.cancelar_pedido(id)
@@ -215,7 +215,7 @@ def cancelar(id):
 
 
 @orden_venta_bp.route('/<int:id>/completar', methods=['POST'])
-@permission_required(sectores=['LOGISTICA', 'VENTAS'], accion='modificar_ordenes_venta')
+@permission_required(accion='modificar_ordenes_venta')
 def completar(id):
         """Endpoint para completar el pedido (despacho de stock)."""
         try:
@@ -238,7 +238,7 @@ def completar(id):
             return redirect(url_for('orden_venta.detalle', id=id))
 
 @orden_venta_bp.route('/<int:id>/aprobar', methods=['POST'])
-@permission_required(sectores=['LOGISTICA', 'VENTAS'], accion='aprobar_ordenes_venta')
+@permission_required(accion='aprobar_ordenes_venta')
 def aprobar(id):
     """
     Endpoint de API para aprobar un pedido. Devuelve una respuesta JSON.

@@ -20,7 +20,7 @@ usuario_controller = UsuarioController()
 cliente_controller = ClienteController()
 
 @cliente_proveedor.route('/clientes/')
-@admin_permission_required(accion='gestionar_proveedores') # Asumido
+@admin_permission_required(accion='gestionar_clientes')
 def listar_clientes():
     # Extraer todos los filtros de la solicitud (incluye 'busqueda')
     filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
@@ -34,7 +34,7 @@ def listar_clientes():
     return render_template('clientes/listar.html', clientes=clientes, busqueda_actual=busqueda_actual)
 
 @cliente_proveedor.route('/clientes/<int:id>')
-@admin_permission_required(accion='gestionar_proveedores') # Asumido
+@admin_permission_required(accion='gestionar_clientes')
 def ver_perfil_cliente(id):
     """Muestra el perfil de un cliente específico."""
     cliente_result, status = cliente_controller.obtener_cliente(id)
@@ -42,7 +42,7 @@ def ver_perfil_cliente(id):
     return render_template('clientes/perfil.html', cliente=cliente)
 
 @cliente_proveedor.route('/clientes/nuevo', methods=['GET', 'PUT', 'POST'])
-@admin_permission_required(accion='gestionar_proveedores') # Asumido
+@admin_permission_required(accion='gestionar_clientes')
 def nuevo_cliente():
     """
     Gestiona la creación de un nuevo cliente
@@ -65,7 +65,7 @@ def nuevo_cliente():
     return render_template('clientes/formulario.html', cliente=cliente)
 
 @cliente_proveedor.route('/buscar_por_cuil/<cliente_cuil>', methods=['GET'])
-@admin_permission_required(accion='gestionar_proveedores') # Asumido
+@admin_permission_required(accion='gestionar_clientes')
 def buscar_por_cuil(cliente_cuil):
     """
     Endpoint HTTP que llama a la función obtener_cliente_cuil
@@ -80,7 +80,7 @@ def buscar_por_cuil(cliente_cuil):
     return jsonify(cliente_respuesta), estado
 
 @cliente_proveedor.route('/clientes/<int:id>/editar', methods=['GET', 'PUT', 'POST'])
-@admin_permission_required(accion='gestionar_proveedores') # Asumido
+@admin_permission_required(accion='gestionar_clientes')
 def editar_cliente(id):
     """Gestiona la edición de un cliente existente"""
     cliente_result, status = cliente_controller.obtener_cliente(id)
@@ -103,7 +103,7 @@ def editar_cliente(id):
     return render_template('clientes/formulario.html', cliente=cliente)
 
 @cliente_proveedor.route('/clientes/<int:id>/eliminar', methods=['POST'])
-@admin_permission_any_of('gestionar_proveedores', 'inactivar_proveedores_clientes') # Asumido para gestionar
+@admin_permission_any_of('gestionar_clientes', 'inactivar_proveedores_clientes')
 def eliminar_cliente(id):
     """Desactiva un cliente."""
     try:
@@ -116,7 +116,7 @@ def eliminar_cliente(id):
 
     
 @cliente_proveedor.route('/clientes/<int:id>/habilitar', methods=['POST'])
-@admin_permission_required(accion='gestionar_proveedores') # Asumido
+@admin_permission_required(accion='gestionar_clientes')
 def habilitar_cliente(id):
     """Reactiva un cliente."""
     try:

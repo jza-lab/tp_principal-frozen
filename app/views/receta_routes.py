@@ -11,14 +11,14 @@ producto_controller = ProductoController()
 insumo_controller = InsumoController()
 
 @receta_bp.route('/')
-@permission_required(sectores=['PRODUCCION'], accion='ver_ordenes_produccion')
+@permission_required(accion='ver_ordenes_produccion')
 def listar():
     """Muestra una lista de todas las recetas."""
     recetas = controller.obtener_recetas()
     return render_template('recetas/listar.html', recetas=recetas)
 
 @receta_bp.route('/<int:id>')
-@permission_required(sectores=['PRODUCCION'], accion='ver_ordenes_produccion')
+@permission_required(accion='ver_ordenes_produccion')
 def detalle(id):
     """Muestra el detalle de una receta, incluyendo sus ingredientes."""
     receta = controller.obtener_receta_con_ingredientes(id)
@@ -28,7 +28,7 @@ def detalle(id):
     return render_template('recetas/detalle.html', receta=receta)
 
 @receta_bp.route('/nueva', methods=['GET', 'POST'])
-@permission_required(sectores=['PRODUCCION'], accion='crear_ordenes_produccion')
+@permission_required(accion='crear_ordenes_produccion')
 def nueva():
     """Gestiona la creación de una nueva receta con sus ingredientes."""
     if request.method == 'POST':
@@ -68,14 +68,14 @@ def nueva():
     return render_template('recetas/formulario.html', receta={}, productos=productos, insumos=insumos, is_new=True)
 
 @receta_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
-@permission_required(sectores=['PRODUCCION'], accion='modificar_ordenes_produccion')
+@permission_required(accion='modificar_ordenes_produccion')
 def editar(id):
     """Gestiona la edición de una receta existente (funcionalidad pendiente)."""
     flash('Funcionalidad de editar receta aún no implementada.', 'info')
     return redirect(url_for('receta.detalle', id=id))
 
 @receta_bp.route('/<int:id>/eliminar', methods=['POST'])
-@permission_required(sectores=['PRODUCCION'], accion='modificar_ordenes_produccion')
+@permission_required(accion='modificar_ordenes_produccion')
 def eliminar(id):
     """Elimina una receta (funcionalidad pendiente)."""
     flash('Funcionalidad de eliminar receta aún no implementada.', 'info')

@@ -6,7 +6,7 @@ reservas_bp = Blueprint('reservas', __name__, url_prefix='/reservas')
 controller = ReservasController()
 
 @reservas_bp.route('/')
-@permission_required(sectores=['LOGISTICA'], accion='leer')
+@permission_required(accion='ver_trazabilidad_reservas')
 def listar():
     """Muestra la vista unificada de trazabilidad de reservas."""
     response, status_code = controller.obtener_trazabilidad_reservas()
