@@ -120,7 +120,7 @@
                         <a href="{{ url_for('insumos_api.agregar_lote', id_insumo=insumo.id_insumo) }}" class="btn btn-sm btn-outline-success" title="Registrar Lote">
                             <i class="bi bi-plus-square"></i>
                         </a>
-                        {% if 'ALMACEN' in session.permisos and 'modificar_materias_primas' in session.permisos['ALMACEN'] %}
+                        {% if has_permission('modificar_materias_primas') %}
                         <a href="{{ url_for('insumos_api.actualizar_insumo', id_insumo=insumo.id_insumo) }}"
                             class="btn btn-sm btn-outline-primary" title="Modificar insumo">
                             <i class="bi bi-pencil"></i>

@@ -15,7 +15,7 @@
             <i class="bi bi-arrow-left me-1"></i>Volver
         </a>
         {% if orden.estado == 'PENDIENTE' %}
-        {% if 'COMPRAS' in session.permisos and 'modificar_ordenes_compra' in session.permisos['COMPRAS'] %}
+        {% if has_permission('modificar_ordenes_compra') %}
         <a href="{{ url_for('orden_compra.editar', id=orden.id) }}" class="btn btn-primary">
             <i class="bi bi-pencil-square me-1"></i>Editar
         </a>

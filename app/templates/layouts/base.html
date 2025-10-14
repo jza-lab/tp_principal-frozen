@@ -50,15 +50,16 @@
                         
                         
                         {% macro has_permission(action) %}
-                            {% set found = false %}
-                            {% if session.permisos %}
-                                {% for sector, actions in session.permisos.items() %}
-                                    {% if action in actions %}
-                                        {% set found = true %}
-                                    {% endif %}
-                                {% endfor %}
+                            {% set can_access = false %}
+                            {% if session.get('rol') == 'GERENTE_GENERAL' %}
+                                {% set can_access = true %}
+                            {% else %}
+                                {% set allowed_roles = CANONICAL_PERMISSION_MAP.get(action, []) %}
+                                {% if session.get('rol') in allowed_roles %}
+                                    {% set can_access = true %}
+                                {% endif %}
                             {% endif %}
-                            {{ found }}
+                            {{ can_access }}
                         {% endmacro %}
 
                         {% set can_ver_insumos = has_permission('ver_materias_primas') %}

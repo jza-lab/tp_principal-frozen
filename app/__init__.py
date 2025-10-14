@@ -121,28 +121,18 @@ def create_app():
 
     app.jinja_env.filters['format_datetime'] = format_datetime_filter
 
-    # --- Context Processors ---
-    from app.models.permisos import PermisosModel
+
+
+    ##PARA AUTH SEGUN ROL
+    from app.utils.permission_map import CANONICAL_PERMISSION_MAP
 
     @app.context_processor
-    def inject_user_permissions():
+    def inject_permission_map():
         """
-        Inyecta los permisos del usuario en el contexto de todas las plantillas.
-        Esto permite verificaciones como: {% if 'PRODUCCION' in user_permissions and 'crear' in user_permissions['PRODUCCION'] %}
+        Inyecta el mapa de permisos canónico en el contexto de Jinja2
+        para que esté disponible en todas las plantillas.
         """
-        if 'rol_id' not in session:
-            return {'user_permissions': {}}
-
-        role_id = session['rol_id']
-        # GERENTE tiene acceso a todo, devolvemos un objeto especial
-        if session.get('rol') == 'GERENTE':
-             return {'user_permissions': {'is_gerente': True}}
-
-
-        permisos_model = PermisosModel()
-        user_permissions = permisos_model.get_user_permissions(role_id)
-        
-        return {'user_permissions': user_permissions}
+        return {'CANONICAL_PERMISSION_MAP': CANONICAL_PERMISSION_MAP}
 
 
     return app

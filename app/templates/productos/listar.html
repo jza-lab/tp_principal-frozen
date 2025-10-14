@@ -7,7 +7,7 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Catálogo de Productos</h1>
     <div class="btn-toolbar">
-        {% if 'ALMACEN' in session.permisos and 'crear_materias_primas' in session.permisos['ALMACEN'] %}
+        {% if has_permission('crear_materias_primas') %}
         <a href="{{ url_for('productos.crear_producto') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Agregar Nuevo Producto
         </a>
@@ -75,7 +75,7 @@
                             <i class="bi bi-arrow-repeat"></i>
                         </a>
 
-                        {% if 'ALMACEN' in session.permisos and 'modificar_materias_primas' in session.permisos['ALMACEN'] %}
+                        {% if has_permission('modificar_materias_primas') %}
                         <a href="{{ url_for('productos.actualizar_producto', id_producto=producto.id) }}"
                             class="btn btn-sm btn-outline-primary" title="Modificar producto">
                             <i class="bi bi-pencil"></i>
@@ -87,7 +87,7 @@
                             <i class="bi bi-eye"></i>
                         </a>
 
-                        {% if 'ALMACEN' in session.permisos and 'eliminar_materias_primas' in session.permisos['ALMACEN'] %}
+                        {% if has_permission('eliminar_materias_primas') %}
                         <a class="btn btn-sm btn-outline-danger" title="Inhabilitar producto"
                             onClick="eliminarProducto('{{ producto.id }}')">
                             <i class="bi bi-slash-circle"></i> Inhabilitar
@@ -95,7 +95,7 @@
                         {% endif %}
 
                         {% else %}
-                        {% if 'ALMACEN' in session.permisos and 'modificar_materias_primas' in session.permisos['ALMACEN'] %}
+                        {% if has_permission('modificar_materias_primas') %}
                         <a class="btn btn-sm btn-outline-success" title="Habilitar producto"
                             onClick="habilitarProducto('{{ producto.id }}')">
                             <i class="bi bi-check-circle"></i> Habilitar

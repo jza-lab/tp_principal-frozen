@@ -165,12 +165,12 @@
                 <h6 class="mb-0"><i class="bi bi-arrow-repeat me-1"></i>Acciones</h6>
             </div>
             <div class="card-body d-grid gap-2">
-                {% if 'ALMACEN' in session.permisos and 'registrar_ingresos_stock' in session.permisos['ALMACEN'] %}
+                {% if has_permission('registrar_ingresos_stock') %}
                  <a href="{{ url_for('lote_producto.nuevo_lote', id_producto=producto.id) }}" class="btn btn-success">
                     <i class="bi bi-box-fill me-1"></i> Registrar Lote
                 </a>
                 {% endif %}
-                {% if 'ALMACEN' in session.permisos and 'modificar_materias_primas' in session.permisos['ALMACEN'] %}
+                {% if has_permission('modificar_materias_primas') %}
                 <button type="button" class="btn btn-outline-primary" onclick="recargarPrecioProducto('{{ producto.id }}')" title="Recalcular el precio unitario basado en los costos de insumos actuales.">
                     <i class="bi bi-arrow-clockwise me-1"></i> Recalcular Costo
                 </button>

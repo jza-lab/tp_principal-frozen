@@ -237,7 +237,7 @@
                     </button>
 
                     {% if pedido.estado != 'CANCELADO' %}
-                        {% if 'VENTAS' in session.permisos and 'cancelar_ordenes_venta' in session.permisos['VENTAS'] %}
+                        {% if has_permission('cancelar_ordenes_venta') %}
                         <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
                             class="confirm-form d-grid" data-title="Confirmar Cancelación"
                             data-message="¿Está seguro de que desea cancelar este pedido? Esta acción no se puede deshacer."

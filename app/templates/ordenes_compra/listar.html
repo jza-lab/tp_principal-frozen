@@ -9,7 +9,7 @@
         <p class="text-muted mb-0">Gestión y seguimiento de órdenes de compra a proveedores</p>
     </div>
     <div class="btn-toolbar">
-        {% if 'COMPRAS' in session.permisos and 'crear_ordenes_compra' in session.permisos['COMPRAS'] %}
+        {% if has_permission('crear_ordenes_compra') %}
         <a href="{{ url_for('orden_compra.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
         </a>
@@ -97,7 +97,7 @@
                             <i class="bi bi-eye"></i>
                         </a>
                         
-                        {% if 'SUPERVISOR' in session.get('rol', '') or 'GERENTE' in session.get('rol', '') %}
+                        {% if has_permission('aprobar_ordenes_compra') %}
                             {% if orden.estado == 'PENDIENTE' %}
                                 <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id) }}"class="confirm-form"
                                 data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de producción?" data-button-type="success">
