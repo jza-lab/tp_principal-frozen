@@ -30,9 +30,9 @@ class AutorizacionIngresoModel(BaseModel):
             response = query.execute()
             
             if response.data:
-                return {'success': True, 'data': response.data[0]}
+                return {'success': True, 'data': response.data} # Devolver siempre una lista
             
-            error_message = f'Autorización de tipo "{tipo}" no encontrada.' if tipo else 'Autorización no encontrada.'
+            error_message = 'No se encontraron autorizaciones para los criterios especificados.'
             return {'success': False, 'error': error_message}
             
         except Exception as e:
