@@ -151,6 +151,34 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error calculando stock para producto {producto_id}: {e}", exc_info=True)
             return self.error_response('Error interno al calcular stock', 500)
+    
+    
+    # === NUEVA FUNCIÓN AÑADIDA PARA SOPORTE DE LA LÓGICA DE COMPLETAR PEDIDO ===
+    def obtener_lotes_producto_disponibles(self, producto_id: int) -> dict:
+        """
+        Obtiene la lista de lotes disponibles para un producto con stock, sin consumirlos.
+        """
+        try:
+            filtros = {
+                'producto_id': producto_id, 
+                'estado': 'DISPONIBLE', 
+                'cantidad_actual': ('gt', 0)
+            }
+            # FIFO (más antiguo primero) para sugerir qué lotes usar
+            lotes_result = self.model.find_all(filters=filtros, order_by='created_at.asc')
+            
+            if not lotes_result.get('success'):
+                return {'success': False, 'error': lotes_result.get('error')}
+                
+            lotes_disponibles = lotes_result.get('data', [])
+            stock_total = sum(lote.get('cantidad_actual', 0) for lote in lotes_disponibles)
+
+            # Devolvemos el stock total y los lotes para la vista
+            return {'success': True, 'data': {'stock_total': stock_total, 'lotes': lotes_disponibles}}
+        except Exception as e:
+            logger.error(f"Error obteniendo lotes disponibles para producto {producto_id}: {e}", exc_info=True)
+            return {'success': False, 'error': 'Error interno al obtener lotes'}
+    # ===========================================================================
 
 
     def reservar_stock_para_item(self, pedido_id: int, pedido_item_id: int, producto_id: int, cantidad_necesaria: float, usuario_id: int) -> dict:
@@ -408,4 +436,3 @@ class LoteProductoController(BaseController):
             logger.error(f"Error crítico al despachar stock directo del pedido {pedido_id}: {e}", exc_info=True)
             # Devolvemos el error específico para el PedidoController
             return {'success': False, 'error': f'Error interno al despachar stock: {str(e)}'}
-
