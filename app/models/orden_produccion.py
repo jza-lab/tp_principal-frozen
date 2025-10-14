@@ -214,7 +214,7 @@ class OrdenProduccionModel(BaseModel):
         """
         try:
             result = self.db.table('pedido_items').select(
-                '*, pedido:pedidos(id, nombre_cliente)'
+                '*, pedido_detalle:pedidos!pedido_items_pedido_id_fkey(id, nombre_cliente)'
             ).eq('orden_produccion_id', orden_id).execute()
 
             if result.data:

@@ -186,39 +186,60 @@
         </div>
 
         <div class="card mb-4 mt-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-arrow-return-right me-1"></i>Origen de la Orden</h5>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Pedido de Cliente</th>
-                            <th>Cliente</th>
-                            <th class="text-end">Cantidad Solicitada</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in desglose_origen %}
-                        <tr>
-                            <td>
-                                <a href="{{ url_for('orden_venta.detalle', id=item.pedido_id) }}" class="fw-bold">
-                                    PED-{{ item.pedido_id }}
-                                </a>
-                            </td>
-                            <td>{{ item.cliente_nombre }}</td>
-                            <td class="text-end">{{ item.cantidad }} unidades</td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="3" class="text-center text-muted py-4">
-                                Esta orden no se originó a partir de un pedido de cliente o el origen no pudo ser rastreado.
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+           <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-arrow-return-right me-1"></i>Pedidos de Cliente Asociados</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            {# Usamos table-primary para un encabezado azul/celeste más visible #}
+            <thead class="text-black"> 
+                <tr>
+                    <th># Pedido</th>
+                    <th>Cliente</th>
+                    <th class="text-center">Estado</th>
+                    <th class="text-end">Monto Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pedido in pedidos_asociados %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}" class="fw-bold text-primary">
+                            PED-{{ pedido.id }}
+                        </a>
+                    </td>
+
+                    <td>{{ pedido.nombre_cliente }}</td> 
+                    
+                    <td class="text-center">
+                        {# Badge con el color condicional para el estado #}
+                        <span class="badge 
+                            {% if pedido.estado == 'PENDIENTE' %}bg-info text-dark
+                            {% elif pedido.estado == 'APROBADO' %}bg-primary
+                            {% elif pedido.estado == 'COMPLETADO' %}bg-success
+                            {% elif pedido.estado == 'CANCELADO' %}bg-danger
+                            {% else %}bg-secondary
+                            {% endif %}">
+                            {{ pedido.estado }}
+                        </span>
+                    </td>
+
+                    <td class="text-end">
+                        <span class="fw-bold">
+                            $ {{ "{:,.2f}".format(pedido.precio_orden | default(0) ) }}
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-4">
+                        Esta Orden de Producción no está vinculada a ningún pedido de cliente.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
         </div>
         
         <div class="card mb-4">
@@ -242,7 +263,7 @@
                                 <div class="fw-bold">{{ ingrediente.nombre_insumo or 'Producto no encontrado' }}</div>
                             </td>
                             <td>{{ ingrediente.cantidad }} {{ ingrediente.unidad_medida}}</td>
-                            <td>{{ ingrediente.descripcion_insumo | default(' ') }}</td>
+                            <td>{{ ingrediente.descripcion_insumo if ingrediente.descripcion_insumo != None and ingrediente.descripcion_insumo != 'None' else 'N/A' }}</td>
                             <td>
                                 {% if ingrediente.id_insumo %}
                                 <a
@@ -269,7 +290,7 @@
     </div>
 
     <div class="col-lg-4">
-        <div class="card">
+        <!-- <div class="card">
             <div class="card-header">
                 <h6 class="mb-0">
                     <i class="bi bi-bar-chart me-1"></i>
@@ -288,7 +309,7 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </div> -->
 
         <div class="card mt-3">
             <div class="card-header">

@@ -463,3 +463,31 @@ class PedidoController(BaseController):
                 return self.error_response(result.get('error', 'No se pudo cargar los pedidos.'),404)
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+        
+    
+    def obtener_pedidos_por_orden_produccion(self, id_orden_produccion: int) -> tuple:
+
+        try:
+        
+            id_result = self.model.devolver_pedidos_segun_orden(id_orden_produccion)
+            
+            if not id_result['success']:
+                error_msg = id_result.get('error', 'Error al obtener IDs de pedidos de la OP.')
+                return self.error_response(error_msg, 500)
+            
+            pedido_ids = id_result['data'] 
+            
+            if not pedido_ids:
+                return self.success_response(data=[])
+            
+            
+            result = self.model.find_by_id_list(pedido_ids)
+            
+            if result.get('success'):
+                return self.success_response(data=result.get('data', [])) 
+            else:
+                error_msg = result.get('error', 'Error al obtener detalles de los pedidos.')
+                return self.error_response(error_msg, 500)
+                
+        except Exception as e:
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)

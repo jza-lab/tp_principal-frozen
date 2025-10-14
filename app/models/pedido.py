@@ -336,3 +336,39 @@ class PedidoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error buscando orden por código: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def devolver_pedidos_segun_orden(self, id_orden_produccion: int) -> Dict:
+        try:
+            # Asumiendo que la tabla de items se llama 'pedido_items'
+            result = self.db.table('pedido_items').select('pedido_id').eq('orden_produccion_id', id_orden_produccion).execute()
+            if result.data:
+                # Extrae los IDs de pedido únicos en una lista
+                pedido_ids = list(set([item['pedido_id'] for item in result.data]))
+
+                return {'success': True, 'data': pedido_ids}
+            return {'success': True, 'data': []} 
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def find_by_id_list(self, pedido_ids: List[int]) -> Dict:
+        """
+        Busca pedidos de venta completos basándose en una lista de IDs.
+        """
+        if not pedido_ids:
+            return {'success': True, 'data': []}
+
+        try:
+            
+            query = self.db.table(self.get_table_name()).select('*').in_('id', pedido_ids)
+
+            result = query.execute()
+
+            if result.data:
+
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': True, 'data': []} 
+                
+        except Exception as e:
+            logger.error(f"Error buscando pedidos por lista de IDs: {str(e)}")
+            return {'success': False, 'error': str(e)}
