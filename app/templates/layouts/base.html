@@ -133,7 +133,7 @@
                         {% set can_gestionar_empleados = has_permission('ver_info_empleados') or has_permission('modificar_usuarios') or has_permission('crear_usuarios') %}
                         {% set can_gestionar_clientes = has_permission('gestionar_clientes') %}
                         {% set can_gestionar_proveedores = has_permission('gestionar_proveedores') %}
-                        {% set can_access_admin_dropdown = (can_gestionar_empleados|trim == 'True') or (can_gestionar_clientes|trim == 'True') or (can_gestionar_proveedores|trim == 'True') %}
+                        {% set can_access_admin_dropdown = (can_gestionar_empleados|trim == 'True') or (can_gestionar_clientes|trim == 'True') or (can_gestionar_proveedores|trim == 'True') or (session.get('rol') == 'IT') %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if is_admin_section %}active{% endif %} {% if not can_access_admin_dropdown %}disabled{% endif %}"
                             href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">
