@@ -34,9 +34,6 @@ class AutorizacionController(BaseController):
             return {'success': False, 'error': 'El turno seleccionado no es válido.'}
         
         turno_autorizado_details = turno_auth_result['data']
-        nombre_turno_autorizado = turno_autorizado_details['nombre'].lower()
-        if 'mañana' not in nombre_turno_autorizado and 'tarde' not in nombre_turno_autorizado:
-            return {'success': False, 'error': 'Solo se pueden autorizar turnos de Mañana o Tarde.'}
 
         # 2. Validaciones de lógica de negocio
         usuario_id = data.get('usuario_id')
@@ -50,12 +47,12 @@ class AutorizacionController(BaseController):
         # Reglas para 'HORAS_EXTRAS'
         if tipo_autorizacion == 'HORAS_EXTRAS':
             user_result = self.usuario_model.find_by_id(usuario_id)
-            if not user_result.get('success'):
+            if not user_result.get('success'): 
                 return {'success': False, 'error': 'Usuario no encontrado.'}
             
             usuario = user_result['data']
             turno_habitual = usuario.get('turno')
-            if not turno_habitual:
+            if not turno_habitual: 
                 return {'success': False, 'error': 'El empleado no tiene un turno habitual asignado.'}
 
             nombre_turno_habitual = turno_habitual['nombre'].lower()

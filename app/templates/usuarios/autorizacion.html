@@ -147,16 +147,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const turnoText = selectedTurnoOption.text.toLowerCase();
 
-        if (tipoValue === 'HORAS_EXTRAS' && turnoText.includes('tarde')) {
-            turnoInput.classList.add('is-invalid');
-            turnoErrorDiv.textContent = 'No se pueden autorizar horas extras para el turno tarde.';
-            turnoErrorDiv.style.display = 'block';
-            isTurnoValid = false;
-        } else {
-            turnoInput.classList.remove('is-invalid');
-            turnoErrorDiv.style.display = 'none';
-            isTurnoValid = true;
-        }
+        turnoInput.classList.remove('is-invalid');
+        turnoErrorDiv.style.display = 'none';
+        isTurnoValid = true;
+        
         updateSubmitButtonState();
     }
 
