@@ -40,7 +40,10 @@ def ver_perfil_cliente(id):
     cliente_result, status = cliente_controller.obtener_cliente(id)
     cliente= cliente_result.get('data') if cliente_result.get('success') else None
     pedidos_resp, status = pedido_controller.get_ordenes_by_cliente(id)
-    pedidos = pedidos_resp['data']
+    if pedidos_resp.get('data'):
+        pedidos = pedidos_resp['data']
+    else:
+        pedidos={}
     return render_template('clientes/perfil.html', cliente=cliente, pedidos=pedidos)
 
 @cliente_proveedor.route('/clientes/nuevo', methods=['GET', 'PUT', 'POST'])
