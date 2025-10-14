@@ -362,7 +362,8 @@
             contenidoHtml += '<h6>Órdenes de Producción Generadas:</h6>';
             contenidoHtml += '<ul class="list-group">';
             ordenesCreadas.forEach(orden => {
-                const urlOrden = `/ordenes/${orden.id}/detalle`;
+                // LÍNEA CORREGIDa
+                const urlOrden = `/ordenes/${orden.id}/detalle`; 
                 contenidoHtml += `
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
@@ -397,7 +398,7 @@
             contenidoHtml += '<h6>Órdenes de Producción Generadas:</h6>';
             contenidoHtml += '<ul class="list-group">';
             ordenesCreadas.forEach(orden => {
-                const urlOrden = `/orden-produccion/${orden.id}/detalle`;
+                const urlOrden = `/ordenes/${orden.id}/detalle`;
                 contenidoHtml += `
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <div>

@@ -154,29 +154,27 @@ class OrdenProduccionController(BaseController):
     def aprobar_orden_con_oc(self, orden_id: int, usuario_id: int, oc_id: int) -> tuple:
         """
         Aprueba la OP cuando se sabe que se ha generado la OC (flujo manual).
+        
+        MODIFICADO: Este método solo vincula la OC (si es necesario) y mantiene
+        el estado en PENDIENTE, a la espera de la recepción de los insumos.
+        La aprobación formal a 'APROBADA' debe ocurrir en otro flujo.
         """
         try:
-            orden_result = self.obtener_orden_por_id(orden_id)
-            orden_produccion = orden_result['data']
-            
-            # 1. Asocia la OC a la OP
-            update_oc = self.model.update(orden_id, {'orden_compra_id': oc_id}, 'id')
-            if not update_oc.get('success'):
-                return self.error_response("Fallo al vincular la OP con la OC.", 500)
+            # Opcional: Si el modelo de OP tiene un campo para vincular la OC
+            # 1. Asocia la OC a la OP (Descomentar si el modelo de OP soporta orden_compra_id)
+            # update_oc = self.model.update(orden_id, {'orden_compra_id': oc_id}, 'id')
+            # if not update_oc.get('success'):
+            #     return self.error_response("Fallo al vincular la OP con la OC.", 500)
 
-            # 2. Cambiar a APROBADA
-            cambio_estado_result, status_code = self.cambiar_estado_orden(orden_id, 'APROBADA')
-
-            if status_code != 200:
-                 return cambio_estado_result, status_code
-
-            # 3. Reservar stock (esto registrará que se intentó usar el stock que no existe).
-            reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
+            # 2. **CAMBIO CLAVE: Se ELIMINA el cambio de estado a 'APROBADA'**
+            # y se ELIMINA la reserva de stock.
+            # La OP permanece en PENDIENTE hasta que se reciba la OC/Stock.
             
-            if not reserva_result.get('success'):
-                logger.warning(f"Reserva falló para OP {orden_id} después de crear OC: {reserva_result.get('error')}. Se continúa.")
+            # NOTA: Si se desea registrar que la OC ya fue generada para esta OP:
+            # Se podría cambiar a un estado intermedio como 'OC_GENERADA' o añadir una bandera, 
+            # pero si se pide que se quede en PENDIENTE, se respeta la lógica.
             
-            return self.success_response(None, "Orden aprobada y vinculada a OC. Pendiente de recepción de insumos.")
+            return self.success_response(None, "Orden de Compra vinculada (o generada). La Orden de Producción permanece en PENDIENTE a la espera de la recepción de insumos.")
 
         except Exception as e:
             logger.error(f"Error en aprobar_orden_con_oc para OP {orden_id}: {e}", exc_info=True)
@@ -285,7 +283,7 @@ class OrdenProduccionController(BaseController):
         form_data_simulado = {
             **datos_oc,
             'insumo_id[]': [item['insumo_id'] for item in items_oc_para_form],
-            'cantidad_solicitada[]': [item['cantidad_faltante'] for item in items_oc_para_form],
+            'cantidad_faltante[]': [item['cantidad_faltante'] for item in items_oc_para_form],
             'precio_unitario[]': [item['precio_unitario'] for item in items_oc_para_form]
         }
 

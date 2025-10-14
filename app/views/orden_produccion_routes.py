@@ -15,6 +15,8 @@ from app.controllers.producto_controller import ProductoController
 from app.controllers.etapa_produccion_controller import EtapaProduccionController
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
+from app.controllers.pedido_controller import PedidoController
+from app.utils.decorators import roles_required
 from app.permisos import permission_required
 from datetime import date
 
@@ -25,6 +27,7 @@ producto_controller = ProductoController()
 etapa_controller = EtapaProduccionController()
 usuario_controller = UsuarioController()
 receta_controller = RecetaController()
+pedido_controller = PedidoController()
 
 
 @orden_produccion_bp.route("/")
@@ -114,6 +117,7 @@ def modificar(id):
         orden = controller.obtener_orden_por_id(id).get("data")
         productos = producto_controller.obtener_todos_los_productos()
         operarios = usuario_controller.obtener_todos_los_usuarios()
+       
 
         if isinstance(operarios, list):
             operarios_list = operarios
@@ -126,7 +130,7 @@ def modificar(id):
             "ordenes_produccion/formulario.html",
             orden_m=orden,
             productos=productos,
-            operarios=operarios_list,
+            operarios=operarios_list
         )
     except Exception as e:
         print(f"Error inesperado en modificar: {str(e)}")
@@ -152,11 +156,17 @@ def detalle(id):
     ingredientes = (
         ingredientes_response.get("data", []) if ingredientes_response and isinstance(ingredientes_response, dict) else []
     )
+    pedidos_asociados_resp, status= pedido_controller.obtener_pedidos_por_orden_produccion(id)
+    pedidos_asociados=[]
+    if pedidos_asociados_resp.get('data') and len(pedidos_asociados_resp.get('data'))>0:
+        pedidos_asociados=pedidos_asociados_resp.get('data')
+    
     return render_template(
         "ordenes_produccion/detalle.html",
         orden=orden,
         ingredientes=ingredientes,
         desglose_origen=desglose_origen,
+        pedidos_asociados=pedidos_asociados
     )
 
 

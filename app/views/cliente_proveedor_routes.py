@@ -3,7 +3,7 @@ from venv import logger
 from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
 
 from app.controllers.usuario_controller import UsuarioController
-from app.controllers.orden_compra_controller import OrdenCompraController
+from app.controllers.pedido_controller  import PedidoController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.cliente_controller import ClienteController
@@ -14,7 +14,7 @@ cliente_proveedor = Blueprint('clientes_proveedores', __name__, url_prefix='/adm
 
 # Instanciar controladores
 proveedor_controller = ProveedorController()
-orden_compra_controller = OrdenCompraController()
+pedido_controller = PedidoController()
 insumo_controller = InsumoController()
 usuario_controller = UsuarioController()
 cliente_controller = ClienteController()
@@ -39,7 +39,12 @@ def ver_perfil_cliente(id):
     """Muestra el perfil de un cliente específico."""
     cliente_result, status = cliente_controller.obtener_cliente(id)
     cliente= cliente_result.get('data') if cliente_result.get('success') else None
-    return render_template('clientes/perfil.html', cliente=cliente)
+    pedidos_resp, status = pedido_controller.get_ordenes_by_cliente(id)
+    if pedidos_resp.get('data'):
+        pedidos = pedidos_resp['data']
+    else:
+        pedidos={}
+    return render_template('clientes/perfil.html', cliente=cliente, pedidos=pedidos)
 
 @cliente_proveedor.route('/clientes/nuevo', methods=['GET', 'PUT', 'POST'])
 @permission_required(accion='gestionar_clientes')

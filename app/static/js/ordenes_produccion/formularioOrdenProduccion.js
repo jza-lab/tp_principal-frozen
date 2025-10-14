@@ -28,7 +28,8 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(data => {
             if (data.success) {
                 // La redirección mostrará el mensaje flash de éxito en el nuevo modal
-                window.location.href = LISTA_URL;
+                showNotificationModal(data.message || 'Operación exitosa', 'Se creó exitosamente la orden de producción.');
+                setTimeout(() => {window.location.href = LISTA_URL}, 1500);
             } else {
                 // Mostrar error de validación en el modal
                 showNotificationModal('Error de Validación', data.error, 'error');
