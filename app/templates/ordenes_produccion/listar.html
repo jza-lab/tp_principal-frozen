@@ -44,14 +44,14 @@
                                         Pendientes
                                     </a>
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" 
-                                    class="btn btn-sm {% if current_status == 'EN_PROCESO' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        En Proceso
-                                    </a>
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
                                     <a href="{{ url_for('orden_produccion.listar', estado='APROBADA') }}" 
                                     class="btn btn-sm {% if current_status == 'APROBADA' %}btn-primary{% else %}btn-secondary{% endif %}">
                                         Aprobadas
+                                    </a>
+                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                                    <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" 
+                                    class="btn btn-sm {% if current_status == 'EN_PROCESO' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        En Proceso
                                     </a>
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
                                     <a href="{{ url_for('orden_produccion.listar', estado='CANCELADA') }}" 

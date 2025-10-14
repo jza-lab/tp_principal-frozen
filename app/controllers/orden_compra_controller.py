@@ -16,7 +16,8 @@ class OrdenCompraController:
 
     def _parse_form_data(self, form_data):
         """
-        Parsea los datos del formulario web o de un diccionario, incluyendo los items anidados.
+        Parsea los datos del formulario web o de un diccionario, calcula los totales
+        y prepara los datos para la creación/actualización de la orden.
         """
         orden_data = {
             'proveedor_id': form_data.get('proveedor_id'),
@@ -24,39 +25,52 @@ class OrdenCompraController:
             'fecha_estimada_entrega': form_data.get('fecha_estimada_entrega'),
             'prioridad': form_data.get('prioridad'),
             'observaciones': form_data.get('observaciones'),
-            'subtotal': form_data.get('subtotal'),
-            'iva': form_data.get('iva'),
-            'total': form_data.get('total'),
         }
 
         items_data = []
+        subtotal_calculado = 0.0
 
-        # --- LÓGICA MEJORADA ---
-        # Comprueba si form_data tiene el método 'getlist' (es un form de Flask)
+        # Determinar si los datos vienen de un form de Flask o de un dict (ej. JSON)
         if hasattr(form_data, 'getlist'):
             insumo_ids = form_data.getlist('insumo_id[]')
+            # Se busca 'cantidad_solicitada' y, si no existe, se usa 'cantidad_faltante' como fallback
             cantidades = form_data.getlist('cantidad_solicitada[]')
+            if not cantidades:
+                cantidades = form_data.getlist('cantidad_faltante[]')
             precios = form_data.getlist('precio_unitario[]')
         else:
-            # Si es un diccionario normal, accede a las claves directamente
             insumo_ids = form_data.get('insumo_id[]', [])
             cantidades = form_data.get('cantidad_solicitada[]', [])
+            if not cantidades:
+                cantidades = form_data.get('cantidad_faltante[]', [])
             precios = form_data.get('precio_unitario[]', [])
-        # ------------------------
 
         for i in range(len(insumo_ids)):
             if insumo_ids[i]:
                 try:
                     cantidad = float(cantidades[i] or 0)
                     precio = float(precios[i] or 0)
+                    item_subtotal = cantidad * precio
+                    subtotal_calculado += item_subtotal
+                    
                     items_data.append({
                         'insumo_id': insumo_ids[i],
                         'cantidad_solicitada': cantidad,
-                        'precio_unitario': precio
+                        'precio_unitario': precio,
+                        'cantidad_recibida': 0.0
                     })
                 except (ValueError, IndexError) as e:
                     logger.warning(f"Error parseando item de orden de compra: {e}")
                     continue
+        
+        # Calcular IVA y Total
+        iva_calculado = subtotal_calculado * 0.21
+        total_calculado = subtotal_calculado + iva_calculado
+
+        # Sobrescribir los valores en orden_data con los calculados en el backend
+        orden_data['subtotal'] = round(subtotal_calculado, 2)
+        orden_data['iva'] = round(iva_calculado, 2)
+        orden_data['total'] = round(total_calculado, 2)
 
         return orden_data, items_data
 

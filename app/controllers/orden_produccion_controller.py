@@ -283,7 +283,7 @@ class OrdenProduccionController(BaseController):
         form_data_simulado = {
             **datos_oc,
             'insumo_id[]': [item['insumo_id'] for item in items_oc_para_form],
-            'cantidad_solicitada[]': [item['cantidad_faltante'] for item in items_oc_para_form],
+            'cantidad_faltante[]': [item['cantidad_faltante'] for item in items_oc_para_form],
             'precio_unitario[]': [item['precio_unitario'] for item in items_oc_para_form]
         }
 
