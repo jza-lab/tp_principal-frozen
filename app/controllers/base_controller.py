@@ -7,77 +7,80 @@ import logging
 logger = logging.getLogger(__name__)
 
 class BaseController:
-    """Controlador base con métodos comunes"""
+    """
+    Controlador base que proporciona métodos de utilidad comunes heredables
+    por otros controladores de la aplicación.
+    """
 
     def __init__(self):
+        """
+        Inicializa el controlador base, preparando esquemas y modelos comunes.
+        """
         self.response_schema = ResponseSchema()
         self.direccion_model = DireccionModel()
         self.direccion_schema = DireccionSchema()
 
-    def _actualizar_direccion(self, direccion_id: int, direccion_data: Dict) -> bool:
-        """Actualiza una dirección existente."""
-        if not direccion_data or not direccion_id:
-            return False
-
-        update_result = self.direccion_model.update(direccion_id, direccion_data, 'id')
-        return update_result.get('success', False)
-    
     def _get_or_create_direccion(self, direccion_data: Dict) -> Optional[int]:
-        """Busca una dirección existente o crea una nueva si no se encuentra."""
+        """
+        Busca una dirección que coincida exactamente con los datos proporcionados.
+        Si no se encuentra, crea un nuevo registro de dirección.
+        Este método es esencial para la reutilización de direcciones y evitar datos duplicados en la base de datos.
+        """
         if not direccion_data:
             return None
 
-        # Extraer latitud y longitud antes de la validación
         latitud = direccion_data.pop('latitud', None)
         longitud = direccion_data.pop('longitud', None)
 
-        print(direccion_data)
-
         existing_address_result = self.direccion_model.find_by_full_address(
-            calle=direccion_data['calle'],
-            altura=direccion_data['altura'],
+            calle=direccion_data.get('calle'),
+            altura=direccion_data.get('altura'),
             piso=direccion_data.get('piso'),
             depto=direccion_data.get('depto'),
-            localidad=direccion_data['localidad'],
-            provincia=direccion_data['provincia']
+            localidad=direccion_data.get('localidad'),
+            provincia=direccion_data.get('provincia')
         )
 
-        if existing_address_result['success']:
+        if existing_address_result.get('success'):
             return existing_address_result['data']['id']
         else:
-            # Re-agregar latitud y longitud para la creación
             if latitud is not None:
                 direccion_data['latitud'] = latitud
             if longitud is not None:
                 direccion_data['longitud'] = longitud
 
             new_address_result = self.direccion_model.create(direccion_data)
-            if new_address_result['success']:
+            if new_address_result.get('success'):
                 return new_address_result['data']['id']
+        
+        logger.error(f"Error crítico al obtener o crear dirección con datos: {direccion_data}")
         return None
 
-    def success_response(self, data=None, message=None, status_code=200):
-        """Devuelve una respuesta exitosa"""
-        # --- FIX: Asegurar que el mensaje sea una cadena vacía si es None ---
-        message_to_use = str(message) if message is not None else "Acción exitosa"
-        # --------------------------------------------------------------------
+    def success_response(self, data: Any = None, message: str = "Acción exitosa", status_code: int = 200) -> tuple:
+        """
+        Genera una tupla de respuesta HTTP estándar para operaciones exitosas.
+        """
         response = {
             'success': True,
             'data': data,
-            'message': message_to_use
+            'message': message
         }
         return response, status_code 
 
-    def error_response(self, error_message, status_code=400):
-        """Devuelve una respuesta de error"""
+    def error_response(self, error_message: str, status_code: int = 400) -> tuple:
+        """
+        Genera una tupla de respuesta HTTP estándar para operaciones fallidas.
+        """
         response = {
             'success': False,
             'error': str(error_message)
         }
-        return response, status_code  # ✅ Tupla (dict, int)
+        return response, status_code
 
     def paginate_results(self, data: list, page: int, page_size: int) -> Dict:
-        """Paginar resultados"""
+        """
+        Aplica paginación a una lista de resultados.
+        """
         total = len(data)
         start = (page - 1) * page_size
         end = start + page_size
@@ -87,7 +90,7 @@ class BaseController:
             'pagination': {
                 'page': page,
                 'page_size': page_size,
-                'total': total,
-                'pages': (total + page_size - 1) // page_size
+                'total_items': total,
+                'total_pages': (total + page_size - 1) // page_size
             }
         }

@@ -9,7 +9,7 @@ from app.schemas.usuario_schema import UsuarioSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, timedelta, time
+from datetime import datetime, date, timedelta
 import logging
 import json
 from app.controllers.direccion_controller import GeorefController
@@ -37,7 +37,7 @@ class UsuarioController(BaseController):
         self.usuario_direccion_controller = GeorefController()
         self.direccion_model = DireccionModel()
 
-    #region Gestión de Usuarios (CRUD)
+    # region Gestión de Usuarios (CRUD)
 
     def crear_usuario(self, data: Dict) -> Dict:
         """Valida y crea un nuevo usuario, incluyendo su dirección y sectores."""
@@ -160,6 +160,7 @@ class UsuarioController(BaseController):
     # endregion
 
     # region Autenticación y Sesiones
+
     def autenticar_usuario_web(self, legajo: str, password: str) -> Dict:
         """Autentica un usuario para el acceso web por legajo y contraseña."""
         auth_result = self._autenticar_credenciales_base(legajo, password)
@@ -230,9 +231,36 @@ class UsuarioController(BaseController):
             logger.error(f"Error en desactivar_login_totem: {str(e)}", exc_info=True)
             return {'success': False, 'error': f'Error interno: {str(e)}'}
 
+    def cerrar_sesiones_expiradas_totem(self) -> dict:
+        """
+        Cierra todas las sesiones de tótem activas cuyo turno ha finalizado,
+        considerando las autorizaciones de horas extras.
+        """
+        logger.info("Iniciando tarea de cierre de sesiones de tótem expiradas...")
+        active_sessions_result = self.totem_sesion.find_all_active()
+
+        if not active_sessions_result.get('success') or not active_sessions_result.get('data'):
+            logger.info("No se encontraron sesiones de tótem activas.")
+            return {'success': True, 'message': 'No hay sesiones activas para verificar.'}
+
+        sessions_closed = 0
+        for user_session in active_sessions_result['data']:
+            user_result = self.model.find_by_id(user_session['usuario_id'])
+            if not user_result.get('success'):
+                continue
+
+            usuario = user_result['data']
+            if self._sesion_debe_cerrarse(usuario, user_session):
+                self.totem_sesion.cerrar_sesion(usuario['id'])
+                sessions_closed += 1
+        
+        logger.info(f"Tarea finalizada. Se cerraron {sessions_closed} sesiones de tótem.")
+        return {'success': True, 'message': f'Se cerraron {sessions_closed} sesiones expiradas.'}
+
     # endregion
 
     # region Verificación de Acceso y Horarios
+
     def verificar_acceso_web(self, usuario_id: int) -> Dict:
         """Verifica si un usuario tiene permitido el acceso a la plataforma web."""
         user_result = self.model.find_by_id(usuario_id)
@@ -319,6 +347,7 @@ class UsuarioController(BaseController):
     # endregion
 
     # region Obtención de Datos Relacionados (Sectores, Roles, Turnos)
+
     def obtener_todos_los_sectores(self) -> List[Dict]:
         """Obtiene todos los sectores disponibles."""
         return self.sector_model.find_all().get('data', [])
@@ -343,7 +372,8 @@ class UsuarioController(BaseController):
 
     # endregion
 
-    # region Reporte y Actividad
+    # region Reportería y Actividad
+
     def obtener_actividad_totem(self, filtros: Optional[Dict] = None) -> Dict:
         """Obtiene la lista de actividad del tótem, con filtros opcionales."""
         return self.totem_sesion.obtener_actividad_filtrada(filtros)
@@ -369,6 +399,7 @@ class UsuarioController(BaseController):
     # endregion
 
     # region Validación y Helpers
+
     def validar_campo_unico(self, field: str, value: str, user_id: Optional[int] = None) -> Dict:
         """Verifica si un valor de campo ya existe en la base de datos."""
         field_map = {'legajo': 'Legajo', 'email': 'Email', 'cuil_cuit': 'CUIL/CUIT', 'telefono': 'Teléfono'}
@@ -487,6 +518,7 @@ class UsuarioController(BaseController):
             if update_result.get('success'):
                 return {'success': True, 'direccion_id': original_direccion_id}
         
+        # Asumo que _get_or_create_direccion existe
         new_direccion_id = self._get_or_create_direccion(direccion_normalizada)
         if new_direccion_id:
             return {'success': True, 'direccion_id': new_direccion_id}
@@ -540,25 +572,37 @@ class UsuarioController(BaseController):
             "longitud": norm_data['ubicacion']['lon']
         }
 
-    def _get_or_create_direccion(self, direccion_data: Dict) -> Optional[int]:
+    def _sesion_debe_cerrarse(self, usuario: dict, session: dict) -> bool:
         """
-        Busca una dirección existente con los datos proporcionados. Si no la encuentra,
-        crea una nueva. Devuelve el ID de la dirección.
+        Determina si una sesión de tótem específica debe cerrarse por haber expirado.
         """
-        try:
-            # Buscar una dirección que coincida exactamente
-            resultado_busqueda = self.direccion_model.find_exact_match(direccion_data)
-            if resultado_busqueda.get('success') and resultado_busqueda.get('data'):
-                return resultado_busqueda['data']['id']
+        turno = usuario.get('turno')
+        if not turno or not turno.get('hora_fin'):
+            return False # No se puede determinar, no se cierra
 
-            # Si no se encuentra, crear una nueva
-            resultado_creacion = self.direccion_model.create(direccion_data)
-            if resultado_creacion.get('success'):
-                return resultado_creacion['data']['id']
+        try:
+            hora_fin_turno = datetime.strptime(turno['hora_fin'], '%H:%M:%S').time()
+            session_start_date = datetime.fromisoformat(session['fecha_inicio']).date()
+            shift_end_datetime = datetime.combine(session_start_date, hora_fin_turno)
             
-            logger.error(f"No se pudo crear la dirección: {resultado_creacion.get('error')}")
-            return None
-        except Exception as e:
-            logger.error(f"Error en _get_or_create_direccion: {str(e)}", exc_info=True)
-            return None
+            # Si el turno termina al día siguiente (turno noche)
+            if shift_end_datetime < datetime.fromisoformat(session['fecha_inicio']):
+                shift_end_datetime += timedelta(days=1)
+
+            grace_period_end = shift_end_datetime + timedelta(minutes=15)
+
+            if datetime.now() > grace_period_end:
+                # La sesión ha expirado, a menos que haya horas extras.
+                autorizacion_model = AutorizacionIngresoModel()
+                auth_result = autorizacion_model.find_by_usuario_and_fecha(
+                    usuario['id'], date.today(), tipo='HORAS_EXTRAS', estado='APROBADA'
+                )
+                if auth_result.get('success') and auth_result.get('data'):
+                    # El usuario tiene autorización, no se cierra la sesión.
+                    return False 
+                return True # La sesión expiró y no hay autorización.
+        except (ValueError, TypeError):
+            return False # Error en los datos, no se arriesga a cerrar.
+            
+        return False
     # endregion
