@@ -301,60 +301,157 @@ class PedidoController(BaseController):
             logging.error(f"Error en aprobar_pedido: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
-    def actualizar_pedido_con_items(self, pedido_id: int, form_data: Dict) -> tuple:
+    def _get_or_create_direccion(self, direccion_data: Dict) -> Optional[int]:
         """
-        Valida y actualiza un pedido existente y sus items.
+        Busca una dirección por sus componentes. Si no existe, la crea.
+        Devuelve el ID de la dirección.
         """
         try:
-            if 'items-TOTAL_FORMS' in form_data:
-                form_data.pop('items-TOTAL_FORMS')
+            # Normalizar datos para la búsqueda
+            calle = direccion_data.get('calle')
+            altura = direccion_data.get('altura')
+            localidad = direccion_data.get('localidad')
+            provincia = direccion_data.get('provincia')
+            piso = direccion_data.get('piso')
+            depto = direccion_data.get('depto')
+
+            # Buscar si la dirección ya existe
+            existing_address = self.direccion_model.find_by_full_address(
+                calle, altura, piso, depto, localidad, provincia
+            )
+
+            if existing_address.get('success'):
+                return existing_address['data']['id']
+            else:
+                # Si no existe, crear una nueva
+                # Validar que los campos requeridos no sean None
+                required_fields = {
+                    'calle': calle, 'altura': altura, 'localidad': localidad, 'provincia': provincia,
+                    'codigo_postal': direccion_data.get('codigo_postal')
+                }
+                if not all(required_fields.values()):
+                    logging.error(f"Faltan datos para crear la dirección: {required_fields}")
+                    return None
+
+                new_address_res = self.direccion_model.create(direccion_data)
+                if new_address_res.get('success'):
+                    return new_address_res['data']['id']
+                else:
+                    logging.error(f"Error al crear la dirección: {new_address_res.get('error')}")
+                    return None
+        except Exception as e:
+            logging.error(f"Error en _get_or_create_direccion: {e}", exc_info=True)
+            return None
+
+    def _actualizar_direccion(self, direccion_id: int, direccion_data: Dict) -> bool:
+        """
+        Actualiza una dirección existente. Devuelve True si fue exitoso.
+        """
+        try:
+            update_res = self.direccion_model.update(direccion_id, direccion_data)
+            return update_res.get('success', False)
+        except Exception as e:
+            logging.error(f"Error en _actualizar_direccion: {e}", exc_info=True)
+            return False
+
+    def actualizar_pedido_con_items(self, pedido_id: int, form_data: Dict, estado_original: str) -> tuple:
+        """
+        Valida y actualiza un pedido y sus items. Si el pedido estaba 'EN_PROCESO',
+        crea OPs para los nuevos items sin stock.
+        """
+        try:
+            # Consolidar y preparar datos
             if 'items' in form_data:
                 form_data['items'] = self._consolidar_items(form_data['items'])
-
-            items_data = form_data.pop('items')
+            items_data = form_data.pop('items', [])
             pedido_data = form_data
-            
+
+            # ... (lógica de dirección sin cambios)
             direccion_payload = form_data.get('direccion_entrega', {})
             direccion_data = {
-                'calle': direccion_payload.get('calle'),
-                'altura': direccion_payload.get('altura'),
-                'provincia': direccion_payload.get('provincia'),
-                'localidad': direccion_payload.get('localidad'),
-                'piso': direccion_payload.get('piso'),
-                'depto': direccion_payload.get('depto'),
+                'calle': direccion_payload.get('calle'), 'altura': direccion_payload.get('altura'),
+                'provincia': direccion_payload.get('provincia'), 'localidad': direccion_payload.get('localidad'),
+                'piso': direccion_payload.get('piso'), 'depto': direccion_payload.get('depto'),
                 'codigo_postal': direccion_payload.get('codigo_postal')
             }
-
-            pedido_actual_resp, estado= self.obtener_pedido_por_id(pedido_id)
+            pedido_actual_resp, _ = self.obtener_pedido_por_id(pedido_id)
             pedido_actual = pedido_actual_resp.get('data')
-
-            id_direccion_vieja = pedido_actual['id_direccion_entrega']
-            
-
-            if(id_direccion_vieja):
-                cantidad_misma_direccion = self.model.contar_pedidos_direccion(id_direccion_vieja)
-
-                if(cantidad_misma_direccion>1):
+            id_direccion_vieja = pedido_actual.get('id_direccion_entrega')
+            direccion_id = None
+            if id_direccion_vieja:
+                cantidad_misma_direccion = self.model.contar_pedidos_direccion(id_direccion_vieja, pedido_id)
+                if cantidad_misma_direccion > 0:
                     direccion_id = self._get_or_create_direccion(direccion_data)
-                    if direccion_id:
-                            pedido_data['direccion_id'] = direccion_id
                 else:
-                    self._actualizar_direccion(id_direccion_vieja, direccion_data)
-                    pedido_data['direccion_id'] = id_direccion_vieja
+                    actualizacion_exitosa = self._actualizar_direccion(id_direccion_vieja, direccion_data)
+                    direccion_id = id_direccion_vieja if actualizacion_exitosa else self._get_or_create_direccion(direccion_data)
             else:
                 direccion_id = self._get_or_create_direccion(direccion_data)
-                if direccion_id:
-                    pedido_data['direccion_id'] = direccion_id
+
+            if not direccion_id:
+                return self.error_response("No se pudo procesar la dirección de entrega.", 400)
             
-            form_data['id_direccion_entrega'] = direccion_id
-            form_data.pop('direccion_entrega', None)
-            
+            pedido_data['id_direccion_entrega'] = direccion_id
+            pedido_data.pop('direccion_entrega', None)
+
+            # Actualizar el pedido y obtener los items nuevos
             result = self.model.update_with_items(pedido_id, pedido_data, items_data)
 
-            if result.get('success'):
-                return self.success_response(data=result.get('data'), message="Pedido actualizado con éxito.")
-            else:
+            if not result.get('success'):
                 return self.error_response(result.get('error', 'No se pudo actualizar el pedido.'), 400)
+
+            # --- Lógica para crear OP si el estado era 'EN_PROCESO' ---
+            if estado_original == 'EN_PROCESO':
+                nuevos_items = result.get('data', {}).get('nuevos_items', [])
+                if nuevos_items:
+                    # Necesitamos el ID del usuario para crear la OP
+                    from flask import session
+                    usuario_id = session.get('usuario_id')
+                    if not usuario_id:
+                        return self.error_response("Sesión de usuario no encontrada para crear OP.", 401)
+
+                    for item in nuevos_items:
+                        producto_id = item['producto_id']
+                        cantidad_solicitada = item['cantidad']
+
+                        # 1. Verificar si tiene receta
+                        receta_result = self.receta_model.find_all({'producto_id': producto_id, 'activa': True}, limit=1)
+                        if not receta_result.get('success') or not receta_result.get('data'):
+                            logging.warning(f"Nuevo item (ID: {item['id']}) del producto {producto_id} no tiene receta activa. No se generará OP.")
+                            continue # Pasar al siguiente item
+
+                        # 2. Verificar stock
+                        stock_response, _ = self.lote_producto_controller.obtener_stock_producto(producto_id)
+                        stock_disponible = stock_response.get('data', {}).get('stock_total', 0)
+
+                        if cantidad_solicitada > stock_disponible:
+                            cantidad_a_producir = cantidad_solicitada - stock_disponible
+                            logging.info(f"Stock insuficiente para nuevo item. Solicitado: {cantidad_solicitada}, Disponible: {stock_disponible}. Se creará OP por {cantidad_a_producir}.")
+                            
+                            # 3. Crear OP
+                            datos_orden = {
+                                'producto_id': producto_id,
+                                'cantidad': cantidad_a_producir,
+                                'fecha_planificada': date.today().isoformat(),
+                                'prioridad': 'NORMAL'
+                            }
+                            resultado_op, _ = self.orden_produccion_controller.crear_orden(datos_orden, usuario_id)
+
+                            if resultado_op.get('success'):
+                                orden_creada = resultado_op.get('data', {})
+                                # 4. Actualizar el item del pedido
+                                self.model.update_item(item['id'], {
+                                    'estado': 'EN_PRODUCCION',
+                                    'orden_produccion_id': orden_creada.get('id')
+                                })
+                                logging.info(f"OP {orden_creada.get('id')} creada para el item {item['id']}.")
+                            else:
+                                logging.error(f"No se pudo crear la OP para el nuevo item {item['id']}. Error: {resultado_op.get('error')}")
+            
+            # Actualizar el estado general del pedido después de los cambios
+            self.model.actualizar_estado_agregado(pedido_id)
+
+            return self.success_response(data=result.get('data'), message="Pedido actualizado con éxito.")
 
         except ValidationError as e:
             if 'items' in e.messages and isinstance(e.messages['items'], list):

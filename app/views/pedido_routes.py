@@ -121,48 +121,61 @@ def nueva():
                            today=hoy,
                            fecha_limite=fecha_limite)
 
-@orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST','PUT'])
+@orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST', 'PUT'])
 @permission_required(accion='modificar_ordenes_venta')
 def editar(id):
-    
     """Gestiona la edición de un pedido de venta existente."""
+    
+    # --- Verificación de Estado ---
+    pedido_resp, _ = controller.obtener_pedido_por_id(id)
+    if not pedido_resp.get('success'):
+        flash(pedido_resp.get('error', 'Pedido no encontrado.'), 'error')
+        return redirect(url_for('orden_venta.listar'))
+    
+    pedido = pedido_resp.get('data')
+    
+    # Estados permitidos para la edición
+    estados_permitidos = ['PENDIENTE', 'EN_PROCESO']
+    
+    if pedido.get('estado') not in estados_permitidos:
+        mensaje_error = f"No se puede editar el pedido porque su estado es '{pedido.get('estado')}'. Solo se permiten los estados: {', '.join(estados_permitidos)}."
+        if request.method == 'PUT':
+            return jsonify({"success": False, "error": mensaje_error}), 403
+        else:
+            flash(mensaje_error, 'error')
+            return redirect(url_for('orden_venta.detalle', id=id))
+    # -----------------------------
 
     hoy = datetime.now().strftime('%Y-%m-%d')
+    
     if request.method == 'PUT':
         try:
             json_data = request.get_json()
             if not json_data:
                 return jsonify({"success": False, "error": "No se recibieron datos JSON válidos"}), 400
 
-            response_data, status_code = controller.actualizar_pedido_con_items(id, json_data)
+            # Se pasa el estado original al controlador para la nueva lógica
+            response_data, status_code = controller.actualizar_pedido_con_items(id, json_data, pedido.get('estado'))
 
-            if status_code < 300: # Éxito
-                    return jsonify({
-                        'success': True,
-                        'message': response_data.get('message', 'Pedido actualizado con éxito.'),
-                        'redirect_url': url_for('orden_venta.detalle', id=id)
-                    }), 200
-            else: # Error de validación
-                    return jsonify({
-                        'success': False,
-                        'message': response_data.get('message', 'Error al actualizar el pedido.'),
-                        'errors': response_data.get('errors', {})
-                    }), status_code
+            if status_code < 300:  # Éxito
+                return jsonify({
+                    'success': True,
+                    'message': response_data.get('message', 'Pedido actualizado con éxito.'),
+                    'redirect_url': url_for('orden_venta.detalle', id=id)
+                }), 200
+            else:  # Error de validación o de lógica de negocio
+                return jsonify({
+                    'success': False,
+                    'message': response_data.get('message', 'Error al actualizar el pedido.'),
+                    'errors': response_data.get('errors', {})
+                }), status_code
             
         except Exception as e:
-                print(f"Error inesperado en PUT /editar: {e}") 
-                return jsonify({"success": False, "error": "Ocurrió un error interno en el servidor."}), 500
-       
+            print(f"Error inesperado en PUT /editar: {e}")
+            return jsonify({"success": False, "error": "Ocurrió un error interno en el servidor."}), 500
 
     # Método GET
-    pedido_resp, _ = controller.obtener_pedido_por_id(id)
-    pedido= pedido_resp.get('data')
-
-    if not pedido_resp.get('success'):
-        flash(pedido_resp.get('error', 'Pedido no encontrado.'), 'error')
-        return redirect(url_for('orden_venta.listar'))
-
-    cliente_resp, _ = cliente_controller.obtener_cliente(pedido['id_cliente'])
+    cliente_resp, _ = cliente_controller.obtener_cliente(pedido.get('id_cliente'))
     cliente=cliente_resp.get('data')
 
     if(cliente and cliente['cuit']):
