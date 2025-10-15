@@ -14,7 +14,7 @@
         <a href="{{ url_for('orden_produccion.listar') }}" class="btn btn-outline-secondary me-2">
             <i class="bi bi-arrow-left me-1"></i>Volver
         </a>
-        {% if orden.estado == 'PLANIFICADA' %}
+        {% if orden.estado == 'LISTA PARA PRODUCIR' %}
             {% if has_permission('iniciar_produccion') %}
             <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                 data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
@@ -43,11 +43,12 @@
                 <h5 class="mb-0">Información General</h5>
                 <div>
                     {% set estado_config = {
-                    'PLANIFICADA': {'class': 'bg-secondary', 'icon': 'calendar'},
-                    'EN_PROCESO': {'class': 'bg-primary', 'icon': 'play-circle'},
-                    'PAUSADA': {'class': 'bg-warning text-dark', 'icon': 'pause-circle'},
-                    'COMPLETADA': {'class': 'bg-success', 'icon': 'check-circle'},
-                    'CANCELADA': {'class': 'bg-danger', 'icon': 'x-circle'}
+                        'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
+                        'EN_ESPERA': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
+                        'LISTA PARA PRODUCIR': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
+                        'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
+                        'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle-fill'},
+                        'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
                     {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':
                     'question-circle'}) %}
@@ -182,6 +183,16 @@
                         <h6 class="text-muted mb-2"><i class="bi bi-chat-left-text me-1"></i>Observaciones</h6>
                         <div class="border-start border-3 border-warning ps-3">
                             <p class="mb-0">{{ orden.observaciones }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if orden.estado == 'EN ESPERA' and orden.orden_compra_id %}
+                    <div class="col-12">
+                        <div class="alert alert-warning">
+                            <i class="bi bi-hourglass-split me-2"></i>
+                            Esta orden está en espera de insumos.
+                            <a href="{{ url_for('orden_compra.detalle', id=orden.orden_compra_id) }}" class="alert-link">Ver Orden de Compra asociada</a>.
                         </div>
                     </div>
                     {% endif %}

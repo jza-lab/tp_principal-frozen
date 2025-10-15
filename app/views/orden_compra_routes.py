@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from app.controllers.orden_compra_controller import OrdenCompraController
+from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
 from app.permisos import permission_required
@@ -8,6 +9,7 @@ from datetime import datetime
 orden_compra_bp = Blueprint("orden_compra", __name__, url_prefix="/compras")
 
 controller = OrdenCompraController()
+orden_produccion_controller = OrdenProduccionController()
 proveedor_controller = ProveedorController()
 insumo_controller = InsumoController()
 
@@ -149,7 +151,7 @@ def procesar_recepcion(orden_id):
     if not usuario_id:
         flash("Su sesión ha expirado, por favor inicie sesión de nuevo.", "error")
         return redirect(url_for("auth.login"))
-    resultado = controller.procesar_recepcion(orden_id, request.form, usuario_id)
+    resultado = controller.procesar_recepcion(orden_id, request.form, usuario_id, orden_produccion_controller)
     if resultado.get("success"):
         flash(
             "Recepción de la orden procesada exitosamente. Se crearon los lotes en inventario.",

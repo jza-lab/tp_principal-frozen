@@ -49,14 +49,19 @@
                                         En Proceso
                                     </a>
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='APROBADA') }}" 
-                                    class="btn btn-sm {% if current_status == 'APROBADA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Aprobadas
+                                    <a href="{{ url_for('orden_produccion.listar', estado='EN_ESPERA') }}" 
+                                    class="btn btn-sm {% if current_status == 'EN_ESPERA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        En Espera
                                     </a>
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='CANCELADA') }}" 
-                                    class="btn btn-sm {% if current_status == 'CANCELADA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        En Espera
+                                    <a href="{{ url_for('orden_produccion.listar', estado='LISTA PARA PRODUCIR') }}" 
+                                    class="btn btn-sm {% if current_status == 'LISTA PARA PRODUCIR' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        Lista para Producir
+                                    </a>
+                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                                    <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" 
+                                    class="btn btn-sm {% if current_status == 'EN_PROCESO' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        En Proceso
                                     </a>
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
                                     <a href="{{ url_for('orden_produccion.listar', estado='COMPLETADA') }}" 
@@ -159,8 +164,8 @@
                     <h5 class="card-title">{{ orden.producto_nombre or 'Producto no definido' }}</h5>
                     {% set estado_config = {
                         'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
-                        'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
-                        'PLANIFICADA': {'class': 'bg-light text-dark', 'icon': 'calendar3'},
+                        'EN_ESPERA': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
+                        'LISTA PARA PRODUCIR': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
                         'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
                         'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle-fill'},
                         'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
@@ -236,7 +241,7 @@
                         <i class="bi bi-eye"></i>
                     </a>
 
-                    {% if orden.estado == 'PLANIFICADA' or orden.estado == 'APROBADA' %}
+                    {% if orden.estado == 'LISTA PARA PRODUCIR' %}
                         {% if has_permission('iniciar_produccion') %}
                         <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                             data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
@@ -323,8 +328,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const forms = document.querySelectorAll('.confirm-form');
     
     // Función para manejar la creación de OC + OP
-    async function handleCreateOcOp(ordenId, insumosFaltantes) {
-        const url = `/ordenes/${ordenId}/crear_oc_op`;
+      async function handleCreateOcOp(ordenId, insumosFaltantes) {
+        const url = `/ordenes/${ordenId}/crear_oc_op`; 
+        
+        // Muestra un modal temporal de procesamiento mientras se genera la OC
+        showNotificationModal('Procesando', 'Generando Orden de Compra...', 'info', null, true);
         
         try {
             const response = await fetch(url, {
@@ -333,37 +341,54 @@ document.addEventListener('DOMContentLoaded', function () {
                 body: JSON.stringify({ insumos_faltantes: insumosFaltantes })
             });
 
-            // 1. Manejo robusto de la respuesta: lee texto y luego parsea JSON
-            const text = await response.text();
+            // Si hay una redirección, la seguimos (ej. si Flask redirige por un error)
+            if (response.redirected) {
+                window.location.href = response.url;
+                return;
+            }
+
+            // Intentar parsear el JSON de forma nativa
             let result;
-            let status = response.status;
-            
             try {
-                result = JSON.parse(text);
+                // Usamos response.json() para una gestión más limpia del Content-Type
+                result = await response.json(); 
             } catch (e) {
-                // Si falla el parseo, pero el status es de éxito, inyecta un resultado de éxito simulado
-                if (status >= 200 && status < 300) {
-                    result = { success: true, message: "Operación completada, pero con respuesta vacía.", oc_codigo: 'N/A' };
-                } else {
-                    // Si falla el parseo y es un error (4xx/5xx), utiliza el texto como error.
-                    result = { success: false, error: text || `Error ${status} del servidor.` };
-                }
+                // Fallo crítico al parsear JSON. Leemos el texto para loguear y reportar.
+                const text = await response.text();
+                console.error("Fallo al parsear la respuesta JSON de crear_oc_op. Texto recibido:", text);
+                showNotificationModal('Error de Servidor (JSON)', `Respuesta no válida del servidor (Código ${response.status}). Revise la consola para detalles.`, 'error');
+                return;
+            }
+
+            // 1. Manejo de errores basado en el código HTTP
+            if (!response.ok) {
+                 showNotificationModal('Error de Servidor', result.error || 'Fallo desconocido al crear OC/OP.', 'error');
+                 return;
             }
             
+            // 2. Manejo de éxito basado en el contenido del JSON
             if (result.success) {
-                // Éxito: OC y OP creadas. Redirigir a la lista de Compras.
+                const ocCodigo = result.oc_codigo || (result.data ? result.data.oc_codigo : 'N/A');
+                
+                // Usamos el mensaje del servidor si existe, sino un mensaje de respaldo garantizado
+                const finalMessage = result.message || 
+                                     `✅ Se generó la Orden de Compra ${ocCodigo} para cubrir los faltantes. La OP ahora está en 'En Espera'.`;
+                
                 showNotificationModal(
                     'OP Aprobada y OC Creada',
-                    result.message || `Se creó la OC ${result.oc_codigo} para cubrir faltantes.`,
+                    finalMessage, 
                     'success',
-                    () => { window.location.href = result.redirect_url; }
+                    () => { 
+                        // Redirigir a la lista de OC para ver la orden recién creada
+                        window.location.href = result.redirect_url || "{{ url_for('orden_compra.listar') }}"; 
+                    }
                 );
             } else {
                 showNotificationModal('Error Crítico', result.error || 'No se pudo crear la OC/OP. Intente de nuevo.', 'error');
             }
         } catch (error) {
-            console.error('Error de red/Parseo al crear OC/OP:', error);
-            showNotificationModal('Error de Red', 'Fallo de conexión o error de parseo irrecuperable.', 'error');
+            console.error('Error de red al crear OC/OP:', error);
+            showNotificationModal('Error de Red', 'Fallo de conexión.', 'error');
         }
     }
 
@@ -437,9 +462,11 @@ document.addEventListener('DOMContentLoaded', function () {
                                 'warning'
                             );
                         } else if (data.success) {
-                            showNotificationModal('Éxito', 'Accion exitosa', 'success', () => { 
+                            // --- CÓDIGO CORREGIDO PARA USAR data.message ---
+                            showNotificationModal('Éxito', data.message || 'Acción exitosa.', 'success', () => { 
                                 window.location.reload(); 
                             });
+                            // ------------------------------------------------
                         } else {
                             showNotificationModal('Error', data.error || 'Ocurrió un error al aprobar la OP.', 'error');
                         }

@@ -182,11 +182,11 @@ class OrdenProduccionController(BaseController):
 
     def aprobar_orden(self, orden_id: int, usuario_id: int) -> Dict:
         """
-        Aprueba una orden SOLO SI HAY STOCK SUFICIENTE. Si no hay, retorna un error
-        indicando la acción de crear OC.
+        Inicia el proceso de una orden PENDIENTE.
+        - Si hay stock, la pasa a 'LISTA PARA PRODUCIR' y reserva insumos.
+        - Si no hay stock, la pasa a 'EN ESPERA' y genera una OC.
         """
         try:
-            # 1. Obtener la orden de producción completa
             orden_result = self.obtener_orden_por_id(orden_id)
             if not orden_result.get('success'):
                 return self.error_response("Orden de producción no encontrada.", 404)
@@ -195,55 +195,43 @@ class OrdenProduccionController(BaseController):
             if orden_produccion['estado'] != 'PENDIENTE':
                 return self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
 
-            # 2. Dry Run: Verificar si hay stock suficiente SIN RESERVAR NADA
             verificacion_result = self.inventario_controller.verificar_stock_para_op(orden_produccion)
-            
             if not verificacion_result.get('success'):
-                return self.error_response(f"Error del sistema al verificar stock: {verificacion_result.get('error')}", 500)
+                return self.error_response(f"Error al verificar stock: {verificacion_result.get('error')}", 500)
 
             insumos_faltantes = verificacion_result['data']['insumos_faltantes']
             
-            # 3. SI HAY FALTANTES: Detener y retornar un código especial (409) con los datos.
             if insumos_faltantes:
-                mensaje_error = "No se puede aprobar la producción por **falta de stock** de los siguientes insumos:"
-                detalles = [f"{insumo['nombre']} (falta: {insumo['cantidad_faltante']})" for insumo in insumos_faltantes]
+                # --- CASO: FALTA STOCK ---
+                # 1. Generar OC automática
+                oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
+                if not oc_result.get('success'):
+                    return self.error_response(f"No se pudo generar la orden de compra: {oc_result.get('error')}", 500)
                 
-                # Prepara el mensaje de error para el frontend (con saltos de línea y guiones)
-                mensaje_error += " - " + " - ".join(detalles)
+                # 2. Cambiar estado de OP a 'EN ESPERA'
+                self.model.cambiar_estado(orden_id, 'EN ESPERA')
                 
-                # Retorno directo del diccionario de error con los datos necesarios
-                return (
-                    {
-                        'success': False,
-                        'error': mensaje_error,
-                        'data': {'insumos_faltantes': insumos_faltantes} 
-                    }, 
-                    409
+                return self.success_response(
+                    data={'oc_generada': True, 'oc_codigo': oc_result['data']['codigo_oc']},
+                    message="Stock insuficiente. Se generó la Orden de Compra y la OP está 'En Espera'."
                 )
+            else:
+                # --- CASO: HAY STOCK ---
+                # 1. Reservar insumos
+                reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
+                if not reserva_result.get('success'):
+                    return self.error_response(f"Fallo crítico al reservar insumos: {reserva_result.get('error')}", 500)
                 
-            # 4. SI NO HAY FALTANTES: Continuar con la aprobación y reserva.
-            
-            # A. Cambiar el estado a APROBADA (Esto actualiza fechas de aprobación y estimadas)
-            cambio_estado_result, status_code = self.cambiar_estado_orden(orden_id, 'APROBADA')
-            
-            if status_code != 200:
-                 return cambio_estado_result, status_code
-
-            # B. Intentar reservar los insumos necesarios (Reserva real)
-            reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
-
-            if not reserva_result.get('success'):
-                # Error crítico: la verificación pasó, pero la reserva falló.
-                return self.error_response(f"Fallo crítico: La orden se aprobó pero la reserva de insumos falló: {reserva_result.get('error')}", 500)
+                # 2. Cambiar estado a 'LISTA PARA PRODUCIR'
+                self.model.cambiar_estado(orden_id, 'LISTA PARA PRODUCIR')
                 
-            # Se ha aprobado y reservado.
-            return self.success_response(None, "Orden aprobada y stock de insumos reservado.")
+                return self.success_response(message="Stock disponible. La orden está 'Lista para Producir' y los insumos han sido reservados.")
 
         except Exception as e:
             logger.error(f"Error en el proceso de aprobación de OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
-    def _generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int) -> Dict:
+    def _generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int, orden_produccion_id: int) -> Dict:
         """
         Helper para crear una OC a partir de una lista de insumos faltantes.
         Aplica redondeo hacia arriba (ceil) en las cantidades solicitadas.
@@ -276,7 +264,8 @@ class OrdenProduccionController(BaseController):
             'proveedor_id': proveedor_id_por_defecto,
             'fecha_emision': date.today().isoformat(),
             'prioridad': 'ALTA',
-            'observaciones': 'Orden de Compra generada automáticamente para cubrir faltante de producción.',
+            'observaciones': f"Orden de Compra generada automáticamente para la OP ID: {orden_produccion_id}",
+            'orden_produccion_id': orden_produccion_id
         }
 
         # Simulamos los datos como si vinieran de un form para reusar el método del controlador
@@ -289,9 +278,9 @@ class OrdenProduccionController(BaseController):
 
         return self.orden_compra_controller.crear_orden(form_data_simulado, usuario_id)
     
-    def generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int) -> Dict:
+    def generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int, orden_produccion_id: int) -> Dict:
         """Wrapper publico para el helper privado _generar_orden_de_compra_automatica."""
-        return self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id)
+        return self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_produccion_id)
 
 
     def rechazar_orden(self, orden_id: int, motivo: str) -> Dict:
@@ -313,9 +302,8 @@ class OrdenProduccionController(BaseController):
                 
                 # 1. Validación de estado para INICIAR
                 if nuevo_estado == 'EN_PROCESO':
-                    if orden_produccion['estado'] != 'APROBADA':
-                        return self.error_response(f"La orden debe estar en estado 'APROBADA' para poder iniciarla. Estado actual: {orden_produccion['estado']}", 400)
-                    # Lógica de reserva/verificación de stock eliminada.
+                    if orden_produccion['estado'] != 'LISTA PARA PRODUCIR':
+                        return self.error_response(f"La orden debe estar en estado 'LISTA PARA PRODUCIR' para poder iniciarla. Estado actual: {orden_produccion['estado']}", 400)
 
                 # 2. Lógica para COMPLETAR la OP
                 if nuevo_estado == 'COMPLETADA':

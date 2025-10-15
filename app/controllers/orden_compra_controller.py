@@ -25,6 +25,8 @@ class OrdenCompraController:
             'fecha_estimada_entrega': form_data.get('fecha_estimada_entrega'),
             'prioridad': form_data.get('prioridad'),
             'observaciones': form_data.get('observaciones'),
+            # >>> AÑADE ESTA LÍNEA CRÍTICA <<<
+            'orden_produccion_id': form_data.get('orden_produccion_id'), 
         }
 
         items_data = []
@@ -298,7 +300,7 @@ class OrdenCompraController:
             logger.error(f"Error rechazando orden {orden_id}: {e}")
             return {'success': False, 'error': str(e)}
 
-    def procesar_recepcion(self, orden_id, form_data, usuario_id):
+    def procesar_recepcion(self, orden_id, form_data, usuario_id, orden_produccion_controller):
         """
         Procesa la recepción de una orden de compra, actualiza cantidades,
         cambia el estado y crea los lotes correspondientes en el inventario.
@@ -376,8 +378,29 @@ class OrdenCompraController:
 
                 if lotes_error_count > 0:
                     logger.warning(f"Recepción de OC {orden_id} completada, pero {lotes_error_count} lotes no se pudieron crear.")
+                
+                # --- LÓGICA ROBUSTA: Transición de OP ---
+                op_transition_message = ""
+                if orden_data.get('orden_produccion_id'):
+                    op_id = orden_data['orden_produccion_id']
+                    
+                    # Llamar a cambiar_estado_orden que devuelve una tupla (response_dict, status_code)
+                    op_update_result, op_status_code = orden_produccion_controller.cambiar_estado_orden(op_id, 'LISTA PARA PRODUCIR')
+                    
+                    if op_status_code >= 400:
+                        op_error_msg = op_update_result.get('error', 'Error desconocido al intentar actualizar el estado.')
+                        op_transition_message = f"ADVERTENCIA: Fallo al actualizar la OP {op_id} a 'LISTA PARA PRODUCIR'. Por favor, revísela manualmente. Error: {op_error_msg}"
+                        logger.error(f"Fallo al actualizar OP {op_id} tras recepción de OC {orden_id}: {op_error_msg}")
+                    else:
+                        op_transition_message = op_update_result.get('message', f"La Orden de Producción {op_id} asociada ha sido actualizada a 'LISTA PARA PRODUCIR'.")
+                        logger.info(f"OC {orden_id} recibida, OP {op_id} movida a 'LISTA PARA PRODUCIR'.")
 
-                return {'success': True, 'message': f'Recepción completada. {lotes_creados_count} lotes creados.'}
+                # Actualizar el mensaje de respuesta para incluir el estado de la OP
+                final_message = f'Recepción completada. {lotes_creados_count} lotes creados.'
+                if op_transition_message:
+                    final_message += f" | {op_transition_message}"
+                
+                return {'success': True, 'message': final_message}
 
             elif accion == 'rechazar':
                 return self.rechazar_orden(orden_id, f"Rechazada en recepción: {observaciones}")

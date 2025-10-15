@@ -1,5 +1,4 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
-from matplotlib.dates import relativedelta
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
 from app.permisos import permission_required
@@ -44,17 +43,26 @@ def _parse_form_data(form_dict):
 @orden_venta_bp.route('/')
 @permission_required(accion='ver_ordenes_venta')
 def listar():
-    """Muestra la lista de todos los pedidos de venta."""
+    """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
     estado = request.args.get('estado')
     filtros = {'estado': estado} if estado else {}
-
-    response, status_code = controller.obtener_pedidos(filtros)
-
+    
+    response, _ = controller.obtener_pedidos(filtros)
     pedidos = []
+    
     if response.get('success'):
-        # Ordenar para que los pedidos CANCELADOS aparezcan al final
         todos_los_pedidos = response.get('data', [])
-        pedidos = sorted(todos_los_pedidos, key=lambda p: p.get('estado') == 'CANCELADO')
+        # --- LÓGICA DE ORDENAMIENTO POR ESTADO ---
+        estado_orden = {
+            'PENDIENTE': 1,
+            'PLANIFICACION': 2,
+            'EN_PROCESO': 3,
+            'LISTO_PARA_ARMAR': 4,
+            'LISTO_PARA_ENTREGAR': 5,
+            'COMPLETADO': 6,
+            'CANCELADO': 7
+        }
+        pedidos = sorted(todos_los_pedidos, key=lambda p: estado_orden.get(p.get('estado'), 99))
     else:
         flash(response.get('error', 'Error al cargar los pedidos.'), 'error')
 
@@ -64,150 +72,76 @@ def listar():
 @permission_required(accion='crear_ordenes_venta')
 def nueva():
     """Gestiona la creación de un nuevo pedido de venta."""
-
-    # Calculamos la fecha de hoy en formato AAAA-MM-DD
     hoy = datetime.now().strftime('%Y-%m-%d')
-    fecha_limite= (datetime.now() + relativedelta(months=3)).strftime('%Y-%m-%d')
     
     if request.method == 'POST':
         json_data = request.get_json()
         if not json_data:
-            return jsonify({"success": False, "error": "No se recibieron datos JSON válidos"}), 400
+            return jsonify({"success": False, "error": "Datos no válidos"}), 400
 
         usuario_id = session.get('usuario_id')
         if not usuario_id:
-            return jsonify({"success": False, "error": "Su sesión ha expirado o no está autenticado."}), 401
+            return jsonify({"success": False, "error": "Sesión expirada"}), 401
         
-        # Se pasa el usuario_id al controlador.
         response, status_code = controller.crear_pedido_con_items(json_data, usuario_id)
 
-        if status_code < 300: # Éxito (e.g., 201 Created)
-                nuevo_pedido_id = response.get('data', {}).get('id')
-                
-                is_completed_immediately = response.get('data', {}).get('estado_completado_inmediato', False)
-                
-                if is_completed_immediately:
-                    success_message = "STOCK EXISTENTE Y RESERVADO, OV LISTA Y COMPLETADA."
-                    redirect_url = url_for('orden_venta.listar') 
-                else:
-                    success_message = response.get('message', 'Pedido creado con éxito.')
-                    redirect_url = url_for('orden_venta.detalle', id=nuevo_pedido_id)
-
-                return jsonify({
-                    'success': True,
-                    'message': success_message,
-                    'redirect_url': redirect_url
-                }), 201
-        
-        else: # Error de validación
-                return jsonify({
-                    'success': False,
-                    'message': response.get('message', 'Error al crear el pedido.'),
-                    'errors': response.get('errors', {})
-                }), status_code
+        if status_code < 300:
+            nuevo_pedido = response.get('data', {})
+            redirect_url = url_for('orden_venta.detalle', id=nuevo_pedido.get('id'))
+            return jsonify({'success': True, 'message': response.get('message'), 'redirect_url': redirect_url}), 201
+        else:
+            return jsonify({'success': False, 'message': response.get('message', 'Error al crear el pedido.')}), status_code
 
     # Método GET
-    response, status_code = controller.obtener_datos_para_formulario()
-    productos = []
-    if response.get('success'):
-        productos = response.get('data', {}).get('productos', [])
-    else:
-        flash(response.get('error', 'No se pudieron cargar los datos para el formulario.'), 'error')
+    response, _ = controller.obtener_datos_para_formulario()
+    productos = response.get('data', {}).get('productos', [])
+    return render_template('orden_venta/formulario.html', productos=productos, pedido=None, is_edit=False, today=hoy)
 
-    return render_template('orden_venta/formulario.html',
-                           productos=productos,
-                           pedido=None, cliente=None,
-                           is_edit=False,
-                           today=hoy,
-                           fecha_limite=fecha_limite)
-
-@orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST', 'PUT'])
+@orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'PUT'])
 @permission_required(accion='modificar_ordenes_venta')
 def editar(id):
-    """Gestiona la edición de un pedido de venta existente."""
-    
-    # --- Verificación de Estado ---
+    """Gestiona la edición de un pedido. Solo permitido en PENDIENTE y PLANIFICACION."""
     pedido_resp, _ = controller.obtener_pedido_por_id(id)
     if not pedido_resp.get('success'):
-        flash(pedido_resp.get('error', 'Pedido no encontrado.'), 'error')
+        flash('Pedido no encontrado.', 'error')
         return redirect(url_for('orden_venta.listar'))
     
     pedido = pedido_resp.get('data')
-    
-    # Estados permitidos para la edición
-    estados_permitidos = ['PENDIENTE', 'EN_PROCESO']
+    estados_permitidos = ['PENDIENTE', 'PLANIFICACION']
     
     if pedido.get('estado') not in estados_permitidos:
-        mensaje_error = f"No se puede editar el pedido porque su estado es '{pedido.get('estado')}'. Solo se permiten los estados: {', '.join(estados_permitidos)}."
-        if request.method == 'PUT':
-            return jsonify({"success": False, "error": mensaje_error}), 403
-        else:
-            flash(mensaje_error, 'error')
-            return redirect(url_for('orden_venta.detalle', id=id))
-    # -----------------------------
+        flash(f"No se puede editar un pedido en estado '{pedido.get('estado')}'.", 'warning')
+        return redirect(url_for('orden_venta.detalle', id=id))
 
-    hoy = datetime.now().strftime('%Y-%m-%d')
-    
     if request.method == 'PUT':
-        try:
-            json_data = request.get_json()
-            if not json_data:
-                return jsonify({"success": False, "error": "No se recibieron datos JSON válidos"}), 400
-
-            # Se pasa el estado original al controlador para la nueva lógica
-            response_data, status_code = controller.actualizar_pedido_con_items(id, json_data, pedido.get('estado'))
-
-            if status_code < 300:  # Éxito
-                return jsonify({
-                    'success': True,
-                    'message': response_data.get('message', 'Pedido actualizado con éxito.'),
-                    'redirect_url': url_for('orden_venta.detalle', id=id)
-                }), 200
-            else:  # Error de validación o de lógica de negocio
-                return jsonify({
-                    'success': False,
-                    'message': response_data.get('message', 'Error al actualizar el pedido.'),
-                    'errors': response_data.get('errors', {})
-                }), status_code
-            
-        except Exception as e:
-            print(f"Error inesperado en PUT /editar: {e}")
-            return jsonify({"success": False, "error": "Ocurrió un error interno en el servidor."}), 500
+        json_data = request.get_json()
+        if not json_data:
+            return jsonify({"success": False, "error": "Datos no válidos"}), 400
+        
+        response_data, status_code = controller.actualizar_pedido_con_items(id, json_data)
+        if status_code < 300:
+            return jsonify({'success': True, 'message': 'Pedido actualizado.', 'redirect_url': url_for('orden_venta.detalle', id=id)}), 200
+        else:
+            return jsonify({'success': False, 'message': response_data.get('message')}), status_code
 
     # Método GET
-    cliente_resp, _ = cliente_controller.obtener_cliente(pedido.get('id_cliente'))
-    cliente=cliente_resp.get('data')
-
-    if(cliente and cliente['cuit']):
-        cliente['cuit'] = cliente['cuit'].replace('-', '')
-
+    hoy = datetime.now().strftime('%Y-%m-%d')
     form_data_resp, _ = controller.obtener_datos_para_formulario()
-
-
-    productos = []
-    if form_data_resp.get('success'):
-        productos = form_data_resp.get('data', {}).get('productos', [])
-    else:
-        flash(form_data_resp.get('error', 'Error cargando datos del formulario.'), 'warning')
-    
-    return render_template('orden_venta/formulario.html',
-                           pedido=pedido,
-                           productos=productos,is_edit=True, cliente=cliente,
-                           today=hoy)
+    productos = form_data_resp.get('data', {}).get('productos', [])
+    return render_template('orden_venta/formulario.html', pedido=pedido, productos=productos, is_edit=True, today=hoy)
 
 @orden_venta_bp.route('/<int:id>/detalle')
 @permission_required(accion='ver_ordenes_venta')
 def detalle(id):
     """Muestra la página de detalle de un pedido de venta."""
-    response, status_code = controller.obtener_pedido_por_id(id)
-
+    response, _ = controller.obtener_pedido_por_id(id)
     if response.get('success'):
         pedido_data = response.get('data')
+        # --- FIX: Convertir strings de fecha a objetos datetime ---
         if pedido_data and pedido_data.get('created_at') and isinstance(pedido_data['created_at'], str):
             pedido_data['created_at'] = datetime.fromisoformat(pedido_data['created_at'])
         if pedido_data and pedido_data.get('updated_at') and isinstance(pedido_data['updated_at'], str):
             pedido_data['updated_at'] = datetime.fromisoformat(pedido_data['updated_at'])
-
         return render_template('orden_venta/detalle.html', pedido=pedido_data)
     else:
         flash(response.get('error', 'Pedido no encontrado.'), 'error')
@@ -217,66 +151,73 @@ def detalle(id):
 @permission_required(accion='cancelar_ordenes_venta')
 def cancelar(id):
     """Endpoint para cambiar el estado de un pedido a 'CANCELADO'."""
-    response, status_code = controller.cancelar_pedido(id)
-
+    response, _ = controller.cancelar_pedido(id)
     if response.get('success'):
-        flash(response.get('message', 'Pedido cancelado con éxito.'), 'success')
+        flash(response.get('message'), 'success')
     else:
-        flash(response.get('error', 'Error al cancelar el pedido.'), 'error')
-
+        flash(response.get('error'), 'error')
     return redirect(url_for('orden_venta.detalle', id=id))
 
+@orden_venta_bp.route('/<int:id>/planificar', methods=['POST'])
+@permission_required(accion='aprobar_ordenes_venta')
+def planificar(id):
+    """Pasa el pedido a estado de PLANIFICACION, guardando la fecha estimada."""
+    fecha_estimativa = request.form.get('fecha_estimativa_proceso')
+    if not fecha_estimativa:
+        flash("Debe seleccionar una fecha estimada de proceso.", "error")
+        return redirect(url_for('orden_venta.detalle', id=id))
+
+    response, _ = controller.planificar_pedido(id, fecha_estimativa)
+    if response.get('success'):
+        flash(response.get('message'), 'success')
+    else:
+        flash(response.get('error'), 'error')
+    return redirect(url_for('orden_venta.detalle', id=id))
+
+@orden_venta_bp.route('/<int:id>/iniciar_proceso', methods=['POST'])
+@permission_required(accion='aprobar_ordenes_venta')
+def iniciar_proceso(id):
+    """Pasa el pedido a EN PROCESO y crea las OPs."""
+    usuario_id = session.get("usuario_id")
+    if not usuario_id:
+        flash("Faltan datos para iniciar el proceso.", "error")
+        return redirect(url_for('orden_venta.detalle', id=id))
+
+    response, _ = controller.iniciar_proceso_pedido(id, usuario_id)
+    if response.get('success'):
+        flash(response.get('message'), 'success')
+    else:
+        flash(response.get('error'), 'error')
+    return redirect(url_for('orden_venta.detalle', id=id))
+
+@orden_venta_bp.route('/<int:id>/preparar_entrega', methods=['POST'])
+@permission_required(accion='modificar_ordenes_venta')
+def preparar_entrega(id):
+    """Pasa el pedido a LISTO PARA ENTREGAR y descuenta stock."""
+    usuario_id = session.get("usuario_id")
+    if not usuario_id:
+        flash("Sesión expirada.", "error")
+        return redirect(url_for("auth.login"))
+    
+    response, _ = controller.preparar_para_entrega(id, usuario_id)
+    if response.get('success'):
+        flash(response.get('message'), 'success')
+    else:
+        flash(response.get('error'), 'error')
+    return redirect(url_for('orden_venta.detalle', id=id))
 
 @orden_venta_bp.route('/<int:id>/completar', methods=['POST'])
 @permission_required(accion='modificar_ordenes_venta')
 def completar(id):
-        """Endpoint para completar el pedido (despacho de stock)."""
-        try:
-            usuario_id = session.get("usuario_id")
-            if not usuario_id:
-                flash("Su sesión ha expirado.", "error")
-                return redirect(url_for("auth.login"))
+    """Finaliza el pedido, pasándolo a COMPLETADO."""
+    usuario_id = session.get("usuario_id")
+    if not usuario_id:
+        flash("Sesión expirada.", "error")
+        return redirect(url_for("auth.login"))
 
-            response, status_code = controller.completar_pedido(id, usuario_id)
-
-            if response.get('success'):
-                flash(response.get('message', 'Pedido completado con éxito.'), 'success')
-            else:
-                flash(response.get('error', 'Error al completar el pedido.'), 'error')
-
-            return redirect(url_for('orden_venta.listar'))
-
-        except Exception as e:
-            flash(f"Ocurrió un error inesperado al completar el pedido: {str(e)}", 'error')
-            return redirect(url_for('orden_venta.detalle', id=id))
-
-@orden_venta_bp.route('/<int:id>/aprobar', methods=['POST'])
-@permission_required(accion='aprobar_ordenes_venta')
-def aprobar(id):
-    """
-    Endpoint de API para aprobar un pedido. Devuelve una respuesta JSON.
-    """
-    try:
-        usuario_id = session.get("usuario_id")
-        if not usuario_id:
-            return jsonify({"success": False, "error": "Usuario no autenticado."}), 401
-
-        response, status_code = controller.aprobar_pedido(id, usuario_id)
-
-        if status_code == 202 and response.get('oc_generada'):
-            oc_codigo = response['orden_compra_creada']['codigo_oc']
-            
-            return jsonify({
-                "success": True,
-                "message": response.get('message'),
-                "redirect_url": url_for('orden_compra.listar'),
-                "oc_generada": True,
-                "oc_codigo": oc_codigo,
-                "data": response.get('data')
-            }), 202
-
-        return jsonify(response), status_code
-
-    except Exception as e:
-        print(f"Error inesperado en la ruta aprobar pedido: {str(e)}")
-        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+    response, _ = controller.completar_pedido(id, usuario_id)
+    if response.get('success'):
+        flash(response.get('message'), 'success')
+    else:
+        flash(response.get('error'), 'error')
+    return redirect(url_for('orden_venta.listar'))
