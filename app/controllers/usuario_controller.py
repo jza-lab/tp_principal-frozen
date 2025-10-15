@@ -9,7 +9,7 @@ from app.schemas.usuario_schema import UsuarioSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 import logging
 import json
 from app.controllers.direccion_controller import GeorefController
@@ -157,6 +157,54 @@ class UsuarioController(BaseController):
         """Reactiva un usuario que fue desactivado lógicamente."""
         return self.model.update(usuario_id, {'activo': True})
 
+    def obtener_datos_para_vista_perfil(self, usuario_id: int) -> dict:
+        """
+        Obtiene y prepara todos los datos necesarios para renderizar la vista de perfil de usuario.
+        """
+        usuario = self.obtener_usuario_por_id(usuario_id, include_direccion=True)
+        if not usuario:
+            return {'success': False, 'error': 'Usuario no encontrado.'}
+
+        # Parsear fechas de string a objetos datetime para la vista
+        for key in ['ultimo_login_web', 'fecha_ingreso']:
+            if usuario.get(key) and isinstance(usuario[key], str):
+                try:
+                    usuario[key] = datetime.fromisoformat(usuario[key].replace('Z', '+00:00'))
+                except (ValueError, TypeError):
+                    usuario[key] = None
+        
+        # Formatear dirección para visualización
+        if usuario.get('direccion'):
+            dir_data = usuario['direccion']
+            usuario['direccion_formateada'] = f"{dir_data.get('calle', '')} {dir_data.get('altura', '')}, {dir_data.get('localidad', '')}"
+        else:
+            usuario['direccion_formateada'] = 'No especificada'
+
+        # Obtener datos para los dropdowns
+        roles = self.obtener_todos_los_roles()
+        sectores = self.obtener_todos_los_sectores()
+        turnos = self.obtener_todos_los_turnos()
+
+        return {
+            'success': True,
+            'data': {
+                'usuario': usuario,
+                'roles_disponibles': roles,
+                'sectores_disponibles': sectores,
+                'turnos_disponibles': turnos
+            }
+        }
+
+    def obtener_datos_para_formulario_usuario(self) -> dict:
+        """
+        Obtiene los datos maestros necesarios para los formularios de creación/edición de usuarios.
+        """
+        return {
+            'roles': self.obtener_todos_los_roles(),
+            'sectores': self.obtener_todos_los_sectores(),
+            'turnos': self.obtener_todos_los_turnos()
+        }
+
     # endregion
 
     # region Autenticación y Sesiones
@@ -201,6 +249,7 @@ class UsuarioController(BaseController):
     # endregion
 
     # region Gestión de Tótem
+
     def activar_login_totem(self, usuario_id: int, metodo_acceso: str = 'FACIAL') -> Dict:
         """Crea una nueva sesión de tótem para un usuario."""
         try:
@@ -369,6 +418,70 @@ class UsuarioController(BaseController):
             return self.model.get_turnos_para_usuario(usuario_id).get('data', [])
         
         return self.turno_model.find_all().get('data', [])
+
+    def obtener_sectores_ids_usuario(self, usuario_id: int) -> List[int]:
+        """Obtiene una lista solo con los IDs de los sectores de un usuario."""
+        sectores = self.obtener_sectores_usuario(usuario_id)
+        return [s['id'] for s in sectores if s]
+
+    def gestionar_creacion_usuario_form(self, form_data: dict, facial_controller) -> dict:
+        """
+        Orquesta la creación de un usuario a partir de datos de formulario,
+        incluyendo la validación y registro facial.
+        """
+        datos_usuario = dict(form_data)
+        sectores_str = datos_usuario.get('sectores', '[]')
+        try:
+            sectores_ids = json.loads(sectores_str)
+            datos_usuario['sectores'] = [int(s) for s in sectores_ids if isinstance(sectores_ids, list) and str(s).isdigit()]
+        except (json.JSONDecodeError, TypeError):
+             datos_usuario['sectores'] = [int(s) for s in datos_usuario.getlist('sectores') if s.isdigit()]
+
+        face_data = datos_usuario.pop('face_data', None)
+        if 'role_id' in datos_usuario:
+            datos_usuario['role_id'] = int(datos_usuario['role_id'])
+
+        if face_data:
+            validacion_facial = facial_controller.validar_y_codificar_rostro(face_data)
+            if not validacion_facial.get('success'):
+                return validacion_facial
+
+        resultado_creacion = self.crear_usuario(datos_usuario)
+        
+        if resultado_creacion.get('success') and face_data:
+            usuario_creado = resultado_creacion.get('data')
+            resultado_facial = facial_controller.registrar_rostro(usuario_creado.get('id'), face_data)
+            if not resultado_facial.get('success'):
+                # Adjuntar una advertencia en lugar de un error completo
+                resultado_creacion['warning'] = f"Usuario creado, pero falló el registro facial: {resultado_facial.get('message')}"
+        
+        return resultado_creacion
+
+    def gestionar_actualizacion_usuario_form(self, usuario_id: int, form_data: dict) -> dict:
+        """
+        Orquesta la actualización de un usuario a partir de datos de formulario,
+        manejando la normalización de datos.
+        """
+        datos_actualizados = dict(form_data)
+        
+        # Procesamiento de Sectores
+        sectores_str = datos_actualizados.get('sectores', '[]')
+        try:
+            sectores_ids = json.loads(sectores_str)
+            if isinstance(sectores_ids, list):
+                datos_actualizados['sectores'] = [int(s) for s in sectores_ids if str(s).isdigit()]
+        except (json.JSONDecodeError, TypeError):
+            # Fallback para Formulario normal
+            datos_actualizados['sectores'] = [int(s) for s in form_data.getlist('sectores') if s.isdigit()]
+
+        # Role ID y Turno ID
+        for key in ['role_id', 'turno_id']:
+            if key in datos_actualizados and str(datos_actualizados[key]).isdigit():
+                datos_actualizados[key] = int(datos_actualizados[key])
+            else:
+                datos_actualizados.pop(key, None)
+        
+        return self.actualizar_usuario(usuario_id, datos_actualizados)
 
     # endregion
 

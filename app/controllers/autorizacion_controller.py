@@ -3,7 +3,7 @@ from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.totem_sesion import TotemSesionModel
 from app.models.usuario_turno import UsuarioTurnoModel
 from app.models.usuario import UsuarioModel
-from datetime import date, datetime
+from datetime import date, datetime, time
 import logging
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ class AutorizacionController(BaseController):
 
     def obtener_todas_las_autorizaciones(self) -> dict:
         """Obtiene un historial de todas las autorizaciones agrupadas por estado."""
-        return self.model.find_all_by_status()
+        return self.model.find_all_grouped_by_status()
 
     def actualizar_estado_autorizacion(self, autorizacion_id: int, estado: str, comentario: str) -> dict:
         """

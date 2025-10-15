@@ -5,45 +5,42 @@ from app.schemas.direccion_schema import DireccionSchema
 class UsuarioSchema(Schema):
     """
     Esquema para la validación y serialización de datos de usuarios.
-    Este esquema define la estructura de los datos de un usuario, aplicando reglas
-    de validación para la entrada (carga) de datos y controlando qué campos
-    se exponen en la salida.
     """
     # --- Campos de Identificación y Auditoría (Solo Lectura) ---
-    id = fields.Int(dump_only=True, description="Identificador único del usuario.")
-    activo = fields.Bool(dump_only=True, description="Indica si el usuario está activo en el sistema.")
-    created_at = fields.DateTime(dump_only=True, description="Fecha y hora de creación del registro.")
-    updated_at = fields.DateTime(dump_only=True, description="Fecha y hora de la última actualización.")
-    ultimo_login_web = fields.DateTime(dump_only=True, allow_none=True, description="Fecha y hora del último inicio de sesión web.")
-    facial_encoding = fields.String(allow_none=True, dump_only=True, description="Codificación facial del usuario (si existe).")
+    id = fields.Int(dump_only=True, metadata={'description': "Identificador único del usuario."})
+    activo = fields.Bool(dump_only=True, metadata={'description': "Indica si el usuario está activo en el sistema."})
+    created_at = fields.DateTime(dump_only=True, metadata={'description': "Fecha y hora de creación del registro."})
+    updated_at = fields.DateTime(dump_only=True, metadata={'description': "Fecha y hora de la última actualización."})
+    ultimo_login_web = fields.DateTime(dump_only=True, allow_none=True, metadata={'description': "Fecha y hora del último inicio de sesión web."})
+    facial_encoding = fields.String(allow_none=True, dump_only=True, metadata={'description': "Codificación facial del usuario (si existe)."})
 
     # --- Datos Personales y de Contacto ---
     nombre = fields.Str(
         required=True,
         validate=validate.Length(min=1, error="El nombre no puede estar vacío."),
-        description="Nombre del usuario."
+        metadata={'description': "Nombre del usuario."}
     )
     apellido = fields.Str(
         required=True,
         validate=validate.Length(min=1, error="El apellido no puede estar vacío."),
-        description="Apellido del usuario."
+        metadata={'description': "Apellido del usuario."}
     )
-    email = fields.Email(required=True, description="Correo electrónico del usuario (debe ser único).")
+    email = fields.Email(required=True, metadata={'description': "Correo electrónico del usuario (debe ser único)."})
     telefono = fields.Str(
         allow_none=True,
         validate=validate.Regexp(
             r'^\d{7,15}$',
             error='El teléfono debe contener solo números y tener entre 7 y 15 dígitos.'
         ),
-        description="Número de teléfono del usuario."
+        metadata={'description': "Número de teléfono del usuario."}
     )
-    fecha_nacimiento = fields.Date(allow_none=True, description="Fecha de nacimiento del usuario.")
+    fecha_nacimiento = fields.Date(allow_none=True, metadata={'description': "Fecha de nacimiento del usuario."})
 
     # --- Datos Laborales ---
     legajo = fields.Str(
         required=True,
         validate=validate.Length(min=1, error="El legajo no puede estar vacío."),
-        description="Número de legajo del empleado (debe ser único)."
+        metadata={'description': "Número de legajo del empleado (debe ser único)."}
     )
     cuil_cuit = fields.Str(
         allow_none=True,
@@ -51,33 +48,26 @@ class UsuarioSchema(Schema):
             r'^\d{2}-\d{8}-\d{1}$',
             error='El formato del CUIL/CUIT debe ser XX-XXXXXXXX-X.'
         ),
-        description="CUIL/CUIT del usuario."
+        metadata={'description': "CUIL/CUIT del usuario."}
     )
-    fecha_ingreso = fields.Date(allow_none=True, description="Fecha de ingreso del usuario a la empresa.")
-    turno_id = fields.Int(allow_none=True, load_default=None, description="ID del turno de trabajo asignado.")
+    fecha_ingreso = fields.Date(allow_none=True, metadata={'description': "Fecha de ingreso del usuario a la empresa."})
+    turno_id = fields.Int(allow_none=True, load_default=None, metadata={'description': "ID del turno de trabajo asignado."})
 
-    # --- Campos de Seguridad y Relaciones ---
-    
-    # El password es de solo escritura (load_only): se acepta para crear/actualizar, pero nunca se muestra.
+    # --- Campos de Seguridad y Relaciones (Carga y Volcado Asimétrico) ---
     password = fields.Str(
         required=True,
         load_only=True,
         validate=validate.Length(min=8, error="La contraseña debe tener al menos 8 caracteres.")
     )
-
-    # El ID del rol se usa para la carga de datos.
     role_id = fields.Int(
         required=True,
         load_only=True,
         validate=validate.Range(min=1, error="El ID de rol no es válido.")
     )
-    # El objeto completo del rol se usa para el volcado de datos.
-    roles = fields.Nested(RoleSchema, dump_only=True, description="Rol asignado al usuario.")
+    roles = fields.Nested(RoleSchema, dump_only=True, metadata={'description': "Rol asignado al usuario."})
     
-    # El ID de la dirección se usa para la carga de datos.
     direccion_id = fields.Int(allow_none=True, load_only=True)
-    # El objeto completo de la dirección se usa para el volcado de datos.
-    direccion = fields.Nested(DireccionSchema, dump_only=True, description="Dirección del usuario.")
+    direccion = fields.Nested(DireccionSchema, dump_only=True, metadata={'description': "Dirección del usuario."})
 
     @validates_schema
     def validate_dates(self, data, **kwargs):
