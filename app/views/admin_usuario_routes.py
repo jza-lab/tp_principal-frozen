@@ -1,5 +1,4 @@
-import json
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta
 from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
@@ -105,39 +104,16 @@ def listar_usuarios():
 @admin_usuario_bp.route('/usuarios/<int:id>')
 @permission_any_of('ver_info_empleados', 'modificar_usuarios')
 def ver_perfil(id):
-    """Muestra el perfil de un usuario específico, incluyendo su dirección."""
-    usuario = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)
-    if not usuario:
-        flash('Usuario no encontrado.', 'error')
+    """Muestra el perfil de un usuario específico, delegando la carga de datos al controlador."""
+    resultado = usuario_controller.obtener_datos_para_vista_perfil(id)
+
+    if not resultado.get('success'):
+        flash(resultado.get('error', 'Ocurrió un error'), 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
 
-    # Parsear fechas de string a datetime objects antes de renderizar
-    for key in ['ultimo_login_web', 'ultimo_login_totem', 'fecha_ingreso']:
-        if usuario.get(key) and isinstance(usuario[key], str):
-            try:
-                usuario[key] = datetime.fromisoformat(usuario[key].replace('Z', '+00:00'))
-            except (ValueError, TypeError):
-                print(f"Advertencia: No se pudo parsear la fecha '{usuario[key]}' para el campo '{key}'.")
-                usuario[key] = None
-
-    # Formatear la dirección para una mejor visualización
-    if usuario.get('direccion'):
-        dir_data = usuario['direccion']
-        usuario['direccion_formateada'] = f"{dir_data.get('calle', '')} {dir_data.get('altura', '')}, " \
-                                          f"{dir_data.get('localidad', '')}, {dir_data.get('provincia', '')}"
-    else:
-        usuario['direccion_formateada'] = 'No especificada'
-
-    # Obtener datos para los dropdowns del modo edición
-    roles_disponibles = usuario_controller.obtener_todos_los_roles()
-    sectores_disponibles = usuario_controller.obtener_todos_los_sectores()
-    turnos_disponibles = usuario_controller.obtener_todos_los_turnos()
-
-    return render_template('usuarios/perfil.html', 
-                           usuario=usuario,
-                           roles_disponibles=roles_disponibles,
-                           sectores_disponibles=sectores_disponibles,
-                           turnos_disponibles=turnos_disponibles)
+    # El controlador ya ha preparado todos los datos necesarios.
+    # Desempaquetamos el diccionario de datos para pasarlo a la plantilla.
+    return render_template('usuarios/perfil.html', **resultado.get('data', {}))
 
 @admin_usuario_bp.route('/usuarios/nuevo', methods=['GET', 'POST'])
 @permission_required(accion='crear_usuarios')
@@ -146,77 +122,37 @@ def nuevo_usuario():
     Gestiona la creación de un nuevo usuario, incluyendo la asignación de sectores.
     """
     if request.method == 'POST':
-        datos_usuario = request.form.to_dict()
-        
-        # --- Procesamiento de Sectores ---
-        sectores_str = datos_usuario.get('sectores', '[]')
-        try:
-            sectores_ids = json.loads(sectores_str)
-            if isinstance(sectores_ids, list):
-                datos_usuario['sectores'] = [int(s) for s in sectores_ids if str(s).isdigit()]
-            else:
-                datos_usuario['sectores'] = []
-        except (json.JSONDecodeError, TypeError):
-            # Fallback para el caso de que no sea un JSON string
-            sectores_raw = request.form.getlist('sectores')
-            datos_usuario['sectores'] = [int(s) for s in sectores_raw if s.isdigit()]
+        resultado = usuario_controller.gestionar_creacion_usuario_form(request.form, facial_controller)
 
-        face_data = datos_usuario.pop('face_data', None)
-
-        if 'role_id' in datos_usuario:
-            datos_usuario['role_id'] = int(datos_usuario['role_id'])
-
-        # 1. Validar rostro si se proporciona
-        if face_data:
-            validacion_facial = facial_controller.validar_y_codificar_rostro(face_data)
-            if not validacion_facial.get('success'):
-                flash(f"Error en el registro facial: {validacion_facial.get('message')}", 'error')
-                roles = usuario_controller.obtener_todos_los_roles()
-                sectores = usuario_controller.obtener_todos_los_sectores()
-                return render_template('usuarios/formulario.html', 
-                                    usuario=datos_usuario, 
-                                    is_new=True,
-                                    roles=roles,
-                                    sectores=sectores,
-                                    usuario_sectores_ids=datos_usuario.get('sectores', []))
-
-        # 2. Crear el usuario
-        resultado_creacion = usuario_controller.crear_usuario(datos_usuario)
-        
-        if not resultado_creacion.get('success'):
-            flash(f"Error al crear el usuario: {resultado_creacion.get('error')}", 'error')
-            roles = usuario_controller.obtener_todos_los_roles()
-            sectores = usuario_controller.obtener_todos_los_sectores()
-            return render_template('usuarios/formulario.html', 
-                                usuario=datos_usuario, 
-                                is_new=True,
-                                roles=roles,
-                                sectores=sectores,
-                                usuario_sectores_ids=datos_usuario.get('sectores', []))
-
-        # 3. Registrar el rostro si aplica
-        usuario_creado = resultado_creacion.get('data')
-        if usuario_creado and face_data:
-            resultado_facial = facial_controller.registrar_rostro(usuario_creado.get('id'), face_data)
-            if resultado_facial.get('success'):
-                flash('Usuario creado y rostro registrado exitosamente.', 'success')
-            else:
-                flash(f"Usuario creado, pero falló el registro facial: {resultado_facial.get('message')}", 'warning')
-        else:
+        if resultado.get('success'):
             flash('Usuario creado exitosamente.', 'success')
+            if resultado.get('warning'):
+                flash(resultado.get('warning'), 'warning')
+            return redirect(url_for('admin_usuario.listar_usuarios'))
+        else:
+            flash(f"Error al crear el usuario: {resultado.get('error')}", 'error')
+            form_data = usuario_controller.obtener_datos_para_formulario_usuario()
+            
+            # Re-poblar el formulario con los datos ingresados por el usuario
+            datos_formulario = request.form.to_dict()
+            sectores_seleccionados = [int(s) for s in request.form.getlist('sectores') if s.isdigit()]
 
-        return redirect(url_for('admin_usuario.listar_usuarios'))
+            return render_template('usuarios/formulario.html', 
+                                 usuario=datos_formulario, 
+                                 is_new=True,
+                                 roles=form_data.get('roles'),
+                                 sectores=form_data.get('sectores'),
+                                 turnos=form_data.get('turnos'),
+                                 usuario_sectores_ids=sectores_seleccionados)
 
     # Método GET
-    roles = usuario_controller.obtener_todos_los_roles()
-    sectores = usuario_controller.obtener_todos_los_sectores()
-    turnos = usuario_controller.obtener_todos_los_turnos()
+    form_data = usuario_controller.obtener_datos_para_formulario_usuario()
     return render_template('usuarios/formulario.html', 
                          usuario={}, 
                          is_new=True,
-                         roles=roles,
-                         sectores=sectores,
-                         turnos=turnos,
+                         roles=form_data.get('roles'),
+                         sectores=form_data.get('sectores'),
+                         turnos=form_data.get('turnos'),
                          usuario_sectores_ids=[])
 
 @admin_usuario_bp.route('/usuarios/<int:id>/editar', methods=['GET', 'POST'])
@@ -230,86 +166,51 @@ def editar_usuario(id):
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     if request.method == 'POST':
-        datos_actualizados = request.form.to_dict()
-        print(f"DEBUG: Datos recibidos en la ruta: {datos_actualizados}")
-        
-        # --- Procesamiento de Datos ---
-        # Sectores: AJAX los envía como un string JSON, el form normal como una lista
-        sectores_str = datos_actualizados.get('sectores', '[]')
-        try:
-            # Para AJAX
-            sectores_ids = json.loads(sectores_str)
-            if isinstance(sectores_ids, list):
-                datos_actualizados['sectores'] = [int(s) for s in sectores_ids if str(s).isdigit()]
-            else:
-                 datos_actualizados['sectores'] = []
-        except (json.JSONDecodeError, TypeError):
-            # Para Formulario normal
-            sectores_raw = request.form.getlist('sectores')
-            datos_actualizados['sectores'] = [int(s) for s in sectores_raw if s.isdigit()]
-
-        # Role ID y Turno ID
-        for key in ['role_id', 'turno_id']:
-            if key in datos_actualizados and str(datos_actualizados[key]).isdigit():
-                datos_actualizados[key] = int(datos_actualizados[key])
-            else:
-                datos_actualizados.pop(key, None)
-        
-        # --- Lógica de Actualización ---
-        resultado = usuario_controller.actualizar_usuario(id, datos_actualizados)
+        resultado = usuario_controller.gestionar_actualizacion_usuario_form(id, request.form)
 
         if resultado.get('success'):
             if is_ajax:
                 return jsonify({'success': True, 'message': 'Usuario actualizado exitosamente.'})
-            else:
-                flash('Usuario actualizado exitosamente.', 'success')
-                return redirect(url_for('admin_usuario.listar_usuarios'))
+            flash('Usuario actualizado exitosamente.', 'success')
+            return redirect(url_for('admin_usuario.listar_usuarios'))
         else:
             error_message = resultado.get('error', 'Ocurrió un error desconocido.')
             if is_ajax:
                 return jsonify({'success': False, 'message': error_message}), 400
-            else:
-                flash(f"Error al actualizar: {error_message}", 'error')
-                # Recargar datos para el formulario en caso de error
-                usuario_existente = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)
-                if not usuario_existente:
-                    flash('Error crítico: No se pudo encontrar el usuario.', 'error')
-                    return redirect(url_for('admin_usuario.listar_usuarios'))
-                
-                # Fusionar datos para preservar la entrada del usuario
-                usuario_existente.update(datos_actualizados)
-                
-                roles = usuario_controller.obtener_todos_los_roles()
-                sectores = usuario_controller.obtener_todos_los_sectores()
-                turnos = usuario_controller.obtener_todos_los_turnos()
-                
-                return render_template('usuarios/formulario.html', 
-                                     usuario=usuario_existente, 
-                                     is_new=False,
-                                     roles=roles,
-                                     sectores=sectores,
-                                     turnos=turnos,
-                                     usuario_sectores_ids=datos_actualizados.get('sectores', []))
+            
+            flash(f"Error al actualizar: {error_message}", 'error')
+            # Recargar datos para el formulario en caso de error
+            usuario_existente = usuario_controller.obtener_usuario_por_id(id, include_direccion=True)
+            if not usuario_existente:
+                return redirect(url_for('admin_usuario.listar_usuarios'))
+            
+            # Fusionar datos para preservar la entrada del usuario en el formulario
+            usuario_existente.update(request.form.to_dict())
+            form_data = usuario_controller.obtener_datos_para_formulario_usuario()
+            
+            return render_template('usuarios/formulario.html', 
+                                 usuario=usuario_existente, 
+                                 is_new=False,
+                                 roles=form_data.get('roles'),
+                                 sectores=form_data.get('sectores'),
+                                 turnos=form_data.get('turnos'),
+                                 usuario_sectores_ids=[int(s) for s in request.form.getlist('sectores') if s.isdigit()])
 
     # Método GET
-    usuario = usuario_controller.obtener_usuario_por_id(id, include_sectores=True, include_direccion=True)
+    usuario = usuario_controller.obtener_usuario_por_id(id, include_direccion=True)
     if not usuario:
         flash('Usuario no encontrado.', 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
         
-    
-    roles = usuario_controller.obtener_todos_los_roles()
-    sectores = usuario_controller.obtener_todos_los_sectores()
-    turnos = usuario_controller.obtener_todos_los_turnos()
-    usuario_sectores_actuales = usuario_controller.obtener_sectores_usuario(id)
-    usuario_sectores_ids = [s['id'] for s in usuario_sectores_actuales]
+    form_data = usuario_controller.obtener_datos_para_formulario_usuario()
+    usuario_sectores_ids = usuario_controller.obtener_sectores_ids_usuario(id)
 
     return render_template('usuarios/formulario.html', 
                          usuario=usuario, 
                          is_new=False,
-                         roles=roles,
-                         sectores=sectores,
-                         turnos=turnos,
+                         roles=form_data.get('roles'),
+                         sectores=form_data.get('sectores'),
+                         turnos=form_data.get('turnos'),
                          usuario_sectores_ids=usuario_sectores_ids)
 
 @admin_usuario_bp.route('/usuarios/<int:id>/eliminar', methods=['POST'])
@@ -495,17 +396,16 @@ def listar_autorizaciones():
     """
     resultado = autorizacion_controller.obtener_todas_las_autorizaciones()
     if resultado.get('success'):
-        # Separar las autorizaciones en pendientes y un historial
-        todas = resultado.get('data', [])
-        pendientes = [auth for auth in todas if auth['estado'] == 'PENDIENTE']
-        historial = [auth for auth in todas if auth['estado'] != 'PENDIENTE']
+        # El modelo ya devuelve los datos agrupados, ej: {'PENDIENTE': [...], 'APROBADA': [...]}
+        grouped_data = resultado.get('data', {})
+        
+        # Separar para la estructura que espera el frontend
+        pendientes = grouped_data.get('PENDIENTE', [])
+        historial = grouped_data.get('APROBADA', []) + grouped_data.get('RECHAZADA', [])
         
         return jsonify(success=True, data={'pendientes': pendientes, 'historial': historial})
-    else:
-        # Si no hay ninguna autorización, devolver listas vacías
-        if "no se encontraron" in resultado.get('error', '').lower():
-            return jsonify(success=True, data={'pendientes': [], 'historial': []})
-        return jsonify(success=False, error=resultado.get('error', 'Error al obtener las autorizaciones.')), 500
+    
+    return jsonify(success=False, error=resultado.get('error', 'Error al obtener las autorizaciones.')), 500
 
 @admin_usuario_bp.route('/autorizaciones/<int:id>/estado', methods=['POST'])
 @permission_required(accion='aprobar_permisos')
