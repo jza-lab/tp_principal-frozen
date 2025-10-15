@@ -1,17 +1,13 @@
 from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
 from app.controllers.usuario_controller import UsuarioController
-from app.controllers.facial_controller import FacialController
 from app.utils.roles import get_redirect_url_by_role
-from app.models.permisos import PermisosModel
-from datetime import datetime, timedelta, time
 from app.models.totem_sesion import TotemSesionModel
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
+from datetime import datetime, timedelta
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 usuario_controller = UsuarioController()
-facial_controller = FacialController()
-permisos_model = PermisosModel()
 totem_sesion_model = TotemSesionModel()
 autorizacion_model = AutorizacionIngresoModel()
 
@@ -81,7 +77,6 @@ def before_request_auth():
     except (ValueError, TypeError):
         return
 
-
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     """Gestiona el inicio de sesión de los usuarios."""
@@ -90,36 +85,16 @@ def login():
     
     if request.method == 'POST':
         legajo = request.form['legajo']
-        password = request.form['password']
-        
+        password = request.form['password']        
         respuesta = usuario_controller.autenticar_usuario_web(legajo, password)
-        usuario = respuesta.get('data')
 
-        if respuesta.get('success') and usuario and usuario.get('activo'):
-            # Verificación de horario de turno
-            verificacion_turno = usuario_controller.verificar_acceso_por_horario(usuario)
-            if not verificacion_turno.get('success'):
-                flash(verificacion_turno.get('error'), 'error')
-                return redirect(url_for('auth.login'))
-
-            rol = usuario.get('roles', {})
-            rol_codigo = rol.get('codigo')
-            rol_nivel = rol.get('nivel', 0)
-
-            session['usuario_id'] = usuario.get('id')
-            session['rol_id'] = usuario.get('role_id')
-            session['rol'] = rol_codigo
-            session['user_level'] = rol_nivel
-            session['usuario_nombre'] = f"{usuario['nombre']}"
-            session['user_data'] = usuario
-            
-            # Cargar y guardar permisos en la sesión
-            permisos = permisos_model.get_user_permissions(usuario.get('role_id'))
-            session['permisos'] = permisos
-
-            flash(f"Bienvenido {usuario['nombre']}", 'success')
+        if respuesta.get('success'):
+            rol_codigo = respuesta.get('rol_codigo')
+            usuario_nombre = session.get('usuario_nombre', 'Usuario') 
+            flash(f"Bienvenido {usuario_nombre}", 'success')
             return redirect(get_redirect_url_by_role(rol_codigo))
         else:
+            # Mostrar el error específico devuelto por el controlador
             error_message = respuesta.get('error', 'Credenciales incorrectas o usuario inactivo.')
             flash(error_message, 'error')
             return redirect(url_for('auth.login'))
@@ -138,36 +113,16 @@ def identificar_rostro():
 
     image_data_url = data.get("image")
     respuesta = usuario_controller.autenticar_usuario_facial_web(image_data_url)
-    usuario = respuesta.get('data')
 
-    if respuesta.get('success') and usuario:
-        # Verificación de horario de turno
-        verificacion_turno = usuario_controller.verificar_acceso_por_horario(usuario)
-        if not verificacion_turno.get('success'):
-            return jsonify({'success': False, 'message': verificacion_turno.get('error')}), 401
-
-        rol = usuario.get('roles', {})
-        rol_codigo = rol.get('codigo')
-        rol_nivel = rol.get('nivel', 0)
-        
-        session['usuario_id'] = usuario.get('id')
-        session['rol_id'] = usuario.get('role_id')
-        session['rol'] = rol_codigo
-        session['user_level'] = rol_nivel
-        session['usuario_nombre'] = f"{usuario.get('nombre')} {usuario.get('apellido')}"
-        session['user_data'] = usuario
-        
-        # Cargar y guardar permisos en la sesión
-        permisos = permisos_model.get_user_permissions(usuario.get('role_id'))
-        session['permisos'] = permisos
-
+    if respuesta.get('success'):
+        rol_codigo = respuesta.get('rol_codigo')
         return jsonify({
             'success': True, 
             'message': 'Rostro identificado correctamente.',
             'redirect': get_redirect_url_by_role(rol_codigo)
         }), 200
     else:
-        error_message = respuesta.get('message', 'Rostro no reconocido o usuario inactivo.')
+        error_message = respuesta.get('error', 'Rostro no reconocido o usuario inactivo.')
         return jsonify({'success': False, 'message': error_message}), 401
 
 @auth_bp.route('/logout')
