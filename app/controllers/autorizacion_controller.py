@@ -3,12 +3,15 @@ from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.totem_sesion import TotemSesionModel
 from app.models.usuario_turno import UsuarioTurnoModel
 from app.models.usuario import UsuarioModel
-from datetime import date, datetime, time
+from datetime import date, datetime
 import logging
 
 logger = logging.getLogger(__name__)
 
 class AutorizacionController(BaseController):
+    """
+    Controlador para la lógica de negocio relacionada con las autorizaciones de ingreso.
+    """
     def __init__(self):
         super().__init__()
         self.model = AutorizacionIngresoModel()
@@ -16,8 +19,12 @@ class AutorizacionController(BaseController):
         self.turno_model = UsuarioTurnoModel()
         self.usuario_model = UsuarioModel()
 
-    def crear_autorizacion(self, data: dict):
-        # 1. Validaciones básicas de datos
+    # region Operaciones CRUD
+    def crear_autorizacion(self, data: dict) -> dict:
+        """
+        Valida los datos y las reglas de negocio antes de crear una nueva autorización.
+        """
+        # 1. Validación de datos base
         try:
             fecha_autorizada = date.fromisoformat(data.get('fecha_autorizada'))
             if fecha_autorizada < date.today():
@@ -33,57 +40,83 @@ class AutorizacionController(BaseController):
         if not turno_auth_result.get('success'): 
             return {'success': False, 'error': 'El turno seleccionado no es válido.'}
         
-        turno_autorizado_details = turno_auth_result['data']
-
-        # 2. Validaciones de lógica de negocio
-        usuario_id = data.get('usuario_id')
+        # 2. Validaciones de lógica de negocio específicas por tipo
         tipo_autorizacion = data.get('tipo')
-
-        # Regla para 'LLEGADA_TARDIA'
+        usuario_id = data.get('usuario_id')
+        
+        validation_result = None
         if tipo_autorizacion == 'LLEGADA_TARDIA':
-            if self.totem_sesion.verificar_sesion_activa_hoy(usuario_id):
-                return {'success': False, 'error': 'El empleado ya ingresó. No se puede crear una autorización de llegada tardía.'}
+            validation_result = self._validar_llegada_tardia(usuario_id)
+        elif tipo_autorizacion == 'HORAS_EXTRAS':
+            turno_autorizado_details = turno_auth_result['data']
+            validation_result = self._validar_horas_extras(usuario_id, turno_autorizado_details)
 
-        # Reglas para 'HORAS_EXTRAS'
-        if tipo_autorizacion == 'HORAS_EXTRAS':
-            user_result = self.usuario_model.find_by_id(usuario_id)
-            if not user_result.get('success'): 
-                return {'success': False, 'error': 'Usuario no encontrado.'}
-            
-            usuario = user_result['data']
-            turno_habitual = usuario.get('turno')
-            if not turno_habitual: 
-                return {'success': False, 'error': 'El empleado no tiene un turno habitual asignado.'}
+        if validation_result and not validation_result.get('success'):
+            return validation_result
 
+        # 3. Creación del registro si todas las validaciones pasan
+        return self.model.create(data)
+
+    def obtener_autorizaciones_pendientes(self) -> dict:
+        """Obtiene todas las autorizaciones con estado 'PENDIENTE'."""
+        return self.model.find_all_pending()
+
+    def obtener_todas_las_autorizaciones(self) -> dict:
+        """Obtiene un historial de todas las autorizaciones agrupadas por estado."""
+        return self.model.find_all_by_status()
+
+    def actualizar_estado_autorizacion(self, autorizacion_id: int, estado: str, comentario: str) -> dict:
+        """
+        Actualiza el estado y el comentario de una autorización específica.
+        """
+        return self.model.update_estado(autorizacion_id, estado, comentario)
+
+    # endregion
+
+    # region Métodos de Validación (Helpers)
+    def _validar_llegada_tardia(self, usuario_id: int) -> dict:
+        """
+        Valida la regla de negocio para autorizaciones de llegada tardía.
+        Regla: No se puede crear si el empleado ya ha fichado su ingreso.
+        """
+        if self.totem_sesion.verificar_sesion_activa_hoy(usuario_id):
+            return {'success': False, 'error': 'El empleado ya ingresó. No se puede crear una autorización de llegada tardía.'}
+        return {'success': True}
+
+    def _validar_horas_extras(self, usuario_id: int, turno_autorizado_details: dict) -> dict:
+        """
+        Valida las reglas de negocio para autorizaciones de horas extras.
+        Reglas:
+        - Turno Mañana: Las horas extras deben ser posteriores al turno habitual.
+        - Turno Tarde: Las horas extras deben finalizar antes del turno habitual.
+        """
+        user_result = self.usuario_model.find_by_id(usuario_id)
+        if not user_result.get('success'): 
+            return {'success': False, 'error': 'Usuario no encontrado.'}
+        
+        usuario = user_result['data']
+        turno_habitual = usuario.get('turno')
+        if not turno_habitual: 
+            return {'success': False, 'error': 'El empleado no tiene un turno habitual asignado.'}
+
+        try:
             nombre_turno_habitual = turno_habitual['nombre'].lower()
+            hora_inicio_autorizada = datetime.strptime(turno_autorizado_details['hora_inicio'], '%H:%M:%S').time()
+            hora_fin_autorizada = datetime.strptime(turno_autorizado_details['hora_fin'], '%H:%M:%S').time()
 
-            # Regla para Turno Mañana
             if 'mañana' in nombre_turno_habitual:
                 hora_fin_habitual = datetime.strptime(turno_habitual['hora_fin'], '%H:%M:%S').time()
-                hora_inicio_autorizada = datetime.strptime(turno_autorizado_details['hora_inicio'], '%H:%M:%S').time()
                 if hora_inicio_autorizada < hora_fin_habitual:
                     return {'success': False, 'error': 'Las horas extras para el turno mañana deben ser posteriores a su turno habitual.'}
             
-            # Regla para Turno Tarde
             if 'tarde' in nombre_turno_habitual:
                 hora_inicio_habitual = datetime.strptime(turno_habitual['hora_inicio'], '%H:%M:%S').time()
-                hora_fin_autorizada = datetime.strptime(turno_autorizado_details['hora_fin'], '%H:%M:%S').time()
-
                 if hora_fin_autorizada > hora_inicio_habitual:
                     return {'success': False, 'error': 'Las horas extras para el turno tarde deben finalizar antes del inicio de su turno habitual.'}
 
-                # La regla de las 23:00 hs ya no es necesaria con la lógica anterior, pero la mantenemos por si acaso
-                if hora_fin_autorizada > time(23, 0, 0):
-                    return {'success': False, 'error': 'Las horas extras no pueden extenderse más allá de las 23:00 hs.'}
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Error al parsear horas en validación de horas extras para usuario {usuario_id}: {e}")
+            return {'success': False, 'error': 'Error en los datos de turno para la validación de horas extras.'}
 
-        # 3. Si todas las validaciones pasan, crear la autorización
-        return self.model.create(data)
-
-    def obtener_autorizaciones_pendientes(self):
-        return self.model.find_all_pending()
-
-    def obtener_todas_las_autorizaciones(self):
-        return self.model.find_all_by_status()
-
-    def actualizar_estado_autorizacion(self, autorizacion_id: int, estado: str, comentario: str):
-        return self.model.update_estado(autorizacion_id, estado, comentario)
+        return {'success': True}
+    # endregion
