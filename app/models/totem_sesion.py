@@ -156,3 +156,65 @@ class TotemSesionModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo todas las sesiones activas: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def cerrar_sesiones_expiradas(self) -> Dict:
+        """
+        Busca todas las sesiones de tótem activas y cierra aquellas cuyo turno
+        ha finalizado hace más de 15 minutos. Maneja turnos nocturnos.
+        """
+        try:
+            from datetime import timedelta
+
+            query = self.db.table(self.get_table_name()).select(
+                'id, fecha_inicio, usuario:usuarios(id, roles(codigo), turno:turno_id(hora_inicio, hora_fin))'
+            ).eq('activa', True)
+            
+            response = query.execute()
+
+            if not response.data:
+                return {'success': True, 'message': 'No hay sesiones activas para verificar.'}
+
+            sesiones_a_cerrar = []
+            now = datetime.now()
+
+            for sesion in response.data:
+                usuario = sesion.get('usuario')
+                
+                if not usuario or usuario.get('roles', {}).get('codigo') == 'GERENTE' or not usuario.get('turno'):
+                    continue
+
+                turno_info = usuario.get('turno')
+                hora_inicio_str = turno_info.get('hora_inicio')
+                hora_fin_str = turno_info.get('hora_fin')
+
+                if not hora_inicio_str or not hora_fin_str:
+                    continue
+                
+                hora_inicio = datetime.strptime(hora_inicio_str, '%H:%M:%S').time()
+                hora_fin = datetime.strptime(hora_fin_str, '%H:%M:%S').time()
+                # Usamos UTC para la fecha de la sesión si la BBDD guarda en UTC
+                fecha_sesion = datetime.fromisoformat(sesion['fecha_inicio'].replace('Z', '+00:00')).date()
+                
+                limite_dt = datetime.combine(fecha_sesion, hora_fin) + timedelta(minutes=15)
+
+                if hora_fin < hora_inicio:
+                    limite_dt += timedelta(days=1)
+                
+                # Convertir now a la misma zona horaria que limite_dt si es necesario (asumimos local por ahora)
+                if now > limite_dt:
+                    sesiones_a_cerrar.append(sesion['id'])
+
+            if not sesiones_a_cerrar:
+                return {'success': True, 'message': 'No hay sesiones expiradas.'}
+
+            update_response = self.db.table(self.get_table_name()).update({
+                'activa': False,
+                'fecha_fin': now.isoformat()
+            }).in_('id', sesiones_a_cerrar).execute()
+
+            logger.info(f"Cerradas {len(update_response.data)} sesiones de tótem expiradas.")
+            return {'success': True, 'data': update_response.data}
+
+        except Exception as e:
+            logger.error(f"Error cerrando sesiones de tótem expiradas: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}

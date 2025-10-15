@@ -237,16 +237,15 @@
                     </button>
 
                     {% if pedido.estado != 'CANCELADO' %}
-                        {% if has_permission('cancelar_ordenes_venta') %}
-                        <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
+                        {% set can_cancel = has_permission('cancelar_ordenes_venta')|trim == 'True' %}
+                        <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) if can_cancel else '#' }}"
                             class="confirm-form d-grid" data-title="Confirmar Cancelación"
                             data-message="¿Está seguro de que desea cancelar este pedido? Esta acción no se puede deshacer."
                             data-button-type="danger">
-                            <button type="submit" class="btn btn-outline-danger">
+                            <button type="submit" class="btn btn-outline-danger {% if not can_cancel %}disabled{% endif %}">
                                 <i class="bi bi-x-circle me-1"></i>Cancelar Pedido
                             </button>
                         </form>
-                        {% endif %}
                     {% endif %}
                 </div>
             </div>
@@ -362,8 +361,7 @@
             contenidoHtml += '<h6>Órdenes de Producción Generadas:</h6>';
             contenidoHtml += '<ul class="list-group">';
             ordenesCreadas.forEach(orden => {
-                // LÍNEA CORREGIDa
-                const urlOrden = `/ordenes/${orden.id}/detalle`; 
+                const urlOrden = `/ordenes/${orden.id}/detalle`;
                 contenidoHtml += `
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
@@ -398,7 +396,7 @@
             contenidoHtml += '<h6>Órdenes de Producción Generadas:</h6>';
             contenidoHtml += '<ul class="list-group">';
             ordenesCreadas.forEach(orden => {
-                const urlOrden = `/ordenes/${orden.id}/detalle`;
+                const urlOrden = `/orden-produccion/${orden.id}/detalle`;
                 contenidoHtml += `
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <div>

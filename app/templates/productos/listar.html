@@ -68,9 +68,10 @@
                     <hr class="card-divider"></hr>
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
                         {% if producto.activo %}
+                        {% set can_edit_price = has_permission('modificar_materias_primas')|trim == 'True' %}
                         <a 
-                            onClick = "recargarPrecioProducto('{{ producto.id }}')"
-                            class="btn btn-sm btn-outline-primary" title="Actualizar precio">
+                            {% if can_edit_price %}onClick = "recargarPrecioProducto('{{ producto.id }}')"{% endif %}
+                            class="btn btn-sm btn-outline-primary {% if not can_edit_price %}disabled{% endif %}" title="Actualizar precio">
                             <i class="bi bi-arrow-repeat"></i>
                         </a>
 

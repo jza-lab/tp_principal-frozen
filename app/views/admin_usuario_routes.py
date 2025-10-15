@@ -491,15 +491,20 @@ def nueva_autorizacion():
 @permission_required(accion='aprobar_permisos')
 def listar_autorizaciones():
     """
-    Obtiene todas las autorizaciones de ingreso pendientes.
+    Obtiene todas las autorizaciones de ingreso.
     """
-    resultado = autorizacion_controller.obtener_autorizaciones_pendientes()
+    resultado = autorizacion_controller.obtener_todas_las_autorizaciones()
     if resultado.get('success'):
-        return jsonify(success=True, data=resultado.get('data', []))
+        # Separar las autorizaciones en pendientes y un historial
+        todas = resultado.get('data', [])
+        pendientes = [auth for auth in todas if auth['estado'] == 'PENDIENTE']
+        historial = [auth for auth in todas if auth['estado'] != 'PENDIENTE']
+        
+        return jsonify(success=True, data={'pendientes': pendientes, 'historial': historial})
     else:
-        # Devuelve un array vacío si no hay autorizaciones pendientes, en lugar de un error.
+        # Si no hay ninguna autorización, devolver listas vacías
         if "no se encontraron" in resultado.get('error', '').lower():
-            return jsonify(success=True, data=[])
+            return jsonify(success=True, data={'pendientes': [], 'historial': []})
         return jsonify(success=False, error=resultado.get('error', 'Error al obtener las autorizaciones.')), 500
 
 @admin_usuario_bp.route('/autorizaciones/<int:id>/estado', methods=['POST'])

@@ -51,7 +51,7 @@
                         
                         {% macro has_permission(action) %}
                             {% set can_access = false %}
-                            {% if session.get('rol') == 'GERENTE_GENERAL' %}
+                            {% if session.get('rol') == 'GERENTE' %}
                                 {% set can_access = true %}
                             {% else %}
                                 {% set allowed_roles = CANONICAL_PERMISSION_MAP.get(action, []) %}
@@ -92,22 +92,23 @@
                         </li>
 
                         
+                        {% set can_ver_productos = has_permission('ver_materias_primas')|trim == 'True' %}
+                        {% set can_ver_ventas = has_permission('ver_ordenes_venta')|trim == 'True' %}
+                        {% set can_ver_inventario_prod = has_permission('realizar_control_calidad')|trim == 'True' %}
+                        {% set can_access_comercial_dropdown = can_ver_productos or can_ver_ventas or can_ver_inventario_prod %}
                         <li class="nav-item dropdown">
-                             <a class="nav-link dropdown-toggle {% if 'producto' in request.endpoint or 'orden_venta' in request.endpoint %}active{% endif %}"
+                             <a class="nav-link dropdown-toggle {% if 'producto' in request.endpoint or 'orden_venta' in request.endpoint %}active{% endif %} {% if not can_access_comercial_dropdown %}disabled{% endif %}"
                                href="#" id="navbarDropdownComercial" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-cart-fill me-1"></i> Comercial
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownComercial">
-                                {% set can_ver_productos = has_permission('ver_materias_primas') %}
                                 <li><a class="dropdown-item {% if 'producto' in request.endpoint %}active{% endif %} {% if not can_ver_productos %}disabled{% endif %}" href="{{ url_for('productos.obtener_productos') if can_ver_productos else '#' }}" aria-disabled="{{ 'true' if not can_ver_productos else 'false' }}"><i class="bi bi-bag-fill me-2"></i> Productos</a></li>
 
-                                {% set can_ver_ventas = has_permission('ver_ordenes_venta') %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if 'orden_venta' in request.endpoint %}active{% endif %} {% if not can_ver_ventas %}disabled{% endif %}" href="{{ url_for('orden_venta.listar') if can_ver_ventas else '#' }}" aria-disabled="{{ 'true' if not can_ver_ventas else 'false' }}"><i class="bi bi-currency-dollar me-2"></i> Ventas (Ordenes)</a></li>
 
-                                {% set can_ver_inventario_prod = has_permission('realizar_control_calidad') %}
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item {% if 'lote_producto' in request.endpoint %}active{% endif %} {% if can_ver_inventario_prod|trim != 'True' %}disabled{% endif %}" href="{{ url_for('lote_producto.listar_lotes') if can_ver_inventario_prod|trim == 'True' else '#' }}" aria-disabled="{{ 'true' if can_ver_inventario_prod|trim != 'True' else 'false' }}"><i class="bi bi-box-seam me-2"></i> Inventario (Productos)</a></li>
+                                <li><a class="dropdown-item {% if 'lote_producto' in request.endpoint %}active{% endif %} {% if not can_ver_inventario_prod %}disabled{% endif %}" href="{{ url_for('lote_producto.listar_lotes') if can_ver_inventario_prod else '#' }}" aria-disabled="{{ 'true' if not can_ver_inventario_prod else 'false' }}"><i class="bi bi-box-seam me-2"></i> Inventario (Productos)</a></li>
                             </ul>
                         </li>
 
@@ -132,7 +133,7 @@
                         {% set can_gestionar_empleados = has_permission('ver_info_empleados') or has_permission('modificar_usuarios') or has_permission('crear_usuarios') %}
                         {% set can_gestionar_clientes = has_permission('gestionar_clientes') %}
                         {% set can_gestionar_proveedores = has_permission('gestionar_proveedores') %}
-                        {% set can_access_admin_dropdown = (can_gestionar_empleados|trim == 'True') or (can_gestionar_clientes|trim == 'True') or (can_gestionar_proveedores|trim == 'True') %}
+                        {% set can_access_admin_dropdown = (can_gestionar_empleados|trim == 'True') or (can_gestionar_clientes|trim == 'True') or (can_gestionar_proveedores|trim == 'True') or (session.get('rol') == 'IT') %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if is_admin_section %}active{% endif %} {% if not can_access_admin_dropdown %}disabled{% endif %}"
                             href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">

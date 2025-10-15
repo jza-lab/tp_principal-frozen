@@ -13,20 +13,26 @@ class PedidoModel(BaseModel):
         """Devuelve el nombre de la tabla principal."""
         return 'pedidos'
 
-    def contar_pedidos_direccion(self, direccion_id: int) -> int:
+    def contar_pedidos_direccion(self, direccion_id: int, exclude_pedido_id: Optional[int] = None) -> int:
+        """
+        Cuenta cuántos pedidos están asociados a una dirección.
+        Opcionalmente, puede excluir un ID de pedido del conteo.
+        """
         try:
-            # Usamos el método select con .count() para obtener solo el recuento.
-            # 'exact' asegura que el número total de filas es devuelto en la cabecera.
-            response = self.db.table(self.get_table_name()) \
+            query = self.db.table(self.get_table_name()) \
                 .select('id', count='exact') \
-                .eq('id_direccion_entrega', direccion_id) \
-                .execute()
+                .eq('id_direccion_entrega', direccion_id)
+
+            # Si se proporciona un ID de pedido para excluir, se añade un filtro 'not equals'.
+            if exclude_pedido_id is not None:
+                query = query.not_.eq('id', exclude_pedido_id)
+
+            response = query.execute()
 
             return response.count if response.count is not None else 0
 
         except Exception as e:
-            logger.error(f"Error contando clientes por direccion_id {direccion_id}: {e}")
-            # En caso de error, retornamos 0 para evitar fallos.
+            logger.error(f"Error contando pedidos por direccion_id {direccion_id}: {e}")
             return 0
     def create_with_items(self, pedido_data: Dict, items_data: List[Dict]) -> Dict:
         """

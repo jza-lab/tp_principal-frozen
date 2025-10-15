@@ -9,10 +9,11 @@ from app.schemas.usuario_schema import UsuarioSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, time
 import logging
 import json
 from app.controllers.direccion_controller import GeorefController
+from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 
 logger = logging.getLogger(__name__)
 
@@ -649,7 +650,97 @@ class UsuarioController(BaseController):
             logger.error(f"Error obteniendo rol por ID: {str(e)}")
             return None
 
-    def obtener_todos_los_turnos(self) -> List[Dict]:
-        """Obtiene una lista de todos los turnos de trabajo disponibles."""
-        resultado = self.turno_model.find_all()
+    def obtener_todos_los_turnos(self, usuario_id: Optional[int] = None) -> List[Dict]:
+        """
+        Obtiene una lista de turnos de trabajo. Si se proporciona un ID de usuario,
+        aplica la lógica de negocio (gerentes ven todo, el resto su turno).
+        Si no, devuelve todos los turnos (útil para formularios de creación).
+        """
+        if usuario_id:
+            resultado = self.model.get_turnos_para_usuario(usuario_id)
+        else:
+            resultado = self.turno_model.find_all()
+            
         return resultado.get('data', [])
+
+    def verificar_acceso_por_horario(self, usuario: dict) -> dict:
+        """
+        Verifica si el login es válido según la ventana de fichaje del turno o una autorización.
+        Regla: 15 mins antes hasta 15 mins después del inicio del turno.
+        """
+        if not usuario or usuario.get('roles', {}).get('codigo') == 'GERENTE':
+            return {'success': True}
+
+        hora_actual = datetime.now().time()
+        autorizacion_model = AutorizacionIngresoModel()
+
+        # 1. Verificar la ventana de fichaje normal
+        turno_info = usuario.get('turno')
+        if turno_info and 'hora_inicio' in turno_info:
+            try:
+                hora_inicio = datetime.strptime(turno_info['hora_inicio'], '%H:%M:%S').time()
+                dt_inicio = datetime.combine(datetime.today(), hora_inicio)
+                inicio_permitido = (dt_inicio - timedelta(minutes=15)).time()
+                fin_permitido = (dt_inicio + timedelta(minutes=15)).time()
+
+                if fin_permitido < inicio_permitido: # Turno transnoche
+                    if hora_actual >= inicio_permitido or hora_actual <= fin_permitido:
+                        return {'success': True}
+                else: # Turno normal
+                    if inicio_permitido <= hora_actual <= fin_permitido:
+                        return {'success': True}
+            except (ValueError, TypeError):
+                logger.warning(f"No se pudo parsear la hora de inicio del turno para el usuario {usuario.get('legajo')}")
+                pass # Continuar para verificar autorizaciones
+
+        # 2. Si se está fuera de la ventana, buscar autorizaciones APROBADAS para hoy
+        usuario_id = usuario.get('id')
+        hoy = datetime.today().date()
+        auth_result = autorizacion_model.find_by_usuario_and_fecha(usuario_id, hoy, estado='APROBADA')
+
+        if not auth_result.get('success'):
+            return {'success': False, 'error': 'Fichaje fuera de horario. Se requiere una autorización.'}
+
+        # 3. Iterar sobre las autorizaciones y aplicar la lógica correcta para cada tipo
+        for autorizacion in auth_result.get('data', []):
+            auth_turno = autorizacion.get('turno')
+            auth_tipo = autorizacion.get('tipo')
+
+            if not all(k in auth_turno for k in ['hora_inicio', 'hora_fin']):
+                logger.warning(f"Autorización ID {autorizacion.get('id')} para usuario {usuario_id} no tiene horas de turno válidas.")
+                continue
+
+            try:
+                auth_inicio = datetime.strptime(auth_turno['hora_inicio'], '%H:%M:%S').time()
+                auth_fin = datetime.strptime(auth_turno['hora_fin'], '%H:%M:%S').time()
+
+                # Lógica específica por tipo de autorización
+                if auth_tipo == 'TARDANZA':
+                    # Válido desde el inicio del turno autorizado hasta el fin del mismo
+                    if auth_inicio <= hora_actual <= auth_fin:
+                        logger.info(f"Acceso permitido para {usuario.get('legajo')} por autorización de TARDANZA.")
+                        return {'success': True}
+                
+                elif auth_tipo == 'HORAS_EXTRAS':
+                    # Válido desde 15 mins antes del inicio de las horas extras hasta el fin de las mismas
+                    inicio_ventana_he = (datetime.combine(date.today(), auth_inicio) - timedelta(minutes=15)).time()
+                    fin_ventana_he = auth_fin
+
+                    if fin_ventana_he < inicio_ventana_he: # Horas extras transnoche
+                        if hora_actual >= inicio_ventana_he or hora_actual <= fin_ventana_he:
+                            logger.info(f"Acceso permitido para {usuario.get('legajo')} por autorización de HORAS_EXTRAS (transnoche).")
+                            return {'success': True}
+                    else: # Horas extras en el mismo día
+                        if inicio_ventana_he <= hora_actual <= fin_ventana_he:
+                            logger.info(f"Acceso permitido para {usuario.get('legajo')} por autorización de HORAS_EXTRAS.")
+                            return {'success': True}
+                
+                # Puedes añadir más tipos de autorización aquí si es necesario
+                # elif auth_tipo == 'SALIDA_ANTICIPADA': ...
+
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Error al procesar turno de autorización para {usuario.get('legajo')}: {e}")
+                continue
+        
+        # 4. Si ninguna autorización coincide
+        return {'success': False, 'error': 'Fichaje fuera de horario y sin autorización válida para este momento.'}

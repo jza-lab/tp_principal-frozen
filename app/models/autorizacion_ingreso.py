@@ -11,26 +11,28 @@ class AutorizacionIngresoModel(BaseModel):
     def get_table_name(self) -> str:
         return 'u_autorizaciones_ingreso'
 
-    def find_by_usuario_and_fecha(self, usuario_id: int, fecha: date, tipo: str = None):
+    def find_by_usuario_and_fecha(self, usuario_id: int, fecha: date, tipo: str = None, estado: str = None):
         """
-        Busca una autorización de ingreso para un usuario en una fecha específica,
-        con la opción de filtrar por tipo de autorización.
+        Busca una autorización para un usuario y fecha, con filtros opcionales de tipo y estado.
         """
         try:
             query = self.db.table(self.table_name)\
-                .select("*")\
+                .select("*, turno:turno_autorizado_id(nombre, hora_inicio, hora_fin)")\
                 .eq("usuario_id", usuario_id)\
                 .eq("fecha_autorizada", fecha.isoformat())
 
             if tipo:
                 query = query.eq('tipo', tipo)
+            
+            if estado:
+                query = query.eq('estado', estado)
 
             response = query.execute()
             
             if response.data:
-                return {'success': True, 'data': response.data[0]}
+                return {'success': True, 'data': response.data} # Devolver siempre una lista
             
-            error_message = f'Autorización de tipo "{tipo}" no encontrada.' if tipo else 'Autorización no encontrada.'
+            error_message = 'No se encontraron autorizaciones para los criterios especificados.'
             return {'success': False, 'error': error_message}
             
         except Exception as e:
@@ -62,22 +64,34 @@ class AutorizacionIngresoModel(BaseModel):
             logger.error(f"Error al crear autorización: {e}", exc_info=True)
             return {'success': False, 'error': f"Error en la base de datos: {e}"}
 
+    def find_all_by_status(self, status: str = None):
+        """
+        Busca todas las autorizaciones de ingreso, opcionalmente filtradas por estado.
+        """
+        try:
+            query = self.db.table(self.table_name).select(
+                "*, usuario:usuario_id(nombre, apellido, legajo), turno:turno_autorizado_id(nombre, hora_inicio, hora_fin)"
+            )
+
+            if status:
+                query = query.eq("estado", status)
+
+            response = query.order('fecha_autorizada', desc=True).execute()
+
+            if response.data:
+                return {'success': True, 'data': response.data}
+            
+            error_msg = f'No se encontraron autorizaciones con estado "{status}".' if status else 'No se encontraron autorizaciones.'
+            return {'success': False, 'error': error_msg}
+        except Exception as e:
+            logger.error(f"Error al buscar autorizaciones: {e}", exc_info=True)
+            return {'success': False, 'error': f"Error en la base de datos: {e}"}
+
     def find_all_pending(self):
         """
         Busca todas las autorizaciones de ingreso pendientes.
         """
-        try:
-            response = self.db.table(self.table_name)\
-                .select("*, usuario:usuario_id(nombre, apellido, legajo), turno:turno_autorizado_id(nombre, hora_inicio, hora_fin)")\
-                .eq("estado", "PENDIENTE")\
-                .execute()
-            
-            if response.data:
-                return {'success': True, 'data': response.data}
-            return {'success': False, 'error': 'No se encontraron autorizaciones pendientes.'}
-        except Exception as e:
-            logger.error(f"Error al buscar autorizaciones pendientes: {e}", exc_info=True)
-            return {'success': False, 'error': f"Error en la base de datos: {e}"}
+        return self.find_all_by_status("PENDIENTE")
 
     def update_estado(self, autorizacion_id: int, estado: str, comentario: str = None):
         """

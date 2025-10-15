@@ -9,12 +9,10 @@
         <p class="text-muted mb-0">Gestión y seguimiento de órdenes de producción</p>
     </div>
     <div class="btn-toolbar">
-        {# El botón de crear nueva orden está deshabilitado. Las órdenes se crean desde Planificación. #}
-        {% if has_permission('crear_ordenes_produccion') %}
-        <a href="{{ url_for('orden_produccion.nueva') }}" class="btn btn-primary">
+        {% set can_create = has_permission('crear_ordenes_produccion')|trim == 'True' %}
+        <a href="{{ url_for('orden_produccion.nueva') if can_create else '#' }}" class="btn btn-primary {% if not can_create %}disabled{% endif %}">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
         </a>
-        {% endif %}
     </div>
 </div>
 
@@ -46,24 +44,24 @@
                                         Pendientes
                                     </a>
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='APROBADA') }}" 
-                                    class="btn btn-sm {% if current_status == 'APROBADA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Aprobadas
-                                    </a>
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
                                     <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" 
                                     class="btn btn-sm {% if current_status == 'EN_PROCESO' %}btn-primary{% else %}btn-secondary{% endif %}">
                                         En Proceso
                                     </a>
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='COMPLETADA') }}" 
-                                    class="btn btn-sm {% if current_status == 'COMPLETADA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Completadas
+                                    <a href="{{ url_for('orden_produccion.listar', estado='APROBADA') }}" 
+                                    class="btn btn-sm {% if current_status == 'APROBADA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        Aprobadas
                                     </a>
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
                                     <a href="{{ url_for('orden_produccion.listar', estado='CANCELADA') }}" 
                                     class="btn btn-sm {% if current_status == 'CANCELADA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Canceladas
+                                        En Espera
+                                    </a>
+                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                                    <a href="{{ url_for('orden_produccion.listar', estado='COMPLETADA') }}" 
+                                    class="btn btn-sm {% if current_status == 'COMPLETADA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        Completadas
                                     </a>
                                 </div>
                             </div>
@@ -267,14 +265,13 @@
                             </button>
                         </form>
                         {% endif %}
-                        {% if has_permission('cancelar_ordenes_produccion') %}
-                        <form method="POST" action="{{ url_for('orden_produccion.rechazar', id=orden.id) }}" style="display: inline;" class="confirm-form"
+                        {% set can_cancel = has_permission('cancelar_ordenes_produccion')|trim == 'True' %}
+                        <form method="POST" action="{{ url_for('orden_produccion.rechazar', id=orden.id) if can_cancel else '#' }}" style="display: inline;" class="confirm-form"
                             data-title="Confirmar Rechazo" data-message="¿Está seguro de que desea rechazar esta orden de producción? Esta acción no se puede deshacer." data-button-type="danger">
-                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Rechazar Orden">Rechazar
+                            <button type="submit" class="btn btn-sm btn-outline-danger {% if not can_cancel %}disabled{% endif %}" title="Rechazar Orden">Rechazar
                                 <i class="bi bi-x-circle"></i>
                             </button>
                         </form>
-                        {% endif %}
                     {% endif %}
                 </div>
             </div>
