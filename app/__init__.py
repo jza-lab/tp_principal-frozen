@@ -72,12 +72,12 @@ def create_app() -> Flask:
     Factory para crear y configurar la aplicación Flask.
     """
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    
+
     app = Flask(__name__)
     app.config.from_object(Config)
     app.json = CustomJSONEncoder(app)
 
-    CORS(app, resources={r"/api/*": {"origins": "*"}}) 
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     _register_blueprints(app)
     _register_error_handlers(app)

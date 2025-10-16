@@ -46,7 +46,7 @@ def crear_producto():
             # Correctly unpack the response from the controller
             response, status = producto_controller.crear_producto(datos_json)
             return jsonify(response), status
-        
+
         # For GET request
         producto = None
         insumos_resp, _ = insumo_controller.obtener_insumos()
@@ -61,9 +61,9 @@ def crear_producto():
 def obtener_productos():
     try:
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
-        
+
         response, status = producto_controller.obtener_todos_los_productos(filtros)
-        
+
         if status == 200:
             productos = response.get("data", [])
         else:
@@ -72,10 +72,10 @@ def obtener_productos():
 
         categorias_response, _ = producto_controller.obtener_categorias_distintas()
         categorias = categorias_response.get("data", [])
-        
+
         return render_template(
-            "productos/listar.html", 
-            productos=productos, 
+            "productos/listar.html",
+            productos=productos,
             categorias=categorias
         )
     except Exception as e:
@@ -89,7 +89,7 @@ def obtener_productos():
 def obtener_producto_por_id(id_producto):
     try:
         producto= producto_controller.obtener_producto_por_id(id_producto)
-        
+
         response_insumos, status_insumo = insumo_controller.obtener_insumos()
         insumos = response_insumos.get("data", [])
 
@@ -149,14 +149,14 @@ def actualizar_producto(id_producto):
             receta_id = receta_response.data[0]['id']
             receta_items_response = receta_controller.obtener_ingredientes_para_receta(receta_id)
             receta_items = receta_items_response.get("data", [])
-        
+
         insumos_dict = {str(insumo['id']): insumo for insumo in insumos}
 
         for item in receta_items:
             insumo = insumos_dict.get(str(item['id_insumo']))
             if insumo:
                 item['precio_unitario'] = insumo.get('precio_unitario', 0)
-                
+
                 item['unidad_medida'] = insumo.get('unidad_medida', '')
             else:
                 item['precio_unitario'] = 0

@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function () {
              return;
         }
 
-        const url = isEditBoolean ? `/api/productos/catalogo/actualizar/${ID_producto}` : '/api/productos/catalogo/nuevo';
+        const url = isEditBoolean ? `/catalogo/actualizar/${ID_producto}` : '/catalogo/nuevo';
         const method = isEditBoolean ? 'PUT' : 'POST';
 
         try {
