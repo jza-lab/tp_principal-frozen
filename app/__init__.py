@@ -20,7 +20,9 @@ from app.views.productos_routes import productos_bp
 from app.views.cliente_proveedor_routes import cliente_proveedor
 from app.views.lote_producto_routes import lote_producto_bp
 from app.views.reservas_routes import reservas_bp
-from app.views.admin_tarea_routes import admin_tasks_bp
+from app.views.admin_dashboard_routes import admin_dashboard_bp
+from app.views.admin_autorizacion_routes import admin_autorizacion_bp
+from app.views.api_routes import api_bp
 
 def create_app():
     """Factory para crear la aplicación Flask"""
@@ -64,7 +66,11 @@ def create_app():
     app.register_blueprint(cliente_proveedor)
     app.register_blueprint(lote_producto_bp, url_prefix='/api/productos')
     app.register_blueprint(reservas_bp)
-    app.register_blueprint(admin_tasks_bp)
+    
+    # Nuevos blueprints registrados
+    app.register_blueprint(admin_dashboard_bp)
+    app.register_blueprint(admin_autorizacion_bp)
+    app.register_blueprint(api_bp)
 
     # Ruta de health check
     @app.route('/api/health')
