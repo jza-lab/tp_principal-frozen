@@ -120,13 +120,10 @@
                         {% if insumo.activo %}
                         <!-- <a href="{{ url_for('insumos_api.agregar_lote', id_insumo=insumo.id_insumo) }}" class="btn btn-sm btn-outline-success" title="Registrar Lote">
                             <i class="bi bi-plus-square"></i>
-                        </a>
+                        </a> -->
                         {% set can_edit = has_permission('modificar_materias_primas')|trim == 'True' %}
                         <a href="{{ url_for('insumos_api.actualizar_insumo', id_insumo=insumo.id_insumo) if can_edit else '#' }}"
                             class="btn btn-sm btn-outline-primary {% if not can_edit %}disabled{% endif %}" title="Modificar insumo">
-                        </a> -->
-                        <a href="{{ url_for('insumos_api.actualizar_insumo', id_insumo=insumo.id_insumo) }}"
-                            class="btn btn-sm btn-outline-primary" title="Modificar insumo">
                             <i class="bi bi-pencil"></i>
                         </a>
 

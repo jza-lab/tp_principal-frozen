@@ -13,20 +13,26 @@ class PedidoModel(BaseModel):
         """Devuelve el nombre de la tabla principal."""
         return 'pedidos'
 
-    def contar_pedidos_direccion(self, direccion_id: int) -> int:
+    def contar_pedidos_direccion(self, direccion_id: int, exclude_pedido_id: Optional[int] = None) -> int:
+        """
+        Cuenta cuántos pedidos están asociados a una dirección.
+        Opcionalmente, puede excluir un ID de pedido del conteo.
+        """
         try:
-            # Usamos el método select con .count() para obtener solo el recuento.
-            # 'exact' asegura que el número total de filas es devuelto en la cabecera.
-            response = self.db.table(self.get_table_name()) \
+            query = self.db.table(self.get_table_name()) \
                 .select('id', count='exact') \
-                .eq('id_direccion_entrega', direccion_id) \
-                .execute()
+                .eq('id_direccion_entrega', direccion_id)
+
+            # Si se proporciona un ID de pedido para excluir, se añade un filtro 'not equals'.
+            if exclude_pedido_id is not None:
+                query = query.not_.eq('id', exclude_pedido_id)
+
+            response = query.execute()
 
             return response.count if response.count is not None else 0
 
         except Exception as e:
-            logger.error(f"Error contando clientes por direccion_id {direccion_id}: {e}")
-            # En caso de error, retornamos 0 para evitar fallos.
+            logger.error(f"Error contando pedidos por direccion_id {direccion_id}: {e}")
             return 0
     def create_with_items(self, pedido_data: Dict, items_data: List[Dict]) -> Dict:
         """
@@ -91,11 +97,11 @@ class PedidoModel(BaseModel):
     def get_one_with_items(self, pedido_id: int) -> Dict:
         """Obtiene un pedido con sus items, especificando la relación."""
         try:
-            # --- LÍNEA CORREGIDA ---
+            
             result = self.db.table(self.get_table_name()).select(
-                '*, cliente:clientes(*), items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre)), direccion:usuario_direccion(*)'
+                '*, cliente:clientes(*), items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre, precio_unitario, unidad_medida)), direccion:usuario_direccion(*)'
             ).eq('id', pedido_id).single().execute()
-            # ------------------------
+            
 
             if result.data:
                 return {'success': True, 'data': result.data}
@@ -232,7 +238,7 @@ class PedidoModel(BaseModel):
     def actualizar_estado_agregado(self, pedido_id: int) -> Dict:
         """
         Recalcula y actualiza el estado de un pedido principal basado en el estado
-        de todos sus items.
+        de todos sus items, incorporando la nueva lógica de estados.
         """
         try:
             items_result = self.db.table('pedido_items').select('estado').eq('pedido_id', pedido_id).execute()
@@ -242,20 +248,31 @@ class PedidoModel(BaseModel):
                 return {'success': True, 'message': 'No items found.'}
 
             estados_items = {item['estado'] for item in items_result.data}
-
             nuevo_estado_pedido = None
 
-            # Lógica de estados:
-            # Si TODOS los items están 'ALISTADO', el pedido está listo para entrega.
-            if all(estado == 'ALISTADO' for estado in estados_items):
-                nuevo_estado_pedido = 'LISTO_PARA_ENTREGA'
-            # Si AL MENOS UNO está 'EN_PRODUCCION', el pedido está en proceso.
-            elif 'EN_PRODUCCION' in estados_items:
+            # --- NUEVA LÓGICA DE ESTADOS ---
+            # 1. Si al menos un item está 'EN_PRODUCCION', el pedido está 'EN_PROCESO'.
+            if 'EN_PRODUCCION' in estados_items:
                 nuevo_estado_pedido = 'EN_PROCESO'
+            # 2. Si TODOS los items están 'ALISTADO', el pedido pasa a 'LISTO PARA ARMAR'.
+            elif all(estado == 'ALISTADO' for estado in estados_items):
+                nuevo_estado_pedido = 'LISTO_PARA_ARMAR'
+            # 3. Si no hay items en producción y no todos están alistados, pero al menos uno lo está,
+            #    se mantiene EN_PROCESO (o el estado que tuviera).
+            elif 'ALISTADO' in estados_items and 'EN_PRODUCCION' not in estados_items:
+                 # Esta condición puede ser más compleja. Por ahora, si hay una mezcla
+                 # de PENDIENTE y ALISTADO, se podría considerar EN_PROCESO.
+                 # O simplemente no cambiar el estado hasta que todo esté listo.
+                 # Por simplicidad, no hacemos nada y esperamos a que todos los items avancen.
+                 pass
+
 
             if nuevo_estado_pedido:
-                logger.info(f"Actualizando estado del pedido {pedido_id} a '{nuevo_estado_pedido}'.")
-                return self.cambiar_estado(pedido_id, nuevo_estado_pedido)
+                # Obtenemos el estado actual para evitar actualizaciones redundantes
+                pedido_actual_res = self.find_by_id(pedido_id, 'id')
+                if pedido_actual_res.get('success') and pedido_actual_res['data'].get('estado') != nuevo_estado_pedido:
+                    logger.info(f"Actualizando estado del pedido {pedido_id} a '{nuevo_estado_pedido}'.")
+                    return self.cambiar_estado(pedido_id, nuevo_estado_pedido)
 
             return {'success': True, 'message': 'No state change required.'}
 

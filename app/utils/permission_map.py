@@ -1,3 +1,12 @@
+"""
+Este módulo centraliza los mapas de permisos y roles de la aplicación.
+Define la relación entre acciones y los roles que pueden realizarlas,
+así como mapas de IDs a códigos para sectores y roles.
+
+NOTA: El diccionario CANONICAL_PERMISSION_MAP es la única fuente de verdad
+para la lógica de permisos basada en roles y acciones.
+"""
+
 SECTOR_MAP = {
     1: 'ADMINISTRACION',
     2: 'ALMACEN',
@@ -5,7 +14,6 @@ SECTOR_MAP = {
     4: 'CALIDAD',
     5: 'PRODUCCION'
 }
-
 
 ROLE_MAP = {
     1: 'ADMIN',
@@ -37,7 +45,7 @@ CANONICAL_PERMISSION_MAP = {
     'ver_reportes_stock': ['VENDEDOR', 'SUPERVISOR', 'GERENTE'],
     'ver_reportes_financieros': ['VENDEDOR', 'GERENTE'],
     'exportar_reportes': ['VENDEDOR', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'],
-    'ver_dashboard': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'],
+    'ver_dashboard': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE','ADMIN', 'IT', 'RRHH'],
     'actualizar_precios_proveedor': ['VENDEDOR'],
     'ver_materias_primas': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'],
     'ver_stock_actual': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'GERENTE'],
@@ -46,13 +54,13 @@ CANONICAL_PERMISSION_MAP = {
     'crear_ordenes_compra': ['VENDEDOR', 'GERENTE'],
     'modificar_ordenes_compra': ['VENDEDOR', 'GERENTE'],
     'cancelar_ordenes_compra': ['VENDEDOR', 'GERENTE'],
-    'ver_ordenes_venta': ['VENDEDOR', 'GERENTE'],
+    'ver_ordenes_venta': ['VENDEDOR', 'GERENTE', 'SUPERVISOR'],
     'crear_ordenes_venta': ['VENDEDOR', 'GERENTE'],
     'modificar_ordenes_venta': ['VENDEDOR', 'GERENTE'],
     'cancelar_ordenes_venta': ['VENDEDOR', 'GERENTE'],
     'registrar_envios': ['VENDEDOR', 'SUPERVISOR'],
     'registrar_datos_calidad_basicos': ['OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD'],
-    'ver_ordenes_produccion': ['OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'],
+    'ver_ordenes_produccion': ['OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE', 'VENDEDOR'],
     'iniciar_produccion': ['OPERARIO', 'SUPERVISOR'],
     'registrar_inicio_etapa': ['OPERARIO', 'SUPERVISOR'],
     'registrar_fin_etapa': ['OPERARIO', 'SUPERVISOR'],
@@ -93,14 +101,14 @@ CANONICAL_PERMISSION_MAP = {
     'modificar_info_empleados': ['RRHH', 'GERENTE'],
     'monitoreo_tecnico_ver_logs': ['GERENTE', 'IT'],
     'ver_reportes_estrategicos': ['GERENTE'],
-    'inactivar_proveedores_clientes': ['GERENTE'],
+    'inactivar_proveedores_clientes': ['GERENTE', 'ADMIN'],
     'aprobar_ordenes_compra': ['GERENTE'],
     'aprobar_ordenes_venta': ['GERENTE'],
     'gestionar_backups': ['IT']
 }
 
-def get_allowed_roles_for_action(action_name):
+def get_allowed_roles_for_action(action_name: str) -> list:
     """
-    Devuelve la lista de roles permitidos para una acción específica.
+    Devuelve la lista de códigos de rol permitidos para una acción específica.
     """
     return CANONICAL_PERMISSION_MAP.get(action_name, [])

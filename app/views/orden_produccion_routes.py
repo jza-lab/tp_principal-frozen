@@ -17,7 +17,7 @@ from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
 from app.controllers.pedido_controller import PedidoController
 from app.utils.decorators import roles_required
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 from datetime import date
 
 orden_produccion_bp = Blueprint("orden_produccion", __name__, url_prefix="/ordenes")
@@ -225,38 +225,42 @@ def listar_pendientes():
 @orden_produccion_bp.route("/<int:id>/aprobar", methods=["POST"])
 @permission_required(accion='aprobar_ordenes_produccion')
 def aprobar(id):
-    """Aprueba una orden de producción."""
+    """Aprueba una orden de producción. Devuelve JSON si es una llamada AJAX."""
     try:
         usuario_id = session.get("usuario_id")
         if not usuario_id:
+            # Si no está autenticado, siempre devolvemos JSON en un AJAX/API call
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({"success": False, "error": "Error de autenticación. Por favor, inicie sesión."}), 401
             flash("Error de autenticación. Por favor, inicie sesión.", "danger")
             return redirect(url_for("auth.login"))
 
-        resultado_dict, status_code = controller.aprobar_orden(id, usuario_id)
-
-        if status_code == 409 and not resultado_dict.get("success"):
-            return jsonify(resultado_dict), 409
-
-        if isinstance(resultado_dict, dict) and resultado_dict.get("success"):
-            message = resultado_dict.get("message", "Orden aprobada exitosamente.")
-            
-            data = resultado_dict.get("data")
-            orden_compra_generada = data.get("orden_compra_generada") if isinstance(data, dict) else None
-
-            if orden_compra_generada and isinstance(orden_compra_generada, dict):
-                codigo_oc = orden_compra_generada.get('codigo_oc', 'N/A')
-                message = f"Orden de Producción aprobada. Se generó la Orden de Compra {codigo_oc} para cubrir insumos faltantes."
-                flash(message, "warning") 
-            else:
-                flash(message, "success")
+        # El controller devuelve (response_dict, status_code)
+        response = controller.aprobar_orden(id, usuario_id) 
+        
+        # --- LÓGICA CLAVE: Manejo de Respuesta AJAX vs. Web ---
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            # Si es AJAX, devolvemos JSON (incluyendo el mensaje detallado o el error 409 con los faltantes)
+            status_code = response[1] if isinstance(response, tuple) else (200 if response.get('success') else (409 if response.get('data', {}).get('insumos_faltantes') else 500))
+            response_dict = response[0] if isinstance(response, tuple) else response
+            return jsonify(response_dict), status_code
+        # --- FIN LÓGICA CLAVE ---
+        
+        # Lógica para Petición Web Normal (Redirección con Flash)
+        if response.get("success"):
+            flash(response.get('message', 'Operación realizada con éxito.'), "success")
+            if response.get('data', {}).get('oc_generada'):
+                # Si se generó una OC, redirigir a la lista de OCs
+                return redirect(url_for("orden_compra.listar"))
         else:
-            error_message = resultado_dict.get("error", "Ocurrió un error al aprobar la orden.") if isinstance(resultado_dict, dict) else "Error al procesar la aprobación."
-            flash(error_message, "error")
+            flash(response.get('error', 'Ocurrió un error.'), "error")
 
-        return redirect(url_for("orden_produccion.listar"))
+        return redirect(url_for("orden_produccion.detalle", id=id))
 
     except Exception as e:
         logger.error(f"Error inesperado en la ruta aprobar OP: {e}", exc_info=True)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+             return jsonify({"success": False, "error": "Ocurrió un error interno al procesar la solicitud."}), 500
         flash("Ocurrió un error interno al procesar la solicitud.", "danger")
         return redirect(url_for("orden_produccion.listar"))
 

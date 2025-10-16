@@ -9,11 +9,10 @@
         <p class="text-muted mb-0">Gestión y seguimiento de órdenes de compra a proveedores</p>
     </div>
     <div class="btn-toolbar">
-        {% if has_permission('crear_ordenes_compra') %}
-        <a href="{{ url_for('orden_compra.nueva') }}" class="btn btn-primary">
+        {% set can_create = has_permission('crear_ordenes_compra')|trim == 'True' %}
+        <a href="{{ url_for('orden_compra.nueva') if can_create else '#' }}" class="btn btn-primary {% if not can_create %}disabled{% endif %}">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
         </a>
-        {% endif %}
     </div>
 </div>
 

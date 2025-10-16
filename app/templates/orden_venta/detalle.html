@@ -3,7 +3,8 @@
 {% block title %}Pedido PED-{{ pedido.id }} - Sistema Frozen{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+<div
+    class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom page-content">
     <div>
         <h1 class="h2 mb-1">
             Pedido <code class="text-muted">PED-{{ pedido.id }}</code>
@@ -17,14 +18,16 @@
     </div>
 </div>
 
-<div class="row">
+<div class="row page-content">
     <div class="col-lg-8">
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Información General del Pedido</h5>
                 {% set estado_config = {
                 'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
-                'APROBADO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
+                'PLANIFICACION': {'class': 'bg-warning-soft text-warning', 'icon': 'calendar-check'},
+                'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
+                'LISTO_PARA_ARMAR': {'class': 'bg-success-soft text-succes', 'icon': 'tools'},
                 'LISTO_PARA_ENTREGA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
                 'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
                 'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
@@ -36,6 +39,7 @@
                 </span>
             </div>
             <div class="card-body">
+                <!-- ... (sección de información general sin cambios) ... -->
                 <div class="col-md-12">
 
                     <label class="form-label-sm fw-bold mb-4">
@@ -60,7 +64,7 @@
                                     {{ pedido.cliente.cuit | default('N/A', true) }}
                                 </p>
                             </div>
-                            
+
                         </div>
                         <div class="row">
                             <div class="col-md-6">
@@ -161,23 +165,23 @@
                     <thead class="table-light">
                         <tr>
                             <th>Producto</th>
-                            <th>Cantidad Solicitada</th>
-                            <th>Estado del Item</th>
+                            <th>Cantidad</th>
+                            <th>Estado</th>
                             <th>Orden de Producción</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in pedido['items'] %}
-
                         <tr>
                             <td>
-                                <div class="fw-bold">{{ item.producto_nombre.nombre or 'Producto no encontrado' }}</div>
+                                <div class="fw-bold">{{ item.producto_nombre.nombre or 'N/A' }}</div>
                             </td>
-                            <td>{{ item.cantidad }} unidades</td>
+                            <td>{{ item.cantidad }} {{ item.producto_nombre.unidad_medida or 'u.' }}</td>
                             <td>
                                 {% set item_estado_config = {
                                 'PENDIENTE': {'class': 'text-secondary', 'icon': 'clock'},
-                                'EN_PROCESO': {'class': 'text-primary', 'icon': 'play-circle'},
+                                'EN_PRODUCCION': {'class': 'text-primary', 'icon': 'play-circle'},
+                                'ALISTADO': {'class': 'text-info', 'icon': 'box-seam'},
                                 'COMPLETADO': {'class': 'text-success', 'icon': 'check-circle'},
                                 'CANCELADO': {'class': 'text-danger', 'icon': 'x-circle'}
                                 } %}
@@ -199,9 +203,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="text-center text-muted py-4">
-                                No hay productos en este pedido.
-                            </td>
+                            <td colspan="4" class="text-center text-muted py-4">No hay productos.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -217,207 +219,143 @@
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
+                    <!-- ACCIONES CONDICIONALES POR ESTADO -->
+
                     {% if pedido.estado == 'PENDIENTE' %}
-                    <form method="POST" action="{{ url_for('orden_venta.aprobar', id=pedido.id) }}"
-                        class="confirm-form d-grid" data-title="Confirmar Aprobación"
-                        data-message="¿Está seguro de que desea aprobar este pedido? Se reservará el stock disponible y se crearán las órdenes de producción necesarias."
+                    <form method="POST" action="{{ url_for('orden_venta.planificar', id=pedido.id) }}" class="d-grid">
+                        <div class="mb-3">
+                            <label for="fecha_estimativa_proceso" class="form-label">Fecha Estimada de Proceso</label>
+                            <input type="date" class="form-control" id="fecha_estimativa_proceso"
+                                name="fecha_estimativa_proceso" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-calendar-check me-1"></i>Pasar a
+                            Planificación</button>
+                    </form>
+
+                    {% elif pedido.estado == 'PLANIFICACION' %}
+                    <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}"
+                        class="confirm-form d-grid" data-title="Iniciar Proceso"
+                        data-message="¿Está seguro de que desea iniciar el proceso de producción para este pedido?"
                         data-button-type="success">
-                        <button type="submit" class="btn btn-success">
-                            <i class="bi bi-check-circle me-1"></i>Aprobar Pedido
-                        </button>
+                        <button type="submit" class="btn btn-success"><i class="bi bi-play-fill me-1"></i>Iniciar
+                            Proceso y Crear OPs</button>
+                    </form>
+
+                    {% elif pedido.estado == 'LISTO_PARA_ARMAR' %}
+                    <form method="POST" action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}"
+                        class="confirm-form d-grid" data-title="Preparar para Entrega"
+                        data-message="Esta acción moverá el pedido a 'LISTO PARA ENTREGAR' y descontará el stock de los productos del inventario. ¿Está seguro?"
+                        data-button-type="info">
+                        <button type="submit" class="btn btn-info"><i class="bi bi-box-seam me-1"></i>Preparar para
+                            Entrega</button>
+                    </form>
+
+                    {% elif pedido.estado == 'LISTO_PARA_ENTREGA' %}
+                    <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}"
+                        class="confirm-form d-grid" data-title="Completar Pedido"
+                        data-message="¿Confirma que el pedido ha sido entregado? Esta acción lo marcará como 'COMPLETADO'."
+                        data-button-type="success">
+                        <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-1"></i>Marcar como
+                            Completado</button>
                     </form>
                     {% endif %}
 
-                    <button class="btn btn-outline-primary" disabled>
-                        <i class="bi bi-truck me-1"></i>Generar Remito
+                    <hr>
+                    <!-- ACCIONES GENERALES -->
+                    {% if pedido.estado in ['PENDIENTE', 'PLANIFICACION'] %}
+                    <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}" class="btn btn-outline-primary"><i
+                            class="bi bi-pencil me-1"></i>Editar Pedido</a>
+                    {% endif %}
+                    
+                    <button type="button" id="btn-imprimir-factura" class="btn btn-primary" {% if pedido.estado not in ['LISTO_PARA_ENTREGA', 'LISTO_PARA_ARMAR', 'COMPLETADO'] %} disabled {% endif %}>
+                        <i class="bi bi-printer me-1"></i>Imprimir Factura
                     </button>
+                    
 
-                    <button class="btn btn-outline-secondary" disabled>
-                        <i class="bi bi-printer me-1"></i>Imprimir Pedido
-                    </button>
-
-                    {% if pedido.estado != 'CANCELADO' %}
-                        {% if has_permission('cancelar_ordenes_venta') %}
-                        <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
-                            class="confirm-form d-grid" data-title="Confirmar Cancelación"
-                            data-message="¿Está seguro de que desea cancelar este pedido? Esta acción no se puede deshacer."
-                            data-button-type="danger">
-                            <button type="submit" class="btn btn-outline-danger">
-                                <i class="bi bi-x-circle me-1"></i>Cancelar Pedido
-                            </button>
-                        </form>
-                        {% endif %}
+                    {% if pedido.estado not in ['COMPLETADO', 'CANCELADO'] %}
+                    <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
+                        class="confirm-form d-grid" data-title="Confirmar Cancelación"
+                        data-message="¿Está seguro? Esta acción no se puede deshacer." data-button-type="danger">
+                        <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Cancelar
+                            Pedido</button>
+                    </form>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    // URL de la API para obtener el HTML de la factura
+    const FACTURA_API_URL = "{{ url_for('orden_venta.generar_factura_html', id=pedido.id) }}";
+
+    // Función para imprimir el contenido HTML generado por el backend
+    function printHtmlContent(htmlContent) {
+
+        // 1. Crea un iframe invisible y lo añade al body
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none'; // Importante: hacerlo invisible
+        iframe.id = 'factura-print-frame';
+        document.body.appendChild(iframe);
+
+        // 2. Obtiene el objeto document dentro del iframe
+        const iframeDocument = iframe.contentWindow.document;
+
+        // 3. Escribe el HTML de la factura en el documento del iframe
+        iframeDocument.open();
+        iframeDocument.write(htmlContent); // Esto es el HTML de la factura
+        iframeDocument.close();
+
+        // 4. Llama a print() en el iframe. Esto mantiene el diálogo de impresión en la misma pestaña.
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+
+        // 5. Limpieza: Elimina el iframe después de un breve retraso para asegurar que el diálogo de impresión se inicialice.
+        setTimeout(() => {
+            document.body.removeChild(iframe);
+        }, 500); // 500ms es suficiente para que el diálogo se abra
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
-        const formAprobar = document.querySelector('form[action*="/aprobar"]');
+        // URL de la API para obtener el HTML de la factura
+        const FACTURA_API_URL = "{{ url_for('orden_venta.generar_factura_html', id=pedido.id) }}";
 
-        if (formAprobar) {
-            formAprobar.addEventListener('submit', function (e) {
-                e.preventDefault();
+        // Manejador del botón de impresión
+        const printButton = document.getElementById('btn-imprimir-factura');
+        if (printButton) {
+            printButton.addEventListener('click', async () => {
 
-                const title = this.dataset.title || 'Confirmar';
-                const message = this.dataset.message || '¿Está seguro?';
-                const buttonType = this.dataset.buttonType || 'primary';
-                const form = this;
-                const submitButton = form.querySelector('button[type="submit"]');
-                const originalButtonContent = submitButton.innerHTML;
+                printButton.disabled = true;
+                const originalHtml = printButton.innerHTML;
+                printButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generando...';
 
-                showConfirmationModal(title, message, function () {
-                    // --- INICIO DE LA LÓGICA DE CARGA MEJORADA ---
+                try {
+                    const response = await fetch(FACTURA_API_URL);
+                    const result = await response.json();
 
-                    // 1. Desactivar botón y mostrar spinner
-                    submitButton.disabled = true;
-                    submitButton.innerHTML = `
-                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                    Procesando...
-                `;
-                    fetch(form.action, {
-                        method: 'POST',
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                    })
-                        .then(response => {
-                            // Capturamos el status code aquí
-                            const statusCode = response.status;
-                            if (!response.ok && statusCode !== 202) { throw new Error('Error en la respuesta del servidor.'); }
-                            return response.json().then(data => ({ data, statusCode }));
-                        })
-                        .then(({ data, statusCode }) => {
-                            if (data.success) {
-                                // Pasamos el status code aquí
-                                mostrarModalExito(data, statusCode);
-                            } else {
-                                showNotificationModal('Error', data.error || 'No se pudo aprobar el pedido.', 'error');
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error en la petición fetch:', error);
-                            showNotificationModal('Error de Red', 'No se pudo comunicar con el servidor.', 'error');
-                        })
-                        .finally(() => {
-                            // 2. PASE LO QUE PASE, restaura el botón a su estado original
-                            submitButton.disabled = false;
-                            submitButton.innerHTML = originalButtonContent;
-                        });
-                    // --- FIN DE LA LÓGICA MEJORADA ---
-                }, buttonType);
+                    if (result.success) {
+                        // LLAMA A LA NUEVA FUNCIÓN BASADA EN IFRAME
+                        printHtmlContent(result.html);
+                    } else {
+                        showNotificationModal('Error de Factura', result.error || 'No se pudo generar el HTML de la factura.', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error AJAX al generar factura:', error);
+                    showNotificationModal('Error de Conexión', 'Fallo al contactar al servidor para generar la factura.', 'error');
+                } finally {
+                    // Restaurar el botón al estado normal
+                    // Usamos un pequeño delay aquí también para que el diálogo de impresión no se interrumpa
+                    setTimeout(() => {
+                        printButton.disabled = false;
+                        printButton.innerHTML = originalHtml;
+                    }, 500);
+                }
             });
         }
-
-        // Lógica para otros formularios de confirmación (como cancelar)
-        const otherForms = document.querySelectorAll('.confirm-form:not([action*="/aprobar"])');
-        otherForms.forEach(form => {
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();
-                const title = form.dataset.title || 'Confirmar Acción';
-                const message = form.dataset.message || '¿Está seguro?';
-                const buttonType = form.dataset.buttonType || 'primary';
-                showConfirmationModal(title, message, () => form.submit(), buttonType);
-            });
-        });
     });
-
-     function mostrarModalExito(respuestaJson, status_code) {
-    const modalBody = document.getElementById('resultadoModalBody');
-    const modalElement = document.getElementById('resultadoAprobacionModal');
-    const modalTitle = modalElement.querySelector('.modal-title');
-    const modalAceptarBtn = modalElement.querySelector('#confirm-cancel-edit'); // Este ID no existe en base.html, usar el botón de "Cerrar" como marcador
-    const modalIrAProduccionBtn = modalElement.querySelector('a[href*="orden_produccion"]');
-    
-    // --- Lógica AGREGADA para OC ---
-    if (status_code === 202 && respuestaJson.oc_generada) {
-        modalTitle.innerHTML = `<i class="bi bi-truck-flatbed text-warning me-2"></i>Atención Requerida`;
-        modalBody.innerHTML = `
-            <p class="text-danger fw-bold">STOCK DE INSUMOS INSUFICIENTE</p>
-            <p>${respuestaJson.message}</p>
-            <hr>
-            <p><strong>Siguiente Paso:</strong> Debe aprobar la Orden de Compra <code>${respuestaJson.oc_codigo}</code> para iniciar la producción.</p>
-        `;
-        modalIrAProduccionBtn.textContent = 'Ir a Órdenes de Compra';
-        // Se asume que el botón de "Ir a Producción" ya apunta a la lista de OP.
-
-        // Al cerrarse el modal, redirigimos a la lista de órdenes de compra.
-        modalElement.addEventListener('hidden.bs.modal', () => {
-             // Redirigir a la lista de OC
-             window.location.href = respuestaJson.redirect_url;
-        }, { once: true });
-
-    } else {
-        // --- Lógica ORIGINAL de OP (status 200 OK) ---
-        modalTitle.innerHTML = `<i class="bi bi-check-circle-fill text-success me-2"></i>¡Éxito!`;
-        let contenidoHtml = `<p>${respuestaJson.message}</p>`;
-        // ... (el resto de la lógica para listar OP creadas) ...
-        const ordenesCreadas = respuestaJson.data.ordenes_creadas;
-        // ... (la misma lógica de la línea 140 en adelante para mostrar OP) ...
-        
-        if (ordenesCreadas && ordenesCreadas.length > 0) {
-            contenidoHtml += '<h6>Órdenes de Producción Generadas:</h6>';
-            contenidoHtml += '<ul class="list-group">';
-            ordenesCreadas.forEach(orden => {
-                // LÍNEA CORREGIDa
-                const urlOrden = `/ordenes/${orden.id}/detalle`; 
-                contenidoHtml += `
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                        <a href="${urlOrden}" target="_blank"><strong>${orden.codigo}</strong></a>
-                        <small class="d-block text-muted">Cantidad: ${orden.cantidad_planificada} unidades</small>
-                    </div>
-                    <a href="${urlOrden}" target="_blank" class="btn btn-sm btn-outline-secondary">Ver</a>
-                </li>
-            `;
-            });
-            contenidoHtml += '</ul>';
-        }
-
-        modalBody.innerHTML = contenidoHtml;
-        modalIrAProduccionBtn.textContent = 'Ir a Producción';
-
-        // Al cerrarse el modal, recargamos la página (lógica original)
-        modalElement.addEventListener('hidden.bs.modal', () => window.location.reload(), { once: true });
-    }
-    
-    const bootstrapModal = new bootstrap.Modal(modalElement);
-    bootstrapModal.show();
-}
-    function mostrarModalExito(respuestaJson) {
-        const modalBody = document.getElementById('resultadoModalBody');
-        const modalElement = document.getElementById('resultadoAprobacionModal');
-
-        let contenidoHtml = `<p>${respuestaJson.message}</p>`;
-        const ordenesCreadas = respuestaJson.data.ordenes_creadas;
-
-        if (ordenesCreadas && ordenesCreadas.length > 0) {
-            contenidoHtml += '<h6>Órdenes de Producción Generadas:</h6>';
-            contenidoHtml += '<ul class="list-group">';
-            ordenesCreadas.forEach(orden => {
-                const urlOrden = `/ordenes/${orden.id}/detalle`;
-                contenidoHtml += `
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                        <a href="${urlOrden}" target="_blank"><strong>${orden.codigo}</strong></a>
-                        <small class="d-block text-muted">Cantidad: ${orden.cantidad_planificada} unidades</small>
-                    </div>
-                    <a href="${urlOrden}" target="_blank" class="btn btn-sm btn-outline-secondary">Ver</a>
-                </li>
-            `;
-            });
-            contenidoHtml += '</ul>';
-        }
-
-        modalBody.innerHTML = contenidoHtml;
-
-        const bootstrapModal = new bootstrap.Modal(modalElement);
-        bootstrapModal.show();
-
-        modalElement.addEventListener('hidden.bs.modal', () => window.location.reload(), { once: true });
-    }
 </script>
 {% endblock %}

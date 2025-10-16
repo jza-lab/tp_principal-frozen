@@ -102,7 +102,7 @@ class PedidoController(BaseController):
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
-    def crear_pedido_con_items(self, form_data: Dict, usuario_id: int) -> tuple:
+    def crear_pedido_con_items(self, form_data: Dict) -> tuple:
         """
         Valida y crea un nuevo pedido con sus items, verificando el stock previamente.
         Si todo el stock está disponible, lo marca como 'COMPLETADO' y despacha el stock.
@@ -222,139 +222,237 @@ class PedidoController(BaseController):
             logging.error(f"Error interno en crear_pedido_con_items: {e}", exc_info=True)
             return self.error_response(f'Error interno: {str(e)}', 500)
 
-    def aprobar_pedido(self, pedido_id: int, usuario_id: int) -> tuple:
+    def planificar_pedido(self, pedido_id: int, fecha_estimativa: str) -> tuple:
         """
-        Aprueba un pedido, forzando la creación de Órdenes de Producción por la cantidad total
-        solicitada, independientemente del stock actual. El item se marca EN_PRODUCCION si se 
-        crea la OP, o APROBADO si no hay receta.
+        Pasa un pedido del estado 'PENDIENTE' a 'PLANIFICACION' y guarda la fecha estimada.
         """
         try:
-            # 1. Obtener pedido y verificar estado
             pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_resp.get('success'):
                 return self.error_response("Pedido no encontrado.", 404)
+            
             pedido_actual = pedido_resp['data']
             if pedido_actual.get('estado') != 'PENDIENTE':
-                return self.error_response("Este pedido ya ha sido aprobado o está en proceso.", 400)
+                return self.error_response("Solo los pedidos en estado 'PENDIENTE' pueden ser planificados.", 400)
 
-            items_del_pedido = pedido_actual.get('items', [])
-            ordenes_creadas_op_branch = []
-            
-            # --- LÓGICA: FORZAR OP PARA LA CANTIDAD TOTAL ---
-            
-            for item in items_del_pedido:
-                # Solo procesar ítems en estado inicial PENDIENTE
-                if item['estado'] == 'PENDIENTE':
-                    
-                    cantidad_a_producir = item['cantidad'] # Cantidad total solicitada
-                    
-                    # 1. Buscar receta para crear OP
-                    receta_result = self.receta_model.find_all({'producto_id': item['producto_id'], 'activa': True}, limit=1)
-                    
-                    if not receta_result.get('success') or not receta_result.get('data'):
-                        logging.warning(f"Producto {item['producto_id']} sin receta. Imposible generar OP. El item queda APROBADO.")
-                        # Si no hay receta, marcamos el ítem como APROBADO (revisado)
-                        self.model.update_item(item['id'], {'estado': 'APROBADO'})
-                        continue
-                    
-                    # 2. Crear la Orden de Producción (OP) para la cantidad total
-                    datos_orden = {
-                        'producto_id': item['producto_id'],
-                        'cantidad': cantidad_a_producir, 
-                        'fecha_planificada': date.today().isoformat(),
-                        'prioridad': 'NORMAL' 
-                    }
-
-                    resultado_op = self.orden_produccion_controller.crear_orden(datos_orden, usuario_id)
-
-                    resultado_op_dict = resultado_op[0] if isinstance(resultado_op, tuple) else resultado_op
-                    
-                    if resultado_op_dict.get('success'):
-                        orden_creada = resultado_op_dict.get('data', {})
-                        ordenes_creadas_op_branch.append(orden_creada)
-                        
-                        # 3. Actualizar el ítem del pedido
-                        self.model.update_item(item['id'], {
-                            'estado': 'EN_PRODUCCION',
-                            'orden_produccion_id': orden_creada.get('id')
-                        })
-                    else:
-                        logging.error(f"No se pudo crear la OP para el producto {item['producto_id']}. Error: {resultado_op_dict.get('error')}")
-                        # Si la OP falla, el ítem queda en APROBADO
-                        self.model.update_item(item['id'], {'estado': 'APROBADO'})
-                        
-                # Si no es PENDIENTE (e.g., ya EN_PRODUCCION, o APROBADO de flujo anterior), no hacemos nada
-            
-            
-            # 4. Determinar el estado final del pedido
-            
-            self.model.cambiar_estado(pedido_id, 'APROBADO') 
-            self.model.actualizar_estado_agregado(pedido_id)
-
-            msg = f"Pedido APROBADO con éxito. Se generaron {len(ordenes_creadas_op_branch)} Órdenes de Producción por la cantidad total solicitada."
-            if not ordenes_creadas_op_branch:
-                 msg = "Pedido APROBADO. No se requirieron Órdenes de Producción (items sin receta o ya procesados)."
-            
-            return self.success_response(data={'ordenes_creadas': ordenes_creadas_op_branch}, message=msg) 
-
-        except Exception as e:
-            logging.error(f"Error en aprobar_pedido: {e}", exc_info=True)
-            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
-
-    def actualizar_pedido_con_items(self, pedido_id: int, form_data: Dict) -> tuple:
-        """
-        Valida y actualiza un pedido existente y sus items.
-        """
-        try:
-            if 'items-TOTAL_FORMS' in form_data:
-                form_data.pop('items-TOTAL_FORMS')
-            if 'items' in form_data:
-                form_data['items'] = self._consolidar_items(form_data['items'])
-
-            items_data = form_data.pop('items')
-            pedido_data = form_data
-            
-            direccion_payload = form_data.get('direccion_entrega', {})
-            direccion_data = {
-                'calle': direccion_payload.get('calle'),
-                'altura': direccion_payload.get('altura'),
-                'provincia': direccion_payload.get('provincia'),
-                'localidad': direccion_payload.get('localidad'),
-                'piso': direccion_payload.get('piso'),
-                'depto': direccion_payload.get('depto'),
-                'codigo_postal': direccion_payload.get('codigo_postal')
+            # Actualizar estado y fecha estimada en un solo paso
+            update_data = {
+                'estado': 'PLANIFICACION',
+                'fecha_estimativa_proceso': fecha_estimativa
             }
-
-            pedido_actual_resp, estado= self.obtener_pedido_por_id(pedido_id)
-            pedido_actual = pedido_actual_resp.get('data')
-
-            id_direccion_vieja = pedido_actual['id_direccion_entrega']
-            
-
-            if(id_direccion_vieja):
-                cantidad_misma_direccion = self.model.contar_pedidos_direccion(id_direccion_vieja)
-
-                if(cantidad_misma_direccion>1):
-                    direccion_id = self._get_or_create_direccion(direccion_data)
-                    if direccion_id:
-                            pedido_data['direccion_id'] = direccion_id
-                else:
-                    self._actualizar_direccion(id_direccion_vieja, direccion_data)
-                    pedido_data['direccion_id'] = id_direccion_vieja
-            else:
-                direccion_id = self._get_or_create_direccion(direccion_data)
-                if direccion_id:
-                    pedido_data['direccion_id'] = direccion_id
-            
-            form_data['id_direccion_entrega'] = direccion_id
-            form_data.pop('direccion_entrega', None)
-            
-            result = self.model.update_with_items(pedido_id, pedido_data, items_data)
+            result = self.model.update(id_value=pedido_id, data=update_data, id_field='id')
 
             if result.get('success'):
-                return self.success_response(data=result.get('data'), message="Pedido actualizado con éxito.")
+                return self.success_response(message="Pedido pasado a estado de PLANIFICACIÓN.")
             else:
+                return self.error_response(result.get('error', 'Error al planificar el pedido.'), 500)
+        except Exception as e:
+            logging.error(f"Error en planificar_pedido: {e}", exc_info=True)
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
+    def iniciar_proceso_pedido(self, pedido_id: int, usuario_id: int) -> tuple:
+        """
+        Pasa un pedido de 'PLANIFICACION' a 'EN PROCESO'.
+        Crea las Órdenes de Producción (OPs) necesarias en este paso.
+        """
+        try:
+            # 1. Validar estado y datos
+            pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
+            if not pedido_resp.get('success'):
+                return self.error_response("Pedido no encontrado.", 404)
+            
+            pedido_actual = pedido_resp['data']
+            if pedido_actual.get('estado') != 'PLANIFICACION':
+                return self.error_response("Solo los pedidos en 'PLANIFICACION' pueden pasar a 'EN PROCESO'.", 400)
+            
+            # 2. Lógica de creación de OPs
+            items_del_pedido = pedido_actual.get('items', [])
+            ordenes_creadas = []
+            for item in items_del_pedido:
+                # Solo crear OP si el producto tiene receta
+                receta_result = self.receta_model.find_all({'producto_id': item['producto_id'], 'activa': True}, limit=1)
+                if receta_result.get('success') and receta_result.get('data'):
+                    datos_op = {
+                        'producto_id': item['producto_id'],
+                        'cantidad': item['cantidad'],
+                        'fecha_planificada': date.today().isoformat(),
+                        'prioridad': 'NORMAL'
+                    }
+                    # --- FIX: Manejo defensivo de la respuesta ---
+                    resultado_op_tuple = self.orden_produccion_controller.crear_orden(datos_op, usuario_id)
+                    resultado_op = resultado_op_tuple[0] if isinstance(resultado_op_tuple, tuple) else resultado_op_tuple
+
+                    if resultado_op.get('success'):
+                        orden_creada = resultado_op.get('data', {})
+                        ordenes_creadas.append(orden_creada)
+                        self.model.update_item(item['id'], {'estado': 'EN_PRODUCCION', 'orden_produccion_id': orden_creada.get('id')})
+                    else:
+                        logging.error(f"No se pudo crear la OP para el producto {item['producto_id']}. Error: {resultado_op.get('error')}")
+                else:
+                    # Si no hay receta, el item se considera listo para el siguiente paso.
+                    self.model.update_item(item['id'], {'estado': 'ALISTADO'})
+
+            # 3. Actualizar estado del pedido
+            self.model.actualizar_estado_agregado(pedido_id) # Esto lo pasará a EN_PROCESO si se creó alguna OP
+
+            msg = f"Pedido enviado a producción. Se generaron {len(ordenes_creadas)} Órdenes de Producción."
+            return self.success_response(data={'ordenes_creadas': ordenes_creadas}, message=msg)
+
+        except Exception as e:
+            logging.error(f"Error en iniciar_proceso_pedido: {e}", exc_info=True)
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
+    def _get_or_create_direccion(self, direccion_data: Dict) -> Optional[int]:
+        """
+        Busca una dirección por sus componentes. Si no existe, la crea.
+        Devuelve el ID de la dirección.
+        """
+        try:
+            # Normalizar datos para la búsqueda
+            calle = direccion_data.get('calle')
+            altura = direccion_data.get('altura')
+            localidad = direccion_data.get('localidad')
+            provincia = direccion_data.get('provincia')
+            piso = direccion_data.get('piso')
+            depto = direccion_data.get('depto')
+
+            # Buscar si la dirección ya existe
+            existing_address = self.direccion_model.find_by_full_address(
+                calle, altura, piso, depto, localidad, provincia
+            )
+
+            if existing_address.get('success'):
+                return existing_address['data']['id']
+            else:
+                # Si no existe, crear una nueva
+                # Validar que los campos requeridos no sean None
+                required_fields = {
+                    'calle': calle, 'altura': altura, 'localidad': localidad, 'provincia': provincia,
+                    'codigo_postal': direccion_data.get('codigo_postal')
+                }
+                if not all(required_fields.values()):
+                    logging.error(f"Faltan datos para crear la dirección: {required_fields}")
+                    return None
+
+                new_address_res = self.direccion_model.create(direccion_data)
+                if new_address_res.get('success'):
+                    return new_address_res['data']['id']
+                else:
+                    logging.error(f"Error al crear la dirección: {new_address_res.get('error')}")
+                    return None
+        except Exception as e:
+            logging.error(f"Error en _get_or_create_direccion: {e}", exc_info=True)
+            return None
+
+    def _actualizar_direccion(self, direccion_id: int, direccion_data: Dict) -> bool:
+        """
+        Actualiza una dirección existente. Devuelve True si fue exitoso.
+        """
+        try:
+            update_res = self.direccion_model.update(direccion_id, direccion_data)
+            return update_res.get('success', False)
+        except Exception as e:
+            logging.error(f"Error en _actualizar_direccion: {e}", exc_info=True)
+            return False
+
+    def actualizar_pedido_con_items(self, pedido_id: int, form_data: Dict, estado_original: str) -> tuple:
+        """
+        Valida y actualiza un pedido y sus items. Si el pedido estaba 'EN_PROCESO',
+        crea OPs para los nuevos items sin stock.
+        """
+        try:
+            # Consolidar y preparar datos
+            if 'items' in form_data:
+                form_data['items'] = self._consolidar_items(form_data['items'])
+            items_data = form_data.pop('items', [])
+            pedido_data = form_data
+
+            # ... (lógica de dirección sin cambios)
+            direccion_payload = form_data.get('direccion_entrega', {})
+            direccion_data = {
+                'calle': direccion_payload.get('calle'), 'altura': direccion_payload.get('altura'),
+                'provincia': direccion_payload.get('provincia'), 'localidad': direccion_payload.get('localidad'),
+                'piso': direccion_payload.get('piso'), 'depto': direccion_payload.get('depto'),
+                'codigo_postal': direccion_payload.get('codigo_postal')
+            }
+            pedido_actual_resp, _ = self.obtener_pedido_por_id(pedido_id)
+            pedido_actual = pedido_actual_resp.get('data')
+            id_direccion_vieja = pedido_actual.get('id_direccion_entrega')
+            direccion_id = None
+            if id_direccion_vieja:
+                cantidad_misma_direccion = self.model.contar_pedidos_direccion(id_direccion_vieja, pedido_id)
+                if cantidad_misma_direccion > 0:
+                    direccion_id = self._get_or_create_direccion(direccion_data)
+                else:
+                    actualizacion_exitosa = self._actualizar_direccion(id_direccion_vieja, direccion_data)
+                    direccion_id = id_direccion_vieja if actualizacion_exitosa else self._get_or_create_direccion(direccion_data)
+            else:
+                direccion_id = self._get_or_create_direccion(direccion_data)
+
+            if not direccion_id:
+                return self.error_response("No se pudo procesar la dirección de entrega.", 400)
+            
+            pedido_data['id_direccion_entrega'] = direccion_id
+            pedido_data.pop('direccion_entrega', None)
+
+            # Actualizar el pedido y obtener los items nuevos
+            result = self.model.update_with_items(pedido_id, pedido_data, items_data)
+
+            if not result.get('success'):
                 return self.error_response(result.get('error', 'No se pudo actualizar el pedido.'), 400)
+
+            # --- Lógica para crear OP si el estado era 'EN_PROCESO' ---
+            if estado_original == 'EN_PROCESO':
+                nuevos_items = result.get('data', {}).get('nuevos_items', [])
+                if nuevos_items:
+                    # Necesitamos el ID del usuario para crear la OP
+                    from flask import session
+                    usuario_id = session.get('usuario_id')
+                    if not usuario_id:
+                        return self.error_response("Sesión de usuario no encontrada para crear OP.", 401)
+
+                    for item in nuevos_items:
+                        producto_id = item['producto_id']
+                        cantidad_solicitada = item['cantidad']
+
+                        # 1. Verificar si tiene receta
+                        receta_result = self.receta_model.find_all({'producto_id': producto_id, 'activa': True}, limit=1)
+                        if not receta_result.get('success') or not receta_result.get('data'):
+                            logging.warning(f"Nuevo item (ID: {item['id']}) del producto {producto_id} no tiene receta activa. No se generará OP.")
+                            continue # Pasar al siguiente item
+
+                        # 2. Verificar stock
+                        stock_response, _ = self.lote_producto_controller.obtener_stock_producto(producto_id)
+                        stock_disponible = stock_response.get('data', {}).get('stock_total', 0)
+
+                        if cantidad_solicitada > stock_disponible:
+                            cantidad_a_producir = cantidad_solicitada - stock_disponible
+                            logging.info(f"Stock insuficiente para nuevo item. Solicitado: {cantidad_solicitada}, Disponible: {stock_disponible}. Se creará OP por {cantidad_a_producir}.")
+                            
+                            # 3. Crear OP
+                            datos_orden = {
+                                'producto_id': producto_id,
+                                'cantidad': cantidad_a_producir,
+                                'fecha_planificada': date.today().isoformat(),
+                                'prioridad': 'NORMAL'
+                            }
+                            resultado_op, _ = self.orden_produccion_controller.crear_orden(datos_orden, usuario_id)
+
+                            if resultado_op.get('success'):
+                                orden_creada = resultado_op.get('data', {})
+                                # 4. Actualizar el item del pedido
+                                self.model.update_item(item['id'], {
+                                    'estado': 'EN_PRODUCCION',
+                                    'orden_produccion_id': orden_creada.get('id')
+                                })
+                                logging.info(f"OP {orden_creada.get('id')} creada para el item {item['id']}.")
+                            else:
+                                logging.error(f"No se pudo crear la OP para el nuevo item {item['id']}. Error: {resultado_op.get('error')}")
+            
+            # Actualizar el estado general del pedido después de los cambios
+            self.model.actualizar_estado_agregado(pedido_id)
+
+            return self.success_response(data=result.get('data'), message="Pedido actualizado con éxito.")
 
         except ValidationError as e:
             if 'items' in e.messages and isinstance(e.messages['items'], list):
@@ -364,6 +462,39 @@ class PedidoController(BaseController):
 
             return self.error_response(error_message, 400)
         except Exception as e:
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def preparar_para_entrega(self, pedido_id: int, usuario_id: int) -> tuple:
+        """
+        Pasa un pedido de 'LISTO PARA ARMAR' a 'LISTO PARA ENTREGAR'.
+        En este paso se consume/despacha el stock de los productos finales.
+        """
+        try:
+            pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
+            if not pedido_resp.get('success'):
+                return self.error_response("Pedido no encontrado.", 404)
+            pedido_actual = pedido_resp['data']
+
+            if pedido_actual.get('estado') != 'LISTO_PARA_ARMAR':
+                return self.error_response("El pedido debe estar 'LISTO PARA ARMAR' para poder prepararlo para entrega.", 400)
+
+            # Despachar stock de productos
+            despacho_result = self.lote_producto_controller.despachar_stock_directo_por_pedido(
+                pedido_id=pedido_id,
+                items_del_pedido=pedido_actual.get('items', [])
+            )
+            if not despacho_result.get('success'):
+                return self.error_response(f"Fallo al despachar el stock: {despacho_result.get('error')}", 500)
+
+            # Cambiar estado final
+            result = self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
+            if result.get('success'):
+                return self.success_response(message="Pedido listo para entrega y stock despachado.")
+            else:
+                return self.error_response(result.get('error', 'No se pudo actualizar el estado del pedido.'), 500)
+
+        except Exception as e:
+            logging.error(f"Error en preparar_para_entrega: {e}", exc_info=True)
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def cancelar_pedido(self, pedido_id: int) -> tuple:
@@ -405,45 +536,25 @@ class PedidoController(BaseController):
         
     def completar_pedido(self, pedido_id: int, usuario_id: int) -> tuple:
         """
-        Completa el pedido, descontando el stock directamente de los lotes de producto
-        y cambiando el estado a 'COMPLETADO'. Se intenta el despacho sin preguntar al usuario,
-        resolviendo el problema de la interfaz.
+        Finaliza un pedido, pasándolo de 'LISTO PARA ENTREGAR' a 'COMPLETADO'.
+        El stock ya fue descontado en el paso anterior.
         """
         try:
-            # 1. Obtener pedido y verificar estado
             pedido_resp, _ = self.obtener_pedido_por_id(pedido_id) 
             if not pedido_resp.get('success'):
                 return self.error_response("Pedido no encontrado.", 404)
             pedido_actual = pedido_resp['data']
 
             if pedido_actual.get('estado') == 'COMPLETADO':
-                return self.error_response("El pedido ya está en estado 'COMPLETADO'.", 400)
+                return self.error_response("El pedido ya está completado.", 400)
 
-            # Si el estado no es uno de los permitidos, se bloquea la operación.
-            if pedido_actual.get('estado') not in ['LISTO_PARA_ENTREGA', 'APROBADO', 'EN_PROCESO']:
-                 return self.error_response(f"El pedido debe estar APROBADO, EN PROCESO o LISTO PARA ENTREGA (actual: {pedido_actual['estado']}) para ser completado.", 400)
+            if pedido_actual.get('estado') != 'LISTO_PARA_ENTREGA':
+                 return self.error_response(f"El pedido debe estar 'LISTO PARA ENTREGAR' para ser completado (actual: {pedido_actual['estado']}).", 400)
 
-
-            items_del_pedido = pedido_actual.get('items', [])
-            
-            # 2. Despachar/Consumir stock directamente de los lotes
-            despacho_result = self.lote_producto_controller.despachar_stock_directo_por_pedido(
-                pedido_id=pedido_id,
-                items_del_pedido=items_del_pedido
-            ) 
-
-            if not despacho_result.get('success'):
-                 # Si el despacho falla (ej. stock insuficiente), se detiene y reporta el error.
-                return self.error_response(f"Fallo al despachar el stock: {despacho_result.get('error')}", 500)
-
-            # 3. Cambiar estado final
             result = self.model.cambiar_estado(pedido_id, 'COMPLETADO')
 
             if result.get('success'):
-                return self.success_response(
-                    data=result.get('data'),
-                    message="Pedido completado y stock despachado exitosamente."
-                )
+                return self.success_response(message="Pedido completado exitosamente.")
             else:
                 return self.error_response(result.get('error', 'No se pudo completar el pedido.'), 500)
 

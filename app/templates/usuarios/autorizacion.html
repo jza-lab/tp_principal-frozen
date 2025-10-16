@@ -10,7 +10,7 @@
             <p class="card-subtitle text-muted">Permitir que un empleado ingrese fuera de su turno habitual.</p>
         </div>
         <div class="card-body">
-            <form method="POST" action="{{ url_for('admin_usuario.nueva_autorizacion') }}">
+            <form method="POST" action="{{ url_for('admin_autorizacion.nueva_autorizacion') }}">
                 
                 <!-- Selección de Empleado -->
                 <div class="mb-3">
@@ -120,11 +120,6 @@ document.addEventListener('DOMContentLoaded', function() {
             fechaErrorDiv.textContent = 'La fecha no puede ser anterior a la actual.';
             fechaErrorDiv.style.display = 'block';
             isFechaValid = false;
-        } else if (selectedDateStr > todayStr) {
-            fechaInput.classList.add('is-invalid');
-            fechaErrorDiv.textContent = 'La fecha no puede ser posterior a la actual.';
-            fechaErrorDiv.style.display = 'block';
-            isFechaValid = false;
         } else {
             fechaInput.classList.remove('is-invalid');
             fechaErrorDiv.style.display = 'none';
@@ -147,16 +142,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const turnoText = selectedTurnoOption.text.toLowerCase();
 
-        if (tipoValue === 'HORAS_EXTRAS' && turnoText.includes('tarde')) {
-            turnoInput.classList.add('is-invalid');
-            turnoErrorDiv.textContent = 'No se pueden autorizar horas extras para el turno tarde.';
-            turnoErrorDiv.style.display = 'block';
-            isTurnoValid = false;
-        } else {
-            turnoInput.classList.remove('is-invalid');
-            turnoErrorDiv.style.display = 'none';
-            isTurnoValid = true;
-        }
+        turnoInput.classList.remove('is-invalid');
+        turnoErrorDiv.style.display = 'none';
+        isTurnoValid = true;
+        
         updateSubmitButtonState();
     }
 

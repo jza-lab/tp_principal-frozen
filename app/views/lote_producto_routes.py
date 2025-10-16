@@ -2,7 +2,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.controllers.producto_controller import ProductoController # Para el formulario
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 import logging
 from datetime import date
 from flask import jsonify
@@ -10,7 +10,8 @@ from flask import jsonify
 
 logger = logging.getLogger(__name__)
 
-lote_producto_bp = Blueprint("lote_producto", __name__)
+# lote_producto_bp = Blueprint("lote_producto", __name__)
+lote_producto_bp = Blueprint("lote_producto", __name__, url_prefix="/lotes-productos")
 
 controller = LoteProductoController()
 producto_controller = ProductoController() # Para obtener la lista de productos

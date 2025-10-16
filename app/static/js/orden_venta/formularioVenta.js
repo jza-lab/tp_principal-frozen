@@ -291,7 +291,7 @@ async function handleSubmit(event) {
 
     try {
         const direccionParaVerificar = payload.direccion_entrega;
-        const verificationUrl = "/admin/usuarios/verificar_direccion";
+        const verificationUrl = "/api/validar/direccion";
 
         const verificationResponse = await fetch(verificationUrl, {
             method: 'POST',
@@ -323,48 +323,6 @@ async function handleSubmit(event) {
     }
 
 
-}
-
-async function enviarDatos(payload) {
-    const submitButton = form.querySelector('button[type="submit"]');
-    const url = isEditing ? `/orden-venta/${pedidoId}/editar` : '/orden-venta/nueva';
-    const method = isEditing ? 'PUT' : 'POST';
-
-    let response;
-    try {
-        response = await fetch(url, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-
-            showNotificationModal('Éxito', '¡Pedido guardado correctamente!', 'success');
-
-            setTimeout(() => {
-                window.location.href = result.redirect_url || "{{ url_for('orden_venta.listar') }}";
-            }, 1500);
-        } else {
-            showNotificationModal('Error al Guardar', 'No se pudo guardar el pedido. Por favor, revise los errores.', 'error');
-        }
-
-    } catch (error) {
-
-        console.error('Error en la petición fetch:', error);
-
-        showNotificationModal('Error de Conexión', 'Ocurrió un error inesperado al conectar con el servidor.', 'error');
-    } finally {
-
-        if (!response || !response.ok) {
-            submitButton.disabled = false;
-            submitButton.innerHTML = `<i class="bi bi-save me-1"></i> ${isEditing ? 'Actualizar Pedido' : 'Guardar Pedido'}`;
-        }
-    }
 }
 
 async function enviarDatos(payload) {
@@ -418,6 +376,12 @@ async function enviarDatos(payload) {
 
 
 function buildPayload() {
+    function cleanCurrency(value) {
+        if (!value) return 0;
+        // 1. Remover $ y espacios. 2. Reemplazar punto (miles) por nada. 3. Reemplazar coma (decimal) por punto.
+        const cleaned = value.toString().replace(/[$\s]/g, '').replace(/\./g, '').replace(',', '.');
+        return parseFloat(cleaned) || 0;
+    }
 
     const cuilParte1 = document.getElementById('cuil_parte1').value;
     const cuilParte2 = document.getElementById('cuil_parte2').value;
@@ -430,7 +394,7 @@ function buildPayload() {
         fecha_solicitud: document.getElementById('fecha_solicitud').value,
         fecha_requerido: document.getElementById('fecha_requerido').value,
         estado: document.getElementById('estado') ? document.getElementById('estado').value : 'PENDIENTE',
-        precio_orden: parseFloat(document.getElementById('total-final').value) || 0,
+        precio_orden: cleanCurrency(document.getElementById('total-final').value),
         comentarios_adicionales: document.getElementById('comentarios_adicionales').value,
         direccion_entrega: {
             calle: document.getElementById('calle').value,
