@@ -343,48 +343,6 @@ async function enviarDatos(payload) {
         const result = await response.json();
 
         if (response.ok) {
-
-            showNotificationModal('Éxito', '¡Pedido guardado correctamente!', 'success');
-
-            setTimeout(() => {
-                window.location.href = result.redirect_url || "{{ url_for('orden_venta.listar') }}";
-            }, 1500);
-        } else {
-            showNotificationModal('Error al Guardar', 'No se pudo guardar el pedido. Por favor, revise los errores.', 'error');
-        }
-
-    } catch (error) {
-
-        console.error('Error en la petición fetch:', error);
-
-        showNotificationModal('Error de Conexión', 'Ocurrió un error inesperado al conectar con el servidor.', 'error');
-    } finally {
-
-        if (!response || !response.ok) {
-            submitButton.disabled = false;
-            submitButton.innerHTML = `<i class="bi bi-save me-1"></i> ${isEditing ? 'Actualizar Pedido' : 'Guardar Pedido'}`;
-        }
-    }
-}
-
-async function enviarDatos(payload) {
-    const submitButton = form.querySelector('button[type="submit"]');
-    const url = isEditing ? `/orden-venta/${pedidoId}/editar` : '/orden-venta/nueva';
-    const method = isEditing ? 'PUT' : 'POST';
-
-    let response;
-    try {
-        response = await fetch(url, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
             
             // === MODIFICACIÓN CLAVE AQUÍ ===
             // 1. Usar el mensaje y título que vienen del backend
