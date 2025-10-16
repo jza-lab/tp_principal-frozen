@@ -15,6 +15,19 @@ CREATE TABLE public.clientes (
   CONSTRAINT clientes_pkey PRIMARY KEY (id),
   CONSTRAINT clientes_direccion_id_fkey FOREIGN KEY (direccion_id) REFERENCES public.usuario_direccion(id)
 );
+CREATE TABLE public.historial_precios_insumos (
+  id integer NOT NULL DEFAULT nextval('historial_precios_insumos_id_seq'::regclass),
+  id_insumo uuid NOT NULL,
+  precio_anterior numeric NOT NULL,
+  precio_nuevo numeric NOT NULL,
+  fecha_cambio timestamp with time zone NOT NULL DEFAULT now(),
+  usuario_cambio character varying,
+  origen_cambio character varying,
+  archivo_origen character varying,
+  observaciones text,
+  CONSTRAINT historial_precios_insumos_pkey PRIMARY KEY (id),
+  CONSTRAINT historial_precios_insumos_id_insumo_fkey FOREIGN KEY (id_insumo) REFERENCES public.insumos_catalogo(id_insumo)
+);
 CREATE TABLE public.insumos_catalogo (
   id_insumo uuid NOT NULL DEFAULT gen_random_uuid(),
   nombre character varying NOT NULL,
@@ -182,6 +195,8 @@ CREATE TABLE public.pedidos (
   precio_orden real,
   id_cliente integer,
   id_direccion_entrega integer,
+  comentarios_adicionales text,
+  fecha_estimativa_proceso date,
   CONSTRAINT pedidos_pkey PRIMARY KEY (id),
   CONSTRAINT pedidos_id_cliente_fkey FOREIGN KEY (id_cliente) REFERENCES public.clientes(id),
   CONSTRAINT pedidos_id_direccion_entrega_fkey FOREIGN KEY (id_direccion_entrega) REFERENCES public.usuario_direccion(id)
@@ -356,6 +371,8 @@ CREATE TABLE public.u_autorizaciones_ingreso (
   motivo text,
   created_at timestamp with time zone DEFAULT now(),
   tipo character varying NOT NULL DEFAULT 'TURNO_ESPECIAL'::character varying,
+  estado character varying NOT NULL DEFAULT 'PENDIENTE'::character varying,
+  comentario_supervisor text,
   CONSTRAINT u_autorizaciones_ingreso_pkey PRIMARY KEY (id),
   CONSTRAINT fk_usuario_autorizado FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id),
   CONSTRAINT fk_supervisor FOREIGN KEY (supervisor_id) REFERENCES public.usuarios(id),

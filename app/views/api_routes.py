@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
-from app.permisos import permission_any_of, permission_required
+from app.utils.decorators import permission_any_of, permission_required
 
 # Blueprint para endpoints de API interna
 api_bp = Blueprint('api', __name__, url_prefix='/api')

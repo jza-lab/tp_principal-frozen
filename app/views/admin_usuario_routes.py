@@ -2,7 +2,7 @@ import json
 from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
-from app.permisos import permission_required, permission_any_of
+from app.utils.decorators import permission_required, permission_any_of
 
 # Blueprint para la administración de usuarios
 admin_usuario_bp = Blueprint('admin_usuario', __name__, url_prefix='/admin/usuarios')

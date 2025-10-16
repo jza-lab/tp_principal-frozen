@@ -14,7 +14,7 @@ from app.controllers.inventario_controller import InventarioController
 from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 from app.utils.validators import validate_uuid
 from marshmallow import ValidationError
 import logging

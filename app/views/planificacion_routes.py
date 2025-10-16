@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.models.pedido import PedidoModel
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 from itertools import groupby
 from operator import itemgetter
 

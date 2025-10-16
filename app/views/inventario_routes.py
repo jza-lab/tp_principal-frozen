@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, session
 from app.controllers.inventario_controller import InventarioController
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.proveedor_controller import ProveedorController
 from marshmallow import ValidationError

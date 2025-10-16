@@ -9,7 +9,7 @@ from app.controllers.producto_controller import ProductoController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.historial_precios_controller import HistorialPreciosController
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 
 precios_bp = Blueprint('precios', __name__)
 logger = logging.getLogger(__name__)

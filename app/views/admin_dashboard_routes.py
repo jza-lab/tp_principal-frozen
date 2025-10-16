@@ -5,7 +5,7 @@ from app.controllers.orden_produccion_controller import OrdenProduccionControlle
 from app.controllers.notificación_controller import NotificacionController
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.lote_producto_controller import LoteProductoController
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 
 # Blueprint para el dashboard de administración
 admin_dashboard_bp = Blueprint('admin_dashboard', __name__, url_prefix='/admin')

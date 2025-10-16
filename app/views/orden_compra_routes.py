@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 from datetime import datetime
 
 orden_compra_bp = Blueprint("orden_compra", __name__, url_prefix="/compras")

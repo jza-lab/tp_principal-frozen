@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, flash
 from app.controllers.reservas_controller import ReservasController
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 
 reservas_bp = Blueprint('reservas', __name__, url_prefix='/reservas')
 controller = ReservasController()

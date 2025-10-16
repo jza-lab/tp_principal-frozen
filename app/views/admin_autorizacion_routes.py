@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.autorizacion_controller import AutorizacionController
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 
 # Blueprint para la administración de autorizaciones
 admin_autorizacion_bp = Blueprint('admin_autorizacion', __name__, url_prefix='/admin/autorizaciones')
