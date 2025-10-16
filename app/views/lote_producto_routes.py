@@ -10,7 +10,8 @@ from flask import jsonify
 
 logger = logging.getLogger(__name__)
 
-lote_producto_bp = Blueprint("lote_producto", __name__)
+# lote_producto_bp = Blueprint("lote_producto", __name__)
+lote_producto_bp = Blueprint("lote_producto", __name__, url_prefix="/lotes-productos")
 
 controller = LoteProductoController()
 producto_controller = ProductoController() # Para obtener la lista de productos

@@ -343,8 +343,8 @@ class LoteProductoController(BaseController):
                 for p in productos_activos_result['data']
             }
             
-            # 2. Obtener IDs de productos que tienen al menos un lote
-            productos_con_lotes_result = self.model.find_all() 
+            # 2. Obtener IDs de productos que tienen al menos un lote DISPONIBLE
+            productos_con_lotes_result = self.model.find_all(filters={'estado': 'DISPONIBLE'})
             if not productos_con_lotes_result.get('success'):
                 raise Exception("Error al obtener lotes.")
 
