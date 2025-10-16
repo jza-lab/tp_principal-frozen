@@ -21,6 +21,8 @@ from marshmallow import ValidationError
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+logger = logging.getLogger(__name__)
+
 class PedidoController(BaseController):
     """
     Controlador para la lógica de negocio de los Pedidos de Venta.
@@ -116,7 +118,7 @@ class PedidoController(BaseController):
 
             # Primero, obtenemos el diccionario anidado de la dirección.
             direccion_payload = form_data.get('direccion_entrega', {})
-            
+
             # Ahora, extraemos los datos de ESE diccionario anidado.
             direccion_data = {
                 'calle': direccion_payload.get('calle'),
@@ -128,11 +130,11 @@ class PedidoController(BaseController):
                 'codigo_postal': direccion_payload.get('codigo_postal')
             }
             direccion_id = self._get_or_create_direccion(direccion_data)
-            
+
             # Añadimos el id de la dirección al payload principal para la validación/creación.
             form_data['id_direccion_entrega'] = direccion_id
             form_data.pop('direccion_entrega', None)
-            
+
             # FIX: Se elimina el intento de añadir el ID del creador al modelo `pedidos`
             # La tabla `pedidos` no tiene esta columna, causando el error PGRST204.
 
@@ -141,7 +143,7 @@ class PedidoController(BaseController):
 
             # --- NUEVA LÓGICA: Verificación de Stock (Dry Run) y determinación de estado ---
             all_in_stock = True # Indicador para la nueva lógica
-            
+
             for item in items_data:
                 producto_id = item['producto_id']
                 cantidad_solicitada = item['cantidad']
@@ -163,7 +165,7 @@ class PedidoController(BaseController):
                 else:
                     logging.warning(f"STOCK INSUFICIENTE para '{nombre_producto}': Solicitados: {cantidad_solicitada}, Disponible: {stock_disponible}")
                     all_in_stock = False # Marcar como insuficiente
-            
+
             # Definir el estado inicial basado en la verificación
             if all_in_stock:
                 # Si todo está en stock, el estado inicial es COMPLETADO
@@ -174,20 +176,20 @@ class PedidoController(BaseController):
                 pedido_data['estado'] = 'PENDIENTE'
                 logging.warning("Stock insuficiente para uno o más items. El pedido se creará en estado PENDIENTE.")
 
-                
+
             result = self.model.create_with_items(pedido_data, items_data)
 
             if result.get('success'):
                 nuevo_pedido = result.get('data')
-                
+
                 if all_in_stock:
                     # --- Lógica de Despacho/Consumo Inmediato (Solo si all_in_stock es True) ---
-                    
+
                     # 1. Recuperar el pedido con IDs de item para el despacho
                     pedido_con_items_resp = self.model.get_one_with_items(nuevo_pedido.get('id'))
                     if pedido_con_items_resp.get('success'):
                         items_del_pedido_con_id = pedido_con_items_resp.get('data', {}).get('items', [])
-                        
+
                         # 2. ** Despacho/Consumo de Stock **
                         despacho_result = self.lote_producto_controller.despachar_stock_directo_por_pedido(
                             pedido_id=nuevo_pedido.get('id'),
@@ -200,16 +202,16 @@ class PedidoController(BaseController):
                             logging.error(f"Fallo al despachar stock en la creación. Revirtiendo a PENDIENTE. Error: {despacho_result.get('error')}")
                             # Devolvemos un 500 para indicar un fallo en la transacción
                             return self.error_response(f"Pedido creado, pero falló el despacho de stock: {despacho_result.get('error')}", 500)
-                        
+
                         # 3. Éxito en la creación y el despacho. Enviamos un indicador.
-                        nuevo_pedido['estado'] = 'COMPLETADO' 
+                        nuevo_pedido['estado'] = 'COMPLETADO'
                         # === CAMBIO SOLICITADO: Mensaje explícito de stock encontrado y completado ===
                         return self.success_response(
                             data={**nuevo_pedido, 'estado_completado_inmediato': True}, # <--- INDICADOR ESPECIAL
-                            message="El pedido ha sido puesto en estado COMPLETADO automáticamente porque se encontró stock disponible para despachar todos los ítems.", 
+                            message="El pedido ha sido puesto en estado COMPLETADO automáticamente porque se encontró stock disponible para despachar todos los ítems.",
                             status_code=201
                         )
-                
+
                 # Caso de éxito normal (all_in_stock era False)
                 return self.success_response(data=nuevo_pedido, message="Pedido creado con éxito.", status_code=201)
             else:
@@ -217,7 +219,7 @@ class PedidoController(BaseController):
 
         except ValidationError as e:
             return self.error_response(str(e.messages), 400)
-        
+
         except Exception as e:
             logging.error(f"Error interno en crear_pedido_con_items: {e}", exc_info=True)
             return self.error_response(f'Error interno: {str(e)}', 500)
@@ -230,7 +232,7 @@ class PedidoController(BaseController):
             pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_resp.get('success'):
                 return self.error_response("Pedido no encontrado.", 404)
-            
+
             pedido_actual = pedido_resp['data']
             if pedido_actual.get('estado') != 'PENDIENTE':
                 return self.error_response("Solo los pedidos en estado 'PENDIENTE' pueden ser planificados.", 400)
@@ -260,11 +262,11 @@ class PedidoController(BaseController):
             pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_resp.get('success'):
                 return self.error_response("Pedido no encontrado.", 404)
-            
+
             pedido_actual = pedido_resp['data']
             if pedido_actual.get('estado') != 'PLANIFICACION':
                 return self.error_response("Solo los pedidos en 'PLANIFICACION' pueden pasar a 'EN PROCESO'.", 400)
-            
+
             # 2. Lógica de creación de OPs
             items_del_pedido = pedido_actual.get('items', [])
             ordenes_creadas = []
@@ -391,7 +393,7 @@ class PedidoController(BaseController):
 
             if not direccion_id:
                 return self.error_response("No se pudo procesar la dirección de entrega.", 400)
-            
+
             pedido_data['id_direccion_entrega'] = direccion_id
             pedido_data.pop('direccion_entrega', None)
 
@@ -428,7 +430,7 @@ class PedidoController(BaseController):
                         if cantidad_solicitada > stock_disponible:
                             cantidad_a_producir = cantidad_solicitada - stock_disponible
                             logging.info(f"Stock insuficiente para nuevo item. Solicitado: {cantidad_solicitada}, Disponible: {stock_disponible}. Se creará OP por {cantidad_a_producir}.")
-                            
+
                             # 3. Crear OP
                             datos_orden = {
                                 'producto_id': producto_id,
@@ -448,7 +450,7 @@ class PedidoController(BaseController):
                                 logging.info(f"OP {orden_creada.get('id')} creada para el item {item['id']}.")
                             else:
                                 logging.error(f"No se pudo crear la OP para el nuevo item {item['id']}. Error: {resultado_op.get('error')}")
-            
+
             # Actualizar el estado general del pedido después de los cambios
             self.model.actualizar_estado_agregado(pedido_id)
 
@@ -466,36 +468,58 @@ class PedidoController(BaseController):
 
     def preparar_para_entrega(self, pedido_id: int, usuario_id: int) -> tuple:
         """
-        Pasa un pedido de 'LISTO PARA ARMAR' a 'LISTO PARA ENTREGAR'.
-        En este paso se consume/despacha el stock de los productos finales.
+        Marca un pedido como listo para entregar, consumiendo el stock reservado.
         """
         try:
-            pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
-            if not pedido_resp.get('success'):
-                return self.error_response("Pedido no encontrado.", 404)
-            pedido_actual = pedido_resp['data']
+            # La lógica interna no cambia, solo la firma del método
+            despacho_result = self.lote_producto_controller.despachar_stock_reservado_por_pedido(pedido_id)
 
-            if pedido_actual.get('estado') != 'LISTO_PARA_ARMAR':
-                return self.error_response("El pedido debe estar 'LISTO PARA ARMAR' para poder prepararlo para entrega.", 400)
-
-            # Despachar stock de productos
-            despacho_result = self.lote_producto_controller.despachar_stock_directo_por_pedido(
-                pedido_id=pedido_id,
-                items_del_pedido=pedido_actual.get('items', [])
-            )
             if not despacho_result.get('success'):
-                return self.error_response(f"Fallo al despachar el stock: {despacho_result.get('error')}", 500)
+                return self.error_response(f"No se pudo preparar el pedido: {despacho_result.get('error')}", 400)
 
-            # Cambiar estado final
-            result = self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
-            if result.get('success'):
-                return self.success_response(message="Pedido listo para entrega y stock despachado.")
-            else:
-                return self.error_response(result.get('error', 'No se pudo actualizar el estado del pedido.'), 500)
+            self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
+            self.model.update_items_by_pedido_id(pedido_id, {'estado': 'COMPLETADO'})
+
+            return self.success_response(message="Pedido preparado para entrega. El stock ha sido despachado.")
 
         except Exception as e:
-            logging.error(f"Error en preparar_para_entrega: {e}", exc_info=True)
-            return self.error_response(f'Error interno: {str(e)}', 500)
+            logger.error(f"Error preparando para entrega el pedido {pedido_id}: {e}", exc_info=True)
+            return self.error_response("Error interno al procesar el pedido.", 500)
+
+    def marcar_como_completado(self, pedido_id: int, usuario_id: int) -> tuple:
+        """
+        Marca un pedido como COMPLETADO. Se asume que la entrega ya fue realizada.
+        """
+        logger.info(f"[Controlador] Iniciando 'marcar_como_completado' para Pedido ID: {pedido_id}")
+        try:
+            # 1. Obtener el estado actual del pedido para validación
+            pedido_actual_res = self.model.find_by_id(pedido_id, 'id')
+            if not pedido_actual_res.get('success'):
+                return self.error_response('Pedido no encontrado.', 404)
+
+            estado_actual = pedido_actual_res['data'].get('estado')
+            logger.info(f"[Controlador] Estado actual del pedido: '{estado_actual}'")
+
+            # 2. Condición de seguridad: Solo se puede completar si está 'LISTO_PARA_ENTREGA'
+            if estado_actual != 'LISTO_PARA_ENTREGA':
+                error_msg = f"El pedido no se puede marcar como completado porque no está 'LISTO PARA ENTREGAR'. Estado actual: {estado_actual}"
+                logger.warning(f"[Controlador] {error_msg}")
+                return self.error_response(error_msg, 400)
+
+            # 3. Llamar al modelo para cambiar el estado a 'COMPLETADO'
+            logger.info(f"[Controlador] El estado es correcto. Llamando al modelo para cambiar a 'COMPLETADO'...")
+            resultado_update = self.model.cambiar_estado(pedido_id, 'COMPLETADO')
+
+            if resultado_update.get('success'):
+                logger.info(f"[Controlador] Pedido {pedido_id} marcado como COMPLETADO con éxito.")
+                return self.success_response(message="Pedido marcado como completado exitosamente.")
+            else:
+                logger.error(f"[Controlador] El modelo falló al actualizar el estado del pedido {pedido_id}.")
+                return self.error_response("Fallo al actualizar el estado en la base de datos.", 500)
+
+        except Exception as e:
+            logger.error(f"Error crítico en marcar_como_completado para pedido {pedido_id}: {e}", exc_info=True)
+            return self.error_response("Error interno del servidor.", 500)
 
     def cancelar_pedido(self, pedido_id: int) -> tuple:
         """
@@ -533,35 +557,8 @@ class PedidoController(BaseController):
                 return self.error_response("Error al obtener la lista de productos.", 500)
         except Exception as e:
             return self.error_response(f'Error interno obteniendo datos para el formulario: {str(e)}', 500)
-        
-    def completar_pedido(self, pedido_id: int, usuario_id: int) -> tuple:
-        """
-        Finaliza un pedido, pasándolo de 'LISTO PARA ENTREGAR' a 'COMPLETADO'.
-        El stock ya fue descontado en el paso anterior.
-        """
-        try:
-            pedido_resp, _ = self.obtener_pedido_por_id(pedido_id) 
-            if not pedido_resp.get('success'):
-                return self.error_response("Pedido no encontrado.", 404)
-            pedido_actual = pedido_resp['data']
 
-            if pedido_actual.get('estado') == 'COMPLETADO':
-                return self.error_response("El pedido ya está completado.", 400)
 
-            if pedido_actual.get('estado') != 'LISTO_PARA_ENTREGA':
-                 return self.error_response(f"El pedido debe estar 'LISTO PARA ENTREGAR' para ser completado (actual: {pedido_actual['estado']}).", 400)
-
-            result = self.model.cambiar_estado(pedido_id, 'COMPLETADO')
-
-            if result.get('success'):
-                return self.success_response(message="Pedido completado exitosamente.")
-            else:
-                return self.error_response(result.get('error', 'No se pudo completar el pedido.'), 500)
-
-        except Exception as e:
-            logging.error(f"Error en completar_pedido: {e}", exc_info=True)
-            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
-        
     def get_ordenes_by_cliente(self, id_cliente):
         try:
             result = self.model.find_by_cliente(id_cliente)
@@ -574,31 +571,31 @@ class PedidoController(BaseController):
                 return self.error_response(result.get('error', 'No se pudo cargar los pedidos.'),404)
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
-        
-    
+
+
     def obtener_pedidos_por_orden_produccion(self, id_orden_produccion: int) -> tuple:
 
         try:
-        
+
             id_result = self.model.devolver_pedidos_segun_orden(id_orden_produccion)
-            
+
             if not id_result['success']:
                 error_msg = id_result.get('error', 'Error al obtener IDs de pedidos de la OP.')
                 return self.error_response(error_msg, 500)
-            
-            pedido_ids = id_result['data'] 
-            
+
+            pedido_ids = id_result['data']
+
             if not pedido_ids:
                 return self.success_response(data=[])
-            
-            
+
+
             result = self.model.find_by_id_list(pedido_ids)
-            
+
             if result.get('success'):
-                return self.success_response(data=result.get('data', [])) 
+                return self.success_response(data=result.get('data', []))
             else:
                 error_msg = result.get('error', 'Error al obtener detalles de los pedidos.')
                 return self.error_response(error_msg, 500)
-                
+
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)

@@ -15,6 +15,7 @@ from app.controllers.inventario_controller import InventarioController
 from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.lote_producto_controller import LoteProductoController
+from app.models.pedido import PedidoModel
 from datetime import date
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ class OrdenProduccionController(BaseController):
         self.orden_compra_controller = OrdenCompraController()
         self.insumo_controller = InsumoController()
         self.lote_producto_controller = LoteProductoController()
+        self.pedido_model = PedidoModel()
 
 
     def obtener_ordenes(self, filtros: Optional[Dict] = None) -> tuple:
@@ -142,7 +144,7 @@ class OrdenProduccionController(BaseController):
                     return self.error_response('Error al asignar supervisor.', 500)
             except Exception as e:
                 return self.error_response(f'Error interno del servidor: {str(e)}', 500)
-    
+
     # --- WRAPPER PARA DELEGAR VERIFICACIÓN DE STOCK (FIX de AttributeError) ---
     def verificar_stock_para_op(self, orden_simulada: Dict) -> Dict:
         """
@@ -154,7 +156,7 @@ class OrdenProduccionController(BaseController):
     def aprobar_orden_con_oc(self, orden_id: int, usuario_id: int, oc_id: int) -> tuple:
         """
         Aprueba la OP cuando se sabe que se ha generado la OC (flujo manual).
-        
+
         MODIFICADO: Este método solo vincula la OC (si es necesario) y mantiene
         el estado en PENDIENTE, a la espera de la recepción de los insumos.
         La aprobación formal a 'APROBADA' debe ocurrir en otro flujo.
@@ -169,11 +171,11 @@ class OrdenProduccionController(BaseController):
             # 2. **CAMBIO CLAVE: Se ELIMINA el cambio de estado a 'APROBADA'**
             # y se ELIMINA la reserva de stock.
             # La OP permanece en PENDIENTE hasta que se reciba la OC/Stock.
-            
+
             # NOTA: Si se desea registrar que la OC ya fue generada para esta OP:
-            # Se podría cambiar a un estado intermedio como 'OC_GENERADA' o añadir una bandera, 
+            # Se podría cambiar a un estado intermedio como 'OC_GENERADA' o añadir una bandera,
             # pero si se pide que se quede en PENDIENTE, se respeta la lógica.
-            
+
             return self.success_response(None, "Orden de Compra vinculada (o generada). La Orden de Producción permanece en PENDIENTE a la espera de la recepción de insumos.")
 
         except Exception as e:
@@ -200,17 +202,17 @@ class OrdenProduccionController(BaseController):
                 return self.error_response(f"Error al verificar stock: {verificacion_result.get('error')}", 500)
 
             insumos_faltantes = verificacion_result['data']['insumos_faltantes']
-            
+
             if insumos_faltantes:
                 # --- CASO: FALTA STOCK ---
                 # 1. Generar OC automática
                 oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
                 if not oc_result.get('success'):
                     return self.error_response(f"No se pudo generar la orden de compra: {oc_result.get('error')}", 500)
-                
+
                 # 2. Cambiar estado de OP a 'EN ESPERA'
                 self.model.cambiar_estado(orden_id, 'EN ESPERA')
-                
+
                 return self.success_response(
                     data={'oc_generada': True, 'oc_codigo': oc_result['data']['codigo_oc']},
                     message="Stock insuficiente. Se generó la Orden de Compra y la OP está 'En Espera'."
@@ -221,10 +223,10 @@ class OrdenProduccionController(BaseController):
                 reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
                 if not reserva_result.get('success'):
                     return self.error_response(f"Fallo crítico al reservar insumos: {reserva_result.get('error')}", 500)
-                
+
                 # 2. Cambiar estado a 'LISTA PARA PRODUCIR'
                 self.model.cambiar_estado(orden_id, 'LISTA PARA PRODUCIR')
-                
+
                 return self.success_response(message="Stock disponible. La orden está 'Lista para Producir' y los insumos han sido reservados.")
 
         except Exception as e:
@@ -237,23 +239,23 @@ class OrdenProduccionController(BaseController):
         Aplica redondeo hacia arriba (ceil) en las cantidades solicitadas.
         """
         # Simplificación: Asumimos un proveedor por defecto o el primero que encontremos.
-        proveedor_id_por_defecto = 1 
+        proveedor_id_por_defecto = 1
 
         items_oc_para_form = []
         for insumo in insumos_faltantes:
             # FIX: Aplicar math.ceil() al faltante
             cantidad_redondeada = math.ceil(insumo['cantidad_faltante'])
-            
+
             if cantidad_redondeada == 0:
-                continue 
-            
+                continue
+
             try:
                 response_data, status_code = self.insumo_controller.obtener_insumo_por_id(insumo['insumo_id'])
                 precio = response_data['data']['precio_unitario'] if status_code < 400 else 0
             except Exception as e:
                  logger.error(f"Error obteniendo precio para insumo {insumo.get('insumo_id')}: {e}")
                  precio = 0
-                 
+
             items_oc_para_form.append({
                 'insumo_id': insumo['insumo_id'],
                 'cantidad_faltante': cantidad_redondeada, # Usamos la cantidad redondeada
@@ -277,7 +279,7 @@ class OrdenProduccionController(BaseController):
         }
 
         return self.orden_compra_controller.crear_orden(form_data_simulado, usuario_id)
-    
+
     def generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int, orden_produccion_id: int) -> Dict:
         """Wrapper publico para el helper privado _generar_orden_de_compra_automatica."""
         return self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_produccion_id)
@@ -290,77 +292,83 @@ class OrdenProduccionController(BaseController):
         return self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=f"Rechazada: {motivo}")
 
     def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str) -> tuple:
-            """
-            Cambia el estado de una orden.
-            Si el estado es 'COMPLETADA', genera el lote de producto terminado.
-            """
-            try:
-                orden_result = self.obtener_orden_por_id(orden_id)
-                if not orden_result.get('success'):
-                    return self.error_response("Orden de producción no encontrada.", 404)
-                orden_produccion = orden_result['data']
-                
-                # 1. Validación de estado para INICIAR
-                if nuevo_estado == 'EN_PROCESO':
-                    if orden_produccion['estado'] != 'LISTA PARA PRODUCIR':
-                        return self.error_response(f"La orden debe estar en estado 'LISTA PARA PRODUCIR' para poder iniciarla. Estado actual: {orden_produccion['estado']}", 400)
+        """
+        Cambia el estado de una orden.
+        Si el estado es 'COMPLETADA', genera el lote de producto terminado Y LO RESERVA.
+        """
+        try:
+            # --- Lógica para obtener la OP y validar estados (sin cambios) ---
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden_produccion = orden_result['data']
 
-                # 2. Lógica para COMPLETAR la OP
+            if nuevo_estado == 'EN_PROCESO' and orden_produccion['estado'] != 'LISTA PARA PRODUCIR':
+                return self.error_response(f"La orden debe estar en 'LISTA PARA PRODUCIR' para iniciarla.", 400)
+
+            if nuevo_estado == 'COMPLETADA':
+                if orden_produccion['estado'] != 'EN_PROCESO':
+                    return self.error_response(f"La orden debe estar en 'EN_PROCESO' para completarla.", 400)
+
+                # A. Crear el lote de producto terminado (lógica existente)
+                datos_lote = {
+                    'producto_id': orden_produccion['producto_id'],
+                    'cantidad_inicial': orden_produccion['cantidad_planificada'],
+                    'orden_produccion_id': orden_id,
+                    'fecha_produccion': date.today().isoformat(),
+                    'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat()
+                }
+                resultado_lote, status_lote = self.lote_producto_controller.crear_lote_desde_formulario(
+                    datos_lote,
+                    usuario_id=orden_produccion.get('usuario_creador_id', 1)
+                )
+
+                if status_lote >= 400:
+                    return self.error_response(f"Fallo al registrar el lote de producto: {resultado_lote.get('error')}", 500)
+
+                lote_creado = resultado_lote['data']
+
+                # --- INICIO DE LA NUEVA LÓGICA DE RESERVA AUTOMÁTICA ---
+                # B. Encontrar los ítems de pedido que originaron esta OP
+                items_a_surtir_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
+                if items_a_surtir_res.get('success') and items_a_surtir_res.get('data'):
+                    items_a_surtir = items_a_surtir_res['data']
+
+                    # C. Crear un registro de reserva para cada ítem de pedido
+                    for item in items_a_surtir:
+                        datos_reserva = {
+                            'lote_producto_id': lote_creado['id_lote'],
+                            'pedido_id': item['pedido_id'],
+                            'pedido_item_id': item['id'],
+                            'cantidad_reservada': item['cantidad'], # Asumimos que la OP cubre la cantidad exacta
+                            'usuario_reserva_id': orden_produccion.get('usuario_creador_id')
+                        }
+                        # Usamos el modelo de reserva que está dentro del lote_producto_controller
+                        self.lote_producto_controller.reserva_model.create(
+                            self.lote_producto_controller.reserva_schema.load(datos_reserva)
+                        )
+                        logger.info(f"Reserva creada para el item {item['id']} desde el lote {lote_creado['id_lote']}.")
+
+                    # D. Actualizar el estado del nuevo lote a 'RESERVADO'
+                    self.lote_producto_controller.model.update(lote_creado['id_lote'], {'estado': 'RESERVADO'}, 'id_lote')
+                    logger.info(f"Lote {lote_creado['numero_lote']} marcado como RESERVADO.")
+                # --- FIN DE LA NUEVA LÓGICA ---
+
+            # 3. Cambiar el estado de la OP en la base de datos (sin cambios)
+            result = self.model.cambiar_estado(orden_id, nuevo_estado)
+
+            if result.get('success'):
+                message_to_use = f"Estado actualizado a {nuevo_estado.replace('_', ' ')}."
                 if nuevo_estado == 'COMPLETADA':
-                    if orden_produccion['estado'] != 'EN_PROCESO':
-                        return self.error_response(f"La orden debe estar en estado 'EN_PROCESO' para poder completarla. Estado actual: {orden_produccion['estado']}", 400)
-                    
-                    # A. Obtener el origen de la orden para la trazabilidad del lote
-                    # El campo 'pedido_id' en la OP es nuestra referencia principal (si existe).
-                    referencia_pedido_id = orden_produccion.get('pedido_id') 
-                    
-                    # B. Determinar la fuente del lote (Pedido vs. Stock)
-                    if referencia_pedido_id:
-                        origen_lote = f"Pedido PED-{referencia_pedido_id}"
-                    else:
-                        origen_lote = "Stock Interno"
+                    message_to_use = f"Orden completada. Lote N° {lote_creado['numero_lote']} creado y reservado para el pedido."
 
-                    # C. Preparar los datos del nuevo lote
-                    datos_lote = {
-                        'producto_id': orden_produccion['producto_id'],
-                        'cantidad_inicial': orden_produccion['cantidad_planificada'],
-                        'orden_produccion_id': orden_id,
-                        'fecha_produccion': date.today().isoformat(),
-                        'observaciones': f"Origen: {origen_lote}. " + (orden_produccion.get('observaciones') or ''),
-                        # Se asume una vida útil por defecto si el producto no la tiene o el modelo de lote la infiere.
-                        'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat() # Usamos 90 días por defecto
-                    }
-                    
-                    # D. Crear el lote de producto terminado
-                    # El método `crear_lote` de LoteProductoController espera {cantidad_inicial, producto_id, etc.}
-                    resultado_lote, status_lote = self.lote_producto_controller.crear_lote_desde_formulario(
-                        datos_lote,
-                        usuario_id=orden_produccion.get('usuario_creador_id', 1) # Usar ID del creador o 1 si es None
-                    )
+                return self.success_response(data=result.get('data'), message=message_to_use)
+            else:
+                return self.error_response(result.get('error', 'Error al cambiar el estado.'), 500)
 
-                    if status_lote >= 400:
-                        # Detener el cambio de estado si falla la creación del lote
-                        return self.error_response(f"Fallo al registrar el lote de producto terminado: {resultado_lote.get('error', 'Error desconocido')}", 500)
-                    
-                # 3. Cambiar el estado en la base de datos (y actualizar fechas)
-                result = self.model.cambiar_estado(orden_id, nuevo_estado)
-
-                if result.get('success'):
-                    # Inyectar un mensaje más informativo para el frontend
-                    if nuevo_estado == 'COMPLETADA' and 'resultado_lote' in locals() and resultado_lote.get('success'):
-                        message_to_use = f"Orden completada. Lote N° {resultado_lote['data']['numero_lote']} registrado en Inventario de Productos ({origen_lote})."
-                    elif nuevo_estado == 'EN_PROCESO':
-                        message_to_use = "Producción iniciada correctamente. Insumos reservados."
-                    else:
-                        message_to_use = f"Estado actualizado a {nuevo_estado.replace('_', ' ')}."
-                    
-                    return self.success_response(data=result.get('data'), message=message_to_use)
-                else:
-                    return self.error_response(result.get('error', 'Error al cambiar el estado.'), 500)
-
-            except Exception as e:
-                logger.error(f"Error en cambiar_estado_orden para la orden {orden_id}: {e}", exc_info=True)
-                return self.error_response(f"Error interno: {str(e)}", 500)
+        except Exception as e:
+            logger.error(f"Error en cambiar_estado_orden para la orden {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
 
     def crear_orden_desde_planificacion(self, producto_id: int, item_ids: List[int], usuario_id: int) -> Dict:
         """
@@ -401,7 +409,7 @@ class OrdenProduccionController(BaseController):
                 'receta_id': receta['id'],
                 'prioridad': 'NORMAL',
                 # --- INCLUIR EL CAMPO pedido_id EN LOS DATOS ---
-                'pedido_id': primer_pedido_id 
+                'pedido_id': primer_pedido_id
                 # -----------------------------------------------
             }
             resultado_creacion = self.crear_orden(datos_orden, usuario_id)

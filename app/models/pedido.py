@@ -97,11 +97,11 @@ class PedidoModel(BaseModel):
     def get_one_with_items(self, pedido_id: int) -> Dict:
         """Obtiene un pedido con sus items, especificando la relación."""
         try:
-            
+
             result = self.db.table(self.get_table_name()).select(
                 '*, cliente:clientes(*), items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre, precio_unitario, unidad_medida)), direccion:usuario_direccion(*)'
             ).eq('id', pedido_id).single().execute()
-            
+
 
             if result.data:
                 return {'success': True, 'data': result.data}
@@ -342,7 +342,7 @@ class PedidoModel(BaseModel):
         except Exception as e:
             logging.error(f"Error actualizando pedido_item {item_id}: {e}")
             return {'success': False, 'error': str(e)}
-        
+
     def find_by_cliente(self, id_cliente: int):
         try:
             result = self.db.table(self.get_table_name()).select('*').eq('id_cliente', id_cliente).execute()
@@ -363,7 +363,7 @@ class PedidoModel(BaseModel):
                 pedido_ids = list(set([item['pedido_id'] for item in result.data]))
 
                 return {'success': True, 'data': pedido_ids}
-            return {'success': True, 'data': []} 
+            return {'success': True, 'data': []}
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
@@ -375,7 +375,7 @@ class PedidoModel(BaseModel):
             return {'success': True, 'data': []}
 
         try:
-            
+
             query = self.db.table(self.get_table_name()).select('*').in_('id', pedido_ids)
 
             result = query.execute()
@@ -384,8 +384,28 @@ class PedidoModel(BaseModel):
 
                 return {'success': True, 'data': result.data}
             else:
-                return {'success': True, 'data': []} 
-                
+                return {'success': True, 'data': []}
+
         except Exception as e:
             logger.error(f"Error buscando pedidos por lista de IDs: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    # --- MÉTODO NUEVO A AÑADIR ---
+    def update_items_by_pedido_id(self, pedido_id: int, data: dict) -> dict:
+        """
+        Actualiza todos los ítems de un pedido específico.
+        """
+        try:
+            # Asumiendo que la tabla de items se llama 'pedido_items'
+            result = self.db.table('pedido_items').update(data).eq('pedido_id', pedido_id).execute()
+
+            # La operación de actualización devuelve los datos modificados
+            if result.data:
+                return {'success': True, 'data': result.data}
+            else:
+                # Esto puede ocurrir si el pedido no tenía ítems, lo cual no es un error.
+                return {'success': True, 'data': [], 'message': 'No se encontraron ítems para el ID de pedido proporcionado.'}
+        except Exception as e:
+            logger.error(f"Error actualizando los ítems del pedido {pedido_id}: {e}")
+            return {'success': False, 'error': str(e)}
+    # --- FIN DEL MÉTODO NUEVO ---

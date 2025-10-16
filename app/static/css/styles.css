@@ -1073,3 +1073,30 @@ h1.h2 {
     transform: none; /* Evita cualquier transformación en hover */
 }
 
+/* --- ESTILOS PARA EL OVERLAY DE CARGA --- */
+#loadingOverlay {
+    position: fixed; /* Se queda fijo en la pantalla */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5); /* Fondo negro semitransparente */
+    z-index: 10000; /* Asegura que esté por encima de todo */
+    display: none; /* Oculto por defecto */
+    justify-content: center;
+    align-items: center;
+}
+
+#loadingOverlay .loading-content {
+    background-color: white;
+    padding: 20px 30px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+#loadingOverlay .spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
+

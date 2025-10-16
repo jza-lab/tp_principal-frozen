@@ -234,3 +234,46 @@
     </div>
 </div>
 {% endblock %}
+{# --- INICIO DE LA CORRECCIÓN --- #}
+{# El script ahora está dentro del bloque extra_js, asegurando que se cargue en el orden correcto #}
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const recepcionForm = document.getElementById('recepcionForm');
+    
+    if (recepcionForm) {
+        recepcionForm.addEventListener('submit', function (e) {
+            // 1. Prevenimos el envío inmediato.
+            e.preventDefault();
+
+            // 2. Obtenemos el botón que disparó el envío.
+            const submitter = e.submitter;
+            if (!submitter) {
+                // Si por alguna razón no se detecta el botón, se envía sin overlay para evitar bloqueo.
+                this.submit();
+                return;
+            }
+
+            // 3. Creamos un campo oculto para enviar el valor de 'accion'.
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = 'accion';
+            hiddenInput.value = submitter.value; // 'aceptar' o 'rechazar'
+            this.appendChild(hiddenInput); // Añadimos el campo al formulario
+
+            // 4. Mostramos nuestra pantalla de carga.
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) {
+                overlay.style.display = 'flex';
+            }
+
+            // 5. Después de un breve instante, permitimos que el formulario se envíe (ahora con el campo 'accion').
+            setTimeout(() => {
+                this.submit(); 
+            }, 50);
+        });
+    }
+});
+</script>
+{% endblock %}
+{# --- FIN DE LA CORRECCIÓN --- #}

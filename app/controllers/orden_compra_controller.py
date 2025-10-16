@@ -26,7 +26,7 @@ class OrdenCompraController:
             'prioridad': form_data.get('prioridad'),
             'observaciones': form_data.get('observaciones'),
             # >>> AÑADE ESTA LÍNEA CRÍTICA <<<
-            'orden_produccion_id': form_data.get('orden_produccion_id'), 
+            'orden_produccion_id': form_data.get('orden_produccion_id'),
         }
 
         items_data = []
@@ -54,7 +54,7 @@ class OrdenCompraController:
                     precio = float(precios[i] or 0)
                     item_subtotal = cantidad * precio
                     subtotal_calculado += item_subtotal
-                    
+
                     items_data.append({
                         'insumo_id': insumo_ids[i],
                         'cantidad_solicitada': cantidad,
@@ -64,7 +64,7 @@ class OrdenCompraController:
                 except (ValueError, IndexError) as e:
                     logger.warning(f"Error parseando item de orden de compra: {e}")
                     continue
-        
+
         # Calcular IVA y Total
         iva_calculado = subtotal_calculado * 0.21
         total_calculado = subtotal_calculado + iva_calculado
@@ -302,20 +302,21 @@ class OrdenCompraController:
 
     def procesar_recepcion(self, orden_id, form_data, usuario_id, orden_produccion_controller):
         """
-        Procesa la recepción de una orden de compra, actualiza cantidades,
-        cambia el estado y crea los lotes correspondientes en el inventario.
+        Procesa la recepción de una OC, crea lotes, RESERVA INSUMOS para la OP asociada
+        y finalmente actualiza el estado de la OP.
         """
         try:
             accion = form_data.get('accion')
             observaciones = form_data.get('observaciones', '')
 
             if accion == 'aceptar':
-                # Obtener datos de la orden para usarlos en la creación de lotes
                 orden_result = self.model.find_by_id(orden_id)
                 if not orden_result.get('success'):
                     return {'success': False, 'error': 'No se pudo encontrar la orden de compra.'}
                 orden_data = orden_result['data']
 
+                # --- INICIO DE LA CORRECCIÓN ---
+                # Reintroducimos la inicialización de los contadores y la lógica de creación de lotes
                 item_ids = form_data.getlist('item_id[]')
                 cantidades_recibidas = form_data.getlist('cantidad_recibida[]')
 
@@ -323,6 +324,8 @@ class OrdenCompraController:
                     return {'success': False, 'error': 'Los datos de los ítems no coinciden.'}
 
                 items_para_lote = []
+                lotes_creados_count = 0
+                lotes_error_count = 0
 
                 # 1. Actualizar cada ítem de la orden
                 for i in range(len(item_ids)):
@@ -346,14 +349,9 @@ class OrdenCompraController:
                     'observaciones': observaciones,
                     'updated_at': datetime.now().isoformat()
                 }
-                update_result = self.model.update(orden_id, orden_update_data)
-
-                if not update_result.get('success'):
-                    return update_result
+                self.model.update(orden_id, orden_update_data)
 
                 # 3. Crear lotes en inventario
-                lotes_creados_count = 0
-                lotes_error_count = 0
                 for item_lote in items_para_lote:
                     item_data = item_lote['data']
                     lote_data = {
@@ -364,42 +362,51 @@ class OrdenCompraController:
                         'documento_ingreso': f"OC-{orden_data.get('codigo_oc', 'N/A')}",
                         'f_ingreso': date.today().isoformat()
                     }
-
                     try:
                         lote_result, status_code = self.inventario_controller.crear_lote(lote_data, usuario_id)
                         if lote_result.get('success'):
                             lotes_creados_count += 1
                         else:
                             lotes_error_count += 1
-                            logger.error(f"Error creando lote para insumo {lote_data['id_insumo']}: {lote_result.get('error')}")
-                    except Exception as e:
+                    except Exception:
                         lotes_error_count += 1
-                        logger.error(f"Excepción creando lote para insumo {lote_data['id_insumo']}: {e}")
+                # --- FIN DE LA CORRECCIÓN ---
 
-                if lotes_error_count > 0:
-                    logger.warning(f"Recepción de OC {orden_id} completada, pero {lotes_error_count} lotes no se pudieron crear.")
-                
-                # --- LÓGICA ROBUSTA: Transición de OP ---
+
+                # Lógica de reserva y transición de OP (esta parte ya estaba bien)
                 op_transition_message = ""
                 if orden_data.get('orden_produccion_id'):
                     op_id = orden_data['orden_produccion_id']
-                    
-                    # Llamar a cambiar_estado_orden que devuelve una tupla (response_dict, status_code)
-                    op_update_result, op_status_code = orden_produccion_controller.cambiar_estado_orden(op_id, 'LISTA PARA PRODUCIR')
-                    
-                    if op_status_code >= 400:
-                        op_error_msg = op_update_result.get('error', 'Error desconocido al intentar actualizar el estado.')
-                        op_transition_message = f"ADVERTENCIA: Fallo al actualizar la OP {op_id} a 'LISTA PARA PRODUCIR'. Por favor, revísela manualmente. Error: {op_error_msg}"
-                        logger.error(f"Fallo al actualizar OP {op_id} tras recepción de OC {orden_id}: {op_error_msg}")
-                    else:
-                        op_transition_message = op_update_result.get('message', f"La Orden de Producción {op_id} asociada ha sido actualizada a 'LISTA PARA PRODUCIR'.")
-                        logger.info(f"OC {orden_id} recibida, OP {op_id} movida a 'LISTA PARA PRODUCIR'.")
 
-                # Actualizar el mensaje de respuesta para incluir el estado de la OP
+                    op_result = orden_produccion_controller.obtener_orden_por_id(op_id)
+                    if not op_result.get('success'):
+                        op_error_msg = f"No se pudo encontrar la OP {op_id} asociada."
+                        return {'success': False, 'error': op_error_msg}
+
+                    orden_produccion = op_result['data']
+
+                    logger.info(f"Intentando reservar insumos para la OP {op_id} tras recepción de OC.")
+                    reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
+
+                    if not reserva_result.get('success'):
+                        op_error_msg = f"Se recibieron los insumos pero falló la reserva automática para la OP {op_id}. Por favor, verifique manualmente. Error: {reserva_result.get('error')}"
+                        op_transition_message = f"ADVERTENCIA: {op_error_msg}"
+                    else:
+                        logger.info(f"Reserva para OP {op_id} exitosa. Cambiando estado a 'LISTA PARA PRODUCIR'.")
+                        op_update_result, op_status_code = orden_produccion_controller.cambiar_estado_orden(op_id, 'LISTA PARA PRODUCIR')
+
+                        if op_status_code >= 400:
+                            op_error_msg = op_update_result.get('error', 'Error desconocido.')
+                            op_transition_message = f"ADVERTENCIA: Fallo al actualizar la OP {op_id}. Error: {op_error_msg}"
+                        else:
+                            op_transition_message = f"Insumos reservados. La Orden de Producción {op_id} asociada ha sido actualizada a 'LISTA PARA PRODUCIR'."
+                            logger.info(f"OC {orden_id} recibida, OP {op_id} movida a 'LISTA PARA PRODUCIR'.")
+
+                # Ahora 'lotes_creados_count' sí existe y se puede usar en el mensaje final
                 final_message = f'Recepción completada. {lotes_creados_count} lotes creados.'
                 if op_transition_message:
                     final_message += f" | {op_transition_message}"
-                
+
                 return {'success': True, 'message': final_message}
 
             elif accion == 'rechazar':
@@ -409,5 +416,5 @@ class OrdenCompraController:
                 return {'success': False, 'error': 'Acción no válida.'}
 
         except Exception as e:
-            logger.error(f"Error crítico procesando la recepción de la orden {orden_id}: {e}")
+            logger.error(f"Error crítico procesando la recepción de la orden {orden_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}

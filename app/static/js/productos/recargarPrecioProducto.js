@@ -2,7 +2,7 @@ function recargarPrecioProducto(id) {
     const title = 'Confirmar Habilitación';
     const body = '¿Quieres actualizar el precio del producto?';
 
-        const url = `/api/productos/catalogo/actualizar-precio/${id}`;
+        const url = `/catalogo/actualizar-precio/${id}`;
 
         fetch(url, {
             method: 'GET',
