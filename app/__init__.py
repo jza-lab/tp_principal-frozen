@@ -42,7 +42,7 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(admin_usuario_bp)
     app.register_blueprint(admin_autorizacion_bp)
     app.register_blueprint(api_bp)
-    app.register_blueprint(facial_bp)
+    app.register_blueprint(facial_bp, url_prefix='/totem')
     app.register_blueprint(orden_venta_bp)
     app.register_blueprint(planificacion_bp)
     app.register_blueprint(google_forms_bp)
