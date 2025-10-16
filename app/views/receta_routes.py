@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from app.controllers.receta_controller import RecetaController
 from app.controllers.producto_controller import ProductoController
 from app.controllers.insumo_controller import InsumoController
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 
 receta_bp = Blueprint('receta', __name__, url_prefix='/recetas')
 controller = RecetaController()

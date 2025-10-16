@@ -1,3 +1,12 @@
+"""
+Este módulo centraliza los mapas de permisos y roles de la aplicación.
+Define la relación entre acciones y los roles que pueden realizarlas,
+así como mapas de IDs a códigos para sectores y roles.
+
+NOTA: El diccionario CANONICAL_PERMISSION_MAP es la única fuente de verdad
+para la lógica de permisos basada en roles y acciones.
+"""
+
 SECTOR_MAP = {
     1: 'ADMINISTRACION',
     2: 'ALMACEN',
@@ -5,7 +14,6 @@ SECTOR_MAP = {
     4: 'CALIDAD',
     5: 'PRODUCCION'
 }
-
 
 ROLE_MAP = {
     1: 'ADMIN',
@@ -99,8 +107,8 @@ CANONICAL_PERMISSION_MAP = {
     'gestionar_backups': ['IT']
 }
 
-def get_allowed_roles_for_action(action_name):
+def get_allowed_roles_for_action(action_name: str) -> list:
     """
-    Devuelve la lista de roles permitidos para una acción específica.
+    Devuelve la lista de códigos de rol permitidos para una acción específica.
     """
     return CANONICAL_PERMISSION_MAP.get(action_name, [])

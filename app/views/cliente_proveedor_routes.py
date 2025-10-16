@@ -7,7 +7,7 @@ from app.controllers.pedido_controller  import PedidoController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.cliente_controller import ClienteController
-from app.permisos import permission_required, permission_any_of
+from app.utils.decorators import permission_required, permission_any_of
 
 # Blueprint para la administración de usuarios
 cliente_proveedor = Blueprint('clientes_proveedores', __name__, url_prefix='/administrar')

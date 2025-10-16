@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 import re
 from datetime import datetime
 

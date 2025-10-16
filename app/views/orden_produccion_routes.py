@@ -17,7 +17,7 @@ from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
 from app.controllers.pedido_controller import PedidoController
 from app.utils.decorators import roles_required
-from app.permisos import permission_required
+from app.utils.decorators import permission_required
 from datetime import date
 
 orden_produccion_bp = Blueprint("orden_produccion", __name__, url_prefix="/ordenes")

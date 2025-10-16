@@ -78,66 +78,63 @@ class UsuarioModel(BaseModel):
             logger.error(f"Error contando usuarios por direccion_id {direccion_id}: {e}")
             return 0
 
-    def _find_by(self, field: str, value, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
+    def _find_by(self, field: str, value, include_direccion: bool = False) -> Dict:
         """
-        Método genérico y privado para buscar un usuario por un campo específico.
+        Método genérico y optimizado para buscar un usuario, incluyendo siempre
+        sus relaciones (rol, turno, sectores) en una única consulta.
         """
         try:
-            select_query = "*, roles(codigo, nombre, nivel), turno:turno_id(nombre, hora_inicio, hora_fin)"
+            select_query = "*, roles(*), turno:turno_id(*), sectores:usuario_sectores(sectores(*))"
             if include_direccion:
-                select_query += ", direccion:usuario_direccion(*)"
+                select_query += ", direccion:direccion_id(*)"
 
-            query = self.db.table(self.get_table_name()).select(select_query).eq(field, value)
+            query = self.db.table(self.get_table_name()).select(select_query).eq(field, value).limit(1)
             result = query.execute()
 
             if not result.data:
                 return {'success': False, 'error': 'Usuario no encontrado'}
 
             usuario_data = result.data[0]
-
-            if include_sectores:
-                from app.models.usuario_sector import UsuarioSectorModel
-                usuario_sector_model = UsuarioSectorModel()
-                sectores_result = usuario_sector_model.find_by_usuario(usuario_data['id'])
-
-                if sectores_result.get('success'):
-                    sectores = [item['sectores'] for item in sectores_result['data'] if item.get('sectores')]
-                    usuario_data['sectores'] = sectores
-                else:
-                    usuario_data['sectores'] = []
+            
+            # Aplanar la estructura de sectores para que sea más fácil de usar
+            if 'sectores' in usuario_data:
+                usuario_data['sectores'] = [s['sectores'] for s in usuario_data['sectores'] if s.get('sectores')]
 
             return {'success': True, 'data': usuario_data}
 
         except Exception as e:
             logger.error(f"Error buscando usuario por {field}: {str(e)}", exc_info=True)
-            return {'success': False, 'error': str(e)}
+            return {'success': False, 'error': f"Error en la base de datos: {e}"}
 
-    def find_by_email(self, email: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
-        """Busca un usuario por email"""
-        return self._find_by('email', email, include_sectores, include_direccion)
+    def find_by_email(self, email: str, include_direccion: bool = False) -> Dict:
+        """Busca un usuario por email, siempre incluyendo sus relaciones."""
+        return self._find_by('email', email, include_direccion)
 
-    def find_by_id(self, usuario_id: int, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
-        """Busca un usuario por su ID"""
-        return self._find_by('id', usuario_id, include_sectores, include_direccion)
+    def find_by_id(self, usuario_id: int, include_direccion: bool = False) -> Dict:
+        """Busca un usuario por su ID, siempre incluyendo sus relaciones."""
+        return self._find_by('id', usuario_id, include_direccion)
 
-    def find_by_legajo(self, legajo: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
-        """Busca un usuario por su legajo"""
-        return self._find_by('legajo', legajo, include_sectores, include_direccion)
+    def find_by_legajo(self, legajo: str, include_direccion: bool = False) -> Dict:
+        """Busca un usuario por su legajo, siempre incluyendo sus relaciones."""
+        return self._find_by('legajo', legajo, include_direccion)
 
-    def find_by_cuil(self, cuil_cuit: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
-        """Busca un usuario por su CUIL/CUIT"""
-        return self._find_by('cuil_cuit', cuil_cuit, include_sectores, include_direccion)
+    def find_by_cuil(self, cuil_cuit: str, include_direccion: bool = False) -> Dict:
+        """Busca un usuario por su CUIL/CUIT, siempre incluyendo sus relaciones."""
+        return self._find_by('cuil_cuit', cuil_cuit, include_direccion)
 
-    def find_by_telefono(self, telefono: str, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
-        """Busca un usuario por su teléfono"""
-        return self._find_by('telefono', telefono, include_sectores, include_direccion)
+    def find_by_telefono(self, telefono: str, include_direccion: bool = False) -> Dict:
+        """Busca un usuario por su teléfono, siempre incluyendo sus relaciones."""
+        return self._find_by('telefono', telefono, include_direccion)
 
-    def find_all(self, filtros: Dict = None, include_sectores: bool = False, include_direccion: bool = False) -> Dict:
-        """Obtiene todos los usuarios con opción de incluir sectores y dirección."""
+    def find_all(self, filtros: Dict = None, include_direccion: bool = False) -> Dict:
+        """
+        Obtiene todos los usuarios, incluyendo siempre sus relaciones (rol, turno, sectores)
+        en una única consulta optimizada por cada usuario.
+        """
         try:
-            select_query = "*, roles(codigo, nombre, nivel), turno:turno_id(nombre, hora_inicio, hora_fin)"
+            select_query = "*, roles(*), turno:turno_id(*), sectores:usuario_sectores(sectores(*))"
             if include_direccion:
-                select_query += ", direccion:usuario_direccion(*)"
+                select_query += ", direccion:direccion_id(*)"
 
             query = self.db.table(self.get_table_name()).select(select_query)
 
@@ -148,17 +145,10 @@ class UsuarioModel(BaseModel):
             response = query.execute()
             usuarios = response.data
 
-            if include_sectores and usuarios:
-                from app.models.usuario_sector import UsuarioSectorModel
-                usuario_sector_model = UsuarioSectorModel()
-
-                for usuario in usuarios:
-                    sectores_result = usuario_sector_model.find_by_usuario(usuario['id'])
-                    if sectores_result.get('success'):
-                        sectores = [item['sectores'] for item in sectores_result['data'] if item.get('sectores')]
-                        usuario['sectores'] = sectores
-                    else:
-                        usuario['sectores'] = []
+            # Aplanar la estructura de sectores para cada usuario
+            for usuario in usuarios:
+                if 'sectores' in usuario:
+                    usuario['sectores'] = [s['sectores'] for s in usuario['sectores'] if s.get('sectores')]
 
             return {'success': True, 'data': usuarios}
 

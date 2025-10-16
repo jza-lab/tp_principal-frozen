@@ -271,7 +271,7 @@
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h2 class="h4 mb-0">Autorizaciones Pendientes</h2>
                     {% set can_request = has_permission('solicitar_permisos')|trim == 'True' %}
-                    <a href="{{ url_for('admin_usuario.nueva_autorizacion') if can_request else '#' }}" class="btn btn-primary {% if not can_request %}disabled{% endif %}">
+                    <a href="{{ url_for('admin_autorizacion.nueva_autorizacion') if can_request else '#' }}" class="btn btn-primary {% if not can_request %}disabled{% endif %}">
                         <i class="bi bi-plus-circle me-1"></i>
                         Nueva Autorización
                     </a>
@@ -293,8 +293,8 @@
 </div>
 
 <script>
-    const URL_TOTEM_ACTIVITY = "{{ url_for('admin_usuario.obtener_actividad_totem') }}";
-    const URL_WEB_ACTIVITY = "{{ url_for('admin_usuario.obtener_actividad_web') }}";
+    const URL_TOTEM_ACTIVITY = "{{ url_for('api.obtener_actividad_totem') }}";
+    const URL_WEB_ACTIVITY = "{{ url_for('api.obtener_actividad_web') }}";
 </script>
 <script src="{{ url_for('static', filename='js/usuarios/habilitarUsuario.js') }}"></script>
 <script src="{{ url_for('static', filename='js/usuarios/listarUsuarios.js') }}"></script>
