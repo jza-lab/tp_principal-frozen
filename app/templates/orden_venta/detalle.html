@@ -176,7 +176,7 @@
                             <td>
                                 <div class="fw-bold">{{ item.producto_nombre.nombre or 'N/A' }}</div>
                             </td>
-                            <td>{{ item.cantidad }} u.</td>
+                            <td>{{ item.cantidad }} {{ item.producto_nombre.unidad_medida or 'u.' }}</td>
                             <td>
                                 {% set item_estado_config = {
                                 'PENDIENTE': {'class': 'text-secondary', 'icon': 'clock'},
