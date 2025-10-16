@@ -3,7 +3,7 @@ function eliminarProducto(id) {
     const body = '¿Estás seguro de que quieres inhabilitar este producto?';
 
     showConfirmationModal(title, body, () => {
-        const url = `/api/productos/catalogo/eliminar/${id}`;
+        const url = `/catalogo/eliminar/${id}`;
 
         fetch(url, {
             method: 'DELETE',

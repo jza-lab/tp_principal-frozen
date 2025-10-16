@@ -3,7 +3,7 @@ function habilitarProducto(id) {
     const body = '¿Estás seguro de que quieres habilitar este producto?';
 
     showConfirmationModal(title, body, () => {
-        const url = `/api/productos/catalogo/habilitar/${id}`;
+        const url = `/catalogo/habilitar/${id}`;
 
         fetch(url, {
             method: 'POST',
