@@ -102,7 +102,7 @@ class PedidoController(BaseController):
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
-    def crear_pedido_con_items(self, form_data: Dict, usuario_id: int) -> tuple:
+    def crear_pedido_con_items(self, form_data: Dict) -> tuple:
         """
         Valida y crea un nuevo pedido con sus items, verificando el stock previamente.
         Si todo el stock está disponible, lo marca como 'COMPLETADO' y despacha el stock.

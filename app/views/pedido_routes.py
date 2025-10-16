@@ -1,10 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
+import os
+from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, session, jsonify
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
 from app.utils.decorators import permission_required
 import re
 from datetime import datetime
-
+import base64
 orden_venta_bp = Blueprint('orden_venta', __name__, url_prefix='/orden-venta')
 
 controller = PedidoController()
@@ -83,7 +84,7 @@ def nueva():
         if not usuario_id:
             return jsonify({"success": False, "error": "Sesión expirada"}), 401
         
-        response, status_code = controller.crear_pedido_con_items(json_data, usuario_id)
+        response, status_code = controller.crear_pedido_con_items(json_data)
 
         if status_code < 300:
             nuevo_pedido = response.get('data', {})
@@ -108,6 +109,12 @@ def editar(id):
     
     pedido = pedido_resp.get('data')
     estados_permitidos = ['PENDIENTE', 'PLANIFICACION']
+
+    
+    cliente_resp, _ = cliente_controller.obtener_cliente(pedido.get('id_cliente'))
+    cliente= cliente_resp.get('data')
+    cuit = cliente['cuit']
+    cliente['cuit']= cuit.replace('-', '')
     
     if pedido.get('estado') not in estados_permitidos:
         flash(f"No se puede editar un pedido en estado '{pedido.get('estado')}'.", 'warning')
@@ -118,7 +125,7 @@ def editar(id):
         if not json_data:
             return jsonify({"success": False, "error": "Datos no válidos"}), 400
         
-        response_data, status_code = controller.actualizar_pedido_con_items(id, json_data)
+        response_data, status_code = controller.actualizar_pedido_con_items(id, json_data, pedido.get('estado'))
         if status_code < 300:
             return jsonify({'success': True, 'message': 'Pedido actualizado.', 'redirect_url': url_for('orden_venta.detalle', id=id)}), 200
         else:
@@ -128,7 +135,7 @@ def editar(id):
     hoy = datetime.now().strftime('%Y-%m-%d')
     form_data_resp, _ = controller.obtener_datos_para_formulario()
     productos = form_data_resp.get('data', {}).get('productos', [])
-    return render_template('orden_venta/formulario.html', pedido=pedido, productos=productos, is_edit=True, today=hoy)
+    return render_template('orden_venta/formulario.html', pedido=pedido, productos=productos, is_edit=True, today=hoy, cliente = cliente)
 
 @orden_venta_bp.route('/<int:id>/detalle')
 @permission_required(accion='ver_ordenes_venta')
@@ -221,3 +228,40 @@ def completar(id):
     else:
         flash(response.get('error'), 'error')
     return redirect(url_for('orden_venta.listar'))
+
+
+@orden_venta_bp.route('/api/<int:id>/generar_factura_html', methods=['GET'])
+@permission_required(accion='ver_ordenes_venta')
+def generar_factura_html(id):
+
+    """
+    Ruta API para obtener el contenido HTML PÚRO de la factura.
+    """
+    response, status_code = controller.obtener_pedido_por_id(id)
+
+    if status_code != 200:
+        return jsonify({'success': False, 'error': 'Pedido no encontrado para generar factura.'}), 404
+    
+    pedido_data = response.get('data')
+    if pedido_data:
+        pedido_data['emisor'] = {
+            'ingresos_brutos': 'XX-XXXXXXX-X',
+            'inicio_actividades': '2020-01-01',
+            'cae': '00000000000000', # Valores de ejemplo o obtenidos de otra fuente
+            'vencimiento_cae': '2025-10-31'
+        }
+
+    # Convertir las fechas a objetos datetime si son strings ISO (necesario para strftime en Jinja)
+    if pedido_data and pedido_data.get('created_at') and isinstance(pedido_data['created_at'], str):
+        try:
+            pedido_data['created_at'] = datetime.fromisoformat(pedido_data['created_at'])
+        except ValueError:
+            pass 
+
+    # Renderiza la plantilla sin la maquetación base
+    rendered_html = render_template('orden_venta/factura_pedido.html', pedido=pedido_data)
+    
+    return jsonify({
+        'success': True,
+        'html': rendered_html
+    }), 200

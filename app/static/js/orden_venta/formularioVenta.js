@@ -291,7 +291,7 @@ async function handleSubmit(event) {
 
     try {
         const direccionParaVerificar = payload.direccion_entrega;
-        const verificationUrl = "/admin/usuarios/verificar_direccion";
+        const verificationUrl = "/api/validar/direccion";
 
         const verificationResponse = await fetch(verificationUrl, {
             method: 'POST',
@@ -418,6 +418,12 @@ async function enviarDatos(payload) {
 
 
 function buildPayload() {
+    function cleanCurrency(value) {
+        if (!value) return 0;
+        // 1. Remover $ y espacios. 2. Reemplazar punto (miles) por nada. 3. Reemplazar coma (decimal) por punto.
+        const cleaned = value.toString().replace(/[$\s]/g, '').replace(/\./g, '').replace(',', '.');
+        return parseFloat(cleaned) || 0;
+    }
 
     const cuilParte1 = document.getElementById('cuil_parte1').value;
     const cuilParte2 = document.getElementById('cuil_parte2').value;
@@ -430,7 +436,7 @@ function buildPayload() {
         fecha_solicitud: document.getElementById('fecha_solicitud').value,
         fecha_requerido: document.getElementById('fecha_requerido').value,
         estado: document.getElementById('estado') ? document.getElementById('estado').value : 'PENDIENTE',
-        precio_orden: parseFloat(document.getElementById('total-final').value) || 0,
+        precio_orden: cleanCurrency(document.getElementById('total-final').value),
         comentarios_adicionales: document.getElementById('comentarios_adicionales').value,
         direccion_entrega: {
             calle: document.getElementById('calle').value,

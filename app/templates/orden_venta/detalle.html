@@ -3,7 +3,8 @@
 {% block title %}Pedido PED-{{ pedido.id }} - Sistema Frozen{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+<div
+    class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom page-content">
     <div>
         <h1 class="h2 mb-1">
             Pedido <code class="text-muted">PED-{{ pedido.id }}</code>
@@ -17,21 +18,22 @@
     </div>
 </div>
 
-<div class="row">
+<div class="row page-content">
     <div class="col-lg-8">
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Información General del Pedido</h5>
                 {% set estado_config = {
-                    'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
-                    'PLANIFICACION': {'class': 'bg-warning-soft text-warning', 'icon': 'calendar-check'},
-                    'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                    'LISTO_PARA_ARMAR': {'class': 'bg-success-soft text-succes', 'icon': 'tools'},
-                    'LISTO_PARA_ENTREGA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
-                    'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
-                    'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
+                'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
+                'PLANIFICACION': {'class': 'bg-warning-soft text-warning', 'icon': 'calendar-check'},
+                'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
+                'LISTO_PARA_ARMAR': {'class': 'bg-success-soft text-succes', 'icon': 'tools'},
+                'LISTO_PARA_ENTREGA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
+                'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
+                'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                 } %}
-                {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon':
+                'question-circle'}) %}
                 <span class="badge {{ config.class }} fs-6">
                     <i class="bi bi-{{ config.icon }} me-1"></i>{{ pedido.estado.replace('_', ' ') }}
                 </span>
@@ -62,7 +64,7 @@
                                     {{ pedido.cliente.cuit | default('N/A', true) }}
                                 </p>
                             </div>
-                            
+
                         </div>
                         <div class="row">
                             <div class="col-md-6">
@@ -177,13 +179,14 @@
                             <td>{{ item.cantidad }} u.</td>
                             <td>
                                 {% set item_estado_config = {
-                                    'PENDIENTE': {'class': 'text-secondary', 'icon': 'clock'},
-                                    'EN_PRODUCCION': {'class': 'text-primary', 'icon': 'play-circle'},
-                                    'ALISTADO': {'class': 'text-info', 'icon': 'box-seam'},
-                                    'COMPLETADO': {'class': 'text-success', 'icon': 'check-circle'},
-                                    'CANCELADO': {'class': 'text-danger', 'icon': 'x-circle'}
+                                'PENDIENTE': {'class': 'text-secondary', 'icon': 'clock'},
+                                'EN_PRODUCCION': {'class': 'text-primary', 'icon': 'play-circle'},
+                                'ALISTADO': {'class': 'text-info', 'icon': 'box-seam'},
+                                'COMPLETADO': {'class': 'text-success', 'icon': 'check-circle'},
+                                'CANCELADO': {'class': 'text-danger', 'icon': 'x-circle'}
                                 } %}
-                                {% set item_config = item_estado_config.get(item.estado, {'class': 'text-dark', 'icon': 'question-circle'}) %}
+                                {% set item_config = item_estado_config.get(item.estado, {'class': 'text-dark', 'icon':
+                                'question-circle'}) %}
                                 <span class="{{ item_config.class }}">
                                     <i class="bi bi-{{ item_config.icon }} me-1"></i>{{ item.estado.replace('_', ' ') }}
                                 </span>
@@ -211,7 +214,9 @@
 
     <div class="col-lg-4">
         <div class="card">
-            <div class="card-header"><h5 class="mb-0">Acciones</h5></div>
+            <div class="card-header">
+                <h5 class="mb-0">Acciones</h5>
+            </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
                     <!-- ACCIONES CONDICIONALES POR ESTADO -->
@@ -220,40 +225,59 @@
                     <form method="POST" action="{{ url_for('orden_venta.planificar', id=pedido.id) }}" class="d-grid">
                         <div class="mb-3">
                             <label for="fecha_estimativa_proceso" class="form-label">Fecha Estimada de Proceso</label>
-                            <input type="date" class="form-control" id="fecha_estimativa_proceso" name="fecha_estimativa_proceso" required>
+                            <input type="date" class="form-control" id="fecha_estimativa_proceso"
+                                name="fecha_estimativa_proceso" required>
                         </div>
-                        <button type="submit" class="btn btn-primary"><i class="bi bi-calendar-check me-1"></i>Pasar a Planificación</button>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-calendar-check me-1"></i>Pasar a
+                            Planificación</button>
                     </form>
-                    
+
                     {% elif pedido.estado == 'PLANIFICACION' %}
-                    <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}" class="confirm-form d-grid"
-                          data-title="Iniciar Proceso" data-message="¿Está seguro de que desea iniciar el proceso de producción para este pedido?" data-button-type="success">
-                        <button type="submit" class="btn btn-success"><i class="bi bi-play-fill me-1"></i>Iniciar Proceso y Crear OPs</button>
+                    <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}"
+                        class="confirm-form d-grid" data-title="Iniciar Proceso"
+                        data-message="¿Está seguro de que desea iniciar el proceso de producción para este pedido?"
+                        data-button-type="success">
+                        <button type="submit" class="btn btn-success"><i class="bi bi-play-fill me-1"></i>Iniciar
+                            Proceso y Crear OPs</button>
                     </form>
 
                     {% elif pedido.estado == 'LISTO_PARA_ARMAR' %}
-                     <form method="POST" action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}" class="confirm-form d-grid"
-                          data-title="Preparar para Entrega" data-message="Esta acción moverá el pedido a 'LISTO PARA ENTREGAR' y descontará el stock de los productos del inventario. ¿Está seguro?" data-button-type="info">
-                        <button type="submit" class="btn btn-info"><i class="bi bi-box-seam me-1"></i>Preparar para Entrega</button>
+                    <form method="POST" action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}"
+                        class="confirm-form d-grid" data-title="Preparar para Entrega"
+                        data-message="Esta acción moverá el pedido a 'LISTO PARA ENTREGAR' y descontará el stock de los productos del inventario. ¿Está seguro?"
+                        data-button-type="info">
+                        <button type="submit" class="btn btn-info"><i class="bi bi-box-seam me-1"></i>Preparar para
+                            Entrega</button>
                     </form>
 
                     {% elif pedido.estado == 'LISTO_PARA_ENTREGA' %}
-                    <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}" class="confirm-form d-grid"
-                          data-title="Completar Pedido" data-message="¿Confirma que el pedido ha sido entregado? Esta acción lo marcará como 'COMPLETADO'." data-button-type="success">
-                        <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-1"></i>Marcar como Completado</button>
+                    <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}"
+                        class="confirm-form d-grid" data-title="Completar Pedido"
+                        data-message="¿Confirma que el pedido ha sido entregado? Esta acción lo marcará como 'COMPLETADO'."
+                        data-button-type="success">
+                        <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-1"></i>Marcar como
+                            Completado</button>
                     </form>
                     {% endif %}
-                    
+
                     <hr>
                     <!-- ACCIONES GENERALES -->
                     {% if pedido.estado in ['PENDIENTE', 'PLANIFICACION'] %}
-                    <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}" class="btn btn-outline-primary"><i class="bi bi-pencil me-1"></i>Editar Pedido</a>
+                    <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}" class="btn btn-outline-primary"><i
+                            class="bi bi-pencil me-1"></i>Editar Pedido</a>
                     {% endif %}
+                    
+                    <button type="button" id="btn-imprimir-factura" class="btn btn-primary" {% if pedido.estado not in ['LISTO_PARA_ENTREGA', 'LISTO_PARA_ARMAR', 'COMPLETADO'] %} disabled {% endif %}>
+                        <i class="bi bi-printer me-1"></i>Imprimir Factura
+                    </button>
+                    
 
                     {% if pedido.estado not in ['COMPLETADO', 'CANCELADO'] %}
-                    <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}" class="confirm-form d-grid"
-                          data-title="Confirmar Cancelación" data-message="¿Está seguro? Esta acción no se puede deshacer." data-button-type="danger">
-                        <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Cancelar Pedido</button>
+                    <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
+                        class="confirm-form d-grid" data-title="Confirmar Cancelación"
+                        data-message="¿Está seguro? Esta acción no se puede deshacer." data-button-type="danger">
+                        <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Cancelar
+                            Pedido</button>
                     </form>
                     {% endif %}
                 </div>
@@ -261,21 +285,77 @@
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    // Un solo manejador para todos los formularios de confirmación
-    document.querySelectorAll('.confirm-form').forEach(form => {
-        form.addEventListener('submit', function (e) {
-            e.preventDefault();
-            const title = form.dataset.title || 'Confirmar Acción';
-            const message = form.dataset.message || '¿Está seguro?';
-            const buttonType = form.dataset.buttonType || 'primary';
-            showConfirmationModal(title, message, () => form.submit(), buttonType);
-        });
+    // URL de la API para obtener el HTML de la factura
+    const FACTURA_API_URL = "{{ url_for('orden_venta.generar_factura_html', id=pedido.id) }}";
+
+    // Función para imprimir el contenido HTML generado por el backend
+    function printHtmlContent(htmlContent) {
+
+        // 1. Crea un iframe invisible y lo añade al body
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none'; // Importante: hacerlo invisible
+        iframe.id = 'factura-print-frame';
+        document.body.appendChild(iframe);
+
+        // 2. Obtiene el objeto document dentro del iframe
+        const iframeDocument = iframe.contentWindow.document;
+
+        // 3. Escribe el HTML de la factura en el documento del iframe
+        iframeDocument.open();
+        iframeDocument.write(htmlContent); // Esto es el HTML de la factura
+        iframeDocument.close();
+
+        // 4. Llama a print() en el iframe. Esto mantiene el diálogo de impresión en la misma pestaña.
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+
+        // 5. Limpieza: Elimina el iframe después de un breve retraso para asegurar que el diálogo de impresión se inicialice.
+        setTimeout(() => {
+            document.body.removeChild(iframe);
+        }, 500); // 500ms es suficiente para que el diálogo se abra
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // URL de la API para obtener el HTML de la factura
+        const FACTURA_API_URL = "{{ url_for('orden_venta.generar_factura_html', id=pedido.id) }}";
+
+        // Manejador del botón de impresión
+        const printButton = document.getElementById('btn-imprimir-factura');
+        if (printButton) {
+            printButton.addEventListener('click', async () => {
+
+                printButton.disabled = true;
+                const originalHtml = printButton.innerHTML;
+                printButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generando...';
+
+                try {
+                    const response = await fetch(FACTURA_API_URL);
+                    const result = await response.json();
+
+                    if (result.success) {
+                        // LLAMA A LA NUEVA FUNCIÓN BASADA EN IFRAME
+                        printHtmlContent(result.html);
+                    } else {
+                        showNotificationModal('Error de Factura', result.error || 'No se pudo generar el HTML de la factura.', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error AJAX al generar factura:', error);
+                    showNotificationModal('Error de Conexión', 'Fallo al contactar al servidor para generar la factura.', 'error');
+                } finally {
+                    // Restaurar el botón al estado normal
+                    // Usamos un pequeño delay aquí también para que el diálogo de impresión no se interrumpa
+                    setTimeout(() => {
+                        printButton.disabled = false;
+                        printButton.innerHTML = originalHtml;
+                    }, 500);
+                }
+            });
+        }
     });
-});
 </script>
 {% endblock %}

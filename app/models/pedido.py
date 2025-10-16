@@ -97,11 +97,11 @@ class PedidoModel(BaseModel):
     def get_one_with_items(self, pedido_id: int) -> Dict:
         """Obtiene un pedido con sus items, especificando la relación."""
         try:
-            # --- LÍNEA CORREGIDA ---
+            
             result = self.db.table(self.get_table_name()).select(
-                '*, cliente:clientes(*), items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre)), direccion:usuario_direccion(*)'
+                '*, cliente:clientes(*), items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre, precio_unitario, unidad_medida)), direccion:usuario_direccion(*)'
             ).eq('id', pedido_id).single().execute()
-            # ------------------------
+            
 
             if result.data:
                 return {'success': True, 'data': result.data}
