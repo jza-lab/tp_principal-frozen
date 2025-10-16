@@ -1,22 +1,26 @@
 from decimal import Decimal
 from datetime import date, datetime
 from uuid import UUID
+from typing import Any
 
-def safe_serialize(obj):
-    """Serializa de forma segura cualquier objeto a tipos JSON-compatibles"""
-    if obj is None:
-        return None
-    elif isinstance(obj, (dict)):
+def safe_serialize(obj: Any) -> Any:
+    """
+    Serializa de forma recursiva un objeto a tipos de datos compatibles con JSON.
+
+    Maneja tipos comunes como datetime, date, Decimal y UUID, convirtiéndolos
+    a strings. Es útil para preparar datos complejos antes de enviarlos
+    como respuesta JSON.
+    """
+    if isinstance(obj, (dict)):
         return {k: safe_serialize(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple)):
+    if isinstance(obj, (list, tuple)):
         return [safe_serialize(item) for item in obj]
-    elif isinstance(obj, (Decimal, float, int)):
-        return float(obj) if isinstance(obj, Decimal) else obj
-    elif isinstance(obj, (date, datetime)):
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, (datetime, date)):
         return obj.isoformat()
-    elif isinstance(obj, UUID):
+    if isinstance(obj, UUID):
         return str(obj)
-    elif hasattr(obj, 'isoformat'):  # Para otros objetos con isoformat
-        return obj.isoformat()
-    else:
-        return str(obj)  # Fallback seguro
+    
+    # Devuelve el objeto sin cambios si ya es de un tipo compatible con JSON
+    return obj

@@ -2,10 +2,15 @@ from functools import wraps
 from flask import session, flash, redirect, url_for
 from app.utils.roles import get_redirect_url_by_role
 
-def roles_required(min_level=0, allowed_roles=None):
+def roles_required(min_level: int = 0, allowed_roles: list = None):
     """
-    Decorator mejorado que verifica permisos por nivel jerárquico o por roles específicos.
-    Un usuario debe cumplir AL MENOS UNA de las condiciones si se especifican ambas.
+    Decorador para restringir el acceso a rutas basado en el nivel jerárquico
+    o en una lista de roles permitidos.
+
+    Un usuario obtiene acceso si su rol es 'GERENTE', o si cumple al menos
+    una de las siguientes condiciones:
+    - Su nivel jerárquico es igual o superior a `min_level`.
+    - El código de su rol está en la lista `allowed_roles`.
     """
     def decorator(f):
         @wraps(f)
@@ -17,10 +22,12 @@ def roles_required(min_level=0, allowed_roles=None):
             user_role_code = session.get('rol')
             user_level = session.get('user_level', 0)
 
+            # El rol 'GERENTE' tiene acceso universal
             if user_role_code == 'GERENTE':
                 return f(*args, **kwargs)
 
             is_authorized = False
+            # Si no se especifica ninguna regla, se deniega el acceso por defecto
             if not min_level and not allowed_roles:
                 is_authorized = False
             else:
