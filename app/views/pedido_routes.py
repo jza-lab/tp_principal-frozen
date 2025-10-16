@@ -47,10 +47,10 @@ def listar():
     """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
     estado = request.args.get('estado')
     filtros = {'estado': estado} if estado else {}
-    
+
     response, _ = controller.obtener_pedidos(filtros)
     pedidos = []
-    
+
     if response.get('success'):
         todos_los_pedidos = response.get('data', [])
         # --- LÓGICA DE ORDENAMIENTO POR ESTADO ---
@@ -74,7 +74,7 @@ def listar():
 def nueva():
     """Gestiona la creación de un nuevo pedido de venta."""
     hoy = datetime.now().strftime('%Y-%m-%d')
-    
+
     if request.method == 'POST':
         json_data = request.get_json()
         if not json_data:
@@ -83,7 +83,7 @@ def nueva():
         usuario_id = session.get('usuario_id')
         if not usuario_id:
             return jsonify({"success": False, "error": "Sesión expirada"}), 401
-        
+
         response, status_code = controller.crear_pedido_con_items(json_data)
 
         if status_code < 300:
@@ -106,16 +106,16 @@ def editar(id):
     if not pedido_resp.get('success'):
         flash('Pedido no encontrado.', 'error')
         return redirect(url_for('orden_venta.listar'))
-    
+
     pedido = pedido_resp.get('data')
     estados_permitidos = ['PENDIENTE', 'PLANIFICACION']
 
-    
+
     cliente_resp, _ = cliente_controller.obtener_cliente(pedido.get('id_cliente'))
     cliente= cliente_resp.get('data')
     cuit = cliente['cuit']
     cliente['cuit']= cuit.replace('-', '')
-    
+
     if pedido.get('estado') not in estados_permitidos:
         flash(f"No se puede editar un pedido en estado '{pedido.get('estado')}'.", 'warning')
         return redirect(url_for('orden_venta.detalle', id=id))
@@ -124,7 +124,7 @@ def editar(id):
         json_data = request.get_json()
         if not json_data:
             return jsonify({"success": False, "error": "Datos no válidos"}), 400
-        
+
         response_data, status_code = controller.actualizar_pedido_con_items(id, json_data, pedido.get('estado'))
         if status_code < 300:
             return jsonify({'success': True, 'message': 'Pedido actualizado.', 'redirect_url': url_for('orden_venta.detalle', id=id)}), 200
@@ -205,7 +205,7 @@ def preparar_entrega(id):
     if not usuario_id:
         flash("Sesión expirada.", "error")
         return redirect(url_for("auth.login"))
-    
+
     response, _ = controller.preparar_para_entrega(id, usuario_id)
     if response.get('success'):
         flash(response.get('message'), 'success')
@@ -216,18 +216,17 @@ def preparar_entrega(id):
 @orden_venta_bp.route('/<int:id>/completar', methods=['POST'])
 @permission_required(accion='modificar_ordenes_venta')
 def completar(id):
-    """Finaliza el pedido, pasándolo a COMPLETADO."""
-    usuario_id = session.get("usuario_id")
-    if not usuario_id:
-        flash("Sesión expirada.", "error")
-        return redirect(url_for("auth.login"))
+    """Endpoint para marcar un pedido como COMPLETADO."""
+    usuario_id = session.get('usuario_id')
+    # Llama al NUEVO y correcto método del controlador
+    response, _ = controller.marcar_como_completado(id, usuario_id)
 
-    response, _ = controller.completar_pedido(id, usuario_id)
     if response.get('success'):
         flash(response.get('message'), 'success')
     else:
         flash(response.get('error'), 'error')
-    return redirect(url_for('orden_venta.listar'))
+
+    return redirect(url_for('orden_venta.detalle', id=id))
 
 
 @orden_venta_bp.route('/api/<int:id>/generar_factura_html', methods=['GET'])
@@ -241,7 +240,7 @@ def generar_factura_html(id):
 
     if status_code != 200:
         return jsonify({'success': False, 'error': 'Pedido no encontrado para generar factura.'}), 404
-    
+
     pedido_data = response.get('data')
     if pedido_data:
         pedido_data['emisor'] = {
@@ -256,11 +255,11 @@ def generar_factura_html(id):
         try:
             pedido_data['created_at'] = datetime.fromisoformat(pedido_data['created_at'])
         except ValueError:
-            pass 
+            pass
 
     # Renderiza la plantilla sin la maquetación base
     rendered_html = render_template('orden_venta/factura_pedido.html', pedido=pedido_data)
-    
+
     return jsonify({
         'success': True,
         'html': rendered_html
