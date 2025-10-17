@@ -20,7 +20,7 @@ def listar_usuarios():
     # Datos para modales o filtros en la vista
     turnos = usuario_controller.obtener_todos_los_turnos()
     sectores = usuario_controller.obtener_todos_los_sectores()
-    return render_template('usuarios/listar.html', usuarios=usuarios, turnos=turnos, sectores=sectores)
+    return render_template('usuarios/gestionEmpleados.html', usuarios=usuarios, turnos=turnos, sectores=sectores)
 
 @admin_usuario_bp.route('/<int:id>')
 @permission_any_of('ver_info_empleados', 'modificar_usuarios')
