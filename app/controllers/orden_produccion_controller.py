@@ -303,74 +303,67 @@ class OrdenProduccionController(BaseController):
     def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str) -> tuple:
         """
         Cambia el estado de una orden.
-        Si el estado es 'COMPLETADA', genera el lote de producto terminado Y LO RESERVA.
+        Si es 'COMPLETADA', crea el lote y lo deja 'RESERVADO' si está
+        vinculado a un pedido, o 'DISPONIBLE' si es para stock general.
         """
         try:
-            # --- Lógica para obtener la OP y validar estados (sin cambios) ---
             orden_result = self.obtener_orden_por_id(orden_id)
             if not orden_result.get('success'):
                 return self.error_response("Orden de producción no encontrada.", 404)
             orden_produccion = orden_result['data']
-
-            if nuevo_estado == 'EN_PROCESO' and orden_produccion['estado'] != 'LISTA PARA PRODUCIR':
-                return self.error_response(f"La orden debe estar en 'LISTA PARA PRODUCIR' para iniciarla.", 400)
+            estado_actual = orden_produccion['estado']
 
             if nuevo_estado == 'COMPLETADA':
-                if orden_produccion['estado'] != 'EN_PROCESO':
-                    return self.error_response(f"La orden debe estar en 'EN_PROCESO' para completarla.", 400)
+                if estado_actual != 'CONTROL_DE_CALIDAD':
+                    return self.error_response(f"La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
 
-                # A. Crear el lote de producto terminado (lógica existente)
+                # 1. Verificar si la OP está vinculada a ítems de pedido
+                items_a_surtir_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
+                items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
+
+                # 2. Decidir el estado inicial del lote
+                estado_lote_inicial = 'RESERVADO' if items_vinculados else 'DISPONIBLE'
+
+                # 3. Preparar y crear el lote con el estado decidido
                 datos_lote = {
                     'producto_id': orden_produccion['producto_id'],
                     'cantidad_inicial': orden_produccion['cantidad_planificada'],
                     'orden_produccion_id': orden_id,
                     'fecha_produccion': date.today().isoformat(),
-                    'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat()
+                    'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat(),
+                    'estado': estado_lote_inicial # <-- Pasamos el estado decidido
                 }
                 resultado_lote, status_lote = self.lote_producto_controller.crear_lote_desde_formulario(
-                    datos_lote,
-                    usuario_id=orden_produccion.get('usuario_creador_id', 1)
+                    datos_lote, usuario_id=orden_produccion.get('usuario_creador_id', 1)
                 )
-
                 if status_lote >= 400:
                     return self.error_response(f"Fallo al registrar el lote de producto: {resultado_lote.get('error')}", 500)
 
                 lote_creado = resultado_lote['data']
+                message_to_use = f"Orden completada. Lote N° {lote_creado['numero_lote']} creado como '{estado_lote_inicial}'."
 
-                # --- INICIO DE LA NUEVA LÓGICA DE RESERVA AUTOMÁTICA ---
-                # B. Encontrar los ítems de pedido que originaron esta OP
-                items_a_surtir_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
-                if items_a_surtir_res.get('success') and items_a_surtir_res.get('data'):
-                    items_a_surtir = items_a_surtir_res['data']
-
-                    # C. Crear un registro de reserva para cada ítem de pedido
-                    for item in items_a_surtir:
+                # 4. Si el lote se creó como RESERVADO, crear los registros de reserva
+                if estado_lote_inicial == 'RESERVADO':
+                    for item in items_vinculados:
                         datos_reserva = {
                             'lote_producto_id': lote_creado['id_lote'],
                             'pedido_id': item['pedido_id'],
                             'pedido_item_id': item['id'],
-                            'cantidad_reservada': item['cantidad'], # Asumimos que la OP cubre la cantidad exacta
-                            'usuario_reserva_id': orden_produccion.get('usuario_creador_id')
+                            'cantidad_reservada': float(item['cantidad']), # Asumimos que la OP cubre la cantidad del item
+                            'usuario_reserva_id': orden_produccion.get('usuario_creador_id', 1)
                         }
-                        # Usamos el modelo de reserva que está dentro del lote_producto_controller
+                        # Creamos la reserva directamente, sin descontar stock
                         self.lote_producto_controller.reserva_model.create(
                             self.lote_producto_controller.reserva_schema.load(datos_reserva)
                         )
-                        logger.info(f"Reserva creada para el item {item['id']} desde el lote {lote_creado['id_lote']}.")
+                    logger.info(f"Registros de reserva creados para el lote {lote_creado['numero_lote']}.")
+                    message_to_use += " y vinculado a los pedidos correspondientes."
 
-                    # D. Actualizar el estado del nuevo lote a 'RESERVADO'
-                    self.lote_producto_controller.model.update(lote_creado['id_lote'], {'estado': 'RESERVADO'}, 'id_lote')
-                    logger.info(f"Lote {lote_creado['numero_lote']} marcado como RESERVADO.")
-                # --- FIN DE LA NUEVA LÓGICA ---
-
-            # 3. Cambiar el estado de la OP en la base de datos (sin cambios)
+            # 5. Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
             result = self.model.cambiar_estado(orden_id, nuevo_estado)
-
             if result.get('success'):
-                message_to_use = f"Estado actualizado a {nuevo_estado.replace('_', ' ')}."
-                if nuevo_estado == 'COMPLETADA':
-                    message_to_use = f"Orden completada. Lote N° {lote_creado['numero_lote']} creado y reservado para el pedido."
-
+                if nuevo_estado != 'COMPLETADA':
+                    message_to_use = f"Estado actualizado a {nuevo_estado.replace('_', ' ')}."
                 return self.success_response(data=result.get('data'), message=message_to_use)
             else:
                 return self.error_response(result.get('error', 'Error al cambiar el estado.'), 500)

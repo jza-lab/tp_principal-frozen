@@ -98,6 +98,7 @@ class InventarioController(BaseController):
             logger.error(f"Error crítico al reservar insumos para OP {orden_produccion['id']}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
+
     def verificar_stock_para_op(self, orden_produccion: Dict) -> dict:
             """
             "Dry Run": Verifica si hay stock suficiente para una OP sin reservar.
@@ -115,7 +116,7 @@ class InventarioController(BaseController):
 
                 ingredientes = ingredientes_result.get('data', [])
                 insumos_faltantes = []
-                
+
                 # Definir un umbral de tolerancia para errores de punto flotante
                 TOLERANCE = 1e-9 # 0.000000001 - Cualquier cosa menor a esto es 0
 
@@ -210,10 +211,10 @@ class InventarioController(BaseController):
 
             if result['success']:
                 logger.info(f"Lote creado exitosamente: {result['data']['id_lote']}")
-                
+
                 # Actualizar stock de seccion insumo automáticamente
                 self.insumo_controller.actualizar_stock_insumo(validated_data['id_insumo'])
-                
+
                 serialized_data = self._serialize_data(result['data'])
                 return self.success_response(
                     data=serialized_data,
@@ -471,7 +472,7 @@ class InventarioController(BaseController):
         except Exception as e:
             logger.error(f"Error obteniendo lotes para la vista: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
-        
+
     def obtener_insumos_bajo_stock(self) -> tuple:
         """
         Obtiene la lista de insumos con estado de stock 'BAJO'.
@@ -484,9 +485,9 @@ class InventarioController(BaseController):
             if stock_bajo_result.get('success'):
                 insumos_bajo_stock = stock_bajo_result.get('data', [])
                 return self.success_response(data=insumos_bajo_stock)
-            
+
             return self.error_response(stock_bajo_result.get('error', 'Error al obtener insumos bajo stock'), 500)
-            
+
         except Exception as e:
             logger.error(f"Error obteniendo lista de insumos bajo stock: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)

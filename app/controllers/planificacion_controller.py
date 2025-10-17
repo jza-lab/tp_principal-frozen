@@ -115,19 +115,30 @@ class PlanificacionController(BaseController):
 
     def mover_orden(self, op_id: int, nuevo_estado: str) -> tuple:
         """
-        Orquesta el cambio de estado de una OP, delegando la lógica
-        al controlador de órdenes de producción.
+        Orquesta el cambio de estado de una OP.
+        Es inteligente: si el estado es 'COMPLETADA', llama al método complejo.
+        Si no, llama al método simple.
         """
         if not nuevo_estado:
             return self.error_response("El 'nuevo_estado' es requerido.", 400)
 
         try:
-            # Delegamos la lógica al controlador que maneja la entidad de OP
-            resultado = self.orden_produccion_controller.cambiar_estado_orden_simple(op_id, nuevo_estado)
+            resultado = {}
+            # --- LÓGICA DE DECISIÓN ---
+            # Si la tarjeta se mueve a una columna que implica una lógica de negocio compleja...
+            if nuevo_estado == 'COMPLETADA':
+                # Llamamos al método que sabe cómo crear lotes y reservas.
+                # NOTA: Este método devuelve una tupla (response, status), la manejamos diferente.
+                response_dict, _ = self.orden_produccion_controller.cambiar_estado_orden(op_id, nuevo_estado)
+                resultado = response_dict
+            else:
+                # Para cualquier otro movimiento en el Kanban, usamos el método simple.
+                resultado = self.orden_produccion_controller.cambiar_estado_orden_simple(op_id, nuevo_estado)
 
             if resultado.get('success'):
                 return self.success_response(data=resultado.get('data'))
             else:
+                # Usamos 500 para errores de negocio complejos que pueden ocurrir.
                 return self.error_response(resultado.get('error'), 500)
 
         except Exception as e:
