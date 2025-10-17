@@ -213,7 +213,7 @@ Agregar nuevo cliente
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"  minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}" title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
+                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"  minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|([A-Za-z]\d{4})|\d{4}" title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
                                             placeholder="Código Postal" value="{{ (cliente.get('direccion') or {}).get('codigo_postal', '') if cliente and cliente.direccion }}" required>
                                         <label for="codigo_postal">
                                             <i class="bi bi-mailbox me-1"></i>Código Postal
