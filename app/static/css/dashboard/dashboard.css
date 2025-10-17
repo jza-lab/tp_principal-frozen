@@ -1,0 +1,157 @@
+/* ================================================= */
+/* ESTILOS DE DASHBOARD: ELEVACIÓN Y CONTRASTE (Respeta la estética) */
+/* ================================================= */
+
+/* 1. Tarjetas de Estadísticas (stat-card) */
+.card {
+    /* Mantiene bordes suaves y fondo blanco */
+    border: 1px solid rgba(222, 226, 230, 0.5) !important; 
+    border-radius: 12px;
+    background-color: var(--frozen-card-bg) !important;
+    
+    /* Sombra más notable pero limpia, para efecto de "flotación" */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); 
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.5, 1);
+    position: relative;
+    /* Añadimos un borde animado en la parte superior para acento */
+    overflow: hidden;
+}
+
+/* Borde superior de acento para las tarjetas de estado (visible en hover) */
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background-color: var(--app-primary);
+    transition: transform 0.4s ease;
+    transform: scaleX(0);
+    transform-origin: left;
+    z-index: 2;
+}
+
+.card:hover {
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15); /* Sombra más fuerte */
+    transform: translateY(-4px);
+    border-color: rgba(49, 49, 49, 0.2) !important;
+}
+
+/* Revelar el borde de acento en hover */
+.stat-card:hover::before {
+    transform: scaleX(1);
+}
+
+/* 2. Valores de Estado (Tamaño y Color) */
+.stat-label {
+    color: var(--frozen-text-secondary) !important;
+    font-weight: 600 !important;
+    font-size: 0.9rem !important;
+}
+
+.stat-value {
+    font-size: 2rem !important;
+    font-weight: 800 !important;
+    color: var(--app-primary) !important; /* Usar el color principal para los números */
+    line-height: 1.1 !important;
+}
+
+/* Asistencia (Tamaño Extra Grande) */
+.stat-value.display-4 {
+    font-size: 3.5rem !important; 
+}
+
+
+/* 3. Encabezados de Tarjeta (Limpieza Visual) */
+.card-header {
+    background-color: var(--frozen-card-bg) !important;
+    border-bottom: 1px solid #f0f0f0 !important; /* Borde muy sutil */
+    padding: 1.25rem 1.5rem !important; /* Más padding para aire */
+    font-weight: 700;
+}
+
+/* 4. Listas de Riesgos y Notificaciones (Separación por aire, no por líneas) */
+.list-group-flush .list-group-item {
+    background-color: transparent !important;
+    border: none !important; /* Elimina todas las líneas */
+    padding: 0.7rem 1.25rem !important;
+    color: var(--frozen-text-primary) !important;
+    transition: background-color 0.2s ease;
+}
+
+.list-group-item:hover {
+    background-color: #f8f9fa !important; /* Un gris muy claro en hover */
+    /* Añadir un sutil borde a la izquierda en hover */
+    border-left: 4px solid var(--accent-green) !important;
+    padding-left: 0.95rem !important; /* Compensar el padding */
+}
+
+/* 5. Estilos de Badge y Botones */
+
+/* Botón Iniciar Orden (Destacar sutilmente) */
+.btn-success {
+    box-shadow: 0 2px 8px rgba(28, 200, 138, 0.3) !important;
+}
+
+/* Badges de Órdenes (Más oscuros para contraste) */
+.badge.bg-primary-soft {
+    background-color: rgba(49, 49, 49, 0.15) !important; 
+    color: var(--app-primary) !important;
+}
+
+.badge.bg-secondary-soft {
+    background-color: rgba(108, 117, 125, 0.1) !important;
+    color: var(--frozen-text-secondary) !important;
+}
+
+/* Resumen de Riesgos: Hacer los números más grandes */
+.list-group-item .badge {
+    font-size: 0.9rem !important; /* Mantiene el tamaño grande */
+    padding: 0.4em 0.8em;
+}
+
+/* Asegurar que todos los enlaces internos de las tarjetas mantengan el color del texto */
+.card a {
+    color: inherit;
+    text-decoration: none;
+}
+
+/* ================================================= */
+/* ESTILOS ESPECÍFICOS PARA ALERTAS CRÍTICAS (ANIMACIÓN DE INICIO) */
+/* ================================================= */
+
+/* Animación de Parpadeo para Alertar sobre Stock Crítico */
+@keyframes flash-critico {
+    0%, 100% {
+        /* Estado inicial/final: Sombra y borde normales de la card */
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); 
+        border-color: rgba(222, 226, 230, 0.5) !important;
+    }
+    25% {
+        /* Pico de brillo: Sombra roja intensa */
+        box-shadow: 0 0 15px rgba(220, 53, 69, 0.8);
+        border-color: rgba(220, 53, 69, 0.7) !important;
+    }
+    50% {
+        /* Vuelta a la normalidad (o casi) */
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        border-color: rgba(222, 226, 230, 0.5) !important;
+    }
+    75% {
+        /* Segundo pulso, más sutil */
+        box-shadow: 0 0 8px rgba(220, 53, 69, 0.4);
+        border-color: rgba(220, 53, 69, 0.3) !important;
+    }
+}
+
+/* Clase para aplicar la animación */
+.alerta-flash.alerta-critica {
+    animation: flash-critico 3s ease-in-out; /* Duración de 3 segundos */
+}
+
+/* Estilo base para que las cards críticas se destaquen incluso sin animación */
+.alerta-critica {
+    border: 2px solid #dc3545 !important; /* Borde rojo más grueso (color danger de Bootstrap) */
+    box-shadow: 0 4px 10px rgba(220, 53, 69, 0.2) !important; /* Sombra sutil roja */
+}
