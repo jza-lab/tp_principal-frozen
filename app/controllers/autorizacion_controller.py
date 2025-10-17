@@ -48,7 +48,7 @@ class AutorizacionController(BaseController):
         usuario_id = data.get('usuario_id')
         
         validation_result = None
-        if tipo_autorizacion == 'TARDANZA':
+        if tipo_autorizacion == 'LLEGADA_TARDIA':
             validation_result = self._validar_llegada_tardia(usuario_id)
         elif tipo_autorizacion == 'HORAS_EXTRAS':
             turno_autorizado_details = turno_auth_result['data']
@@ -59,10 +59,6 @@ class AutorizacionController(BaseController):
 
         # 4. Creación del registro si todas las validaciones pasan
         return self.model.create(data)
-
-    def obtener_autorizaciones_pendientes(self) -> dict:
-        """Obtiene todas las autorizaciones con estado 'PENDIENTE'."""
-        return self.model.find_all_pending()
 
     def obtener_todas_las_autorizaciones(self) -> dict:
         """Obtiene un historial de todas las autorizaciones agrupadas por estado."""

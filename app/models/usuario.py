@@ -136,7 +136,7 @@ class UsuarioModel(BaseModel):
             if include_direccion:
                 select_query += ", direccion:direccion_id(*)"
 
-            query = self.db.table(self.get_table_name()).select(select_query)
+            query = self.db.table(self.get_table_name()).select(select_query.replace("turno:turno_id(*)", "turno:turno_id(*)"))
 
             if filtros:
                 for key, value in filtros.items():

@@ -261,7 +261,7 @@ class FacialController:
         try:
             logger.info("Recargando perfiles faciales desde la base de datos...")
             response = self.db.table("usuarios").select(
-                "id, email, nombre, apellido, facial_encoding, role_id, turno_id, roles(*), usuarios_turnos(*)"
+                "id, email, nombre, apellido, facial_encoding, role_id, turno_id, roles(*), turno:turno_id(*)"
             ).not_.is_("facial_encoding", "null").eq("activo", True).execute()
             
             if response.data:

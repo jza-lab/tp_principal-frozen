@@ -205,8 +205,8 @@
                 <ul class="list-group list-group-flush list-group-compact">
                     {% for notificacion in notificaciones %}
                     <li class="list-group-item d-flex align-items-start py-2">
-                        <span class="me-2 text-{{ 'danger' if notificacion.tipo == 'TARDANZA' else 'info' }}">
-                            <i class="bi bi-{{ 'clock-fill' if notificacion.tipo == 'TARDANZA' else 'info-circle' }} mt-1"></i>
+                        <span class="me-2 text-{{ 'danger' if notificacion.tipo == 'LLEGADA_TARDIA' else 'info' }}">
+                            <i class="bi bi-{{ 'clock-fill' if notificacion.tipo == 'LLEGADA_TARDIA' else 'info-circle' }} mt-1"></i>
                         </span>
                         <div class="flex-grow-1">
                             <small class="d-block fw-bold text-truncate-2" title="{{ notificacion.mensaje }}">
