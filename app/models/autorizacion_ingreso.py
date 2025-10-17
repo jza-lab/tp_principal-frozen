@@ -1,5 +1,5 @@
 from .base_model import BaseModel
-from datetime import date, datetime, time
+from datetime import date
 from collections import defaultdict
 import logging
 import pytz
@@ -42,8 +42,10 @@ class AutorizacionIngresoModel(BaseModel):
         Devuelve siempre una lista de resultados para manejar múltiples autorizaciones.
         """
         try:
+            select_query = "*, turno:fk_turno_autorizado(nombre, hora_inicio, hora_fin)"
+            
             query = self.db.table(self.get_table_name())\
-                .select("*, turno:turno_autorizado_id(nombre, hora_inicio, hora_fin)")\
+                .select(select_query)\
                 .eq("usuario_id", usuario_id)\
                 .eq("fecha_autorizada", fecha.isoformat())
 
@@ -66,9 +68,10 @@ class AutorizacionIngresoModel(BaseModel):
         Esto optimiza la carga de datos para la UI, que necesita tanto las pendientes como el historial en una sola operación.
         """
         try:
-            response = self.db.table(self.get_table_name()).select(
-                "*, usuario:usuario_id(nombre, apellido, legajo), turno:turno_autorizado_id(nombre, hora_inicio, hora_fin)"
-            ).order('fecha_autorizada', desc=True).execute()
+            select_query = "*, usuario:usuario_id(nombre, apellido, legajo), turno:fk_turno_autorizado(nombre, hora_inicio, hora_fin)"
+
+            response = self.db.table(self.get_table_name()).select(select_query)\
+                .order('fecha_autorizada', desc=True).execute()
 
             grouped_data = defaultdict(list)
             if response.data:
