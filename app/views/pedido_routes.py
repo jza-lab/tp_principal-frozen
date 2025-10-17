@@ -259,12 +259,15 @@ def generar_factura_html(id):
             pedido_data['created_at'] = datetime.fromisoformat(pedido_data['created_at'])
         except ValueError:
             pass 
-    if cliente['condicion_iva'] == '1':
-        # Renderiza la plantilla sin la maquetación base
-        rendered_html = render_template('orden_venta/factura_a_pedido.html', pedido=pedido_data, cliente=cliente)
+    if pedido_data['estado'] == 'PENDIENTE':
+        rendered_html = render_template('orden_venta/factura_proforma_pedido.html', pedido=pedido_data, cliente=cliente)
     else:
-        rendered_html = render_template('orden_venta/factura_b_pedido.html', pedido=pedido_data, cliente=cliente)
-    
+        if cliente['condicion_iva'] == '1':
+            # Renderiza la plantilla sin la maquetación base
+            rendered_html = render_template('orden_venta/factura_a_pedido.html', pedido=pedido_data, cliente=cliente)
+        else:
+            rendered_html = render_template('orden_venta/factura_b_pedido.html', pedido=pedido_data, cliente=cliente)
+        
     return jsonify({
         'success': True,
         'html': rendered_html
