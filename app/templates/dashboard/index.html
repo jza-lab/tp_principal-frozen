@@ -42,7 +42,7 @@
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card stat-card h-100 border-0 shadow-sm
              {% if not can_ver_produccion %}disabled{% endif %}
-             {% if ordenesventa_pendientes > 0 %} alert-pulse-danger {% endif %}">
+             {% if ordenesventa_pendientes > 0 %}glow-on-load{% endif %}">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
@@ -62,7 +62,8 @@
 
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card stat-card h-100 border-0 shadow-sm
-             {% if not can_ver_produccion %}disabled{% endif %}">
+             {% if not can_ver_produccion %}disabled{% endif %}
+             {% if productos_sin_lotes_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('lote_producto.listar_lotes') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -105,7 +106,7 @@
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="card stat-card h-100 border-0 shadow-sm
              {% if not can_ver_almacen %}disabled{% endif %}
-             {% if alertas_stock_count > 0 %} alert-pulse-danger {% endif %}">
+             {% if alertas_stock_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') if can_ver_almacen else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_almacen else 'false' }}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -295,4 +296,33 @@
 
 {% if alertas %}
     {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const glowingCards = document.querySelectorAll('.glow-on-load');
+    const animationDuration = 3000; // La duración total que quieres que la tarjeta brille.
+    const fadeOutDuration = 500;    // Duración de la transición de salida (debe coincidir con el CSS).
+
+    glowingCards.forEach(card => {
+        // Temporizador para iniciar el desvanecimiento (500ms antes de que se cumplan 3s)
+        setTimeout(() => {
+            // Añade la clase que dispara el desvanecimiento gradual en el CSS
+            card.classList.add('glow-fade-out');
+
+            // Pausa la animación para evitar saltos visuales durante el fade-out
+            card.style.animationPlayState = 'paused';
+
+            // Temporizador para la eliminación final de las clases
+            setTimeout(() => {
+                card.classList.remove('glow-on-load');
+                card.classList.remove('glow-fade-out');
+                card.style.animationPlayState = ''; // Limpiar el estado de pausa
+            }, fadeOutDuration);
+            
+        }, animationDuration - fadeOutDuration);
+    });
+});
+</script>>
 {% endblock %}

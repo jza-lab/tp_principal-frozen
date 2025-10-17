@@ -121,37 +121,34 @@
 /* ESTILOS ESPECÍFICOS PARA ALERTAS CRÍTICAS (ANIMACIÓN DE INICIO) */
 /* ================================================= */
 
-/* Animación de Parpadeo para Alertar sobre Stock Crítico */
-@keyframes flash-critico {
-    0%, 100% {
-        /* Estado inicial/final: Sombra y borde normales de la card */
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); 
-        border-color: rgba(222, 226, 230, 0.5) !important;
-    }
-    25% {
-        /* Pico de brillo: Sombra roja intensa */
-        box-shadow: 0 0 15px rgba(220, 53, 69, 0.8);
-        border-color: rgba(220, 53, 69, 0.7) !important;
+/* Animación de Pulso para Alertas Críticas */
+@keyframes critical-pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
     }
     50% {
-        /* Vuelta a la normalidad (o casi) */
+        transform: scale(1.03); /* Ligeramente más grande */
+        box-shadow: 0 10px 27px rgba(251, 27, 50, 0.633); /* Sombra roja más intensa */
+    }
+    100% {
+        transform: scale(1);
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
-        border-color: rgba(222, 226, 230, 0.5) !important;
-    }
-    75% {
-        /* Segundo pulso, más sutil */
-        box-shadow: 0 0 8px rgba(220, 53, 69, 0.4);
-        border-color: rgba(220, 53, 69, 0.3) !important;
     }
 }
 
-/* Clase para aplicar la animación */
-.alerta-flash.alerta-critica {
-    animation: flash-critico 3s ease-in-out; /* Duración de 3 segundos */
+/* Clase para aplicar la animación de pulso al cargar */
+.glow-on-load {
+    animation: critical-pulse 1s ease-in-out 3; /* Se repite 3 veces, total 3s */
+    border: 1px solid rgba(235, 28, 49, 0.427) !important;
 }
 
-/* Estilo base para que las cards críticas se destaquen incluso sin animación */
-.alerta-critica {
-    border: 2px solid #dc3545 !important; /* Borde rojo más grueso (color danger de Bootstrap) */
-    box-shadow: 0 4px 10px rgba(220, 53, 69, 0.2) !important; /* Sombra sutil roja */
+.glow-fade-out {
+    /* Define explícitamente la transición de desvanecimiento */
+    transition: box-shadow 0.5s ease-out, border-color 0.5s ease-out !important;
+
+    /* Forzar los valores a los estilos por defecto del .card */
+    /* Usar valores base del card para que la transición vaya a un estado no animado */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
+    border-color: rgba(222, 226, 230, 0.5) !important; 
 }
