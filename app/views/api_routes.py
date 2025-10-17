@@ -108,3 +108,21 @@ def get_turnos_para_autorizacion():
         return jsonify(resultado)
     
     return jsonify({'success': False, 'error': resultado.get('error', 'Error interno del servidor')}), 500
+
+@api_bp.route('/usuarios/buscar', methods=['GET'])
+@permission_required(accion='aprobar_permisos')
+def buscar_usuario_por_legajo():
+    """
+    Busca un usuario por su legajo y devuelve sus datos básicos.
+    Utilizado para la búsqueda dinámica en el formulario de autorizaciones.
+    """
+    legajo = request.args.get('legajo')
+    if not legajo:
+        return jsonify({'success': False, 'error': 'El parámetro "legajo" es requerido.'}), 400
+
+    resultado = usuario_controller.buscar_por_legajo_para_api(legajo)
+    
+    if resultado.get('success'):
+        return jsonify(resultado)
+    
+    return jsonify({'success': False, 'error': resultado.get('error', 'Usuario no encontrado')}), 404

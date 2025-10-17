@@ -12,18 +12,24 @@
         <div class="card-body">
             <form method="POST" action="{{ url_for('admin_autorizacion.nueva_autorizacion') }}">
                 
-                <!-- Selección de Empleado -->
-                <div class="mb-3">
-                    <label for="usuario_id" class="form-label">Empleado</label>
-                    <select class="form-select" id="usuario_id" name="usuario_id" required>
-                        <option value="">Seleccione un empleado...</option>
-                        {% for usuario in usuarios %}
-                        <option value="{{ usuario.id }}" {% if autorizacion.usuario_id == usuario.id %}selected{% endif %}>
-                            {{ usuario.nombre }} {{ usuario.apellido }} (Legajo: {{ usuario.legajo }})
-                        </option>
-                        {% endfor %}
-                    </select>
+                <!-- Búsqueda de Empleado por Legajo -->
+                <div class="row g-3 align-items-end mb-3">
+                    <div class="col-md-4">
+                        <label for="legajo_empleado" class="form-label">Legajo del Empleado</label>
+                        <input type="text" class="form-control" id="legajo_empleado" placeholder="Ingrese el legajo...">
+                        <div class="invalid-feedback" id="legajo-error"></div>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-secondary w-100" id="btn-buscar-legajo">
+                            <i class="bi bi-search me-1"></i> Buscar
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Nombre del Empleado</label>
+                        <input type="text" class="form-control" id="nombre_empleado" readonly placeholder="El nombre aparecerá aquí...">
+                    </div>
                 </div>
+                <input type="hidden" id="usuario_id" name="usuario_id" required>
 
                 <!-- Selección de Fecha -->
                 <div class="mb-3">
@@ -151,6 +157,57 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Cargar los turnos iniciales al cargar la página
     actualizarTurnos();
+
+    // --- Lógica de Búsqueda de Empleado por Legajo ---
+    const legajoInput = document.getElementById('legajo_empleado');
+    const nombreInput = document.getElementById('nombre_empleado');
+    const usuarioIdInput = document.getElementById('usuario_id');
+    const buscarBtn = document.getElementById('btn-buscar-legajo');
+    const legajoErrorDiv = document.getElementById('legajo-error');
+
+    async function buscarEmpleado() {
+        const legajo = legajoInput.value.trim();
+        if (!legajo) {
+            return;
+        }
+
+        // Resetear estado
+        nombreInput.value = 'Buscando...';
+        usuarioIdInput.value = '';
+        legajoInput.classList.remove('is-invalid');
+        legajoErrorDiv.textContent = '';
+
+        try {
+            const response = await fetch(`/api/usuarios/buscar?legajo=${legajo}`);
+            const resultado = await response.json();
+
+            if (resultado.success) {
+                const usuario = resultado.data;
+                nombreInput.value = `${usuario.nombre} ${usuario.apellido}`;
+                usuarioIdInput.value = usuario.id;
+                legajoInput.classList.remove('is-invalid');
+            } else {
+                nombreInput.value = '';
+                nombreInput.placeholder = 'Empleado no encontrado.';
+                legajoInput.classList.add('is-invalid');
+                legajoErrorDiv.textContent = resultado.error || 'No se encontró un usuario con ese legajo.';
+            }
+        } catch (error) {
+            console.error('Error al buscar empleado:', error);
+            nombreInput.value = '';
+            nombreInput.placeholder = 'Error en la búsqueda.';
+            legajoInput.classList.add('is-invalid');
+            legajoErrorDiv.textContent = 'Error al conectar con el servidor.';
+        }
+    }
+
+    buscarBtn.addEventListener('click', buscarEmpleado);
+    legajoInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            buscarEmpleado();
+        }
+    });
 });
 </script>
 {% endblock %}
