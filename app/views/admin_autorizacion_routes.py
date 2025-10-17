@@ -52,7 +52,7 @@ def listar_autorizaciones():
     if resultado.get('success'):
         grouped_data = resultado.get('data', {})
         pendientes = grouped_data.get('PENDIENTE', [])
-        historial = grouped_data.get('APROBADA', []) + grouped_data.get('RECHAZADA', [])
+        historial = grouped_data.get('APROBADO', []) + grouped_data.get('RECHAZADO', [])
         
         return jsonify(success=True, data={'pendientes': pendientes, 'historial': historial})
     

@@ -68,7 +68,7 @@ class AutorizacionIngresoModel(BaseModel):
         Esto optimiza la carga de datos para la UI, que necesita tanto las pendientes como el historial en una sola operación.
         """
         try:
-            select_query = "*, usuario:usuario_id(nombre, apellido, legajo), turno:fk_turno_autorizado(nombre, hora_inicio, hora_fin)"
+            select_query = "*, usuario:usuario_id(nombre, apellido, legajo), turno:turno_autorizado_id(nombre, hora_inicio, hora_fin)"
 
             response = self.db.table(self.get_table_name()).select(select_query)\
                 .order('fecha_autorizada', desc=True).execute()

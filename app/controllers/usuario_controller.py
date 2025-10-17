@@ -153,19 +153,26 @@ class UsuarioController(BaseController):
 
     def buscar_por_legajo_para_api(self, legajo: str) -> Dict:
         """
-        Busca un usuario por legajo y devuelve solo los datos necesarios para la API.
+        Busca un usuario por legajo y devuelve los datos necesarios para la API,
+        incluyendo su turno de trabajo.
         """
         resultado = self.model.find_by_legajo(legajo)
         if not resultado.get('success'):
             return resultado
         
         usuario = resultado.get('data')
+        turno_info = usuario.get('turno')
+        
         return {
             'success': True,
             'data': {
                 'id': usuario.get('id'),
                 'nombre': usuario.get('nombre'),
-                'apellido': usuario.get('apellido')
+                'apellido': usuario.get('apellido'),
+                'turno': {
+                    'id': turno_info.get('id'),
+                    'nombre': turno_info.get('nombre')
+                } if turno_info else None
             }
         }
 

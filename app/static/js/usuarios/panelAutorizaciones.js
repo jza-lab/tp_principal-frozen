@@ -33,8 +33,8 @@ const AutorizacionesPanel = (function() {
     }
 
     function createHistoryCard(auth) {
-        const statusClass = auth.estado === 'APROBADA' ? 'success' : 'danger';
-        const statusIcon = auth.estado === 'APROBADA' ? 'check-circle-fill' : 'x-circle-fill';
+        const statusClass = auth.estado === 'APROBADO' ? 'success' : 'danger';
+        const statusIcon = auth.estado === 'APROBADO' ? 'check-circle-fill' : 'x-circle-fill';
         const formattedDate = new Date(auth.fecha_autorizada).toLocaleDateString('es-AR', {
             day: '2-digit', month: '2-digit', year: 'numeric'
         });
