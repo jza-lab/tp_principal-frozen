@@ -13,6 +13,25 @@
 {% set EMISOR_CAE = pedido.emisor.cae or '00000000000000' %}
 {% set EMISOR_VTO_CAE = pedido.emisor.vencimiento_cae or '2025-10-31' %}
 
+{% macro format_ars(val) %}
+    {% set string_val = "%.2f"|format(val | float) %}
+    {% set parts = string_val.split('.') %}
+    {% set integer_part = parts[0] %}
+    {% set decimal_part = parts[1] %}
+    {% set reversed_int = integer_part | reverse %}
+    {% set sep_int = namespace(result="") %}
+    
+    {% for char in reversed_int %}
+        {% set sep_int.result = sep_int.result ~ char %}
+        {% if loop.index is divisibleby 3 and not loop.last %}
+            {% set sep_int.result = sep_int.result ~ '.' %}
+        {% endif %}
+    {% endfor %}
+    
+    {% set final_integer = sep_int.result | reverse %}
+    {{ final_integer ~ ',' ~ decimal_part }}
+{% endmacro %}
+
 <div style="font-family: Arial, sans-serif; font-size: 11pt; width: 100%; margin: 0 auto; padding: 5px;">
 
     <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">
@@ -97,7 +116,7 @@
                     <strong>Localidad:</strong> {{ d.localidad or 'N/A' }}
                 </td>
             </tr>
-            {# --- FILA SEPARADA PARA LA CONDICIÓN IVA --- #}
+
             <tr>
                 <td colspan="2">
                     {% set condicion_iva_cliente = pedido.cliente.condicion_iva | string %}
@@ -126,7 +145,6 @@
                     </table>
                 </td>
             </tr>
-            {# --- FIN FILA SEPARADA PARA LA CONDICIÓN IVA --- #}
             <tr>
                 <td colspan="2">
                     <strong>Provincia:</strong> {{ d.provincia or 'N/A' }}
@@ -140,53 +158,55 @@
             <tr
                 style="background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; border-top: 1px solid #000; border-bottom: 1px solid #000;">
                 <th style="width: 8%; padding: 5px 3px; text-align: center;">Código</th>
-                <th style="width: 30%; padding: 5px 3px; text-align: left;">Descripción</th>
+                <th style="width: 32%; padding: 5px 3px; text-align: left;">Descripción</th>
                 <th style="width: 10%; padding: 5px 3px; text-align: center;">Cantidad</th>
-                <th style="width: 15%; padding: 5px 3px; text-align: right;">P. Unitario NETO</th>
-                <th style="width: 17%; padding: 5px 3px; text-align: right;">IVA (21%)</th>
-                <th style="width: 20%; padding: 5px 3px; text-align: right;">Importe Total</th>
+                <th style="width: 10%; padding: 5px 3px; text-align: center;">U. Med.</th>
+                <th style="width: 18%; padding: 5px 3px; text-align: right;">P. Unitario Neto</th>
+                <th style="width: 10%; padding: 5px 3px; text-align: center;">% IVA</th>
+                <th style="width: 12%; padding: 5px 3px; text-align: right;">Subtotal Neto</th>
             </tr>
         </thead>
         <tbody>
-            {% set ns = namespace(base_imponible=0.0, total_iva=0.0, total_final=0.0) %}
-
+            {% set ns = namespace(base_imponible=0.0, total_iva=0.0, total_final=0.0, total_cantidad=0.0) %}
+            
             {% for item in pedido['items'] %}
 
-            {# Cálculos de totales (Neto + IVA) #}
-            {% set producto_id = item.producto_nombre.get('id', loop.index) if item.producto_nombre is mapping else
-            loop.index %}
-            {% set producto_nombre = item.producto_nombre.nombre if item.producto_nombre is mapping else
-            item.producto_nombre %}
+            {% set producto_id = item.producto_nombre.get('id', loop.index) if item.producto_nombre is mapping else loop.index %}
+            {% set producto_nombre = item.producto_nombre.nombre if item.producto_nombre is mapping else item.producto_nombre %}
+            {% set item_cantidad = item.get('cantidad', 0) | float %}
+            {% set unidad_medida = item.producto_nombre.unidad_medida if item.producto_nombre is mapping and item.producto_nombre.unidad_medida else 'UNI' %}
 
             {% set precio_con_iva = item.producto_nombre.get('precio_unitario', 0.0) | float %}
-            {% set item_cantidad = item.get('cantidad', 0) | int %}
-
             {% set NETO_FACTOR = 1.21 %}
 
-            {% set precio_neto_unitario = precio_con_iva / NETO_FACTOR %}
-            {% set subtotal_neto = precio_neto_unitario * item_cantidad %}
-            {% set iva_item = subtotal_neto * 0.21 %}
-            {% set subtotal_total_item = precio_con_iva * item_cantidad %}
+            {% set precio_unitario_neto = precio_con_iva / NETO_FACTOR %}
+            {% set porcentaje_iva = 0.21 %}
+
+            {% set subtotal_neto = precio_unitario_neto * item_cantidad %}
+            {% set iva_item = subtotal_neto * porcentaje_iva %}
+            {% set subtotal_total_item = subtotal_neto + iva_item %}
 
             {% set ns.base_imponible = ns.base_imponible + subtotal_neto %}
             {% set ns.total_iva = ns.total_iva + iva_item %}
             {% set ns.total_final = ns.total_final + subtotal_total_item %}
+            {% set ns.total_cantidad = ns.total_cantidad + item_cantidad %}
 
             <tr style="border-bottom: 1px dashed #ddd;">
                 <td style="padding: 5px 3px; text-align: center;">{{ producto_id }}</td>
                 <td style="padding: 5px 3px;">{{ producto_nombre or 'Producto sin nombre' }}</td>
-                <td style="padding: 5px 3px; text-align: center;">{{ item_cantidad }}</td>
-                <td style="padding: 5px 3px; text-align: right;">$ {{ "%.2f"|format(precio_neto_unitario) }}</td>
-                <td style="padding: 5px 3px; text-align: right;">$ {{ "%.2f"|format(iva_item) }}</td>
-                <td style="padding: 5px 3px; text-align: right;">$ {{ "%.2f"|format(subtotal_total_item) }}</td>
+                <td style="padding: 5px 3px; text-align: center;">{{ "%.2f"|format(item_cantidad) | replace('.', ',') }}</td>
+                <td style="padding: 5px 3px; text-align: center;">{{ unidad_medida }}</td>
+                <td style="padding: 5px 3px; text-align: right;">$ {{ format_ars(precio_unitario_neto) }}</td>
+                <td style="padding: 5px 3px; text-align: center;">{{ "%.0f"|format(porcentaje_iva * 100) }}%</td>
+                <td style="padding: 5px 3px; text-align: right;">$ {{ format_ars(subtotal_neto) }}</td>
             </tr>
             {% endfor %}
 
-            {# Rellenar filas vacías #}
             {% set total_items = pedido['items']|length %}
             {% set max_rows = 5 %}
             {% if total_items < max_rows %} {% for i in range(max_rows - total_items) %} <tr
                 style="border-bottom: 1px dashed #ddd;">
+                <td style="padding: 5px 3px;">&nbsp;</td>
                 <td style="padding: 5px 3px;">&nbsp;</td>
                 <td style="padding: 5px 3px;">&nbsp;</td>
                 <td style="padding: 5px 3px;">&nbsp;</td>
@@ -198,7 +218,7 @@
                 {% endif %}
 
                 <tr style="border-bottom: none;">
-                    <td colspan="6" style="padding: 0;"></td>
+                    <td colspan="7" style="padding: 0;"></td>
                 </tr>
         </tbody>
     </table>
@@ -218,23 +238,20 @@
             <td style="width: 40%; vertical-align: top;">
                 <table style="width: 100%; border-collapse: collapse;">
                     <tr>
-                        <td style="width: 50%; padding: 2px 5px; text-align: right;">Subtotal Neto Gravado:</td>
-                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{
-                            "%.2f"|format(ns.base_imponible) }}</td>
+                        <td style="padding: 2px 5px; text-align: right;">Subtotal Neto Gravado:</td>
+                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ format_ars(ns.base_imponible) }}</td>
                     </tr>
                     <tr>
-                        <td style="padding: 2px 5px; text-align: right;">Impuestos (IVA 21%):</td>
-                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ "%.2f"|format(ns.total_iva) }}
-                        </td>
+                        <td style="padding: 2px 5px; text-align: right;">Total IVA (21%):</td>
+                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ format_ars(ns.total_iva) }}</td>
                     </tr>
                     <tr>
                         <td style="padding: 2px 5px; text-align: right;">Dto/Recargo:</td>
-                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ 0.00</td>
+                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ format_ars(0) }}</td>
                     </tr>
                     <tr style="border-top: 1px solid #000; background-color: #f0f0f0;">
                         <td style="padding: 5px; text-align: right; font-weight: bold;">Total Final:</td>
-                        <td style="padding: 5px; text-align: right; font-weight: bold;">$ {{
-                            "%.2f"|format(ns.total_final) }}</td>
+                        <td style="padding: 5px; text-align: right; font-weight: bold;">$ {{ format_ars(ns.total_final) }}</td>
                     </tr>
                 </table>
             </td>

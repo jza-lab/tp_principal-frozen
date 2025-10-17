@@ -1,4 +1,5 @@
 import os
+import random
 from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, session, jsonify
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
@@ -247,7 +248,7 @@ def generar_factura_html(id):
         pedido_data['emisor'] = {
             'ingresos_brutos': '20-12345678-3',
             'inicio_actividades': '2020-01-01',
-            'cae': '00000000000000', # Valores de ejemplo o obtenidos de otra fuente
+            'cae': ''.join([str(random.randint(0, 9)) for _ in range(14)]),
             'vencimiento_cae': '2025-10-31'
         }
 
