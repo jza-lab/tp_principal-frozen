@@ -2,6 +2,7 @@ from app.models.base_model import BaseModel
 import logging
 from datetime import datetime
 from typing import Dict
+from app.utils.date_utils import get_now_in_argentina
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class TotemSesionModel(BaseModel):
         """
         try:
             response = self.db.table(self.get_table_name())\
-                .update({'activa': False, 'fecha_fin': datetime.utcnow().isoformat()})\
+                .update({'activa': False, 'fecha_fin': get_now_in_argentina().isoformat()})\
                 .eq('usuario_id', usuario_id)\
                 .eq('activa', True)\
                 .execute()
@@ -75,22 +76,22 @@ class TotemSesionModel(BaseModel):
     def verificar_sesion_activa_hoy(self, usuario_id: int) -> bool:
         """
         Verifica si el usuario tiene una sesión activa hoy.
-        La consulta se hace utilizando UTC para evitar problemas de zona horaria.
+        La consulta se hace utilizando la fecha de Argentina para consistencia.
         """
         try:
-            from datetime import time, timezone, datetime
+            from datetime import time
             
-            # Definir el inicio y el fin del día de hoy en UTC
-            today_utc = datetime.now(timezone.utc).date()
-            start_of_day_utc = datetime.combine(today_utc, time.min, tzinfo=timezone.utc)
-            end_of_day_utc = datetime.combine(today_utc, time.max, tzinfo=timezone.utc)
+            # Definir el inicio y el fin del día de hoy en la zona horaria de Argentina.
+            today_arg = get_now_in_argentina().date()
+            start_of_day_arg = datetime.combine(today_arg, time.min)
+            end_of_day_arg = datetime.combine(today_arg, time.max)
 
             response = self.db.table(self.get_table_name())\
                 .select('id', count='exact')\
                 .eq('usuario_id', usuario_id)\
                 .eq('activa', True)\
-                .gte('fecha_inicio', start_of_day_utc.isoformat())\
-                .lte('fecha_inicio', end_of_day_utc.isoformat())\
+                .gte('fecha_inicio', start_of_day_arg.isoformat())\
+                .lte('fecha_inicio', end_of_day_arg.isoformat())\
                 .execute()
 
             # Si el conteo es mayor a 0, significa que ya hay una sesión activa hoy.

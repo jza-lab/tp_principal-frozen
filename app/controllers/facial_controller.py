@@ -10,6 +10,7 @@ from datetime import datetime
 from app.database import Database
 from app.models.totem_sesion import TotemSesionModel
 from app.controllers.usuario_controller import UsuarioController
+from app.utils.date_utils import get_now_in_argentina
 
 try:
     import face_recognition
@@ -92,7 +93,7 @@ class FacialController:
         try:
             response = self.db.table("usuarios").update({
                 "facial_encoding": new_encoding_json,
-                "updated_at": datetime.now().isoformat()
+                "updated_at": get_now_in_argentina().isoformat()
             }).eq("id", user_id).execute()
             
             if response.data:
@@ -242,7 +243,7 @@ class FacialController:
         try:
             self.db.table("registros_acceso").insert({
                 "usuario_id": usuario_id,
-                "fecha_hora": datetime.now().isoformat(),
+                "fecha_hora": get_now_in_argentina().isoformat(),
                 "tipo": tipo,
                 "metodo": metodo,
                 "dispositivo": "TOTEM",

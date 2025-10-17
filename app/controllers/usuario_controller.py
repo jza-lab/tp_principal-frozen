@@ -12,6 +12,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta, time
 import logging
 import json
+import pytz
+from app.utils.date_utils import get_now_in_argentina
 from app.controllers.direccion_controller import GeorefController
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.direccion import DireccionModel
@@ -211,16 +213,23 @@ class UsuarioController(BaseController):
 
     def autenticar_usuario_web(self, legajo: str, password: str) -> Dict:
         """Autentica un usuario para el acceso web por legajo y contraseña."""
+        logger.info(f"Attempting web authentication for legajo: {legajo}")
         auth_result = self._autenticar_credenciales_base(legajo, password)
         if not auth_result.get('success'):
+            logger.warning(f"Web auth failed for legajo {legajo} at credential check: {auth_result.get('error')}")
             return auth_result
 
         user_data = auth_result['data']
+        user_id = user_data['id']
+        logger.info(f"Credentials OK for user_id: {user_id}")
         
-        if not self.totem_sesion.verificar_sesion_activa_hoy(user_data['id']):
+        totem_check = self.totem_sesion.verificar_sesion_activa_hoy(user_id)
+        if not totem_check:
+            logger.warning(f"Web auth failed for user_id {user_id}: No active totem session found for today.")
             return {'success': False, 'error': 'Debe registrar su entrada en el tótem primero para acceder por web'}
         
-        self.model.update(user_data['id'], {'ultimo_login_web': datetime.now().isoformat()})
+        logger.info(f"Active totem session found for user_id: {user_id}. Proceeding to start session.")
+        self.model.update(user_id, {'ultimo_login_web': get_now_in_argentina().isoformat()})
         return self._iniciar_sesion_usuario(user_data)
 
     def autenticar_usuario_facial_web(self, image_data_url: str) -> Dict:
@@ -239,7 +248,7 @@ class UsuarioController(BaseController):
         if not self.totem_sesion.verificar_sesion_activa_hoy(user_data['id']):
             return {'success': False, 'error': 'Acceso Web denegado. Por favor, registre su ingreso en el tótem.'}
         
-        self.model.update(user_data['id'], {'ultimo_login_web': datetime.now().isoformat()})
+        self.model.update(user_data['id'], {'ultimo_login_web': get_now_in_argentina().isoformat()})
         return self._iniciar_sesion_usuario(user_data)
 
     def autenticar_usuario_para_totem(self, legajo: str, password: str) -> Dict:
@@ -344,10 +353,8 @@ class UsuarioController(BaseController):
 
     def _get_hora_actual_argentina(self) -> (date, time):
         """Devuelve la fecha y hora actuales para la zona horaria de Argentina (ART/UTC-3)."""
-        from datetime import timezone, timedelta
-        # Zona horaria para Argentina (ART, UTC-3)
-        art_timezone = timezone(timedelta(hours=-3))
-        now_art = datetime.now(art_timezone)
+        from app.utils.date_utils import get_now_in_argentina
+        now_art = get_now_in_argentina()
         return now_art.date(), now_art.time()
 
     def _esta_en_horario_habitual(self, usuario: dict) -> bool:
@@ -627,10 +634,13 @@ class UsuarioController(BaseController):
 
     def _iniciar_sesion_usuario(self, usuario: Dict) -> Dict:
         """Helper centralizado para establecer la sesión de Flask de un usuario."""
+        logger.info(f"Initiating session for user_id: {usuario.get('id')}")
         verificacion_turno = self.verificar_acceso_por_horario(usuario)
         if not verificacion_turno.get('success'):
+            logger.warning(f"Session initiation failed for user_id {usuario.get('id')}: {verificacion_turno.get('error')}")
             return verificacion_turno
 
+        logger.info(f"Access verified for user_id: {usuario.get('id')}. Loading permissions.")
         permisos = PermisosModel().get_user_permissions(usuario.get('role_id'))
         rol = usuario.get('roles', {})
         
@@ -643,6 +653,7 @@ class UsuarioController(BaseController):
         session['user_data'] = usuario
         session['permisos'] = permisos
         
+        logger.info(f"Session successfully created for user_id: {usuario.get('id')}, role: {rol.get('codigo')}")
         return {'success': True, 'rol_codigo': rol.get('codigo')}
 
     def _asignar_sectores_usuario(self, usuario_id: int, sectores_ids: List[int]) -> Dict:
@@ -777,12 +788,14 @@ class UsuarioController(BaseController):
                 shift_end_datetime += timedelta(days=1)
 
             grace_period_end = shift_end_datetime + timedelta(minutes=15)
+            
+            now_in_argentina = get_now_in_argentina()
 
-            if datetime.now() > grace_period_end:
+            if now_in_argentina > grace_period_end:
                 # La sesión ha expirado, a menos que haya horas extras.
                 autorizacion_model = AutorizacionIngresoModel()
                 auth_result = autorizacion_model.find_by_usuario_and_fecha(
-                    usuario['id'], date.today(), tipo='HORAS_EXTRAS', estado='APROBADA'
+                    usuario['id'], now_in_argentina.date(), tipo='HORAS_EXTRAS', estado='APROBADA'
                 )
                 if auth_result.get('success') and auth_result.get('data'):
                     # El usuario tiene autorización, no se cierra la sesión.

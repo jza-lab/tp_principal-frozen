@@ -48,7 +48,7 @@ class AutorizacionController(BaseController):
         usuario_id = data.get('usuario_id')
         
         validation_result = None
-        if tipo_autorizacion == 'LLEGADA_TARDIA':
+        if tipo_autorizacion == 'TARDANZA':
             validation_result = self._validar_llegada_tardia(usuario_id)
         elif tipo_autorizacion == 'HORAS_EXTRAS':
             turno_autorizado_details = turno_auth_result['data']
