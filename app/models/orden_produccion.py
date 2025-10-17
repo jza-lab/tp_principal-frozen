@@ -30,7 +30,7 @@ class OrdenProduccionModel(BaseModel):
                 update_data['fecha_inicio'] = datetime.now().isoformat()
             elif nuevo_estado == 'COMPLETADA':
                 update_data['fecha_fin'] = datetime.now().isoformat()
-            elif nuevo_estado == 'APROBADA':
+            elif nuevo_estado == 'LISTA PARA PRODUCIR':
                 fecha_aprobacion = datetime.now()
                 fecha_fin_esperada = fecha_aprobacion + timedelta(weeks=1)
                 update_data['fecha_aprobacion'] = fecha_aprobacion.isoformat()

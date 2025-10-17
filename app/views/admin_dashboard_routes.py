@@ -30,17 +30,17 @@ def index():
 
     # NOTA: Esta lógica compleja debería moverse a un DashboardController en el futuro.
     # Por ahora, se mantiene aquí para cumplir con la primera fase de la refactorización.
-    respuesta, _ = orden_produccion_controller.obtener_cantidad_ordenes_estado("EN_PROCESO", hoy)
+    respuesta, _ = orden_produccion_controller.obtener_cantidad_ordenes_estado("EN_PROCESO")
     ordenes_pendientes = respuesta.get('data', {}).get('cantidad', 0)
 
-    respuesta2, _ = orden_produccion_controller.obtener_cantidad_ordenes_estado("APROBADA")
+    respuesta2, _ = orden_produccion_controller.obtener_cantidad_ordenes_estado("LISTA PARA PRODUCIR")
     respuesta3, _ = orden_produccion_controller.obtener_cantidad_ordenes_estado("COMPLETADA")
     
     cantidad_aprobadas = respuesta2.get('data', {}).get('cantidad', 0)
     cantidad_completadas = respuesta3.get('data', {}).get('cantidad', 0)
     ordenes_totales = int(cantidad_aprobadas) + int(cantidad_completadas)
 
-    filtros = {'estado': 'APROBADA', 'fecha_planificada_desde': fecha_inicio_iso, 'fecha_planificada_hasta': fecha_fin_iso}
+    filtros = {'estado': 'LISTA PARA PRODUCIR', 'fecha_planificada_desde': fecha_inicio_iso, 'fecha_planificada_hasta': fecha_fin_iso}
     respuesta_ordenes, _ = orden_produccion_controller.obtener_ordenes(filtros)
     ordenes_aprobadas = respuesta_ordenes.get('data', [])
 
