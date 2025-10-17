@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from flask import Blueprint, session, render_template
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
+from app.controllers.pedido_controller import PedidoController
 from app.controllers.notificación_controller import NotificacionController
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.lote_producto_controller import LoteProductoController
@@ -13,6 +14,7 @@ admin_dashboard_bp = Blueprint('admin_dashboard', __name__, url_prefix='/admin')
 # Instanciar controladores
 usuario_controller = UsuarioController()
 orden_produccion_controller = OrdenProduccionController()
+orden_venta_controller = PedidoController()
 notificacion_controller = NotificacionController()
 inventario_controller = InventarioController()
 lote_producto_controller = LoteProductoController()
@@ -55,6 +57,10 @@ def index():
     data_sin_lotes = productos_sin_lotes_resp.get('data', {})
     productos_sin_lotes_count = data_sin_lotes.get('conteo_sin_lotes', 0) 
     productos_sin_lotes_list = data_sin_lotes.get('productos_sin_lotes', [])
+
+
+    respuesta4, _ = orden_venta_controller.obtener_cantidad_pedidos_estado("PENDIENTE")
+    ordenesventa_pendientes = respuesta4.get('data', {}).get('cantidad', 0)
     
     user_permissions = session.get('permisos', {})
 
@@ -68,4 +74,5 @@ def index():
                            insumos_bajo_stock_list=insumos_bajo_stock_list,
                            productos_sin_lotes_count=productos_sin_lotes_count,
                            productos_sin_lotes_list=productos_sin_lotes_list,
+                           ordenesventa_pendientes=ordenesventa_pendientes,
                            user_permissions=user_permissions)
