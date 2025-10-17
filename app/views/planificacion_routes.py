@@ -1,84 +1,75 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
-from app.controllers.orden_produccion_controller import OrdenProduccionController
-from app.models.pedido import PedidoModel
-from app.utils.decorators import permission_required
-from itertools import groupby
-from operator import itemgetter
+# En app/routes/planificacion_routes.py
+from flask import Blueprint, render_template, flash, url_for, request, jsonify # Añade request y jsonify
+from app.controllers.planificacion_controller import PlanificacionController
+
 
 planificacion_bp = Blueprint('planificacion', __name__, url_prefix='/planificacion')
-
-orden_produccion_controller = OrdenProduccionController()
-pedido_model = PedidoModel()
+controller = PlanificacionController()
 
 @planificacion_bp.route('/')
-@permission_required(accion='ver_ordenes_produccion')
+##@permission_required(sector_codigo='PRODUCCION', accion='leer')
 def index():
     """
-    Muestra los items de pedidos pendientes de planificación.
+    Muestra el tablero de planificación de producción (Kanban).
     """
-    items_result = pedido_model.find_all_items(filters={
-        'estado': ('eq', 'PENDIENTE'),
-        'orden_produccion_id': ('is', 'null')
-    })
+    response, _ = controller.obtener_ops_para_tablero()
 
-    items = []
-    if items_result.get('success'):
-        items = items_result.get('data', [])
+    ordenes_por_estado = {}
+    if response.get('success'):
+        ordenes_por_estado = response.get('data', {})
     else:
-        flash('Error al cargar los ítems para planificar.', 'error')
+        flash(response.get('error', 'No se pudieron cargar los datos del tablero.'), 'error')
 
-    return render_template('planificacion/index.html', items=items)
+    # Definimos las columnas y sus títulos para la plantilla
+    columnas = {
+        'LISTA PARA PRODUCIR': 'Por Asignar',
+        'EN_LINEA_1': 'Línea 1 (Moderna)',
+        'EN_LINEA_2': 'Línea 2 (Clásica)',
+        'EN_EMPAQUETADO': 'Empaquetado',
+        'CONTROL_DE_CALIDAD': 'Control de Calidad',  # <-- NUEVO
+        'COMPLETADA': 'Completada'
+    }
 
-@planificacion_bp.route('/crear_orden', methods=['POST'])
-@permission_required(accion='crear_ordenes_produccion')
-def crear_orden():
+    return render_template(
+        'planificacion/tablero.html',
+        ordenes_por_estado=ordenes_por_estado,
+        columnas=columnas
+    )
+
+# Endpoint para la API de consolidación
+@planificacion_bp.route('/api/consolidar', methods=['POST'])
+def consolidar_api():
     """
-    Crea órdenes de producción a partir de los items de pedido seleccionados.
+    API endpoint para consolidar múltiples OPs en una Super OP.
     """
-    selected_items_ids = request.form.getlist('item_ids')
-    if not selected_items_ids:
-        flash('No se seleccionó ningún ítem para planificar.', 'warning')
-        return redirect(url_for('planificacion.index'))
+    data = request.get_json()
+    op_ids = data.get('op_ids', [])
 
-    selected_items_ids = [int(id) for id in selected_items_ids]
+    # Asumimos que el usuario logueado tiene ID 1, debes reemplazarlo con el real
+    usuario_id = 1
 
-    items_result = pedido_model.find_all_items(filters={'id': ('in', selected_items_ids)})
-    if not items_result.get('success'):
-        flash('Error al obtener los detalles de los ítems seleccionados.', 'error')
-        return redirect(url_for('planificacion.index'))
+    response, status_code = controller.consolidar_ops(op_ids, usuario_id)
+    return jsonify(response), status_code
 
-    all_items = items_result['data']
+# Endpoint para la API de recomendación
+@planificacion_bp.route('/api/recomendar-linea/<int:op_id>', methods=['GET'])
+def recomendar_linea_api(op_id):
+    """
+    API endpoint para analizar una OP y recomendar una línea de producción.
+    """
+    response, status_code = controller.recomendar_linea_produccion(op_id)
+    return jsonify(response), status_code
 
-    all_items.sort(key=itemgetter('producto_id'))
-    grouped_items = {k: list(v) for k, v in groupby(all_items, key=itemgetter('producto_id'))}
 
-    usuario_id = session.get('usuario_id')
-    if not usuario_id:
-        flash('Error de autenticación. Por favor, inicie sesión de nuevo.', 'error')
-        return redirect(url_for('auth.login'))
+# Endpoint para la API de mover OPs (Drag-and-Drop y asignación)
+@planificacion_bp.route('/api/mover-op/<int:op_id>', methods=['POST'])
+def mover_op_api(op_id):
+    """
+    API endpoint para cambiar el estado de una OP.
+    Usado tanto por el drag-and-drop como por la asignación post-recomendación.
+    """
+    data = request.get_json()
+    nuevo_estado = data.get('nuevo_estado')
 
-    ordenes_creadas = 0
-    errores = []
-
-    for producto_id, items_del_producto in grouped_items.items():
-        item_ids_del_producto = [item['id'] for item in items_del_producto]
-
-        resultado = orden_produccion_controller.crear_orden_desde_planificacion(
-            producto_id=producto_id,
-            item_ids=item_ids_del_producto,
-            usuario_id=usuario_id
-        )
-
-        if resultado.get('success'):
-            ordenes_creadas += 1
-        else:
-            nombre_producto = items_del_producto[0].get('producto_nombre', f"ID {producto_id}")
-            errores.append(f"Error al crear OP para '{nombre_producto}': {resultado.get('error')}")
-
-    if ordenes_creadas > 0:
-        flash(f'{ordenes_creadas} orden(es) de producción creadas exitosamente.', 'success')
-
-    for error in errores:
-        flash(error, 'error')
-
-    return redirect(url_for('planificacion.index'))
+    response, status_code = controller.mover_orden(op_id, nuevo_estado)
+    return jsonify(response), status_code

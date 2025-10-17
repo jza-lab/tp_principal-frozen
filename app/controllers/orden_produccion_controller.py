@@ -2,6 +2,7 @@ from app.controllers.base_controller import BaseController
 from app.models.orden_produccion import OrdenProduccionModel
 from app.schemas.orden_produccion_schema import OrdenProduccionSchema
 from typing import Dict, Optional, List
+from decimal import Decimal
 from marshmallow import ValidationError
 from app.controllers.producto_controller import ProductoController
 from app.controllers.receta_controller import RecetaController
@@ -90,42 +91,50 @@ class OrdenProduccionController(BaseController):
 
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """
-        Valida datos y crea una orden en estado PENDIENTE.
+        Valida datos y crea una orden.
+        MODIFICADO: Este método ahora siempre devuelve un diccionario.
         """
         from app.models.receta import RecetaModel
         receta_model = RecetaModel()
 
         try:
-            # Si el supervisor_responsable_id está presente pero vacío, lo eliminamos
             if 'supervisor_responsable_id' in form_data and not form_data['supervisor_responsable_id']:
                 form_data.pop('supervisor_responsable_id')
 
             producto_id = form_data.get('producto_id')
             if not producto_id:
-                return self.error_response('El campo producto_id es requerido.', 400)
+                return {'success': False, 'error': 'El campo producto_id es requerido.'}
 
             if 'cantidad' in form_data:
                 form_data['cantidad_planificada'] = form_data.pop('cantidad')
 
-            receta_result = receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
-            if not receta_result.get('success') or not receta_result.get('data'):
-                return self.error_response(f'No se encontró una receta activa para el producto seleccionado (ID: {producto_id}).', 404)
-            receta = receta_result['data'][0]
-            form_data['receta_id'] = receta['id']
+            # Si no se provee receta_id, la buscamos (lógica clave para la Super OP)
+            if not form_data.get('receta_id'):
+                receta_result = receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
+                if not receta_result.get('success') or not receta_result.get('data'):
+                    return {'success': False, 'error': f'No se encontró una receta activa para el producto ID: {producto_id}.'}
+                receta = receta_result['data'][0]
+                form_data['receta_id'] = receta['id']
+
+            if 'estado' not in form_data or not form_data['estado']:
+                form_data['estado'] = 'PENDIENTE'
+            # ------------------------------------
 
             validated_data = self.schema.load(form_data)
             validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-            validated_data['estado'] = 'PENDIENTE'
             validated_data['usuario_creador_id'] = usuario_id
 
-            result = self.model.create(validated_data)
-            return result
+            return self.model.create(validated_data)
 
         except ValidationError as e:
-            return self.error_response(f"Datos inválidos: {e.messages}", 400)
+            # --- CORRECCIÓN AQUÍ ---
+            # En lugar de devolver una tupla, devolvemos el diccionario de error.
+            logger.error(f"Error de validación al crear orden: {e.messages}")
+            return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
         except Exception as e:
+            # --- CORRECCIÓN AQUÍ ---
             logger.error(f"Error inesperado en crear_orden: {e}", exc_info=True)
-            return self.error_response(f'Error interno: {str(e)}', 500)
+            return {'success': False, 'error': f'Error interno: {str(e)}'}
 
     def asignar_supervisor(self, orden_id: int, supervisor_id: int) -> tuple:
             """
@@ -451,3 +460,86 @@ class OrdenProduccionController(BaseController):
                 'productos': [], 'recetas': [], 'operarios': [],
                 'error': f'Error obteniendo datos para el formulario: {str(e)}'
             }
+
+    def consolidar_ordenes_produccion(self, op_ids: List[int], usuario_id: int) -> Dict:
+        """
+        Lógica de negocio para fusionar varias OPs en una Super OP.
+        1. Valida las OPs.
+        2. Calcula totales.
+        3. Crea la nueva Super OP.
+        4. Actualiza las OPs originales.
+        """
+        try:
+            # 1. Obtener las OPs originales desde el modelo
+            ops_a_consolidar_res = self.model.find_by_ids(op_ids) # Necesitarás crear este método en tu modelo
+            if not ops_a_consolidar_res.get('success') or not ops_a_consolidar_res.get('data'):
+                return {'success': False, 'error': 'Una o más órdenes no fueron encontradas.'}
+
+            ops_originales = ops_a_consolidar_res['data']
+
+            # Validación extra en el backend
+            if len(ops_originales) != len(op_ids):
+                return {'success': False, 'error': 'Algunas órdenes no pudieron ser cargadas.'}
+
+            primer_producto_id = ops_originales[0]['producto_id']
+            if not all(op['producto_id'] == primer_producto_id for op in ops_originales):
+                return {'success': False, 'error': 'Todas las órdenes deben ser del mismo producto.'}
+
+            # 2. Calcular la cantidad total
+            cantidad_total = sum(Decimal(op['cantidad_planificada']) for op in ops_originales)
+            primera_op = ops_originales[0]
+
+            # 3. Crear la nueva Super OP (reutilizando la lógica de `crear_orden`)
+            super_op_data = {
+                'producto_id': primera_op['producto_id'],
+                'cantidad_planificada': str(cantidad_total),
+                'fecha_planificada': primera_op['fecha_planificada'],
+                'receta_id': primera_op['receta_id'],
+                'prioridad': 'ALTA', # Las super OPs suelen ser prioritarias
+                'observaciones': f'Super OP consolidada desde las OPs: {", ".join(map(str, op_ids))}',
+                'estado': 'LISTA PARA PRODUCIR' # La Super OP nace lista
+            }
+
+            resultado_creacion = self.crear_orden(super_op_data, usuario_id)
+            if not resultado_creacion.get('success'):
+                return resultado_creacion
+
+            nueva_super_op = resultado_creacion['data']
+            super_op_id = nueva_super_op['id']
+
+            # 4. Actualizar las OPs originales
+            update_data = {
+                'estado': 'CONSOLIDADA',
+                'super_op_id': super_op_id
+            }
+            for op_id in op_ids:
+                self.model.update(id_value=op_id, data=update_data, id_field='id')
+
+            return {'success': True, 'data': nueva_super_op}
+
+        except Exception as e:
+            logger.error(f"Error en consolidar_ordenes_produccion: {e}", exc_info=True)
+            # Aquí idealmente implementarías un rollback de la transacción
+            return {'success': False, 'error': f'Error interno del servidor: {str(e)}'}
+
+    def cambiar_estado_orden_simple(self, orden_id: int, nuevo_estado: str) -> Dict:
+        """
+        Cambia el estado de una orden de producción. Ideal para el Kanban.
+        Reutiliza la lógica robusta del modelo.
+        """
+        try:
+            # Validación simple de estados (opcional pero recomendado)
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return {'success': False, 'error': "Orden de producción no encontrada."}
+
+            # Aquí podrías añadir reglas de negocio, ej:
+            # "No se puede mover de 'EN LINEA 1' a 'LISTA PARA PRODUCIR'"
+
+            # Llamamos al método del modelo que ya sabe cómo cambiar estados y fechas
+            result = self.model.cambiar_estado(orden_id, nuevo_estado)
+            return result
+
+        except Exception as e:
+            logger.error(f"Error en cambiar_estado_orden_simple para OP {orden_id}: {e}", exc_info=True)
+            return {'success': False, 'error': f"Error interno: {str(e)}"}

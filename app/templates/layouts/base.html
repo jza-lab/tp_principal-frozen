@@ -120,10 +120,8 @@
                                 <i class="fas fa-industry me-1"></i> Producción
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownProduccion">
-                                {# --- INICIO DEL CÓDIGO COMENTADO --- #}
-                                {# <li><a class="dropdown-item {% if 'planificacion' in request.endpoint %}active{% endif %}" href="{{ url_for('planificacion.index') }}"><i class="bi bi-calendar-check me-2"></i> Planificación</a></li> #}
-                                {# <li><hr class="dropdown-divider"></li> #}
-                                {# --- FIN DEL CÓDIGO COMENTADO --- #}
+                                <li><a class="dropdown-item {% if 'planificacion' in request.endpoint %}active{% endif %}" href="{{ url_for('planificacion.index') }}"><i class="bi bi-calendar-check me-2"></i> Planificación</a></li>
+        			<li><hr class="dropdown-divider"></li>
                                 {% set can_ver_produccion = has_permission('ver_ordenes_produccion') %}
                                 <li><a class="dropdown-item {% if 'orden_produccion' in request.endpoint %}active{% endif %} {% if can_ver_produccion|trim != 'True' %}disabled{% endif %}" href="{{ url_for('orden_produccion.listar') if can_ver_produccion|trim == 'True' else '#' }}" aria-disabled="{{ 'true' if can_ver_produccion|trim != 'True' else 'false' }}"><i class="fas fa-clipboard-list me-2"></i> Ordenes de Producción</a></li>
                             </ul>
