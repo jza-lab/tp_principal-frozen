@@ -35,7 +35,7 @@
                 <div class="mb-3">
                     <label for="tipo" class="form-label">Tipo de Autorización</label>
                     <select class="form-select" id="tipo" name="tipo" required>
-                        <option value="LLEGADA_TARDIA" {% if not autorizacion.tipo or autorizacion.tipo == 'LLEGADA_TARDIA' %}selected{% endif %}>Llegada Tarde</option>
+                        <option value="TARDANZA" {% if not autorizacion.tipo or autorizacion.tipo == 'TARDANZA' %}selected{% endif %}>Llegada Tarde</option>
                         <option value="HORAS_EXTRAS" {% if autorizacion.tipo == 'HORAS_EXTRAS' %}selected{% endif %}>Horas Extras</option>
                     </select>
                 </div>
@@ -76,85 +76,81 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const form = document.querySelector('form');
+    const tipoSelect = document.getElementById('tipo');
+    const turnoSelect = document.getElementById('turno_autorizado_id');
     const fechaInput = document.getElementById('fecha_autorizada');
-    const tipoInput = document.getElementById('tipo');
-    const turnoInput = document.getElementById('turno_autorizado_id');
-    const submitButton = form.querySelector('button[type="submit"]');
 
-    // --- Error Div for Fecha ---
+    // --- Validación de Fecha ---
     const fechaErrorDiv = document.createElement('div');
     fechaErrorDiv.className = 'invalid-feedback';
     fechaInput.parentNode.insertBefore(fechaErrorDiv, fechaInput.nextSibling);
 
-    // --- Error Div for Turno/Tipo ---
-    const turnoErrorDiv = document.createElement('div');
-    turnoErrorDiv.className = 'invalid-feedback';
-    turnoInput.parentNode.insertBefore(turnoErrorDiv, turnoInput.nextSibling);
-
-    let isFechaValid = true;
-    let isTurnoValid = true;
-
-    function updateSubmitButtonState() {
-        submitButton.disabled = !isFechaValid || !isTurnoValid;
-    }
-
     function validateFecha() {
         const selectedDateStr = fechaInput.value;
-        if (!selectedDateStr) {
-            fechaInput.classList.remove('is-invalid');
-            fechaErrorDiv.style.display = 'none';
-            isFechaValid = true; 
-            updateSubmitButtonState();
-            return;
-        }
+        if (!selectedDateStr) return; // No validar si está vacío
 
         const today = new Date();
-        const year = today.getFullYear();
-        const month = String(today.getMonth() + 1).padStart(2, '0');
-        const day = String(today.getDate()).padStart(2, '0');
-        const todayStr = `${year}-${month}-${day}`;
+        today.setHours(0, 0, 0, 0); // Normalizar a medianoche
+        const selectedDate = new Date(selectedDateStr + 'T00:00:00');
 
-        if (selectedDateStr < todayStr) {
+        if (selectedDate < today) {
             fechaInput.classList.add('is-invalid');
             fechaErrorDiv.textContent = 'La fecha no puede ser anterior a la actual.';
             fechaErrorDiv.style.display = 'block';
-            isFechaValid = false;
         } else {
             fechaInput.classList.remove('is-invalid');
             fechaErrorDiv.style.display = 'none';
-            isFechaValid = true;
         }
-        updateSubmitButtonState();
+    }
+    fechaInput.addEventListener('change', validateFecha);
+    validateFecha(); // Validar al cargar la página
+
+    // --- Lógica de Filtrado de Turnos ---
+    async function actualizarTurnos() {
+        const tipoAutorizacion = tipoSelect.value;
+        const turnoSpinner = document.createElement('option');
+        turnoSpinner.textContent = 'Cargando...';
+        turnoSpinner.disabled = true;
+
+        turnoSelect.innerHTML = '';
+        turnoSelect.appendChild(turnoSpinner);
+        turnoSelect.disabled = true;
+
+        try {
+            const response = await fetch(`/api/turnos_para_autorizacion?tipo=${tipoAutorizacion}`);
+            if (!response.ok) {
+                throw new Error(`Error en la solicitud: ${response.statusText}`);
+            }
+            const resultado = await response.json();
+            
+            turnoSelect.innerHTML = ''; // Limpiar el spinner
+            if (resultado.success && resultado.data.length > 0) {
+                turnoSelect.appendChild(new Option('Seleccione el turno a autorizar...', ''));
+                resultado.data.forEach(turno => {
+                    const optionText = `${turno.nombre} (${turno.hora_inicio.substring(0, 5)} - ${turno.hora_fin.substring(0, 5)})`;
+                    const option = new Option(optionText, turno.id);
+                    turnoSelect.appendChild(option);
+                });
+            } else {
+                const noHayTurnosOption = new Option('No hay turnos disponibles para este tipo', '');
+                noHayTurnosOption.disabled = true;
+                turnoSelect.appendChild(noHayTurnosOption);
+            }
+        } catch (error) {
+            console.error('Error al cargar los turnos:', error);
+            turnoSelect.innerHTML = '';
+            const errorOption = new Option('Error al cargar turnos', '');
+            errorOption.disabled = true;
+            turnoSelect.appendChild(errorOption);
+        } finally {
+            turnoSelect.disabled = false;
+        }
     }
 
-    function validateTurnoYTipo() {
-        const tipoValue = tipoInput.value;
-        const selectedTurnoOption = turnoInput.options[turnoInput.selectedIndex];
-        
-        if (!selectedTurnoOption || !selectedTurnoOption.text) {
-             turnoInput.classList.remove('is-invalid');
-             turnoErrorDiv.style.display = 'none';
-             isTurnoValid = true;
-             updateSubmitButtonState();
-             return;
-        }
-
-        const turnoText = selectedTurnoOption.text.toLowerCase();
-
-        turnoInput.classList.remove('is-invalid');
-        turnoErrorDiv.style.display = 'none';
-        isTurnoValid = true;
-        
-        updateSubmitButtonState();
-    }
-
-    fechaInput.addEventListener('input', validateFecha);
-    tipoInput.addEventListener('input', validateTurnoYTipo);
-    turnoInput.addEventListener('input', validateTurnoYTipo);
-
-    validateFecha();
-    validateTurnoYTipo();
+    tipoSelect.addEventListener('change', actualizarTurnos);
+    
+    // Cargar los turnos iniciales al cargar la página
+    actualizarTurnos();
 });
 </script>
 {% endblock %}

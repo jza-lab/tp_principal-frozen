@@ -173,10 +173,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Carga inicial
     const authTab = document.getElementById('authorizations-tab');
     if (authTab) {
-        authTab.addEventListener('shown.bs.tab', fetchAuthorizations);
-    }
-    // Si la pestaña de autorizaciones ya está activa al cargar la página
-    if (document.querySelector('#authorizations-panel.active')) {
-       fetchAuthorizations();
+        authTab.addEventListener('show.bs.tab', fetchAuthorizations, { once: true });
+
+        if (authTab.classList.contains('active')) {
+            fetchAuthorizations();
+        }
     }
 });

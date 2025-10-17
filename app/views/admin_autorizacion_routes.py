@@ -20,11 +20,6 @@ def nueva_autorizacion():
         data = request.form.to_dict()
         data['supervisor_id'] = session.get('usuario_id')
         
-        # La lógica de conversión de tipos debería estar en el controlador,
-        # pero por ahora se mantiene aquí para cumplir la primera fase.
-        data['usuario_id'] = int(data['usuario_id'])
-        data['turno_autorizado_id'] = int(data['turno_autorizado_id']) if data.get('turno_autorizado_id') else None
-        
         resultado = autorizacion_controller.crear_autorizacion(data)
 
         if resultado.get('success'):

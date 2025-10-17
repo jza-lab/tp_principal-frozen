@@ -91,3 +91,20 @@ def validar_direccion():
         provincia=provincia
     )
     return jsonify(resultado)
+
+@api_bp.route('/turnos_para_autorizacion', methods=['GET'])
+@permission_required(accion='aprobar_permisos') 
+def get_turnos_para_autorizacion():
+    """
+    Obtiene una lista de turnos filtrada según el tipo de autorización.
+    """
+    tipo_autorizacion = request.args.get('tipo', '')
+    if not tipo_autorizacion:
+        return jsonify({'success': False, 'error': 'El parámetro "tipo" es requerido.'}), 400
+
+    resultado = usuario_controller.obtener_turnos_para_autorizacion(tipo_autorizacion)
+    
+    if resultado.get('success'):
+        return jsonify(resultado)
+    
+    return jsonify({'success': False, 'error': resultado.get('error', 'Error interno del servidor')}), 500

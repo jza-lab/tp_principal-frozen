@@ -75,22 +75,29 @@ class TotemSesionModel(BaseModel):
     def verificar_sesion_activa_hoy(self, usuario_id: int) -> bool:
         """
         Verifica si el usuario tiene una sesión activa hoy.
+        La consulta se hace utilizando UTC para evitar problemas de zona horaria.
         """
         try:
-            from datetime import date
-            hoy = date.today().isoformat()
+            from datetime import time, timezone, datetime
             
+            # Definir el inicio y el fin del día de hoy en UTC
+            today_utc = datetime.now(timezone.utc).date()
+            start_of_day_utc = datetime.combine(today_utc, time.min, tzinfo=timezone.utc)
+            end_of_day_utc = datetime.combine(today_utc, time.max, tzinfo=timezone.utc)
+
             response = self.db.table(self.get_table_name())\
-                .select('*')\
+                .select('id', count='exact')\
                 .eq('usuario_id', usuario_id)\
                 .eq('activa', True)\
-                .gte('fecha_inicio', f'{hoy}T00:00:00')\
-                .lte('fecha_inicio', f'{hoy}T23:59:59')\
+                .gte('fecha_inicio', start_of_day_utc.isoformat())\
+                .lte('fecha_inicio', end_of_day_utc.isoformat())\
                 .execute()
 
-            return len(response.data) > 0
+            # Si el conteo es mayor a 0, significa que ya hay una sesión activa hoy.
+            return response.count > 0
+            
         except Exception as e:
-            logger.error(f"Error verificando sesión activa hoy: {str(e)}")
+            logger.error(f"Error verificando sesión activa hoy para usuario {usuario_id}: {e}", exc_info=True)
             return False
 
     def obtener_actividad_filtrada(self, filtros: dict) -> Dict:

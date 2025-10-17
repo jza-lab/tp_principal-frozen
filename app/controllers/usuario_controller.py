@@ -322,56 +322,102 @@ class UsuarioController(BaseController):
         return {'success': True, 'data': user_result.get('data')}
 
     def verificar_acceso_por_horario(self, usuario: dict) -> dict:
-        """Verifica si un fichaje es válido según el turno o una autorización."""
+        """
+        Verifica si un fichaje es válido, considerando el turno habitual y las autorizaciones.
+        Orquesta la lógica de verificación llamando a métodos de ayuda específicos.
+        """
         if not usuario or usuario.get('roles', {}).get('codigo') == 'GERENTE':
             return {'success': True}
 
-        hora_actual = datetime.now().time()
-        autorizacion_model = AutorizacionIngresoModel()
-        
-        turno_info = usuario.get('turno')
-        if turno_info and 'hora_inicio' in turno_info:
-            try:
-                hora_inicio = datetime.strptime(turno_info['hora_inicio'], '%H:%M:%S').time()
-                dt_inicio = datetime.combine(datetime.today(), hora_inicio)
-                inicio_permitido = (dt_inicio - timedelta(minutes=15)).time()
-                fin_permitido = (dt_inicio + timedelta(minutes=15)).time()
+        # 1. Verificar si el usuario está dentro de su ventana de fichaje habitual.
+        if self._esta_en_horario_habitual(usuario):
+            return {'success': True}
 
-                if fin_permitido < inicio_permitido:
-                    if hora_actual >= inicio_permitido or hora_actual <= fin_permitido:
-                        return {'success': True}
-                else:
-                    if inicio_permitido <= hora_actual <= fin_permitido:
-                        return {'success': True}
-            except (ValueError, TypeError) as e:
-                logger.warning(f"No se pudo parsear hora de inicio de turno para {usuario.get('legajo')}: {e}")
-                pass
+        # 2. Si no está en horario, buscar una autorización válida para el momento actual.
+        resultado_autorizacion = self._buscar_autorizacion_valida_para_hora_actual(usuario)
+        if resultado_autorizacion.get('success'):
+            logger.info(f"Acceso para {usuario.get('legajo')} concedido por autorización: {resultado_autorizacion.get('message')}")
+            return {'success': True}
+
+        # 3. Si ambas verificaciones fallan, denegar el acceso.
+        return {'success': False, 'error': 'Fichaje fuera de horario y sin autorización válida para este momento.'}
+
+    def _get_hora_actual_argentina(self) -> (date, time):
+        """Devuelve la fecha y hora actuales para la zona horaria de Argentina (ART/UTC-3)."""
+        from datetime import timezone, timedelta
+        # Zona horaria para Argentina (ART, UTC-3)
+        art_timezone = timezone(timedelta(hours=-3))
+        now_art = datetime.now(art_timezone)
+        return now_art.date(), now_art.time()
+
+    def _esta_en_horario_habitual(self, usuario: dict) -> bool:
+        """Comprueba si la hora actual está dentro de la ventana del turno habitual del usuario."""
+        turno_info = usuario.get('turno')
+        if not turno_info or 'hora_inicio' not in turno_info:
+            return False
         
-        auth_result = autorizacion_model.find_by_usuario_and_fecha(usuario.get('id'), datetime.today().date(), estado='APROBADA')
-        if not auth_result.get('success'):
-            return {'success': False, 'error': 'Fichaje fuera de horario. Se requiere una autorización.'}
+        try:
+            fecha_actual_art, hora_actual_art = self._get_hora_actual_argentina()
+            # Usar time.fromisoformat para manejar formatos de hora más flexibles de la BD
+            hora_inicio = time.fromisoformat(turno_info['hora_inicio'])
+            dt_inicio = datetime.combine(fecha_actual_art, hora_inicio)
+            
+            # Ventana de fichaje: 15 minutos antes y 15 minutos después del inicio del turno.
+            inicio_permitido = (dt_inicio - timedelta(minutes=15)).time()
+            fin_permitido = (dt_inicio + timedelta(minutes=15)).time()
+
+            if fin_permitido < inicio_permitido:  # Turno nocturno que cruza medianoche
+                return hora_actual_art >= inicio_permitido or hora_actual_art <= fin_permitido
+            else:  # Turno diurno
+                return inicio_permitido <= hora_actual_art <= fin_permitido
+        except (ValueError, TypeError) as e:
+            logger.warning(f"No se pudo parsear hora de inicio de turno para {usuario.get('legajo')}: {e}")
+            return False
+
+    def _buscar_autorizacion_valida_para_hora_actual(self, usuario: dict) -> dict:
+        """Busca una autorización aprobada y activa para el usuario y la hora actual."""
+        autorizacion_model = AutorizacionIngresoModel()
+        fecha_actual_art, hora_actual_art = self._get_hora_actual_argentina()
+        
+        auth_result = autorizacion_model.find_by_usuario_and_fecha(
+            usuario.get('id'), fecha_actual_art, estado='APROBADA'
+        )
+
+        if not auth_result.get('success') or not auth_result.get('data'):
+            return {'success': False}
 
         for autorizacion in auth_result.get('data', []):
             try:
-                auth_turno = autorizacion.get('turno', {})
-                auth_inicio = datetime.strptime(auth_turno['hora_inicio'], '%H:%M:%S').time()
-                auth_fin = datetime.strptime(auth_turno['hora_fin'], '%H:%M:%S').time()
+                auth_turno = autorizacion.get('turno')
+                if not auth_turno or 'hora_inicio' not in auth_turno or 'hora_fin' not in auth_turno:
+                    continue
 
-                if autorizacion.get('tipo') == 'TARDANZA' and auth_inicio <= hora_actual <= auth_fin:
-                    logger.info(f"Acceso permitido para {usuario.get('legajo')} por TARDANZA.")
-                    return {'success': True}
+                auth_inicio = time.fromisoformat(auth_turno['hora_inicio'])
+                auth_fin = time.fromisoformat(auth_turno['hora_fin'])
                 
-                if autorizacion.get('tipo') == 'HORAS_EXTRAS':
-                    inicio_ventana_he = (datetime.combine(date.today(), auth_inicio) - timedelta(minutes=15)).time()
-                    if (auth_fin < inicio_ventana_he and (hora_actual >= inicio_ventana_he or hora_actual <= auth_fin)) or \
-                       (inicio_ventana_he <= hora_actual <= auth_fin):
-                        logger.info(f"Acceso permitido para {usuario.get('legajo')} por HORAS_EXTRAS.")
-                        return {'success': True}
+                # Ventana de fichaje para autorización: 15 min antes del inicio autorizado hasta el fin.
+                dt_inicio_auth = datetime.combine(fecha_actual_art, auth_inicio)
+                inicio_permitido = (dt_inicio_auth - timedelta(minutes=15)).time()
+                fin_permitido = auth_fin
+
+                en_ventana = False
+                if fin_permitido < inicio_permitido:  # Turno autorizado cruza medianoche
+                    if hora_actual_art >= inicio_permitido or hora_actual_art <= fin_permitido:
+                        en_ventana = True
+                else:  # Turno autorizado diurno
+                    if inicio_permitido <= hora_actual_art <= fin_permitido:
+                        en_ventana = True
+                
+                if en_ventana:
+                    tipo_auth = autorizacion.get('tipo')
+                    if tipo_auth in ['TARDANZA', 'HORAS_EXTRAS']:
+                        return {'success': True, 'message': f"Tipo: {tipo_auth}, Horario: {auth_inicio}-{auth_fin}"}
+
             except (ValueError, TypeError) as e:
                 logger.warning(f"Error procesando turno de autorización para {usuario.get('legajo')}: {e}")
                 continue
-
-        return {'success': False, 'error': 'Fichaje fuera de horario y sin autorización válida para este momento.'}
+        
+        return {'success': False}
 
     def obtener_estado_acceso(self, usuario_id: int) -> Dict:
         """Obtiene el estado completo de acceso de un usuario (web y tótem)."""
@@ -418,6 +464,34 @@ class UsuarioController(BaseController):
             return self.model.get_turnos_para_usuario(usuario_id).get('data', [])
         
         return self.turno_model.find_all().get('data', [])
+
+    def obtener_turnos_para_autorizacion(self, tipo_autorizacion: str) -> dict:
+        """
+        Obtiene una lista de turnos filtrada según el tipo de autorización,
+        implementando las mejores prácticas de UX para el formulario.
+        """
+        turnos_result = self.turno_model.find_all()
+        if not turnos_result.get('success'):
+            return turnos_result
+
+        all_turnos = turnos_result.get('data', [])
+        filtered_turnos = []
+
+        if tipo_autorizacion == 'HORAS_EXTRAS':
+            # Para horas extras, mostrar solo turnos que parezcan ser para ese fin.
+            filtered_turnos = [
+                t for t in all_turnos if 'extra' in t.get('nombre', '').lower()
+            ]
+        elif tipo_autorizacion == 'TARDANZA':
+            # Para llegadas tardías, mostrar solo los turnos principales.
+            filtered_turnos = [
+                t for t in all_turnos if 'mañana' in t.get('nombre', '').lower() or 'tarde' in t.get('nombre', '').lower()
+            ]
+        else:
+            # Por defecto, o para otros tipos, devolver todos los turnos.
+            filtered_turnos = all_turnos
+        
+        return {'success': True, 'data': filtered_turnos}
 
     def obtener_sectores_ids_usuario(self, usuario_id: int) -> List[int]:
         """Obtiene una lista solo con los IDs de los sectores de un usuario."""
