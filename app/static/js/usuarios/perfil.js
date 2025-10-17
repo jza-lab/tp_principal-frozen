@@ -89,7 +89,7 @@ async function validateField(field, value, inputElement) {
 
     // --- Validación asíncrona (unicidad) ---
     try {
-        const response = await fetch('/admin/usuarios/validar', {
+        const response = await fetch('/api/validar/campo_usuario', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ field, value, user_id: userId })
@@ -732,7 +732,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const response = await fetch('/admin/usuarios/verificar_direccion', {
+            const response = await fetch('/api/validar/direccion', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ calle, altura, localidad, provincia })

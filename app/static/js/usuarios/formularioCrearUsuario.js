@@ -391,7 +391,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const response = await fetch('/admin/usuarios/verificar_direccion', {
+            const response = await fetch('/api/validar/direccion', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -490,7 +490,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // --- Validación asíncrona (unicidad) ---
         try {
-            const response = await fetch('/admin/usuarios/validar', {
+            const response = await fetch('/api/validar/campo_usuario', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ field, value })
@@ -975,7 +975,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             try {
-                const response = await fetch('/admin/usuarios/validar_rostro', {
+                const response = await fetch('/api/validar/rostro', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ image: imageData })
