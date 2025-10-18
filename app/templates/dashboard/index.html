@@ -2,6 +2,12 @@
 
 {% block title %}Dashboard - Sistema Frozen{% endblock %}
 
+{% block extra_css %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard/dashboard.css') }}">
+
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Dashboard</h1>
@@ -13,17 +19,20 @@
 {% set can_ver_admin = user_permissions.is_gerente or ('ADMINISTRACION' in user_permissions and ('ver_info_empleados' in user_permissions['ADMINISTRACION'] or 'gestionar_turnos' in user_permissions['ADMINISTRACION'])) %}
 
 <div class="row mb-4">
+    
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card h-100 {% if not can_ver_produccion %}disabled{% endif %}">
+        <div class="card stat-card h-100 border-0 shadow-sm">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
                     <div>
-                        <div class="stat-label mb-1">Órdenes en Proceso</div>
-                        <div class="stat-value">{{ ordenes_pendientes }} en curso</div>
-                        <div class="small text-muted">Órdenes en estado EN PROCESO</div>
+                        <div class="stat-label mb-1 text-muted">Órdenes en Proceso</div>
+                        <div class="stat-value text-primary">{{ ordenes_pendientes }}</div>
+                        <div class="small text-muted">OPs en fabricación</div>
                     </div>
-                    <div class="text-muted">
-                        <i class="bi bi-gear-fill fs-1 opacity-25"></i>
+                    </a>
+                    <div class="text-primary">
+                        <i class="bi bi-gear-fill fs-1"></i>
                     </div>
                 </div>
             </div>
@@ -31,23 +40,46 @@
     </div>
 
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card h-100 {% if not can_ver_produccion %}disabled{% endif %}">
+        <div class="card stat-card h-100 border-0 shadow-sm
+             {% if not can_ver_produccion %}disabled{% endif %}
+             {% if ordenesventa_pendientes > 0 %}glow-on-load{% endif %}">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
+                    <div>
+                        <div class="stat-label mb-1 text-muted">Órdenes de Venta Pendientes</div>
+                        <div class="stat-value text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">{{ ordenesventa_pendientes }}</div>
+                        <div class="small text-muted">OV esperando stock/planificación</div>
+                    </div>
+                    </a>
+                    <div class="text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">
+                        <i class="bi bi-cart-x-fill fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card h-100 border-0 shadow-sm
+             {% if not can_ver_produccion %}disabled{% endif %}
+             {% if productos_sin_lotes_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('lote_producto.listar_lotes') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         {% if productos_sin_lotes_count == 0 %}
                             <div>
-                                <div class="stat-label mb-1 text-success">Stock Productos Finales</div>
+                                <div class="stat-label mb-1 text-muted">Stock Productos Finales</div>
                                 <div class="small text-muted">Productos sin lotes asociados</div>
                                 <div class="stat-value text-success">{{ productos_sin_lotes_count }}</div>
                                 <div class="small text-success">¡Inventario de productos completo!</div>
                             </div>
-                            <div class="text-muted">
-                                <i class="bi bi-check-circle-fill fs-1 opacity-25 text-success"></i>
+                            <div class="text-success">
+                                <i class="bi bi-check-circle-fill fs-1"></i>
                             </div>
                         {% else %}
                             <div>
-                                <div class="stat-label mb-1 text-danger">PRODUCTOS SIN STOCK</div>
+                                <div class="stat-label mb-1 text-muted">PRODUCTOS SIN STOCK</div>
                                 <div class="small text-muted">Se requieren lotes para:</div>
                                 <div class="stat-value text-danger">{{ productos_sin_lotes_count }}</div>
                                 
@@ -61,8 +93,8 @@
                                 </ul>
 
                             </div>
-                            <div class="text-muted">
-                                <i class="bi bi-box-fill fs-1 opacity-25 text-danger"></i>
+                            <div class="text-danger">
+                                <i class="bi bi-box-fill fs-1"></i>
                             </div>
                         {% endif %}
                     </div>
@@ -72,23 +104,25 @@
     </div>
 
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card h-100 {% if not can_ver_almacen %}disabled{% endif %}">
+        <div class="card stat-card h-100 border-0 shadow-sm
+             {% if not can_ver_almacen %}disabled{% endif %}
+             {% if alertas_stock_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') if can_ver_almacen else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_almacen else 'false' }}">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         {% if alertas_stock_count == 0 %}
                             <div>
-                                <div class="stat-label mb-1 text-success">Alertas de Stock Insumos</div>
+                                <div class="stat-label mb-1 text-muted">Alertas de Stock Insumos</div>
                                 <div class="small text-muted">Insumos por debajo del mínimo</div>
                                 <div class="stat-value text-success">{{ alertas_stock_count }}</div>
                                 <div class="small text-success">¡Todo en orden, contas con stock!</div>
                             </div>
-                            <div class="text-muted">
-                                <i class="bi bi-check-circle fs-1 opacity-25 text-success"></i>
+                            <div class="text-success">
+                                <i class="bi bi-check-circle fs-1"></i>
                             </div>
                         {% else %}
                             <div>
-                                <div class="stat-label mb-1 text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }}">Alertas de Stock Insumos</div>
+                                <div class="stat-label mb-1 text-muted">Alertas de Stock Insumos</div>
                                 <div class="small text-muted">Insumos con stock bajo/crítico:</div>
                                 <div class="stat-value text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }}">{{ alertas_stock_count }}</div>
                                 
@@ -104,8 +138,8 @@
                                 </ul>
 
                             </div>
-                            <div class="text-muted">
-                                <i class="bi bi-exclamation-triangle-fill fs-1 opacity-25 text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }}"></i>
+                            <div class="text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }}">
+                                <i class="bi bi-exclamation-triangle-fill fs-1"></i>
                             </div>
                         {% endif %}
                     </div>
@@ -113,32 +147,14 @@
             </a>
         </div>
     </div>
-
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card h-100 {% if not can_ver_admin %}disabled{% endif %}">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <div class="stat-label mb-1">ASISTENCIA GENERAL HOY</div>
-                        <div class="stat-value text-{{ 'success' if asistencia >= 80 else 'warning' if asistencia > 50 else 'danger' }}"> 
-                            {{ asistencia }}%
-                        </div>
-                        <div class="small text-muted">Porcentaje de personal en planta</div>
-                    </div>
-                    <div class="text-muted">
-                        <i class="bi bi-person-check-fill fs-1 opacity-25"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    
 </div>
 
 <div class="row">
     <div class="col-lg-8 mb-4">
-        <div class="card h-100 {% if not can_ver_produccion %}disabled{% endif %}">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
+        <div class="card h-100 shadow-sm {% if not can_ver_produccion %}disabled{% endif %}">
+            <div class="card-header bg-white border-bottom pb-2 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 text-dark">
                     <i class="bi bi-clock-history text-primary me-2"></i>
                     Órdenes de Producción Aprobadas
                 </h5>
@@ -155,10 +171,10 @@
                         <div class="me-3" style="flex-grow: 1;">
                             <h6 class="mb-1 fw-bold text-truncate">{{ orden.producto_nombre or 'Producto no definido' }}</h6>
                             <p class="mb-1 small text-muted">
-                                <span class="badge bg-secondary-soft me-2">
+                                <span class="badge bg-secondary-subtle text-secondary me-2">
                                     <i class="bi bi-box-seam me-1"></i> {{ orden.cantidad_planificada }} uds.
                                 </span>
-                                <span class="badge bg-primary-soft">
+                                <span class="badge bg-primary-subtle text-primary">
                                     <i class="bi bi-person me-1"></i> {{ orden.supervisor_nombre or 'N/A' }}
                                 </span>
                             </p>
@@ -192,21 +208,38 @@
     </div>
 
     <div class="col-lg-4 mb-4">
-        <div class="card mb-4" style="height: 48%;"> 
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-bell-fill me-2"></i>
+        
+        <div class="card stat-card mb-4 border-0 shadow-sm {% if not can_ver_admin %}disabled{% endif %}">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="stat-label mb-1 text-muted">ASISTENCIA GENERAL HOY</div>
+                        <div class="stat-value text-{{ 'success' if asistencia >= 80 else 'warning' if asistencia > 50 else 'danger' }} display-4 fw-bold"> 
+                            {{ asistencia }}%
+                        </div>
+                        <div class="small text-muted">Porcentaje de personal en planta</div>
+                    </div>
+                    <div class="text-{{ 'success' if asistencia >= 80 else 'warning' if asistencia > 50 else 'danger' }}">
+                        <i class="bi bi-person-check-fill fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mb-4 border-0 shadow-sm"> 
+            <div class="card-header bg-white border-bottom pb-2 d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0 text-dark">
+                    <i class="bi bi-bell-fill me-2 text-danger"></i>
                     Notificaciones Recientes
                     <span class="badge bg-danger ms-2">{{ notificaciones|length }}</span>
                 </h5>
             </div>
             <div class="card-body p-0" style="max-height: 250px; overflow-y: auto;">
                 {% if notificaciones %}
-                <ul class="list-group list-group-flush list-group-compact">
-                    {% for notificacion in notificaciones %}
-                    <li class="list-group-item d-flex align-items-start py-2">
-                        <span class="me-2 text-{{ 'danger' if notificacion.tipo == 'LLEGADA_TARDIA' else 'info' }}">
-                            <i class="bi bi-{{ 'clock-fill' if notificacion.tipo == 'LLEGADA_TARDIA' else 'info-circle' }} mt-1"></i>
+                <ul class="list-group list-group-flush border-0">
+                    {% for notificacion in notificaciones[:5] %} <li class="list-group-item d-flex align-items-start py-2 border-0">
+                        <span class="me-2 text-{{ 'danger' if notificacion.tipo == 'TARDANZA' else 'info' }}">
+                            <i class="bi bi-{{ 'clock-fill' if notificacion.tipo == 'TARDANZA' else 'info-circle' }} mt-1"></i>
                         </span>
                         <div class="flex-grow-1">
                             <small class="d-block fw-bold text-truncate-2" title="{{ notificacion.mensaje }}">
@@ -220,38 +253,41 @@
                     {% endfor %}
                 </ul>
                 {% else %}
-                <p class="text-center text-muted py-3">No hay notificaciones nuevas.</p>
+                <p class="text-center text-muted py-4 mb-0">No hay notificaciones nuevas.</p>
                 {% endif %}
             </div>
         </div>
 
-        <div class="card" style="height: 48%;">
-            <div class="card-header">
-                <h5 class="mb-0">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-bottom pb-2">
+                <h5 class="mb-0 text-dark">
                     <i class="bi bi-exclamation-octagon-fill text-warning me-2"></i>
                     Resumen de Riesgos
                 </h5>
             </div>
-            <div class="card-body">
+            <div class="card-body d-flex flex-column justify-content-around py-3 px-3">
                 <div class="list-group list-group-flush small">
-                    <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') if can_ver_almacen else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center {% if not can_ver_almacen %}disabled{% endif %}" aria-disabled="{{ 'true' if not can_ver_almacen else 'false' }}">
+                    
+                    <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') if can_ver_almacen else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center border-0 {% if not can_ver_almacen %}disabled{% endif %}" aria-disabled="{{ 'true' if not can_ver_almacen else 'false' }}">
                         <span class="text-muted">Insumos Críticos con Stock Bajo:</span>
-                        <span class="badge bg-{{ 'danger' if alertas_stock_count > 0 else 'success' }} rounded-pill">
+                        <span class="badge bg-{{ 'danger' if alertas_stock_count > 0 else 'success' }} rounded-pill fs-6">
                             {{ alertas_stock_count }}
                         </span>
                     </a>
-                    <a href="{{ url_for('lote_producto.listar_lotes') if can_ver_produccion else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center {% if not can_ver_produccion %}disabled{% endif %}" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
+                    
+                    <a href="{{ url_for('lote_producto.listar_lotes') if can_ver_produccion else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center border-0 {% if not can_ver_produccion %}disabled{% endif %}" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
                         <span class="text-muted">Productos sin Lotes (Producción Requerida):</span>
-                        <span class="badge bg-{{ 'danger' if productos_sin_lotes_count > 0 else 'success' }} rounded-pill">
+                        <span class="badge bg-{{ 'danger' if productos_sin_lotes_count > 0 else 'success' }} rounded-pill fs-6">
                             {{ productos_sin_lotes_count }}
                         </span>
                     </a>
-                    <div class="list-group-item p-2 d-flex justify-content-between align-items-center {% if not can_ver_admin %}disabled{% endif %}">
-                        <span class="text-muted">Asistencia Hoy (&lt;80%):</span>
-                        <span class="badge bg-{{ 'danger' if asistencia < 80 else 'success' }} rounded-pill">
-                            {{ asistencia }}%
+
+                    <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') if can_ver_produccion else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center border-0 {% if not can_ver_produccion %}disabled{% endif %}" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
+                        <span class="text-muted">Órdenes de Venta Pendientes:</span>
+                        <span class="badge bg-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }} rounded-pill fs-6">
+                            {{ ordenesventa_pendientes }}
                         </span>
-                    </div>
+                    </a>      
                 </div>
             </div>
         </div>
@@ -260,4 +296,33 @@
 
 {% if alertas %}
     {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const glowingCards = document.querySelectorAll('.glow-on-load');
+    const animationDuration = 3000; // La duración total que quieres que la tarjeta brille.
+    const fadeOutDuration = 500;    // Duración de la transición de salida (debe coincidir con el CSS).
+
+    glowingCards.forEach(card => {
+        // Temporizador para iniciar el desvanecimiento (500ms antes de que se cumplan 3s)
+        setTimeout(() => {
+            // Añade la clase que dispara el desvanecimiento gradual en el CSS
+            card.classList.add('glow-fade-out');
+
+            // Pausa la animación para evitar saltos visuales durante el fade-out
+            card.style.animationPlayState = 'paused';
+
+            // Temporizador para la eliminación final de las clases
+            setTimeout(() => {
+                card.classList.remove('glow-on-load');
+                card.classList.remove('glow-fade-out');
+                card.style.animationPlayState = ''; // Limpiar el estado de pausa
+            }, fadeOutDuration);
+            
+        }, animationDuration - fadeOutDuration);
+    });
+});
+</script>>
 {% endblock %}

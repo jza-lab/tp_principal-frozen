@@ -32,7 +32,7 @@ class ClienteModel(BaseModel):
     def get_all(self, filtros: Optional[Dict] = None) -> Dict:
         """Obtener todos los clientes, con filtros opcionales de búsqueda y activos."""
         try:
-            query = self.db.table(self.get_table_name()).select("*")
+            query = self.db.table(self.get_table_name()).select("*, direccion:direccion_id(*)")
             
             filtros_copy = filtros.copy() if filtros else {}
             texto_busqueda = filtros_copy.pop('busqueda', None)

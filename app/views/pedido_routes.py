@@ -1,4 +1,5 @@
 import os
+import random
 from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, session, jsonify
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
@@ -244,22 +245,29 @@ def generar_factura_html(id):
     pedido_data = response.get('data')
     if pedido_data:
         pedido_data['emisor'] = {
-            'ingresos_brutos': 'XX-XXXXXXX-X',
+            'ingresos_brutos': '20-12345678-3',
             'inicio_actividades': '2020-01-01',
-            'cae': '00000000000000', # Valores de ejemplo o obtenidos de otra fuente
+            'cae': ''.join([str(random.randint(0, 9)) for _ in range(14)]),
             'vencimiento_cae': '2025-10-31'
         }
 
+    cliente_resp, _= cliente_controller.obtener_cliente(pedido_data['id_cliente'])
+    cliente= cliente_resp['data']
     # Convertir las fechas a objetos datetime si son strings ISO (necesario para strftime en Jinja)
     if pedido_data and pedido_data.get('created_at') and isinstance(pedido_data['created_at'], str):
         try:
             pedido_data['created_at'] = datetime.fromisoformat(pedido_data['created_at'])
         except ValueError:
-            pass
-
-    # Renderiza la plantilla sin la maquetación base
-    rendered_html = render_template('orden_venta/factura_pedido.html', pedido=pedido_data)
-
+            pass 
+    if pedido_data['estado'] == 'PENDIENTE':
+        rendered_html = render_template('orden_venta/factura_proforma_pedido.html', pedido=pedido_data, cliente=cliente)
+    else:
+        if cliente['condicion_iva'] == '1':
+            # Renderiza la plantilla sin la maquetación base
+            rendered_html = render_template('orden_venta/factura_a_pedido.html', pedido=pedido_data, cliente=cliente)
+        else:
+            rendered_html = render_template('orden_venta/factura_b_pedido.html', pedido=pedido_data, cliente=cliente)
+        
     return jsonify({
         'success': True,
         'html': rendered_html

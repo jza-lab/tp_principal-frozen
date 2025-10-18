@@ -186,7 +186,7 @@ class OrdenProduccionController(BaseController):
         """
         Inicia el proceso de una orden PENDIENTE.
         - Si hay stock, la pasa a 'LISTA PARA PRODUCIR' y reserva insumos.
-        - Si no hay stock, la pasa a 'EN ESPERA' y genera una OC.
+        - Si no hay stock, la pasa a 'EN_ESPERA' y genera una OC.
         """
         try:
             orden_result = self.obtener_orden_por_id(orden_id)
@@ -211,8 +211,8 @@ class OrdenProduccionController(BaseController):
                     return self.error_response(f"No se pudo generar la orden de compra: {oc_result.get('error')}", 500)
 
                 # 2. Cambiar estado de OP a 'EN ESPERA'
-                self.model.cambiar_estado(orden_id, 'EN ESPERA')
-
+                self.model.cambiar_estado(orden_id, 'EN_ESPERA')
+                
                 return self.success_response(
                     data={'oc_generada': True, 'oc_codigo': oc_result['data']['codigo_oc']},
                     message="Stock insuficiente. Se generó la Orden de Compra y la OP está 'En Espera'."

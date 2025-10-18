@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from flask import Blueprint, session, render_template
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
+from app.controllers.pedido_controller import PedidoController
 from app.controllers.notificación_controller import NotificacionController
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.lote_producto_controller import LoteProductoController
@@ -13,6 +14,7 @@ admin_dashboard_bp = Blueprint('admin_dashboard', __name__, url_prefix='/admin')
 # Instanciar controladores
 usuario_controller = UsuarioController()
 orden_produccion_controller = OrdenProduccionController()
+orden_venta_controller = PedidoController()
 notificacion_controller = NotificacionController()
 inventario_controller = InventarioController()
 lote_producto_controller = LoteProductoController()
@@ -30,17 +32,17 @@ def index():
 
     # NOTA: Esta lógica compleja debería moverse a un DashboardController en el futuro.
     # Por ahora, se mantiene aquí para cumplir con la primera fase de la refactorización.
-    respuesta, _ = orden_produccion_controller.obtener_cantidad_ordenes_estado("EN_PROCESO", hoy)
+    respuesta, _ = orden_produccion_controller.obtener_cantidad_ordenes_estado("EN_PROCESO")
     ordenes_pendientes = respuesta.get('data', {}).get('cantidad', 0)
 
-    respuesta2, _ = orden_produccion_controller.obtener_cantidad_ordenes_estado("APROBADA")
+    respuesta2, _ = orden_produccion_controller.obtener_cantidad_ordenes_estado("LISTA PARA PRODUCIR")
     respuesta3, _ = orden_produccion_controller.obtener_cantidad_ordenes_estado("COMPLETADA")
     
     cantidad_aprobadas = respuesta2.get('data', {}).get('cantidad', 0)
     cantidad_completadas = respuesta3.get('data', {}).get('cantidad', 0)
     ordenes_totales = int(cantidad_aprobadas) + int(cantidad_completadas)
 
-    filtros = {'estado': 'APROBADA', 'fecha_planificada_desde': fecha_inicio_iso, 'fecha_planificada_hasta': fecha_fin_iso}
+    filtros = {'estado': 'LISTA PARA PRODUCIR', 'fecha_planificada_desde': fecha_inicio_iso, 'fecha_planificada_hasta': fecha_fin_iso}
     respuesta_ordenes, _ = orden_produccion_controller.obtener_ordenes(filtros)
     ordenes_aprobadas = respuesta_ordenes.get('data', [])
 
@@ -55,6 +57,10 @@ def index():
     data_sin_lotes = productos_sin_lotes_resp.get('data', {})
     productos_sin_lotes_count = data_sin_lotes.get('conteo_sin_lotes', 0) 
     productos_sin_lotes_list = data_sin_lotes.get('productos_sin_lotes', [])
+
+
+    respuesta4, _ = orden_venta_controller.obtener_cantidad_pedidos_estado("PENDIENTE")
+    ordenesventa_pendientes = respuesta4.get('data', {}).get('cantidad', 0)
     
     user_permissions = session.get('permisos', {})
 
@@ -68,4 +74,5 @@ def index():
                            insumos_bajo_stock_list=insumos_bajo_stock_list,
                            productos_sin_lotes_count=productos_sin_lotes_count,
                            productos_sin_lotes_list=productos_sin_lotes_list,
+                           ordenesventa_pendientes=ordenesventa_pendientes,
                            user_permissions=user_permissions)

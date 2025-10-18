@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', function () {
             cuit: cuit,
             email: formData.get('email'),
             telefono: formData.get('telefono'),
+            condicion_iva: formData.get('condicion_iva'),
             direccion: {
                 calle: formData.get('calle'),
                 altura: formData.get('altura'),
@@ -62,7 +63,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function verifyAddress() {
         try {
-            const response = await fetch('/admin/usuarios/verificar_direccion', {
+            const response = await fetch('/api/validar/direccion', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
