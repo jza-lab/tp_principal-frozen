@@ -26,8 +26,8 @@ def index():
         'EN_LINEA_1': 'Línea 1 (Moderna)',
         'EN_LINEA_2': 'Línea 2 (Clásica)',
         'EN_EMPAQUETADO': 'Empaquetado',
-        'CONTROL_DE_CALIDAD': 'Control de Calidad',  # <-- NUEVO
-        'COMPLETADA': 'Completada'
+        'CONTROL_DE_CALIDAD': 'Control de Calidad',
+        'COMPLETADA': 'Completadas'
     }
 
     return render_template(

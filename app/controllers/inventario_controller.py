@@ -32,6 +32,7 @@ class InventarioController(BaseController):
     def reservar_stock_insumos_para_op(self, orden_produccion: Dict, usuario_id: int) -> dict:
         """
         Calcula los insumos necesarios para una OP, los reserva y devuelve los faltantes.
+        Ahora también actualiza el estado del lote a 'agotado' (minúscula) si se vacía.
         """
         receta_model = RecetaModel()
         reserva_insumo_model = ReservaInsumoModel()
@@ -40,7 +41,6 @@ class InventarioController(BaseController):
             receta_id = orden_produccion['receta_id']
             cantidad_a_producir = orden_produccion['cantidad_planificada']
 
-            # 1. Obtener los ingredientes de la receta
             ingredientes_result = receta_model.get_ingredientes(receta_id)
             if not ingredientes_result.get('success'):
                 raise Exception("No se pudieron obtener los ingredientes de la receta.")
@@ -48,17 +48,15 @@ class InventarioController(BaseController):
             ingredientes = ingredientes_result.get('data', [])
             insumos_faltantes = []
 
-            # 2. Iterar por cada ingrediente para verificar y reservar stock
             for ingrediente in ingredientes:
                 insumo_id = ingrediente['id_insumo']
                 cantidad_necesaria = ingrediente['cantidad'] * cantidad_a_producir
 
-                # Buscar lotes disponibles para este insumo (FIFO)
-                lotes_disponibles = self.inventario_model.find_all(
+                lotes_disponibles_res = self.inventario_model.find_all(
                     filters={'id_insumo': insumo_id, 'cantidad_actual': ('gt', 0)},
-                    order_by='f_ingreso.asc' # Ordenar por fecha de ingreso para FIFO
-                ).get('data', [])
-
+                    order_by='f_ingreso.asc'
+                )
+                lotes_disponibles = lotes_disponibles_res.get('data', [])
                 cantidad_restante_a_reservar = cantidad_necesaria
 
                 for lote in lotes_disponibles:
@@ -68,7 +66,6 @@ class InventarioController(BaseController):
                     cantidad_en_lote = lote.get('cantidad_actual', 0)
                     cantidad_a_reservar_de_lote = min(cantidad_en_lote, cantidad_restante_a_reservar)
 
-                    # a. Crear el registro de reserva de insumo
                     datos_reserva = {
                         'orden_produccion_id': orden_produccion['id'],
                         'lote_inventario_id': lote['id_lote'],
@@ -78,13 +75,23 @@ class InventarioController(BaseController):
                     }
                     reserva_insumo_model.create(datos_reserva)
 
-                    # b. Actualizar la cantidad del lote de inventario
+                    # --- INICIO DE LA LÓGICA CORREGIDA ---
                     nueva_cantidad_lote = cantidad_en_lote - cantidad_a_reservar_de_lote
-                    self.inventario_model.update(lote['id_lote'], {'cantidad_actual': nueva_cantidad_lote}, 'id_lote')
+
+                    datos_actualizacion_lote = {
+                        'cantidad_actual': nueva_cantidad_lote
+                    }
+
+                    # Si el lote se agota, añadimos el cambio de estado EN MINÚSCULAS
+                    if nueva_cantidad_lote <= 0:
+                        datos_actualizacion_lote['estado'] = 'agotado' # <-- CORREGIDO
+                        logger.info(f"El lote de insumo ID {lote['id_lote']} ha sido marcado como agotado.")
+
+                    self.inventario_model.update(lote['id_lote'], datos_actualizacion_lote, 'id_lote')
+                    # --- FIN DE LA LÓGICA CORREGIDA ---
 
                     cantidad_restante_a_reservar -= cantidad_a_reservar_de_lote
 
-                # 3. Si después de revisar todos los lotes aún falta, registrar el faltante
                 if cantidad_restante_a_reservar > 0:
                     insumos_faltantes.append({
                         'insumo_id': insumo_id,
@@ -100,65 +107,71 @@ class InventarioController(BaseController):
 
 
     def verificar_stock_para_op(self, orden_produccion: Dict) -> dict:
-            """
-            "Dry Run": Verifica si hay stock suficiente para una OP sin reservar.
-            Devuelve una lista de insumos faltantes. No modifica la base de datos.
-            Añade tolerancia para errores de punto flotante.
-            """
-            receta_model = RecetaModel()
-            try:
-                receta_id = orden_produccion['receta_id']
-                cantidad_a_producir = orden_produccion['cantidad_planificada']
+        """
+        "Dry Run": Verifica si hay stock suficiente para una OP sin reservar.
+        Calcula el stock disponible REAL sumando los lotes de inventario.
+        Devuelve una lista de insumos faltantes.
+        """
+        receta_model = RecetaModel()
+        try:
+            receta_id = orden_produccion['receta_id']
+            cantidad_a_producir = orden_produccion['cantidad_planificada']
 
-                ingredientes_result = receta_model.get_ingredientes(receta_id)
-                if not ingredientes_result.get('success'):
-                    raise Exception("No se pudieron obtener los ingredientes de la receta.")
+            ingredientes_result = receta_model.get_ingredientes(receta_id)
+            if not ingredientes_result.get('success'):
+                raise Exception("No se pudieron obtener los ingredientes de la receta.")
 
-                ingredientes = ingredientes_result.get('data', [])
-                insumos_faltantes = []
+            ingredientes = ingredientes_result.get('data', [])
+            insumos_faltantes = []
 
-                # Definir un umbral de tolerancia para errores de punto flotante
-                TOLERANCE = 1e-9 # 0.000000001 - Cualquier cosa menor a esto es 0
+            # Tolerancia para errores de punto flotante
+            TOLERANCE = 1e-9
 
-                for ingrediente in ingredientes:
-                    insumo_id = ingrediente['id_insumo']
-                    cantidad_necesaria = ingrediente['cantidad'] * cantidad_a_producir
+            for ingrediente in ingredientes:
+                insumo_id = ingrediente['id_insumo']
+                cantidad_necesaria = ingrediente['cantidad'] * cantidad_a_producir
 
-                    stock_disponible_result = self.insumo_model.find_by_id(insumo_id, 'id_insumo')
+                # --- INICIO DE LA LÓGICA CORREGIDA ---
+                # En lugar de leer el resumen, calculamos el stock real sumando
+                # los lotes que están 'disponibles' y tienen cantidad.
+                lotes_disponibles_res = self.inventario_model.find_all(
+                    filters={
+                        'id_insumo': insumo_id,
+                        'estado': 'disponible', # <-- Solo lotes 'disponible' (en minúscula)
+                        'cantidad_actual': ('gt', 0)
+                    }
+                )
 
-                    if stock_disponible_result.get('success'):
-                        stock_actual = stock_disponible_result['data'].get('stock_actual', 0)
-                    else:
-                        stock_actual = 0
+                if not lotes_disponibles_res.get('success'):
+                    stock_actual = 0
+                else:
+                    # Sumamos la cantidad de todos los lotes que SÍ están disponibles
+                    stock_actual = sum(lote.get('cantidad_actual', 0) for lote in lotes_disponibles_res.get('data', []))
+                # --- FIN DE LA LÓGICA CORREGIDA ---
 
-                    # Calcular el faltante
-                    cantidad_faltante = cantidad_necesaria - stock_actual
+                # Calcular el faltante
+                cantidad_faltante = cantidad_necesaria - stock_actual
 
-                    # --- LÓGICA DE CORRECCIÓN DE PUNTO FLOTANTE ---
-                    # 1. Si la cantidad faltante es positiva pero menor a la tolerancia, la tratamos como cero.
-                    if 0 < cantidad_faltante < TOLERANCE:
-                        cantidad_faltante = 0
+                # Aplicar tolerancia
+                if 0 < cantidad_faltante < TOLERANCE:
+                    cantidad_faltante = 0
+                if cantidad_faltante < 0:
+                    cantidad_faltante = 0
 
-                    # 2. Si la cantidad faltante es negativa (hay sobrestock), la tratamos como cero.
-                    if cantidad_faltante < 0:
-                        cantidad_faltante = 0
-                    # -----------------------------------------------
+                if cantidad_faltante > 0:
+                    insumos_faltantes.append({
+                        'insumo_id': insumo_id,
+                        'nombre': ingrediente.get('nombre_insumo', 'N/A'),
+                        'cantidad_necesaria': cantidad_necesaria,
+                        'stock_disponible': stock_actual, # <-- Ahora es el stock real
+                        'cantidad_faltante': cantidad_faltante
+                    })
 
+            return {'success': True, 'data': {'insumos_faltantes': insumos_faltantes}}
 
-                    if cantidad_faltante > 0:
-                        insumos_faltantes.append({
-                            'insumo_id': insumo_id,
-                            'nombre': ingrediente.get('nombre_insumo', 'N/A'),
-                            'cantidad_necesaria': cantidad_necesaria,
-                            'stock_disponible': stock_actual,
-                            'cantidad_faltante': cantidad_faltante
-                        })
-
-                return {'success': True, 'data': {'insumos_faltantes': insumos_faltantes}}
-
-            except Exception as e:
-                logger.error(f"Error verificando stock para OP {orden_produccion.get('id', 'N/A')}: {e}", exc_info=True)
-                return {'success': False, 'error': str(e)}
+        except Exception as e:
+            logger.error(f"Error verificando stock para OP {orden_produccion.get('id', 'N/A')}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
 
     def obtener_lotes(self, filtros: Optional[Dict] = None) -> tuple:
         """Obtener todos los lotes con filtros opcionales"""

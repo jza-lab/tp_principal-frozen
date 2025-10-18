@@ -192,14 +192,20 @@
 
                     const responseRecomendacion = await fetch(`/planificacion/api/recomendar-linea/${nuevaSuperOP.id}`);
                     const resultRecomendacion = await responseRecomendacion.json();
+                    
                     if (resultRecomendacion.success) {
                         const rec = resultRecomendacion.data;
                         const msg = `RECOMENDACIÓN:\nLínea: ${rec.nombre_linea}\nMotivo: ${rec.motivo}\n\nPresiona "Aceptar" para usarla o "Cancelar" para la otra.`;
+                        
+                        // =======================================================
+                        // --- CORRECCIÓN FINAL: USAR GUION BAJO ( _ ) ---
+                        // =======================================================
                         if (confirm(msg)) {
-                            await moverOp(nuevaSuperOP.id, `EN LINEA ${rec.linea_sugerida}`);
+                            await moverOp(nuevaSuperOP.id, `EN_LINEA_${rec.linea_sugerida}`);
                         } else {
-                            await moverOp(nuevaSuperOP.id, `EN LINEA ${rec.linea_sugerida === 1 ? 2 : 1}`);
+                            await moverOp(nuevaSuperOP.id, `EN_LINEA_${rec.linea_sugerida === 1 ? 2 : 1}`);
                         }
+
                     } else {
                          alert('Super OP creada, pero no se pudo obtener recomendación.');
                     }
@@ -215,25 +221,33 @@
         // --- LÓGICA DE DRAG-AND-DROP (FASE 4) ---
         const columns = document.querySelectorAll('.kanban-column');
         columns.forEach(column => {
-            new Sortable(column.querySelector('.kanban-cards'), {
-                group: 'kanban',
-                animation: 150,
-                ghostClass: 'bg-primary-soft',
-                onEnd: async function (evt) {
-                    const item = evt.item;
-                    const toColumn = evt.to.closest('.kanban-column');
-                    const opId = item.dataset.opId;
-                    const nuevoEstado = toColumn.dataset.estado;
+            // Buscamos el contenedor de tarjetas dentro de la columna
+            const cardContainer = column.querySelector('.kanban-cards');
+            if (cardContainer) {
+                new Sortable(cardContainer, {
+                    group: 'kanban', // Nombre del grupo para permitir mover entre columnas
+                    animation: 150,
+                    ghostClass: 'bg-primary-soft', // Clase CSS para el "fantasma"
+                    
+                    // Evento que se dispara al soltar una tarjeta
+                    onEnd: async function (evt) {
+                        const item = evt.item; // La tarjeta que moviste
+                        const toColumn = evt.to.closest('.kanban-column'); // Columna de destino
+                        const opId = item.dataset.opId;
+                        const nuevoEstado = toColumn.dataset.estado; // Ej: 'EN_LINEA_1'
 
-                    console.log(`Moviendo OP #${opId} a estado: ${nuevoEstado}`);
-                    const success = await moverOp(opId, nuevoEstado);
+                        console.log(`Moviendo OP #${opId} a estado: ${nuevoEstado}`);
+                        
+                        // Llamamos a la misma función helper
+                        const success = await moverOp(opId, nuevoEstado);
 
-                    if (!success) {
-                        // Si la API falla, devolvemos la tarjeta a su columna original
-                        evt.from.appendChild(item); 
+                        if (!success) {
+                            // Si la API falla, devolvemos la tarjeta a su columna original
+                            evt.from.appendChild(item); 
+                        }
                     }
-                }
-            });
+                });
+            }
         });
     });
 </script>

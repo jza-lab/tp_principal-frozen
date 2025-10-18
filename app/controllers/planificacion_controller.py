@@ -21,10 +21,10 @@ class PlanificacionController(BaseController):
             estados_activos = [
                 'LISTA PARA PRODUCIR',
                 'EN PROCESO',
-                'EN LINEA 1',
-                'EN LINEA 2',
-                'EN EMPAQUETADO',      # <-- NUEVO
-                'CONTROL DE CALIDAD',  # <-- NUEVO
+                'EN_LINEA_1',
+                'EN_LINEA_2',
+                'EN_EMPAQUETADO',      # <-- NUEVO
+                'CONTROL_DE_CALIDAD',  # <-- NUEVO
                 'COMPLETADA'
                 # Añade aquí otros estados si tienes columnas para ellos, ej: 'EN ESPERA'
             ]
