@@ -44,11 +44,6 @@
                                         Pendientes
                                     </a>
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" 
-                                    class="btn btn-sm {% if current_status == 'EN_PROCESO' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        En Proceso
-                                    </a>
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
                                     <a href="{{ url_for('orden_produccion.listar', estado='EN_ESPERA') }}" 
                                     class="btn btn-sm {% if current_status == 'EN_ESPERA' %}btn-primary{% else %}btn-secondary{% endif %}">
                                         En Espera
@@ -58,6 +53,11 @@
                                     class="btn btn-sm {% if current_status == 'LISTA PARA PRODUCIR' %}btn-primary{% else %}btn-secondary{% endif %}">
                                         Lista para Producir
                                     </a>
+                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                                    <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" 
+                                    class="btn btn-sm {% if current_status == 'EN_PROCESO' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        En Proceso
+                                    </a>                                    
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
                                     <a href="{{ url_for('orden_produccion.listar', estado='COMPLETADA') }}" 
                                     class="btn btn-sm {% if current_status == 'COMPLETADA' %}btn-primary{% else %}btn-secondary{% endif %}">

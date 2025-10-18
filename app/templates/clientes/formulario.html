@@ -107,6 +107,31 @@ Agregar nuevo cliente
                                 </label>
                             </div>
                         </div>
+                        
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <select class="form-select" id="condicion-iva" name="condicion_iva" required>
+                                    <option value="" disabled selected>Seleccione una opción...</option>
+
+                                    <option value="1" {{ 'selected' if cliente and cliente.condicion_iva|string=='1'
+                                        }}>Responsable Inscripto</option>
+                                    <option value="2" {{ 'selected' if cliente and cliente.condicion_iva|string=='2'
+                                        }}>Monotributista</option>
+                                    <option value="3" {{ 'selected' if cliente and cliente.condicion_iva|string=='3'
+                                        }}>IVA Exento</option>
+                                    <option value="4" {{ 'selected' if cliente and cliente.condicion_iva|string=='4'
+                                        }}>Consumidor Final</option>
+                                </select>
+
+                                <label for="condicion-iva">
+                                    <i class="bi bi-file-earmark-person me-1"></i>Condición de IVA <span
+                                        class="text-danger">*</span>
+                                </label>
+                            </div>
+                            <div class="invalid-feedback">
+                                Por favor, seleccione una condición de IVA.
+                            </div>
+                        </div>
 
                         <div class="form-subsection">
 
@@ -188,8 +213,8 @@ Agregar nuevo cliente
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"  minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}" title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
-                                            placeholder="Código Postal" value="{{ (cliente.get('depto') or {}).get('piso', '') if cliente and cliente.direccion }}">
+                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"  minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|([A-Za-z]\d{4})|\d{4}" title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
+                                            placeholder="Código Postal" value="{{ (cliente.get('direccion') or {}).get('codigo_postal', '') if cliente and cliente.direccion }}" required>
                                         <label for="codigo_postal">
                                             <i class="bi bi-mailbox me-1"></i>Código Postal
                                         </label>

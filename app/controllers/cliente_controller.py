@@ -55,7 +55,6 @@ class ClienteController(BaseController):
                 return self.error_response(result['error'], 404)
             
             serialized_data = self.schema.dump(result['data'])
-            print(serialized_data)
 
             return self.success_response(data=serialized_data)
         except Exception as e:

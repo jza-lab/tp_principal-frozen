@@ -20,6 +20,24 @@ class BaseController:
         self.direccion_model = DireccionModel()
         self.direccion_schema = DireccionSchema()
 
+    def _actualizar_direccion(self, direccion_id: int, direccion_data: Dict) -> bool:
+        """
+        Actualiza una dirección existente utilizando el DireccionModel.
+        Devuelve True si la actualización fue exitosa, False en caso contrario.
+        """
+        if not direccion_data:
+            return True # Si no hay datos, se considera que la "actualización" fue exitosa.
+
+        try:
+            # 1. Llamar al método update del modelo de dirección
+            update_res = self.direccion_model.update(direccion_id, direccion_data)
+            
+            # 2. Devolver True si el modelo reporta éxito
+            return update_res.get('success', False)
+            
+        except Exception as e:
+            logger.error(f"Error en _actualizar_direccion ID {direccion_id}: {e}", exc_info=True)
+            return False
     def _get_or_create_direccion(self, direccion_data: Dict) -> Optional[int]:
         """
         Busca una dirección que coincida exactamente con los datos proporcionados.

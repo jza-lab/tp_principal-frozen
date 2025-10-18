@@ -36,3 +36,9 @@ class ClienteSchema(Schema):
     activo = fields.Bool(dump_only=True)
     created_at = fields.Str(dump_only=True)
     updated_at = fields.Str(dump_only=True)
+
+    condicion_iva = fields.Str(
+        validate=validate.Length(max=50),
+        allow_none=True,
+        load_default=None
+    )

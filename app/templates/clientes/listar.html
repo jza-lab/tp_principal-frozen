@@ -69,6 +69,7 @@
                         <span class="fw-semibold"><i class="bi bi-phone"></i> {{ cliente.telefono }}</span>
                         
                         {% set direccion = cliente.direccion %}
+                        
                         <span class="text-truncate">
                             <i class="bi bi-house"></i> 
                             {% if direccion %}
@@ -189,5 +190,5 @@
             }
         });
     </script>
-    <script src="{{ url_for('static', filename='js/clientes/formularioCliente.js') }}"></script>
+
 {% endblock %}
