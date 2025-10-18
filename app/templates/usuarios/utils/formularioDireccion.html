@@ -1,0 +1,106 @@
+<!--
+Este parcial contiene los campos de formulario de dirección.
+Recibe la variable `usuario` del contexto de Jinja2.
+-->
+<div id="address-section-container">
+    <div class="section-title">
+        <i class="bi bi-geo-alt me-2"></i>
+        <h5 class="mb-0">Dirección de Residencia</h5>
+    </div>
+    <div id="address-feedback" class="form-text my-2"></div>
+
+    <div class="form-subsection">
+        <div class="row g-3">
+            <!-- Calle -->
+            <div class="col-md-8">
+                <div class="info-item" data-field="calle">
+                    <label class="info-label" for="calle">Calle</label>
+                    <div class="info-value">
+                        <input type="text" class="form-control" id="calle" name="calle" placeholder="Calle"
+                            value="{{ (usuario.get('direccion') or {}).get('calle', '') }}" required>
+                    </div>
+                    <div class="invalid-feedback"></div>
+                </div>
+            </div>
+            <!-- Altura -->
+            <div class="col-md-4">
+                <div class="info-item" data-field="altura">
+                    <label class="info-label" for="altura">Altura</label>
+                    <div class="info-value">
+                        <input type="number" class="form-control" id="altura" name="altura" placeholder="Altura"
+                            value="{{ (usuario.get('direccion') or {}).get('altura', '') }}" max="999999" required>
+                    </div>
+                    <div class="invalid-feedback"></div>
+                </div>
+            </div>
+
+            <!-- Provincia -->
+            <div class="col-md-6">
+                <div class="info-item" data-field="provincia">
+                    <label class="info-label" for="provincia">Provincia</label>
+                    <div class="info-value">
+                        <select class="form-select" id="provincia" name="provincia" required>
+                            <option value="">Seleccionar provincia...</option>
+                            {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut", "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan", "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del Fuego", "Tucumán"] %}
+                            {% for p in provincias %}
+                            <option value="{{ p }}"
+                                {% if (usuario.get('direccion') or {}).get('provincia') == p %}selected{% endif %}>{{ p }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="invalid-feedback"></div>
+                </div>
+            </div>
+
+            <!-- Localidad -->
+            <div class="col-md-6">
+                <div class="info-item" data-field="localidad">
+                    <label class="info-label" for="localidad">Localidad</label>
+                    <div class="info-value">
+                        <input type="text" class="form-control" id="localidad" name="localidad"
+                            placeholder="Localidad"
+                            value="{{ (usuario.get('direccion') or {}).get('localidad', '') }}" required>
+                    </div>
+                    <div class="invalid-feedback"></div>
+                </div>
+            </div>
+
+            <!-- Piso -->
+            <div class="col-md-4">
+                <div class="info-item" data-field="piso">
+                    <label class="info-label" for="piso">Piso (Opcional)</label>
+                    <div class="info-value">
+                        <input type="text" class="form-control" id="piso" name="piso" min="0" max="100"
+                            placeholder="Piso" value="{{ (usuario.get('direccion') or {}).get('piso', '') }}">
+                    </div>
+                    <div class="invalid-feedback"></div>
+                </div>
+            </div>
+
+            <!-- Depto -->
+            <div class="col-md-4">
+                <div class="info-item" data-field="depto">
+                    <label class="info-label" for="depto">Dto (Opcional)</label>
+                    <div class="info-value">
+                        <input type="text" class="form-control" id="depto" name="depto"
+                            placeholder="Dto" value="{{ (usuario.get('direccion') or {}).get('depto', '') }}">
+                    </div>
+                    <div class="invalid-feedback"></div>
+                </div>
+            </div>
+
+            <!-- Código Postal -->
+            <div class="col-md-4">
+                <div class="info-item" data-field="codigo_postal">
+                    <label class="info-label" for="codigo_postal">Código Postal</label>
+                    <div class="info-value">
+                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                            placeholder="Código Postal"
+                            value="{{ (usuario.get('direccion') or {}).get('codigo_postal', '') }}">
+                    </div>
+                    <div class="invalid-feedback"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -2,6 +2,11 @@
 
 {% block title %}Perfil de Empleado - {{ usuario.nombre }} {{ usuario.apellido }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/perfil.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/crearUsuario.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="profile-container">
     <!-- Header del Perfil -->
@@ -90,143 +95,12 @@
 
         <!-- Contenido del Perfil -->
         <div class="profile-content">
-            <!-- Información Personal -->
-            <div class="info-section">
-                <div class="section-header">
-                    <div class="section-icon">
-                        <i class="bi bi-person-vcard"></i>
-                    </div>
-                    <h3 class="section-title">Información Personal</h3>
-                </div>
-                
-                <div class="info-grid">
-                    <div class="info-item" data-field="nombre">
-                        <label class="info-label">Nombre</label>
-                        <div class="info-value" id="value-nombre">{{ usuario.nombre }}</div>
-                    </div>
-                    
-                    <div class="info-item" data-field="apellido">
-                        <label class="info-label">Apellido</label>
-                        <div class="info-value" id="value-apellido">{{ usuario.apellido }}</div>
-                    </div>
-                    
-                    <div class="info-item" data-field="cuil_cuit">
-                        <label class="info-label">CUIL/CUIT</label>
-                        <div class="info-value" id="value-cuil_cuit">{{ usuario.cuil_cuit or 'No especificado' }}</div>
-                    </div>
-                    
-                    <div class="info-item" data-field="legajo">
-                        <label class="info-label">Legajo</label>
-                        <div class="info-value" id="value-legajo">{{ usuario.legajo or 'N/A' }}</div>
-                    </div>
-                    <div class="info-item" data-field="fecha_ingreso">
-                        <label class="info-label">Fecha de Ingreso</label>
-                    <div class="info-value" id="value-fecha_ingreso">{{ usuario.created_at[:10] if usuario.created_at else 'No especificada' }}</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Información de Contacto -->
-            <div class="info-section">
-                <div class="section-header">
-                    <div class="section-icon">
-                        <i class="bi bi-telephone"></i>
-                    </div>
-                    <h3 class="section-title">Información de Contacto</h3>
-                </div>
-                
-                <div class="info-grid">
-                    <div class="info-item" data-field="email">
-                        <label class="info-label">Email</label>
-                        <div class="info-value" id="value-email">{{ usuario.email }}</div>
-                    </div>
-                    
-                    <div class="info-item" data-field="telefono">
-                        <label class="info-label">Teléfono</label>
-                        <div class="info-value" id="value-telefono">{{ usuario.telefono or 'No especificado' }}</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Dirección -->
-            <div class="info-section">
-                <div class="section-header">
-                    <div class="section-icon">
-                        <i class="bi bi-geo-alt"></i>
-                    </div>
-                    <h3 class="section-title">Dirección de Residencia</h3>
-                </div>
-                
-                <div class="info-grid">
-                    <div class="info-item" data-field="calle">
-                        <label class="info-label">Calle</label>
-                        <div class="info-value" id="value-calle">{{ (usuario.direccion or {}).get('calle', 'No especificada') }}</div>
-                    </div>
-                    
-                    <div class="info-item" data-field="altura">
-                        <label class="info-label">Altura</label>
-                        <div class="info-value" id="value-altura">{{ (usuario.direccion or {}).get('altura', 'No especificada') }}</div>
-                    </div>
-                    
-                    <div class="info-item" data-field="provincia">
-                        <label class="info-label">Provincia</label>
-                        <div class="info-value" id="value-provincia">{{ (usuario.direccion or {}).get('provincia', 'No especificada') }}</div>
-                    </div>
-                    
-                    <div class="info-item" data-field="localidad">
-                        <label class="info-label">Localidad</label>
-                        <div class="info-value" id="value-localidad">{{ (usuario.direccion or {}).get('localidad', 'No especificada') }}</div>
-                    </div>
-                    
-                    <div class="info-item" data-field="piso">
-                        <label class="info-label">Piso</label>
-                        <div class="info-value" id="value-piso">{{ (usuario.direccion or {}).get('piso', 'No especificado') }}</div>
-                    </div>
-                    
-                    <div class="info-item" data-field="depto">
-                        <label class="info-label">Departamento</label>
-                        <div class="info-value" id="value-depto">{{ (usuario.direccion or {}).get('depto', 'No especificado') }}</div>
-                    </div>
-                    
-                    <div class="info-item" data-field="codigo_postal">
-                        <label class="info-label">Código Postal</label>
-                        <div class="info-value" id="value-codigo_postal">{{ (usuario.direccion or {}).get('codigo_postal', 'No especificado') }}</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Información Laboral -->
-            <div class="info-section">
-                <div class="section-header">
-                    <div class="section-icon">
-                        <i class="bi bi-briefcase"></i>
-                    </div>
-                    <h3 class="section-title">Información Laboral</h3>
-                </div>
-                
-                <div class="info-grid">
-                    <div class="info-item" data-field="role_id">
-                        <label class="info-label">Rol</label>
-                        <div class="info-value" id="value-role_id">{{ usuario.roles.nombre if usuario.roles else 'Sin rol' }}</div>
-                    </div>
-                    
-                    <div class="info-item" data-field="turno_id">
-                        <label class="info-label">Turno</label>
-                        <div class="info-value" id="value-turno_id">{{ usuario.turno.nombre if usuario.turno else 'Sin turno' }}</div>
-                    </div>
-                    
-                    <div class="info-item" data-field="sectores">
-                        <label class="info-label">Sectores Asignados</label>
-                        <div class="info-value" id="value-sectores">
-                            {% if usuario.sectores and usuario.sectores|length > 0 %}
-                                {{ usuario.sectores|map(attribute='nombre')|join(', ') }}
-                            {% else %}
-                                Sin sectores
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <form id="profile-form" novalidate>
+                 {% set is_new = False %}
+                 {% include 'usuarios/utils/formularioPersonal.html' %}
+                 <hr class="my-4">
+                 {% include 'usuarios/utils/formularioDireccion.html' %}
+            </form>
         </div>
     </div>
 </div>
@@ -278,54 +152,18 @@
     </div>
 </div>
 
-
-<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/perfil.css') }}">
-
 <script>
 // Inyectar datos para el JavaScript
-window.userData = {
-    nombre: "{{ usuario.nombre }}",
-    apellido: "{{ usuario.apellido }}",
-    email: "{{ usuario.email }}",
-    legajo: "{{ usuario.legajo or '' }}",
-    cuil_cuit: "{{ usuario.cuil_cuit or '' }}",
-    telefono: "{{ usuario.telefono or '' }}",
-    calle: "{{ (usuario.direccion or {}).get('calle', '') }}",
-    altura: "{{ (usuario.direccion or {}).get('altura', '') }}",
-    provincia: "{{ (usuario.direccion or {}).get('provincia', '') }}",
-    localidad: "{{ (usuario.direccion or {}).get('localidad', '') }}",
-    piso: "{{ (usuario.direccion or {}).get('piso', '') }}",
-    depto: "{{ (usuario.direccion or {}).get('depto', '') }}",
-    codigo_postal: "{{ (usuario.direccion or {}).get('codigo_postal', '') }}",
-    role_id: "{{ usuario.role_id or '' }}",
-    turno_id: "{{ usuario.turno_id or '' }}",
-    fecha_ingreso: "{{ usuario.fecha_ingreso.strftime('%Y-%m-%d') if usuario.fecha_ingreso else '' }}"
-};
+const USER_ID = {{ usuario.id|tojson }};
+const IS_NEW = false;
 
-window.rolesDisponibles = [
-    {% for rol in roles_disponibles %}
-    { id: {{ rol.id }}, nombre: "{{ rol.nombre }}" }{% if not loop.last %},{% endif %}
-    {% endfor %}
-];
+window.ROLES_DISPONIBLES = {{ roles|tojson }};
+window.TURNOS_DISPONIBLES = {{ turnos|tojson }};
+window.SECTORES_DISPONIBLES = {{ sectores|tojson }};
+window.USUARIO_SECTORES_IDS = {{ usuario_sectores_ids|tojson }};
 
-window.turnosDisponibles = [
-    {% for turno in turnos_disponibles %}
-    { 
-        id: {{ turno.id }}, 
-        nombre: "{{ turno.nombre }}",
-        hora_inicio: "{{ turno.hora_inicio[:5] }}",
-        hora_fin: "{{ turno.hora_fin[:5] }}"
-    }{% if not loop.last %},{% endif %}
-    {% endfor %}
-];
-
-window.sectoresDisponibles = [
-    {% for sector in sectores_disponibles %}
-    { id: {{ sector.id }}, nombre: "{{ sector.nombre }}" }{% if not loop.last %},{% endif %}
-    {% endfor %}
-];
 </script>
 
-<script src="{{ url_for('static', filename='js/usuarios/perfil.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/usuarios/perfil.js') }}"></script>
 
 {% endblock %}

@@ -211,14 +211,16 @@ class UsuarioController(BaseController):
         roles = self.obtener_todos_los_roles()
         sectores = self.obtener_todos_los_sectores()
         turnos = self.obtener_todos_los_turnos()
+        usuario_sectores_ids = self.obtener_sectores_ids_usuario(usuario_id)
 
         return {
             'success': True,
             'data': {
                 'usuario': usuario,
-                'roles_disponibles': roles,
-                'sectores_disponibles': sectores,
-                'turnos_disponibles': turnos
+                'roles': roles,
+                'sectores': sectores,
+                'turnos': turnos,
+                'usuario_sectores_ids': usuario_sectores_ids
             }
         }
 
