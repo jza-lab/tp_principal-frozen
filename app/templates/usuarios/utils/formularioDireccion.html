@@ -17,7 +17,7 @@ Recibe la variable `usuario` del contexto de Jinja2.
                     <label class="info-label" for="calle">Calle</label>
                     <div class="info-value">
                         <input type="text" class="form-control" id="calle" name="calle" placeholder="Calle"
-                            value="{{ (usuario.get('direccion') or {}).get('calle', '') }}" required>
+                            value="{{ (usuario.get('direccion') or {}).get('calle', '') }}" required disabled>
                     </div>
                     <div class="invalid-feedback"></div>
                 </div>
@@ -28,7 +28,7 @@ Recibe la variable `usuario` del contexto de Jinja2.
                     <label class="info-label" for="altura">Altura</label>
                     <div class="info-value">
                         <input type="number" class="form-control" id="altura" name="altura" placeholder="Altura"
-                            value="{{ (usuario.get('direccion') or {}).get('altura', '') }}" max="999999" required>
+                            value="{{ (usuario.get('direccion') or {}).get('altura', '') }}" max="999999" required disabled>
                     </div>
                     <div class="invalid-feedback"></div>
                 </div>
@@ -39,7 +39,7 @@ Recibe la variable `usuario` del contexto de Jinja2.
                 <div class="info-item" data-field="provincia">
                     <label class="info-label" for="provincia">Provincia</label>
                     <div class="info-value">
-                        <select class="form-select" id="provincia" name="provincia" required>
+                        <select class="form-select" id="provincia" name="provincia" required disabled>
                             <option value="">Seleccionar provincia...</option>
                             {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut", "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan", "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del Fuego", "Tucumán"] %}
                             {% for p in provincias %}
@@ -59,7 +59,7 @@ Recibe la variable `usuario` del contexto de Jinja2.
                     <div class="info-value">
                         <input type="text" class="form-control" id="localidad" name="localidad"
                             placeholder="Localidad"
-                            value="{{ (usuario.get('direccion') or {}).get('localidad', '') }}" required>
+                            value="{{ (usuario.get('direccion') or {}).get('localidad', '') }}" required disabled>
                     </div>
                     <div class="invalid-feedback"></div>
                 </div>
@@ -71,7 +71,7 @@ Recibe la variable `usuario` del contexto de Jinja2.
                     <label class="info-label" for="piso">Piso (Opcional)</label>
                     <div class="info-value">
                         <input type="text" class="form-control" id="piso" name="piso" min="0" max="100"
-                            placeholder="Piso" value="{{ (usuario.get('direccion') or {}).get('piso', '') }}">
+                            placeholder="Piso" value="{{ (usuario.get('direccion') or {}).get('piso', '') }}" disabled>
                     </div>
                     <div class="invalid-feedback"></div>
                 </div>
@@ -83,7 +83,7 @@ Recibe la variable `usuario` del contexto de Jinja2.
                     <label class="info-label" for="depto">Dto (Opcional)</label>
                     <div class="info-value">
                         <input type="text" class="form-control" id="depto" name="depto"
-                            placeholder="Dto" value="{{ (usuario.get('direccion') or {}).get('depto', '') }}">
+                            placeholder="Dto" value="{{ (usuario.get('direccion') or {}).get('depto', '') }}" disabled>
                     </div>
                     <div class="invalid-feedback"></div>
                 </div>
@@ -96,7 +96,7 @@ Recibe la variable `usuario` del contexto de Jinja2.
                     <div class="info-value">
                         <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
                             placeholder="Código Postal"
-                            value="{{ (usuario.get('direccion') or {}).get('codigo_postal', '') }}">
+                            value="{{ (usuario.get('direccion') or {}).get('codigo_postal', '') }}" disabled>
                     </div>
                     <div class="invalid-feedback"></div>
                 </div>

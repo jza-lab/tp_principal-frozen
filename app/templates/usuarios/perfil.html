@@ -9,6 +9,11 @@
 
 {% block content %}
 <div class="profile-container">
+    <!-- Toast Container -->
+    <div id="toast-container-profile" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1055">
+        <!-- Toasts will be injected here -->
+    </div>
+    
     <!-- Header del Perfil -->
     <div class="profile-header-section">
         <div class="d-flex justify-content-between align-items-start">
@@ -94,7 +99,7 @@
         </div>
 
         <!-- Contenido del Perfil -->
-        <div class="profile-content">
+        <div class="profile-content view-mode">
             <form id="profile-form" novalidate>
                  {% set is_new = False %}
                  {% include 'usuarios/utils/formularioPersonal.html' %}
@@ -152,10 +157,32 @@
     </div>
 </div>
 
+<!-- Modal para "No Hay Cambios" -->
+<div class="modal fade" id="noChangesModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-info-circle me-2"></i>Información
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>No se detectaron cambios para guardar.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal" id="btn-no-changes-confirm">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // Inyectar datos para el JavaScript
 const USER_ID = {{ usuario.id|tojson }};
 const IS_NEW = false;
+const USER_ROLE_ID = {{ usuario.role_id|tojson }};
+const USER_TURNO_ID = {{ usuario.turno_id|tojson }};
 
 window.ROLES_DISPONIBLES = {{ roles|tojson }};
 window.TURNOS_DISPONIBLES = {{ turnos|tojson }};

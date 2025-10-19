@@ -21,7 +21,7 @@ Recibe las siguientes variables del contexto de Jinja2:
                 <label class="info-label" for="nombre">Nombre</label>
                 <div class="info-value">
                     <input type="text" class="form-control" id="nombre" name="nombre" value="{{ usuario.nombre or '' }}"
-                        required placeholder="Nombre">
+                        required placeholder="Nombre" disabled>
                 </div>
                 <div class="invalid-feedback"></div>
             </div>
@@ -33,7 +33,7 @@ Recibe las siguientes variables del contexto de Jinja2:
                 <label class="info-label" for="apellido">Apellido</label>
                 <div class="info-value">
                     <input type="text" class="form-control" id="apellido" name="apellido"
-                        value="{{ usuario.apellido or '' }}" required placeholder="Apellido">
+                        value="{{ usuario.apellido or '' }}" required placeholder="Apellido" disabled>
                 </div>
                 <div class="invalid-feedback"></div>
             </div>
@@ -46,7 +46,7 @@ Recibe las siguientes variables del contexto de Jinja2:
                 <label class="info-label" for="legajo">Legajo</label>
                 <div class="info-value">
                     <input type="text" class="form-control" id="legajo" name="legajo" value="{{ usuario.legajo or '' }}"
-                        required placeholder="Número de legajo">
+                        required placeholder="Número de legajo" disabled>
                 </div>
                 <div class="invalid-feedback"></div>
             </div>
@@ -58,16 +58,16 @@ Recibe las siguientes variables del contexto de Jinja2:
                 <label class="info-label" for="cuit_parte2">CUIL/CUIT</label>
                 <div class="info-value">
                     <div class="input-group cuit-input-group">
-                        <input type="hidden" name="cuil_cuit" id="cuil_cuit_hidden">
+                        <input type="hidden" name="cuil_cuit" id="cuil_cuit_hidden" value="{{ usuario.cuil_cuit or '' }}">
                         <input type="text" class="form-control text-center" id="cuit_parte1" maxlength="2"
                             pattern="\d{2}" placeholder="XX" required
                             value="{{ usuario.cuil_cuit.split('-')[0] if usuario and usuario.cuil_cuit else '' }}"
-                            aria-label="Prefijo del CUIT">
+                            aria-label="Prefijo del CUIT" disabled>
                         <span class="input-group-text">-</span>
                         <div class="form-floating" style="flex-grow: 4;">
                             <input type="text" class="form-control text-center" id="cuit_parte2" maxlength="8"
                                 pattern="\d{8}" placeholder="XXXXXXXX" required
-                                value="{{ usuario.cuil_cuit.split('-')[1] if usuario and usuario.cuil_cuit else '' }}">
+                                value="{{ usuario.cuil_cuit.split('-')[1] if usuario and usuario.cuil_cuit else '' }}" disabled>
                             <label for="cuit_parte2">
                                 <i class="bi bi-person-badge me-1"></i>Cuit
                             </label>
@@ -76,7 +76,7 @@ Recibe las siguientes variables del contexto de Jinja2:
                         <input type="text" class="form-control text-center" id="cuit_parte3" maxlength="1"
                             pattern="\d{1}" placeholder="X" required
                             value="{{ usuario.cuil_cuit.split('-')[2] if usuario and usuario.cuil_cuit else '' }}"
-                            aria-label="Dígito verificador">
+                            aria-label="Dígito verificador" disabled>
                     </div>
                 </div>
                 <small id="cuil-helper" class="form-text text-muted ms-2"></small>
@@ -90,7 +90,7 @@ Recibe las siguientes variables del contexto de Jinja2:
                 <label class="info-label" for="email">Correo Electrónico</label>
                 <div class="info-value">
                     <input type="email" class="form-control" id="email" name="email" value="{{ usuario.email or '' }}"
-                        required placeholder="nombre@empresa.com">
+                        required placeholder="nombre@empresa.com" disabled>
                 </div>
                 <div class="invalid-feedback"></div>
             </div>
@@ -102,7 +102,7 @@ Recibe las siguientes variables del contexto de Jinja2:
                 <label class="info-label" for="telefono">Teléfono</label>
                 <div class="info-value">
                     <input type="text" class="form-control" id="telefono" name="telefono"
-                        value="{{ usuario.telefono or '' }}" placeholder="Ej: 1122334455" required>
+                        value="{{ usuario.telefono or '' }}" placeholder="Ej: 1122334455" required disabled>
                 </div>
                 <div class="invalid-feedback"></div>
             </div>

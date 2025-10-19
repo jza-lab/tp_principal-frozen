@@ -49,6 +49,7 @@ function initRoleSelector() {
 
     rolCards.forEach(card => {
         card.addEventListener('click', () => {
+            if (card.closest('.profile-content.view-mode')) return;
             rolCards.forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
             selectedRole = parseInt(card.dataset.rolId);
@@ -77,6 +78,7 @@ function initTurnoSelector() {
 
     turnoCards.forEach(card => {
         card.addEventListener('click', () => {
+            if (card.closest('.profile-content.view-mode')) return;
             turnoCards.forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
             selectedTurno = parseInt(card.dataset.turnoId);
@@ -92,7 +94,7 @@ function initSectorSelector() {
     const sectorCards = document.querySelectorAll('.sector-card');
     const sectoresInput = document.getElementById('sectores');
 
-    // Marcar sectores iniciales
+    // Marcar sectores iniciales y popular el input
     if (selectedSectores.length > 0) {
         sectorCards.forEach(card => {
             if (selectedSectores.includes(parseInt(card.dataset.sectorId))) {
@@ -100,11 +102,14 @@ function initSectorSelector() {
             }
         });
     }
+    if (sectoresInput) {
+        sectoresInput.value = JSON.stringify(selectedSectores);
+    }
     updateSectoresUI();
 
     sectorCards.forEach(card => {
         card.addEventListener('click', () => {
-            if (card.classList.contains('disabled')) return;
+            if (card.closest('.profile-content.view-mode') || card.classList.contains('disabled')) return;
 
             const sectorId = parseInt(card.dataset.sectorId);
             const isSelected = card.classList.toggle('selected');

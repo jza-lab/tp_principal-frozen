@@ -4,7 +4,9 @@ import {
     validateNombre,
     validateApellido,
     validateForm,
-    validateAddressField
+    validateAddressField,
+    showError,
+    showSuccess
 } from './utils/validaciones.js';
 
 import {
@@ -28,7 +30,17 @@ document.addEventListener('DOMContentLoaded', function () {
     let addressVerified = true; // Asumimos que la dirección inicial es válida
 
     // --- INICIALIZACIÓN ---
-    addEventListeners();
+    initializePage();
+
+    function initializePage() {
+        const initialState = {
+            role_id: USER_ROLE_ID,
+            turno_id: USER_TURNO_ID,
+            sectores_ids: USUARIO_SECTORES_IDS
+        };
+        initializeSelectors(initialState);
+        addEventListeners();
+    }
 
     function addEventListeners() {
         if (btnEditMode) btnEditMode.addEventListener('click', enterEditMode);
@@ -44,13 +56,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         actionBarView.style.display = 'none';
         actionBarEdit.style.display = 'flex';
+        profileContent.classList.remove('view-mode');
         profileContent.classList.add('edit-mode');
-        
-        initializeSelectors({
-            role_id: parseInt(originalFormState.role_id),
-            turno_id: parseInt(originalFormState.turno_id),
-            sectores_ids: USUARIO_SECTORES_IDS
-        });
 
         profileForm.querySelectorAll('input, select').forEach(el => {
             el.disabled = false;
@@ -65,6 +72,7 @@ document.addEventListener('DOMContentLoaded', function () {
         actionBarEdit.style.display = 'none';
         actionBarView.style.display = 'flex';
         profileContent.classList.remove('edit-mode');
+        profileContent.classList.add('view-mode');
 
         profileForm.querySelectorAll('input, select').forEach(el => {
             el.disabled = true;
@@ -202,7 +210,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- LÓGICA DE GUARDADO ---
     async function saveChanges() {
-        if (!validateForm() || !addressVerified) {
+        // Validación de campos básicos
+        const isFormValid = validateForm();
+        const areSectoresValid = validateSectores();
+
+        if (!isFormValid || !addressVerified || !areSectoresValid) {
+            return;
+        }
+
+        if (!formHasChanged()) {
+            const noChangesModalEl = document.getElementById('noChangesModal');
+            const noChangesModal = new bootstrap.Modal(noChangesModalEl);
+            
+            // Añadir listener para salir del modo edición al confirmar
+            const confirmBtn = document.getElementById('btn-no-changes-confirm');
+            confirmBtn.addEventListener('click', () => {
+                noChangesModal.hide();
+                exitEditMode();
+            }, { once: true }); // Usar 'once' para que el listener se auto-elimine
+
+            noChangesModal.show();
             return;
         }
 
@@ -224,10 +251,87 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             window.location.reload();
         } catch (error) {
+            showToast(error.message, 'error');
             console.error('Error al guardar:', error);
         } finally {
             btnSaveChanges.disabled = false;
             btnSaveChanges.innerHTML = '<i class="bi bi-check-circle me-2"></i>Guardar Cambios';
         }
+    }
+
+    function formHasChanged() {
+        const currentState = captureFormState();
+        // El campo 'sectores' necesita un tratamiento especial porque se carga dinámicamente.
+        // Lo comparamos como un array de números.
+        currentState.sectores = JSON.stringify(JSON.parse(currentState.sectores || '[]').map(Number).sort());
+        originalFormState.sectores = JSON.stringify((USUARIO_SECTORES_IDS || []).map(Number).sort());
+
+        for (const key in originalFormState) {
+            if (originalFormState[key] !== currentState[key]) {
+                // Para depuración, puedes ver qué campo cambió:
+                // console.log(`'${key}' ha cambiado. Original: '${originalFormState[key]}', Actual: '${currentState[key]}'`);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function showToast(message, type = 'info') {
+        const toastContainer = document.getElementById('toast-container-profile');
+        if (!toastContainer) {
+            console.error('El contenedor de toasts no se encuentra en la página.');
+            return;
+        }
+
+        const toastId = 'toast-' + Date.now();
+        const toastIcon = type === 'success' ? '<i class="bi bi-check-circle-fill"></i>' :
+                          type === 'error' ? '<i class="bi bi-x-circle-fill"></i>' :
+                          '<i class="bi bi-info-circle-fill"></i>';
+        const toastHtml = `
+            <div id="${toastId}" class="toast align-items-center text-white bg-${type === 'error' ? 'danger' : (type === 'success' ? 'success' : 'primary')}" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${toastIcon} ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        `;
+        toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+
+        const toastElement = document.getElementById(toastId);
+        const toast = new bootstrap.Toast(toastElement, { delay: 4000 });
+        toast.show();
+        toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove());
+    }
+
+    // Hacer la función accesible globalmente para el onclick del HTML
+    window.showDeactivateModal = function() {
+        const deactivateModal = new bootstrap.Modal(document.getElementById('deactivateModal'));
+        deactivateModal.show();
+    }
+    
+    function validateSectores() {
+        const sectoresInput = document.getElementById('sectores');
+        const sectoresGrid = document.getElementById('sectoresGrid');
+        const value = sectoresInput.value;
+
+        // Limpiar validación previa al interactuar
+        clearValidation(sectoresGrid);
+
+        try {
+            const sectores = JSON.parse(value);
+            if (!Array.isArray(sectores) || sectores.length === 0) {
+                showError(sectoresGrid, 'Debe seleccionar al menos un sector.');
+                return false;
+            }
+        } catch (e) {
+            // Si el JSON es inválido, también es un error.
+            showError(sectoresGrid, 'La selección de sectores es inválida.');
+            return false;
+        }
+
+        showSuccess(sectoresGrid, 'Selección de sectores válida.');
+        return true;
     }
 });

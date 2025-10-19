@@ -1192,3 +1192,11 @@ select.form-control-inline {
 .cuit-input-group.is-valid {
     border-color: #198754 !important;
 }
+
+/* --- Control de Modo Vista --- */
+.profile-content.view-mode .rol-card,
+.profile-content.view-mode .turno-card,
+.profile-content.view-mode .sector-card {
+    pointer-events: none;
+    user-select: none;
+}
