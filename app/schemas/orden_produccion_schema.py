@@ -18,7 +18,6 @@ class OrdenProduccionSchema(Schema):
     # Campos de solo lectura (generados por el sistema)
     id = fields.Int(dump_only=True)
     codigo = fields.Str(dump_only=True)
-    estado = fields.Str(dump_only=True)
     usuario_creador_id = fields.Int(dump_only=True)
     fecha_inicio = fields.DateTime(dump_only=True, allow_none=True)
     fecha_fin = fields.DateTime(dump_only=True, allow_none=True)
@@ -26,3 +25,14 @@ class OrdenProduccionSchema(Schema):
     fecha_aprobacion = fields.DateTime(dump_only=True, allow_none=True)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
+
+    linea_produccion = fields.Int(allow_none=True)
+    super_op_id = fields.Int(allow_none=True)
+
+    estado = fields.Str(required=False, validate=validate.OneOf([
+        'PENDIENTE', 'APROBADA', 'EN_PROCESO', 'COMPLETADA', 'CANCELADA',
+        'EN ESPERA', 'LISTA PARA PRODUCIR',
+        'EN_LINEA_1', 'EN_LINEA_2',  # <-- ASEGURARSE QUE USEN GUION BAJO
+        'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD',
+        'FINALIZADA', 'CONSOLIDADA'
+    ]))

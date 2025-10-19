@@ -2,6 +2,7 @@ from app.controllers.base_controller import BaseController
 from app.models.orden_produccion import OrdenProduccionModel
 from app.schemas.orden_produccion_schema import OrdenProduccionSchema
 from typing import Dict, Optional, List
+from decimal import Decimal
 from marshmallow import ValidationError
 from app.controllers.producto_controller import ProductoController
 from app.controllers.receta_controller import RecetaController
@@ -90,42 +91,50 @@ class OrdenProduccionController(BaseController):
 
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """
-        Valida datos y crea una orden en estado PENDIENTE.
+        Valida datos y crea una orden.
+        MODIFICADO: Este método ahora siempre devuelve un diccionario.
         """
         from app.models.receta import RecetaModel
         receta_model = RecetaModel()
 
         try:
-            # Si el supervisor_responsable_id está presente pero vacío, lo eliminamos
             if 'supervisor_responsable_id' in form_data and not form_data['supervisor_responsable_id']:
                 form_data.pop('supervisor_responsable_id')
 
             producto_id = form_data.get('producto_id')
             if not producto_id:
-                return self.error_response('El campo producto_id es requerido.', 400)
+                return {'success': False, 'error': 'El campo producto_id es requerido.'}
 
             if 'cantidad' in form_data:
                 form_data['cantidad_planificada'] = form_data.pop('cantidad')
 
-            receta_result = receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
-            if not receta_result.get('success') or not receta_result.get('data'):
-                return self.error_response(f'No se encontró una receta activa para el producto seleccionado (ID: {producto_id}).', 404)
-            receta = receta_result['data'][0]
-            form_data['receta_id'] = receta['id']
+            # Si no se provee receta_id, la buscamos (lógica clave para la Super OP)
+            if not form_data.get('receta_id'):
+                receta_result = receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
+                if not receta_result.get('success') or not receta_result.get('data'):
+                    return {'success': False, 'error': f'No se encontró una receta activa para el producto ID: {producto_id}.'}
+                receta = receta_result['data'][0]
+                form_data['receta_id'] = receta['id']
+
+            if 'estado' not in form_data or not form_data['estado']:
+                form_data['estado'] = 'PENDIENTE'
+            # ------------------------------------
 
             validated_data = self.schema.load(form_data)
             validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-            validated_data['estado'] = 'PENDIENTE'
             validated_data['usuario_creador_id'] = usuario_id
 
-            result = self.model.create(validated_data)
-            return result
+            return self.model.create(validated_data)
 
         except ValidationError as e:
-            return self.error_response(f"Datos inválidos: {e.messages}", 400)
+            # --- CORRECCIÓN AQUÍ ---
+            # En lugar de devolver una tupla, devolvemos el diccionario de error.
+            logger.error(f"Error de validación al crear orden: {e.messages}")
+            return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
         except Exception as e:
+            # --- CORRECCIÓN AQUÍ ---
             logger.error(f"Error inesperado en crear_orden: {e}", exc_info=True)
-            return self.error_response(f'Error interno: {str(e)}', 500)
+            return {'success': False, 'error': f'Error interno: {str(e)}'}
 
     def asignar_supervisor(self, orden_id: int, supervisor_id: int) -> tuple:
             """
@@ -294,74 +303,67 @@ class OrdenProduccionController(BaseController):
     def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str) -> tuple:
         """
         Cambia el estado de una orden.
-        Si el estado es 'COMPLETADA', genera el lote de producto terminado Y LO RESERVA.
+        Si es 'COMPLETADA', crea el lote y lo deja 'RESERVADO' si está
+        vinculado a un pedido, o 'DISPONIBLE' si es para stock general.
         """
         try:
-            # --- Lógica para obtener la OP y validar estados (sin cambios) ---
             orden_result = self.obtener_orden_por_id(orden_id)
             if not orden_result.get('success'):
                 return self.error_response("Orden de producción no encontrada.", 404)
             orden_produccion = orden_result['data']
-
-            if nuevo_estado == 'EN_PROCESO' and orden_produccion['estado'] != 'LISTA PARA PRODUCIR':
-                return self.error_response(f"La orden debe estar en 'LISTA PARA PRODUCIR' para iniciarla.", 400)
+            estado_actual = orden_produccion['estado']
 
             if nuevo_estado == 'COMPLETADA':
-                if orden_produccion['estado'] != 'EN_PROCESO':
-                    return self.error_response(f"La orden debe estar en 'EN_PROCESO' para completarla.", 400)
+                if estado_actual != 'CONTROL_DE_CALIDAD':
+                    return self.error_response(f"La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
 
-                # A. Crear el lote de producto terminado (lógica existente)
+                # 1. Verificar si la OP está vinculada a ítems de pedido
+                items_a_surtir_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
+                items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
+
+                # 2. Decidir el estado inicial del lote
+                estado_lote_inicial = 'RESERVADO' if items_vinculados else 'DISPONIBLE'
+
+                # 3. Preparar y crear el lote con el estado decidido
                 datos_lote = {
                     'producto_id': orden_produccion['producto_id'],
                     'cantidad_inicial': orden_produccion['cantidad_planificada'],
                     'orden_produccion_id': orden_id,
                     'fecha_produccion': date.today().isoformat(),
-                    'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat()
+                    'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat(),
+                    'estado': estado_lote_inicial # <-- Pasamos el estado decidido
                 }
                 resultado_lote, status_lote = self.lote_producto_controller.crear_lote_desde_formulario(
-                    datos_lote,
-                    usuario_id=orden_produccion.get('usuario_creador_id', 1)
+                    datos_lote, usuario_id=orden_produccion.get('usuario_creador_id', 1)
                 )
-
                 if status_lote >= 400:
                     return self.error_response(f"Fallo al registrar el lote de producto: {resultado_lote.get('error')}", 500)
 
                 lote_creado = resultado_lote['data']
+                message_to_use = f"Orden completada. Lote N° {lote_creado['numero_lote']} creado como '{estado_lote_inicial}'."
 
-                # --- INICIO DE LA NUEVA LÓGICA DE RESERVA AUTOMÁTICA ---
-                # B. Encontrar los ítems de pedido que originaron esta OP
-                items_a_surtir_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
-                if items_a_surtir_res.get('success') and items_a_surtir_res.get('data'):
-                    items_a_surtir = items_a_surtir_res['data']
-
-                    # C. Crear un registro de reserva para cada ítem de pedido
-                    for item in items_a_surtir:
+                # 4. Si el lote se creó como RESERVADO, crear los registros de reserva
+                if estado_lote_inicial == 'RESERVADO':
+                    for item in items_vinculados:
                         datos_reserva = {
                             'lote_producto_id': lote_creado['id_lote'],
                             'pedido_id': item['pedido_id'],
                             'pedido_item_id': item['id'],
-                            'cantidad_reservada': item['cantidad'], # Asumimos que la OP cubre la cantidad exacta
-                            'usuario_reserva_id': orden_produccion.get('usuario_creador_id')
+                            'cantidad_reservada': float(item['cantidad']), # Asumimos que la OP cubre la cantidad del item
+                            'usuario_reserva_id': orden_produccion.get('usuario_creador_id', 1)
                         }
-                        # Usamos el modelo de reserva que está dentro del lote_producto_controller
+                        # Creamos la reserva directamente, sin descontar stock
                         self.lote_producto_controller.reserva_model.create(
                             self.lote_producto_controller.reserva_schema.load(datos_reserva)
                         )
-                        logger.info(f"Reserva creada para el item {item['id']} desde el lote {lote_creado['id_lote']}.")
+                    logger.info(f"Registros de reserva creados para el lote {lote_creado['numero_lote']}.")
+                    message_to_use += " y vinculado a los pedidos correspondientes."
 
-                    # D. Actualizar el estado del nuevo lote a 'RESERVADO'
-                    self.lote_producto_controller.model.update(lote_creado['id_lote'], {'estado': 'RESERVADO'}, 'id_lote')
-                    logger.info(f"Lote {lote_creado['numero_lote']} marcado como RESERVADO.")
-                # --- FIN DE LA NUEVA LÓGICA ---
-
-            # 3. Cambiar el estado de la OP en la base de datos (sin cambios)
+            # 5. Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
             result = self.model.cambiar_estado(orden_id, nuevo_estado)
-
             if result.get('success'):
-                message_to_use = f"Estado actualizado a {nuevo_estado.replace('_', ' ')}."
-                if nuevo_estado == 'COMPLETADA':
-                    message_to_use = f"Orden completada. Lote N° {lote_creado['numero_lote']} creado y reservado para el pedido."
-
+                if nuevo_estado != 'COMPLETADA':
+                    message_to_use = f"Estado actualizado a {nuevo_estado.replace('_', ' ')}."
                 return self.success_response(data=result.get('data'), message=message_to_use)
             else:
                 return self.error_response(result.get('error', 'Error al cambiar el estado.'), 500)
@@ -451,3 +453,86 @@ class OrdenProduccionController(BaseController):
                 'productos': [], 'recetas': [], 'operarios': [],
                 'error': f'Error obteniendo datos para el formulario: {str(e)}'
             }
+
+    def consolidar_ordenes_produccion(self, op_ids: List[int], usuario_id: int) -> Dict:
+        """
+        Lógica de negocio para fusionar varias OPs en una Super OP.
+        1. Valida las OPs.
+        2. Calcula totales.
+        3. Crea la nueva Super OP.
+        4. Actualiza las OPs originales.
+        """
+        try:
+            # 1. Obtener las OPs originales desde el modelo
+            ops_a_consolidar_res = self.model.find_by_ids(op_ids) # Necesitarás crear este método en tu modelo
+            if not ops_a_consolidar_res.get('success') or not ops_a_consolidar_res.get('data'):
+                return {'success': False, 'error': 'Una o más órdenes no fueron encontradas.'}
+
+            ops_originales = ops_a_consolidar_res['data']
+
+            # Validación extra en el backend
+            if len(ops_originales) != len(op_ids):
+                return {'success': False, 'error': 'Algunas órdenes no pudieron ser cargadas.'}
+
+            primer_producto_id = ops_originales[0]['producto_id']
+            if not all(op['producto_id'] == primer_producto_id for op in ops_originales):
+                return {'success': False, 'error': 'Todas las órdenes deben ser del mismo producto.'}
+
+            # 2. Calcular la cantidad total
+            cantidad_total = sum(Decimal(op['cantidad_planificada']) for op in ops_originales)
+            primera_op = ops_originales[0]
+
+            # 3. Crear la nueva Super OP (reutilizando la lógica de `crear_orden`)
+            super_op_data = {
+                'producto_id': primera_op['producto_id'],
+                'cantidad_planificada': str(cantidad_total),
+                'fecha_planificada': primera_op['fecha_planificada'],
+                'receta_id': primera_op['receta_id'],
+                'prioridad': 'ALTA', # Las super OPs suelen ser prioritarias
+                'observaciones': f'Super OP consolidada desde las OPs: {", ".join(map(str, op_ids))}',
+                'estado': 'LISTA PARA PRODUCIR' # La Super OP nace lista
+            }
+
+            resultado_creacion = self.crear_orden(super_op_data, usuario_id)
+            if not resultado_creacion.get('success'):
+                return resultado_creacion
+
+            nueva_super_op = resultado_creacion['data']
+            super_op_id = nueva_super_op['id']
+
+            # 4. Actualizar las OPs originales
+            update_data = {
+                'estado': 'CONSOLIDADA',
+                'super_op_id': super_op_id
+            }
+            for op_id in op_ids:
+                self.model.update(id_value=op_id, data=update_data, id_field='id')
+
+            return {'success': True, 'data': nueva_super_op}
+
+        except Exception as e:
+            logger.error(f"Error en consolidar_ordenes_produccion: {e}", exc_info=True)
+            # Aquí idealmente implementarías un rollback de la transacción
+            return {'success': False, 'error': f'Error interno del servidor: {str(e)}'}
+
+    def cambiar_estado_orden_simple(self, orden_id: int, nuevo_estado: str) -> Dict:
+        """
+        Cambia el estado de una orden de producción. Ideal para el Kanban.
+        Reutiliza la lógica robusta del modelo.
+        """
+        try:
+            # Validación simple de estados (opcional pero recomendado)
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return {'success': False, 'error': "Orden de producción no encontrada."}
+
+            # Aquí podrías añadir reglas de negocio, ej:
+            # "No se puede mover de 'EN LINEA 1' a 'LISTA PARA PRODUCIR'"
+
+            # Llamamos al método del modelo que ya sabe cómo cambiar estados y fechas
+            result = self.model.cambiar_estado(orden_id, nuevo_estado)
+            return result
+
+        except Exception as e:
+            logger.error(f"Error en cambiar_estado_orden_simple para OP {orden_id}: {e}", exc_info=True)
+            return {'success': False, 'error': f"Error interno: {str(e)}"}
