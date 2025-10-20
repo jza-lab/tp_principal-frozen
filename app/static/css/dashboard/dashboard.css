@@ -168,19 +168,18 @@
 /* ================================================= */
 
 .alert-carousel-wrapper {
-    position: relative; 
-    padding-left: 2rem;  
-    padding-right: 2rem; 
+    position: relative;
+    padding-left: 2rem;
+    padding-right: 2rem;
+    overflow: hidden; 
 }
 
 .alert-carousel-container {
     display: flex;
-    gap: 1.5rem; 
-    overflow-x: auto; 
-    padding-bottom: 0.5rem; 
-    /* ESTA ES LA CLAVE PARA LA ANIMACIÓN SUAVE EN CHROME/FIREFOX */
-    scroll-behavior: smooth; 
-    outline: none; 
+    gap: 1.5rem;
+    padding-bottom: 0.5rem;
+    outline: none;
+    transition: transform 0.5s ease-in-out; 
 }
 
 /* Ocultar la barra de scroll para una vista limpia */

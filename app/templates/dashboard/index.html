@@ -391,101 +391,84 @@ document.addEventListener('DOMContentLoaded', function () {
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const carouselWrapper = document.querySelector('.alert-carousel-wrapper');
     const carouselContainer = document.getElementById('alertCarouselContainer');
     const prevBtn = document.getElementById('prevAlertBtn');
     const nextBtn = document.getElementById('nextAlertBtn');
     const cards = carouselContainer.querySelectorAll('.stat-card-item');
     
-    // Configuraciones
-    const gap = 24; // Corresponde a 1.5rem de gap en CSS
-    const scrollDuration = 4000; // Auto-scroll cada 4 segundos
+    if (cards.length === 0) return;
 
+    const gap = 55; 
+    const scrollDration = 4000;
     let currentIndex = 0;
     let autoScrollInterval;
 
-    function getScrollPosition(index) {
-        if (index < 0 || index >= cards.length) return 0;
-        return cards[index].offsetLeft - gap;
+    function calculateMaxScroll() {
+        const totalWidth = carouselContainer.scrollWidth;
+        const visibleWidth = carouselWrapper.clientWidth;
+        return totalWidth - visibleWidth + gap;
     }
 
-    function updateButtonState() {
-        // Deshabilita el botón Prev en la primera tarjeta
-        prevBtn.disabled = (currentIndex === 0);
-        // Deshabilita el botón Next en la última tarjeta
-        nextBtn.disabled = (currentIndex === cards.length - 1);
-        
-        // Control de opacidad para el feedback visual
+    function updateCarousel() {
+        const cardWidth = cards[0].offsetWidth;
+        const offset = currentIndex * (cardWidth + gap);
+        const maxScroll = calculateMaxScroll();
+
+        // Asegurarse de que el desplazamiento no exceda el máximo
+        const finalOffset = Math.min(offset, maxScroll);
+
+        carouselContainer.style.transform = `translateX(-${finalOffset}px)`;
+
+        // Actualizar el estado de los botones
+        prevBtn.disabled = (finalOffset === 0);
+        nextBtn.disabled = (finalOffset >= maxScroll);
+
         prevBtn.style.opacity = prevBtn.disabled ? '0.5' : '1';
         nextBtn.style.opacity = nextBtn.disabled ? '0.5' : '1';
-        prevBtn.style.cursor = prevBtn.disabled ? 'default' : 'pointer';
-        nextBtn.style.cursor = nextBtn.disabled ? 'default' : 'pointer';
-    }
-
-    function scrollToCard(index, smooth = true) {
-        if (cards.length === 0) return;
-
-        // Limita el índice al rango válido [0, cards.length - 1]
-        index = Math.max(0, Math.min(index, cards.length - 1));
-        
-        currentIndex = index;
-
-        const scrollPosition = getScrollPosition(currentIndex); 
-        
-        // Uso de 'smooth' para la animación, que es la transición suave que necesitas.
-        carouselContainer.scrollTo({
-            left: scrollPosition,
-            behavior: smooth ? 'smooth' : 'instant'
-        });
-        
-        updateButtonState();
     }
 
     function startAutoScroll() {
         if (autoScrollInterval) clearInterval(autoScrollInterval);
-        if (cards.length <= 1) return; 
 
         autoScrollInterval = setInterval(() => {
-            // Detiene el auto-scroll si llega al final
-            if (currentIndex >= cards.length - 1) {
-                clearInterval(autoScrollInterval);
-                updateButtonState(); // Actualiza para deshabilitar 'Next'
-                return;
+            if (nextBtn.disabled) {
+                // Si el botón 'next' está desactivado, hemos llegado al final. Reinicia.
+                currentIndex = 0;
+            } else {
+                currentIndex++;
             }
-            
-            // Si no es el final, avanza con animación suave
-            scrollToCard(currentIndex + 1, true);
+            updateCarousel();
         }, scrollDuration);
     }
 
     function resetAutoScroll() {
-        // Reinicia el auto-scroll después de una interacción manual
-        if (cards.length > 1) {
-            clearInterval(autoScrollInterval);
-            startAutoScroll();
-        }
+        clearInterval(autoScrollInterval);
+        startAutoScroll();
     }
 
-    // 1. Button Click Handlers (Manual Interaction)
     nextBtn.addEventListener('click', function() {
-        if (currentIndex < cards.length - 1) {
-            scrollToCard(currentIndex + 1, true); 
-            resetAutoScroll(); 
+        if (!nextBtn.disabled) {
+            currentIndex++;
+            updateCarousel();
+            resetAutoScroll();
         }
     });
 
     prevBtn.addEventListener('click', function() {
         if (currentIndex > 0) {
-            scrollToCard(currentIndex - 1, true);
-            resetAutoScroll(); 
+            currentIndex--;
+            updateCarousel();
+            resetAutoScroll();
         }
     });
 
-    // 2. Initial setup and Auto-Scroll Start
-    if (cards.length > 0) {
-        // Inicializa la posición sin animación
-        scrollToCard(0, false); 
-        startAutoScroll();
-    }
+    // Añadir un listener para recalcular en caso de que cambie el tamaño de la ventana
+    window.addEventListener('resize', updateCarousel);
+
+    // Configuración inicial
+    updateCarousel();
+    startAutoScroll();
 });
 </script>
 {% endblock %}
