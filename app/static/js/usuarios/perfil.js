@@ -47,12 +47,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (btnSaveChanges) btnSaveChanges.addEventListener('click', saveChanges);
         if (btnCancelEdit) btnCancelEdit.addEventListener('click', handleCancelEdit);
     }
-
     // --- LÓGICA DE MODO EDICIÓN ---
 
     function enterEditMode() {
         isEditMode = true;
-        originalFormState = captureFormState();
 
         actionBarView.style.display = 'none';
         actionBarEdit.style.display = 'flex';
@@ -62,6 +60,8 @@ document.addEventListener('DOMContentLoaded', function () {
         profileForm.querySelectorAll('input, select').forEach(el => {
             el.disabled = false;
         });
+        
+        originalFormState = captureFormState();
         addValidationListeners();
     }
     
@@ -261,14 +261,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function formHasChanged() {
         const currentState = captureFormState();
-        // El campo 'sectores' necesita un tratamiento especial porque se carga dinámicamente.
-        // Lo comparamos como un array de números.
-        currentState.sectores = JSON.stringify(JSON.parse(currentState.sectores || '[]').map(Number).sort());
-        originalFormState.sectores = JSON.stringify((USUARIO_SECTORES_IDS || []).map(Number).sort());
+        // Rol: Comparamos como números para evitar errores de tipo (e.g., '1' vs 1)
+        currentState.role_id = document.getElementById('role_id').value;
+        originalFormState.role_id = String(USER_ROLE_ID);
+
+        // Turno: Comparamos como números
+        currentState.turno_id = document.getElementById('turno_id').value;
+        originalFormState.turno_id = String(USER_TURNO_ID);
+
+        // Sectores: Normalizamos a un string JSON ordenado para una comparación consistente
+        const currentSectores = JSON.parse(document.getElementById('sectores').value || '[]').map(Number).sort();
+        currentState.sectores = JSON.stringify(currentSectores);
+        const originalSectores = (USUARIO_SECTORES_IDS || []).map(Number).sort();
+        originalFormState.sectores = JSON.stringify(originalSectores);
 
         for (const key in originalFormState) {
             if (originalFormState[key] !== currentState[key]) {
-                // Para depuración, puedes ver qué campo cambió:
+                // Para depuración:
                 // console.log(`'${key}' ha cambiado. Original: '${originalFormState[key]}', Actual: '${currentState[key]}'`);
                 return true;
             }
