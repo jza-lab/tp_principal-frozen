@@ -4,6 +4,7 @@ from app.utils.roles import get_redirect_url_by_role
 from app.models.totem_sesion import TotemSesionModel
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from datetime import datetime, timedelta
+from app.utils.date_utils import get_now_in_argentina
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -46,15 +47,17 @@ def before_request_auth():
         if hora_fin < hora_inicio:
             limite_dt += timedelta(days=1)
         
-        if datetime.now() > limite_dt:
+        now_art = get_now_in_argentina()
+
+        if now_art > limite_dt:
             # Antes de cerrar sesión, verificar si hay autorización de horas extras
             auth_result = autorizacion_model.find_by_usuario_and_fecha(
                 usuario_id=usuario['id'],
                 fecha=fecha_sesion,
                 tipo='HORAS_EXTRAS',
-                estado='APROBADA'
+                estado='APROBADO'
             )
-            if auth_result.get('success'):
+            if auth_result.get('success') and auth_result.get('data'):
                 # Iterar sobre todas las autorizaciones de HE para ver si alguna justifica la sesión activa
                 for autorizacion in auth_result['data']:
                     auth_turno_info = autorizacion.get('turno')
@@ -67,7 +70,7 @@ def before_request_auth():
                         if auth_hora_fin < auth_hora_inicio: # Turno nocturno
                             limite_he_dt += timedelta(days=1)
 
-                        if datetime.now() < limite_he_dt:
+                        if now_art < limite_he_dt:
                             return  # La sesión está justificada por al menos una autorización, no hacer nada.
                 
             flash('Tu turno ha finalizado. La sesión se ha cerrado automáticamente.', 'info')

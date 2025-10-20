@@ -252,8 +252,43 @@ class UsuarioController(BaseController):
         
         totem_check = self.totem_sesion.verificar_sesion_activa_hoy(user_id)
         if not totem_check:
-            logger.warning(f"Web auth failed for user_id {user_id}: No active totem session found for today.")
-            return {'success': False, 'error': 'Debe registrar su entrada en el tótem primero para acceder por web'}
+            logger.info(f"No esta activo en el totem para user_id {user_id}. Buscando una autorización para horas extras..")
+            now_in_argentina = get_now_in_argentina()
+            autorizacion_model = AutorizacionIngresoModel()
+            auth_result = autorizacion_model.find_by_usuario_and_fecha(
+                user_id,
+                now_in_argentina.date(),
+                tipo='HORAS_EXTRAS',
+                estado='APROBADO'
+            )
+
+            if not auth_result.get('success') or not auth_result.get('data'):
+                logger.warning(f"Web auth failed for user_id {user_id}: No active totem session and no HORAS_EXTRAS auth.")
+                return {'success': False, 'error': 'Debe registrar su entrada en el tótem o tener una autorización de Horas Extras activa.'}
+
+            # Verificar si la hora actual está dentro del turno de alguna de las autorizaciones
+            hora_actual = now_in_argentina.time()
+            acceso_permitido_por_auth = False
+            for autorizacion in auth_result['data']:
+                turno_auth = autorizacion.get('turno')
+                if turno_auth and 'hora_inicio' in turno_auth and 'hora_fin' in turno_auth:
+                    hora_inicio_auth = time.fromisoformat(turno_auth['hora_inicio'])
+                    hora_fin_auth = time.fromisoformat(turno_auth['hora_fin'])
+
+                    if hora_fin_auth < hora_inicio_auth:  # Turno nocturno
+                        if hora_actual >= hora_inicio_auth or hora_actual <= hora_fin_auth:
+                            acceso_permitido_por_auth = True
+                            break
+                    else:  # Turno diurno
+                        if hora_inicio_auth <= hora_actual <= hora_fin_auth:
+                            acceso_permitido_por_auth = True
+                            break
+            
+            if not acceso_permitido_por_auth:
+                logger.warning(f"Web auth failed for user_id {user_id}: Found HORAS_EXTRAS auth but current time is outside the authorized shift.")
+                return {'success': False, 'error': 'Tiene una autorización de Horas Extras, pero se encuentra fuera del horario permitido por la misma.'}
+
+            logger.info(f"Access granted for user_id {user_id} via HORAS_EXTRAS authorization.")
         
         logger.info(f"Active totem session found for user_id: {user_id}. Proceeding to start session.")
         self.model.update(user_id, {'ultimo_login_web': get_now_in_argentina().isoformat()})
@@ -803,15 +838,29 @@ class UsuarioController(BaseController):
             now_in_argentina = get_now_in_argentina()
 
             if now_in_argentina > grace_period_end:
-                # La sesión ha expirado, a menos que haya horas extras.
+                # La sesión del turno regular ha expirado. Verificar si está justificada por horas extras.
                 autorizacion_model = AutorizacionIngresoModel()
                 auth_result = autorizacion_model.find_by_usuario_and_fecha(
                     usuario['id'], now_in_argentina.date(), tipo='HORAS_EXTRAS', estado='APROBADO'
                 )
+                
                 if auth_result.get('success') and auth_result.get('data'):
-                    # El usuario tiene autorización, no se cierra la sesión.
-                    return False 
-                return True # La sesión expiró y no hay autorización.
+                    hora_actual = now_in_argentina.time()
+                    for autorizacion in auth_result['data']:
+                        turno_auth = autorizacion.get('turno')
+                        if turno_auth and 'hora_inicio' in turno_auth and 'hora_fin' in turno_auth:
+                            hora_inicio_auth = time.fromisoformat(turno_auth['hora_inicio'])
+                            hora_fin_auth = time.fromisoformat(turno_auth['hora_fin'])
+                            
+                            # Si la hora actual está dentro del turno de horas extras, la sesión NO debe cerrarse.
+                            if hora_fin_auth < hora_inicio_auth: # Turno nocturno
+                                if hora_actual >= hora_inicio_auth or hora_actual <= hora_fin_auth:
+                                    return False # Sesión justificada.
+                            else: # Turno diurno
+                                if hora_inicio_auth <= hora_actual <= hora_fin_auth:
+                                    return False # Sesión justificada.
+                
+                return True # La sesión expiró y no hay una autorización válida que la justifique.
         except (ValueError, TypeError):
             return False # Error en los datos, no se arriesga a cerrar.
             
