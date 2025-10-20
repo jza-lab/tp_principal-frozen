@@ -18,6 +18,7 @@ orden_venta_controller = PedidoController()
 notificacion_controller = NotificacionController()
 inventario_controller = InventarioController()
 lote_producto_controller = LoteProductoController()
+alertas_stock_count = inventario_controller.obtener_conteo_alertas_stock()
 
 @admin_dashboard_bp.route('/')
 @permission_required(accion='ver_dashboard')
@@ -61,7 +62,12 @@ def index():
 
     respuesta4, _ = orden_venta_controller.obtener_cantidad_pedidos_estado("PENDIENTE")
     ordenesventa_pendientes = respuesta4.get('data', {}).get('cantidad', 0)
-    
+
+    lotes_vencimiento_count = inventario_controller.obtener_conteo_vencimientos() 
+    productos_sin_lotes_resp, _ = lote_producto_controller.obtener_conteo_productos_sin_lotes()
+
+    lotes_producto_vencimiento_count = lote_producto_controller.obtener_conteo_vencimientos() 
+
     user_permissions = session.get('permisos', {})
 
     return render_template('dashboard/index.html', 
@@ -75,4 +81,6 @@ def index():
                            productos_sin_lotes_count=productos_sin_lotes_count,
                            productos_sin_lotes_list=productos_sin_lotes_list,
                            ordenesventa_pendientes=ordenesventa_pendientes,
+                           lotes_vencimiento_count=lotes_vencimiento_count,
+                           lotes_producto_vencimiento_count=lotes_producto_vencimiento_count,
                            user_permissions=user_permissions)

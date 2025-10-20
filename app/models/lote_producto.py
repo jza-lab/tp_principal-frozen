@@ -1,5 +1,5 @@
 # app/models/lote_producto.py
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from app.models.base_model import BaseModel
 from typing import Dict, List, Optional
 import logging
@@ -147,3 +147,23 @@ class LoteProductoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error al despachar lote {lote_id}: {str(e)}")
             return {'success': False, 'error': f"Error interno en la BD al actualizar lote: {str(e)}"}
+        
+    def find_por_vencimiento(self, dias_adelante: int = 7) -> Dict:
+        """Obtener lotes de productos que vencen en X días"""
+        try:
+            fecha_limite = (date.today() + timedelta(days=dias_adelante)).isoformat()
+            fecha_hoy = date.today().isoformat()
+
+            result = (self.db.table(self.table_name)
+                     .select('*, producto:productos(nombre)')
+                     .gte('fecha_vencimiento', fecha_hoy)
+                     .lte('fecha_vencimiento', fecha_limite)
+                     .eq('estado', 'DISPONIBLE')
+                     .order('fecha_vencimiento')
+                     .execute())
+
+            return {'success': True, 'data': result.data}
+
+        except Exception as e:
+            logger.error(f"Error obteniendo lotes de productos por vencimiento: {str(e)}")
+            return {'success': False, 'error': str(e)}

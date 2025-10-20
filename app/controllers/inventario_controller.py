@@ -504,3 +504,17 @@ class InventarioController(BaseController):
         except Exception as e:
             logger.error(f"Error obteniendo lista de insumos bajo stock: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+        
+    def obtener_conteo_vencimientos(self) -> int:
+        """Obtiene el conteo de lotes próximos a vencer (crítico)."""
+        try:
+            # Llama al método del modelo que busca lotes por vencer en 7 días
+            # Se asume que el método del modelo ya está implementado correctamente.
+            vencimiento_result = self.inventario_model.obtener_por_vencimiento(7) 
+
+            if vencimiento_result.get('success'):
+                return len(vencimiento_result.get('data', []))
+            return 0
+        except Exception as e:
+            logger.error(f"Error contando alertas de vencimiento: {str(e)}")
+            return 0
