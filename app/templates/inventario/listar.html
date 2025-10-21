@@ -52,7 +52,11 @@
                             {% endif %}
                         </td>
                         <td>
-                            <span class="badge bg-success">{{ lote.estado or 'disponible' }}</span>
+                            {% if lote.estado == 'disponible' %}
+                                <span class="badge bg-success">{{ lote.estado }}</span>
+                            {% else %}
+                                <span class="badge bg-danger">{{ lote.estado }}</span>
+                            {% endif %}
                         </td>
                         <td>
                             <a href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-primary">

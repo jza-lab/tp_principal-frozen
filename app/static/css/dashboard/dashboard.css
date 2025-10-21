@@ -1,5 +1,5 @@
 /* ================================================= */
-/* ESTILOS DE DASHBOARD: ELEVACIÓN Y CONTRASTE (Respeta la estética) */
+/* ESTILOS DE DASHBOARD: ELEVACIÓN Y CONTRASTE */
 /* ================================================= */
 
 /* 1. Tarjetas de Estadísticas (stat-card) */
@@ -121,34 +121,117 @@
 /* ESTILOS ESPECÍFICOS PARA ALERTAS CRÍTICAS (ANIMACIÓN DE INICIO) */
 /* ================================================= */
 
-/* Animación de Pulso para Alertas Críticas */
+/* Animación de Pulso para Alertas Críticas: Se ha potenciado el 'efecto de LUZ' en el 50% */
 @keyframes critical-pulse {
     0% {
         transform: scale(1);
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        /* Sombra base y el inicio del brillo (cero dispersión) */
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08), 0 0 0 rgba(255, 0, 0, 0); 
+        border-color: rgba(255, 0, 0, 0.2) !important; /* Borde muy suave */
     }
     50% {
-        transform: scale(1.03); /* Ligeramente más grande */
-        box-shadow: 0 10px 27px rgba(251, 27, 50, 0.633); /* Sombra roja más intensa */
+        transform: scale(1.01); /* Movimiento sutil */
+        /* Múltiples sombras para el efecto de resplandor (luz roja intensa y suave) */
+        box-shadow: 
+            0 0 40px rgba(255, 50, 50, 1), /* Brillo más cercano, más opaco */
+            0 0 15px rgba(255, 50, 50, 0.8), /* Brillo más lejano, más transparente */
+            inset 0 0 10px rgba(255, 0, 0, 0.3); /* Ligero resplandor interno */
+        /* El borde se vuelve el color de la luz en el pico del pulso */
+        border-color: #FF5050 !important;
     }
     100% {
         transform: scale(1);
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08), 0 0 0 rgba(255, 0, 0, 0); 
+        border-color: rgba(255, 0, 0, 0.2) !important;
     }
 }
 
 /* Clase para aplicar la animación de pulso al cargar */
 .glow-on-load {
-    animation: critical-pulse 1s ease-in-out 3; /* Se repite 3 veces, total 3s */
-    border: 1px solid rgba(235, 28, 49, 0.427) !important;
+    /* La animación se mantiene en 0.8s y se repite 4 veces al cargar */
+    animation: critical-pulse 0.8s ease-in-out 4;
+    border: 1px solid rgba(255, 0, 0, 0.398) !important; 
+    box-shadow: 0 4px 10px rgba(255, 4, 4, 0.381) !important;
 }
 
 .glow-fade-out {
-    /* Define explícitamente la transición de desvanecimiento */
-    transition: box-shadow 0.5s ease-out, border-color 0.5s ease-out !important;
+    /* Define la transición para volver al estado normal sin el brillo */
+    transition: box-shadow 0.5s ease-out, border-color 0.5s ease-out, transform 0.5s ease-out !important;
 
-    /* Forzar los valores a los estilos por defecto del .card */
-    /* Usar valores base del card para que la transición vaya a un estado no animado */
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08) !important;
+    /* Fuerza la vuelta a los estilos no animados */
     border-color: rgba(222, 226, 230, 0.5) !important; 
+    transform: translateY(0) !important;
+}
+
+/* ================================================= */
+/* ESTILOS PARA CARRUSEL DE ALERTAS (Scroll Horizontal y Botones) */
+/* ================================================= */
+
+.alert-carousel-wrapper {
+    position: relative;
+    padding-left: 2rem;
+    padding-right: 2rem;
+    overflow: hidden; 
+}
+
+.alert-carousel-container {
+    display: flex;
+    gap: 1.5rem;
+    padding-bottom: 0.5rem;
+    outline: none;
+    transition: transform 0.5s ease-in-out; 
+}
+
+/* Ocultar la barra de scroll para una vista limpia */
+.alert-carousel-container::-webkit-scrollbar {
+    display: none; 
+}
+.alert-carousel-container {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+
+.stat-card-item {
+    /* Mantiene el ancho grande (400px) */
+    flex: 0 0 400px; 
+    min-width: 400px;
+    cursor: default; 
+    transition: transform 0.3s ease;
+}
+
+.stat-card-item:hover {
+    transform: translateY(-5px); 
+}
+
+/* Estilos de los botones de navegación */
+.carousel-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: rgba(255, 255, 255, 0.95); 
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transition: background-color 0.2s, box-shadow 0.2s, opacity 0.3s, cursor 0.3s;
+    color: var(--app-primary);
+}
+
+.carousel-nav-btn:hover {
+    background-color: #fff;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.prev-btn {
+    left: 0; 
+}
+
+.next-btn {
+    right: 0; 
 }

@@ -59,6 +59,11 @@
                                         En Proceso
                                     </a>                                    
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                                    <a href="{{ url_for('orden_produccion.listar', estado='CONSOLIDADA') }}" 
+                                    class="btn btn-sm {% if current_status == 'CONSOLIDADA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                        Consolidadas
+                                    </a>
+                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
                                     <a href="{{ url_for('orden_produccion.listar', estado='COMPLETADA') }}" 
                                     class="btn btn-sm {% if current_status == 'COMPLETADA' %}btn-primary{% else %}btn-secondary{% endif %}">
                                         Completadas
@@ -167,6 +172,7 @@
                         'EN_ESPERA': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
                         'LISTA PARA PRODUCIR': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
                         'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
+                        'CONSOLIDADA': {'class': 'bg-success text-white', 'icon': 'check-circle'},
                         'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle-fill'},
                         'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}

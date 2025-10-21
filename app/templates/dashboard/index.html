@@ -13,97 +13,14 @@
     <h1 class="h2">Dashboard</h1>
 </div>
 
-<div class="row mb-4">
+<div class="alert-carousel-wrapper">
+    <div class="alert-carousel-container mb-4" id="alertCarouselContainer">
+        
 {% set can_ver_produccion = user_permissions.is_gerente or ('PRODUCCION' in user_permissions and 'ver_ordenes_produccion' in user_permissions['PRODUCCION']) %}
 {% set can_ver_almacen = user_permissions.is_gerente or ('ALMACEN' in user_permissions and 'ver_stock_actual' in user_permissions['ALMACEN']) %}
 {% set can_ver_admin = user_permissions.is_gerente or ('ADMINISTRACION' in user_permissions and ('ver_info_empleados' in user_permissions['ADMINISTRACION'] or 'gestionar_turnos' in user_permissions['ADMINISTRACION'])) %}
-
-<div class="row mb-4">
     
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card h-100 border-0 shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
-                    <div>
-                        <div class="stat-label mb-1 text-muted">Órdenes en Proceso</div>
-                        <div class="stat-value text-primary">{{ ordenes_pendientes }}</div>
-                        <div class="small text-muted">OPs en fabricación</div>
-                    </div>
-                    </a>
-                    <div class="text-primary">
-                        <i class="bi bi-gear-fill fs-1"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card h-100 border-0 shadow-sm
-             {% if not can_ver_produccion %}disabled{% endif %}
-             {% if ordenesventa_pendientes > 0 %}glow-on-load{% endif %}">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
-                    <div>
-                        <div class="stat-label mb-1 text-muted">Órdenes de Venta Pendientes</div>
-                        <div class="stat-value text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">{{ ordenesventa_pendientes }}</div>
-                        <div class="small text-muted">OV esperando stock/planificación</div>
-                    </div>
-                    </a>
-                    <div class="text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">
-                        <i class="bi bi-cart-x-fill fs-1"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card h-100 border-0 shadow-sm
-             {% if not can_ver_produccion %}disabled{% endif %}
-             {% if productos_sin_lotes_count > 0 %}glow-on-load{% endif %}">
-            <a href="{{ url_for('lote_producto.listar_lotes') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        {% if productos_sin_lotes_count == 0 %}
-                            <div>
-                                <div class="stat-label mb-1 text-muted">Stock Productos Finales</div>
-                                <div class="small text-muted">Productos sin lotes asociados</div>
-                                <div class="stat-value text-success">{{ productos_sin_lotes_count }}</div>
-                                <div class="small text-success">¡Inventario de productos completo!</div>
-                            </div>
-                            <div class="text-success">
-                                <i class="bi bi-check-circle-fill fs-1"></i>
-                            </div>
-                        {% else %}
-                            <div>
-                                <div class="stat-label mb-1 text-muted">PRODUCTOS SIN STOCK</div>
-                                <div class="small text-muted">Se requieren lotes para:</div>
-                                <div class="stat-value text-danger">{{ productos_sin_lotes_count }}</div>
-                                
-                                <ul class="text-danger small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
-                                {% for producto in productos_sin_lotes_list[:3] %}
-                                    <li class="text-truncate" title="{{ producto.nombre }}">{{ producto.nombre }}</li>
-                                {% endfor %}
-                                {% if productos_sin_lotes_count > 3 %}
-                                    <li class="small">y {{ productos_sin_lotes_count - 3 }} más...</li>
-                                {% endif %}
-                                </ul>
-
-                            </div>
-                            <div class="text-danger">
-                                <i class="bi bi-box-fill fs-1"></i>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-md-6 mb-4">
+    <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm
              {% if not can_ver_almacen %}disabled{% endif %}
              {% if alertas_stock_count > 0 %}glow-on-load{% endif %}">
@@ -148,10 +65,156 @@
         </div>
     </div>
     
-</div>
+    <div class="stat-card-item">
+        <div class="card stat-card h-100 border-0 shadow-sm
+             {% if not can_ver_produccion %}disabled{% endif %}
+             {% if productos_sin_lotes_count > 0 %}glow-on-load{% endif %}">
+            <a href="{{ url_for('lote_producto.listar_lotes') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        {% if productos_sin_lotes_count == 0 %}
+                            <div>
+                                <div class="stat-label mb-1 text-muted">Stock Productos Finales</div>
+                                <div class="small text-muted">Productos sin lotes asociados</div>
+                                <div class="stat-value text-success">{{ productos_sin_lotes_count }}</div>
+                                <div class="small text-success">¡Inventario de productos completo!</div>
+                            </div>
+                            <div class="text-success">
+                                <i class="bi bi-check-circle-fill fs-1"></i>
+                            </div>
+                        {% else %}
+                            <div>
+                                <div class="stat-label mb-1 text-muted">PRODUCTOS SIN STOCK</div>
+                                <div class="small text-muted">Se requieren lotes para:</div>
+                                <div class="stat-value text-danger">{{ productos_sin_lotes_count }}</div>
+                                
+                                <ul class="text-danger small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                {% for producto in productos_sin_lotes_list[:3] %}
+                                    <li class="text-truncate" title="{{ producto.nombre }}">{{ producto.nombre }}</li>
+                                {% endfor %}
+                                {% if productos_sin_lotes_count > 3 %}
+                                    <li class="small">y {{ productos_sin_lotes_count - 3 }} más...</li>
+                                {% endif %}
+                                </ul>
 
+                            </div>
+                            <div class="text-danger">
+                                <i class="bi bi-box-fill fs-1"></i>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <div class="stat-card-item">
+        <div class="card stat-card h-100 border-0 shadow-sm
+             {% if not can_ver_produccion %}disabled{% endif %}
+             {% if ordenesventa_pendientes > 0 %}glow-on-load{% endif %}">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
+                    <div>
+                        <div class="stat-label mb-1 text-muted">Órdenes de Venta Pendientes</div>
+                        <div class="stat-value text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">{{ ordenesventa_pendientes }}</div>
+                        <div class="small text-muted">OVs esperando aprobación</div>
+                    </div>
+                    </a>
+                    <div class="text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">
+                        <i class="bi bi-cart-x-fill fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="stat-card-item">
+        <div class="card stat-card h-100 border-0 shadow-sm
+             {% if not can_ver_produccion %}disabled{% endif %}
+             {% if lotes_producto_vencimiento_count > 0 %}glow-on-load{% endif %}">
+            <a href="{{ url_for('lote_producto.listar_lotes') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="stat-label mb-1 text-muted">RIESGO PROD. VENCIMIENTO</div>
+                            <div class="small text-muted">Lotes de productos que vencen en 7 días:</div>
+                            <div class="stat-value text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}">{{ lotes_producto_vencimiento_count }}</div>
+                            <div class="small text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}" style="min-height: 20px;">
+                                {% if lotes_producto_vencimiento_count > 0 %}
+                                    <i class="bi bi-box-fill me-1"></i> ¡Priorizar despacho!
+                                {% else %}
+                                    Lotes estables.
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}">
+                            <i class="bi bi-calendar-x-fill fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+    
+    <div class="stat-card-item">
+        <div class="card stat-card h-100 border-0 shadow-sm
+             {% if not can_ver_almacen %}disabled{% endif %}
+             {% if lotes_vencimiento_count > 0 %}glow-on-load{% endif %}">
+            <a href="{{ url_for('inventario_view.listar_lotes') if can_ver_almacen else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_almacen else 'false' }}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="stat-label mb-1 text-muted">RIESGO DE VENCIMIENTO INSUMOS</div>
+                            <div class="small text-muted">Lotes de insumos que vencen en 7 días:</div>
+                            <div class="stat-value text-{{ 'warning' if lotes_vencimiento_count > 0 else 'success' }}">{{ lotes_vencimiento_count }}</div>
+                            <div class="small text-{{ 'warning' if lotes_vencimiento_count > 0 else 'success' }}" style="min-height: 20px;">
+                                {% if lotes_vencimiento_count > 0 %}
+                                    <i class="bi bi-calendar-x me-1"></i> ¡Priorizar consumo!
+                                {% else %}
+                                    Lotes estables.
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="text-{{ 'warning' if lotes_vencimiento_count > 0 else 'success' }}">
+                            <i class="bi bi-calendar-x-fill fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+    
+    <div class="stat-card-item">
+        <div class="card stat-card h-100 border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
+                    <div>
+                        <div class="stat-label mb-1 text-muted">Órdenes en Proceso</div>
+                        <div class="stat-value text-primary">{{ ordenes_pendientes }}</div>
+                        <div class="small text-muted">OPs en fabricación</div>
+                    </div>
+                    </a>
+                    <div class="text-primary">
+                        <i class="bi bi-gear-fill fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+    <button id="prevAlertBtn" class="carousel-nav-btn prev-btn" aria-label="Anterior">
+        <i class="bi bi-chevron-left"></i>
+    </button>
+    <button id="nextAlertBtn" class="carousel-nav-btn next-btn" aria-label="Siguiente">
+        <i class="bi bi-chevron-right"></i>
+    </button>
+</div>
 <div class="row">
-    <div class="col-lg-8 mb-4">
+    <div class="col-lg-7 mb-4"> 
         <div class="card h-100 shadow-sm {% if not can_ver_produccion %}disabled{% endif %}">
             <div class="card-header bg-white border-bottom pb-2 d-flex justify-content-between align-items-center">
                 <h5 class="mb-0 text-dark">
@@ -207,7 +270,7 @@
         </div>
     </div>
 
-    <div class="col-lg-4 mb-4">
+    <div class="col-lg-5 mb-4">
         
         <div class="card stat-card mb-4 border-0 shadow-sm {% if not can_ver_admin %}disabled{% endif %}">
             <div class="card-body py-3">
@@ -242,9 +305,9 @@
                             <i class="bi bi-{{ 'clock-fill' if notificacion.tipo == 'TARDANZA' else 'info-circle' }} mt-1"></i>
                         </span>
                         <div class="flex-grow-1">
-                            <small class="d-block fw-bold text-truncate-2" title="{{ notificacion.mensaje }}">
+                            <h6 class="mb-1 fw-bold text-truncate-2" title="{{ notificacion.mensaje }}">
                                 {{ notificacion.tipo | title }}: {{ notificacion.mensaje }}
-                            </small>
+                            </h6>
                             <small class="text-muted d-block" style="font-size: 0.75rem;">
                                 {{ notificacion.created_at | format_datetime('%d/%m %H:%M') }}
                             </small>
@@ -324,5 +387,88 @@ document.addEventListener('DOMContentLoaded', function () {
         }, animationDuration - fadeOutDuration);
     });
 });
-</script>>
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const carouselWrapper = document.querySelector('.alert-carousel-wrapper');
+    const carouselContainer = document.getElementById('alertCarouselContainer');
+    const prevBtn = document.getElementById('prevAlertBtn');
+    const nextBtn = document.getElementById('nextAlertBtn');
+    const cards = carouselContainer.querySelectorAll('.stat-card-item');
+    
+    if (cards.length === 0) return;
+
+    const gap = 55; 
+    const scrollDration = 4000;
+    let currentIndex = 0;
+    let autoScrollInterval;
+
+    function calculateMaxScroll() {
+        const totalWidth = carouselContainer.scrollWidth;
+        const visibleWidth = carouselWrapper.clientWidth;
+        return totalWidth - visibleWidth + gap;
+    }
+
+    function updateCarousel() {
+        const cardWidth = cards[0].offsetWidth;
+        const offset = currentIndex * (cardWidth + gap);
+        const maxScroll = calculateMaxScroll();
+
+        // Asegurarse de que el desplazamiento no exceda el máximo
+        const finalOffset = Math.min(offset, maxScroll);
+
+        carouselContainer.style.transform = `translateX(-${finalOffset}px)`;
+
+        // Actualizar el estado de los botones
+        prevBtn.disabled = (finalOffset === 0);
+        nextBtn.disabled = (finalOffset >= maxScroll);
+
+        prevBtn.style.opacity = prevBtn.disabled ? '0.5' : '1';
+        nextBtn.style.opacity = nextBtn.disabled ? '0.5' : '1';
+    }
+
+    function startAutoScroll() {
+        if (autoScrollInterval) clearInterval(autoScrollInterval);
+
+        autoScrollInterval = setInterval(() => {
+            if (nextBtn.disabled) {
+                // Si el botón 'next' está desactivado, hemos llegado al final. Reinicia.
+                currentIndex = 0;
+            } else {
+                currentIndex++;
+            }
+            updateCarousel();
+        }, scrollDuration);
+    }
+
+    function resetAutoScroll() {
+        clearInterval(autoScrollInterval);
+        startAutoScroll();
+    }
+
+    nextBtn.addEventListener('click', function() {
+        if (!nextBtn.disabled) {
+            currentIndex++;
+            updateCarousel();
+            resetAutoScroll();
+        }
+    });
+
+    prevBtn.addEventListener('click', function() {
+        if (currentIndex > 0) {
+            currentIndex--;
+            updateCarousel();
+            resetAutoScroll();
+        }
+    });
+
+    // Añadir un listener para recalcular en caso de que cambie el tamaño de la ventana
+    window.addEventListener('resize', updateCarousel);
+
+    // Configuración inicial
+    updateCarousel();
+    startAutoScroll();
+});
+</script>
 {% endblock %}

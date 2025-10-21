@@ -1,5 +1,6 @@
 # app/controllers/lote_producto_controller.py
 import logging
+from datetime import datetime, date, timedelta 
 from app.controllers.base_controller import BaseController
 from app.models.lote_producto import LoteProductoModel
 from app.models.producto import ProductoModel
@@ -494,3 +495,16 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico al despachar stock reservado del pedido {pedido_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def obtener_conteo_vencimientos(self) -> int:
+        """Obtiene el conteo de lotes de productos próximos a vencer (crítico)."""
+        try:
+            # Llama al método del modelo que busca lotes por vencer en 7 días
+            vencimiento_result = self.model.find_por_vencimiento(7) 
+
+            if vencimiento_result.get('success'):
+                return len(vencimiento_result.get('data', []))
+            return 0
+        except Exception as e:
+            logger.error(f"Error contando alertas de vencimiento de producto: {str(e)}")
+            return 0
