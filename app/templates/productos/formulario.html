@@ -54,10 +54,12 @@ Agregar nuevo producto al catálogo
                             <div class="form-floating">
                                 <select class="form-select" name="categoria" id="categoria" required>
                                     <option value="">Seleccionar categoría...</option>
-                                    <option value="Congelados" {% if producto and producto.categoria=="Congelados" %}selected{% endif %}>
+                                    <option value="Congelados" {% if producto and producto.categoria=="Congelados"
+                                        %}selected{% endif %}>
                                         Congelados (Milanesas, hamburguesas, etc.)
                                     </option>
-                                    <option value="Otros" {% if producto and producto.categoria=='Otros' %}selected{% endif %}>
+                                    <option value="Otros" {% if producto and producto.categoria=='Otros' %}selected{%
+                                        endif %}>
                                         Otros
                                     </option>
                                 </select>
@@ -68,18 +70,83 @@ Agregar nuevo producto al catálogo
                         </div>
 
                         <div class="col-md-6">
-                            <div class="form-floating">
+                            <div class="form-floating mb-3">
                                 <select class="form-select" name="unidad_medida" id="unidad_medida" required>
                                     <option value="">Seleccionar unidad...</option>
-                                    <option value="t" {% if producto and producto.unidad_medida=='t' %}selected{% endif %}>Toneladas (t)</option>
-                                    <option value="kg" {% if producto and producto.unidad_medida=='kg' %}selected{% endif %}>Kilogramos (kg)</option>
-                                    <option value="g" {% if producto and producto.unidad_medida=='g' %}selected{% endif %}>Gramos (g)</option>
-                                    <option value="litros" {% if producto and producto.unidad_medida=='litros' %}selected{% endif %}>Litros (l)</option>
-                                    <option value="unidades" {% if producto and producto.unidad_medida=='unidades' %}selected{% endif %}>Unidades</option>
+                                    <option value="t" {% if producto and producto.unidad_medida=='t' %}selected{% endif
+                                        %}>Toneladas (t)</option>
+                                    <option value="kg" {% if producto and producto.unidad_medida=='kg' %}selected{%
+                                        endif %}>Kilogramos (kg)</option>
+                                    <option value="g" {% if producto and producto.unidad_medida=='g' %}selected{% endif
+                                        %}>Gramos (g)</option>
+                                    <option value="litros" {% if producto and producto.unidad_medida=='litros'
+                                        %}selected{% endif %}>Litros (l)</option>
+                                    <option value="unidades" {% if producto and producto.unidad_medida=='unidades'
+                                        %}selected{% endif %}>Unidades</option>
+                                    <option value="paquete" {% if producto and (producto.unidad_medida | string |
+                                        lower)[:7]=='paquete' %}selected{% endif %}>Paquete</option>
                                 </select>
                                 <label for="unidad_medida">
-                                    <i class="bi bi-rulers me-1"></i>Unidad de Medida <span class="text-danger">*</span>
+                                    <i class="bi bi-rulers me-1"></i>Unidad de Venta <span class="text-danger">*</span>
                                 </label>
+                            </div>
+
+                            <div class="row g-3" id="unidades-paquete-group"
+                                style="display: {{ 'block' if producto and (producto.unidad_medida | string | lower)[:7] == 'paquete' else 'none' }};">
+
+                                <div class="col-6">
+                                    <label for="tipo_paquete" class="form-label small">Se mide por:</label>
+                                    <select class="form-select" name="tipo_paquete" id="tipo_paquete">
+                                        <option value="unidades" {% if producto and producto.unidades_por_paquete> 1
+                                            %}selected{% endif %}>Unidades</option>
+                                        <option value="peso_volumen" {% if producto and producto.peso_por_paquete_valor>
+                                            0 %}selected{% endif %}>Peso/Volumen</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-6">
+
+                                    <div id="unidades-paquete-fields" style="display: none;">
+                                        <label for="unidades_por_paquete" class="form-label small">Cant.
+                                            Unidades</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-box"></i></span>
+                                            <input type="number" step="1" min="1" max="1000" class="form-control"
+                                                name="unidades_por_paquete" id="unidades_por_paquete"
+                                                value="{{ producto.unidades_por_paquete if producto and producto.unidades_por_paquete else '1' }}">
+                                            <span class="input-group-text">u</span>
+                                        </div>
+                                    </div>
+
+                                    <div id="peso-paquete-fields" style="display: none;">
+                                        <label for="peso_por_paquete_valor" class="form-label small">Peso por
+                                            Paquete</label>
+                                        <div class="input-group">
+                                            <input type="number" step="0.01" min="0.01" max="1000" class="form-control"
+                                                name="peso_por_paquete_valor" id="peso_por_paquete_valor"
+                                                value="{{ producto.peso_por_paquete_valor if producto and producto.peso_por_paquete_valor else '1.00' }}">
+
+                                            <select class="form-select" name="peso_por_paquete_unidad"
+                                                id="peso_por_paquete_unidad" style="max-width: 100px;">
+                                                <option value="kg" {% if producto and
+                                                    producto.peso_por_paquete_unidad=='kg' %}selected{% endif %}>kg
+                                                </option>
+                                                <option value="g" {% if producto and
+                                                    producto.peso_por_paquete_unidad=='g' %}selected{% endif %}>g
+                                                </option>
+                                                <option value="litros" {% if producto and
+                                                    producto.peso_por_paquete_unidad=='litros' %}selected{% endif %}>l
+                                                </option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12">
+                                    <div class="form-text mt-2" id="paquete-info-text">
+                                        Define la medida del producto al venderse como paquete.
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -87,16 +154,18 @@ Agregar nuevo producto al catálogo
                             <label for="descripcion" class="form-label">Descripción</label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-card-text"></i></span>
-                                <textarea class="form-control" name="descripcion" id="descripcion" rows="3">{{ producto.descripcion if producto else '' }}</textarea>
+                                <textarea class="form-control" name="descripcion" id="descripcion"
+                                    rows="3">{{ producto.descripcion if producto else '' }}</textarea>
                             </div>
                             <div class="form-text">Opcional - Ingrese una descripción detallada del producto.</div>
                         </div>
                     </div>
-                    
+
                     <div class="card my-4">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">Ítems de la receta del producto</h5>
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="addItemBtn">Añadir Ítem</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="addItemBtn">Añadir
+                                Ítem</button>
                         </div>
                         <div class="card-body">
                             <div id="itemsContainer">
@@ -107,69 +176,87 @@ Agregar nuevo producto al catálogo
                                         <select class="form-select insumo-selector" name="insumo_id[]" required>
                                             <option value="">Seleccione un insumo...</option>
                                             {% for insumo in insumos %}
-                                            <option value="{{ insumo.id }}" data-id="{{ insumo.id }}" data-unidad="{{ insumo.unidad_medida }}" data-precio="{{ insumo.precio_unitario }}" {% if insumo.id_insumo==item.id_insumo %}selected{% endif %}>
+                                            <option value="{{ insumo.id }}" data-id="{{ insumo.id }}"
+                                                data-unidad="{{ insumo.unidad_medida }}"
+                                                data-precio="{{ insumo.precio_unitario }}" {% if
+                                                insumo.id_insumo==item.id_insumo %}selected{% endif %}>
                                                 {{ insumo.nombre }}
                                             </option>
                                             {% endfor %}
                                         </select>
                                     </div>
                                     <div class="col-md-2">
-                                        <label class="form-label">Cantidad</label>
-                                        <input type="number" step="0.01" min="0.01" max="5000" class="form-control cantidad" name="cantidad[]" value="{{ item.cantidad }}" required>
+                                        <label class="form-label">Cantidad <span
+                                                class="unidad-receta-display"></span></label>
+                                        <input type="number" step="0.01" min="0.01" max="5000"
+                                            class="form-control cantidad" name="cantidad[]" value="{{ item.cantidad }}"
+                                            required>
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label">Precio Unitario</label>
-                                        <input type="number" class="form-control precio_unitario" name="precio_unitario[]" value="{{ item.precio_unitario }}" readonly>
+                                        <input type="text" class="form-control precio_unitario" name="precio_unitario[]"
+                                            value="{{ item.precio_unitario }}" readonly>
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label">Subtotal</label>
-                                        <input type="number" class="form-control subtotal-item" value="{{ (item.cantidad * item.precio_unitario) | round(2) }}" readonly>
+                                        <input type="text" class="form-control subtotal-item"
+                                            value="{{ (item.cantidad * item.precio_unitario) | round(2) }}" readonly>
                                     </div>
                                     <div class="col-md-2">
-                                        <button type="button" class="btn btn-outline-danger removeItemBtn">Eliminar</button>
+                                        <button type="button"
+                                            class="btn btn-outline-danger removeItemBtn">Eliminar</button>
                                     </div>
                                 </div>
                                 {% endfor %}
                             </div>
                         </div>
                     </div>
-
                     <div class="card mb-4">
-                        <div class="card-body d-flex justify-content-end gap-3 align-items-center">
-                            
-                            <div class="w-25">
-                                <label class="form-label">Mano de obra / Ganancia (%)</label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-percent"></i></span>
-                                    <input type="number" step="0.01" min="0" max="100" class="form-control" id="porcentaje_extra" name="porcentaje_extra" value="{{ producto.porcentaje_extra if producto else '0' }}">
+                        <div class="card-body">
+                            <div class="row g-3 justify-content-end align-items-center">
+
+                                <div class="col-6 col-md-3 col-lg-3">
+                                    <label class="form-label">Mano de obra / Ganancia (%)</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-percent"></i></span>
+                                        <input type="number" step="0.01" min="0" max="100" class="form-control"
+                                            id="porcentaje_extra" name="porcentaje_extra"
+                                            value="{{ producto.porcentaje_extra if producto else '0' }}">
+                                    </div>
                                 </div>
-                            </div>
-                            
-                            <div class="w-25">
-                                <label class="form-label">Subtotal Receta</label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
-                                    <input type="number" step="0.01" class="form-control" id="subtotal" name="subtotal" value="0" readonly>
+
+                                <div class="col-6 col-md-3 col-lg-3">
+                                    <label class="form-label">Subtotal Receta</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
+                                        <input type="text" class="form-control" id="subtotal" name="subtotal" value="0"
+                                            readonly>
+                                    </div>
                                 </div>
-                            </div>
-                            
-                            <div class="form-check mt-4">
-                                <input class="form-check-input" type="checkbox" id="iva" name="iva" value="1" {% if producto and producto.iva %}checked{% endif %}>
-                                <label class="form-check-label" for="iva">Aplicar IVA 21%</label>
-                            </div>
-                            
-                            <div class="w-25">
-                                <label class="form-label fw-bold">Precio Final Producto</label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
-                                    <input type="number" step="0.01" class="form-control fw-bold fs-5" id="total" name="total" value="0" readonly>
+
+                                <div class="col-12 col-md-3 col-lg-auto pt-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="iva" name="iva" value="1" {%
+                                            if producto and producto.iva %}checked{% endif %}>
+                                        <label class="form-check-label" for="iva">Aplicar IVA 21%</label>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 col-md-3 col-lg-3">
+                                    <label class="form-label fw-bold">Precio Final Producto</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
+                                        <input type="text" class="form-control fw-bold fs-5" id="total" name="total"
+                                            value="0" readonly>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="d-flex justify-content-end gap-2 mt-4">
-                        <a href="{{ url_for('productos.obtener_productos') }}" class="btn btn-outline-secondary">Cancelar</a>
+                        <a href="{{ url_for('productos.obtener_productos') }}"
+                            class="btn btn-outline-secondary">Cancelar</a>
                         <button type="submit" class="btn btn-primary">
                             <i class="bi bi-check-circle me-1"></i>
                             {% if is_edit %}Actualizar{% else %}Crear{% endif %} producto
@@ -205,6 +292,75 @@ Agregar nuevo producto al catálogo
     const IS_EDIT = '{{ is_edit }}';
     const isEditBoolean = IS_EDIT == 'True';
     const INSUMOS_DATA = JSON.parse('{{ insumos | tojson | safe | replace("\n", "") | replace("\r", "") }}');
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const unidadMedidaSelect = document.getElementById('unidad_medida');
+        const unidadesPaqueteGroup = document.getElementById('unidades-paquete-group');
+        const tipoPaqueteSelect = document.getElementById('tipo_paquete');
+        const unidadesPaqueteFields = document.getElementById('unidades-paquete-fields');
+        const pesoPaqueteFields = document.getElementById('peso-paquete-fields');
+        const paqueteInfoText = document.getElementById('paquete-info-text');
+
+        const unidadesPaqueteInput = document.getElementById('unidades_por_paquete');
+        const pesoPaqueteValorInput = document.getElementById('peso_por_paquete_valor');
+        const pesoPaqueteUnidadSelect = document.getElementById('peso_por_paquete_unidad');
+
+
+        function toggleTipoPaquete() {
+            const tipo = tipoPaqueteSelect.value;
+            let infoText = '';
+            if (tipo === 'unidades') {
+                unidadesPaqueteFields.style.display = 'block';
+                pesoPaqueteFields.style.display = 'none';
+                infoText = 'Define la cantidad de unidades individuales dentro del paquete.';
+                unidadesPaqueteInput.setAttribute('required', 'required');
+                unidadesPaqueteInput.removeAttribute('disabled');
+                pesoPaqueteValorInput.removeAttribute('required');
+                pesoPaqueteUnidadSelect.removeAttribute('required');
+                pesoPaqueteValorInput.setAttribute('disabled', 'disabled');
+                pesoPaqueteUnidadSelect.setAttribute('disabled', 'disabled');
+                pesoPaqueteValorInput.value = 0;
+                pesoPaqueteUnidadSelect.value = 'kg';
+                if (parseFloat(unidadesPaqueteInput.value) <= 0) unidadesPaqueteInput.value = 1;
+            } else if (tipo === 'peso_volumen') {
+                unidadesPaqueteFields.style.display = 'none';
+                pesoPaqueteFields.style.display = 'block';
+                infoText = 'Define el peso o volumen total del paquete .';
+                pesoPaqueteValorInput.setAttribute('required', 'required');
+                pesoPaqueteUnidadSelect.setAttribute('required', 'required');
+                pesoPaqueteValorInput.removeAttribute('disabled');
+                pesoPaqueteUnidadSelect.removeAttribute('disabled');
+                unidadesPaqueteInput.removeAttribute('required');
+                unidadesPaqueteInput.setAttribute('disabled', 'disabled');
+                unidadesPaqueteInput.value = 1;
+                if (parseFloat(pesoPaqueteValorInput.value) <= 0) pesoPaqueteValorInput.value = 0.01;
+            }
+            paqueteInfoText.innerHTML = infoText;
+        }
+
+        function togglePaqueteFields() {
+            const selectedValue = unidadMedidaSelect.value;
+            const isPaquete = selectedValue === 'paquete';
+
+            if (isPaquete) {
+                unidadesPaqueteGroup.style.display = 'flex';
+                tipoPaqueteSelect.setAttribute('required', 'required');
+                toggleTipoPaquete();
+            } else {
+                unidadesPaqueteGroup.style.display = 'none';
+                tipoPaqueteSelect.removeAttribute('required');
+                unidadesPaqueteInput.removeAttribute('required');
+                pesoPaqueteValorInput.removeAttribute('required');
+                pesoPaqueteUnidadSelect.removeAttribute('required');
+            }
+        }
+
+        unidadMedidaSelect.addEventListener('change', togglePaqueteFields);
+        tipoPaqueteSelect.addEventListener('change', toggleTipoPaquete);
+
+
+        togglePaqueteFields();
+    });
 </script>
 
 <script src="{{ url_for('static', filename='js/productos/formularioCrearProducto.js') }}"></script>
