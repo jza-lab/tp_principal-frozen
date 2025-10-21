@@ -9,6 +9,10 @@ class RecetaIngredienteSchema(Schema):
     id_insumo = fields.UUID(required=True)
     cantidad = fields.Decimal(as_string=True, required=True, validate=validate.Range(min=0.001, error="La cantidad debe ser mayor que cero."))
     unidad_medida = fields.Str(required=True)
+    tiempo_preparacion_minutos = fields.Int(allow_none=True, load_default=0)
+    linea_compatible = fields.Str(allow_none=True, load_default='2')
+    tiempo_prod_unidad_linea1 = fields.Decimal(as_string=True, allow_none=True, load_default=0)
+    tiempo_prod_unidad_linea2 = fields.Decimal(as_string=True, allow_none=True, load_default=0)
 
 class RecetaSchema(Schema):
     """

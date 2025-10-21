@@ -78,57 +78,105 @@ class OrdenProduccionModel(BaseModel):
 
     def get_all_enriched(self, filtros: Optional[Dict] = None) -> Dict:
         """
-        Obtiene todas las órdenes de producción con datos enriquecidos de tablas relacionadas
-        y un manejo de filtros avanzado.
+        Obtiene todas las órdenes de producción con datos enriquecidos
+        de tablas relacionadas y un manejo de filtros avanzado.
         """
         try:
-            query = self.db.table(self.table_name).select(
+            # Base query selecting related data
+            query = self.db.table(self.get_table_name()).select(
                 "*, productos(nombre), "
                 "creador:usuario_creador_id(nombre, apellido), "
-                "supervisor:supervisor_responsable_id(nombre, apellido)"
+                "supervisor:supervisor_responsable_id(nombre, apellido), "
+                "operario:operario_asignado_id(nombre, apellido)"
             )
 
-            # ... (toda tu lógica de filtros se mantiene igual) ...
+            # Apply filters dynamically
             if filtros:
                 for key, value in filtros.items():
                     if value is None:
                         continue
+
+                    # Handle tuple operators like ('in', [...]) or ('not.in', [...])
                     if isinstance(value, tuple) and len(value) == 2:
                         operator, filter_value = value
                         if operator.lower() == 'in':
                             query = query.in_(key, filter_value)
+                        elif operator.lower() == 'not.in':
+                            # Implement specific logic for 'not in' based on your DB library
+                            # Example for some libraries (might need adjustment):
+                            # query = query.not_.in_(key, filter_value)
+                            logger.warning(f"Operator 'not.in' for key '{key}' not fully implemented yet.")
+                            pass # Add implementation or filter later in Python if needed
+
+                    # Handle specific date range keys
                     elif key == 'fecha_planificada_desde':
                         query = query.gte('fecha_planificada', value)
                     elif key == 'fecha_planificada_hasta':
                         query = query.lte('fecha_planificada', value)
+                    elif key == 'fecha_inicio_planificada_desde':
+                        query = query.gte('fecha_inicio_planificada', value)
+                    elif key == 'fecha_inicio_planificada_hasta':
+                        query = query.lte('fecha_inicio_planificada', value)
+
+                    # Default to equality filter
                     else:
                         query = query.eq(key, value)
 
-            query = query.order("fecha_planificada", desc=True).order("id", desc=True)
+            # Apply ordering (e.g., for weekly view and general listing)
+            query = query.order("fecha_inicio_planificada", desc=False).order("id", desc=True)
+
+            # Execute the query
             result = query.execute()
 
-            # --- LÍNEA DE DEPURACIÓN AÑADIDA ---
-            # Esta línea imprimirá en tu consola lo que la base de datos devuelve
-            logger.debug(f"RAW DATA FROM DB FOR KANBAN: {result.data}")
-            # ------------------------------------
+            logger.debug(f"RAW DATA FROM DB (get_all_enriched): {result.data}")
 
+            # Process and flatten the results
             if result.data:
                 processed_data = []
-                # ... (el resto de tu método para procesar los datos sigue igual) ...
                 for item in result.data:
+                    # Flatten product info
                     if item.get('productos'):
-                        item['producto_nombre'] = item['productos'].get('nombre', 'N/A')
+                        item['producto_nombre'] = item.pop('productos').get('nombre','N/A')
                     else:
-                        item['producto_nombre'] = 'Producto no definido'
-                    if 'productos' in item: item.pop('productos')
-                    # ... etc ...
+                         item['producto_nombre'] = 'N/A' # Handle case where relation might be null
+
+                    # Flatten creator info
+                    if item.get('creador'):
+                        creador_info = item.pop('creador')
+                        item['creador_nombre'] = f"{creador_info.get('nombre', '')} {creador_info.get('apellido', '')}".strip()
+                    else:
+                        item['creador_nombre'] = 'No asignado'
+
+                    # Flatten supervisor info
+                    if item.get('supervisor'):
+                        supervisor_info = item.pop('supervisor')
+                        item['supervisor_nombre'] = f"{supervisor_info.get('nombre', '')} {supervisor_info.get('apellido', '')}".strip()
+                    else:
+                        item['supervisor_nombre'] = 'Sin asignar' # Or None if preferred
+
+                    # Flatten operario info
+                    if item.get('operario'):
+                        operario_info = item.pop('operario')
+                        item['operario_nombre'] = f"{operario_info.get('nombre', '')} {operario_info.get('apellido', '')}".strip()
+                    else:
+                        item['operario_nombre'] = None # Explicitly None if not assigned
+
+                    # You might want to add date formatting here if needed for consistency
+                    # Example:
+                    # if item.get('fecha_inicio_planificada'):
+                    #     try:
+                    #         item['fecha_inicio_planificada'] = date.fromisoformat(item['fecha_inicio_planificada']).strftime('%d/%m/%Y')
+                    #     except (ValueError, TypeError): pass # Keep original if format error
+
                     processed_data.append(item)
                 return {'success': True, 'data': processed_data}
             else:
+                # No data found, but the query was successful
                 return {'success': True, 'data': []}
 
         except Exception as e:
-            logger.error(f"Error al obtener órdenes enriquecidas: {str(e)}")
+            # Log the full traceback for better debugging
+            logger.error(f"Error al obtener órdenes enriquecidas: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def get_one_enriched(self, orden_id: int) -> Dict:
