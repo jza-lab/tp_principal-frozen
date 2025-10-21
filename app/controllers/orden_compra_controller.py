@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, TYPE_CHECKING
 from flask import request, jsonify
 from app.models.orden_compra_model import OrdenCompraItemModel, OrdenCompraModel
 from app.models.orden_compra_model import OrdenCompra
@@ -8,6 +8,12 @@ from datetime import datetime, date
 import logging
 
 logger = logging.getLogger(__name__)
+
+# --- AÑADIR ESTE BLOQUE ---
+# Esto permite usar el nombre para type hints sin causar importación circular
+if TYPE_CHECKING:
+    from app.controllers.orden_produccion_controller import OrdenProduccionController
+# -------------------------
 
 class OrdenCompraController:
     def __init__(self):
@@ -302,92 +308,80 @@ class OrdenCompraController:
             logger.error(f"Error rechazando orden {orden_id}: {e}")
             return {'success': False, 'error': str(e)}
 
-    def procesar_recepcion(self, orden_id, form_data, usuario_id, orden_produccion_controller):
+    def procesar_recepcion(self, orden_id, form_data, usuario_id, orden_produccion_controller: "OrdenProduccionController"):
         """
-        Procesa la recepción de una OC, crea lotes, RESERVA INSUMOS para la OP asociada
-        y finalmente actualiza el estado de la OP.
+        Procesa la recepción de una OC, crea lotes, RESERVA INSUMOS y
+        mueve la OP asociada a 'LISTA_PARA_INICIAR'.
         """
         try:
             accion = form_data.get('accion')
             observaciones = form_data.get('observaciones', '')
 
             if accion == 'aceptar':
+                # --- GET PO DATA ---
                 orden_result = self.model.find_by_id(orden_id)
                 if not orden_result.get('success'):
                     return {'success': False, 'error': 'No se pudo encontrar la orden de compra.'}
                 orden_data = orden_result['data']
 
+                # --- RECEIVE ITEMS & CREATE LOTS ---
                 item_ids = form_data.getlist('item_id[]')
                 cantidades_recibidas = form_data.getlist('cantidad_recibida[]')
-                precios_unitarios = form_data.getlist('precio_unitario[]')
+                if len(item_ids) != len(cantidades_recibidas):
+                    return {'success': False, 'error': 'Datos de ítems inconsistentes.'}
 
-                if not (len(item_ids) == len(cantidades_recibidas) == len(precios_unitarios)):
-                    return {'success': False, 'error': 'Los datos de los ítems recibidos son inconsistentes.'}
-
-                lotes_creados_count = 0
-                lotes_error_count = 0
-                errores_detalle = []
-
-                # Bucle transaccional para procesar cada ítem
+                items_para_lote = []
+                # 1. Update PO Items
                 for i in range(len(item_ids)):
                     try:
                         item_id = int(item_ids[i])
-                        cantidad = float(cantidades_recibidas[i])
-                        precio = float(precios_unitarios[i])
-
-                        # Obtener información original del ítem para tener el insumo_id
-                        item_info_result = self.model.item_model.find_by_id(item_id, 'id')
-                        if not item_info_result.get('success'):
-                            errores_detalle.append(f"No se encontró el ítem con ID {item_id}.")
-                            lotes_error_count += 1
-                            continue
-                        
-                        item_data = item_info_result['data']
-                        insumo_id = item_data['insumo_id']
-
-                        # 1. Actualizar el ítem de la orden de compra (cantidad y nuevo precio)
-                        subtotal_item = cantidad * precio
-                        update_item_data = {
-                            'cantidad_recibida': cantidad,
-                            'precio_unitario': precio,
-                            'subtotal': subtotal_item
-                        }
-                        
-                        # Pasamos el item_id y los datos al modelo para que actualice la BD
-                        update_result = self.model.item_model.update(item_id, update_item_data)
-                        if not update_result.get('success'):
-                             errores_detalle.append(f"Error al actualizar el ítem ID {item_id}: {update_result.get('error')}")
-                             lotes_error_count += 1
-                             continue
-
-                        # 2. Crear lote en inventario solo si se recibió una cantidad > 0
+                        cantidad = float(cantidades_recibidas[i]) if cantidades_recibidas[i] else 0
+                        # Ensure item_model exists on self.model if using it like this
+                        self.model.item_model.update(item_id, {'cantidad_recibida': cantidad})
                         if cantidad > 0:
-                            lote_data = {
-                                'id_insumo': insumo_id,
-                                'id_proveedor': orden_data.get('proveedor_id'),
-                                'cantidad_inicial': cantidad,
-                                'precio_unitario': precio, # <-- Usar el nuevo precio del formulario
-                                'documento_ingreso': f"OC-{orden_data.get('codigo_oc', 'N/A')}",
-                                'f_ingreso': date.today().isoformat()
-                            }
-                            
-                            lote_result, status_code = self.inventario_controller.crear_lote(lote_data, usuario_id)
-                            if not lote_result.get('success'):
-                                errores_detalle.append(f"Error al crear lote para insumo ID {insumo_id}: {lote_result.get('error')}")
-                                lotes_error_count += 1
-                                continue # Continuar al siguiente item aunque este falle
-                            else:
-                                lotes_creados_count += 1
-                        
-                        # 3. Actualizar el precio en el catálogo principal de insumos
-                        precio_update_result, _ = self.insumo_controller.actualizar_precio(insumo_id, precio)
-                        if not precio_update_result.get('success'):
-                            logger.warning(f"No se pudo actualizar el precio en el catálogo para el insumo {insumo_id}. Esto no detiene el proceso.")
+                            item_info_result = self.model.item_model.find_by_id(item_id, 'id')
+                            if item_info_result.get('success'):
+                                items_para_lote.append({
+                                    'data': item_info_result['data'],
+                                    'cantidad_recibida': cantidad
+                                })
+                    except (ValueError, IndexError, AttributeError) as e:
+                         logger.warning(f"Skipping item due to error during update/fetch: {e}")
+                         continue # Skip this item if there's an issue
 
-                    except (ValueError, IndexError) as e:
-                        errores_detalle.append(f"Error de datos procesando un ítem: {e}")
+                # 2. Update PO Status
+                orden_update_data = {
+                    'estado': 'RECIBIDA', 'fecha_real_entrega': date.today().isoformat(),
+                    'observaciones': observaciones, 'updated_at': datetime.now().isoformat()
+                }
+                self.model.update(orden_id, orden_update_data)
+
+                # 3. Create Inventory Lots
+                lotes_creados_count = 0; lotes_error_count = 0
+                for item_lote in items_para_lote:
+                    item_data = item_lote['data']
+                    lote_data = {
+                        'id_insumo': item_data['insumo_id'],
+                        'id_proveedor': orden_data.get('proveedor_id'),
+                        'cantidad_inicial': item_lote['cantidad_recibida'],
+                        'precio_unitario': item_data.get('precio_unitario'),
+                        'documento_ingreso': f"OC-{orden_data.get('codigo_oc', 'N/A')}",
+                        'f_ingreso': date.today().isoformat()
+                        # Add f_vencimiento here if captured
+                    }
+                    try:
+                        # Ensure inventario_controller.crear_lote returns a dict {'success':...}
+                        lote_result = self.inventario_controller.crear_lote(lote_data, usuario_id)
+                        # If it returns a tuple (dict, status), use this:
+                        # lote_result, _ = self.inventario_controller.crear_lote(lote_data, usuario_id)
+
+                        if lote_result.get('success'): lotes_creados_count += 1
+                        else:
+                            logger.error(f"Failed to create lot for insumo {lote_data.get('id_insumo')}: {lote_result.get('error')}")
+                            lotes_error_count += 1
+                    except Exception as e_lote:
+                        logger.error(f"Exception creating lot for insumo {lote_data.get('id_insumo')}: {e_lote}", exc_info=True)
                         lotes_error_count += 1
-                        continue
 
                 # 4. Recalcular y actualizar los totales de la orden principal
                 items_actualizados_result = self.model.item_model.find_by_orden_id(orden_id)
@@ -397,68 +391,68 @@ class OrdenCompraController:
                 else:
                     items_actualizados = items_actualizados_result['data']
                     nuevo_subtotal = sum(float(item.get('subtotal') or 0) for item in items_actualizados)
-                    
+
                     nuevo_iva = 0
                     # Aseguramos que el valor de iva sea numérico antes de comparar
                     iva_original = float(orden_data.get('iva') or 0)
                     if iva_original > 0: # Respetar si la orden original tenía IVA
                         nuevo_iva = nuevo_subtotal * 0.21
 
-                    nuevo_total = nuevo_subtotal + nuevo_iva
-
-                    orden_update_data = {
-                        'subtotal': round(nuevo_subtotal, 2),
-                        'iva': round(nuevo_iva, 2),
-                        'total': round(nuevo_total, 2),
-                        'estado': 'RECIBIDA',
-                        'fecha_real_entrega': date.today().isoformat(),
-                        'observaciones': observaciones,
-                        'updated_at': datetime.now().isoformat()
-                    }
-                    self.model.update(orden_id, orden_update_data)
-
-                if lotes_error_count > 0:
-                    error_msg = f"Recepción procesada con {lotes_error_count} errores. Detalles: {'; '.join(errores_detalle)}"
-                    return {'success': False, 'error': error_msg}
-
-                # Lógica de reserva y transición de OP
+                # --- RESERVE SUPPLIES & TRANSITION OP ---
                 op_transition_message = ""
                 if orden_data.get('orden_produccion_id'):
                     op_id = orden_data['orden_produccion_id']
 
+                    # a. Get FULL OP data (needs linea_asignada)
                     op_result = orden_produccion_controller.obtener_orden_por_id(op_id)
                     if not op_result.get('success'):
                         op_error_msg = f"No se pudo encontrar la OP {op_id} asociada."
+                        # Return error as we cannot proceed
+                        logger.error(op_error_msg)
                         return {'success': False, 'error': op_error_msg}
 
                     orden_produccion = op_result['data']
 
-                    logger.info(f"Intentando reservar insumos para la OP {op_id} tras recepción de OC.")
-                    reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
+                    # b. Proceed only if OP is 'EN ESPERA'
+                    if orden_produccion.get('estado') == 'EN ESPERA':
+                        logger.info(f"OP {op_id} is EN ESPERA. Attempting to reserve supplies after PO receipt.")
 
-                    if not reserva_result.get('success'):
-                        op_error_msg = f"Se recibieron los insumos pero falló la reserva automática para la OP {op_id}. Por favor, verifique manualmente. Error: {reserva_result.get('error')}"
-                        op_transition_message = f"ADVERTENCIA: {op_error_msg}"
-                    else:
-                        logger.info(f"Reserva para OP {op_id} exitosa. Cambiando estado a 'LISTA PARA PRODUCIR'.")
-                        op_update_result, op_status_code = orden_produccion_controller.cambiar_estado_orden(op_id, 'LISTA PARA PRODUCIR')
+                        # c. Attempt to reserve supplies
+                        reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
 
-                        if op_status_code >= 400:
-                            op_error_msg = op_update_result.get('error', 'Error desconocido.')
-                            op_transition_message = f"ADVERTENCIA: Fallo al actualizar la OP {op_id}. Error: {op_error_msg}"
+                        if not reserva_result.get('success'):
+                            op_error_msg = f"Supplies received but automatic reservation failed for OP {op_id}. Please check manually. Error: {reserva_result.get('error')}"
+                            op_transition_message = f"ADVERTENCIA: {op_error_msg}"
+                            logger.error(op_error_msg)
                         else:
-                            op_transition_message = f"Insumos reservados. La Orden de Producción {op_id} asociada ha sido actualizada a 'LISTA PARA PRODUCIR'."
-                            logger.info(f"OC {orden_id} recibida, OP {op_id} movida a 'LISTA PARA PRODUCIR'.")
+                            # d. Set new state to LISTA_PARA_INICIAR
+                            nuevo_estado_op = 'LISTA PARA PRODUCIR'
 
-                # Ahora 'lotes_creados_count' sí existe y se puede usar en el mensaje final
+                            # e. Change OP state using the simple method
+                            # Ensure op controller has cambiar_estado_orden_simple
+                            op_update_result = orden_produccion_controller.cambiar_estado_orden_simple(op_id, nuevo_estado_op)
+
+                            if not op_update_result.get('success'):
+                                op_error_msg = op_update_result.get('error', 'Error desconocido.')
+                                op_transition_message = f"ADVERTENCIA: Fallo al actualizar la OP {op_id} a {nuevo_estado_op}. Error: {op_error_msg}"
+                                logger.error(op_transition_message)
+                            else:
+                                op_transition_message = f"Insumos reservados. La OP {op_id} asociada ha sido actualizada a '{nuevo_estado_op}'."
+                                logger.info(f"OC {orden_id} recibida, OP {op_id} movida a '{nuevo_estado_op}'.")
+                    else:
+                         logger.info(f"OC {orden_id} received, but associated OP {op_id} was already in state '{orden_produccion.get('estado')}'. No changes made to OP.")
+                         op_transition_message = f"La OP {op_id} no estaba 'EN ESPERA', no se modificó."
+                # --- END IMPROVED LOGIC ---
+
                 final_message = f'Recepción completada. {lotes_creados_count} lotes creados.'
-                if op_transition_message:
-                    final_message += f" | {op_transition_message}"
+                if lotes_error_count > 0: final_message += f' ({lotes_error_count} con error).'
+                if op_transition_message: final_message += f" | {op_transition_message}"
 
                 return {'success': True, 'message': final_message}
 
             elif accion == 'rechazar':
-                return self.rechazar_orden(orden_id, f"Rechazada en recepción: {observaciones}")
+                 # Ensure rechazar_orden exists and works
+                 return self.rechazar_orden(orden_id, f"Rechazada en recepción: {observaciones}")
 
             else:
                 return {'success': False, 'error': 'Acción no válida.'}

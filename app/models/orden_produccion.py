@@ -17,118 +17,196 @@ class OrdenProduccionModel(BaseModel):
 
     def cambiar_estado(self, orden_id: int, nuevo_estado: str, observaciones: Optional[str] = None) -> Dict:
         """
-        Cambia el estado de una orden de producción, actualiza fechas clave y el estado
+        Cambia el estado de una orden de producción, actualiza fechas clave
+        (incluyendo fecha_inicio real al entrar en línea por primera vez) y el estado
         de los items de pedido asociados.
         """
         try:
-            # 1. Preparar los datos para la actualización
+            # 1. Preparar los datos base para la actualización
             update_data = {'estado': nuevo_estado}
             if observaciones:
                 update_data['observaciones'] = observaciones
 
-            now = datetime.now().isoformat()
+            now_iso = datetime.now().isoformat() # Timestamp actual en formato ISO
 
             # --- LÓGICA DE FECHAS MEJORADA ---
             # Si la orden entra en una etapa de producción activa por primera vez
-            if nuevo_estado in ['EN_PROCESO', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD']:
+            # Asegúrate que EN_PROCESO usa el formato correcto (guion bajo o espacio) si lo necesitas aquí
+            if nuevo_estado in ['EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD']:
                 # Verificamos si la fecha_inicio ya fue establecida para no sobrescribirla
+                # Usamos find_by_id del propio modelo (self)
                 orden_actual_res = self.find_by_id(orden_id, 'id')
-                if orden_actual_res.get('success') and not orden_actual_res['data'].get('fecha_inicio'):
-                    update_data['fecha_inicio'] = now
+                if orden_actual_res.get('success') and orden_actual_res.get('data') and not orden_actual_res['data'].get('fecha_inicio'):
+                    update_data['fecha_inicio'] = now_iso # Solo se establece si era Nulo
+                    logger.info(f"Registrando inicio real de producción para OP {orden_id} a las {now_iso}")
 
             # Si la orden se completa, registramos la fecha de fin
-            elif nuevo_estado in ['COMPLETADA', 'FINALIZADA']:
-                update_data['fecha_fin'] = now
+            # Quitamos 'FINALIZADA' si no lo usas como estado final que genera lote
+            elif nuevo_estado == 'COMPLETADA':
+                update_data['fecha_fin'] = now_iso
 
-            # Mantenemos la lógica para la fecha de aprobación
+            # Mantenemos la lógica para la fecha de aprobación (si aún la usas)
             elif nuevo_estado == 'APROBADA':
+                # Nota: Con el nuevo flujo de 'LISTA PARA PRODUCIR', este estado 'APROBADA'
+                # podría ya no ser necesario o tener un significado diferente.
+                # Revisa si esta lógica aún aplica.
                 fecha_aprobacion = datetime.now()
-                fecha_fin_esperada = fecha_aprobacion + timedelta(weeks=1)
+                # Considera si la fecha fin estimada debe calcularse aquí o en otro lado
+                # fecha_fin_esperada = fecha_aprobacion + timedelta(weeks=1) # Ejemplo
                 update_data['fecha_aprobacion'] = fecha_aprobacion.isoformat()
-                update_data['fecha_fin_estimada'] = fecha_fin_esperada.isoformat()
+                # update_data['fecha_fin_estimada'] = fecha_fin_esperada.isoformat() # Descomentar si aplica
             # --- FIN DE LA LÓGICA DE FECHAS ---
 
             # 2. Actualizar la orden de producción en la base de datos
+            # Usamos el método update de la clase base (o el propio si fue sobreescrito)
             update_result = self.update(id_value=orden_id, data=update_data, id_field='id')
             if not update_result.get('success'):
+                logger.error(f"Fallo al actualizar OP {orden_id} a estado {nuevo_estado}: {update_result.get('error')}")
                 return update_result
 
-            # 3. Lógica de actualización en cascada para los pedidos (esta parte no cambia)
+            # 3. Lógica de actualización en cascada para los pedidos
             nuevo_estado_item = None
-            if nuevo_estado in ['EN_PROCESO', 'EN_LINEA_1', 'EN_LINEA_2']:
+            # Estados que indican producción activa
+            if nuevo_estado in ['EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD']: # Ajustado
                 nuevo_estado_item = 'EN_PRODUCCION'
-            elif nuevo_estado in ['COMPLETADA', 'FINALIZADA']:
+            # Estado final que indica producto listo
+            elif nuevo_estado == 'COMPLETADA':
                 nuevo_estado_item = 'ALISTADO'
 
             if nuevo_estado_item:
-                items_result = self.db.table('pedido_items').select('id, pedido_id').eq('orden_produccion_id', orden_id).execute()
+                try:
+                    # Usar el cliente de DB directamente para operaciones en otra tabla
+                    items_result = self.db.table('pedido_items').select('id, pedido_id').eq('orden_produccion_id', orden_id).execute()
 
-                if items_result.data:
-                    self.db.table('pedido_items').update({'estado': nuevo_estado_item}).eq('orden_produccion_id', orden_id).execute()
-                    pedidos_ids_afectados = {item['pedido_id'] for item in items_result.data}
+                    if items_result.data:
+                        # Actualizar estado de los items asociados
+                        self.db.table('pedido_items').update({'estado': nuevo_estado_item}).eq('orden_produccion_id', orden_id).execute()
+                        logger.info(f"Items del pedido asociados a OP {orden_id} actualizados a {nuevo_estado_item}.")
 
-                    pedido_model = PedidoModel()
-                    for pedido_id in pedidos_ids_afectados:
-                        pedido_model.actualizar_estado_agregado(pedido_id)
+                        # Obtener IDs únicos de los pedidos afectados
+                        pedidos_ids_afectados = {item['pedido_id'] for item in items_result.data}
 
-            return update_result
+                        # Instanciar PedidoModel y actualizar estado agregado de cada pedido
+                        pedido_model = PedidoModel()
+                        for pedido_id in pedidos_ids_afectados:
+                            # Este método debería recalcular el estado general del pedido
+                            pedido_model.actualizar_estado_agregado(pedido_id)
+                            logger.info(f"Estado agregado del Pedido {pedido_id} actualizado.")
+
+                except Exception as e_cascade:
+                    # Si falla la cascada, la OP ya cambió de estado. Loggeamos el error pero no revertimos.
+                    logger.error(f"Error en actualización cascada para OP {orden_id} -> Pedidos: {e_cascade}", exc_info=True)
+                    # Podrías añadir una advertencia al resultado si lo deseas
+                    update_result['warning'] = "Estado de OP actualizado, pero falló la actualización de pedidos asociados."
+
+
+            return update_result # Devuelve el resultado del update principal de la OP
+
         except Exception as e:
-            logger.error(f"Error cambiando estado de la orden {orden_id}: {str(e)}")
-            return {'success': False, 'error': str(e)}
+            logger.error(f"Error crítico cambiando estado de la orden {orden_id} a {nuevo_estado}: {e}", exc_info=True)
+            return {'success': False, 'error': f"Error interno: {str(e)}"}
 
     def get_all_enriched(self, filtros: Optional[Dict] = None) -> Dict:
         """
-        Obtiene todas las órdenes de producción con datos enriquecidos de tablas relacionadas
-        y un manejo de filtros avanzado.
+        Obtiene todas las órdenes de producción con datos enriquecidos
+        de tablas relacionadas y un manejo de filtros avanzado.
         """
         try:
-            query = self.db.table(self.table_name).select(
+            # Base query selecting related data
+            query = self.db.table(self.get_table_name()).select(
                 "*, productos(nombre), "
                 "creador:usuario_creador_id(nombre, apellido), "
-                "supervisor:supervisor_responsable_id(nombre, apellido)"
+                "supervisor:supervisor_responsable_id(nombre, apellido), "
+                "operario:operario_asignado_id(nombre, apellido)"
             )
 
-            # ... (toda tu lógica de filtros se mantiene igual) ...
+            # Apply filters dynamically
             if filtros:
                 for key, value in filtros.items():
                     if value is None:
                         continue
+
+                    # Handle tuple operators like ('in', [...]) or ('not.in', [...])
                     if isinstance(value, tuple) and len(value) == 2:
                         operator, filter_value = value
                         if operator.lower() == 'in':
                             query = query.in_(key, filter_value)
+                        elif operator.lower() == 'not.in':
+                            # Implement specific logic for 'not in' based on your DB library
+                            # Example for some libraries (might need adjustment):
+                            # query = query.not_.in_(key, filter_value)
+                            logger.warning(f"Operator 'not.in' for key '{key}' not fully implemented yet.")
+                            pass # Add implementation or filter later in Python if needed
+
+                    # Handle specific date range keys
                     elif key == 'fecha_planificada_desde':
                         query = query.gte('fecha_planificada', value)
                     elif key == 'fecha_planificada_hasta':
                         query = query.lte('fecha_planificada', value)
+                    elif key == 'fecha_inicio_planificada_desde':
+                        query = query.gte('fecha_inicio_planificada', value)
+                    elif key == 'fecha_inicio_planificada_hasta':
+                        query = query.lte('fecha_inicio_planificada', value)
+
+                    # Default to equality filter
                     else:
                         query = query.eq(key, value)
 
-            query = query.order("fecha_planificada", desc=True).order("id", desc=True)
+            # Apply ordering (e.g., for weekly view and general listing)
+            query = query.order("fecha_inicio_planificada", desc=False).order("id", desc=True)
+
+            # Execute the query
             result = query.execute()
 
-            # --- LÍNEA DE DEPURACIÓN AÑADIDA ---
-            # Esta línea imprimirá en tu consola lo que la base de datos devuelve
-            logger.debug(f"RAW DATA FROM DB FOR KANBAN: {result.data}")
-            # ------------------------------------
+            logger.debug(f"RAW DATA FROM DB (get_all_enriched): {result.data}")
 
+            # Process and flatten the results
             if result.data:
                 processed_data = []
-                # ... (el resto de tu método para procesar los datos sigue igual) ...
                 for item in result.data:
+                    # Flatten product info
                     if item.get('productos'):
-                        item['producto_nombre'] = item['productos'].get('nombre', 'N/A')
+                        item['producto_nombre'] = item.pop('productos').get('nombre','N/A')
                     else:
-                        item['producto_nombre'] = 'Producto no definido'
-                    if 'productos' in item: item.pop('productos')
-                    # ... etc ...
+                         item['producto_nombre'] = 'N/A' # Handle case where relation might be null
+
+                    # Flatten creator info
+                    if item.get('creador'):
+                        creador_info = item.pop('creador')
+                        item['creador_nombre'] = f"{creador_info.get('nombre', '')} {creador_info.get('apellido', '')}".strip()
+                    else:
+                        item['creador_nombre'] = 'No asignado'
+
+                    # Flatten supervisor info
+                    if item.get('supervisor'):
+                        supervisor_info = item.pop('supervisor')
+                        item['supervisor_nombre'] = f"{supervisor_info.get('nombre', '')} {supervisor_info.get('apellido', '')}".strip()
+                    else:
+                        item['supervisor_nombre'] = 'Sin asignar' # Or None if preferred
+
+                    # Flatten operario info
+                    if item.get('operario'):
+                        operario_info = item.pop('operario')
+                        item['operario_nombre'] = f"{operario_info.get('nombre', '')} {operario_info.get('apellido', '')}".strip()
+                    else:
+                        item['operario_nombre'] = None # Explicitly None if not assigned
+
+                    # You might want to add date formatting here if needed for consistency
+                    # Example:
+                    # if item.get('fecha_inicio_planificada'):
+                    #     try:
+                    #         item['fecha_inicio_planificada'] = date.fromisoformat(item['fecha_inicio_planificada']).strftime('%d/%m/%Y')
+                    #     except (ValueError, TypeError): pass # Keep original if format error
+
                     processed_data.append(item)
                 return {'success': True, 'data': processed_data}
             else:
+                # No data found, but the query was successful
                 return {'success': True, 'data': []}
 
         except Exception as e:
-            logger.error(f"Error al obtener órdenes enriquecidas: {str(e)}")
+            # Log the full traceback for better debugging
+            logger.error(f"Error al obtener órdenes enriquecidas: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def get_one_enriched(self, orden_id: int) -> Dict:

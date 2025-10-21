@@ -267,6 +267,9 @@ class PedidoController(BaseController):
             if pedido_actual.get('estado') != 'PLANIFICACION':
                 return self.error_response("Solo los pedidos en 'PLANIFICACION' pueden pasar a 'EN PROCESO'.", 400)
 
+            # Extraer la fecha requerida del pedido
+            fecha_requerido_pedido = pedido_actual.get('fecha_requerido')
+
             # 2. Lógica de creación de OPs
             items_del_pedido = pedido_actual.get('items', [])
             ordenes_creadas = []
@@ -278,7 +281,10 @@ class PedidoController(BaseController):
                         'producto_id': item['producto_id'],
                         'cantidad': item['cantidad'],
                         'fecha_planificada': date.today().isoformat(),
-                        'prioridad': 'NORMAL'
+                        'prioridad': 'NORMAL',
+                        # --- AÑADIR FECHA META AQUÍ ---
+                        'fecha_meta': fecha_requerido_pedido
+                        # ---------------------------------
                     }
                     # --- FIX: Manejo defensivo de la respuesta ---
                     resultado_op_tuple = self.orden_produccion_controller.crear_orden(datos_op, usuario_id)
@@ -427,6 +433,9 @@ class PedidoController(BaseController):
                         stock_response, _ = self.lote_producto_controller.obtener_stock_producto(producto_id)
                         stock_disponible = stock_response.get('data', {}).get('stock_total', 0)
 
+                        # Extraer la fecha requerida del pedido
+                        fecha_requerido_pedido = pedido_actual.get('fecha_requerido')
+
                         if cantidad_solicitada > stock_disponible:
                             cantidad_a_producir = cantidad_solicitada - stock_disponible
                             logging.info(f"Stock insuficiente para nuevo item. Solicitado: {cantidad_solicitada}, Disponible: {stock_disponible}. Se creará OP por {cantidad_a_producir}.")
@@ -436,7 +445,10 @@ class PedidoController(BaseController):
                                 'producto_id': producto_id,
                                 'cantidad': cantidad_a_producir,
                                 'fecha_planificada': date.today().isoformat(),
-                                'prioridad': 'NORMAL'
+                                'prioridad': 'NORMAL',
+                                # --- AÑADIR FECHA META AQUÍ ---
+                                'fecha_meta': fecha_requerido_pedido
+                                # ---------------------------------
                             }
                             resultado_op, _ = self.orden_produccion_controller.crear_orden(datos_orden, usuario_id)
 

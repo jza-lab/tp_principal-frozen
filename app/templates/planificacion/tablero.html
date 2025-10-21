@@ -1,79 +1,178 @@
 {% extends 'layouts/base.html' %}
 
-{% block title %}Tablero de Planificación - Sistema Frozen{% endblock %}
+{% block title %}Centro de Planificación - Sistema Frozen{% endblock %}
 
 {% block extra_css %}
-<style>
-    /* Estilos básicos para el tablero Kanban */
-    .kanban-board {
-        display: flex;
-        gap: 1.5rem;
-        overflow-x: auto;
-        padding-bottom: 1.5rem;
-    }
-    .kanban-column {
-        flex: 1 1 320px;
-        min-width: 320px;
-        background-color: #f8f9fa;
-        border-radius: 0.75rem;
-        border: 1px solid #dee2e6;
-    }
-    .column-header {
-        padding: 1rem;
-        border-bottom: 1px solid #dee2e6;
-        font-weight: 600;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .kanban-cards {
-        padding: 1rem;
-        min-height: 400px; /* Espacio para arrastrar tarjetas */
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-    }
-    .kanban-card {
-        cursor: grab;
-        position: relative; /* Necesario para posicionar el checkbox */
-    }
-
-    /* --- ESTILOS PARA LA CONSOLIDACIÓN (FASE 2) --- */
-    .card-checkbox {
-        position: absolute;
-        top: 0.5rem;
-        right: 0.5rem;
-        z-index: 10;
-    }
-    .card-checkbox .form-check-input {
-        transform: scale(1.4); /* Hace el checkbox más grande y fácil de clickear */
-        cursor: pointer;
-    }
-    #btn-consolidar {
-        transition: all 0.2s ease-in-out;
-    }
-
-    /* --- ESTILOS PARA DRAG-AND-DROP (FASE 4) --- */
-    .kanban-card:hover {
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        transform: translateY(-2px);
-        transition: all 0.2s ease;
-    }
-    .bg-primary-soft { /* Clase para el "fantasma" de la tarjeta al arrastrar */
-        background-color: rgba(13, 110, 253, 0.1);
-        border: 2px dashed rgba(13, 110, 253, 0.5);
-    }
-</style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/planificacion/planificacion.css') }}">
+    <style>
+        /* Estilo adicional para la navegación separada */
+        .navegacion-semanal-separada {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0; /* Sin margen inferior, se pega al acordeón */
+            padding: 0.5rem 1rem;
+            background-color: #f8f9fa; /* Fondo similar al header */
+            border: 1px solid #dee2e6;
+            border-bottom: none; /* Quitar borde inferior */
+            border-top-left-radius: 0.75rem; /* Redondear esquinas superiores */
+            border-top-right-radius: 0.75rem;
+        }
+         /* Ajustar borde superior del acordeón */
+        #accordionSemanal .accordion-item:first-of-type .accordion-button {
+             border-top-left-radius: 0;
+             border-top-right-radius: 0;
+        }
+         /* Asegurar que el botón del acordeón no tenga margen superior */
+         #accordionSemanal .accordion-header {
+             margin-top: 0;
+         }
+         /* Estilos para Kanban (asegurar visibilidad data-attribute) */
+        .card-assignment-details { font-size: 0.8rem; }
+        .card-assignment-details span { display: inline-block; margin-right: 0.5rem; }
+    </style>
 {% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
-        <h1 class="h2 mb-1">Tablero de Planificación</h1>
-        <p class="text-muted mb-0">Vista en tiempo real del estado de la producción.</p>
+        <h1 class="h2 mb-1">Centro de Planificación</h1>
+        <p class="text-muted mb-0">Planifique OPs pendientes, vea la semana y gestione el tablero.</p>
     </div>
 </div>
 
+<div id="planificador-pendientes">
+    <div class="planificador-header">
+        Bandeja de Entrada: Órdenes Pendientes de Planificar ({{ ops_pendientes|length }})
+    </div>
+    <div class="planificador-body">
+        <table class="table table-hover planificador-tabla">
+            <thead>
+                <tr>
+                    <th>OP</th>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Fecha Meta (del Pedido)</th>
+                    <th style="width: 30%;">Sugerencia del Sistema</th>
+                    <th style="width: 20%;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if not ops_pendientes %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted">¡Genial! No hay Órdenes de Producción pendientes de planificar.</td>
+                </tr>
+                {% endif %}
+                {% for op in ops_pendientes %}
+                <tr data-op-id="{{ op.id }}">
+                    <td><code>{{ op.codigo }}</code></td>
+                    <td>{{ op.producto_nombre }}</td>
+                    <td>{{ op.cantidad_planificada }}</td>
+                    <td><strong class="text-danger">{{ op.fecha_meta }}</strong></td>
+                    <td class="celda-sugerencia">
+                        {% if op.sugerencia_fecha_inicio %}
+                        <div class="resultado-sugerencia sugerencia-calculada {% if op.sugerencia_t_aprovisionamiento_dias > 0 %}alert alert-warning{% else %}alert alert-success{% endif %}" style="display: block;">
+                            <strong>Inicio Sugerido: <span class="fs-6">{{ op.sugerencia_fecha_inicio }}</span></strong>
+                            (Línea Sug.: <b>{{ op.sugerencia_linea }}</b>)
+                            <hr class="my-1">
+                            Plazo Total: <b>{{ op.sugerencia_plazo_total_dias }} días</b><br>
+                            <ul>
+                                <li>Producción: {{ op.sugerencia_t_produccion_dias }} días</li>
+                                <li>Compras: {{ op.sugerencia_t_aprovisionamiento_dias }} días {% if op.sugerencia_t_aprovisionamiento_dias > 0 %}(Stock Faltante){% else %}(Stock OK){% endif %}</li>
+                            </ul>
+                        </div>
+                        {% else %}
+                        <div class="resultado-sugerencia" style="display: none;"></div>
+                        {% endif %}
+                    </td>
+                    <td class="celda-acciones">
+                        {% if op.sugerencia_fecha_inicio %}
+                        <select class="form-select form-select-sm mb-1 select-linea" title="Seleccionar Línea">
+                            <option value="1" {% if op.sugerencia_linea == 1 %}selected{% endif %}>Línea 1</option>
+                            <option value="2" {% if op.sugerencia_linea == 2 %}selected{% endif %}>Línea 2</option>
+                        </select>
+                        <select class="form-select form-select-sm mb-1 select-supervisor" title="Asignar Supervisor">
+                            <option value="">Supervisor (Opcional)</option>
+                            {% for sup in supervisores %}
+                            <option value="{{ sup.id }}">{{ sup.nombre }} {{ sup.apellido or '' }}</option>
+                            {% endfor %}
+                        </select>
+                        <select class="form-select form-select-sm mb-1 select-operario" title="Asignar Operario">
+                            <option value="">Operario (Opcional)</option>
+                            {% for op_user in operarios %}
+                            <option value="{{ op_user.id }}">{{ op_user.nombre }} {{ op_user.apellido or '' }}</option>
+                            {% endfor %}
+                        </select>
+                         <label for="fecha-inicio-{{ op.id }}" class="form-label form-label-sm visually-hidden">Inicio Confirmado:</label>
+                         <input type="date" id="fecha-inicio-{{ op.id }}" class="form-control form-control-sm mb-1 input-fecha-inicio" value="{{ op.sugerencia_fecha_inicio }}" title="Confirmar Fecha de Inicio">
+                         <button class="btn btn-success btn-sm btn-confirmar-inicio w-100" data-op-id="{{ op.id }}">Confirmar Inicio y Aprobar</button>
+                        {% else %}
+                        <button class="btn btn-primary btn-sm btn-calcular" title="Calcular Fecha de Inicio">
+                            <i class="bi bi-calculator-fill"></i> Calcular
+                        </button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="navegacion-semanal-separada">
+    <a href="{{ url_for('planificacion.index', semana=semana_anterior_str) if semana_anterior_str else '#' }}"
+       class="btn btn-sm btn-outline-secondary me-1 {{ 'disabled' if not semana_anterior_str }}">
+        &lt; Ant
+    </a>
+    <span class="fw-bold">Semana {{ semana_actual_str }}</span>
+    <a href="{{ url_for('planificacion.index', semana=semana_siguiente_str) if semana_siguiente_str else '#' }}"
+       class="btn btn-sm btn-outline-secondary {{ 'disabled' if not semana_siguiente_str }}">
+        Sig &gt;
+    </a>
+</div>
+
+<div class="accordion mb-4" id="accordionSemanal">
+    <div class="accordion-item">
+        <h2 class="accordion-header" id="headingSemanal">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSemanal" aria-expanded="false" aria-controls="collapseSemanal">
+                <i class="bi bi-calendar-week me-2"></i>
+                Ver/Ocultar Planificación Semanal (Inicio de OPs)
+            </button>
+        </h2>
+        <div id="collapseSemanal" class="accordion-collapse collapse" aria-labelledby="headingSemanal" data-bs-parent="#accordionSemanal">
+            <div class="accordion-body">
+                <div class="row">
+                    {% if not ordenes_por_dia %}<p class="text-center text-muted">No hay OPs programadas para esta semana.</p>{% endif %}
+                    {% for dia_display, ops_del_dia in ordenes_por_dia.items() %}
+                    <div class="col-lg col-md-4 col-sm-6 mb-3">
+                        <div class="day-column h-100">
+                            <div class="day-header">{{ dia_display }}</div>
+                            <div class="day-content">
+                                {% if not ops_del_dia %}<p class="text-center text-muted small fst-italic mt-3">Vacío</p>{% endif %}
+                                {% for op in ops_del_dia %}
+                                <a href="{{ url_for('orden_produccion.detalle', id=op.id) }}" class="text-decoration-none text-dark" title="Ver detalle OP {{ op.codigo }}">
+                                    <div class="op-card-mini">
+                                        <strong>{{ op.producto_nombre or 'N/A' }}</strong>
+                                        <div class="op-details">
+                                            <span><i class="bi bi-upc-scan"></i> {{ op.codigo }}</span><br>
+                                            <span><i class="bi bi-box-seam"></i> {{ op.cantidad_planificada }}</span>
+                                            {% if op.linea_asignada %}<span><i class="bi bi-diagram-3-fill"></i> L{{ op.linea_asignada }}</span>{% endif %}
+                                            {% if op.operario_nombre %}<span><i class="bi bi-person-fill"></i> {{ op.operario_nombre.split()[0] }}</span>{% endif %}
+                                        </div>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h3 class="h4 mb-3">Tablero Kanban (Producción en Curso)</h3>
 <div class="kanban-board">
     {% for estado_key, titulo_columna in columnas.items() %}
     <div class="kanban-column" data-estado="{{ estado_key }}">
@@ -82,37 +181,34 @@
             <span class="badge bg-secondary rounded-pill">{{ ordenes_por_estado.get(estado_key, [])|length }}</span>
         </div>
         <div class="kanban-cards">
-
-            {% if estado_key == 'LISTA PARA PRODUCIR' %}
-            <div class="d-grid">
-                <button id="btn-consolidar" class="btn btn-success mb-2" disabled>
-                    <i class="bi bi-plus-slash-minus"></i> Consolidar Seleccionadas
-                </button>
-            </div>
+            {% if estado_key == 'LISTA PARA PRODUCIR' %} <div class="d-grid"><button id="btn-consolidar" class="btn btn-success mb-2" disabled><i class="bi bi-plus-slash-minus"></i> Consolidar</button></div>
             {% endif %}
-
             {% for orden in ordenes_por_estado.get(estado_key, []) %}
-            <div class="card insumo-card kanban-card" data-op-id="{{ orden.id }}" data-producto-id="{{ orden.producto_id }}">
-
+            <div class="card insumo-card kanban-card"
+                 data-op-id="{{ orden.id }}"
+                 data-producto-id="{{ orden.producto_id }}"
+                 data-linea-asignada="{{ orden.linea_asignada or '' }}">
                 {% if estado_key == 'LISTA PARA PRODUCIR' %}
-                <div class="form-check card-checkbox">
-                    <input class="form-check-input op-checkbox" type="checkbox" value="{{ orden.id }}">
-                </div>
+                <div class="form-check card-checkbox"><input class="form-check-input op-checkbox" type="checkbox" value="{{ orden.id }}"></div>
                 {% endif %}
-
                 <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <h5 class="card-title mb-1">{{ orden.producto_nombre or 'N/A' }}</h5>
-                        {% if orden.prioridad and orden.prioridad != 'NORMAL' %}
-                            {% set p_config = {'ALTA': 'warning', 'URGENTE': 'danger'}.get(orden.prioridad, 'secondary') %}
-                            <span class="badge bg-{{ p_config }}-soft text-{{ p_config }}">{{ orden.prioridad }}</span>
-                        {% endif %}
-                    </div>
+                    <h5 class="card-title mb-1">{{ orden.producto_nombre or 'N/A' }}</h5>
                     <div class="card-secondary-details">
                         <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
-                        <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b> unidades</span>
+                        <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b></span>
                         <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
+                        {% if orden.fecha_inicio_planificada %}
+                        <br><span class="text-primary"><i class="bi bi-play-circle-fill"></i> Inicia: {{ orden.fecha_inicio_planificada }}</span>
+                        {% endif %}
                     </div>
+                    {% if orden.supervisor_nombre or orden.linea_asignada or orden.operario_nombre %}
+                    <hr class="my-1">
+                    <div class="card-assignment-details">
+                        {% if orden.linea_asignada %}<span class="me-2"><i class="bi bi-diagram-3-fill text-primary"></i> L{{ orden.linea_asignada }}</span>{% endif %}
+                        {% if orden.supervisor_nombre %}<span class="me-2"><i class="bi bi-person-badge-fill text-info"></i> S:{{ orden.supervisor_nombre }}</span>{% endif %}
+                        {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary"></i> O:{{ orden.operario_nombre }}</span>{% endif %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
@@ -123,132 +219,12 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
-<script>
-    // --- FUNCIÓN HELPER (FASE 3 y 4) ---
-    // Actualiza el estado de una OP. Usada por la recomendación y el drag-and-drop.
-    async function moverOp(opId, nuevoEstado) {
-        try {
-            const response = await fetch(`/planificacion/api/mover-op/${opId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nuevo_estado: nuevoEstado })
-            });
-            const result = await response.json();
-            if (!result.success) {
-                alert(`Hubo un error al mover la OP: ${result.error}`);
-            }
-            return result.success;
-        } catch (error) {
-            console.error('Error de red al mover la OP:', error);
-            alert('Error de conexión. No se pudo guardar el cambio.');
-            return false;
-        }
-    }
+    <script>
+        const listaSupervisores = {{ supervisores | tojson }};
+        const listaOperarios = {{ operarios | tojson }};
+    </script>
 
-    document.addEventListener('DOMContentLoaded', function () {
-        
-        // --- LÓGICA DE CONSOLIDACIÓN Y RECOMENDACIÓN (FASE 2 y 3) ---
-        const consolidarBtn = document.getElementById('btn-consolidar');
-        if (consolidarBtn) {
-            const checkboxes = document.querySelectorAll('.op-checkbox');
-
-            function checkSelection() {
-                const seleccionados = document.querySelectorAll('.op-checkbox:checked');
-                if (seleccionados.length < 2) {
-                    consolidarBtn.disabled = true;
-                    return;
-                }
-                const primerProductoId = seleccionados[0].closest('.kanban-card').dataset.productoId;
-                const sonMismoProducto = Array.from(seleccionados).every(cb => 
-                    cb.closest('.kanban-card').dataset.productoId === primerProductoId
-                );
-                consolidarBtn.disabled = !sonMismoProducto;
-            }
-
-            checkboxes.forEach(cb => cb.addEventListener('change', checkSelection));
-
-            consolidarBtn.addEventListener('click', async () => {
-                const seleccionados = document.querySelectorAll('.op-checkbox:checked');
-                const opIds = Array.from(seleccionados).map(cb => cb.value);
-
-                if (!confirm(`¿Estás seguro de que quieres consolidar ${opIds.length} órdenes?`)) return;
-
-                consolidarBtn.disabled = true;
-                consolidarBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Consolidando...`;
-
-                try {
-                    const responseConsolidacion = await fetch('/planificacion/api/consolidar', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ op_ids: opIds })
-                    });
-                    const resultConsolidacion = await responseConsolidacion.json();
-                    if (!resultConsolidacion.success) throw new Error(resultConsolidacion.error);
-
-                    const nuevaSuperOP = resultConsolidacion.data;
-                    alert(`¡Éxito! Super OP creada: ${nuevaSuperOP.codigo}`);
-
-                    const responseRecomendacion = await fetch(`/planificacion/api/recomendar-linea/${nuevaSuperOP.id}`);
-                    const resultRecomendacion = await responseRecomendacion.json();
-                    
-                    if (resultRecomendacion.success) {
-                        const rec = resultRecomendacion.data;
-                        const msg = `RECOMENDACIÓN:\nLínea: ${rec.nombre_linea}\nMotivo: ${rec.motivo}\n\nPresiona "Aceptar" para usarla o "Cancelar" para la otra.`;
-                        
-                        // =======================================================
-                        // --- CORRECCIÓN FINAL: USAR GUION BAJO ( _ ) ---
-                        // =======================================================
-                        if (confirm(msg)) {
-                            await moverOp(nuevaSuperOP.id, `EN_LINEA_${rec.linea_sugerida}`);
-                        } else {
-                            await moverOp(nuevaSuperOP.id, `EN_LINEA_${rec.linea_sugerida === 1 ? 2 : 1}`);
-                        }
-
-                    } else {
-                         alert('Super OP creada, pero no se pudo obtener recomendación.');
-                    }
-                } catch (error) {
-                    console.error('Error en el proceso:', error);
-                    alert('Error: ' + error.message);
-                } finally {
-                    window.location.reload();
-                }
-            });
-        }
-        
-        // --- LÓGICA DE DRAG-AND-DROP (FASE 4) ---
-        const columns = document.querySelectorAll('.kanban-column');
-        columns.forEach(column => {
-            // Buscamos el contenedor de tarjetas dentro de la columna
-            const cardContainer = column.querySelector('.kanban-cards');
-            if (cardContainer) {
-                new Sortable(cardContainer, {
-                    group: 'kanban', // Nombre del grupo para permitir mover entre columnas
-                    animation: 150,
-                    ghostClass: 'bg-primary-soft', // Clase CSS para el "fantasma"
-                    
-                    // Evento que se dispara al soltar una tarjeta
-                    onEnd: async function (evt) {
-                        const item = evt.item; // La tarjeta que moviste
-                        const toColumn = evt.to.closest('.kanban-column'); // Columna de destino
-                        const opId = item.dataset.opId;
-                        const nuevoEstado = toColumn.dataset.estado; // Ej: 'EN_LINEA_1'
-
-                        console.log(`Moviendo OP #${opId} a estado: ${nuevoEstado}`);
-                        
-                        // Llamamos a la misma función helper
-                        const success = await moverOp(opId, nuevoEstado);
-
-                        if (!success) {
-                            // Si la API falla, devolvemos la tarjeta a su columna original
-                            evt.from.appendChild(item); 
-                        }
-                    }
-                });
-            }
-        });
-    });
-</script>
+    <script src="{{ url_for('static', filename='js/planificacion/planificacion.js') }}"></script>
 {% endblock %}

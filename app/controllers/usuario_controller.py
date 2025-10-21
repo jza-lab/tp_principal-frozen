@@ -47,7 +47,7 @@ class UsuarioController(BaseController):
             address_fields = ['calle', 'altura', 'piso', 'depto', 'localidad', 'provincia', 'codigo_postal']
             direccion_data = {field: data.get(field) for field in address_fields if data.get(field) is not None}
             user_data = {k: v for k, v in data.items() if k not in address_fields}
-            
+
             sectores_ids = user_data.pop('sectores', [])
             validated_data = self.schema.load(user_data)
 
@@ -56,7 +56,7 @@ class UsuarioController(BaseController):
 
             password = validated_data.pop('password')
             validated_data['password_hash'] = generate_password_hash(password)
-            
+
             if any(direccion_data.values()):
                 direccion_normalizada = self._normalizar_y_preparar_direccion(direccion_data)
                 if direccion_normalizada:
@@ -159,10 +159,10 @@ class UsuarioController(BaseController):
         resultado = self.model.find_by_legajo(legajo)
         if not resultado.get('success'):
             return resultado
-        
+
         usuario = resultado.get('data')
         turno_info = usuario.get('turno')
-        
+
         return {
             'success': True,
             'data': {
@@ -199,7 +199,7 @@ class UsuarioController(BaseController):
                     usuario[key] = datetime.fromisoformat(usuario[key].replace('Z', '+00:00'))
                 except (ValueError, TypeError):
                     usuario[key] = None
-        
+
         # Formatear dirección para visualización
         if usuario.get('direccion'):
             dir_data = usuario['direccion']
@@ -249,7 +249,7 @@ class UsuarioController(BaseController):
         user_data = auth_result['data']
         user_id = user_data['id']
         logger.info(f"Credentials OK for user_id: {user_id}")
-        
+
         totem_check = self.totem_sesion.verificar_sesion_activa_hoy(user_id)
         if not totem_check:
             logger.info(f"No esta activo en el totem para user_id {user_id}. Buscando una autorización para horas extras..")
@@ -283,13 +283,13 @@ class UsuarioController(BaseController):
                         if hora_inicio_auth <= hora_actual <= hora_fin_auth:
                             acceso_permitido_por_auth = True
                             break
-            
+
             if not acceso_permitido_por_auth:
                 logger.warning(f"Web auth failed for user_id {user_id}: Found HORAS_EXTRAS auth but current time is outside the authorized shift.")
                 return {'success': False, 'error': 'Tiene una autorización de Horas Extras, pero se encuentra fuera del horario permitido por la misma.'}
 
             logger.info(f"Access granted for user_id {user_id} via HORAS_EXTRAS authorization.")
-        
+
         logger.info(f"Active totem session found for user_id: {user_id}. Proceeding to start session.")
         self.model.update(user_id, {'ultimo_login_web': get_now_in_argentina().isoformat()})
         return self._iniciar_sesion_usuario(user_data)
@@ -298,28 +298,60 @@ class UsuarioController(BaseController):
         """Autentica un usuario para el acceso web por reconocimiento facial."""
         from app.controllers.facial_controller import FacialController
         facial_controller = FacialController()
-        
+
         resultado_identificacion = facial_controller.identificar_rostro(image_data_url)
         if not resultado_identificacion.get('success'):
             return resultado_identificacion
-        
+
         user_data = resultado_identificacion['usuario']
         if not user_data.get('activo', True):
             return {'success': False, 'error': 'Este usuario se encuentra desactivado.'}
-        
+
         if not self.totem_sesion.verificar_sesion_activa_hoy(user_data['id']):
             return {'success': False, 'error': 'Acceso Web denegado. Por favor, registre su ingreso en el tótem.'}
-        
+
         self.model.update(user_data['id'], {'ultimo_login_web': get_now_in_argentina().isoformat()})
+
         return self._iniciar_sesion_usuario(user_data)
 
     def autenticar_usuario_para_totem(self, legajo: str, password: str) -> Dict:
         """Autentica un usuario exclusivamente para el tótem (solo credenciales)."""
         return self._autenticar_credenciales_base(legajo, password)
-    
+
     # endregion
 
     # region Gestión de Tótem
+
+
+    def activar_login_totem(self, usuario_id: int, metodo_acceso: str = 'FACIAL') -> Dict:
+        """Crea una nueva sesión de tótem para un usuario."""
+        try:
+            resultado = self.totem_sesion.crear_sesion(
+                usuario_id=usuario_id,
+                metodo_acceso=metodo_acceso,
+                dispositivo_totem='TOTEM_PRINCIPAL'
+            )
+            if resultado.get('success'):
+                return {'success': True, 'session_id': resultado['data']['session_id'], 'message': 'Acceso registrado correctamente'}
+
+            return {'success': False, 'error': 'Error registrando acceso en tótem'}
+
+        except Exception as e:
+            logger.error(f"Error en activar_login_totem: {str(e)}", exc_info=True)
+            return {'success': False, 'error': f'Error interno: {str(e)}'}
+
+    def desactivar_login_totem(self, usuario_id: int) -> Dict:
+        """Cierra la sesión activa de tótem para un usuario."""
+        try:
+            resultado = self.totem_sesion.cerrar_sesion(usuario_id)
+            if resultado.get('success'):
+                return {'success': True, 'message': 'Salida registrada correctamente'}
+
+            return {'success': True, 'message': 'No había una sesión activa para cerrar.'}
+
+        except Exception as e:
+            logger.error(f"Error en desactivar_login_totem: {str(e)}", exc_info=True)
+            return {'success': False, 'error': f'Error interno: {str(e)}'}
 
     def cerrar_sesiones_expiradas_totem(self) -> dict:
         """
@@ -343,7 +375,7 @@ class UsuarioController(BaseController):
             if self._sesion_debe_cerrarse(usuario, user_session):
                 self.totem_sesion.cerrar_sesion(usuario['id'])
                 sessions_closed += 1
-        
+
         logger.info(f"Tarea finalizada. Se cerraron {sessions_closed} sesiones de tótem.")
         return {'success': True, 'message': f'Se cerraron {sessions_closed} sesiones expiradas.'}
 
@@ -386,7 +418,7 @@ class UsuarioController(BaseController):
 
             hora_inicio_turno = time.fromisoformat(turno_info['hora_inicio'])
             hora_fin_turno = time.fromisoformat(turno_info['hora_fin'])
-            
+
             # --- 1. Verificación del Período de Gracia del Turno Habitual ---
             dt_inicio_turno = datetime.combine(fecha_actual, hora_inicio_turno)
             inicio_ventana_gracia = (dt_inicio_turno - timedelta(minutes=MINUTOS_DE_GRACIA)).time()
@@ -415,7 +447,7 @@ class UsuarioController(BaseController):
                 logger.info(f"DEBUG: Autorizaciones encontradas: {auth_result['data']}")
                 for autorizacion in auth_result['data']:
                     tipo_auth = autorizacion.get('tipo')
-                    
+
                     # --- Lógica para LLEGADA_TARDIA ---
                     if tipo_auth == 'LLEGADA_TARDIA':
                         logger.info(f"Evaluando autorización de LLEGADA_TARDIA para {usuario.get('legajo')}.")
@@ -444,7 +476,7 @@ class UsuarioController(BaseController):
 
                         auth_inicio = time.fromisoformat(auth_turno['hora_inicio'])
                         auth_fin = time.fromisoformat(auth_turno['hora_fin'])
-                        
+
                         # Para HORAS_EXTRAS, no hay período de gracia antes del inicio.
                         inicio_ventana_extra = auth_inicio
                         fin_ventana_extra = auth_fin
@@ -456,7 +488,7 @@ class UsuarioController(BaseController):
                         else:  # Turno extra diurno
                             if inicio_ventana_extra <= hora_actual <= fin_ventana_extra:
                                 en_horario_extra = True
-                        
+
                         if en_horario_extra:
                             logger.info(f"Acceso concedido por HORAS_EXTRAS para {usuario.get('legajo')}.")
                             return {'success': True, 'message': f"Acceso concedido por autorización de {tipo_auth}."}
@@ -478,7 +510,7 @@ class UsuarioController(BaseController):
         if not user_result.get('success'):
             return {'success': False, 'error': 'Usuario no encontrado'}
         user_data = user_result['data']
-        
+
         tiene_sesion_activa = self.totem_sesion.verificar_sesion_activa_hoy(usuario_id)
         sesion_activa = self.totem_sesion.obtener_sesion_activa(usuario_id)
 
@@ -515,7 +547,7 @@ class UsuarioController(BaseController):
         """Obtiene turnos de trabajo, aplicando lógica de negocio si se especifica un usuario."""
         if usuario_id:
             return self.model.get_turnos_para_usuario(usuario_id).get('data', [])
-        
+
         return self.turno_model.find_all().get('data', [])
 
     def obtener_turnos_para_autorizacion(self, tipo_autorizacion: str) -> dict:
@@ -543,7 +575,7 @@ class UsuarioController(BaseController):
         else:
             # Por defecto, o para otros tipos, devolver todos los turnos.
             filtered_turnos = all_turnos
-        
+
         return {'success': True, 'data': filtered_turnos}
 
     def obtener_sectores_ids_usuario(self, usuario_id: int) -> List[int]:
@@ -574,14 +606,14 @@ class UsuarioController(BaseController):
                 return validacion_facial
 
         resultado_creacion = self.crear_usuario(datos_usuario)
-        
+
         if resultado_creacion.get('success') and face_data:
             usuario_creado = resultado_creacion.get('data')
             resultado_facial = facial_controller.registrar_rostro(usuario_creado.get('id'), face_data)
             if not resultado_facial.get('success'):
                 # Adjuntar una advertencia en lugar de un error completo
                 resultado_creacion['warning'] = f"Usuario creado, pero falló el registro facial: {resultado_facial.get('message')}"
-        
+
         return resultado_creacion
 
     def gestionar_actualizacion_usuario_form(self, usuario_id: int, form_data: dict) -> dict:
@@ -590,7 +622,7 @@ class UsuarioController(BaseController):
         manejando la normalización de datos.
         """
         datos_actualizados = dict(form_data)
-        
+
         # Procesamiento de Sectores
         sectores_str = datos_actualizados.get('sectores', '[]')
         try:
@@ -607,7 +639,7 @@ class UsuarioController(BaseController):
                 datos_actualizados[key] = int(datos_actualizados[key])
             else:
                 datos_actualizados.pop(key, None)
-        
+
         return self.actualizar_usuario(usuario_id, datos_actualizados)
 
     # endregion
@@ -627,12 +659,12 @@ class UsuarioController(BaseController):
         todos_activos = self.model.find_all({'activo': True})
         if not todos_activos.get('success') or not todos_activos.get('data'):
             return 0.0
-        
+
         usuarios_activos = todos_activos['data']
         total_usuarios_activos = len(usuarios_activos)
         if total_usuarios_activos == 0:
             return 0.0
-        
+
         cant_en_empresa = sum(1 for usuario in usuarios_activos if self.totem_sesion.verificar_sesion_activa_hoy(usuario['id']))
         return round((cant_en_empresa / total_usuarios_activos) * 100, 0)
 
@@ -658,7 +690,7 @@ class UsuarioController(BaseController):
                     return {'valid': False, 'message': f'El {field_map.get(field)} ya está en uso por otro usuario.'}
                 if not user_id:
                     return {'valid': False, 'message': f'El {field_map.get(field)} ya está en uso.'}
-            
+
             return {'valid': True}
         except Exception as e:
             logger.error(f"Error en validación de campo único: {str(e)}", exc_info=True)
@@ -669,13 +701,13 @@ class UsuarioController(BaseController):
         usuario_result = self.model.find_by_legajo(legajo)
         if not usuario_result.get('success'):
             return {'success': False, 'error': 'Legajo o contraseña incorrectos.'}
-        
+
         user_data = usuario_result['data']
         if not user_data.get('activo', True):
             return {'success': False, 'error': 'Usuario inactivo. Contacte al administrador.'}
         if not check_password_hash(user_data['password_hash'], password):
             return {'success': False, 'error': 'Legajo o contraseña incorrectos.'}
-        
+
         return {'success': True, 'data': user_data}
 
     def _iniciar_sesion_usuario(self, usuario: Dict) -> Dict:
@@ -689,7 +721,7 @@ class UsuarioController(BaseController):
         logger.info(f"Access verified for user_id: {usuario.get('id')}. Loading permissions.")
         permisos = PermisosModel().get_user_permissions(usuario.get('role_id'))
         rol = usuario.get('roles', {})
-        
+
         session.clear()
         session['usuario_id'] = usuario.get('id')
         session['rol_id'] = usuario.get('role_id')
@@ -698,8 +730,9 @@ class UsuarioController(BaseController):
         session['usuario_nombre'] = usuario.get('nombre', '')
         session['user_data'] = usuario
         session['permisos'] = permisos
-        
+
         logger.info(f"Session successfully created for user_id: {usuario.get('id')}, role: {rol.get('codigo')}")
+
         return {'success': True, 'rol_codigo': rol.get('codigo')}
 
     def _asignar_sectores_usuario(self, usuario_id: int, sectores_ids: List[int]) -> Dict:
@@ -727,7 +760,7 @@ class UsuarioController(BaseController):
             validated_data['password_hash'] = generate_password_hash(validated_data.pop('password'))
         else:
             validated_data.pop('password', None)
-        
+
         if 'email' in validated_data:
             existing_email = self.model.find_by_email(validated_data['email']).get('data')
             if existing_email and existing_email['id'] != usuario_id:
@@ -740,7 +773,7 @@ class UsuarioController(BaseController):
         """Helper para la lógica de actualización de direcciones."""
         if 'altura' in direccion_data and direccion_data['altura'] == '':
             direccion_data['altura'] = None
-        
+
         has_new_address_data = all(direccion_data.get(f) for f in ['calle', 'altura', 'localidad', 'provincia'])
         original_direccion_id = existing_user.get('direccion_id')
 
@@ -761,7 +794,7 @@ class UsuarioController(BaseController):
             update_result = self.direccion_model.update(original_direccion_id, direccion_normalizada)
             if update_result.get('success'):
                 return {'success': True, 'direccion_id': original_direccion_id}
-        
+
         # Asumo que _get_or_create_direccion existe
         new_direccion_id = self._get_or_create_direccion(direccion_normalizada)
         if new_direccion_id:
@@ -773,7 +806,7 @@ class UsuarioController(BaseController):
         """Helper para la lógica de actualización de sectores."""
         if sectores_ids is None:
             return {'success': True}
-        
+
         existing_sector_ids = {s['id'] for s in existing_user.get('sectores', [])}
         if set(sectores_ids) == existing_sector_ids:
             return {'success': True}
@@ -801,8 +834,8 @@ class UsuarioController(BaseController):
         )
 
         if not norm_result.get('success'):
-            return direccion_data 
-        
+            return direccion_data
+
         norm_data = norm_result['data']
         return {
             "calle": norm_data['calle']['nombre'],
@@ -828,13 +861,13 @@ class UsuarioController(BaseController):
             hora_fin_turno = datetime.strptime(turno['hora_fin'], '%H:%M:%S').time()
             session_start_date = datetime.fromisoformat(session['fecha_inicio']).date()
             shift_end_datetime = datetime.combine(session_start_date, hora_fin_turno)
-            
+
             # Si el turno termina al día siguiente (turno noche)
             if shift_end_datetime < datetime.fromisoformat(session['fecha_inicio']):
                 shift_end_datetime += timedelta(days=1)
 
             grace_period_end = shift_end_datetime + timedelta(minutes=15)
-            
+
             now_in_argentina = get_now_in_argentina()
 
             if now_in_argentina > grace_period_end:
@@ -843,15 +876,16 @@ class UsuarioController(BaseController):
                 auth_result = autorizacion_model.find_by_usuario_and_fecha(
                     usuario['id'], now_in_argentina.date(), tipo='HORAS_EXTRAS', estado='APROBADO'
                 )
-                
+
                 if auth_result.get('success') and auth_result.get('data'):
+
                     hora_actual = now_in_argentina.time()
                     for autorizacion in auth_result['data']:
                         turno_auth = autorizacion.get('turno')
                         if turno_auth and 'hora_inicio' in turno_auth and 'hora_fin' in turno_auth:
                             hora_inicio_auth = time.fromisoformat(turno_auth['hora_inicio'])
                             hora_fin_auth = time.fromisoformat(turno_auth['hora_fin'])
-                            
+
                             # Si la hora actual está dentro del turno de horas extras, la sesión NO debe cerrarse.
                             if hora_fin_auth < hora_inicio_auth: # Turno nocturno
                                 if hora_actual >= hora_inicio_auth or hora_actual <= hora_fin_auth:
@@ -859,10 +893,42 @@ class UsuarioController(BaseController):
                             else: # Turno diurno
                                 if hora_inicio_auth <= hora_actual <= hora_fin_auth:
                                     return False # Sesión justificada.
-                
+
                 return True # La sesión expiró y no hay una autorización válida que la justifique.
+
         except (ValueError, TypeError):
             return False # Error en los datos, no se arriesga a cerrar.
-            
+
         return False
     # endregion
+
+    # =======================================================
+    # --- NUEVO MÉTODO PARA OBTENER USUARIOS POR ROL ---
+    # =======================================================
+    def obtener_usuarios_por_rol(self, codigos_rol: List[str]) -> Dict:
+        """
+        Obtiene una lista de usuarios activos que pertenecen a uno de los
+        roles especificados por sus códigos.
+        """
+        try:
+            # 1. Obtener todos los usuarios activos
+            # La función find_all ya incluye la información del rol anidada
+            todos_usuarios_result = self.model.find_all(filtros={'activo': True})
+
+            if not todos_usuarios_result.get('success'):
+                return {'success': False, 'error': "Error al obtener la lista de usuarios."}
+
+            todos_usuarios = todos_usuarios_result.get('data', [])
+            usuarios_filtrados = []
+
+            # 2. Filtrar en Python
+            for usuario in todos_usuarios:
+                rol_usuario = usuario.get('roles') # Accedemos al diccionario del rol
+                if rol_usuario and rol_usuario.get('codigo') in codigos_rol:
+                    usuarios_filtrados.append(usuario)
+
+            return {'success': True, 'data': usuarios_filtrados}
+
+        except Exception as e:
+            logger.error(f"Error en obtener_usuarios_por_rol: {e}", exc_info=True)
+            return {'success': False, 'error': f'Error interno: {str(e)}'}

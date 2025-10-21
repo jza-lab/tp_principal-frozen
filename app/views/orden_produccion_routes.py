@@ -52,7 +52,7 @@ def listar():
         supervisores = supervisores_response.get("data", [])
     elif isinstance(supervisores_response, list):
         supervisores = supervisores_response
-    
+
     titulo = f"Órdenes de Producción ({'Todas' if not estado else estado.replace('_', ' ').title()})"
     return render_template(
         "ordenes_produccion/listar.html", ordenes=ordenes, titulo=titulo, supervisores=supervisores
@@ -117,7 +117,7 @@ def modificar(id):
         orden = controller.obtener_orden_por_id(id).get("data")
         productos = producto_controller.obtener_todos_los_productos()
         operarios = usuario_controller.obtener_todos_los_usuarios()
-       
+
 
         if isinstance(operarios, list):
             operarios_list = operarios
@@ -160,7 +160,7 @@ def detalle(id):
     pedidos_asociados=[]
     if pedidos_asociados_resp.get('data') and len(pedidos_asociados_resp.get('data'))>0:
         pedidos_asociados=pedidos_asociados_resp.get('data')
-    
+
     return render_template(
         "ordenes_produccion/detalle.html",
         orden=orden,
@@ -236,8 +236,8 @@ def aprobar(id):
             return redirect(url_for("auth.login"))
 
         # El controller devuelve (response_dict, status_code)
-        response = controller.aprobar_orden(id, usuario_id) 
-        
+        response = controller.aprobar_orden(id, usuario_id)
+
         # --- LÓGICA CLAVE: Manejo de Respuesta AJAX vs. Web ---
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             # Si es AJAX, devolvemos JSON (incluyendo el mensaje detallado o el error 409 con los faltantes)
@@ -245,7 +245,7 @@ def aprobar(id):
             response_dict = response[0] if isinstance(response, tuple) else response
             return jsonify(response_dict), status_code
         # --- FIN LÓGICA CLAVE ---
-        
+
         # Lógica para Petición Web Normal (Redirección con Flash)
         if response.get("success"):
             flash(response.get('message', 'Operación realizada con éxito.'), "success")
@@ -278,7 +278,7 @@ def crear_oc_op(orden_id):
 
         datos_json = request.get_json()
         insumos_faltantes = datos_json.get('insumos_faltantes')
-        
+
         if not insumos_faltantes:
             return jsonify({"success": False, "error": "No se recibieron datos de insumos faltantes."}), 400
 
@@ -297,9 +297,9 @@ def crear_oc_op(orden_id):
 
         orden_result = controller.obtener_orden_por_id(orden_id)
         orden_produccion = orden_result['data']
-        
+
         orden_produccion['orden_compra_id'] = oc_id
-        
+
         resultado_aprobacion, status_code = controller.aprobar_orden_con_oc(orden_id, usuario_id, oc_id)
 
         if resultado_aprobacion.get('success'):
@@ -347,3 +347,34 @@ def asignar_supervisor(id):
         flash(response.get("error", "Error al asignar supervisor."), "error")
 
     return redirect(url_for("orden_produccion.listar"))
+
+
+@orden_produccion_bp.route('/<int:orden_id>/sugerir-inicio', methods=['GET'])
+#@login_required
+def api_sugerir_fecha_inicio(orden_id):
+    """
+    API para calcular y sugerir la fecha de inicio óptima para una OP.
+    """
+    # Necesitarás pasar el 'usuario_id' real desde la sesión
+    usuario_id = 1
+
+    response, status_code = controller.sugerir_fecha_inicio(orden_id, usuario_id)
+    return jsonify(response), status_code
+
+# Ruta para guardar las asignaciones (SIN aprobar)
+@orden_produccion_bp.route('/<int:orden_id>/pre-asignar', methods=['POST'])
+#@login_required
+def api_pre_asignar(orden_id):
+    data = request.get_json()
+    usuario_id = 1 # Obtener de sesión
+    response, status_code = controller.pre_asignar_recursos(orden_id, data, usuario_id)
+    return jsonify(response), status_code
+
+# NUEVA Ruta para confirmar fecha y aprobar
+@orden_produccion_bp.route('/<int:orden_id>/confirmar-inicio', methods=['POST'])
+#@login_required
+def api_confirmar_inicio(orden_id):
+    data = request.get_json()
+    usuario_id = 1 # Obtener de sesión
+    response, status_code = controller.confirmar_inicio_y_aprobar(orden_id, data, usuario_id)
+    return jsonify(response), status_code

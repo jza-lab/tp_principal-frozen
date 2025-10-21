@@ -18,6 +18,8 @@ from app.controllers.insumo_controller import InsumoController
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.models.pedido import PedidoModel
 from datetime import date
+from app.models.receta import RecetaModel
+from app.models.insumo import InsumoModel # Asegúrate de importar esto
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,8 @@ class OrdenProduccionController(BaseController):
         self.insumo_controller = InsumoController()
         self.lote_producto_controller = LoteProductoController()
         self.pedido_model = PedidoModel()
+        self.receta_model = RecetaModel()
+        self.insumo_model = InsumoModel()
 
 
     def obtener_ordenes(self, filtros: Optional[Dict] = None) -> tuple:
@@ -191,13 +195,14 @@ class OrdenProduccionController(BaseController):
             logger.error(f"Error en aprobar_orden_con_oc para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
-    def aprobar_orden(self, orden_id: int, usuario_id: int) -> Dict:
+    def aprobar_orden(self, orden_id: int, usuario_id: int) -> tuple: # Changed return type
         """
         Inicia el proceso de una orden PENDIENTE.
-        - Si hay stock, la pasa a 'LISTA PARA PRODUCIR' y reserva insumos.
-        - Si no hay stock, la pasa a 'EN_ESPERA' y genera una OC.
+        - Si hay stock, la pasa a 'LISTA_PARA_INICIAR' y reserva insumos.
+        - Si no hay stock, la pasa a 'EN ESPERA' y genera una OC.
         """
         try:
+            # 1. Obtain OP and validate state
             orden_result = self.obtener_orden_por_id(orden_id)
             if not orden_result.get('success'):
                 return self.error_response("Orden de producción no encontrada.", 404)
@@ -206,37 +211,50 @@ class OrdenProduccionController(BaseController):
             if orden_produccion['estado'] != 'PENDIENTE':
                 return self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
 
+            # 2. Verify stock
+            # Ensure inventario_controller is initialized in __init__
             verificacion_result = self.inventario_controller.verificar_stock_para_op(orden_produccion)
             if not verificacion_result.get('success'):
                 return self.error_response(f"Error al verificar stock: {verificacion_result.get('error')}", 500)
 
             insumos_faltantes = verificacion_result['data']['insumos_faltantes']
 
+            # 3. Handle based on stock availability
             if insumos_faltantes:
-                # --- CASO: FALTA STOCK ---
-                # 1. Generar OC automática
+                # --- CASE: STOCK MISSING ---
+                # Generate automatic Purchase Order
+                # Ensure orden_compra_controller is initialized in __init__
                 oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
                 if not oc_result.get('success'):
                     return self.error_response(f"No se pudo generar la orden de compra: {oc_result.get('error')}", 500)
+                # Change OP state to 'EN ESPERA'
+                # Ensure self.model refers to OrdenProduccionModel
+                estado_change_result = self.model.cambiar_estado(orden_id, 'EN ESPERA')
+                if not estado_change_result.get('success'):
+                    return self.error_response(f"Error al cambiar estado a EN ESPERA: {estado_change_result.get('error')}", 500)
 
-                # 2. Cambiar estado de OP a 'EN ESPERA'
-                self.model.cambiar_estado(orden_id, 'EN_ESPERA')
-                
                 return self.success_response(
                     data={'oc_generada': True, 'oc_codigo': oc_result['data']['codigo_oc']},
-                    message="Stock insuficiente. Se generó la Orden de Compra y la OP está 'En Espera'."
+                    message="Stock insuficiente. Se generó OC y la OP está 'En Espera'."
                 )
             else:
-                # --- CASO: HAY STOCK ---
-                # 1. Reservar insumos
+                # --- CASE: STOCK AVAILABLE ---
+                # Reserve supplies
                 reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
                 if not reserva_result.get('success'):
                     return self.error_response(f"Fallo crítico al reservar insumos: {reserva_result.get('error')}", 500)
 
-                # 2. Cambiar estado a 'LISTA PARA PRODUCIR'
-                self.model.cambiar_estado(orden_id, 'LISTA PARA PRODUCIR')
+                # Set new state to 'LISTA_PARA_INICIAR'
+                nuevo_estado_op = 'LISTA PARA PRODUCIR'
 
-                return self.success_response(message="Stock disponible. La orden está 'Lista para Producir' y los insumos han sido reservados.")
+                # Change OP state
+                estado_change_result = self.model.cambiar_estado(orden_id, nuevo_estado_op)
+                if not estado_change_result.get('success'):
+                    return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
+
+                return self.success_response(
+                    message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos han sido reservados. Lista para iniciar en fecha planificada."
+                )
 
         except Exception as e:
             logger.error(f"Error en el proceso de aprobación de OP {orden_id}: {e}", exc_info=True)
@@ -536,3 +554,204 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             logger.error(f"Error en cambiar_estado_orden_simple para OP {orden_id}: {e}", exc_info=True)
             return {'success': False, 'error': f"Error interno: {str(e)}"}
+
+    def sugerir_fecha_inicio(self, orden_id: int, usuario_id: int) -> tuple:
+        """
+        Calcula fecha de inicio sugerida, considerando la línea de producción
+        óptima y su eficiencia para la cantidad dada.
+        """
+        try:
+            # 1. Obtener OP y Fecha Meta (sin cambios)
+            op_result = self.obtener_orden_por_id(orden_id)
+            if not op_result.get('success'): return self.error_response("OP no encontrada.", 404)
+            op_data = op_result['data']
+            fecha_meta_str = op_data.get('fecha_meta')
+            if not fecha_meta_str: return self.error_response("OP sin fecha meta.", 400)
+            fecha_meta = date.fromisoformat(fecha_meta_str)
+            cantidad = float(op_data['cantidad_planificada'])
+
+            # 2. Obtener Receta y determinar Línea Óptima y Tiempo de Producción
+            receta_model = RecetaModel()
+            receta_res = receta_model.find_by_id(op_data['receta_id'], 'id')
+            if not receta_res.get('success'): return self.error_response("Receta no encontrada.", 404)
+            receta = receta_res['data']
+
+            linea_compatible = receta.get('linea_compatible', '2').split(',') # Default a línea 2 si no está definido
+            tiempo_prep = receta.get('tiempo_preparacion_minutos', 0)
+            tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
+            tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
+
+            linea_sugerida = 0
+            tiempo_prod_unit_elegido = 0
+
+            # --- Lógica de Selección de Línea ---
+            # Define tu umbral para considerar "gran cantidad" y justificar la línea 1
+            UMBRAL_CANTIDAD_LINEA_1 = 50
+
+            puede_l1 = '1' in linea_compatible and tiempo_l1 > 0
+            puede_l2 = '2' in linea_compatible and tiempo_l2 > 0
+
+            if puede_l1 and puede_l2: # Compatible con ambas
+                if cantidad >= UMBRAL_CANTIDAD_LINEA_1:
+                    linea_sugerida = 1 # Grande -> Línea 1
+                    tiempo_prod_unit_elegido = tiempo_l1
+                else:
+                    linea_sugerida = 2 # Pequeña -> Línea 2 (más barata)
+                    tiempo_prod_unit_elegido = tiempo_l2
+            elif puede_l1: # Solo compatible con Línea 1
+                linea_sugerida = 1
+                tiempo_prod_unit_elegido = tiempo_l1
+            elif puede_l2: # Solo compatible con Línea 2
+                linea_sugerida = 2
+                tiempo_prod_unit_elegido = tiempo_l2
+            else:
+                return self.error_response("La receta no tiene tiempos válidos o compatibilidad de línea definida.", 400)
+
+            # Calcular T_Prod basado en la línea elegida
+            t_prod_minutos = tiempo_prep + (tiempo_prod_unit_elegido * cantidad)
+            t_prod_dias = math.ceil(t_prod_minutos / 480) # Asumiendo jornada de 8h
+
+            # --- 3. Calcular Tiempo de Aprovisionamiento (T_Proc) (sin cambios) ---
+            verificacion_res = self.inventario_controller.verificar_stock_para_op(op_data)
+            # ... (la lógica para calcular t_proc_dias se mantiene igual) ...
+            insumos_faltantes = verificacion_res['data']['insumos_faltantes']
+            t_proc_dias = 0
+            if insumos_faltantes:
+                # ... (buscar el max(tiempo_entrega_dias)) ...
+                 insumo_model = InsumoModel()
+                 tiempos_entrega = []
+                 for insumo in insumos_faltantes:
+                     insumo_data_res = insumo_model.find_by_id(insumo['insumo_id'], 'id_insumo')
+                     if insumo_data_res.get('success'):
+                         tiempo = insumo_data_res['data'].get('tiempo_entrega_dias', 0)
+                         tiempos_entrega.append(tiempo)
+                 t_proc_dias = max(tiempos_entrega) if tiempos_entrega else 0
+
+
+            # --- 4. Calcular Fecha de Inicio Sugerida (sin cambios) ---
+            plazo_total_dias = t_prod_dias + t_proc_dias
+            fecha_inicio_sugerida = fecha_meta - timedelta(days=plazo_total_dias)
+
+            # --- 5. Añadir Recomendación de Eficiencia ---
+            recomendacion_eficiencia = ""
+            # Si se sugiere la línea 1 pero la cantidad es baja...
+            if linea_sugerida == 1 and cantidad < UMBRAL_CANTIDAD_LINEA_1:
+                recomendacion_eficiencia = (f"¡Atención! La cantidad ({cantidad}) es baja para la Línea 1. "
+                                            f"Considere si es eficiente encenderla o si puede agrupar con otras OPs.")
+            # Si solo es compatible con la 1 y la cantidad es baja...
+            elif linea_sugerida == 1 and not puede_l2 and cantidad < UMBRAL_CANTIDAD_LINEA_1:
+                 recomendacion_eficiencia = (f"La cantidad ({cantidad}) es baja, pero esta receta solo es compatible con la Línea 1.")
+
+
+            # 6. Preparar la respuesta detallada
+            detalle = {
+            'fecha_meta': fecha_meta.isoformat(),
+            'linea_sugerida': linea_sugerida,
+            'plazo_total_dias': plazo_total_dias,
+            't_produccion_dias': t_prod_dias,
+            't_aprovisionamiento_dias': t_proc_dias,
+            'fecha_inicio_sugerida': fecha_inicio_sugerida.isoformat(),
+            'recomendacion_eficiencia': recomendacion_eficiencia,
+            'insumos_faltantes': insumos_faltantes
+            }
+
+            # --- INICIO NUEVA LÓGICA: GUARDAR SUGERENCIA ---
+            datos_para_guardar = {
+                'sugerencia_fecha_inicio': detalle['fecha_inicio_sugerida'],
+                'sugerencia_plazo_total_dias': detalle['plazo_total_dias'],
+                'sugerencia_t_produccion_dias': detalle['t_produccion_dias'],
+                'sugerencia_t_aprovisionamiento_dias': detalle['t_aprovisionamiento_dias'],
+                'sugerencia_linea': detalle['linea_sugerida']
+            }
+            # Actualizamos la OP en la base de datos con estos datos
+            update_result = self.model.update(orden_id, datos_para_guardar, 'id')
+            if not update_result.get('success'):
+                # Si falla el guardado, no es crítico, pero sí loggeamos/advertimos
+                logger.warning(f"No se pudo guardar la sugerencia calculada para OP {orden_id}. Error: {update_result.get('error')}")
+            # --- FIN NUEVA LÓGICA ---
+
+            # 7. Devolver la respuesta detallada (sin cambios)
+            return self.success_response(data=detalle)
+
+        except Exception as e:
+            logger.error(f"Error en sugerir_fecha_inicio para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
+
+
+
+    def pre_asignar_recursos(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
+        """
+        1. Valida compatibilidad de línea.
+        2. GUARDA la línea, supervisor y operario asignados.
+        3. NO cambia el estado ni aprueba la orden todavía.
+        """
+        try:
+            # 0. Obtener OP y Receta (sin cambios)
+            op_result = self.obtener_orden_por_id(orden_id)
+            if not op_result.get('success'): return self.error_response("OP no encontrada.", 404)
+            op_data = op_result['data']; receta_id = op_data.get('receta_id')
+
+            # 1. Validar datos de entrada (sin cambios)
+            linea_asignada = data.get('linea_asignada'); supervisor_id = data.get('supervisor_responsable_id')
+            operario_id = data.get('operario_asignado_id')
+            if not linea_asignada or linea_asignada not in [1, 2]: return self.error_response("Línea inválida.", 400)
+
+            # Validar compatibilidad de línea (sin cambios)
+            receta_model = RecetaModel()
+            receta_res = receta_model.find_by_id(receta_id, 'id')
+            # ... (código de validación de compatibilidad) ...
+            if not receta_res.get('success'): return self.error_response(f"Receta no encontrada (ID: {receta_id}).", 404)
+            receta_data = receta_res['data']
+            lineas_compatibles = receta_data.get('linea_compatible', '2').split(',')
+            if str(linea_asignada) not in lineas_compatibles:
+                return self.error_response(f"Línea {linea_asignada} incompatible. Permitidas: {', '.join(lineas_compatibles)}.", 400)
+
+
+            # 2. Preparar y actualizar la OP con las asignaciones
+            update_data = {
+                'linea_asignada': linea_asignada,
+                'supervisor_responsable_id': supervisor_id,
+                'operario_asignado_id': operario_id
+            }
+            update_result = self.model.update(orden_id, update_data, 'id')
+            if not update_result.get('success'):
+                return self.error_response(f"Error al asignar recursos: {update_result.get('error')}", 500)
+
+            # 3. Devolver éxito SIN llamar a aprobar_orden
+            # Devolvemos los datos actualizados para referencia
+            return self.success_response(data=update_result.get('data'), message="Recursos pre-asignados. Confirme la fecha de inicio.")
+
+        except Exception as e:
+            logger.error(f"Error crítico en pre_asignar_recursos para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
+
+
+    def confirmar_inicio_y_aprobar(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
+        """
+        1. Guarda la fecha de inicio planificada confirmada.
+        2. Ejecuta la lógica de aprobación (verificar stock, reservar/crear OC, cambiar estado).
+        """
+        try:
+            fecha_inicio_confirmada = data.get('fecha_inicio_planificada')
+            if not fecha_inicio_confirmada:
+                return self.error_response("Debe seleccionar una fecha de inicio.", 400)
+
+            # 1. Guardar la fecha de inicio confirmada
+            update_data = {'fecha_inicio_planificada': fecha_inicio_confirmada}
+            update_result = self.model.update(orden_id, update_data, 'id')
+            if not update_result.get('success'):
+                return self.error_response(f"Error al guardar fecha de inicio: {update_result.get('error')}", 500)
+
+            # 2. Ejecutar la lógica de aprobación que ya tenías
+            # Esta función devuelve (dict, status_code)
+            aprobacion_dict, aprobacion_status_code = self.aprobar_orden(orden_id, usuario_id)
+
+            # Ajustar mensaje si fue exitoso
+            if aprobacion_dict.get('success'):
+                 aprobacion_dict['message'] = f"Inicio confirmado para {fecha_inicio_confirmada}. {aprobacion_dict.get('message', '')}"
+
+            return aprobacion_dict, aprobacion_status_code
+
+        except Exception as e:
+            logger.error(f"Error crítico en confirmar_inicio_y_aprobar para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
