@@ -332,6 +332,7 @@ class OrdenCompraItemModel(BaseModel):
         """
         try:
             # Asegurarse de que solo se actualicen campos permitidos
+            # --- CORRECCIÓN: 'subtotal' es una columna generada en la BD, no se puede actualizar directamente.
             allowed_fields = ['cantidad_recibida', 'precio_unitario']
             update_data = {key: data[key] for key in data if key in allowed_fields}
 
@@ -368,4 +369,15 @@ class OrdenCompraItemModel(BaseModel):
                 return {'success': False, 'error': 'No se pudieron crear los ítems'}
         except Exception as e:
             logger.error(f"Error creando ítems de orden: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def find_by_orden_id(self, orden_id: int) -> Dict:
+        """
+        Encuentra todos los ítems asociados a un ID de orden de compra.
+        """
+        try:
+            result = self.db.table(self.get_table_name()).select('*').eq('orden_compra_id', orden_id).execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error buscando ítems por orden_compra_id {orden_id}: {e}")
             return {'success': False, 'error': str(e)}

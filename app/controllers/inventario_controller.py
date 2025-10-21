@@ -39,7 +39,7 @@ class InventarioController(BaseController):
 
         try:
             receta_id = orden_produccion['receta_id']
-            cantidad_a_producir = orden_produccion['cantidad_planificada']
+            cantidad_a_producir = float(orden_produccion.get('cantidad_planificada', 0))
 
             ingredientes_result = receta_model.get_ingredientes(receta_id)
             if not ingredientes_result.get('success'):
@@ -50,7 +50,7 @@ class InventarioController(BaseController):
 
             for ingrediente in ingredientes:
                 insumo_id = ingrediente['id_insumo']
-                cantidad_necesaria = ingrediente['cantidad'] * cantidad_a_producir
+                cantidad_necesaria = float(ingrediente.get('cantidad', 0)) * cantidad_a_producir
 
                 lotes_disponibles_res = self.inventario_model.find_all(
                     filters={'id_insumo': insumo_id, 'cantidad_actual': ('gt', 0)},
@@ -62,8 +62,8 @@ class InventarioController(BaseController):
                 for lote in lotes_disponibles:
                     if cantidad_restante_a_reservar <= 0:
                         break
-
-                    cantidad_en_lote = lote.get('cantidad_actual', 0)
+                    
+                    cantidad_en_lote = float(lote.get('cantidad_actual', 0))
                     cantidad_a_reservar_de_lote = min(cantidad_en_lote, cantidad_restante_a_reservar)
 
                     datos_reserva = {

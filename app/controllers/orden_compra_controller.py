@@ -3,6 +3,7 @@ from flask import request, jsonify
 from app.models.orden_compra_model import OrdenCompraItemModel, OrdenCompraModel
 from app.models.orden_compra_model import OrdenCompra
 from app.controllers.inventario_controller import InventarioController
+from app.controllers.insumo_controller import InsumoController
 from datetime import datetime, date
 import logging
 
@@ -12,6 +13,7 @@ class OrdenCompraController:
     def __init__(self):
         self.model = OrdenCompraModel()
         self.inventario_controller = InventarioController()
+        self.insumo_controller = InsumoController()
 
 
     def _parse_form_data(self, form_data):
@@ -315,65 +317,111 @@ class OrdenCompraController:
                     return {'success': False, 'error': 'No se pudo encontrar la orden de compra.'}
                 orden_data = orden_result['data']
 
-                # --- INICIO DE LA CORRECCIÓN ---
-                # Reintroducimos la inicialización de los contadores y la lógica de creación de lotes
                 item_ids = form_data.getlist('item_id[]')
                 cantidades_recibidas = form_data.getlist('cantidad_recibida[]')
+                precios_unitarios = form_data.getlist('precio_unitario[]')
 
-                if len(item_ids) != len(cantidades_recibidas):
-                    return {'success': False, 'error': 'Los datos de los ítems no coinciden.'}
+                if not (len(item_ids) == len(cantidades_recibidas) == len(precios_unitarios)):
+                    return {'success': False, 'error': 'Los datos de los ítems recibidos son inconsistentes.'}
 
-                items_para_lote = []
                 lotes_creados_count = 0
                 lotes_error_count = 0
+                errores_detalle = []
 
-                # 1. Actualizar cada ítem de la orden
+                # Bucle transaccional para procesar cada ítem
                 for i in range(len(item_ids)):
-                    item_id = int(item_ids[i])
-                    cantidad = float(cantidades_recibidas[i])
-
-                    self.model.item_model.update(item_id, {'cantidad_recibida': cantidad})
-
-                    if cantidad > 0:
-                        item_info_result = self.model.item_model.find_by_id(item_id, 'id')
-                        if item_info_result.get('success'):
-                            items_para_lote.append({
-                                'data': item_info_result['data'],
-                                'cantidad_recibida': cantidad
-                            })
-
-                # 2. Actualizar el estado de la orden principal
-                orden_update_data = {
-                    'estado': 'RECIBIDA',
-                    'fecha_real_entrega': date.today().isoformat(),
-                    'observaciones': observaciones,
-                    'updated_at': datetime.now().isoformat()
-                }
-                self.model.update(orden_id, orden_update_data)
-
-                # 3. Crear lotes en inventario
-                for item_lote in items_para_lote:
-                    item_data = item_lote['data']
-                    lote_data = {
-                        'id_insumo': item_data['insumo_id'],
-                        'id_proveedor': orden_data.get('proveedor_id'),
-                        'cantidad_inicial': item_lote['cantidad_recibida'],
-                        'precio_unitario': item_data.get('precio_unitario'),
-                        'documento_ingreso': f"OC-{orden_data.get('codigo_oc', 'N/A')}",
-                        'f_ingreso': date.today().isoformat()
-                    }
                     try:
-                        lote_result, status_code = self.inventario_controller.crear_lote(lote_data, usuario_id)
-                        if lote_result.get('success'):
-                            lotes_creados_count += 1
-                        else:
+                        item_id = int(item_ids[i])
+                        cantidad = float(cantidades_recibidas[i])
+                        precio = float(precios_unitarios[i])
+
+                        # Obtener información original del ítem para tener el insumo_id
+                        item_info_result = self.model.item_model.find_by_id(item_id, 'id')
+                        if not item_info_result.get('success'):
+                            errores_detalle.append(f"No se encontró el ítem con ID {item_id}.")
                             lotes_error_count += 1
-                    except Exception:
+                            continue
+                        
+                        item_data = item_info_result['data']
+                        insumo_id = item_data['insumo_id']
+
+                        # 1. Actualizar el ítem de la orden de compra (cantidad y nuevo precio)
+                        subtotal_item = cantidad * precio
+                        update_item_data = {
+                            'cantidad_recibida': cantidad,
+                            'precio_unitario': precio,
+                            'subtotal': subtotal_item
+                        }
+                        
+                        # Pasamos el item_id y los datos al modelo para que actualice la BD
+                        update_result = self.model.item_model.update(item_id, update_item_data)
+                        if not update_result.get('success'):
+                             errores_detalle.append(f"Error al actualizar el ítem ID {item_id}: {update_result.get('error')}")
+                             lotes_error_count += 1
+                             continue
+
+                        # 2. Crear lote en inventario solo si se recibió una cantidad > 0
+                        if cantidad > 0:
+                            lote_data = {
+                                'id_insumo': insumo_id,
+                                'id_proveedor': orden_data.get('proveedor_id'),
+                                'cantidad_inicial': cantidad,
+                                'precio_unitario': precio, # <-- Usar el nuevo precio del formulario
+                                'documento_ingreso': f"OC-{orden_data.get('codigo_oc', 'N/A')}",
+                                'f_ingreso': date.today().isoformat()
+                            }
+                            
+                            lote_result, status_code = self.inventario_controller.crear_lote(lote_data, usuario_id)
+                            if not lote_result.get('success'):
+                                errores_detalle.append(f"Error al crear lote para insumo ID {insumo_id}: {lote_result.get('error')}")
+                                lotes_error_count += 1
+                                continue # Continuar al siguiente item aunque este falle
+                            else:
+                                lotes_creados_count += 1
+                        
+                        # 3. Actualizar el precio en el catálogo principal de insumos
+                        precio_update_result, _ = self.insumo_controller.actualizar_precio(insumo_id, precio)
+                        if not precio_update_result.get('success'):
+                            logger.warning(f"No se pudo actualizar el precio en el catálogo para el insumo {insumo_id}. Esto no detiene el proceso.")
+
+                    except (ValueError, IndexError) as e:
+                        errores_detalle.append(f"Error de datos procesando un ítem: {e}")
                         lotes_error_count += 1
-                # --- FIN DE LA CORRECCIÓN ---
+                        continue
 
+                # 4. Recalcular y actualizar los totales de la orden principal
+                items_actualizados_result = self.model.item_model.find_by_orden_id(orden_id)
+                if not items_actualizados_result.get('success'):
+                    # Si no podemos recalcular, al menos dejamos un log
+                    logger.error(f"No se pudieron obtener los ítems para recalcular los totales de la OC {orden_id}.")
+                else:
+                    items_actualizados = items_actualizados_result['data']
+                    nuevo_subtotal = sum(float(item.get('subtotal') or 0) for item in items_actualizados)
+                    
+                    nuevo_iva = 0
+                    # Aseguramos que el valor de iva sea numérico antes de comparar
+                    iva_original = float(orden_data.get('iva') or 0)
+                    if iva_original > 0: # Respetar si la orden original tenía IVA
+                        nuevo_iva = nuevo_subtotal * 0.21
 
-                # Lógica de reserva y transición de OP (esta parte ya estaba bien)
+                    nuevo_total = nuevo_subtotal + nuevo_iva
+
+                    orden_update_data = {
+                        'subtotal': round(nuevo_subtotal, 2),
+                        'iva': round(nuevo_iva, 2),
+                        'total': round(nuevo_total, 2),
+                        'estado': 'RECIBIDA',
+                        'fecha_real_entrega': date.today().isoformat(),
+                        'observaciones': observaciones,
+                        'updated_at': datetime.now().isoformat()
+                    }
+                    self.model.update(orden_id, orden_update_data)
+
+                if lotes_error_count > 0:
+                    error_msg = f"Recepción procesada con {lotes_error_count} errores. Detalles: {'; '.join(errores_detalle)}"
+                    return {'success': False, 'error': error_msg}
+
+                # Lógica de reserva y transición de OP
                 op_transition_message = ""
                 if orden_data.get('orden_produccion_id'):
                     op_id = orden_data['orden_produccion_id']

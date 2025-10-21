@@ -20,10 +20,23 @@ def _inject_permission_map():
     """
     return {'CANONICAL_PERMISSION_MAP': CANONICAL_PERMISSION_MAP}
 
+def _formato_moneda_filter(value):
+    """
+    Filtro de Jinja2 para formatear un número como moneda (ej: 1,234.50).
+    """
+    if value is None:
+        return "0.00"
+    try:
+        num = float(value)
+        return f"{num:,.2f}"
+    except (ValueError, TypeError):
+        return value
+
 def register_template_extensions(app: Flask):
     """
     Registra todos los helpers de plantillas (filtros, procesadores de contexto)
     en la aplicación Flask.
     """
     app.jinja_env.filters['format_datetime'] = _format_datetime_filter
+    app.jinja_env.filters['formato_moneda'] = _formato_moneda_filter
     app.context_processor(_inject_permission_map)

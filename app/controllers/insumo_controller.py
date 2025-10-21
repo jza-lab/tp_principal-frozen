@@ -350,23 +350,27 @@ class InsumoController(BaseController):
             logger.error(f"Error en controlador buscando insumo por código interno: {str(e)}")
             return None
 
-    def actualizar_precio(self, id_insumo: str, precio_nuevo: float) -> bool:
+    def actualizar_precio(self, insumo_id: str, nuevo_precio: float):
         """
-        Actualiza el precio de un insumo usando el modelo
-
-        Args:
-            id_insumo: ID del insumo a actualizar
-            precio_nuevo: Nuevo precio unitario
-
-        Returns:
-            bool: True si se actualizó correctamente, False en caso contrario
+        Actualiza el precio unitario de un insumo en el catálogo.
         """
+        if nuevo_precio is None or float(nuevo_precio) < 0:
+            return self.error_response("El precio proporcionado no es válido.", 400)
+
         try:
-            return self.insumo_model.actualizar_precio(id_insumo, precio_nuevo)
+            update_data = {"precio_unitario": float(nuevo_precio)}
+            result = self.insumo_model.update(insumo_id, update_data, 'id_insumo')
+
+            if result.get('success'):
+                logger.info(f"Precio del insumo {insumo_id} actualizado a {nuevo_precio}.")
+                return self.success_response(result['data'], "Precio actualizado correctamente.")
+            else:
+                logger.error(f"No se pudo actualizar el precio para el insumo {insumo_id}: {result.get('error')}")
+                return self.error_response(f"No se pudo actualizar el precio: {result.get('error')}", 500)
 
         except Exception as e:
-            logger.error(f"Error en controlador actualizando precio: {str(e)}")
-            return False
+            logger.error(f"Error crítico al actualizar el precio del insumo {insumo_id}: {e}", exc_info=True)
+            return self.error_response("Error interno del servidor al actualizar el precio.", 500)
 
     def buscar_por_codigo_proveedor(self, codigo_proveedor: str, proveedor_id: str = None) -> Optional[Dict]:
         """

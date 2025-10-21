@@ -73,15 +73,15 @@
                             </div>
                             <div class="col-6">
                                 <div class="small text-muted">Subtotal</div>
-                                <div class="fw-bold">$ {{ "%.2f"|format(orden.subtotal|float) }}</div>
+                                <div id="orden-subtotal" class="fw-bold">$ {{ orden.subtotal | formato_moneda }}</div>
                             </div>
                             <div class="col-6">
                                 <div class="small text-muted">IVA</div>
-                                <div class="fw-bold"> {{ 'Aplica' if orden.iva > 0 else 'No aplica' }}</div>
+                                <div id="orden-iva" class="fw-bold">$ {{ orden.iva | formato_moneda }}</div>
                             </div>
                             <div class="col-12">
                                 <div class="small text-muted">Total</div>
-                                <div class="fw-bold h5">$ {{ "%.2f"|format(orden.total|float) }}</div>
+                                <div id="orden-total" class="fw-bold h5">$ {{ orden.total | formato_moneda }}</div>
                             </div>
                         </div>
                     </div>
@@ -163,7 +163,7 @@
                             </thead>
                             <tbody>
                                 {% for item in orden['items'] %}
-                                <tr>
+                                <tr class="item-row">
                                     <td>
                                         <div class="fw-bold">{{ item.insumo_nombre or 'Insumo no encontrado' }}</div>
                                         {% if orden.estado == 'EN_TRANSITO' %}
@@ -173,11 +173,15 @@
                                     <td class="text-end">{{ item.cantidad_solicitada }}</td>
                                     {% if orden.estado == 'EN_TRANSITO' %}
                                     <td class="text-center" style="max-width: 150px;">
-                                        <input type="number" name="cantidad_recibida[]" class="form-control form-control-sm text-center" value="{{ item.cantidad_solicitada }}" min="0" step="any" required>
+                                        <input type="number" name="cantidad_recibida[]" class="form-control form-control-sm text-center cantidad-recibida" value="{{ item.cantidad_solicitada }}" min="0" step="any" required>
                                     </td>
+                                    <td class="text-end" style="max-width: 150px;">
+                                        <input type="number" name="precio_unitario[]" class="form-control form-control-sm text-end precio-unitario" value="{{ "%.2f"|format(item.precio_unitario|float) }}" min="0" step="any" required>
+                                    </td>
+                                    {% else %}
+                                    <td class="text-end">$ {{ item.precio_unitario | formato_moneda }}</td>
                                     {% endif %}
-                                    <td class="text-end">$ {{ "%.2f"|format(item.precio_unitario|float) }}</td>
-                                    <td class="text-end fw-bold">$ {{ "%.2f"|format(item.subtotal|float) }}</td>
+                                    <td class="text-end fw-bold subtotal-item">$ {{ item.subtotal | formato_moneda }}</td>
                                 </tr>
                                 {% else %}
                                 <tr>
@@ -239,35 +243,79 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const recepcionForm = document.getElementById('recepcionForm');
-    
-    if (recepcionForm) {
-        recepcionForm.addEventListener('submit', function (e) {
-            // 1. Prevenimos el envío inmediato.
-            e.preventDefault();
+    const formularioRecepcion = document.getElementById('recepcionForm');
 
-            // 2. Obtenemos el botón que disparó el envío.
+    if (formularioRecepcion) {
+        // La lógica de cálculo de totales solo debe ejecutarse en la pantalla de recepción.
+        {% if orden.estado == 'EN_TRANSITO' %}
+            const ivaOriginal = {{ orden.iva|float|tojson }};
+
+            function formatearMoneda(valor) {
+                const numero = parseFloat(valor) || 0;
+                return `$ ${numero.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            }
+
+            function actualizarTotales() {
+                let granSubtotal = 0;
+                document.querySelectorAll('.item-row').forEach(fila => {
+                    const campoCantidad = fila.querySelector('.cantidad-recibida');
+                    const campoPrecio = fila.querySelector('.precio-unitario');
+                    const celdaSubtotal = fila.querySelector('.subtotal-item');
+
+                    if (campoCantidad && campoPrecio && celdaSubtotal) {
+                        const cantidad = parseFloat(campoCantidad.value) || 0;
+                        const precio = parseFloat(campoPrecio.value) || 0;
+                        const subtotalItem = cantidad * precio;
+                        
+                        celdaSubtotal.textContent = formatearMoneda(subtotalItem);
+                        granSubtotal += subtotalItem;
+                    }
+                });
+
+                const elementoSubtotal = document.querySelector('#orden-subtotal');
+                const elementoIva = document.querySelector('#orden-iva');
+                const elementoTotal = document.querySelector('#orden-total');
+                
+                if (elementoSubtotal && elementoIva && elementoTotal) {
+                    let iva = 0;
+                    if (ivaOriginal > 0) {
+                        iva = granSubtotal * 0.21;
+                    }
+                    const total = granSubtotal + iva;
+
+                    elementoSubtotal.textContent = formatearMoneda(granSubtotal);
+                    elementoIva.textContent = formatearMoneda(iva);
+                    elementoTotal.textContent = formatearMoneda(total);
+                }
+            }
+
+            formularioRecepcion.addEventListener('input', function(e) {
+                if (e.target.classList.contains('cantidad-recibida') || e.target.classList.contains('precio-unitario')) {
+                    actualizarTotales();
+                }
+            });
+
+            // Cálculo inicial al cargar la página
+            actualizarTotales();
+        {% endif %}
+
+        // El manejador del submit es necesario siempre que el formulario exista.
+        formularioRecepcion.addEventListener('submit', function (e) {
+            e.preventDefault();
             const submitter = e.submitter;
             if (!submitter) {
-                // Si por alguna razón no se detecta el botón, se envía sin overlay para evitar bloqueo.
                 this.submit();
                 return;
             }
-
-            // 3. Creamos un campo oculto para enviar el valor de 'accion'.
             const hiddenInput = document.createElement('input');
             hiddenInput.type = 'hidden';
             hiddenInput.name = 'accion';
-            hiddenInput.value = submitter.value; // 'aceptar' o 'rechazar'
-            this.appendChild(hiddenInput); // Añadimos el campo al formulario
-
-            // 4. Mostramos nuestra pantalla de carga.
+            hiddenInput.value = submitter.value;
+            this.appendChild(hiddenInput);
             const overlay = document.getElementById('loadingOverlay');
             if (overlay) {
                 overlay.style.display = 'flex';
             }
-
-            // 5. Después de un breve instante, permitimos que el formulario se envíe (ahora con el campo 'accion').
             setTimeout(() => {
                 this.submit(); 
             }, 50);
