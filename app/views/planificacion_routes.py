@@ -56,7 +56,8 @@ def index():
 
     # 6. Definir columnas Kanban - Sin cambios
     columnas_kanban = {
-        'LISTA PARA PRODUCIR': 'Por Asignar (Stock OK)', 'EN ESPERA': 'En Espera (Sin Insumos)',
+        'EN ESPERA': 'En Espera (Sin Insumos)',
+        'LISTA PARA PRODUCIR':'Listas para Iniciar',
         'EN_LINEA_1': 'Línea 1', 'EN_LINEA_2': 'Línea 2', 'EN_EMPAQUETADO': 'Empaquetado',
         'CONTROL_DE_CALIDAD': 'Control Calidad', 'COMPLETADA': 'Completadas'
     }

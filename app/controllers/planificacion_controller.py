@@ -23,6 +23,7 @@ class PlanificacionController(BaseController):
             # --- CORRECCIÓN DEFINITIVA ---
             # Usamos los nombres exactos de la base de datos y solo los que corresponden al tablero.
             estados_activos = [
+                'EN ESPERA',
                 'LISTA PARA PRODUCIR',
                 'EN PROCESO',
                 'EN_LINEA_1',

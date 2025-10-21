@@ -195,13 +195,14 @@ class OrdenProduccionController(BaseController):
             logger.error(f"Error en aprobar_orden_con_oc para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
-    def aprobar_orden(self, orden_id: int, usuario_id: int) -> Dict:
+    def aprobar_orden(self, orden_id: int, usuario_id: int) -> tuple: # Changed return type
         """
         Inicia el proceso de una orden PENDIENTE.
-        - Si hay stock, la pasa a 'LISTA PARA PRODUCIR' y reserva insumos.
+        - Si hay stock, la pasa a 'LISTA_PARA_INICIAR' y reserva insumos.
         - Si no hay stock, la pasa a 'EN ESPERA' y genera una OC.
         """
         try:
+            # 1. Obtain OP and validate state
             orden_result = self.obtener_orden_por_id(orden_id)
             if not orden_result.get('success'):
                 return self.error_response("Orden de producción no encontrada.", 404)
@@ -210,37 +211,51 @@ class OrdenProduccionController(BaseController):
             if orden_produccion['estado'] != 'PENDIENTE':
                 return self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
 
+            # 2. Verify stock
+            # Ensure inventario_controller is initialized in __init__
             verificacion_result = self.inventario_controller.verificar_stock_para_op(orden_produccion)
             if not verificacion_result.get('success'):
                 return self.error_response(f"Error al verificar stock: {verificacion_result.get('error')}", 500)
 
             insumos_faltantes = verificacion_result['data']['insumos_faltantes']
 
+            # 3. Handle based on stock availability
             if insumos_faltantes:
-                # --- CASO: FALTA STOCK ---
-                # 1. Generar OC automática
+                # --- CASE: STOCK MISSING ---
+                # Generate automatic Purchase Order
+                # Ensure orden_compra_controller is initialized in __init__
                 oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
                 if not oc_result.get('success'):
                     return self.error_response(f"No se pudo generar la orden de compra: {oc_result.get('error')}", 500)
 
-                # 2. Cambiar estado de OP a 'EN ESPERA'
-                self.model.cambiar_estado(orden_id, 'EN ESPERA')
+                # Change OP state to 'EN ESPERA'
+                # Ensure self.model refers to OrdenProduccionModel
+                estado_change_result = self.model.cambiar_estado(orden_id, 'EN ESPERA')
+                if not estado_change_result.get('success'):
+                    return self.error_response(f"Error al cambiar estado a EN ESPERA: {estado_change_result.get('error')}", 500)
 
                 return self.success_response(
                     data={'oc_generada': True, 'oc_codigo': oc_result['data']['codigo_oc']},
-                    message="Stock insuficiente. Se generó la Orden de Compra y la OP está 'En Espera'."
+                    message="Stock insuficiente. Se generó OC y la OP está 'En Espera'."
                 )
             else:
-                # --- CASO: HAY STOCK ---
-                # 1. Reservar insumos
+                # --- CASE: STOCK AVAILABLE ---
+                # Reserve supplies
                 reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
                 if not reserva_result.get('success'):
                     return self.error_response(f"Fallo crítico al reservar insumos: {reserva_result.get('error')}", 500)
 
-                # 2. Cambiar estado a 'LISTA PARA PRODUCIR'
-                self.model.cambiar_estado(orden_id, 'LISTA PARA PRODUCIR')
+                # Set new state to 'LISTA_PARA_INICIAR'
+                nuevo_estado_op = 'LISTA PARA PRODUCIR'
 
-                return self.success_response(message="Stock disponible. La orden está 'Lista para Producir' y los insumos han sido reservados.")
+                # Change OP state
+                estado_change_result = self.model.cambiar_estado(orden_id, nuevo_estado_op)
+                if not estado_change_result.get('success'):
+                    return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
+
+                return self.success_response(
+                    message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos han sido reservados. Lista para iniciar en fecha planificada."
+                )
 
         except Exception as e:
             logger.error(f"Error en el proceso de aprobación de OP {orden_id}: {e}", exc_info=True)

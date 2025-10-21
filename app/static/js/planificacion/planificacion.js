@@ -22,7 +22,7 @@ async function moverOp(opId, nuevoEstado) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    
+
     // --- LÓGICA DE CONSOLIDACIÓN Y RECOMENDACIÓN (KANBAN - FASE 2/3) ---
     const consolidarBtn = document.getElementById('btn-consolidar');
     if (consolidarBtn) {
@@ -59,31 +59,108 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (confirm(msg)) { await moverOp(newOP.id, `EN_LINEA_${rec.linea_sugerida}`); } // Con guion bajo
                     else { await moverOp(newOP.id, `EN_LINEA_${rec.linea_sugerida === 1 ? 2 : 1}`); } // Con guion bajo
                 } else { alert('Super OP creada, pero no se pudo obtener recomendación.'); }
-            } catch (error) { console.error('Error en el proceso:', error); alert('Error: ' + error.message); } 
+            } catch (error) { console.error('Error en el proceso:', error); alert('Error: ' + error.message); }
             finally { window.location.reload(); }
         });
     }
-    
+
     // --- LÓGICA DE DRAG-AND-DROP (KANBAN - FASE 4) ---
     const columns = document.querySelectorAll('.kanban-column');
     columns.forEach(column => {
         const cardContainer = column.querySelector('.kanban-cards');
         if (cardContainer) {
             new Sortable(cardContainer, {
-                group: 'kanban', animation: 150, ghostClass: 'bg-primary-soft',
-                onEnd: async function (evt) {
-                    const item = evt.item; const toColumn = evt.to.closest('.kanban-column');
-                    const opId = item.dataset.opId; const nuevoEstado = toColumn.dataset.estado; // Ej: EN_LINEA_1
-                    const success = await moverOp(opId, nuevoEstado); // Llama a la función helper
-                    if (!success) { evt.from.appendChild(item); } // Revertir si falla
-                }
-            });
-        }
-    });
+                group: 'kanban',
+                animation: 150,
+                ghostClass: 'bg-primary-soft',
+                // --- VALIDACIÓN onMove ---
+                onMove: function (evt) {
+                    const fromState = evt.from.closest('.kanban-column').dataset.estado;
+                    const toState = evt.to.closest('.kanban-column').dataset.estado;
+                    const draggedCard = evt.dragged;
 
-    // =======================================================
-    // --- FIN FIX NAVEGACIÓN ---
-    // =======================================================
+                    console.log("onMove triggered:", { fromState, toState }); // Log inicial
+
+                    // Definir transiciones permitidas
+                    const allowedTransitions = {
+                        'LISTA PARA PRODUCIR': ['EN_LINEA_1', 'EN_LINEA_2'],
+                        'EN ESPERA': [], // No se debe mover manualmente desde aquí
+                        'EN_LINEA_1': ['EN_EMPAQUETADO'],
+                        'EN_LINEA_2': ['EN_EMPAQUETADO'],
+                        'EN_EMPAQUETADO': ['CONTROL_DE_CALIDAD'],
+                        'CONTROL_DE_CALIDAD': ['COMPLETADA'],
+                        'COMPLETADA': []
+                    };
+
+                    if (!allowedTransitions[fromState] || !allowedTransitions[fromState].includes(toState)) {
+                        console.warn(`Movimiento NO PERMITIDO de ${fromState} a ${toState} según allowedTransitions.`);
+                        return false; // Impedir movimiento
+                    }
+
+                    // Validar línea correcta al mover desde LISTA PARA PRODUCIR
+                    if (fromState === 'LISTA PARA PRODUCIR' && (toState === 'EN_LINEA_1' || toState === 'EN_LINEA_2')) {
+                        const opId = draggedCard.dataset.opId;
+                        const lineaAsignada = draggedCard.dataset.lineaAsignada;
+                        const lineaDestino = toState === 'EN_LINEA_1' ? '1' : '2';
+
+                        if (!lineaAsignada) {
+                             console.error(`VALIDACIÓN FALLIDA (onMove): OP ${opId} no tiene data-linea-asignada.`);
+                             // No mostramos alert aquí para evitar interrupciones si falla algo más
+                             return false;
+                        }
+                        if (lineaAsignada !== lineaDestino) {
+                            console.error(`VALIDACIÓN FALLIDA (onMove): Intento de mover OP ${opId} a línea incorrecta. Asignada: ${lineaAsignada}, Destino: ${lineaDestino}`);
+                            // No mostramos alert aquí
+                            return false; // Impedir el movimiento
+                        }
+                    }
+
+                    console.log("Movimiento PERMITIDO visualmente.");
+                    return true; // Permitir el movimiento si pasa las validaciones
+                },
+                // --- FIN VALIDACIÓN onMove ---
+                onEnd: async function (evt) {
+                    // Verificar si el movimiento fue revertido visualmente por onMove retornando false
+                    // Si to y from son el mismo contenedor Y el índice no cambió, no pasó nada.
+                    // Si to y from son el mismo PERO el índice cambió, SÍ hubo un movimiento (dentro de la misma columna).
+                    // Si to es diferente de from, SÍ hubo un movimiento entre columnas.
+                    // La condición importante es si SortableJS revirtió el cambio (to == from && oldIndex == newIndex)
+                    // O si nosotros retornamos false en onMove (que también causa que to == from).
+                    // Una forma más simple: si el elemento sigue en la lista original Y en el índice original
+                    if (evt.from === evt.to && evt.oldDraggableIndex === evt.newDraggableIndex) {
+                         console.log("onEnd: El elemento no cambió de posición o el movimiento fue revertido por onMove. No llamar a API.");
+                         return;
+                    }
+
+                    const item = evt.item;
+                    const toColumn = evt.to.closest('.kanban-column');
+
+                    if (!toColumn || !toColumn.dataset || !toColumn.dataset.estado) {
+                         console.error("onEnd: No se pudo determinar el estado de destino. Abortando API call y revirtiendo.");
+                         // Intentar revertir visualmente
+                         evt.from.insertBefore(item, evt.from.children[evt.oldDraggableIndex]);
+                         return;
+                    }
+
+                    const opId = item.dataset.opId;
+                    const nuevoEstado = toColumn.dataset.estado;
+
+                    console.log(`onEnd: Llamando a API para mover OP #${opId} a estado: ${nuevoEstado}`);
+                    const success = await moverOp(opId, nuevoEstado);
+
+                    if (!success) {
+                        console.error("onEnd: API falló. Revertiendo movimiento visual.");
+                        // Intentar revertir visualmente
+                        evt.from.insertBefore(item, evt.from.children[evt.oldDraggableIndex]);
+                    } else {
+                        console.log(`onEnd: API exitosa para mover OP #${opId}.`);
+                        // Opcional: Recargar o actualizar contadores si es necesario
+                        // window.location.reload(); // Descomentar si la recarga es la forma más fácil
+                    }
+                } // Fin onEnd
+            }); // Fin new Sortable
+        } // Fin if cardContainer
+    }); // Fin columns.forEach
 
     // =======================================================
     // --- JAVASCRIPT DE LA NUEVA BANDEJA DE PLANIFICACIÓN ---
@@ -92,7 +169,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (tablaPlanificacion) {
         tablaPlanificacion.addEventListener('click', async function(e) {
             const botonCalcular = e.target.closest('.btn-calcular');
-            const botonPreAsignar = e.target.closest('.btn-pre-asignar'); // Nombre actualizado
+            const botonPreAsignar = e.target.closest('.btn-pre-asignar');
             const botonConfirmar = e.target.closest('.btn-confirmar-inicio');
 
             // --- Lógica para Calcular Sugerencia ---
@@ -131,50 +208,39 @@ document.addEventListener('DOMContentLoaded', function () {
                         celdaSugerencia.innerHTML = htmlSugerencia;
                         botonCalcular.style.display = 'none';
 
-                        // --- AÑADIR CONTROLES DE ASIGNACIÓN (Selects + Botón Pre-Asignar) ---
+                        // Añadir controles (Selects + Botón Pre-Asignar)
                         let lineaSelectHTML = `<select class="form-select form-select-sm mb-1 select-linea" title="Seleccionar Línea">`;
                         lineaSelectHTML += `<option value="1" ${data.linea_sugerida === 1 ? 'selected' : ''}>Línea 1</option>`;
                         lineaSelectHTML += `<option value="2" ${data.linea_sugerida === 2 ? 'selected' : ''}>Línea 2</option>`;
                         lineaSelectHTML += `</select>`;
                         let supervisorSelectHTML = `<select class="form-select form-select-sm mb-1 select-supervisor" title="Asignar Supervisor">`;
                         supervisorSelectHTML += `<option value="">Supervisor (Opcional)</option>`;
-                        // Accedemos a la variable global inyectada desde el HTML
                         listaSupervisores.forEach(sup => { supervisorSelectHTML += `<option value="${sup.id}">${sup.nombre} ${sup.apellido || ''}</option>`; });
                         supervisorSelectHTML += `</select>`;
                         let operarioSelectHTML = `<select class="form-select form-select-sm mb-1 select-operario" title="Asignar Operario">`;
                         operarioSelectHTML += `<option value="">Operario (Opcional)</option>`;
-                        // Accedemos a la variable global inyectada desde el HTML
                         listaOperarios.forEach(op => { operarioSelectHTML += `<option value="${op.id}">${op.nombre} ${op.apellido || ''}</option>`; });
                         operarioSelectHTML += `</select>`;
-                        // Ahora el botón es btn-pre-asignar
                         const botonPreAsignarHTML = `<button class="btn btn-info btn-sm btn-pre-asignar w-100" data-op-id="${opId}">Guardar Asignación</button>`;
                         celdaAcciones.innerHTML = lineaSelectHTML + supervisorSelectHTML + operarioSelectHTML + botonPreAsignarHTML;
 
-                    } else {
-                        celdaSugerencia.innerHTML = `Error: ${result.error}`; celdaSugerencia.className = 'resultado-sugerencia sugerencia-calculada alert alert-danger'; botonCalcular.disabled = false;
-                    }
-                } catch (error) {
-                     celdaSugerencia.innerHTML = 'Error de conexión.'; celdaSugerencia.className = 'resultado-sugerencia sugerencia-calculada alert alert-danger'; botonCalcular.disabled = false;
-                }
+                    } else { /* Manejo error cálculo */ celdaSugerencia.innerHTML = `Error: ${result.error}`; celdaSugerencia.className = 'resultado-sugerencia sugerencia-calculada alert alert-danger'; botonCalcular.disabled = false; }
+                } catch (error) { /* Manejo error conexión */ console.error("Error al calcular sugerencia:", error); celdaSugerencia.innerHTML = 'Error de conexión.'; celdaSugerencia.className = 'resultado-sugerencia sugerencia-calculada alert alert-danger'; botonCalcular.disabled = false; }
             }
 
-            // --- Lógica para el botón "Guardar Asignación" ---
+            // --- Guardar Asignación ---
             else if (botonPreAsignar) {
                 const fila = botonPreAsignar.closest('tr'); const opId = botonPreAsignar.dataset.opId;
-                const lineaSelect = fila.querySelector('.select-linea');
-                const supervisorSelect = fila.querySelector('.select-supervisor');
-                const operarioSelect = fila.querySelector('.select-operario');
-                const celdaAcciones = fila.querySelector('.celda-acciones');
+                const lineaSelect = fila.querySelector('.select-linea'); const supervisorSelect = fila.querySelector('.select-supervisor');
+                const operarioSelect = fila.querySelector('.select-operario'); const celdaAcciones = fila.querySelector('.celda-acciones');
                 const celdaSugerencia = fila.querySelector('.resultado-sugerencia');
-                
                 const fechaSugeridaElement = celdaSugerencia.querySelector('strong > span');
                 const fechaSugeridaISO = fechaSugeridaElement ? fechaSugeridaElement.textContent : new Date().toISOString().split('T')[0];
 
                 botonPreAsignar.disabled = true; botonPreAsignar.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Guardando...`;
 
                 try {
-                    const response = await fetch(`/ordenes/${opId}/pre-asignar`, { // URL corregida
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    const response = await fetch(`/ordenes/${opId}/pre-asignar`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             linea_asignada: parseInt(lineaSelect.value),
                             supervisor_responsable_id: supervisorSelect.value ? parseInt(supervisorSelect.value) : null,
@@ -183,48 +249,31 @@ document.addEventListener('DOMContentLoaded', function () {
                     });
                     const result = await response.json();
                     if (result.success) {
-                        // Reemplazar controles con input de fecha y botón Confirmar
                         let fechaInputHTML = `<label for="fecha-inicio-${opId}" class="form-label form-label-sm visually-hidden">Inicio Confirmado:</label>`;
                         fechaInputHTML += `<input type="date" id="fecha-inicio-${opId}" class="form-control form-control-sm mb-1 input-fecha-inicio" value="${fechaSugeridaISO}" title="Confirmar Fecha de Inicio">`;
                         const botonConfirmarHTML = `<button class="btn btn-success btn-sm btn-confirmar-inicio w-100" data-op-id="${opId}">Confirmar Inicio y Aprobar</button>`;
                         celdaAcciones.innerHTML = fechaInputHTML + botonConfirmarHTML;
-                    } else {
-                        alert(`Error al guardar asignación: ${result.error}`); botonPreAsignar.disabled = false; botonPreAsignar.textContent = 'Guardar Asignación';
-                    }
-                } catch (error) {
-                    alert('Error de conexión al guardar asignación.'); botonPreAsignar.disabled = false; botonPreAsignar.textContent = 'Guardar Asignación';
-                }
+                    } else { alert(`Error al guardar asignación: ${result.error}`); botonPreAsignar.disabled = false; botonPreAsignar.textContent = 'Guardar Asignación'; }
+                } catch (error) { console.error("Error al pre-asignar:", error); alert('Error de conexión.'); botonPreAsignar.disabled = false; botonPreAsignar.textContent = 'Guardar Asignación'; }
             }
 
-            // --- Lógica para el botón "Confirmar Inicio y Aprobar" ---
+            // --- Confirmar Inicio y Aprobar ---
             else if (botonConfirmar) {
                  const fila = botonConfirmar.closest('tr'); const opId = botonConfirmar.dataset.opId;
-                 const fechaInput = fila.querySelector('.input-fecha-inicio');
-                 const celdaAcciones = fila.querySelector('.celda-acciones');
-
+                 const fechaInput = fila.querySelector('.input-fecha-inicio'); const celdaAcciones = fila.querySelector('.celda-acciones');
                  const fechaSeleccionada = fechaInput.value;
                  if (!fechaSeleccionada) { alert("Seleccione la fecha de inicio."); return; }
-
                  botonConfirmar.disabled = true; botonConfirmar.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Confirmando...`;
-
                  try {
-                     const response = await fetch(`/ordenes/${opId}/confirmar-inicio`, { // URL corregida
-                         method: 'POST', headers: { 'Content-Type': 'application/json' },
+                     const response = await fetch(`/ordenes/${opId}/confirmar-inicio`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
                          body: JSON.stringify({ fecha_inicio_planificada: fechaSeleccionada })
                      });
                      const result = await response.json();
-                     if (result.success) {
-                         alert(result.message || "OP confirmada y aprobada.");
-                         fila.remove(); window.location.reload();
-                     } else {
-                         alert(`Error al confirmar: ${result.error}`); botonConfirmar.disabled = false; botonConfirmar.textContent = 'Confirmar y Aprobar';
-                     }
-                 } catch (error) {
-                      alert('Error de conexión al confirmar.'); botonConfirmar.disabled = false; botonConfirmar.textContent = 'Confirmar y Aprobar';
-                 }
+                     if (result.success) { alert(result.message || "OP confirmada."); fila.remove(); window.location.reload(); }
+                     else { alert(`Error al confirmar: ${result.error}`); botonConfirmar.disabled = false; botonConfirmar.textContent = 'Confirmar y Aprobar'; }
+                 } catch (error) { console.error("Error al confirmar inicio:", error); alert('Error de conexión.'); botonConfirmar.disabled = false; botonConfirmar.textContent = 'Confirmar y Aprobar'; }
             }
-        });
-    }
-});
+        }); // Fin addEventListener
+    } // Fin if tablaPlanificacion
 
-</script>
+}); // Fin del DOMContentLoaded

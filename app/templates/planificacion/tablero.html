@@ -27,7 +27,9 @@
          #accordionSemanal .accordion-header {
              margin-top: 0;
          }
-
+         /* Estilos para Kanban (asegurar visibilidad data-attribute) */
+        .card-assignment-details { font-size: 0.8rem; }
+        .card-assignment-details span { display: inline-block; margin-right: 0.5rem; }
     </style>
 {% endblock %}
 
@@ -179,11 +181,13 @@
             <span class="badge bg-secondary rounded-pill">{{ ordenes_por_estado.get(estado_key, [])|length }}</span>
         </div>
         <div class="kanban-cards">
-            {% if estado_key == 'LISTA PARA PRODUCIR' %}
-            <div class="d-grid"><button id="btn-consolidar" class="btn btn-success mb-2" disabled><i class="bi bi-plus-slash-minus"></i> Consolidar</button></div>
+            {% if estado_key == 'LISTA PARA PRODUCIR' %} <div class="d-grid"><button id="btn-consolidar" class="btn btn-success mb-2" disabled><i class="bi bi-plus-slash-minus"></i> Consolidar</button></div>
             {% endif %}
             {% for orden in ordenes_por_estado.get(estado_key, []) %}
-            <div class="card insumo-card kanban-card" data-op-id="{{ orden.id }}" data-producto-id="{{ orden.producto_id }}">
+            <div class="card insumo-card kanban-card"
+                 data-op-id="{{ orden.id }}"
+                 data-producto-id="{{ orden.producto_id }}"
+                 data-linea-asignada="{{ orden.linea_asignada or '' }}">
                 {% if estado_key == 'LISTA PARA PRODUCIR' %}
                 <div class="form-check card-checkbox"><input class="form-check-input op-checkbox" type="checkbox" value="{{ orden.id }}"></div>
                 {% endif %}
@@ -193,6 +197,9 @@
                         <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
                         <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b></span>
                         <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
+                        {% if orden.fecha_inicio_planificada %}
+                        <br><span class="text-primary"><i class="bi bi-play-circle-fill"></i> Inicia: {{ orden.fecha_inicio_planificada }}</span>
+                        {% endif %}
                     </div>
                     {% if orden.supervisor_nombre or orden.linea_asignada or orden.operario_nombre %}
                     <hr class="my-1">
