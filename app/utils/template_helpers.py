@@ -22,13 +22,18 @@ def _inject_permission_map():
 
 def _formato_moneda_filter(value):
     """
-    Filtro de Jinja2 para formatear un número como moneda (ej: 1,234.50).
+    Filtro de Jinja2 para formatear un número como moneda (ej: 1.234,50).
     """
     if value is None:
-        return "0.00"
+        return "0,00"  # Aseguramos formato ARS/Latam para cero
     try:
         num = float(value)
-        return f"{num:,.2f}"
+        formatted_us = f"{num:,.2f}"
+        formatted_ars = formatted_us.replace(",", "X") 
+        formatted_ars = formatted_ars.replace(".", ",")
+        formatted_ars = formatted_ars.replace("X", ".")
+        return formatted_ars
+            
     except (ValueError, TypeError):
         return value
 

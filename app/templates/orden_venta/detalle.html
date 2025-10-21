@@ -201,11 +201,17 @@
                                 {% endif %}
                             </td>
                         </tr>
+                        <tr>
+
                         {% else %}
                         <tr>
                             <td colspan="4" class="text-center text-muted py-4">No hay productos.</td>
                         </tr>
                         {% endfor %}
+                                                <td class="text-end fw-bold">Total del pedido:</td>
+                            <td class="text-end fw-bold">${{( pedido.precio_orden | formato_moneda ) if pedido.precio_orden else 0}}</td>
+                        </tr>
+
                     </tbody>
                 </table>
             </div>
@@ -266,11 +272,12 @@
                     <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}" class="btn btn-outline-primary"><i
                             class="bi bi-pencil me-1"></i>Editar Pedido</a>
                     {% endif %}
-                    
-                    <button type="button" id="btn-imprimir-factura" class="btn btn-primary" >
-                        <i class="bi bi-printer me-1"></i> {{ 'Imprimir Factura Final' if pedido.estado in ['LISTO_PARA_ENTREGA', 'LISTO_PARA_ARMAR', 'COMPLETADO'] else 'Imprimir Factura Proforma'  }}
+
+                    <button type="button" id="btn-imprimir-factura" class="btn btn-primary">
+                        <i class="bi bi-printer me-1"></i> {{ 'Imprimir Factura Final' if pedido.estado in
+                        ['LISTO_PARA_ENTREGA', 'LISTO_PARA_ARMAR', 'COMPLETADO'] else 'Imprimir Factura Proforma' }}
                     </button>
-                    
+
 
                     {% if pedido.estado not in ['COMPLETADO', 'CANCELADO'] %}
                     <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
