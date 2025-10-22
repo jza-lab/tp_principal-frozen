@@ -1,10 +1,11 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, session
+from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify
 from app.controllers.inventario_controller import InventarioController
 from app.utils.decorators import permission_required
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.proveedor_controller import ProveedorController
 from marshmallow import ValidationError
 from datetime import date
+
 
 inventario_view_bp = Blueprint('inventario_view', __name__, url_prefix='/inventario')
 controller = InventarioController()
@@ -25,8 +26,23 @@ def listar_lotes():
         lotes = response.get('data', [])
     else:
         flash(response.get('error', 'Error al cargar los lotes del inventario.'), 'error')
+    
+    stock_resp, _ = controller.obtener_stock_consolidado()
+    insumos_stock = []
+    if stock_resp.get('success'):
+
+        insumos_data = stock_resp.get('data', [])
+        insumos_stock = [
+            i for i in insumos_data
+            if float(i.get('stock_actual') or 0.0) > 0.0 
+        ]
+
+        insumos_stock.sort(key=lambda x: (
+            1 if x.get('estado_stock') == 'OK' else 0, 
+            float(x.get('stock_actual') or 0.0) * -1
+        ))
         
-    return render_template('inventario/listar.html', lotes=lotes)
+    return render_template('inventario/listar.html', lotes=lotes, insumos_stock=insumos_stock)
 
 @inventario_view_bp.route('/lote/nuevo', methods=['GET', 'POST'])
 @permission_required(accion='registrar_ingresos_stock')
