@@ -74,6 +74,15 @@ def detalle(id):
 @orden_compra_bp.route("/<int:id>/aprobar", methods=["POST"])
 @permission_required(accion='aprobar_ordenes_compra')
 def aprobar(id):
+    # DEBUG: Imprimir TODA la información de la request
+    print("=" * 50)
+    print("DEBUG APROBAR ORDEN")
+    print(f"URL completa: {request.url}")
+    print(f"request.args: {dict(request.args)}")
+    print(f"request.form: {dict(request.form)}")
+    print(f"Estado capturado: '{request.args.get('estado', '')}'")
+    print("=" * 50)
+    
     usuario_id = session.get("usuario_id")
     resultado = controller.aprobar_orden(id, usuario_id)
     if resultado.get("success"):
@@ -82,6 +91,15 @@ def aprobar(id):
         flash(
             f"Error al aprobar: {resultado.get('error', 'Error desconocido')}", "error"
         )
+    
+    # Obtener el estado desde los query params de la URL
+    estado_actual = request.args.get('estado', '')
+    
+    print(f"DEBUG: Estado a preservar: '{estado_actual}'")
+    print(f"DEBUG: Redirigiendo a: {url_for('orden_compra.listar', estado=estado_actual) if estado_actual else url_for('orden_compra.listar')}")
+    
+    if estado_actual:
+        return redirect(url_for("orden_compra.listar", estado=estado_actual))
     return redirect(url_for("orden_compra.listar"))
 
 
@@ -128,6 +146,11 @@ def rechazar(id):
         flash(
             f"Error al rechazar: {resultado.get('error', 'Error desconocido')}", "error"
         )
+    
+    # Obtener el estado desde los query params de la URL
+    estado_actual = request.args.get('estado', '')
+    if estado_actual:
+        return redirect(url_for("orden_compra.listar", estado=estado_actual))
     return redirect(url_for("orden_compra.listar"))
 
 
@@ -142,7 +165,13 @@ def marcar_en_transito(id):
             f"Error al actualizar el estado: {resultado.get('error', 'Error desconocido')}",
             "error",
         )
+    
+    # Obtener el estado desde los query params de la URL
+    estado_actual = request.args.get('estado', '')
+    if estado_actual:
+        return redirect(url_for("orden_compra.listar", estado=estado_actual))
     return redirect(url_for("orden_compra.listar"))
+
 
 @orden_compra_bp.route("/recepcion/<int:orden_id>", methods=["POST"])
 @permission_required(accion='recepcionar_compras')
