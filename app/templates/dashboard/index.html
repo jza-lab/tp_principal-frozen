@@ -16,9 +16,9 @@
 <div class="alert-carousel-wrapper">
     <div class="alert-carousel-container mb-4" id="alertCarouselContainer">
         
-{% set can_ver_produccion = user_permissions.is_gerente or ('PRODUCCION' in user_permissions and 'ver_ordenes_produccion' in user_permissions['PRODUCCION']) %}
-{% set can_ver_almacen = user_permissions.is_gerente or ('ALMACEN' in user_permissions and 'ver_stock_actual' in user_permissions['ALMACEN']) %}
-{% set can_ver_admin = user_permissions.is_gerente or ('ADMINISTRACION' in user_permissions and ('ver_info_empleados' in user_permissions['ADMINISTRACION'] or 'gestionar_turnos' in user_permissions['ADMINISTRACION'])) %}
+{% set can_ver_produccion = user_permissions.is_dev or user_permissions.is_gerente or ('PRODUCCION' in user_permissions and 'ver_ordenes_produccion' in user_permissions['PRODUCCION']) %}
+{% set can_ver_almacen = user_permissions.is_dev or user_permissions.is_gerente or ('ALMACEN' in user_permissions and 'ver_stock_actual' in user_permissions['ALMACEN']) %}
+{% set can_ver_admin = user_permissions.is_dev or user_permissions.is_gerente or ('ADMINISTRACION' in user_permissions and ('ver_info_empleados' in user_permissions['ADMINISTRACION'] or 'gestionar_turnos' in user_permissions['ADMINISTRACION'])) %}
     
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm
