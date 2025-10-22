@@ -13,24 +13,6 @@
 {% set EMISOR_CAE = pedido.emisor.cae or '00000000000000' %}
 {% set EMISOR_VTO_CAE = pedido.emisor.vencimiento_cae or '2025-10-31' %}
 
-{% macro format_ars(val) %}
-    {% set string_val = "%.2f"|format(val | float) %}
-    {% set parts = string_val.split('.') %}
-    {% set integer_part = parts[0] %}
-    {% set decimal_part = parts[1] %}
-    {% set reversed_int = integer_part | reverse %}
-    {% set sep_int = namespace(result="") %}
-    
-    {% for char in reversed_int %}
-        {% set sep_int.result = sep_int.result ~ char %}
-        {% if loop.index is divisibleby 3 and not loop.last %}
-            {% set sep_int.result = sep_int.result ~ '.' %}
-        {% endif %}
-    {% endfor %}
-    
-    {% set final_integer = sep_int.result | reverse %}
-    {{ final_integer ~ ',' ~ decimal_part }}
-{% endmacro %}
 
 <div style="font-family: Arial, sans-serif; font-size: 11pt; width: 100%; margin: 0 auto; padding: 5px;">
 
@@ -196,9 +178,9 @@
                 <td style="padding: 5px 3px;">{{ producto_nombre or 'Producto sin nombre' }}</td>
                 <td style="padding: 5px 3px; text-align: center;">{{ "%.2f"|format(item_cantidad) | replace('.', ',') }}</td>
                 <td style="padding: 5px 3px; text-align: center;">{{ unidad_medida }}</td>
-                <td style="padding: 5px 3px; text-align: right;">$ {{ format_ars(precio_unitario_neto) }}</td>
+                <td style="padding: 5px 3px; text-align: right;">$ {{ precio_unitario_neto | formato_moneda }} </td>
                 <td style="padding: 5px 3px; text-align: center;">{{ "%.0f"|format(porcentaje_iva * 100) }}%</td>
-                <td style="padding: 5px 3px; text-align: right;">$ {{ format_ars(subtotal_neto) }}</td>
+                <td style="padding: 5px 3px; text-align: right;">$ {{  subtotal_neto | formato_moneda  }}</td>
             </tr>
             {% endfor %}
 
@@ -239,19 +221,19 @@
                 <table style="width: 100%; border-collapse: collapse;">
                     <tr>
                         <td style="padding: 2px 5px; text-align: right;">Subtotal Neto Gravado:</td>
-                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ format_ars(ns.base_imponible) }}</td>
+                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ ns.base_imponible | formato_moneda }} </td>
                     </tr>
                     <tr>
                         <td style="padding: 2px 5px; text-align: right;">Total IVA (21%):</td>
-                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ format_ars(ns.total_iva) }}</td>
+                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ ns.total_iva | formato_moneda }} </td>
                     </tr>
                     <tr>
                         <td style="padding: 2px 5px; text-align: right;">Dto/Recargo:</td>
-                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ format_ars(0) }}</td>
+                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ 0 | formato_moneda }}</td>
                     </tr>
                     <tr style="border-top: 1px solid #000; background-color: #f0f0f0;">
                         <td style="padding: 5px; text-align: right; font-weight: bold;">Total Final:</td>
-                        <td style="padding: 5px; text-align: right; font-weight: bold;">$ {{ format_ars(ns.total_final) }}</td>
+                        <td style="padding: 5px; text-align: right; font-weight: bold;">$ {{ ns.total_final | formato_moneda }} </td>
                     </tr>
                 </table>
             </td>

@@ -49,20 +49,24 @@ window.calculateOrderTotals = function () {
         const quantityInput = row.querySelector('.item-quantity');
         const subtotalItemInput = row.querySelector('.subtotal-item');
         const priceDisplay = row.querySelector('.price-display');
-        const unitDisplay = row.querySelector('.unidad-display'); // NUEVO: Elemento para la unidad
+        const unitDisplay = row.querySelector('.unidad-display');
 
         if (productSelect && quantityInput) {
             const productId = productSelect.value;
             const quantity = parseFloat(quantityInput.value) || 0;
-
-            let price = window.PRODUCT_PRICES[productId];
-            let unit = window.PRODUCT_UNITS[productId]; // Obtener unidad
-
-            if (price === undefined) {
-                const selectedOption = productSelect.options[productSelect.selectedIndex];
-                price = parseFloat(selectedOption?.getAttribute('data-precio')) || 0;
-                unit = selectedOption?.getAttribute('data-unidad') || '--'; // Obtener unidad si no está en el mapa
+            
+            // --- INICIO DE LA CORRECCIÓN CLAVE ---
+            // 1. Obtener precio y unidad de los data-attributes de la opción seleccionada.
+            const selectedOption = productSelect.options[productSelect.selectedIndex];
+            let price = 0;
+            let unit = '--';
+            
+            if (selectedOption) {
+                // Leer el precio del data-attribute o del mapa global (si está precargado)
+                price = parseFloat(selectedOption.getAttribute('data-precio')) || window.PRODUCT_PRICES[productId] || 0;
+                unit = selectedOption.getAttribute('data-unidad') || window.PRODUCT_UNITS[productId] || '--';
             }
+            // --- FIN DE LA CORRECCIÓN CLAVE ---
 
             const itemSubtotal = price * quantity;
 
@@ -73,11 +77,13 @@ window.calculateOrderTotals = function () {
 
             // APLICAR FORMATO AL PRECIO UNITARIO
             if (priceDisplay) {
+                // USAMOS formatToARS para el formato de moneda.
                 priceDisplay.value = formatToARS(price);
             }
             
             // APLICAR FORMATO AL SUBTOTAL DEL ÍTEM
             if (subtotalItemInput) {
+                // USAMOS formatToARS para el formato de moneda.
                 subtotalItemInput.value = formatToARS(itemSubtotal);
             }
 

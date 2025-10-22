@@ -14,6 +14,22 @@ class ProductoSchema(Schema):
     created_at = fields.Str(dump_only=True)
     updated_at = fields.Str(dump_only=True)
     unidad_medida = fields.Str(required=True)
+    unidades_por_paquete = fields.Int(
+        required=False,
+        allow_none=True,
+        load_default=1
+    )
+    peso_por_paquete_valor = fields.Float(
+        required=False,
+        allow_none=True,
+        load_default=0
+    )
+
+    peso_por_paquete_unidad = fields.Str(
+        required=False,
+        allow_none=True,
+        load_default=''
+    )
     
     precio_unitario = fields.Float(
         required=True,

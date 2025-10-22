@@ -75,11 +75,11 @@
                             </div>
                             <div class="col-6">
                                 <label class="small text-muted">Precio Unitario</label>
-                                <div class="fw-bold">$ {{ "%.2f"|format(lote.precio_unitario|float) if lote.precio_unitario else 'N/A' }}</div>
+                                <div class="fw-bold">$ {{ lote.precio_unitario | formato_moneda if lote.precio_unitario else 'N/A' }}</div>
                             </div>
                             <div class="col-6">
                                 <label class="small text-muted">Costo Total Ingreso</label>
-                                <div class="fw-bold">$ {{ "%.2f"|format(lote.costo_total|float) if lote.costo_total else 'N/A' }}</div>
+                                <div class="fw-bold">$ {{ lote.costo_total | formato_moneda if lote.costo_total else 'N/A' }}</div>
                             </div>
                         </div>
                     </div>

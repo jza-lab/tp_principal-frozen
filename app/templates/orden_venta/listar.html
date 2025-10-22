@@ -10,7 +10,8 @@
     </div>
     <div class="btn-toolbar">
         {% set can_create_sale = has_permission('crear_ordenes_venta')|trim == 'True' %}
-        <a href="{{ url_for('orden_venta.nueva') if can_create_sale else '#' }}" class="btn btn-primary {% if not can_create_sale %}disabled{% endif %}">
+        <a href="{{ url_for('orden_venta.nueva') if can_create_sale else '#' }}"
+            class="btn btn-primary {% if not can_create_sale %}disabled{% endif %}">
             <i class="bi bi-plus-circle me-1"></i>Crear Nuevo Pedido
         </a>
     </div>
@@ -25,13 +26,20 @@
                     <label for="estado" class="form-label">Filtrar por Estado</label>
                     <select name="estado" class="form-select" onchange="this.form.submit()">
                         <option value="">Todos los pedidos</option>
-                        <option value="PENDIENTE" {% if request.args.get('estado') == 'PENDIENTE' %}selected{% endif %}>Pendientes</option>
-                        <option value="PLANIFICACION" {% if request.args.get('estado') == 'PLANIFICACION' %}selected{% endif %}>Planificación</option>
-                        <option value="EN_PROCESO" {% if request.args.get('estado') == 'EN_PROCESO' %}selected{% endif %}>En Proceso</option>
-                        <option value="LISTO_PARA_ARMAR" {% if request.args.get('estado') == 'LISTO_PARA_ARMAR' %}selected{% endif %}>Listo para Armar</option>
-                        <option value="LISTO_PARA_ENTREGA" {% if request.args.get('estado') == 'LISTO_PARA_ENTREGA' %}selected{% endif %}>Listo para Entrega</option>
-                        <option value="COMPLETADO" {% if request.args.get('estado') == 'COMPLETADO' %}selected{% endif %}>Completados</option>
-                        <option value="CANCELADO" {% if request.args.get('estado') == 'CANCELADO' %}selected{% endif %}>Cancelados</option>
+                        <option value="PENDIENTE" {% if request.args.get('estado')=='PENDIENTE' %}selected{% endif %}>
+                            Pendientes</option>
+                        <option value="PLANIFICACION" {% if request.args.get('estado')=='PLANIFICACION' %}selected{%
+                            endif %}>Planificación</option>
+                        <option value="EN_PROCESO" {% if request.args.get('estado')=='EN_PROCESO' %}selected{% endif %}>
+                            En Proceso</option>
+                        <option value="LISTO_PARA_ARMAR" {% if request.args.get('estado')=='LISTO_PARA_ARMAR'
+                            %}selected{% endif %}>Listo para Armar</option>
+                        <option value="LISTO_PARA_ENTREGA" {% if request.args.get('estado')=='LISTO_PARA_ENTREGA'
+                            %}selected{% endif %}>Listo para Entrega</option>
+                        <option value="COMPLETADO" {% if request.args.get('estado')=='COMPLETADO' %}selected{% endif %}>
+                            Completados</option>
+                        <option value="CANCELADO" {% if request.args.get('estado')=='CANCELADO' %}selected{% endif %}>
+                            Cancelados</option>
                     </select>
                 </div>
                 <div class="col-md-8">
@@ -48,20 +56,22 @@
 <div class="row">
     {% for pedido in pedidos %}
     <div class="col-md-4 mb-4">
-        <div class="card h-100 insumo-card {% if pedido.estado in ['CANCELADO', 'COMPLETADO'] %}insumo-inactivo{% endif %}">
+        <div
+            class="card h-100 insumo-card {% if pedido.estado in ['CANCELADO', 'COMPLETADO'] %}insumo-inactivo{% endif %}">
             <div class="card-body d-flex flex-column">
                 <div class="d-flex justify-content-between">
                     <h5 class="card-title">{{ pedido.nombre_cliente }}</h5>
                     {% set estado_config = {
-                        'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
-                        'PLANIFICACION': {'class': 'bg-warning-soft text-warning', 'icon': 'calendar-check'},
-                        'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                        'LISTO_PARA_ARMAR': {'class': 'bg-success-soft text-succes', 'icon': 'tools'},
-                        'LISTO_PARA_ENTREGA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
-                        'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
-                        'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
+                    'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
+                    'PLANIFICACION': {'class': 'bg-warning-soft text-warning', 'icon': 'calendar-check'},
+                    'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
+                    'LISTO_PARA_ARMAR': {'class': 'bg-success-soft text-succes', 'icon': 'tools'},
+                    'LISTO_PARA_ENTREGA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
+                    'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
+                    'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
-                    {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                    {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon':
+                    'question-circle'}) %}
                     <span class="badge {{ config.class }}">
                         <i class="bi bi-{{ config.icon }} me-1"></i>{{ pedido.estado.replace('_', ' ') }}
                     </span>
@@ -69,38 +79,45 @@
 
                 <div class="card-secondary-details mb-3">
                     <span><i class="bi bi-upc-scan"></i> <code>PED-{{ pedido.id }}</code></span>
-                    <span><i class="bi bi-currency-dollar"></i> <b>{{ "%.2f"|format(pedido.precio_orden|float) }}</b></span>
+                    <span >
+                        <i class="bi bi-currency-dollar"></i> <b>{{ pedido.precio_orden | formato_moneda }}</b>
+                    </span>
                     <span><i class="bi bi-calendar-event"></i> {{ pedido.fecha_solicitud }}</span>
                 </div>
 
                 <div class="mt-auto">
                     <hr class="card-divider">
-                     <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             <span class="stock-label">Items</span>
                             <span class="stock-value"><b>{{ pedido['items']|length }}</b> productos</span>
                         </div>
                     </div>
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
-                        <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}" class="btn btn-sm btn-outline-primary" title="Ver Detalle"><i class="bi bi-eye"></i></a>
-                        
+                        <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}"
+                            class="btn btn-sm btn-outline-primary" title="Ver Detalle"><i class="bi bi-eye"></i></a>
+
                         {% if pedido.estado in ['PENDIENTE', 'PLANIFICACION'] %}
-                            {% set can_edit_sale = has_permission('modificar_ordenes_venta')|trim == 'True' %}
-                            <a href="{{ url_for('orden_venta.editar', id=pedido.id) if can_edit_sale else '#' }}" class="btn btn-sm btn-outline-primary {% if not can_edit_sale %}disabled{% endif %}" title="Editar Pedido"><i class="bi bi-pencil"></i></a>
+                        {% set can_edit_sale = has_permission('modificar_ordenes_venta')|trim == 'True' %}
+                        <a href="{{ url_for('orden_venta.editar', id=pedido.id) if can_edit_sale else '#' }}"
+                            class="btn btn-sm btn-outline-primary {% if not can_edit_sale %}disabled{% endif %}"
+                            title="Editar Pedido"><i class="bi bi-pencil"></i></a>
                         {% endif %}
-                        
+
                         {%if pedido.estado == 'LISTO_PARA_ARMAR' %}
-                        <form method="POST" action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}" class="confirm-form d-grid"
-                            data-title="Preparar para Entrega" data-message="Esta acción moverá el pedido a 'LISTO PARA ENTREGAR' y descontará el stock de los productos del inventario. ¿Está seguro?" data-button-type="info">
-                            <button type="submit" class="btn btn-info"><i class="bi bi-box-seam me-1"></i>Preparar Entrega</button>
+                        <form method="POST" action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}"
+                            class="confirm-form d-grid" data-title="Preparar para Entrega"
+                            data-message="Esta acción moverá el pedido a 'LISTO PARA ENTREGAR' y descontará el stock de los productos del inventario. ¿Está seguro?"
+                            data-button-type="info">
+                            <button type="submit" class="btn btn-info"><i class="bi bi-box-seam me-1"></i>Preparar
+                                Entrega</button>
                         </form>
-                        {% endif %} 
+                        {% endif %}
                         {% if pedido.estado == 'LISTO_PARA_ENTREGA' %}
-                        <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}" 
-                              class="confirm-form d-inline" 
-                              data-title="Confirmar Entrega"
-                              data-message="¿Está seguro de marcar este pedido como 'COMPLETADO'? Esta es la acción final."
-                              data-button-type="success">
+                        <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}"
+                            class="confirm-form d-inline" data-title="Confirmar Entrega"
+                            data-message="¿Está seguro de marcar este pedido como 'COMPLETADO'? Esta es la acción final."
+                            data-button-type="success">
                             <button type="submit" class="btn btn-sm btn-success" title="Marcar como Completado">
                                 <i class="bi bi-check-lg me-1"></i>Completar
                             </button>
@@ -119,11 +136,35 @@
                 <h4 class="card-title">No se encontraron pedidos de venta</h4>
                 <p class="text-muted mb-0">
                     No hay pedidos que coincidan con los filtros seleccionados.
-                    Intente cambiar el filtro de estado o <a href="{{ url_for('orden_venta.nueva') }}">cree un nuevo pedido</a>.
+                    Intente cambiar el filtro de estado o <a href="{{ url_for('orden_venta.nueva') }}">cree un nuevo
+                        pedido</a>.
                 </p>
             </div>
         </div>
     </div>
     {% endfor %}
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const formateador = new Intl.NumberFormat('es-AR', {
+            style: 'currency',
+            currency: 'ARS',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
+
+        const precioElementos = document.querySelectorAll('.price-value');
+        
+        precioElementos.forEach(span => {
+            const precioOriginal = parseFloat(span.getAttribute('data-price'));
+            
+            if (!isNaN(precioOriginal)) {
+                const precioConFormato = formateador.format(precioOriginal);
+                span.querySelector('b').innerHTML = precioConFormato.replace('ARS', '').trim();
+
+            }
+        });
+    });
+</script>
 {% endblock %}

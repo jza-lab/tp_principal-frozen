@@ -57,7 +57,8 @@
                                 <div class="form-floating" style="flex-grow: 4;">
                                     <input type="text" class="form-control text-center" id="cuil_parte2"
                                         name="cuil_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX"
-                                        value="{{ cliente.cuit[2:10] if cliente and cliente.cuit else '' }}" required {% if cliente and pedido %} readonly {% endif %}>
+                                        value="{{ cliente.cuit[2:10] if cliente and cliente.cuit else '' }}" required {%
+                                        if cliente and pedido %} readonly {% endif %}>
                                     <label for="cuil_parte2">
                                         <i class="bi bi-person-badge me-1"></i>CUIL
                                     </label>
@@ -67,7 +68,8 @@
 
                                 <input type="text" class="form-control text-center" id="cuil_parte3" name="cuil_parte3"
                                     value="{{ cliente.cuit[10:] if cliente and cliente.cuit else ''}}" maxlength="1"
-                                    pattern="\d{1}" placeholder="X" required {% if cliente and pedido %} readonly{% endif %}
+                                    pattern="\d{1}" placeholder="X" required {% if cliente and pedido %} readonly{%
+                                    endif %}
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
                                     aria-label="Dígito verificador">
                             </div>
@@ -110,7 +112,9 @@
                                 <div class="col-md-8">
                                     <div class="form-floating">
                                         <input type="text" class="form-control" id="calle_facturacion"
-                                            name="calle_facturacion" placeholder="Calle" value="{{ cliente.direccion.calle if cliente and cliente.direccion else '' }}" readonly>
+                                            name="calle_facturacion" placeholder="Calle"
+                                            value="{{ cliente.direccion.calle if cliente and cliente.direccion else '' }}"
+                                            readonly>
                                         <label for="calle_facturacion">
                                             <i class="bi bi-signpost me-1"></i>Calle
                                         </label>
@@ -120,7 +124,8 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="number" class="form-control" id="altura_facturacion" value="{{ cliente.direccion.altura if cliente and cliente.direccion else '' }}"
+                                        <input type="number" class="form-control" id="altura_facturacion"
+                                            value="{{ cliente.direccion.altura if cliente and cliente.direccion else '' }}"
                                             name="altura_facturacion" placeholder="Altura" value="" readonly>
                                         <label for="altura_facturacion">
                                             <i class="bi bi-123 me-1"></i>Altura
@@ -154,7 +159,8 @@
 
                                 <div class="col-md-6">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="localidad_facturacion" value="{{ cliente.direccion.localidad if cliente and cliente.direccion else '' }}"
+                                        <input type="text" class="form-control" id="localidad_facturacion"
+                                            value="{{ cliente.direccion.localidad if cliente and cliente.direccion else '' }}"
                                             name="localidad_facturacion" placeholder="Localidad" value="" readonly>
                                         <label for="localidad_facturacion">
                                             <i class="bi bi-pin-map me-1"></i>Localidad
@@ -165,7 +171,8 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="piso_facturacion" maxlength="3" value="{{ cliente.direccion.piso if cliente and cliente.direccion and cliente.direccion.piso else '' }}"
+                                        <input type="text" class="form-control" id="piso_facturacion" maxlength="3"
+                                            value="{{ cliente.direccion.piso if cliente and cliente.direccion and cliente.direccion.piso else '' }}"
                                             name="piso_facturacion" placeholder="Piso (Opcional)" value="" readonly>
                                         <label for="piso_facturacion">
                                             <i class="bi bi-building me-1"></i>Piso (Opcional)
@@ -175,7 +182,8 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="depto_facturacion" alue="{{ cliente.direccion.depto if cliente and cliente.direccion and cliente.direccion.depto else '' }}"
+                                        <input type="text" class="form-control" id="depto_facturacion"
+                                            alue="{{ cliente.direccion.depto if cliente and cliente.direccion and cliente.direccion.depto else '' }}"
                                             name="depto_facturacion" placeholder="Dto (Opcional)" value="" readonly>
                                         <label for="depto_facturacion">
                                             <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
@@ -185,9 +193,9 @@
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="codigo_postal_facturacion" value="{{ cliente.direccion.codigo_postal if cliente and cliente.direccion else '' }}"
-                                            name="codigo_postal_facturacion" placeholder="Código Postal"
-                                            readonly>
+                                        <input type="text" class="form-control" id="codigo_postal_facturacion"
+                                            value="{{ cliente.direccion.codigo_postal if cliente and cliente.direccion else '' }}"
+                                            name="codigo_postal_facturacion" placeholder="Código Postal" readonly>
                                         <label for="codigo_postal_facturacion">
                                             <i class="bi bi-mailbox me-1"></i>Código Postal
                                         </label>
@@ -372,19 +380,31 @@
 
                                 {% if pedido and pedido['items'] %}
                                 {% for item in pedido['items'] %}
-                                <tr class="item-row {% if pedido and not pedido.estado=='PENDIENTE' %}table-light text-muted{% endif %}">
+                                {% set current_product = productos | selectattr('id', 'equalto', item.producto_id) |
+                                list | first %}
+                                {% set unidad_medida = current_product.unidad_medida if current_product else 'unidades'
+                                %}
+
+                                {% set is_integer = unidad_medida.startswith('paquete') or unidad_medida == 'unidades'
+                                %}
+                                {% set step_value = '1' if is_integer else '0.01' %}
+                                {% set min_value = '1' if is_integer else '0.01' %}
+
+                                <tr
+                                    class="item-row {% if pedido and not pedido.estado=='PENDIENTE' %}table-light text-muted{% endif %}">
                                     <td>
                                         <input type="hidden" name="items-{{ loop.index0 }}-id"
                                             value="{{ item.id if item.id else '' }}">
                                         <select class="form-select form-select-sm producto-selector"
-                                            name="items-{{ loop.index0 }}-producto_id" required {% if pedido and  pedido.estado !='PENDIENTE' %}disabled{% endif %}>
+                                            name="items-{{ loop.index0 }}-producto_id" required {% if pedido and
+                                            pedido.estado !='PENDIENTE' %}disabled{% endif %}>
                                             <option value="">Seleccione...</option>
                                             {% for producto in productos %}
                                             <option value="{{ producto.id }}"
                                                 data-stock="{{ producto.stock_disponible or 0 }}"
-                                                data-precio="{{ producto.precio_unitario | float or 0 }}" 
-                                                data-unidad="{{ producto.unidad_medida }}"
-                                                {% if item.producto_id==producto.id %}selected{% endif %}>
+                                                data-precio="{{ producto.precio_unitario | float or 0 }}"
+                                                data-unidad="{{ producto.unidad_medida }}" {% if
+                                                item.producto_id==producto.id %}selected{% endif %}>
                                                 {{ producto.nombre }} ({{ producto.unidad_medida }})
                                             </option>
                                             {% endfor %}
@@ -392,35 +412,37 @@
                                     </td>
                                     <td>
                                         <div class="input-group input-group-sm">
-                                            <input type="number" class="form-control item-quantity" oninput="limitarDigitos(this, 4)"
-                                                name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10" min="1" 
-                                                max="5000" step="1" value="{{ item.get('cantidad', 0) }}" required {% if pedido and pedido.estado !='PENDIENTE' %}disabled{% endif %}>
+                                            <input type="number" class="form-control item-quantity"
+                                                oninput="limitarDigitos(this, 7)"
+                                                name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10" max="5000"
+                                                min="{{ min_value }}" step="{{ step_value }}"
+                                                value="{{ item.get('cantidad', 0) }}" required {% if pedido and
+                                                pedido.estado !='PENDIENTE' %}disabled{% endif %}>
                                             <span class="input-group-text unidad-display">
-                                                {% set current_product = productos | selectattr('id', 'equalto', item.producto_id) | list | first %}
-                                                {{ current_product.unidad_medida if current_product and current_product.unidad_medida else '--' }}
+                                                {{ unidad_medida if current_product else '--' }}
                                             </span>
                                         </div>
                                     </td>
-
                                     <td>
                                         {% set precio_u = item.get('precio_unitario', 0) | float %}
-                                        {% set precio_u_formateado = '{:,.2f}'.format(precio_u).replace(',', 'X').replace('.', ',').replace('X', '.') %}
+                                        {% set precio_u_formateado = '{:,.2f}'.format(precio_u).replace(',',
+                                        'X').replace('.', ',').replace('X', '.') %}
                                         <input type="text" class="form-control form-control-sm price-display"
                                             value="$ {{ precio_u_formateado }}" readonly>
                                     </td>
 
                                     <td class="text-center">
-                                        {% set subtotal_valor = item.get('cantidad', 0) * item.get('precio_unitario', 0) | float %}
-                                        {% set subtotal_formateado = '{:,.2f}'.format(subtotal_valor).replace(',', 'X').replace('.', ',').replace('X', '.') %}
+                                        {% set subtotal_valor = item.get('cantidad', 0) * item.get('precio_unitario', 0)
+                                        | float %}
+                                        {% set subtotal_formateado = '{:,.2f}'.format(subtotal_valor).replace(',',
+                                        'X').replace('.', ',').replace('X', '.') %}
                                         <input type="text" class="form-control subtotal-item"
-                                            value="$ {{ subtotal_formateado }}"
-                                            readonly>
+                                            value="$ {{ subtotal_formateado }}" readonly>
                                     </td>
-
                                     <td class="text-center">
                                         <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn"
-                                            title="Eliminar ítem" {% if pedido and not pedido.estado=='PENDIENTE' %}disabled{% endif %}><i
-                                                class="bi bi-trash"></i></button>
+                                            title="Eliminar ítem" {% if pedido and not pedido.estado=='PENDIENTE'
+                                            %}disabled{% endif %}><i class="bi bi-trash"></i></button>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -439,9 +461,8 @@
                 <div class="card-body d-flex justify-content-end">
                     <div class="w-50">
                         <label for="total-final" class="form-label fw-bold">Total del Pedido</label>
-                        {% set total_formateado = '{:,.2f}'.format(total_pedido | float).replace(',', 'X').replace('.', ',').replace('X', '.') %}
                         <input type="text" class="form-control text-end fs-5" id="total-final" name="total"
-                            value="$ {{ total_formateado }}" readonly>
+                            value="$ {{ total_pedido | formato_moneda }}" readonly>
                     </div>
                 </div>
             </div>
@@ -502,16 +523,15 @@
                 {% for producto in productos %}
                 <option value="{{ producto.id }}" data-id="{{ producto.id }}"
                     data-precio="{{ producto.precio_unitario | float or 0 }}"
-                    data-stock="{{ producto.stock_disponible or 0 }}"
-                    data-unidad="{{ producto.unidad_medida }}"
-                    >{{ producto.nombre }}</option>
+                    data-stock="{{ producto.stock_disponible or 0 }}" data-unidad="{{ producto.unidad_medida }}">{{
+                    producto.nombre }} ({{ producto.unidad_medida }})</option>
                 {% endfor %}
             </select>
         </td>
         <td>
             <div class="input-group input-group-sm">
-                <input type="number" min="1" max="5000" step="1" class="form-control item-quantity" oninput="limitarDigitos(this, 4)"
-                    name="items-__prefix__-cantidad" placeholder="Ej: 10" required>
+                <input type="number" min="0.01" max="5000" step="0.01" class="form-control item-quantity"
+                    oninput="limitarDigitos(this, 7)" name="items-__prefix__-cantidad" placeholder="Ej: 10" required>
                 <span class="input-group-text unidad-display">--</span>
             </div>
         </td>
@@ -540,11 +560,11 @@
 
 <script>
 
-function limitarDigitos(input, maxLength) {
-  if (input.value.length > maxLength) {
-    input.value = input.value.slice(0, maxLength);
-  }
-}
+    function limitarDigitos(input, maxLength) {
+        if (input.value.length > maxLength) {
+            input.value = input.value.slice(0, maxLength);
+        }
+    }
 
 </script>
 

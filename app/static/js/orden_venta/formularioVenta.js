@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     // 3. Lógica de Inhabilitación:
                     // Deshabilita la opción si ha sido seleccionada, Y NO es la opción actual de ESTA fila.
                     if (selectedProductIds.has(optionId) && optionId !== currentValue) {
-                        option.style.display = 'none'; 
+                        option.style.display = 'none';
                     }
                 });
             });
@@ -96,17 +96,45 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!row) return;
 
             const stockDisplay = row.querySelector('.stock-display');
+            // Nota: Se asume que el input de cantidad tiene la clase 'item-quantity'
+            const cantidadInput = row.querySelector('.item-quantity');
 
             // Buscamos la opción seleccionada
             const selectedOption = select.options[select.selectedIndex];
 
-            // Obtiene el stock del atributo data-stock de la opción seleccionada
+            // Obtiene el stock y la unidad del atributo data-* de la opción seleccionada
             const stock = selectedOption ? (selectedOption.dataset.stock || 0) : 0;
+            const unidad = selectedOption ? selectedOption.dataset.unidad : '';
+
+            // --- LÓGICA DE CONTROL DE DECIMALES Y STEP ---
+            // Es entero si la unidad es 'unidades' O si empieza con 'paquete'
+            const esEntero = unidad.startsWith('paquete') || unidad === 'unidades';
+
+            if (cantidadInput) {
+                if (esEntero) {
+                    cantidadInput.setAttribute('step', '1');
+                    cantidadInput.setAttribute('min', '1');
+
+                    const currentValue = parseFloat(cantidadInput.value);
+                    if (!isNaN(currentValue) && currentValue > 1 && currentValue % 1 !== 0) {
+                        cantidadInput.value = Math.floor(currentValue);
+                    }
+
+                } else {
+                    cantidadInput.setAttribute('step', '0.01');
+                    cantidadInput.setAttribute('min', '0.01');
+                }
+            }
 
             if (stockDisplay) {
-                // Muestra stock con un decimal
                 stockDisplay.textContent = parseFloat(stock).toFixed(1);
             }
+
+            const unidadDisplay = row.querySelector('.unidad-display');
+            if (unidadDisplay) {
+                unidadDisplay.textContent = unidad || '--';
+            }
+            recalculate();
         }
 
         /**
@@ -266,13 +294,39 @@ async function handleSubmit(event) {
         showNotificationModal('Campos Incompletos', 'Por favor, complete todos los campos obligatorios correctamente.', 'warning');
         return;
     }
-
-    // Validación B: Asegurarse de que haya al menos un ítem
     const itemRows = itemsContainer.querySelectorAll('.item-row');
     if (itemRows.length === 0) {
-        // MODIFICADO: Usamos el modal personalizado
         showNotificationModal('Faltan Productos', 'Debe añadir al menos un producto al pedido.', 'error');
         itemsContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+    }
+    let cantidadEsInvalida = false;
+    let productoInvalido = '';
+
+    itemRows.forEach(row => {
+        const productoSelect = row.querySelector('select[name*="producto_id"]');
+        const cantidadInput = row.querySelector('input[name*="cantidad"]');
+
+        if (productoSelect && cantidadInput) {
+            const selectedOption = productoSelect.options[productoSelect.selectedIndex];
+            const unidad = selectedOption ? selectedOption.dataset.unidad : '';
+            const cantidad = parseFloat(cantidadInput.value);
+            const requiereEntero = unidad.startsWith('paquete') || unidad === 'unidades';
+            if (requiereEntero && (cantidad % 1 !== 0)) {
+                cantidadEsInvalida = true;
+                productoInvalido = selectedOption.textContent.trim().split('(')[0].trim();
+                cantidadInput.focus();
+                return; 
+            }
+        }
+    });
+
+    if (cantidadEsInvalida) {
+        showNotificationModal(
+            'Error en la Cantidad',
+            `La cantidad para el producto "${productoInvalido}" debe ser un número entero (sin decimales), ya que se mide por unidades o paquetes.`,
+            'error'
+        );
         return;
     }
 
@@ -343,12 +397,12 @@ async function enviarDatos(payload) {
         const result = await response.json();
 
         if (response.ok) {
-            
+
             // === MODIFICACIÓN CLAVE AQUÍ ===
             // 1. Usar el mensaje y título que vienen del backend
-            const messageToShow = result.message || '¡Pedido guardado correctamente!'; 
+            const messageToShow = result.message || '¡Pedido guardado correctamente!';
             const titleToShow = result.data && result.data.estado_completado_inmediato ? '¡STOCK DISPONIBLE! Pedido Completado' : 'Éxito';
-            
+
             // 2. Disparar el modal con el mensaje específico
             showNotificationModal(titleToShow, messageToShow, 'success');
             // ===============================
