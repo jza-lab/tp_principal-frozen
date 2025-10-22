@@ -365,4 +365,27 @@
         }
     });
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Bloquear doble clic en TODOS los formularios de acción
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function (e) {
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) {
+                submitButton.disabled = true;
+                // Mostrar spinner de carga
+                const originalHtml = submitButton.innerHTML;
+                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando...';
+                // Evitar reenviar el formulario si el usuario hace back o recarga
+                form.addEventListener('ajax:complete', () => {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalHtml;
+                });
+            }
+        });
+    });
+});
+</script>
+
 {% endblock %}
