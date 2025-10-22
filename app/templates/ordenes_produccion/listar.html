@@ -118,46 +118,22 @@
                     <span><i class="bi bi-calendar2-range"></i> {{ orden.fecha_fin_estimada }}</span>
                     {% endif %}
                     
-                    {% if orden.pedidos_asociados %}
-                        <span>
-                            <i class="bi bi-receipt"></i> 
-                            <strong>Pedido(s):</strong> 
-                            <a href="{{ url_for('orden_venta.detalle', id=orden.pedidos_asociados[0].id) }}" 
-                               class="text-decoration-none fw-bold">
-                                PED-{{ orden.pedidos_asociados[0].id }}
-                            </a>
+                    <div class="card-assignment-details">
+                        {% if orden.pedidos_asociados %}
+                            {% set primer_pedido = orden.pedidos_asociados[0] %}
+                            <span class="me-2" title="{{ primer_pedido.nombre_cliente }}">
+                                <i class="bi bi-person-check-fill text-success"></i>
+                                <a href="{{ url_for('orden_venta.detalle', id=primer_pedido.id) }}" class="text-decoration-none">
+                                    PED-{{ primer_pedido.id }}
+                                </a>
+                            </span>
                             {% if orden.pedidos_asociados|length > 1 %}
-                                <button class="btn btn-sm btn-link p-0 ms-1 btn-expand-pedidos" 
-                                        type="button" 
-                                        data-bs-toggle="collapse" 
-                                        data-bs-target="#pedidos-op-{{ orden.id }}" 
-                                        aria-expanded="false">
-                                    <i class="bi bi-plus-lg"></i> ({{ orden.pedidos_asociados|length - 1 }} más)
-                                </button>
+                                <span class="badge rounded-pill bg-secondary">+{{ orden.pedidos_asociados|length - 1 }}</span>
                             {% endif %}
-                        </span>
-                        
-                        <!-- Área colapsable de pedidos adicionales -->
-                        {% if orden.pedidos_asociados|length > 1 %}
-                        <div class="collapse pedidos-collapse-area" id="pedidos-op-{{ orden.id }}">
-                            <div class="ms-4">
-                                {% for pedido in orden.pedidos_asociados[1:] %}
-                                <div class="d-flex align-items-center gap-2 py-1">
-                                    <i class="bi bi-arrow-return-right text-muted"></i>
-                                    <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}" 
-                                       class="text-decoration-none fw-bold flex-grow-1">
-                                        PED-{{ pedido.id }}
-                                    </a>
-                                    <small class="text-muted">{{ pedido.nombre_cliente }}</small>
-                                    <span class="badge bg-secondary-soft text-secondary">{{ pedido.estado }}</span>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
+                        {% else %}
+                            <span class="text-muted"><i class="bi bi-box-seam"></i> Para Stock</span>
                         {% endif %}
-                    {% else %}
-                        <span><i class="bi bi-box"></i> <em class="text-muted">Para Stock</em></span>
-                    {% endif %}
+                    </div>
                 </div>
 
                 <div class="mt-auto">
@@ -479,4 +455,4 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
-{% endblock %}
+{% endblock %}4

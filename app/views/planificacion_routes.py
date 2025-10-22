@@ -1,5 +1,6 @@
 # En app/routes/planificacion_routes.py
-from flask import Blueprint, render_template, flash, url_for, request, jsonify # Añade request y jsonify
+import logging
+from flask import Blueprint, render_template, flash, url_for, request, jsonify, session # Añade request y jsonify
 from app.controllers.planificacion_controller import PlanificacionController
 from app.controllers.usuario_controller import UsuarioController
 from datetime import date, timedelta
@@ -109,11 +110,13 @@ def consolidar_api():
     """
     API endpoint para consolidar múltiples OPs en una Super OP.
     """
+    logging.warning(f"Contenido de la sesión al consolidar: {dict(session)}")
     data = request.get_json()
     op_ids = data.get('op_ids', [])
 
-    # Asumimos que el usuario logueado tiene ID 1, debes reemplazarlo con el real
-    usuario_id = 1
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'success': False, 'error': 'Usuario no autenticado.'}), 401
 
     response, status_code = controller.consolidar_ops(op_ids, usuario_id)
     return jsonify(response), status_code

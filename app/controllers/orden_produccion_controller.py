@@ -333,7 +333,7 @@ class OrdenProduccionController(BaseController):
 
             if nuevo_estado == 'COMPLETADA':
                 if estado_actual != 'CONTROL_DE_CALIDAD':
-                    return self.error_response(f"La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
+                    return self.error_response("La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
 
                 # 1. Verificar si la OP está vinculada a ítems de pedido
                 items_a_surtir_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
@@ -518,7 +518,24 @@ class OrdenProduccionController(BaseController):
             nueva_super_op = resultado_creacion['data']
             super_op_id = nueva_super_op['id']
 
-            # 4. Actualizar las OPs originales
+            # 4. Re-linkear los items de pedido de las OPs originales a la nueva Super OP
+            try:
+                # Usamos el cliente de base de datos directamente para una operación de actualización en lote
+                update_result = self.pedido_model.db.table('pedido_items').update({
+                    'orden_produccion_id': super_op_id
+                }).in_('orden_produccion_id', op_ids).execute()
+                
+                logger.info(f"Relinkeo de items de pedido a Super OP {super_op_id} completado.")
+
+            except Exception as e_relink:
+                # Si esto falla, la Super OP ya fue creada. Es un estado inconsistente.
+                # Devolvemos un error crítico y loggeamos la situación.
+                logger.error(f"CRÍTICO: Fallo al re-linkear items de pedido a Super OP {super_op_id}. Error: {e_relink}", exc_info=True)
+                # En un sistema transaccional, aquí se haría un rollback.
+                # Por ahora, devolvemos el error para que el frontend lo sepa.
+                return {'success': False, 'error': f'La Super OP fue creada, pero falló la asignación de pedidos. Contacte a soporte. Error: {str(e_relink)}'}
+
+            # 5. Actualizar las OPs originales (antes era el paso 4)
             update_data = {
                 'estado': 'CONSOLIDADA',
                 'super_op_id': super_op_id
@@ -563,17 +580,20 @@ class OrdenProduccionController(BaseController):
         try:
             # 1. Obtener OP y Fecha Meta (sin cambios)
             op_result = self.obtener_orden_por_id(orden_id)
-            if not op_result.get('success'): return self.error_response("OP no encontrada.", 404)
+            if not op_result.get('success'):
+                return self.error_response("OP no encontrada.", 404)
             op_data = op_result['data']
             fecha_meta_str = op_data.get('fecha_meta')
-            if not fecha_meta_str: return self.error_response("OP sin fecha meta.", 400)
+            if not fecha_meta_str:
+                return self.error_response("OP sin fecha meta.", 400)
             fecha_meta = date.fromisoformat(fecha_meta_str)
             cantidad = float(op_data['cantidad_planificada'])
 
             # 2. Obtener Receta y determinar Línea Óptima y Tiempo de Producción
             receta_model = RecetaModel()
             receta_res = receta_model.find_by_id(op_data['receta_id'], 'id')
-            if not receta_res.get('success'): return self.error_response("Receta no encontrada.", 404)
+            if not receta_res.get('success'):
+                return self.error_response("Receta no encontrada.", 404)
             receta = receta_res['data']
 
             linea_compatible = receta.get('linea_compatible', '2').split(',') # Default a línea 2 si no está definido
@@ -694,13 +714,15 @@ class OrdenProduccionController(BaseController):
             # 1. Validar datos de entrada (sin cambios)
             linea_asignada = data.get('linea_asignada'); supervisor_id = data.get('supervisor_responsable_id')
             operario_id = data.get('operario_asignado_id')
-            if not linea_asignada or linea_asignada not in [1, 2]: return self.error_response("Línea inválida.", 400)
+            if not linea_asignada or linea_asignada not in [1, 2]:
+                return self.error_response("Línea inválida.", 400)
 
             # Validar compatibilidad de línea (sin cambios)
             receta_model = RecetaModel()
             receta_res = receta_model.find_by_id(receta_id, 'id')
             # ... (código de validación de compatibilidad) ...
-            if not receta_res.get('success'): return self.error_response(f"Receta no encontrada (ID: {receta_id}).", 404)
+            if not receta_res.get('success'):
+                return self.error_response(f"Receta no encontrada (ID: {receta_id}).", 404)
             receta_data = receta_res['data']
             lineas_compatibles = receta_data.get('linea_compatible', '2').split(',')
             if str(linea_asignada) not in lineas_compatibles:
