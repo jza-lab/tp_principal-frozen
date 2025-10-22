@@ -91,6 +91,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
                             console.log(`Provincia asignada: ${provinciaFacturacion.value}`); // Verifica en consola
                         }
+
+                        //Direccion alternativa
+                        const checkboxDireccion = document.getElementById('usar_direccion_alternativa');
+                        if (checkboxDireccion) {
+                            // Si el cliente no tiene una calle principal, forzar la dirección alternativa
+                            if (!dir.calle) {
+                                checkboxDireccion.checked = true;
+                                // Disparar el evento 'change' para que la otra lógica de UI reaccione
+                                checkboxDireccion.dispatchEvent(new Event('change'));
+                            }
+                        }
+                        
                     } else {
                         limpiarDatosCliente();
                     }

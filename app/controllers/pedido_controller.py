@@ -116,24 +116,43 @@ class PedidoController(BaseController):
             if 'items' in form_data:
                 form_data['items'] = self._consolidar_items(form_data['items'])
 
-            # Primero, obtenemos el diccionario anidado de la dirección.
-            direccion_payload = form_data.get('direccion_entrega', {})
+            direccion_id = None
+            usar_alternativa = form_data.get('usar_direccion_alternativa')
 
-            # Ahora, extraemos los datos de ESE diccionario anidado.
-            direccion_data = {
-                'calle': direccion_payload.get('calle'),
-                'altura': direccion_payload.get('altura'),
-                'provincia': direccion_payload.get('provincia'),
-                'localidad': direccion_payload.get('localidad'),
-                'piso': direccion_payload.get('piso'),
-                'depto': direccion_payload.get('depto'),
-                'codigo_postal': direccion_payload.get('codigo_postal')
-            }
-            direccion_id = self._get_or_create_direccion(direccion_data)
+            if usar_alternativa:
+                # El usuario quiere usar una dirección temporal, validamos que la haya provisto.
+                direccion_payload = form_data.get('direccion_entrega', {})
+                direccion_data = {
+                    'calle': direccion_payload.get('calle'), 'altura': direccion_payload.get('altura'),
+                    'provincia': direccion_payload.get('provincia'), 'localidad': direccion_payload.get('localidad'),
+                    'piso': direccion_payload.get('piso'), 'depto': direccion_payload.get('depto'),
+                    'codigo_postal': direccion_payload.get('codigo_postal')
+                }
+                if not all(direccion_data.get(k) for k in ['calle', 'altura', 'localidad', 'provincia']):
+                    return self.error_response("Debe completar todos los campos de la dirección de entrega alternativa.", 400)
+                
+                direccion_id = self._get_or_create_direccion(direccion_data)
+                if not direccion_id:
+                    return self.error_response("No se pudo procesar la dirección de entrega alternativa.", 500)
+            else:
+                # El usuario quiere usar la dirección principal del cliente, verificamos que exista.
+                id_cliente = form_data.get('id_cliente')
+                if not id_cliente:
+                    return self.error_response("No se ha especificado un cliente.", 400)
+                
+                cliente_result = self.cliente_model.find_by_id(id_cliente, 'id')
+                if not cliente_result.get('success') or not cliente_result.get('data'):
+                    return self.error_response("Cliente no encontrado.", 404)
+                
+                direccion_id = cliente_result['data'].get('direccion_id')
+                
+                if not direccion_id:
+                    return self.error_response("El cliente no tiene una dirección principal. Por favor, marque la opción 'Enviar a una dirección de entrega distinta' y complete los campos.", 400)
 
             # Añadimos el id de la dirección al payload principal para la validación/creación.
             form_data['id_direccion_entrega'] = direccion_id
             form_data.pop('direccion_entrega', None)
+            form_data.pop('usar_direccion_alternativa', None)
 
             # FIX: Se elimina el intento de añadir el ID del creador al modelo `pedidos`
             # La tabla `pedidos` no tiene esta columna, causando el error PGRST204.
@@ -369,39 +388,54 @@ class PedidoController(BaseController):
         crea OPs para los nuevos items sin stock.
         """
         try:
+            # Obtener el estado y datos del pedido antes de cualquier cambio.
+            pedido_actual_resp, _ = self.obtener_pedido_por_id(pedido_id)
+            if not pedido_actual_resp.get('success'):
+                return self.error_response("No se pudo cargar el pedido original para actualizar.", 404)
+            pedido_actual = pedido_actual_resp.get('data')
+
             # Consolidar y preparar datos
             if 'items' in form_data:
                 form_data['items'] = self._consolidar_items(form_data['items'])
             items_data = form_data.pop('items', [])
             pedido_data = form_data
 
-            # ... (lógica de dirección sin cambios)
-            direccion_payload = form_data.get('direccion_entrega', {})
-            direccion_data = {
-                'calle': direccion_payload.get('calle'), 'altura': direccion_payload.get('altura'),
-                'provincia': direccion_payload.get('provincia'), 'localidad': direccion_payload.get('localidad'),
-                'piso': direccion_payload.get('piso'), 'depto': direccion_payload.get('depto'),
-                'codigo_postal': direccion_payload.get('codigo_postal')
-            }
-            pedido_actual_resp, _ = self.obtener_pedido_por_id(pedido_id)
-            pedido_actual = pedido_actual_resp.get('data')
-            id_direccion_vieja = pedido_actual.get('id_direccion_entrega')
             direccion_id = None
-            if id_direccion_vieja:
-                cantidad_misma_direccion = self.model.contar_pedidos_direccion(id_direccion_vieja, pedido_id)
-                if cantidad_misma_direccion > 0:
-                    direccion_id = self._get_or_create_direccion(direccion_data)
-                else:
-                    actualizacion_exitosa = self._actualizar_direccion(id_direccion_vieja, direccion_data)
-                    direccion_id = id_direccion_vieja if actualizacion_exitosa else self._get_or_create_direccion(direccion_data)
-            else:
-                direccion_id = self._get_or_create_direccion(direccion_data)
+            usar_alternativa = form_data.get('usar_direccion_alternativa')
 
-            if not direccion_id:
-                return self.error_response("No se pudo procesar la dirección de entrega.", 400)
+            if usar_alternativa:
+                # El usuario quiere usar una dirección temporal, validamos que la haya provisto.
+                direccion_payload = form_data.get('direccion_entrega', {})
+                direccion_data = {
+                    'calle': direccion_payload.get('calle'), 'altura': direccion_payload.get('altura'),
+                    'provincia': direccion_payload.get('provincia'), 'localidad': direccion_payload.get('localidad'),
+                    'piso': direccion_payload.get('piso'), 'depto': direccion_payload.get('depto'),
+                    'codigo_postal': direccion_payload.get('codigo_postal')
+                }
+                if not all(direccion_data.get(k) for k in ['calle', 'altura', 'localidad', 'provincia', 'codigo_postal']):
+                    return self.error_response("Debe completar todos los campos de la dirección de entrega alternativa.", 400)
+                
+                direccion_id = self._get_or_create_direccion(direccion_data)
+                if not direccion_id:
+                    return self.error_response("No se pudo procesar la dirección de entrega alternativa.", 500)
+            else:
+                # El usuario quiere usar la dirección principal del cliente, verificamos que exista.
+                id_cliente = form_data.get('id_cliente')
+                if not id_cliente:
+                    return self.error_response("No se ha especificado un cliente.", 400)
+                
+                cliente_result = self.cliente_model.find_by_id(id_cliente, 'id')
+                if not cliente_result.get('success') or not cliente_result.get('data'):
+                    return self.error_response("Cliente no encontrado.", 404)
+                
+                direccion_id = cliente_result['data'].get('direccion_id')
+                
+                if not direccion_id:
+                    return self.error_response("El cliente no tiene una dirección principal. Por favor, marque la opción 'Enviar a una dirección de entrega distinta' y complete los campos.", 400)
 
             pedido_data['id_direccion_entrega'] = direccion_id
             pedido_data.pop('direccion_entrega', None)
+            pedido_data.pop('usar_direccion_alternativa', None)
 
             # Actualizar el pedido y obtener los items nuevos
             result = self.model.update_with_items(pedido_id, pedido_data, items_data)
