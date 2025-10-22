@@ -150,11 +150,18 @@ class InventarioModel(BaseModel):
                 return {'success': True, 'data': []}
 
             final_data = []
+            filtros = filtros or {}
+
             target_estado = filtros.get('estado_stock', None)
             
+            
             for insumo in result.data:
-                stock_actual = insumo.get('stock_actual', 0.0) or 0.0
+                if insumo is None:
+                    continue
+                
+                stock_actual = insumo.get('stock_actual', 0.0) or 0
                 stock_min = insumo.get('stock_min', 0) or 0
+
                 
                 # Calcular el estado del stock
                 if stock_min > 0 and stock_actual < stock_min:
