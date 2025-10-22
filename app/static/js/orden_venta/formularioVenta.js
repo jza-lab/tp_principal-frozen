@@ -342,38 +342,41 @@ async function handleSubmit(event) {
     submitButton.disabled = true;
     submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...`;
 
+    if (payload.usar_direccion_alternativa) {
+        try {
+            const direccionParaVerificar = payload.direccion_entrega;
+            const verificationUrl = "/api/validar/direccion";
 
-    try {
-        const direccionParaVerificar = payload.direccion_entrega;
-        const verificationUrl = "/api/validar/direccion";
+            const verificationResponse = await fetch(verificationUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(direccionParaVerificar),
+            });
 
-        const verificationResponse = await fetch(verificationUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(direccionParaVerificar),
-        });
+            const verificationResult = await verificationResponse.json();
 
-
-        const verificationResult = await verificationResponse.json();
-
-        if (verificationResponse.ok && verificationResult.success) {
-            await enviarDatos(payload);
-        } else {
-            let errorMessage = 'Dirección no válida o error de verificación.';
-            if (verificationResult && verificationResult.error) {
-                errorMessage = verificationResult.error;
+            if (verificationResponse.ok && verificationResult.success) {
+                await enviarDatos(payload);
+            } else {
+                let errorMessage = 'Dirección no válida o error de verificación.';
+                if (verificationResult && verificationResult.error) {
+                    errorMessage = verificationResult.error;
+                }
+                showNotificationModal(errorMessage, 'Error al verificar la dirección');
+                form.classList.remove('was-validated');
+                submitButton.disabled = false;
+                submitButton.innerHTML = `<i class="bi bi-save me-1"></i> ${isEditing ? 'Actualizar Pedido' : 'Guardar Pedido'}`;
             }
-            showNotificationModal(errorMessage, 'Error al verificar la dirección');
-            form.classList.remove('was-validated');
+        } catch (error) {
+            console.error('Error de red al verificar la direccion:', error);
+            showNotificationModal('No se pudo conectar con el servidor de verificación.', 'error');
             submitButton.disabled = false;
             submitButton.innerHTML = `<i class="bi bi-save me-1"></i> ${isEditing ? 'Actualizar Pedido' : 'Guardar Pedido'}`;
+            return;
         }
-    } catch (error) {
-        console.error('Error de red al verificar la direccion:', error);
-        showNotificationModal('No se pudo conectar con el servidor de verificación.', 'error');
-        submitButton.disabled = false;
-        submitButton.innerHTML = `<i class="bi bi-save me-1"></i> ${isEditing ? 'Actualizar Pedido' : 'Guardar Pedido'}`;
-        return;
+    } else {
+        // Si no se usa dirección alternativa, enviar los datos directamente
+        await enviarDatos(payload);
     }
 
 
@@ -450,7 +453,12 @@ function buildPayload() {
         estado: document.getElementById('estado') ? document.getElementById('estado').value : 'PENDIENTE',
         precio_orden: cleanCurrency(document.getElementById('total-final').value),
         comentarios_adicionales: document.getElementById('comentarios_adicionales').value,
-        direccion_entrega: {
+        usar_direccion_alternativa: document.getElementById('usar_direccion_alternativa').checked,
+        items: []
+    };
+
+    if (payload.usar_direccion_alternativa) {
+        payload.direccion_entrega = {
             calle: document.getElementById('calle').value,
             altura: document.getElementById('altura').value,
             piso: document.getElementById('piso').value || null,
@@ -458,9 +466,8 @@ function buildPayload() {
             localidad: document.getElementById('localidad').value,
             provincia: document.getElementById('provincia').value,
             codigo_postal: document.getElementById('codigo_postal').value
-        },
-        items: []
-    };
+        };
+    }
 
     const itemRows = document.querySelectorAll('#items-container .item-row');
     itemRows.forEach(row => {

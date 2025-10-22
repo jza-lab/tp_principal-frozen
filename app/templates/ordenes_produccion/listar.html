@@ -120,20 +120,39 @@
                     
                     <div class="card-assignment-details">
                         {% if orden.pedidos_asociados %}
-                            {% set primer_pedido = orden.pedidos_asociados[0] %}
-                            <span class="me-2" title="{{ primer_pedido.nombre_cliente }}">
-                                <i class="bi bi-person-check-fill text-success"></i>
-                                <a href="{{ url_for('orden_venta.detalle', id=primer_pedido.id) }}" class="text-decoration-none">
-                                    PED-{{ primer_pedido.id }}
-                                </a>
-                            </span>
-                            {% if orden.pedidos_asociados|length > 1 %}
-                                <span class="badge rounded-pill bg-secondary">+{{ orden.pedidos_asociados|length - 1 }}</span>
-                            {% endif %}
+                            <div class="d-flex align-items-center">
+                                {% set primer_pedido = orden.pedidos_asociados[0] %}
+                                <span title="{{ primer_pedido.nombre_cliente }}">
+                                    <i class="bi bi-person-check-fill text-success"></i>
+                                    <a href="{{ url_for('orden_venta.detalle', id=primer_pedido.id) }}" class="text-decoration-none">
+                                        PED-{{ primer_pedido.id }}
+                                    </a>
+                                </span>
+                                {% if orden.pedidos_asociados|length > 1 %}
+                                    <button class="btn btn-sm btn-outline-secondary btn-expand-pedidos rounded-pill ms-2" style="--bs-btn-padding-y: .1rem; --bs-btn-padding-x: .4rem; --bs-btn-font-size: .7rem;" type="button" data-bs-toggle="collapse" data-bs-target="#pedidos-{{ orden.id }}" aria-expanded="false" aria-controls="pedidos-{{ orden.id }}">
+                                        +{{ orden.pedidos_asociados|length - 1 }}
+                                    </button>
+                                {% endif %}
+                            </div>
                         {% else %}
                             <span class="text-muted"><i class="bi bi-box-seam"></i> Para Stock</span>
                         {% endif %}
                     </div>
+
+                    {% if orden.pedidos_asociados and orden.pedidos_asociados|length > 1 %}
+                    <div class="collapse pt-2" id="pedidos-{{ orden.id }}">
+                        {% for pedido in orden.pedidos_asociados[1:] %}
+                            <div class="card-assignment-details" title="{{ pedido.nombre_cliente }}">
+                                <span class="me-2">
+                                    <i class="bi bi-person-check-fill text-success"></i>
+                                    <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}" class="text-decoration-none">
+                                        PED-{{ pedido.id }}
+                                    </a>
+                                </span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                 </div>
 
                 <div class="mt-auto">
