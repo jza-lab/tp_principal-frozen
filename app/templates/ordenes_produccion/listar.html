@@ -88,7 +88,7 @@
 
     {% for orden in ordenes %}
     <div class="col-md-4 mb-4">
-        <div class="card orden-card {% if orden.estado == 'CANCELADA' %}orden-rechazada{% endif %}">
+        <div class="card orden-card h-100 {% if orden.estado == 'CANCELADA' %}orden-rechazada{% endif %}">
             <div class="card-body d-flex flex-column">
                 <div class="d-flex justify-content-between">
                     <h5 class="card-title">{{ orden.producto_nombre or 'Producto no definido' }}</h5>
@@ -208,17 +208,13 @@
                         {% endif %}
                     </div>
 
-                    <!-- Botón para ver detalle -->
-                    <div class="d-flex justify-content-end mb-2">
+                    <!-- Botones de Acción -->
+                    <div class="d-flex justify-content-end align-items-center flex-wrap gap-2 action-buttons">
                         <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" 
                            class="btn btn-sm btn-outline-primary" 
                            title="Ver Detalle">
                             <i class="bi bi-eye"></i> Detalle
                         </a>
-                    </div>
-
-                    <!-- State change buttons -->
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
                         {% if orden.estado == 'LISTA PARA PRODUCIR' %}
                             {% if has_permission('iniciar_produccion') %}
                             <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
