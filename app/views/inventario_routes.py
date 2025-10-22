@@ -41,8 +41,9 @@ def listar_lotes():
             1 if x.get('estado_stock') == 'OK' else 0, 
             float(x.get('stock_actual') or 0.0) * -1
         ))
+        insumos_full_data = insumos_data
         
-    return render_template('inventario/listar.html', lotes=lotes, insumos_stock=insumos_stock)
+    return render_template('inventario/listar.html', lotes=lotes, insumos_stock=insumos_stock, insumos_full_data=insumos_full_data)
 
 @inventario_view_bp.route('/lote/nuevo', methods=['GET', 'POST'])
 @permission_required(accion='registrar_ingresos_stock')

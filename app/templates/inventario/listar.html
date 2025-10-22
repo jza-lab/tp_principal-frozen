@@ -87,17 +87,26 @@
                     Gráficos
             </div>
             <div class="card-body">
+                <div style="height: 300px;">
+                    <canvas id="graficoDonut"></canvas>
+                </div>
+                <hr class="my-4">
                 <div>
                     <canvas id="graficoInsumos"></canvas>
                 </div>
+                
+
+
             </div>
         </div>
     </div>
+</div>
 
 </div>
 {% if insumos_stock%}
 <script>
     const INSUMOS_STOCK_DATA = {{ insumos_stock | tojson | safe }};
+    const INSUMOS_FULL_DATA = {{ insumos_full_data | tojson | safe }};
 </script>
 {% endif %}
 
