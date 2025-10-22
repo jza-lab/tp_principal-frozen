@@ -219,19 +219,13 @@ class UsuarioModel(BaseModel):
                 return usuario_result
 
             usuario_data = usuario_result['data']
-            rol = usuario_data.get('roles')
-
-            if rol and rol.get('codigo') == 'GERENTE':
-                from app.models.usuario_turno import UsuarioTurnoModel
-                turno_model = UsuarioTurnoModel()
-                return turno_model.find_all()
             
             turno_asignado = usuario_data.get('turno')
             if turno_asignado:
                 # El formato de find_all devuelve una lista de dicts, lo emulamos
                 return {'success': True, 'data': [turno_asignado]}
             
-            # Si no es gerente y no tiene turno asignado, devuelve lista vacía
+            # Si no tiene turno asignado, devuelve lista vacía
             return {'success': True, 'data': []}
 
         except Exception as e:

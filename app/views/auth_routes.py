@@ -26,10 +26,6 @@ def before_request_auth():
     if not usuario:
         return
 
-    rol = usuario.get('roles', {})
-    if rol.get('codigo') == 'GERENTE':
-        return
-
     turno_info = usuario.get('turno')
     if not turno_info or 'hora_inicio' not in turno_info or 'hora_fin' not in turno_info:
         return

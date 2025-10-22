@@ -248,9 +248,15 @@ class UsuarioController(BaseController):
 
         user_data = auth_result['data']
         user_id = user_data['id']
+        rol_codigo = user_data.get('roles', {}).get('codigo')
         logger.info(f"Credentials OK for user_id: {user_id}")
+      
+        # El rol DEV no necesita una sesión de tótem activa para acceder a la web
+        if rol_codigo == 'DEV':
+            totem_check = True
+        else:
+            totem_check = self.totem_sesion.verificar_sesion_activa_hoy(user_id)
 
-        totem_check = self.totem_sesion.verificar_sesion_activa_hoy(user_id)
         if not totem_check:
             logger.info(f"No esta activo en el totem para user_id {user_id}. Buscando una autorización para horas extras..")
             now_in_argentina = get_now_in_argentina()
@@ -306,9 +312,11 @@ class UsuarioController(BaseController):
         user_data = resultado_identificacion['usuario']
         if not user_data.get('activo', True):
             return {'success': False, 'error': 'Este usuario se encuentra desactivado.'}
-
-        if not self.totem_sesion.verificar_sesion_activa_hoy(user_data['id']):
-            return {'success': False, 'error': 'Acceso Web denegado. Por favor, registre su ingreso en el tótem.'}
+        
+        rol_codigo = user_data.get('roles', {}).get('codigo')
+        if rol_codigo != 'DEV':
+            if not self.totem_sesion.verificar_sesion_activa_hoy(user_data['id']):
+                return {'success': False, 'error': 'Acceso Web denegado. Por favor, registre su ingreso en el tótem.'}
 
         self.model.update(user_data['id'], {'ultimo_login_web': get_now_in_argentina().isoformat()})
 
@@ -402,8 +410,8 @@ class UsuarioController(BaseController):
         # Constante para el período de gracia en minutos
         MINUTOS_DE_GRACIA = 15
 
-        # El rol GERENTE siempre tiene acceso
-        if not usuario or usuario.get('roles', {}).get('codigo') == 'GERENTE':
+        # El rol DEV siempre tiene acceso
+        if not usuario or usuario.get('roles', {}).get('codigo') == 'DEV':
             return {'success': True}
 
         turno_info = usuario.get('turno')
@@ -713,12 +721,6 @@ class UsuarioController(BaseController):
     def _iniciar_sesion_usuario(self, usuario: Dict) -> Dict:
         """Helper centralizado para establecer la sesión de Flask de un usuario."""
         logger.info(f"Initiating session for user_id: {usuario.get('id')}")
-        verificacion_turno = self.verificar_acceso_por_horario(usuario)
-        if not verificacion_turno.get('success'):
-            logger.warning(f"Session initiation failed for user_id {usuario.get('id')}: {verificacion_turno.get('error')}")
-            return verificacion_turno
-
-        logger.info(f"Access verified for user_id: {usuario.get('id')}. Loading permissions.")
         permisos = PermisosModel().get_user_permissions(usuario.get('role_id'))
         rol = usuario.get('roles', {})
 

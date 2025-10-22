@@ -75,28 +75,25 @@ class TotemSesionModel(BaseModel):
 
     def verificar_sesion_activa_hoy(self, usuario_id: int) -> bool:
         """
-        Verifica si el usuario tiene una sesión activa hoy.
-        La consulta se hace utilizando la fecha de Argentina para consistencia.
+        Verifica si el usuario tiene una sesión activa que haya comenzado en la fecha actual de Argentina.
+        Esta función es crucial para decidir si registrar un INGRESO o un EGRESO.
         """
         try:
-            from datetime import time
-            
-            # Definir el inicio y el fin del día de hoy en la zona horaria de Argentina.
-            today_arg = get_now_in_argentina().date()
-            start_of_day_arg = datetime.combine(today_arg, time.min)
-            end_of_day_arg = datetime.combine(today_arg, time.max)
+            today_str = get_now_in_argentina().date().isoformat()
 
-            response = self.db.table(self.get_table_name())\
-                .select('id', count='exact')\
-                .eq('usuario_id', usuario_id)\
-                .eq('activa', True)\
-                .gte('fecha_inicio', start_of_day_arg.isoformat())\
-                .lte('fecha_inicio', end_of_day_arg.isoformat())\
+            start_of_day_utc = datetime.fromisoformat(f"{today_str}T00:00:00-03:00")
+            end_of_day_utc = datetime.fromisoformat(f"{today_str}T23:59:59.999999-03:00")
+
+            response = self.db.table(self.get_table_name()) \
+                .select('id', count='exact') \
+                .eq('usuario_id', usuario_id) \
+                .eq('activa', True) \
+                .gte('fecha_inicio', start_of_day_utc.isoformat()) \
+                .lte('fecha_inicio', end_of_day_utc.isoformat()) \
                 .execute()
 
-            # Si el conteo es mayor a 0, significa que ya hay una sesión activa hoy.
             return response.count > 0
-            
+
         except Exception as e:
             logger.error(f"Error verificando sesión activa hoy para usuario {usuario_id}: {e}", exc_info=True)
             return False

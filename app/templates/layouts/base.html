@@ -51,7 +51,7 @@
                         
                         {% macro has_permission(action) %}
                             {% set can_access = false %}
-                            {% if session.get('rol') == 'GERENTE' %}
+                            {% if session.get('rol') == 'DEV' %}
                                 {% set can_access = true %}
                             {% else %}
                                 {% set allowed_roles = CANONICAL_PERMISSION_MAP.get(action, []) %}

@@ -5,12 +5,10 @@ from flask import (
     jsonify,
     session,
     redirect,
-    url_for,
-    flash,
+    url_for
 )
 from app.controllers.facial_controller import FacialController
-from app.controllers.usuario_controller import UsuarioController
-from app.utils.decorators import roles_required
+from app.utils.decorators import permission_required
 import logging
 
 logger = logging.getLogger(__name__)
@@ -98,9 +96,9 @@ def panel_totem():
 
 
 @facial_bp.route("/facial/register_face/<string:user_id>", methods=["POST"])
-@roles_required(allowed_roles=["GERENTE", "RRHH", "IT"])
+@permission_required('modificar_info_empleados')
 def register_face(user_id):
-    """Registro facial para un usuario existente (protegido por rol)."""
+    """Registro facial para un usuario existente (protegido por permiso)."""
     facial_controller = FacialController()
     data = request.get_json()
     if not data or "image" not in data:
