@@ -68,8 +68,15 @@ def index():
 
     lotes_producto_vencimiento_count = lote_producto_controller.obtener_conteo_vencimientos() 
 
+    user_role = session.get('rol')
     user_permissions = session.get('permisos', {})
 
+    is_dev = (user_role == 'DEV')
+    is_gerente = (user_role == 'GERENTE')
+
+    user_permissions['is_gerente'] = is_gerente
+    user_permissions['is_dev'] = is_dev # Agregar bandera is_dev para desarrolladores
+    
     return render_template('dashboard/index.html', 
                            asistencia=asistencia,
                            ordenes_pendientes=ordenes_pendientes,
