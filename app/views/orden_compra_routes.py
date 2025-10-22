@@ -74,15 +74,7 @@ def detalle(id):
 @orden_compra_bp.route("/<int:id>/aprobar", methods=["POST"])
 @permission_required(accion='aprobar_ordenes_compra')
 def aprobar(id):
-    # DEBUG: Imprimir TODA la información de la request
-    print("=" * 50)
-    print("DEBUG APROBAR ORDEN")
-    print(f"URL completa: {request.url}")
-    print(f"request.args: {dict(request.args)}")
-    print(f"request.form: {dict(request.form)}")
-    print(f"Estado capturado: '{request.args.get('estado', '')}'")
-    print("=" * 50)
-    
+   
     usuario_id = session.get("usuario_id")
     resultado = controller.aprobar_orden(id, usuario_id)
     if resultado.get("success"):
