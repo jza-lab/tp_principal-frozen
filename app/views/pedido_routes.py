@@ -99,7 +99,7 @@ def nueva():
     productos = response.get('data', {}).get('productos', [])
     return render_template('orden_venta/formulario.html', productos=productos, pedido=None, is_edit=False, today=hoy)
 
-@orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'PUT'])
+@orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST', 'PUT'])
 @permission_required(accion='modificar_orden_de_venta')
 def editar(id):
     """Gestiona la edición de un pedido. Solo permitido en PENDIENTE y PLANIFICACION."""
