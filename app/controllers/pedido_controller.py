@@ -89,12 +89,17 @@ class PedidoController(BaseController):
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
+    # Reemplaza el método obtener_pedido_por_id existente
     def obtener_pedido_por_id(self, pedido_id: int) -> tuple:
         """
-        Obtiene el detalle de un pedido específico con sus items.
+        Obtiene el detalle de un pedido específico con sus items
+        Y AÑADE información sobre el estado de las OPs vinculadas.
         """
         try:
-            result = self.model.get_one_with_items(pedido_id)
+            # --- CAMBIO: Llamar al nuevo método del modelo ---
+            result = self.model.get_one_with_items_and_op_status(pedido_id)
+            # -----------------------------------------------
+
             if result.get('success'):
                 return self.success_response(data=result.get('data'))
             else:
@@ -102,6 +107,8 @@ class PedidoController(BaseController):
                 status_code = 404 if "no encontrado" in str(error_msg).lower() else 500
                 return self.error_response(error_msg, status_code)
         except Exception as e:
+            # Mantener el log de error
+            logger.error(f"Error interno obteniendo detalle de pedido {pedido_id}: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
     def crear_pedido_con_items(self, form_data: Dict) -> tuple:
@@ -485,19 +492,59 @@ class PedidoController(BaseController):
         except Exception as e:
             return self.error_response(f'Error interno: {str(e)}', 500)
 
+    # --- MÉTODO CORREGIDO ---
     def preparar_para_entrega(self, pedido_id: int, usuario_id: int) -> tuple:
         """
-        Marca un pedido como listo para entregar, consumiendo el stock reservado.
+        Marca un pedido como listo para entregar, SIEMPRE Y CUANDO todas las OPs
+        asociadas estén completadas. Consume el stock reservado.
         """
         try:
-            # La lógica interna no cambia, solo la firma del método
+            # 1. Obtener Pedido con items
+            pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
+            if not pedido_resp.get('success'):
+                return self.error_response("Pedido no encontrado.", 404)
+            pedido_data = pedido_resp.get('data')
+            items_del_pedido = pedido_data.get('items', [])
+
+            # 2. *** NUEVA VERIFICACIÓN: Estado de OPs vinculadas ***
+            op_controller = self.orden_produccion_controller # Acceso al controlador de OPs
+            for item in items_del_pedido:
+                op_id = item.get('orden_produccion_id')
+                # Solo verificar si el item está vinculado a una OP
+                if op_id:
+                    logger.info(f"Verificando estado de OP ID: {op_id} para item {item.get('id')}")
+                    # Usamos el método obtener_orden_por_id que devuelve un diccionario
+                    op_resp = op_controller.obtener_orden_por_id(op_id)
+
+                    if not op_resp or not op_resp.get('success'):
+                        # Error crítico: OP vinculada pero no encontrada
+                        logger.error(f"Error: OP vinculada (ID: {op_id}) al item {item.get('id')} no fue encontrada.")
+                        return self.error_response(f"Error: OP vinculada (ID: {op_id}) no encontrada. No se puede preparar el pedido.", 500)
+
+                    op_data = op_resp.get('data')
+                    op_estado = op_data.get('estado')
+                    logger.info(f"Estado de OP ID {op_id}: {op_estado}")
+
+                    # Si CUALQUIER OP vinculada NO está completada, detener el proceso
+                    if op_estado != 'COMPLETADA':
+                        error_msg = (f"No se puede preparar para entrega. La Orden de Producción "
+                                     f"'{op_data.get('codigo', op_id)}' (vinculada al producto '{item.get('producto_nombre', 'N/A')}') "
+                                     f"aún no está completada (Estado actual: {op_estado}).")
+                        logger.warning(error_msg)
+                        return self.error_response(error_msg, 400) # 400 Bad Request: Acción no permitida aún
+
+            # 3. Si todas las OPs están OK (o no había OPs), proceder con el despacho y cambio de estado
+            logger.info(f"Todas las OPs para el pedido {pedido_id} están completadas. Procediendo a despachar stock.")
             despacho_result = self.lote_producto_controller.despachar_stock_reservado_por_pedido(pedido_id)
 
             if not despacho_result.get('success'):
+                logger.error(f"Fallo al despachar stock para pedido {pedido_id}: {despacho_result.get('error')}")
                 return self.error_response(f"No se pudo preparar el pedido: {despacho_result.get('error')}", 400)
 
+            # Cambiar estado del pedido y sus items
             self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
             self.model.update_items_by_pedido_id(pedido_id, {'estado': 'COMPLETADO'})
+            logger.info(f"Pedido {pedido_id} marcado como LISTO_PARA_ENTREGA y stock despachado.")
 
             return self.success_response(message="Pedido preparado para entrega. El stock ha sido despachado.")
 

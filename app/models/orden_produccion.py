@@ -148,6 +148,13 @@ class OrdenProduccionModel(BaseModel):
                     elif key == 'fecha_inicio_planificada_hasta':
                         query = query.lte('fecha_inicio_planificada', value)
 
+                        # --- AÑADIR/VERIFICAR ESTOS ELIF ---
+                    elif key == 'fecha_meta_desde':
+                        query = query.gte('fecha_meta', value)
+                    elif key == 'fecha_meta_hasta':
+                        query = query.lte('fecha_meta', value)
+                    # --- FIN ---
+
                     # Default to equality filter
                     else:
                         query = query.eq(key, value)
