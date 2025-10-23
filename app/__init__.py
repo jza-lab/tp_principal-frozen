@@ -30,6 +30,7 @@ def _register_blueprints(app: Flask):
     from app.views.lote_producto_routes import lote_producto_bp
     from app.views.reservas_routes import reservas_bp
     from app.views.admin_tarea_routes import admin_tasks_bp
+    from app.views.alertas_routes import alertas_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(insumos_bp)
@@ -52,6 +53,7 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(lote_producto_bp)
     app.register_blueprint(reservas_bp)
     app.register_blueprint(admin_tasks_bp)
+    app.register_blueprint(alertas_bp)
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""

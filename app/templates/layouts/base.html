@@ -127,6 +127,18 @@
                             </ul>
                         </li>
 
+                        {% set can_ver_alertas = has_permission('ver_alertas') %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle {% if 'alertas' in request.endpoint %}active{% endif %} {% if can_ver_alertas|trim != 'True' %}disabled{% endif %}"
+                                 href="#" id="navbarDropdownAlertas" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-bell-fill me-1"></i> Alertas
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="navbarDropdownAlertas">
+                                <li><a class="dropdown-item {% if 'insumos' in request.endpoint %}active{% endif %}" href="{{ url_for('alertas.listar_insumos_alertas') }}"><i class="bi bi-eyedropper me-2"></i> Insumos</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item {% if 'lotes' in request.endpoint %}active{% endif %}" href="{{ url_for('alertas.configurar_alertas_lotes') }}"><i class="bi bi-box-seam me-2"></i> Lotes</a></li>
+                            </ul>
+                        </li>
                         
                         {% set can_gestionar_empleados = has_permission('ver_info_empleados') or has_permission('modificar_usuarios') or has_permission('crear_usuarios') %}
                         {% set can_gestionar_clientes = has_permission('gestionar_clientes') %}

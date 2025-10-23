@@ -1,0 +1,31 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Configuración de Alertas de Lotes{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Umbral de Vencimiento de Lotes</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item active">Vencimiento de Lotes</li>
+    </ol>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-calendar-times me-1"></i>
+            Configurar Umbral de Vencimiento
+        </div>
+        <div class="card-body">
+            <form action="{{ url_for('alertas.configurar_alertas_lotes') }}" method="POST">
+                <div class="mb-3">
+                    <label for="dias_vencimiento" class="form-label">Días de antelación para alerta de vencimiento</label>
+                    <input type="number" class="form-control" id="dias_vencimiento" name="dias_vencimiento" value="{{ dias_vencimiento }}" required>
+                    <div class="form-text">
+                        Esta configuración determina cuántos días antes de la fecha de vencimiento de un lote se generará una alerta.
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Guardar Configuración</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

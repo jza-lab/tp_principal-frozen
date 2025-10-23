@@ -138,7 +138,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="stat-label mb-1 text-muted">RIESGO PROD. VENCIMIENTO</div>
-                            <div class="small text-muted">Lotes de productos que vencen en 7 días:</div>
+                            <div class="small text-muted">Lotes de productos que estan pronto a vencerse:</div>
                             <div class="stat-value text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}">{{ lotes_producto_vencimiento_count }}</div>
                             <div class="small text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}" style="min-height: 20px;">
                                 {% if lotes_producto_vencimiento_count > 0 %}
@@ -166,7 +166,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <div class="stat-label mb-1 text-muted">RIESGO DE VENCIMIENTO INSUMOS</div>
-                            <div class="small text-muted">Lotes de insumos que vencen en 7 días:</div>
+                            <div class="small text-muted">Lotes de insumos que estan pronto a vencerse:</div>
                             <div class="stat-value text-{{ 'warning' if lotes_vencimiento_count > 0 else 'success' }}">{{ lotes_vencimiento_count }}</div>
                             <div class="small text-{{ 'warning' if lotes_vencimiento_count > 0 else 'success' }}" style="min-height: 20px;">
                                 {% if lotes_vencimiento_count > 0 %}
