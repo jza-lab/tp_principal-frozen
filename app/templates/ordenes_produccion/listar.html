@@ -6,7 +6,7 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">{{ titulo | default('Órdenes de Producción') }}</h1>
-        <p class="text-muted mb-0">Gestión y seguimiento de órdenes de producción</p>
+        <p class="text-muted mb-0">Listado general y seguimiento de órdenes</p>
     </div>
     <div class="btn-toolbar">
         {% set can_create = has_permission('crear_ordenes_produccion')|trim == 'True' %}
@@ -16,76 +16,70 @@
     </div>
 </div>
 
-<!-- Filtros por estado -->
 <div class="card mb-4">
     <div class="card-body card-filter">
         <form method="get" action="{{ url_for('orden_produccion.listar') }}">
             <div class="row g-3 align-items-end">
-                <div class="card-body card-filter">
-                    <form method="get" action="{{ url_for('orden_produccion.listar') }}">
-                        <div class="row g-3 align-items-end">   
-                            <div class="col-12 mb-3">
-                                <h5 class="form-label mb-1 text-white">Filtrar por Estado</h5>
-                                <p class="text-white small mb-0">{{ ordenes|length }} órdenes encontradas</p>
-                            </div>
-                            
-                            <div class="col-12 d-flex">
-                                {% set current_status = request.args.get('estado') %}
-                                
-                                <div class="d-flex flex-wrap gap-2 align-items-center" role="group" aria-label="Filtro de Órdenes">
-                                    
-                                    <a href="{{ url_for('orden_produccion.listar', estado='') }}" 
-                                    class="btn btn-sm {% if not current_status %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Todas las órdenes
-                                    </a>
-                                    <span class="text-white fw-bold mx-1 justify-content-center">|</span>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='PENDIENTE') }}" 
-                                    class="btn btn-sm {% if current_status == 'PENDIENTE' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Pendientes
-                                    </a>
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='EN_ESPERA') }}" 
-                                    class="btn btn-sm {% if current_status == 'EN_ESPERA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        En Espera
-                                    </a>
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='LISTA PARA PRODUCIR') }}" 
-                                    class="btn btn-sm {% if current_status == 'LISTA PARA PRODUCIR' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Lista para Producir
-                                    </a>
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" 
-                                    class="btn btn-sm {% if current_status == 'EN_PROCESO' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        En Proceso
-                                    </a>                                    
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='CONSOLIDADA') }}" 
-                                    class="btn btn-sm {% if current_status == 'CONSOLIDADA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Consolidadas
-                                    </a>
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='COMPLETADA') }}" 
-                                    class="btn btn-sm {% if current_status == 'COMPLETADA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Completadas
-                                    </a>
-                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='CANCELADA') }}" 
-                                    class="btn btn-sm {% if current_status == 'CANCELADA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Canceladas
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
+                <div class="col-12 mb-3">
+                    <h5 class="form-label mb-1 text-white">Filtrar por Estado</h5>
+                    <p class="text-white small mb-0">{{ ordenes|length }} órdenes encontradas</p>
+                </div>
+                <div class="col-12 d-flex">
+                    {% set current_status = request.args.get('estado') %}
+                    <div class="d-flex flex-wrap gap-2 align-items-center" role="group" aria-label="Filtro de Órdenes">
+                        <a href="{{ url_for('orden_produccion.listar', estado='') }}"
+                           class="btn btn-sm {% if not current_status %}btn-primary{% else %}btn-secondary{% endif %}">
+                            Todas
+                        </a>
+                        <span class="text-white fw-bold mx-1">|</span>
+                        <a href="{{ url_for('orden_produccion.listar', estado='PENDIENTE') }}"
+                           class="btn btn-sm {% if current_status == 'PENDIENTE' %}btn-primary{% else %}btn-secondary{% endif %}">
+                            Pendientes
+                        </a>
+                        <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                        <a href="{{ url_for('orden_produccion.listar', estado='EN ESPERA') }}"
+                           class="btn btn-sm {% if current_status == 'EN ESPERA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                            En Espera
+                        </a>
+                        <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                        <a href="{{ url_for('orden_produccion.listar', estado='LISTA PARA PRODUCIR') }}"
+                           class="btn btn-sm {% if current_status == 'LISTA PARA PRODUCIR' %}btn-primary{% else %}btn-secondary{% endif %}">
+                            Listas Prod.
+                        </a>
+                        <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                        <a href="{{ url_for('orden_produccion.listar', estado='EN_LINEA_1') }}" class="btn btn-sm {% if current_status == 'EN_LINEA_1' %}btn-primary{% else %}btn-secondary{% endif %}">L1</a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='EN_LINEA_2') }}" class="btn btn-sm {% if current_status == 'EN_LINEA_2' %}btn-primary{% else %}btn-secondary{% endif %}">L2</a>
+                        <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                         <a href="{{ url_for('orden_produccion.listar', estado='EN_EMPAQUETADO') }}"
+                           class="btn btn-sm {% if current_status == 'EN_EMPAQUETADO' %}btn-primary{% else %}btn-secondary{% endif %}">
+                            Empaq.
+                        </a>
+                         <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                        <a href="{{ url_for('orden_produccion.listar', estado='CONTROL_DE_CALIDAD') }}"
+                           class="btn btn-sm {% if current_status == 'CONTROL_DE_CALIDAD' %}btn-primary{% else %}btn-secondary{% endif %}">
+                            Calidad
+                        </a>
+                         <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
+                        <a href="{{ url_for('orden_produccion.listar', estado='COMPLETADA') }}"
+                           class="btn btn-sm {% if current_status == 'COMPLETADA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                            Completadas
+                        </a>
+                        <span class="text-white fw-bold mx-1">|</span>
+                         <a href="{{ url_for('orden_produccion.listar', estado='CONSOLIDADA') }}"
+                           class="btn btn-sm {% if current_status == 'CONSOLIDADA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                            Consolidadas
+                        </a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='CANCELADA') }}"
+                           class="btn btn-sm {% if current_status == 'CANCELADA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                            Canceladas
+                        </a>
+                    </div>
                 </div>
             </div>
         </form>
     </div>
 </div>
-
-<!-- Lista de órdenes -->
 <div class="row">
-
     {% for orden in ordenes %}
     <div class="col-md-4 mb-4">
         <div class="card orden-card h-100 {% if orden.estado == 'CANCELADA' %}orden-rechazada{% endif %}">
@@ -94,15 +88,17 @@
                     <h5 class="card-title">{{ orden.producto_nombre or 'Producto no definido' }}</h5>
                     {% set estado_config = {
                         'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
-                        'EN_ESPERA': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
+                        'EN ESPERA': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
                         'LISTA PARA PRODUCIR': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
-                        'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                        'CONSOLIDADA': {'class': 'bg-success text-white', 'icon': 'check-circle'},
+                        'EN_LINEA_1': {'class': 'bg-primary-soft text-primary', 'icon': 'diagram-3'},
+                        'EN_LINEA_2': {'class': 'bg-primary-soft text-primary', 'icon': 'diagram-3-fill'},
+                        'EN_EMPAQUETADO': {'class': 'bg-purple-soft text-purple', 'icon': 'box-seam'},
+                        'CONTROL_DE_CALIDAD': {'class': 'bg-cyan-soft text-cyan', 'icon': 'clipboard-check'},
+                        'CONSOLIDADA': {'class': 'bg-light text-muted', 'icon': 'link-45deg'},
                         'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle-fill'},
                         'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
-                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':
-                    'question-circle'}) %}
+                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':'question-circle'}) %}
                     <span class="badge {{ config.class }}">
                         <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado.replace('_', ' ') }}
                     </span>
@@ -110,368 +106,63 @@
 
                 <div class="card-secondary-details mb-3">
                     <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
-                    <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b> unidades</span>
+                    <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b></span>
                     <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
-                    
-                    {% if orden.estado == 'APROBADA' or orden.estado == 'EN_PROCESO' or orden.estado == 'COMPLETADA' %}
-                    <span><i class="bi bi-calendar2-check"></i> {{ orden.fecha_aprobacion }}</span>
-                    <span><i class="bi bi-calendar2-range"></i> {{ orden.fecha_fin_estimada }}</span>
+                    {% if orden.fecha_inicio_planificada %}
+                    <br><span class="text-primary"><i class="bi bi-play-circle-fill"></i> Inicia: {{ orden.fecha_inicio_planificada }}</span>
                     {% endif %}
-                    
-                    <div class="card-assignment-details">
-                        {% if orden.pedidos_asociados %}
-                            <div class="d-flex align-items-center">
-                                {% set primer_pedido = orden.pedidos_asociados[0] %}
-                                <span title="{{ primer_pedido.nombre_cliente }}">
-                                    <i class="bi bi-person-check-fill text-success"></i>
-                                    <a href="{{ url_for('orden_venta.detalle', id=primer_pedido.id) }}" class="text-decoration-none">
-                                        PED-{{ primer_pedido.id }}
-                                    </a>
-                                </span>
-                                {% if orden.pedidos_asociados|length > 1 %}
-                                    <button class="btn btn-sm btn-outline-secondary btn-expand-pedidos rounded-pill ms-2" style="--bs-btn-padding-y: .1rem; --bs-btn-padding-x: .4rem; --bs-btn-font-size: .7rem;" type="button" data-bs-toggle="collapse" data-bs-target="#pedidos-{{ orden.id }}" aria-expanded="false" aria-controls="pedidos-{{ orden.id }}">
-                                        +{{ orden.pedidos_asociados|length - 1 }}
-                                    </button>
-                                {% endif %}
-                            </div>
-                        {% else %}
-                            <span class="text-muted"><i class="bi bi-box-seam"></i> Para Stock</span>
-                        {% endif %}
-                    </div>
-
-                    {% if orden.pedidos_asociados and orden.pedidos_asociados|length > 1 %}
-                    <div class="collapse pt-2" id="pedidos-{{ orden.id }}">
-                        {% for pedido in orden.pedidos_asociados[1:] %}
-                            <div class="card-assignment-details" title="{{ pedido.nombre_cliente }}">
-                                <span class="me-2">
-                                    <i class="bi bi-person-check-fill text-success"></i>
-                                    <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}" class="text-decoration-none">
-                                        PED-{{ pedido.id }}
-                                    </a>
-                                </span>
-                            </div>
-                        {% endfor %}
-                    </div>
+                    {% if orden.fecha_meta %}
+                    <br><span class="text-danger"><i class="bi bi-calendar-check-fill"></i> Meta: {{ orden.fecha_meta }}</span>
                     {% endif %}
                 </div>
 
-                <div class="mt-auto">
-                    <hr class="card-divider">
+                 <div class="card-assignment-details mb-2">
+                      </div>
+                  {% if orden.pedidos_asociados and orden.pedidos_asociados|length > 1 %}
+                  <div class="collapse pt-2" id="pedidos-{{ orden.id }}">
+                      </div>
+                  {% endif %}
 
-                    <div class="d-flex justify-content-between align-items-center mb-3 stock-info">
-                        <div>
-                            <span class="stock-label">Creado por</span>
-                            <span class="stock-value">{{ orden.creador_nombre or 'No asignado' }}</span>
-                        </div>
-                        <div>
-                            {% if orden.prioridad and orden.prioridad != 'NORMAL' %}
-                            {% set prioridad_config = {
-                            'BAJA': {'class': 'bg-light text-dark', 'icon': 'arrow-down'},
-                            'ALTA': {'class': 'bg-warning-soft text-warning', 'icon': 'arrow-up'},
-                            'URGENTE': {'class': 'bg-danger-soft text-danger', 'icon': 'exclamation-triangle'}
-                            } %}
-                            {% set pconfig = prioridad_config.get(orden.prioridad, {'class': 'bg-secondary', 'icon':
-                            'dash'}) %}
-                            <span class="badge {{ pconfig.class }}">
-                                <i class="bi bi-{{ pconfig.icon }} me-1"></i>{{ orden.prioridad }}
-                            </span>
-                            {% endif %}
-                        </div>
+                 <div class="mt-auto">
+                    <hr class="card-divider my-2">
+                    <div class="d-flex justify-content-between align-items-center mb-2 stock-info">
+                         <div><span class="stock-label">Creado por:</span> <span class="stock-value">{{ orden.creador_nombre or 'N/A' }}</span></div>
+                         <div> </div>
                     </div>
 
-                    <!-- Asignación de Supervisor -->
-                    <div class="supervisor-section mb-3">
-                        <span class="stock-label">Supervisor a Cargo</span>
-                        <span class="stock-value fw-bold {% if not orden.supervisor_responsable_id %}text-muted{% endif %}">
-                            {{ orden.supervisor_nombre or 'Sin asignar' }}
-                        </span>
-                    
-                        {% if orden.estado != 'CANCELADA' and orden.estado != 'COMPLETADA' and orden.estado != 'EN_PROCESO' %}
-                        <form method="POST" action="{{ url_for('orden_produccion.asignar_supervisor', id=orden.id) }}" class="mt-2">
-                            <div class="input-group input-group-sm">
-                                <select name="supervisor_id" class="form-select">
-                                    <option value="">Seleccionar supervisor...</option>
-                                    {% for supervisor in supervisores %}
-                                        <option value="{{ supervisor.id }}" {% if orden.supervisor_responsable_id == supervisor.id %}selected{% endif %}>
-                                            {{ supervisor.nombre }} {{ supervisor.apellido }}
-                                        </option>
-                                    {% endfor %}
-                                </select>
-                                <button type="submit" class="btn btn-outline-secondary">Guardar</button>
-                            </div>
-                        </form>
+                    <div class="card-assignment-details mb-3">
+                        {% if orden.linea_asignada %}<span class="me-2"><i class="bi bi-diagram-3-fill text-primary"></i> L{{ orden.linea_asignada }}</span>{% endif %}
+                        {% if orden.supervisor_nombre %}<span class="me-2"><i class="bi bi-person-badge-fill text-info"></i> S:{{ orden.supervisor_nombre or 'N/A' }}</span>{% endif %}
+                        {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary"></i> O:{{ orden.operario_nombre or 'N/A' }}</span>{% endif %}
+                        {% if not orden.linea_asignada and not orden.supervisor_nombre and not orden.operario_nombre %}
+                            <span class="text-muted fst-italic">Sin asignaciones</span>
                         {% endif %}
                     </div>
 
-                    <!-- Botones de Acción -->
                     <div class="d-flex justify-content-end align-items-center flex-wrap gap-2 action-buttons">
-                        <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" 
-                           class="btn btn-sm btn-outline-primary" 
+                        <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}"
+                           class="btn btn-sm btn-outline-primary"
                            title="Ver Detalle">
                             <i class="bi bi-eye"></i> Detalle
                         </a>
-                        {% if orden.estado == 'LISTA PARA PRODUCIR' %}
-                            {% if has_permission('iniciar_produccion') %}
-                            <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
-                                data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
-                                <button type="submit" class="btn btn-sm btn-outline-success" title="Iniciar Orden">Iniciar <i class="bi bi-play-fill"></i></button>
-                            </form>
-                            {% endif %}
-                        {% endif %}
-                        {% if orden.estado == 'EN_PROCESO' %}
-                            {% if has_permission('pausar_produccion') %}
-                            <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;" class="confirm-form"
-                                data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
-                                <button type="submit" class="btn btn-sm btn-outline-success" title="Completar Orden">Completar <i class="bi bi-check-circle-fill"></i></button>
-                            </form>
-                            {% endif %}
-                        {% endif %}
-                        {% if orden.estado == 'PENDIENTE' %}
-                            {% if has_permission('aprobar_ordenes_produccion') %}
-                            <form method="POST" action="{{ url_for('orden_produccion.aprobar', id=orden.id) }}" style="display: inline;" class="confirm-form"
-                                data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de producción?" data-button-type="success">
-                                <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">Aprobar <i class="bi bi-check-circle"></i></button>
-                            </form>
-                            {% endif %}
-                            {% set can_cancel = has_permission('cancelar_ordenes_produccion')|trim == 'True' %}
-                            <form method="POST" action="{{ url_for('orden_produccion.rechazar', id=orden.id) if can_cancel else '#' }}" style="display: inline;" class="confirm-form"
-                                data-title="Confirmar Rechazo" data-message="¿Está seguro de que desea rechazar esta orden de producción? Esta acción no se puede deshacer." data-button-type="danger">
-                                <button type="submit" class="btn btn-sm btn-outline-danger {% if not can_cancel %}disabled{% endif %}" title="Rechazar Orden">Rechazar <i class="bi bi-x-circle"></i></button>
-                            </form>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
+                        </div>
+                 </div> </div>
         </div>
     </div>
     {% else %}
-    <div class="col-12">
-        <div class="card bg-light border-0">
-            <div class="card-body text-center py-5">
-                <i class="bi bi-info-circle fs-1 opacity-25 mb-3"></i>
-                <h4 class="card-title">No se encontraron órdenes de producción</h4>
-                <p class="text-muted mb-0">
-                    No hay órdenes que coincidan con los filtros seleccionados.
-                    Pruebe a cambiar el filtro de estado o verifique si se han creado nuevas órdenes desde el módulo de
-                    planificación.
-                </p>
+        <div class="col-12">
+            <div class="card bg-light border-0">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-info-circle fs-1 opacity-25 mb-3"></i>
+                    <h4 class="card-title">No se encontraron órdenes de producción</h4>
+                    <p class="text-muted mb-0">No hay órdenes que coincidan con los filtros seleccionados.</p>
+                </div>
             </div>
         </div>
-    </div>
     {% endfor %}
 </div>
 
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const forms = document.querySelectorAll('.confirm-form');
-    forms.forEach(form => {
-        form.addEventListener('submit', function (e) {
-            e.preventDefault();
-            
-            const title = form.dataset.title || 'Confirmar Acción';
-            const message = form.dataset.message || '¿Está seguro de que desea realizar esta acción?';
-            const buttonType = form.dataset.buttonType || 'primary';
-
-            showConfirmationModal(
-                title,
-                message,
-                () => { // Callback de confirmación
-                    form.submit();
-                },
-                buttonType
-            );
-        });
-    });
-});
-
-document.addEventListener('DOMContentLoaded', function () {
-    const forms = document.querySelectorAll('.confirm-form');
-    
-    // Función para manejar la creación de OC + OP
-    async function handleCreateOcOp(ordenId, insumosFaltantes) {
-        const url = `/ordenes/${ordenId}/crear_oc_op`; 
-        
-        // Muestra un modal temporal de procesamiento mientras se genera la OC
-        showNotificationModal('Procesando', 'Generando Orden de Compra...', 'info', null, true);
-        
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ insumos_faltantes: insumosFaltantes })
-            });
-
-            // Si hay una redirección, la seguimos (ej. si Flask redirige por un error)
-            if (response.redirected) {
-                window.location.href = response.url;
-                return;
-            }
-
-            // Intentar parsear el JSON de forma nativa
-            let result;
-            try {
-                // Usamos response.json() para una gestión más limpia del Content-Type
-                result = await response.json(); 
-            } catch (e) {
-                // Fallo crítico al parsear JSON. Leemos el texto para loguear y reportar.
-                const text = await response.text();
-                console.error("Fallo al parsear la respuesta JSON de crear_oc_op. Texto recibido:", text);
-                showNotificationModal('Error de Servidor (JSON)', `Respuesta no válida del servidor (Código ${response.status}). Revise la consola para detalles.`, 'error');
-                return;
-            }
-
-            // 1. Manejo de errores basado en el código HTTP
-            if (!response.ok) {
-                 showNotificationModal('Error de Servidor', result.error || 'Fallo desconocido al crear OC/OP.', 'error');
-                 return;
-            }
-            
-            // 2. Manejo de éxito basado en el contenido del JSON
-            if (result.success) {
-                const ocCodigo = result.oc_codigo || (result.data ? result.data.oc_codigo : 'N/A');
-                
-                // Usamos el mensaje del servidor si existe, sino un mensaje de respaldo garantizado
-                const finalMessage = result.message || 
-                                     `✅ Se generó la Orden de Compra ${ocCodigo} para cubrir los faltantes. La OP ahora está en 'En Espera'.`;
-                
-                showNotificationModal(
-                    'OP Aprobada y OC Creada',
-                    finalMessage, 
-                    'success',
-                    () => { 
-                        // Redirigir a la lista de OC para ver la orden recién creada
-                        window.location.href = result.redirect_url || "{{ url_for('orden_compra.listar') }}"; 
-                    }
-                );
-            } else {
-                showNotificationModal('Error Crítico', result.error || 'No se pudo crear la OC/OP. Intente de nuevo.', 'error');
-            }
-        } catch (error) {
-            console.error('Error de red al crear OC/OP:', error);
-            showNotificationModal('Error de Red', 'Fallo de conexión.', 'error');
-        }
-    }
-
-    forms.forEach(form => {
-        if (form.action.includes('/aprobar')) {
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();
-                
-                // Extraer el ID de la orden de la URL de acción del formulario
-                const match = form.action.match(/\/(\d+)\/aprobar$/);
-                if (!match) return;
-                const ordenId = parseInt(match[1]);
-
-                const title = form.dataset.title || 'Confirmar Aprobación';
-                const message = form.dataset.message || '¿Está seguro de que desea realizar esta acción?';
-                const buttonType = form.dataset.buttonType || 'primary';
-
-                showConfirmationModal(title, message, () => {
-                    // Muestra spinner
-                    const btn = form.querySelector('button[type="submit"]');
-                    const originalContent = btn.innerHTML;
-                    btn.disabled = true;
-                    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando...';
-
-                    fetch(form.action, {
-                        method: 'POST',
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                    })
-                    .then(response => {
-                        const status = response.status;
-                        
-                        // 1. Manejo robusto de la respuesta: lee texto y luego parsear JSON
-                        return response.text().then(text => {
-                            let data;
-                            try {
-                                data = JSON.parse(text);
-                            } catch (e) {
-                                // Si falla el parseo, pero el status es de éxito, inyecta un resultado de éxito simulado
-                                if (status >= 200 && status < 300) {
-                                    data = { success: true, message: "Operación exitosa (respuesta sin JSON)." };
-                                } else {
-                                    // Si falla el parseo y es un error (4xx/5xx), utiliza el texto como error.
-                                    data = { success: false, error: text || `Error ${status} del servidor.` };
-                                }
-                            }
-                            return { data, status };
-                        });
-                    })
-                    .then(({ data, status }) => {
-                        // Restaurar el botón base
-                        const btn = form.querySelector('button[type="submit"]');
-                        btn.disabled = false;
-                        btn.innerHTML = originalContent;
-                        
-                        if (status === 409) {
-                            // --- FLUJO ESPECIAL: Faltante de Stock Detectado ---
-                            
-                            // Los datos faltantes vienen anidados en data.data.insumos_faltantes
-                            const faltantes = data.data.insumos_faltantes;
-                            // El mensaje de error viene en data.error, reemplazamos los <br> para HTML
-                            const faltantesHtml = data.error.replace(/<br>/g, '');
-
-                            showConfirmationModal(
-                                'Faltante de Stock', 
-                                `${faltantesHtml} ¿Desea crear una Orden de Compra para solicitar estos insumos y luego aprobar la Orden de Producción?`,
-                                () => {
-                                    // Si el usuario confirma, llamar a la nueva ruta
-                                    // Pasamos el ID de la Orden y los insumos faltantes
-                                    handleCreateOcOp(ordenId, faltantes);
-                                },
-                                'warning'
-                            );
-                        } else if (data.success) {
-                            showNotificationModal('Éxito', data.message || 'Acción exitosa.', 'success', () => { 
-                                window.location.reload(); 
-                            });
-                        } else {
-                            showNotificationModal('Error', data.error || 'Ocurrió un error al aprobar la OP.', 'error');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error en la petición AJAX (Final Catch):', error);
-                        showNotificationModal('Error de Red', 'Fallo de conexión.', 'error');
-                        // Restaurar el botón en caso de fallo de red
-                        const btn = form.querySelector('button[type="submit"]');
-                        btn.disabled = false;
-                        btn.innerHTML = originalContent;
-                    });
-                }, buttonType);
-            });
-        }
-    });
-
-    // Manejo de expansión de pedidos asociados
-    const expandButtons = document.querySelectorAll('.btn-expand-pedidos');
-    expandButtons.forEach(button => {
-        // Obtener el ID del collapse desde data-bs-target
-        const collapseTargetId = button.getAttribute('data-bs-target');
-        const collapseElement = document.querySelector(collapseTargetId);
-        
-        if (collapseElement) {
-            // Escuchar el evento cuando se muestra el collapse
-            collapseElement.addEventListener('show.bs.collapse', function () {
-                const icon = button.querySelector('i');
-                if (icon) {
-                    icon.classList.remove('bi-plus-lg');
-                    icon.classList.add('bi-dash-lg');
-                }
-            });
-
-            // Escuchar el evento cuando se oculta el collapse
-            collapseElement.addEventListener('hide.bs.collapse', function () {
-                const icon = button.querySelector('i');
-                if (icon) {
-                    icon.classList.remove('bi-dash-lg');
-                    icon.classList.add('bi-plus-lg');
-                }
-            });
-        }
-    });
-});
-</script>
-{% endblock %}4
+{% endblock %}
