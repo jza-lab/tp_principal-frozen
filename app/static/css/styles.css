@@ -10,17 +10,19 @@
     --frozen-card-bg: #ffffff;
     --frozen-shadow: rgba(0, 0, 0, 0.05);
 
-    --app-primary: #313131; /* Principal: Negro o Gris Oscuro */
+    --app-primary: #313131;
+    /* Principal: Negro o Gris Oscuro */
     --app-primary-hover: #494949;
     --accent-green: #1cc88a;
     --accent-orange: #fd7e14;
     --accent-purple: #6f42c1;
     --accent-red: #ff1500;
-    --accent-white:#ffffff;
-    --accent-cyan:#00FFFF;
+    --accent-white: #ffffff;
+    --accent-cyan: #00FFFF;
 
     /* Nuevas variables para efectos */
-    --glow-primary: rgba(49, 49, 49, 0.5); /* Sombra de app-primary */
+    --glow-primary: rgba(49, 49, 49, 0.5);
+    /* Sombra de app-primary */
     --button-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     --button-shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.2);
     /* Nueva sombra para tarjetas mejoradas */
@@ -36,7 +38,7 @@ body {
     padding-top: 70px;
     margin-left: 40px;
     margin-right: 40px;
-    transition: background-color 0.3s ease, opacity 0.4s ease-in-out; 
+    transition: background-color 0.3s ease, opacity 0.4s ease-in-out;
     opacity: 1;
 }
 
@@ -46,9 +48,20 @@ body.fade-out {
 
 /* Nuevo Keyframes: Animación de respiración para títulos */
 @keyframes breathing {
-    0% { opacity: 1; transform: translateY(0); }
-    50% { opacity: 0.98; transform: translateY(-0.5px); }
-    100% { opacity: 1; transform: translateY(0); }
+    0% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    50% {
+        opacity: 0.98;
+        transform: translateY(-0.5px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Aplicar a títulos principales */
@@ -62,18 +75,20 @@ h1.h2 {
 
 /* Navbar styles */
 .navbar-custom {
-    position: fixed; /* Asegura que la barra de navegación esté arriba */
+    position: fixed;
+    /* Asegura que la barra de navegación esté arriba */
     top: 0;
     left: 0;
     z-index: 1030;
     width: 100%;
     border-bottom: 1px solid var(--frozen-border);
     background: var(--header-bg);
-    box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.08);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    animation: slideDown 0.5s cubic-bezier(0.23, 1, 0.32, 1); /* Curva de aceleración mejorada */
+    animation: slideDown 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+    /* Curva de aceleración mejorada */
 }
 
 @keyframes slideDown {
@@ -81,6 +96,7 @@ h1.h2 {
         transform: translateY(-100%);
         opacity: 0;
     }
+
     to {
         transform: translateY(0);
         opacity: 1;
@@ -92,12 +108,14 @@ h1.h2 {
     font-weight: 700;
     font-size: 1.6rem;
     color: var(--app-primary) !important;
-    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* Transición más sofisticada */
+    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    /* Transición más sofisticada */
 }
 
 .navbar-custom .navbar-brand:hover {
     color: var(--app-primary-hover) !important;
-    transform: scale(1.05); /* Escala un poco más */
+    transform: scale(1.05);
+    /* Escala un poco más */
 }
 
 .navbar-custom .navbar-brand i.bi-snow2 {
@@ -106,15 +124,16 @@ h1.h2 {
 }
 
 .navbar-custom .navbar-brand:hover i.bi-snow2 {
-    transform: rotate(720deg); /* Doble giro para más impacto */
+    transform: rotate(720deg);
+    /* Doble giro para más impacto */
 }
 
 .navbar-custom .nav-link {
     color: var(--header-text) !important;
     font-weight: 600;
     padding: 0.5rem 1rem !important;
-    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
-    border-radius: 8px; 
+    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    border-radius: 8px;
     margin: 0 5px;
     position: relative;
     overflow: hidden;
@@ -124,14 +143,17 @@ h1.h2 {
 .navbar-custom .nav-link::after {
     content: '';
     position: absolute;
-    top: 0; /* Cambio de bottom a top */
+    top: 0;
+    /* Cambio de bottom a top */
     left: 0;
     width: 100%;
-    height: 100%; /* La línea cubre todo el enlace */
+    height: 100%;
+    /* La línea cubre todo el enlace */
     background-color: var(--app-primary);
     transform: translateX(-100%);
     transition: transform 0.3s ease-out;
-    opacity: 0.1; /* Sutil overlay para el efecto */
+    opacity: 0.1;
+    /* Sutil overlay para el efecto */
     z-index: 0;
     border-radius: 8px;
 }
@@ -141,10 +163,14 @@ h1.h2 {
 }
 
 .navbar-custom .nav-link:hover {
-    color: var(--app-primary) !important; /* Mantiene el color original */
-    background-color: transparent; /* Remueve el background del hover anterior */
-    box-shadow: inset 0 0 0 1px var(--app-primary); /* Borde sutil al hacer hover */
+    color: var(--app-primary) !important;
+    /* Mantiene el color original */
+    background-color: transparent;
+    /* Remueve el background del hover anterior */
+    box-shadow: inset 0 0 0 1px var(--app-primary);
+    /* Borde sutil al hacer hover */
 }
+
 /* Asegura que el texto esté sobre el overlay */
 .navbar-custom .nav-item {
     z-index: 1;
@@ -152,8 +178,10 @@ h1.h2 {
 
 .navbar-custom .nav-link.active {
     color: var(--header-text-hover) !important;
-    background-color: var(--app-primary); /* Estilo activo fuerte */
-    box-shadow: 0 2px 8px var(--glow-primary); /* Sombra que resalta */
+    background-color: var(--app-primary);
+    /* Estilo activo fuerte */
+    box-shadow: 0 2px 8px var(--glow-primary);
+    /* Sombra que resalta */
     transform: translateY(-1px);
 }
 
@@ -179,7 +207,7 @@ h1.h2 {
 .navbar-custom .dropdown-menu {
     border-radius: 8px;
     border: 1px solid var(--frozen-border);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2); 
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
     padding: 0.5rem 0;
     animation: slideDownGrow 0.65s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
@@ -187,11 +215,14 @@ h1.h2 {
 @keyframes slideDownGrow {
     0% {
         opacity: 0;
-        transform: translateY(-70px); /* Comienza 70px arriba */
+        transform: translateY(-70px);
+        /* Comienza 70px arriba */
     }
+
     100% {
         opacity: 1;
-        transform: translateY(30); /* Termina en su posición normal */
+        transform: translateY(30);
+        /* Termina en su posición normal */
     }
 }
 
@@ -202,7 +233,8 @@ h1.h2 {
 .navbar-custom .dropdown-menu.collapsing,
 .navbar-custom .dropdown-menu.hide {
     opacity: 0 !important;
-    transform: translateY(-10px) !important; /* Desaparece encogiéndose hacia arriba */
+    transform: translateY(-10px) !important;
+    /* Desaparece encogiéndose hacia arriba */
     transition: opacity 0.2s ease-out, transform 0.2s ease-out !important;
 }
 
@@ -217,7 +249,8 @@ h1.h2 {
 .navbar-custom .dropdown-item.active {
     background-color: var(--app-primary);
     color: white;
-    transform: translateX(4px); /* Deslizamiento sutil al item */
+    transform: translateX(4px);
+    /* Deslizamiento sutil al item */
 }
 
 /* Navbar de Usuario (Avatar) - Animación de Pulse */
@@ -228,7 +261,8 @@ h1.h2 {
 }
 
 .navbar-custom #navbarDropdownUser:hover {
-    box-shadow: 0 0 0 3px var(--accent-green); /* Efecto de "pulse" en el hover */
+    box-shadow: 0 0 0 3px var(--accent-green);
+    /* Efecto de "pulse" en el hover */
 }
 
 .navbar-custom #navbarDropdownUser i.bi-person-circle {
@@ -248,24 +282,31 @@ h1.h2 {
 /* Card styles */
 .card {
     border: 1px solid var(--frozen-border);
-    border-radius: 12px; /* Radio más pronunciado para un look más suave */
-    box-shadow: var(--button-shadow); /* Usa la nueva variable de sombra */
-    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.5, 1); /* Transición más fluida y elástica */
+    border-radius: 12px;
+    /* Radio más pronunciado para un look más suave */
+    box-shadow: var(--button-shadow);
+    /* Usa la nueva variable de sombra */
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.5, 1);
+    /* Transición más fluida y elástica */
     background-color: var(--frozen-bg);
     position: relative;
 }
 
 .card:hover {
     box-shadow: var(--button-shadow-hover);
-    transform: translateY(-5px); /* Desplazamiento más notorio */
+    transform: translateY(-5px);
+    /* Desplazamiento más notorio */
     /* Agrega un borde de color sutil en el hover */
-    border-color: var(--app-primary); 
+    border-color: var(--app-primary);
 }
 
 .card-header {
-    background: linear-gradient(0deg, #f8f9fa 0%, var(--accent-white) 100%); /* Sutil degradado */
-    border-bottom: 2px solid #e9ecef; /* Borde más definido */
-    font-weight: 700; /* Más audaz */
+    background: linear-gradient(0deg, #f8f9fa 0%, var(--accent-white) 100%);
+    /* Sutil degradado */
+    border-bottom: 2px solid #e9ecef;
+    /* Borde más definido */
+    font-weight: 700;
+    /* Más audaz */
     padding: 1rem 1.5rem;
     border-top-left-radius: 12px;
     border-top-right-radius: 12px;
@@ -275,18 +316,22 @@ h1.h2 {
 .btn {
     font-weight: 600;
     border-radius: 8px;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); /* Curva de desaceleración moderna */
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Curva de desaceleración moderna */
     padding: 0.6rem 1.2rem;
     border: none;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    z-index: 2; /* Asegura que el botón esté sobre otros elementos */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 2;
+    /* Asegura que el botón esté sobre otros elementos */
 }
 
 .btn:hover {
-    transform: translateY(-3px); /* Desplazamiento de hover más pronunciado */
-    box-shadow: 0 5px 15px rgba(0,0,0,0.25); /* Sombra de hover más fuerte */
+    transform: translateY(-3px);
+    /* Desplazamiento de hover más pronunciado */
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.25);
+    /* Sombra de hover más fuerte */
     z-index: 3;
 }
 
@@ -314,18 +359,21 @@ h1.h2 {
 .btn-primary {
     background: linear-gradient(180deg, var(--app-primary-hover) 0%, var(--app-primary) 100%);
     color: white;
-    border: 1px solid var(--app-primary-hover); /* Nuevo borde para estructura */
+    border: 1px solid var(--app-primary-hover);
+    /* Nuevo borde para estructura */
 }
 
 .btn-primary:hover {
     background-color: var(--app-primary-hover);
-    background: var(--app-primary-hover); /* Asegura que el hover se mantenga sólido y oscuro */
+    background: var(--app-primary-hover);
+    /* Asegura que el hover se mantenga sólido y oscuro */
 }
 
 .btn-success {
     background-color: var(--accent-green);
     color: white;
-    box-shadow: 0 4px 10px rgba(28, 200, 138, 0.3); /* Sombra de color para acento */
+    box-shadow: 0 4px 10px rgba(28, 200, 138, 0.3);
+    /* Sombra de color para acento */
 }
 
 .btn-success:hover {
@@ -344,7 +392,7 @@ h1.h2 {
     background-color: var(--frozen-bg);
     border-color: var(--frozen-text-secondary);
     color: var(--app-primary);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .w-100 {
@@ -388,7 +436,8 @@ h1.h2 {
 
 /* Alert styles - Mejorado con línea de color animada */
 .alert {
-    border-radius: 8px; /* Redondeado para coincidir con el resto */
+    border-radius: 8px;
+    /* Redondeado para coincidir con el resto */
     border: none;
     box-shadow: 0 4px 10px var(--frozen-shadow);
     animation: fadeIn 0.5s ease-in-out;
@@ -402,54 +451,74 @@ h1.h2 {
     position: absolute;
     top: 0;
     left: 0;
-    width: 4px; /* Ancho de la línea */
+    width: 4px;
+    /* Ancho de la línea */
     height: 100%;
     transition: width 0.3s ease-out;
 }
 
 .alert:hover::before {
-    width: 8px; /* Se expande un poco en el hover */
+    width: 8px;
+    /* Se expande un poco en el hover */
 }
 
 .alert-danger {
     background-color: #f8d7da;
     color: #721c24;
 }
-.alert-danger::before { background-color: var(--accent-red); }
+
+.alert-danger::before {
+    background-color: var(--accent-red);
+}
 
 .alert-warning {
     background-color: #fff3cd;
     color: #856404;
 }
-.alert-warning::before { background-color: var(--accent-orange); }
+
+.alert-warning::before {
+    background-color: var(--accent-orange);
+}
 
 .alert-success {
     background-color: #d1eddf;
     color: #155724;
 }
-.alert-success::before { background-color: var(--accent-green); }
+
+.alert-success::before {
+    background-color: var(--accent-green);
+}
 
 .alert-info {
     background-color: #d1ecf1;
     color: #0c5460;
 }
-.alert-info::before { background-color: var(--app-primary); }
+
+.alert-info::before {
+    background-color: var(--app-primary);
+}
 
 
 /* Form styles - Foco mejorado */
-.form-control, .form-select {
+.form-control,
+.form-select {
     border-radius: 6px;
-    border: 1px solid var(--frozen-border); /* Asegura borde visible por defecto */
+    border: 1px solid var(--frozen-border);
+    /* Asegura borde visible por defecto */
     transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.form-control:focus, .form-select:focus {
+.form-control:focus,
+.form-select:focus {
     /* Reemplaza la caja de sombra simple con un anillo doble */
     border-color: var(--app-primary);
-    box-shadow: 
-        0 0 0 1px var(--app-primary), /* Anillo interior más fino */
-        0 0 0 3px rgba(49, 49, 49, 0.1); /* Anillo exterior sutil */
-    outline: none; /* Remueve el outline del navegador */
+    box-shadow:
+        0 0 0 1px var(--app-primary),
+        /* Anillo interior más fino */
+        0 0 0 3px rgba(49, 49, 49, 0.1);
+    /* Anillo exterior sutil */
+    outline: none;
+    /* Remueve el outline del navegador */
 }
 
 /* Badge styles */
@@ -462,6 +531,7 @@ h1.h2 {
         opacity: 0;
         transform: translateY(10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -488,7 +558,8 @@ h1.h2 {
 .login-card {
     background: white;
     border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2); /* Sombra de login más fuerte */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    /* Sombra de login más fuerte */
     border: 1px solid var(--frozen-border);
     overflow: hidden;
     max-width: 400px;
@@ -529,6 +600,7 @@ h1.h2 {
         opacity: 0;
         transform: translateY(20px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -541,10 +613,21 @@ h1.h2 {
     animation: card-entry 0.6s ease-out backwards;
 }
 
-.stat-card:nth-child(1) { animation-delay: 0.1s; }
-.stat-card:nth-child(2) { animation-delay: 0.2s; }
-.stat-card:nth-child(3) { animation-delay: 0.3s; }
-.stat-card:nth-child(4) { animation-delay: 0.4s; }
+.stat-card:nth-child(1) {
+    animation-delay: 0.1s;
+}
+
+.stat-card:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.stat-card:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+.stat-card:nth-child(4) {
+    animation-delay: 0.4s;
+}
 
 .stat-card:hover {
     border-left-color: var(--frozen-accent-hover);
@@ -612,18 +695,29 @@ h1.h2 {
     font-size: 0.85rem;
     border-left: 3px solid var(--accent-green);
 }
+
 /* Insumo Card Styles - Mejorado con borde dinámico */
-.insumo-card, .producto-card, .cliente-card:hover, .proveedor-card:hover, .orden-card:hover {
-    border: 1px solid var(--frozen-border) !important; /* Mantener el borde original */
+.insumo-card,
+.producto-card,
+.cliente-card:hover,
+.proveedor-card:hover,
+.orden-card:hover {
+    border: 1px solid var(--frozen-border) !important;
+    /* Mantener el borde original */
     border-radius: 0.75rem;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
     transition: transform 0.4s ease-in-out, box-shadow 0.4s ease-in-out, border-color 0.4s ease;
     position: relative;
-    overflow: hidden; /* Clave para el efecto de borde inferior */
+    overflow: hidden;
+    /* Clave para el efecto de borde inferior */
 }
 
 /* Efecto de borde inferior al iniciar */
-.insumo-card::after, .producto-card::after, .cliente-card::after, .proveedor-card::after, .orden-card::after {
+.insumo-card::after,
+.producto-card::after,
+.cliente-card::after,
+.proveedor-card::after,
+.orden-card::after {
     content: '';
     position: absolute;
     bottom: 0;
@@ -631,23 +725,38 @@ h1.h2 {
     width: 100%;
     height: 3px;
     background-color: var(--accent-green);
-    transform: scaleX(0); /* Inicialmente oculto */
+    transform: scaleX(0);
+    /* Inicialmente oculto */
     transition: transform 0.4s ease-in-out;
     transform-origin: bottom left;
     pointer-events: none;
 }
 
-.insumo-card:hover, .producto-card:hover, .cliente-card:hover, .proveedor-card:hover, .orden-card:hover {
-    transform: translateY(-5px); 
-    box-shadow: var(--card-glow-hover), 0 0 10px rgba(28, 200, 138, 0.1); 
-    border-color: #e9ecef !important; /* Mantener borde sutil */
+.insumo-card:hover,
+.producto-card:hover,
+.cliente-card:hover,
+.proveedor-card:hover,
+.orden-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--card-glow-hover), 0 0 10px rgba(28, 200, 138, 0.1);
+    border-color: #e9ecef !important;
+    /* Mantener borde sutil */
 }
 
-.insumo-card:hover::after, .producto-card:hover::after, .cliente-card:hover::after, .proveedor-card:hover::after, .orden-card:hover::after {
-    transform: scaleX(1); /* El borde inferior se revela completamente */
+.insumo-card:hover::after,
+.producto-card:hover::after,
+.cliente-card:hover::after,
+.proveedor-card:hover::after,
+.orden-card:hover::after {
+    transform: scaleX(1);
+    /* El borde inferior se revela completamente */
 }
 
-.insumo-card .card-title, .producto-card .card-title, .cliente-card .card-title, .proveedor-card .card-title, .orden-card .card-title  {
+.insumo-card .card-title,
+.producto-card .card-title,
+.cliente-card .card-title,
+.proveedor-card .card-title,
+.orden-card .card-title {
     font-size: 1.5rem;
     font-weight: 800;
     color: #212529;
@@ -656,38 +765,43 @@ h1.h2 {
 }
 
 /* Nuevo: Resaltar título en hover */
-.insumo-card:hover .card-title, .producto-card:hover .card-title, .cliente-card:hover .card-title, .proveedor-card:hover .card-title, .orden-card:hover .card-title {
-    color: var(--accent-green); /* Título se vuelve verde */
+.insumo-card:hover .card-title,
+.producto-card:hover .card-title,
+.cliente-card:hover .card-title,
+.proveedor-card:hover .card-title,
+.orden-card:hover .card-title {
+    color: var(--accent-green);
+    /* Título se vuelve verde */
     transform: translateX(0);
 }
 
 /* UNIFICACIÓN DE DETALLES SECUNDARIOS (Vertical) */
-.insumo-card .card-secondary-details, 
+.insumo-card .card-secondary-details,
 .producto-card .card-secondary-details,
 .orden-card .card-secondary-details {
     display: flex;
-    flex-direction: column; 
-    gap: 0.35rem;          
-    font-size: 0.9rem;     
-    color: var(--frozen-text-secondary); 
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.9rem;
+    color: var(--frozen-text-secondary);
     margin-bottom: 1rem;
-    padding-left: 0.5rem; 
-    flex-wrap: nowrap; 
+    padding-left: 0.5rem;
+    flex-wrap: nowrap;
 }
 
-.insumo-card .card-secondary-details i, 
+.insumo-card .card-secondary-details i,
 .producto-card .card-secondary-details i,
 .orden-card .card-secondary-details i {
     margin-right: 0.5rem;
-    color: var(--app-primary); 
+    color: var(--app-primary);
     font-size: 1rem;
 }
 
-.insumo-card .card-secondary-details span:hover, 
+.insumo-card .card-secondary-details span:hover,
 .producto-card .card-secondary-details span:hover,
 .orden-card .card-secondary-details span:hover {
-    color: var(--app-primary); 
-    transform: translateX(3px); 
+    color: var(--app-primary);
+    transform: translateX(3px);
 }
 
 
@@ -699,11 +813,12 @@ h1.h2 {
     border-radius: 3px;
 }
 
-.insumo-card hr.card-divider, .producto-card hr.card-divider {
-    margin-top: 1.5rem; 
+.insumo-card hr.card-divider,
+.producto-card hr.card-divider {
+    margin-top: 1.5rem;
     margin-bottom: 1rem;
     border: 0;
-    border-top: 2px dotted #e9ecef; 
+    border-top: 2px dotted #e9ecef;
 }
 
 .insumo-card .stock-info .stock-label {
@@ -714,10 +829,13 @@ h1.h2 {
 }
 
 /* Nuevo: Estilo para el área de stock/precio */
-.insumo-card .stock-info, .producto-card .stock-info {
+.insumo-card .stock-info,
+.producto-card .stock-info {
     padding: 0.5rem 0.75rem;
-    margin: -0.5rem -0.75rem 1rem -0.75rem; /* Margen negativo para expandir el fondo */
-    background-color: #fcfcfc; /* Fondo muy claro */
+    margin: -0.5rem -0.75rem 1rem -0.75rem;
+    /* Margen negativo para expandir el fondo */
+    background-color: #fcfcfc;
+    /* Fondo muy claro */
     border-radius: 6px;
     border: 1px solid #f0f0f0;
 }
@@ -741,12 +859,15 @@ h1.h2 {
 .insumo-inactivo {
     opacity: 0.6;
     background-color: #f8f9fa;
-    pointer-events: none; /* Evita que se pueda hacer hover o click en la tarjeta */
-    filter: grayscale(50%); /* Detalle visual para inactivo */
+    pointer-events: none;
+    /* Evita que se pueda hacer hover o click en la tarjeta */
+    filter: grayscale(50%);
+    /* Detalle visual para inactivo */
 }
 
 .insumo-inactivo .action-buttons {
-    pointer-events: auto; /* Permite que los botones dentro de la tarjeta inactiva sí sean clickeables */
+    pointer-events: auto;
+    /* Permite que los botones dentro de la tarjeta inactiva sí sean clickeables */
 }
 
 
@@ -798,18 +919,20 @@ h1.h2 {
 }
 
 .subtitulo {
-    color:#687077;
+    color: #687077;
 }
 
 /* Estilo para órdenes rechazadas */
 .orden-rechazada {
     opacity: 0.65;
-    background-color: #f8f9fa; /* Un gris muy claro */
+    background-color: #f8f9fa;
+    /* Un gris muy claro */
     border-color: #dee2e6;
 }
 
 .orden-rechazada .card-title {
-    color: #6c757d; /* Un gris más oscuro para el texto */
+    color: #6c757d;
+    /* Un gris más oscuro para el texto */
 }
 
 /* Badges personalizados */
@@ -882,7 +1005,7 @@ h1.h2 {
 
     /* En tablet, dos columnas */
     .insumo-card .action-buttons .btn {
-        flex: 1 1 calc(50% - 0.5rem); 
+        flex: 1 1 calc(50% - 0.5rem);
         min-width: 120px;
     }
 }
@@ -892,7 +1015,8 @@ h1.h2 {
     .justify-content-between {
         flex-direction: column !important;
         align-items: center !important;
-        gap: 0.75rem; /* espacio entre elementos */
+        gap: 0.75rem;
+        /* espacio entre elementos */
     }
 }
 
@@ -917,36 +1041,37 @@ h1.h2 {
 
 /* Funciona en navegadores modernos (Chrome, Edge, Opera, y soporte creciente) */
 @view-transition {
-  navigation: auto;
+    navigation: auto;
 }
 
 ::view-transition-group(root) {
-  animation-duration: 0.45s; /* Un poco más lenta para verse mejor */
+    animation-duration: 0.45s;
+    /* Un poco más lenta para verse mejor */
 }
 
 /* Animación: La página vieja se desliza un poco hacia afuera */
 ::view-transition-old(root) {
-  animation: 0.45s ease-in-out slide-out-to-left;
+    animation: 0.45s ease-in-out slide-out-to-left;
 }
 
 /* Animación: La nueva página entra ligeramente desde el lado opuesto */
 ::view-transition-new(root) {
-  animation: 0.45s ease-in-out slide-in-from-right;
+    animation: 0.45s ease-in-out slide-in-from-right;
 }
 
 /* Definición de los Keyframes */
 @keyframes slide-out-to-left {
-  to {
-    transform: translateX(-15px);
-    opacity: 0.8;
-  }
+    to {
+        transform: translateX(-15px);
+        opacity: 0.8;
+    }
 }
 
 @keyframes slide-in-from-right {
-  from {
-    transform: translateX(15px);
-    opacity: 0.8;
-  }
+    from {
+        transform: translateX(15px);
+        opacity: 0.8;
+    }
 }
 
 /* ---------------------------------- */
@@ -957,7 +1082,7 @@ h1.h2 {
 .navbar-custom .dropdown-item i {
     display: inline-block;
     transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), color 0.3s ease;
-    will-change: transform, color; 
+    will-change: transform, color;
 }
 
 .navbar-custom .navbar-brand i.bi-snow2 {
@@ -966,61 +1091,70 @@ h1.h2 {
 }
 
 .navbar-custom .navbar-brand:hover i.bi-snow2 {
-    transform: rotate(1080deg) scale(1.2); /* Gira tres vueltas y se agranda un 20% */
-    color: deepskyblue; 
+    transform: rotate(1080deg) scale(1.2);
+    /* Gira tres vueltas y se agranda un 20% */
+    color: deepskyblue;
 }
 
 
 /* 2. Animación para Íconos de Menús Principales (Logística, Comercial, Producción, Administración) */
 .navbar-custom .nav-link:hover i {
-    transform: scale(1.3) rotate(6deg); /* Crece un 10% y gira 5 grados */
-    color: var(--app-primary); /* Mantiene el color principal del texto*/
+    transform: scale(1.3) rotate(6deg);
+    /* Crece un 10% y gira 5 grados */
+    color: var(--app-primary);
+    /* Mantiene el color principal del texto*/
 }
 
 
 /* 3. Animación para Íconos de Subcategoría (Insumos, Compras, etc.) */
 .navbar-custom .dropdown-item:hover i {
-    transform: translateX(2px) scale(1.3); /* Se desliza más y se agranda un poco */
-    color: white; /* Debe coincidir con el color del texto del item en hover */
+    transform: translateX(2px) scale(1.3);
+    /* Se desliza más y se agranda un poco */
+    color: white;
+    /* Debe coincidir con el color del texto del item en hover */
 }
 
 /* 4. Animación especial para el icono de usuario al cerrar sesión */
 .navbar-custom .dropdown-menu .dropdown-item a[href*="logout"]:hover i {
-    transform: translateX(5px) rotate(360deg); /* Gira completamente al cerrar sesión */
-    color: var(--accent-red); /* Un color de acento rojo para la acción de cerrar sesión */
+    transform: translateX(5px) rotate(360deg);
+    /* Gira completamente al cerrar sesión */
+    color: var(--accent-red);
+    /* Un color de acento rojo para la acción de cerrar sesión */
 }
 
 /* Asegúrate de que el icono de persona del usuario también tenga una transición */
 .navbar-custom #navbarDropdownUser i.bi-person-circle {
     font-size: 1.25rem;
-    transition: color 0.3s ease, transform 0.3s ease; /* Agregamos transform a la transición */
+    transition: color 0.3s ease, transform 0.3s ease;
+    /* Agregamos transform a la transición */
 }
 
 .navbar-custom #navbarDropdownUser:hover i.bi-person-circle {
     color: var(--accent-green);
-    transform: scale(1.1); /* Ligeramente más grande al hacer hover */
+    transform: scale(1.1);
+    /* Ligeramente más grande al hacer hover */
 }
 
 /* ---------------------------------------------------- */
 /* UNIFICACIÓN: Aplicar estilos de detalles a todas las tarjetas de listado */
 /* ---------------------------------------------------- */
-.insumo-card .card-secondary-details, 
-.producto-card .card-secondary-details, 
+.insumo-card .card-secondary-details,
+.producto-card .card-secondary-details,
 .orden-card .card-secondary-details,
 .proveedor-card .card-secondary-details,
 .cliente-card .card-secondary-details {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;        
-    font-size: 0.9rem;     
-    color: var(--frozen-text-secondary); 
+    gap: 0.35rem;
+    font-size: 0.9rem;
+    color: var(--frozen-text-secondary);
     margin-bottom: 1rem;
-    padding-left: 0.5rem; 
+    padding-left: 0.5rem;
     flex-wrap: nowrap;
 }
 
-.insumo-card .card-secondary-details i, 
-.producto-card .card-secondary-details i, 
+.insumo-card .card-secondary-details i,
+.producto-card .card-secondary-details i,
 .orden-card .card-secondary-details i,
 .proveedor-card .card-secondary-details i,
 .cliente-card .card-secondary-details i {
@@ -1030,40 +1164,40 @@ h1.h2 {
 }
 
 /* Añadido: Hover en detalles secundarios */
-.insumo-card .card-secondary-details span, 
-.producto-card .card-secondary-details span, 
+.insumo-card .card-secondary-details span,
+.producto-card .card-secondary-details span,
 .orden-card .card-secondary-details span,
 .proveedor-card .card-secondary-details span,
 .cliente-card .card-secondary-details span {
     display: flex;
-    align-items: center; 
-    padding: 0.2rem 0; 
+    align-items: center;
+    padding: 0.2rem 0;
     transition: color 0.2s ease, transform 0.1s ease;
 }
 
-.insumo-card .card-secondary-details span:hover, 
-.producto-card .card-secondary-details span:hover, 
+.insumo-card .card-secondary-details span:hover,
+.producto-card .card-secondary-details span:hover,
 .orden-card .card-secondary-details span:hover,
 .proveedor-card .card-secondary-details span:hover,
 .cliente-card .card-secondary-details span:hover {
-    color: var(--app-primary); 
-    transform: translateX(3px); 
+    color: var(--app-primary);
+    transform: translateX(3px);
 }
 
 /* Asegurar que la regla específica de .insumo-card use los nuevos valores para sobrescribir el estilo anterior */
 .insumo-card .card-secondary-details {
     display: flex;
-    flex-direction: column; 
+    flex-direction: column;
     gap: 0.35rem;
     font-size: 0.9rem;
-    color: #6c757d; 
+    color: #6c757d;
     margin-bottom: 1rem;
     padding-left: 0.5rem;
 }
 
 .insumo-card .card-secondary-details i {
     margin-right: 0.5rem;
-    color: var(--app-primary); 
+    color: var(--app-primary);
 }
 
 /* Estilos para elementos de navegación deshabilitados por permisos */
@@ -1074,12 +1208,15 @@ h1.h2 {
 }
 
 .navbar-custom .nav-link.disabled:hover {
-    color: var(--header-text) !important; /* Evita que cambie de color en hover */
+    color: var(--header-text) !important;
+    /* Evita que cambie de color en hover */
     background-color: transparent !important;
     box-shadow: none;
 }
+
 .navbar-custom .nav-link.disabled::after {
-    transform: translateX(-100%); /* Asegura que la animación de hover no se active */
+    transform: translateX(-100%);
+    /* Asegura que la animación de hover no se active */
 }
 
 /* Estilos para dropdown items deshabilitados */
@@ -1088,25 +1225,32 @@ h1.h2 {
     cursor: not-allowed;
     pointer-events: none;
     background-color: transparent;
-    color: var(--frozen-text-secondary); /* Un color de texto más apagado */
+    color: var(--frozen-text-secondary);
+    /* Un color de texto más apagado */
 }
 
 .navbar-custom .dropdown-item.disabled:hover {
-    color: var(--frozen-text-secondary); /* Mantiene el color apagado en hover */
+    color: var(--frozen-text-secondary);
+    /* Mantiene el color apagado en hover */
     background-color: transparent;
-    transform: none; /* Evita cualquier transformación en hover */
+    transform: none;
+    /* Evita cualquier transformación en hover */
 }
 
 /* --- ESTILOS PARA EL OVERLAY DE CARGA --- */
 #loadingOverlay {
-    position: fixed; /* Se queda fijo en la pantalla */
+    position: fixed;
+    /* Se queda fijo en la pantalla */
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.5); /* Fondo negro semitransparente */
-    z-index: 10000; /* Asegura que esté por encima de todo */
-    display: none; /* Oculto por defecto */
+    background-color: rgba(0, 0, 0, 0.5);
+    /* Fondo negro semitransparente */
+    z-index: 10000;
+    /* Asegura que esté por encima de todo */
+    display: none;
+    /* Oculto por defecto */
     justify-content: center;
     align-items: center;
 }
@@ -1116,7 +1260,7 @@ h1.h2 {
     padding: 20px 30px;
     border-radius: 8px;
     text-align: center;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
 }
 
 #loadingOverlay .spinner-border {
@@ -1124,3 +1268,18 @@ h1.h2 {
     height: 3rem;
 }
 
+@media (max-width: 991px) {
+    .fixed-side-panel {
+        /* Fuerza la posición normal para que se apile correctamente */
+        position: relative !important;
+        width: 90% !important;
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+        top: auto !important;
+        /* Quita el 'top' que causa la superposición */
+        left: auto !important;
+        right: auto !important;
+        margin-top: 1.5rem;
+        /* Añade espacio sobre el siguiente elemento */
+    }
+}

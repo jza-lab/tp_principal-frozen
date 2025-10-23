@@ -477,8 +477,9 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-4">
-            <div class="card sticky-top shadow-sm" style="top: 20px;">
+    
+    <div class="col-lg-4">
+            <div class="card fixed-side-panel" style="top: 10px;">
                 <div class="card-header bg-primary text-black">
                     <h5 class="mb-0">Resumen y Acciones</h5>
                 </div>
@@ -561,6 +562,7 @@
 
 {% block extra_js %}
 
+
 <script>
     window.CLIENTE_API_URL_BASE = "{{ url_for('clientes_proveedores.buscar_por_cuil', cliente_cuil='0') }}";
     const pedidoId = "{{ pedido.id }}"
@@ -577,6 +579,8 @@
     }
 
 </script>
+
+<script src="{{ url_for('static', filename='js/gestionPanelLateral.js') }}"></script>
 
 <script src="{{ url_for('static', filename='js/orden_venta/gestionClientes.js') }}"></script>
 
