@@ -191,14 +191,33 @@ class OrdenProduccionModel(BaseModel):
                     else:
                         item['operario_nombre'] = None # Explicitly None if not assigned
 
-                    # You might want to add date formatting here if needed for consistency
-                    # Example:
-                    # if item.get('fecha_inicio_planificada'):
-                    #     try:
-                    #         item['fecha_inicio_planificada'] = date.fromisoformat(item['fecha_inicio_planificada']).strftime('%d/%m/%Y')
-                    #     except (ValueError, TypeError): pass # Keep original if format error
-
                     processed_data.append(item)
+
+                op_ids = [op['id'] for op in processed_data]
+                pedidos_por_op = {}
+
+                if op_ids:
+                    # Obtenemos todos los items de pedido vinculados a estas OP, incluyendo los datos del pedido.
+                    items_result = self.db.table('pedido_items').select(
+                        'orden_produccion_id, pedido:pedidos!pedido_items_pedido_id_fkey(id, nombre_cliente, estado)'
+                    ).in_('orden_produccion_id', op_ids).execute()
+
+                    if items_result.data:
+                        for item in items_result.data:
+                            op_id = item['orden_produccion_id']
+                            if op_id not in pedidos_por_op:
+                                pedidos_por_op[op_id] = []
+                            
+                            pedido_info = item.get('pedido')
+                            if pedido_info:
+                                # Evitamos duplicados si múltiples items de un mismo pedido apuntan a la misma OP
+                                if not any(p['id'] == pedido_info['id'] for p in pedidos_por_op[op_id]):
+                                    pedidos_por_op[op_id].append(pedido_info)
+
+                # Adjuntamos la lista de pedidos (o una lista vacía) a cada OP
+                for op in processed_data:
+                    op['pedidos_asociados'] = pedidos_por_op.get(op['id'], [])
+
                 return {'success': True, 'data': processed_data}
             else:
                 # No data found, but the query was successful

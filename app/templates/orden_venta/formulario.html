@@ -214,105 +214,114 @@
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="form-subsection">
-                            <label class="form-label">Dirección de Entrega</label>
-                            <div class="row g-3">
-                                <div class="col-md-8">
-                                    <div class="form-floating">
-                                        <input type="text" class="form-control" id="calle" name="calle" minlength="3"
-                                            maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" placeholder="Calle"
-                                            value="{{ pedido.direccion.calle if pedido else ''}}" required>
-                                        <label for="calle">
-                                            <i class="bi bi-signpost me-1"></i>Calle
-                                        </label>
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="usar_direccion_alternativa">
+                                <label class="form-check-label" for="usar_direccion_alternativa">
+                                    Enviar a una dirección de entrega distinta
+                                </label>
+                            </div>
+
+                            <div id="direccion-entrega-container" style="display: none;">
+                                <label class="form-label">Dirección de Entrega</label>
+                                <div class="row g-3">
+                                    <div class="col-md-8">
+                                        <div class="form-floating">
+                                            <input type="text" class="form-control" id="calle" name="calle" minlength="3"
+                                                maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" placeholder="Calle"
+                                                value="{{ pedido.direccion.calle if pedido else ''}}">
+                                            <label for="calle">
+                                                <i class="bi bi-signpost me-1"></i>Calle
+                                            </label>
+                                        </div>
+                                        <div class="invalid-feedback"></div>
                                     </div>
-                                    <div class="invalid-feedback"></div>
-                                </div>
 
-                                <div class="col-md-4">
-                                    <div class="form-floating">
-                                        <input type="number" class="form-control" id="altura" name="altura"
-                                            pattern="\d{1,5}" maxlength="5" max="99999" min="1" placeholder="Altura"
-                                            value="{{ pedido.direccion.altura if pedido else '' }}" required>
-                                        <label for="altura">
-                                            <i class="bi bi-123 me-1"></i>Altura
-                                        </label>
+                                    <div class="col-md-4">
+                                        <div class="form-floating">
+                                            <input type="number" class="form-control" id="altura" name="altura"
+                                                pattern="\d{1,5}" maxlength="5" max="99999" min="1" placeholder="Altura"
+                                                value="{{ pedido.direccion.altura if pedido else '' }}">
+                                            <label for="altura">
+                                                <i class="bi bi-123 me-1"></i>Altura
+                                            </label>
+                                        </div>
+                                        <div class="invalid-feedback"></div>
                                     </div>
-                                    <div class="invalid-feedback"></div>
-                                </div>
 
-                                <div class="col-md-6">
-                                    <div class="form-floating">
-                                        <select class="form-select" id="provincia" name="provincia" required>
-                                            <option value="">Seleccionar provincia...</option>
-                                            {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
-                                            "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
-                                            Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan",
-                                            "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del
-                                            Fuego",
-                                            "Tucumán"] %}
-
-                                            {% for p in provincias %}
-                                            <option value="{{ p }}" {% if pedido and pedido.direccion.provincia==p
-                                                %}selected{% endif %}>{{ p }}</option>
-                                            {% endfor %}
-                                        </select>
-                                        <label for="provincia">
-                                            <i class="bi bi-map me-1"></i>Provincia
-                                        </label>
+                                    <div class="col-md-6">
+                                        <div class="form-floating">
+                                            <select class="form-select" id="provincia" name="provincia">
+                                                <option value="">Seleccionar provincia...</option>
+                                                {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
+                                                "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
+                                                Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan",
+                                                "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del
+                                                Fuego",
+                                                "Tucumán"] %}
+    
+                                                {% for p in provincias %}
+                                                <option value="{{ p }}" {% if pedido and pedido.direccion.provincia==p
+                                                    %}selected{% endif %}>{{ p }}</option>
+                                                {% endfor %}
+                                            </select>
+                                            <label for="provincia">
+                                                <i class="bi bi-map me-1"></i>Provincia
+                                            </label>
+                                        </div>
+                                        <div class="invalid-feedback"></div>
                                     </div>
-                                    <div class="invalid-feedback"></div>
-                                </div>
 
-                                <div class="col-md-6">
-                                    <div class="form-floating">
-                                        <input type="text" class="form-control" id="localidad" name="localidad"
-                                            minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
-                                            title="Ingresá un nombre de localidad válido (solo letras y espacios)."
-                                            placeholder="Localidad"
-                                            value="{{ pedido.direccion.localidad if pedido else ''}}" required>
-                                        <label for="localidad">
-                                            <i class="bi bi-pin-map me-1"></i>Localidad
-                                        </label>
+                                    <div class="col-md-6">
+                                        <div class="form-floating">
+                                            <input type="text" class="form-control" id="localidad" name="localidad"
+                                                minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
+                                                title="Ingresá un nombre de localidad válido (solo letras y espacios)."
+                                                placeholder="Localidad"
+                                                value="{{ pedido.direccion.localidad if pedido else ''}}">
+                                            <label for="localidad">
+                                                <i class="bi bi-pin-map me-1"></i>Localidad
+                                            </label>
+                                        </div>
+                                        <div class="invalid-feedback"></div>
                                     </div>
-                                    <div class="invalid-feedback"></div>
-                                </div>
 
-                                <div class="col-md-4">
-                                    <div class="form-floating">
-                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="3"
-                                            pattern="[A-Za-z0-9\s]*"
-                                            title="Solo se permiten letras, números y espacios."
-                                            placeholder="Piso (Opcional)"
-                                            value="{{ pedido.direccion.piso if pedido and pedido.direccion.piso and pedido.direccion.piso != 'None' else ''}}">
-                                        <label for="piso">
-                                            <i class="bi bi-building me-1"></i>Piso (Opcional)
-                                        </label>
+                                    <div class="col-md-4">
+                                        <div class="form-floating">
+                                            <input type="text" class="form-control" id="piso" name="piso" maxlength="3"
+                                                pattern="[A-Za-z0-9\s]*"
+                                                title="Solo se permiten letras, números y espacios."
+                                                placeholder="Piso (Opcional)"
+                                                value="{{ pedido.direccion.piso if pedido and pedido.direccion.piso and pedido.direccion.piso != 'None' else ''}}">
+                                            <label for="piso">
+                                                <i class="bi bi-building me-1"></i>Piso (Opcional)
+                                            </label>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div class="col-md-4">
-                                    <div class="form-floating">
-                                        <input type="text" class="form-control" id="depto" name="depto" maxlength="5"
-                                            pattern="[A-Za-z0-9\s]*"
-                                            title="Solo se permiten letras, números y espacios."
-                                            placeholder="Dto (Opcional)"
-                                            value="{{ pedido.direccion.depto if pedido and pedido.direccion.depto else ''}}">
-                                        <label for="depto">
-                                            <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
-                                        </label>
+                                    <div class="col-md-4">
+                                        <div class="form-floating">
+                                            <input type="text" class="form-control" id="depto" name="depto" maxlength="5"
+                                                pattern="[A-Za-z0-9\s]*"
+                                                title="Solo se permiten letras, números y espacios."
+                                                placeholder="Dto (Opcional)"
+                                                value="{{ pedido.direccion.depto if pedido and pedido.direccion.depto else ''}}">
+                                            <label for="depto">
+                                                <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
+                                            </label>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div class="col-md-4">
-                                    <div class="form-floating">
-                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
-                                            minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}"
-                                            title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
-                                            placeholder="Código Postal"
-                                            value="{{ pedido.direccion.codigo_postal if pedido else '' }}" required>
-                                        <label for="codigo_postal">
-                                            <i class="bi bi-mailbox me-1"></i>Código Postal
-                                        </label>
+                                    <div class="col-md-4">
+                                        <div class="form-floating">
+                                            <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                                                minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}"
+                                                title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
+                                                placeholder="Código Postal"
+                                                value="{{ pedido.direccion.codigo_postal if pedido else '' }}">
+                                            <label for="codigo_postal">
+                                                <i class="bi bi-mailbox me-1"></i>Código Postal
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -573,4 +582,36 @@
 <script src="{{ url_for('static', filename='js/orden_venta/gestionCalculos.js') }}"></script>
 
 <script src="{{ url_for('static', filename='js/orden_venta/formularioVenta.js') }}"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const checkbox = document.getElementById('usar_direccion_alternativa');
+    const container = document.getElementById('direccion-entrega-container');
+    const fields = container.querySelectorAll('input, select');
+
+    function toggleDireccionEntrega(show) {
+        if (show) {
+            container.style.display = 'block';
+            fields.forEach(field => {
+                // Solo hacer requeridos los campos principales
+                if (['calle', 'altura', 'provincia', 'localidad', 'codigo_postal'].includes(field.name)) {
+                    field.required = true;
+                }
+            });
+        } else {
+            container.style.display = 'none';
+            fields.forEach(field => {
+                field.required = false;
+            });
+        }
+    }
+
+    checkbox.addEventListener('change', function () {
+        toggleDireccionEntrega(this.checked);
+    });
+
+    // Estado inicial al cargar la página
+    toggleDireccionEntrega(checkbox.checked);
+});
+</script>
 {% endblock extra_js %}

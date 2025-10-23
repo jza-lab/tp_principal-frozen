@@ -588,6 +588,30 @@ h1.h2 {
     background: var(--frozen-primary);
 }
 
+/* Fix para cards de órdenes de producción */
+.orden-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.orden-card .card-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+/* Limita la altura del área colapsable de pedidos */
+.pedidos-collapse-area {
+    max-height: 150px;
+    overflow-y: auto;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.pedidos-collapse-area .list-group-item {
+    font-size: 0.85rem;
+    border-left: 3px solid var(--accent-green);
+}
 /* Insumo Card Styles - Mejorado con borde dinámico */
 .insumo-card, .producto-card, .cliente-card:hover, .proveedor-card:hover, .orden-card:hover {
     border: 1px solid var(--frozen-border) !important; /* Mantener el borde original */
