@@ -188,7 +188,7 @@ class PedidoController(BaseController):
             # Definir el estado inicial basado en la verificación
             if all_in_stock:
                 # Si todo está en stock, el estado inicial es COMPLETADO
-                pedido_data['estado'] = 'COMPLETADO'
+                pedido_data['estado'] = 'LISTO_PARA_ENTREGA'
                 logging.info("Todo el stock disponible. El pedido se creará en estado COMPLETADO.")
             elif 'estado' not in pedido_data:
                 # Si falta stock, el estado inicial es PENDIENTE
