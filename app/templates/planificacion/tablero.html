@@ -173,49 +173,60 @@
 </div>
 
 <h3 class="h4 mb-3">Tablero Kanban (Producción en Curso)</h3>
-<div class="kanban-board">
+<div class="row">
     {% for estado_key, titulo_columna in columnas.items() %}
-    <div class="kanban-column" data-estado="{{ estado_key }}">
-        <div class="column-header">
-            <span>{{ titulo_columna }}</span>
-            <span class="badge bg-secondary rounded-pill">{{ ordenes_por_estado.get(estado_key, [])|length }}</span>
-        </div>
-        <div class="kanban-cards">
-            {% if estado_key == 'LISTA PARA PRODUCIR' %} <div class="d-grid"><button id="btn-consolidar" class="btn btn-success mb-2" disabled><i class="bi bi-plus-slash-minus"></i> Consolidar</button></div>
-            {% endif %}
-            {% for orden in ordenes_por_estado.get(estado_key, []) %}
-            <div class="card insumo-card kanban-card"
-                 data-op-id="{{ orden.id }}"
-                 data-producto-id="{{ orden.producto_id }}"
-                 data-linea-asignada="{{ orden.linea_asignada or '' }}">
-                {% if estado_key == 'LISTA PARA PRODUCIR' %}
-                <div class="form-check card-checkbox"><input class="form-check-input op-checkbox" type="checkbox" value="{{ orden.id }}"></div>
-                {% endif %}
-                <div class="card-body">
-                    <h5 class="card-title mb-1">{{ orden.producto_nombre or 'N/A' }}</h5>
-                    <div class="card-secondary-details">
-                        <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
-                        <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b></span>
-                        <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
-                        {% if orden.fecha_inicio_planificada %}
-                        <br><span class="text-primary"><i class="bi bi-play-circle-fill"></i> Inicia: {{ orden.fecha_inicio_planificada }}</span>
-                        {% endif %}
-                    </div>
-                    {% if orden.supervisor_nombre or orden.linea_asignada or orden.operario_nombre %}
-                    <hr class="my-1">
-                    <div class="card-assignment-details">
-                        {% if orden.linea_asignada %}<span class="me-2"><i class="bi bi-diagram-3-fill text-primary"></i> L{{ orden.linea_asignada }}</span>{% endif %}
-                        {% if orden.supervisor_nombre %}<span class="me-2"><i class="bi bi-person-badge-fill text-info"></i> S:{{ orden.supervisor_nombre }}</span>{% endif %}
-                        {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary"></i> O:{{ orden.operario_nombre }}</span>{% endif %}
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
+    {# --- CAMBIO: Añadir clases de columna responsivas --- #}
+    {# col-12: Ancho completo en extra pequeño #}
+    {# col-sm-6: Medio ancho en pequeño (2 columnas) #}
+    {# col-md-4: Un tercio en mediano (3 columnas) #}
+    {# col-lg-3: Un cuarto en grande (4 columnas) - Ajusta según prefieras #}
+    {# col-xl-2: Un sexto en extra grande (6 columnas) - Ajusta según prefieras #}
+    <div class="col-12 col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-4 kanban-column-wrapper"> {# Añadido mb-4 para espacio inferior #}
+        {# Mantenemos un div interno para aplicar estilos de columna originales si es necesario #}
+        <div class="kanban-column h-100" data-estado="{{ estado_key }}">
+             <div class="column-header">
+                 <span>{{ titulo_columna }}</span>
+                 <span class="badge bg-secondary rounded-pill">{{ ordenes_por_estado.get(estado_key, [])|length }}</span>
+             </div>
+             <div class="kanban-cards">
+                 {% if estado_key == 'LISTA PARA PRODUCIR' %}
+                 <div class="d-grid"><button id="btn-consolidar" class="btn btn-success mb-2" disabled><i class="bi bi-plus-slash-minus"></i> Consolidar</button></div>
+                 {% endif %}
+                 {% for orden in ordenes_por_estado.get(estado_key, []) %}
+                 <div class="card insumo-card kanban-card"
+                      data-op-id="{{ orden.id }}"
+                      data-producto-id="{{ orden.producto_id }}"
+                      data-linea-asignada="{{ orden.linea_asignada or '' }}">
+                     {% if estado_key == 'LISTA PARA PRODUCIR' %}
+                     <div class="form-check card-checkbox"><input class="form-check-input op-checkbox" type="checkbox" value="{{ orden.id }}"></div>
+                     {% endif %}
+                     <div class="card-body">
+                         {# ... (Contenido de la tarjeta sin cambios) ... #}
+                          <h5 class="card-title mb-1">{{ orden.producto_nombre or 'N/A' }}</h5>
+                          <div class="card-secondary-details">
+                              <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
+                              <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b></span>
+                              <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
+                              {% if orden.fecha_inicio_planificada %}
+                              <br><span class="text-primary"><i class="bi bi-play-circle-fill"></i> Inicia: {{ orden.fecha_inicio_planificada }}</span>
+                              {% endif %}
+                          </div>
+                          {% if orden.supervisor_nombre or orden.linea_asignada or orden.operario_nombre %}
+                          <hr class="my-1">
+                          <div class="card-assignment-details">
+                              {% if orden.linea_asignada %}<span class="me-2"><i class="bi bi-diagram-3-fill text-primary"></i> L{{ orden.linea_asignada }}</span>{% endif %}
+                              {% if orden.supervisor_nombre %}<span class="me-2"><i class="bi bi-person-badge-fill text-info"></i> S:{{ orden.supervisor_nombre }}</span>{% endif %}
+                              {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary"></i> O:{{ orden.operario_nombre }}</span>{% endif %}
+                          </div>
+                          {% endif %}
+                     </div>
+                 </div>
+                 {% endfor %}
+             </div>
         </div>
     </div>
     {% endfor %}
-</div>
+</div> {# Fin de .row #}
 {% endblock %}
 
 {% block extra_js %}
