@@ -13,7 +13,7 @@ facial_controller = FacialController()
 
 
 @admin_usuario_bp.route('/')
-@permission_any_of('consultar_empleados', 'modificar_empleado', 'crear_empleado')
+@permission_any_of('consultar_empleados', 'modificar_empleado', 'crear_empleado', 'configurar_usuarios_y_roles')
 def listar_usuarios():
     """Muestra la lista de todos los usuarios del sistema."""
     usuarios = usuario_controller.obtener_todos_los_usuarios()
@@ -23,7 +23,7 @@ def listar_usuarios():
     return render_template('usuarios/gestionEmpleados.html', usuarios=usuarios, turnos=turnos, sectores=sectores)
 
 @admin_usuario_bp.route('/<int:id>')
-@permission_any_of('consultar_empleados', 'modificar_empleado')
+@permission_any_of('consultar_empleados', 'modificar_empleado', 'configurar_usuarios_y_roles')
 def ver_perfil(id):
     """Muestra el perfil de un usuario específico, delegando la carga de datos al controlador."""
     resultado = usuario_controller.obtener_datos_para_vista_perfil(id)
@@ -71,7 +71,7 @@ def nuevo_usuario():
                          usuario_sectores_ids=[])
 
 @admin_usuario_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
-@permission_any_of('modificar_empleado')
+@permission_any_of('modificar_empleado', 'configurar_usuarios_y_roles')
 def editar_usuario(id):
     """Gestiona la edición de un usuario."""
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'

@@ -29,8 +29,8 @@ ROLE_MAP = {
 }
 
 CANONICAL_PERMISSION_MAP = {
-    # Rol: Administrativo
-    'acceder_al_panel_principal': ['ADMIN', 'DEV'],
+    # Rol: ADMIN
+    'acceder_al_panel_principal': ['ADMIN', 'DEV', 'IT', 'GERENTE', 'RRHH', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'VENDEDOR', 'OPERARIO'],
     'consultar_reportes_generales': ['ADMIN', 'DEV'],
     'emitir_facturas': ['ADMIN', 'DEV'],
     'emitir_notas_de_credito': ['ADMIN', 'DEV'],
@@ -39,9 +39,9 @@ CANONICAL_PERMISSION_MAP = {
     'registrar_ingreso_de_materia_prima': ['ADMIN', 'DEV'],
     'consultar_ordenes_de_produccion': ['ADMIN', 'SUPERVISOR_CALIDAD', 'GERENTE', 'DEV'],
     'consultar_reportes_de_control': ['ADMIN', 'DEV'],
-    'consultar_empleados': ['ADMIN', 'RRHH', 'DEV'],
+    'consultar_empleados': ['ADMIN', 'RRHH', 'IT''DEV'],
 
-    # Rol: Vendedor
+    # Rol: VENDEDOR
     'crear_orden_de_venta': ['VENDEDOR', 'DEV'],
     'modificar_orden_de_venta': ['VENDEDOR', 'DEV'],
     'consultar_historial_de_clientes': ['VENDEDOR', 'DEV'],
@@ -50,17 +50,17 @@ CANONICAL_PERMISSION_MAP = {
     'consultar_estado_de_produccion_asociada': ['VENDEDOR', 'DEV'],
     'consultar_disponibilidad_de_productos': ['VENDEDOR', 'DEV'],
 
-    # Rol: Operario
+    # Rol: OPERARIO
     'consultar_ordenes_asignadas': ['OPERARIO', 'DEV'],
     'registrar_etapa_de_produccion': ['OPERARIO', 'DEV'],
     'consultar_resultados_de_control': ['OPERARIO', 'DEV'],
     'consultar_stock_de_insumos': ['OPERARIO', 'DEV'],
     'notificar_de_baja_cantidad_de_insumos': ['OPERARIO', 'DEV'],
 
-    # Rol: Supervisor
+    # Rol: SUPERVISOR
     'crear_orden_de_produccion': ['SUPERVISOR', 'DEV'],
     'supervisar_avance_de_etapas': ['SUPERVISOR', 'DEV'],
-    'reasignar_operarios_a_una_orden': ['SUPERVISOR', 'DEV'],
+    'reasignar_OPERARIOs_a_una_orden': ['SUPERVISOR', 'DEV'],
     'cerrar_orden_de_produccion': ['SUPERVISOR', 'DEV'],
     'consultar_stock': ['SUPERVISOR', 'DEV'],
     'solicitar_reposicion_de_insumos': ['SUPERVISOR', 'DEV'],
@@ -68,7 +68,7 @@ CANONICAL_PERMISSION_MAP = {
     'aprobar_orden_de_compra': ['SUPERVISOR', 'DEV'],
     'consultar_control_de_calidad': ['SUPERVISOR', 'DEV'],
 
-    # Rol: Supervisor de Calidad
+    # Rol: SUPERVISOR_CALIDAD
     'crear_control_de_calidad_por_lote': ['SUPERVISOR_CALIDAD', 'DEV'],
     'registrar_resultados_de_control': ['SUPERVISOR_CALIDAD', 'DEV'],
     'registrar_desperdicios': ['SUPERVISOR_CALIDAD', 'DEV'],
@@ -87,20 +87,26 @@ CANONICAL_PERMISSION_MAP = {
 
     # Rol: Recursos Humanos
     'crear_empleado': ['RRHH', 'DEV'],
-    'modificar_empleado': ['RRHH', 'DEV'],
+    'modificar_empleado': ['RRHH', 'IT','DEV'],
     'eliminar_empleado': ['RRHH', 'DEV'],
-    'consultar_operarios': ['RRHH', 'DEV'],
+    'consultar_OPERARIOs': ['RRHH', 'IT', 'DEV'],
 
     # Rol: IT / Soporte
     'configurar_usuarios_y_roles': ['IT', 'DEV'],
     'modificar_parametros_del_sistema': ['IT', 'DEV'],
     'realizar_mantenimiento_y_backups': ['IT', 'DEV'],
-    'consultar_logs_o_auditoria': ['IT', 'DEV'],
+    'consultar_logs_o_auditoria': ['IT', 'GERENTE', 'SUPERVISOR', 'ADMIN', 'DEV'],
 
-    # Permisos nuevos para asignación de roles por parte del usuario
-    'gestionar_catalogo_de_productos': [],
-    'consultar_catalogo_de_insumos': [],
-    'aprobar_orden_de_venta': [],
+    # Permisos nuevos para asignación de roles
+    'gestionar_catalogo_de_productos': ['SUPERVISOR', 'GERENTE'],
+    'consultar_catalogo_de_insumos': ['OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'],
+    'aprobar_orden_de_venta': ['SUPERVISOR', 'GERENTE', 'VENDEDOR'], 
+    'gestionar_clientes': ['VENDEDOR', 'ADMIN', 'GERENTE'], 
+    'gestionar_proveedores': ['ADMIN'], 
+    'gestionar_catalogo_de_insumos': ['SUPERVISOR', 'GERENTE'], 
+    'rechazar_orden_de_compra': ['SUPERVISOR', 'GERENTE'],
+    'ver_panel_notificaciones': ['IT', 'DEV'],
+    'gestionar_autorizaciones': ['ADMIN', 'RRHH', 'DEV'],
 }
 
 def get_allowed_roles_for_action(action_name: str) -> list:

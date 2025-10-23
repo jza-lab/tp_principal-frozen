@@ -7,7 +7,7 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Catálogo de Insumos</h1>
     <div class="btn-toolbar">
-        {% if has_permission('consultar_stock_de_insumos')|trim == 'True' %}
+        {% if has_permission('gestionar_catalogo_de_insumos')|trim == 'True' %}
         <a href="{{ url_for('insumos_api.crear_insumo') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Agregar Nuevo Insumo
         </a>
@@ -118,29 +118,26 @@
                     </div>
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
-                        {% if insumo.activo %}
-                        {% if has_permission('consultar_stock_de_insumos')|trim == 'True' %}
-                        <a href="{{ url_for('insumos_api.actualizar_insumo', id_insumo=insumo.id_insumo) }}"
-                            class="btn btn-sm btn-outline-primary" title="Modificar insumo">
-                            <i class="bi bi-pencil"></i>
-                        </a>
-                        {% endif %}
-
                         <a href="{{ url_for('insumos_api.obtener_insumo_por_id', id_insumo=insumo.id_insumo) }}"
                             class="btn btn-sm btn-outline-primary" title="Detalle">
                             <i class="bi bi-eye"></i>
                         </a>
-
-                        <a class="btn btn-sm btn-outline-danger" title="Inhabilitar insumo"
-                            onClick="eliminarInsumo('{{ insumo.id_insumo }}')">
-                            <i class="bi bi-slash-circle"></i> Inhabilitar
-                        </a>
-
-                        {% else %}
-                        <a class="btn btn-sm btn-outline-success" title="Habilitar insumo"
-                            onClick="habilitarInsumo('{{ insumo.id_insumo }}')">
-                            <i class="bi bi-check-circle"></i> Habilitar
-                        </a>
+                        {% if has_permission('gestionar_catalogo_de_insumos')|trim == 'True' %}
+                            {% if insumo.activo %}
+                                <a href="{{ url_for('insumos_api.actualizar_insumo', id_insumo=insumo.id_insumo) }}"
+                                   class="btn btn-sm btn-outline-primary" title="Modificar insumo">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                <a class="btn btn-sm btn-outline-danger" title="Inhabilitar insumo"
+                                   onClick="eliminarInsumo('{{ insumo.id_insumo }}')">
+                                    <i class="bi bi-slash-circle"></i> Inhabilitar
+                                </a>
+                            {% else %}
+                                <a class="btn btn-sm btn-outline-success" title="Habilitar insumo"
+                                   onClick="habilitarInsumo('{{ insumo.id_insumo }}')">
+                                    <i class="bi bi-check-circle"></i> Habilitar
+                                </a>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>

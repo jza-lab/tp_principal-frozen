@@ -69,7 +69,7 @@
 
         <!-- Barra de Acción (Modo Vista) -->
         <div class="profile-action-bar" id="action-bar-view">
-            {% if has_permission('modificar_empleado')|trim == 'True' %}
+            {% if has_permission('modificar_empleado') |trim == 'True' %}
             <button class="btn btn-primary btn-action" id="btn-edit-mode">
                 <i class="bi bi-pencil-square me-2"></i>Editar Información
             </button>

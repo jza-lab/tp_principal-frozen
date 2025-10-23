@@ -47,7 +47,7 @@ def ver_perfil_cliente(id):
     return render_template('clientes/perfil.html', cliente=cliente, pedidos=pedidos)
 
 @cliente_proveedor.route('/clientes/nuevo', methods=['GET', 'PUT', 'POST'])
-@permission_required(accion='consultar_historial_de_clientes')
+@permission_required(accion='gestionar_clientes')
 def nuevo_cliente():
     """
     Gestiona la creación de un nuevo cliente
@@ -85,7 +85,7 @@ def buscar_por_cuil(cliente_cuil):
     return jsonify(cliente_respuesta), estado
 
 @cliente_proveedor.route('/clientes/<int:id>/editar', methods=['GET', 'PUT', 'POST'])
-@permission_required(accion='consultar_historial_de_clientes')
+@permission_required(accion='gestionar_clientes')
 def editar_cliente(id):
     """Gestiona la edición de un cliente existente"""
     cliente_result, status = cliente_controller.obtener_cliente(id)
@@ -108,7 +108,7 @@ def editar_cliente(id):
     return render_template('clientes/formulario.html', cliente=cliente)
 
 @cliente_proveedor.route('/clientes/<int:id>/eliminar', methods=['POST'])
-@permission_any_of('consultar_historial_de_clientes')
+@permission_required(accion='gestionar_clientes')
 def eliminar_cliente(id):
     """Desactiva un cliente."""
     try:
@@ -121,7 +121,7 @@ def eliminar_cliente(id):
 
     
 @cliente_proveedor.route('/clientes/<int:id>/habilitar', methods=['POST'])
-@permission_required(accion='consultar_historial_de_clientes')
+@permission_required(accion='gestionar_clientes')
 def habilitar_cliente(id):
     """Reactiva un cliente."""
     try:
@@ -160,7 +160,7 @@ def ver_perfil_proveedor(id):
     return render_template('proveedores/perfil.html', proveedor=proveedor, insumos_asociados=insumos_asociados)
 
 @cliente_proveedor.route('/proveedores/nuevo', methods=['GET', 'POST', 'PUT'])
-@permission_required(accion='consultar_historial_de_pagos')
+@permission_required(accion='gestionar_proveedores')
 def nuevo_proveedor():
     """
     Gestiona la creación de un nuevo proveedor
@@ -183,7 +183,7 @@ def nuevo_proveedor():
     return render_template('proveedores/formulario.html', proveedor=proveedor)
 
 @cliente_proveedor.route('/proveedores/<int:id>/editar', methods=['GET', 'POST', 'PUT'])
-@permission_required(accion='consultar_historial_de_pagos')
+@permission_required(accion='gestionar_proveedores')
 def editar_proveedor(id):
     """Gestiona la edición de un proveedor existente"""
     proveedor_result, status = proveedor_controller.obtener_proveedor(id)
@@ -207,7 +207,7 @@ def editar_proveedor(id):
     return render_template('proveedores/formulario.html', proveedor=proveedor)
 
 @cliente_proveedor.route('/proveedores/<int:id>/eliminar', methods=['POST'])
-@permission_any_of('consultar_historial_de_pagos')
+@permission_required(accion='gestionar_proveedores')
 def eliminar_proveedor(id):
     """Desactiva un proveedor."""
     try:
@@ -219,7 +219,7 @@ def eliminar_proveedor(id):
 
 
 @cliente_proveedor.route('/proveedores/<int:id>/habilitar', methods=['POST'])
-@permission_required(accion='consultar_historial_de_pagos')
+@permission_required(accion='gestionar_proveedores')
 def habilitar_proveedor(id):
     """Reactiva un proveedor."""
     try:

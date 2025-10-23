@@ -11,7 +11,7 @@ usuario_controller = UsuarioController()
 facial_controller = FacialController()
 
 @api_bp.route('/usuarios/actividad_totem', methods=['GET'])
-@permission_required(accion='consultar_empleados')
+@permission_required(accion='consultar_logs_o_auditoria')
 def obtener_actividad_totem():
     """Devuelve la actividad del tótem en formato JSON."""
     filtros = {
@@ -25,7 +25,7 @@ def obtener_actividad_totem():
     return jsonify(success=False, error=resultado.get('error')), 500
 
 @api_bp.route('/usuarios/actividad_web', methods=['GET'])
-@permission_required(accion='consultar_empleados')
+@permission_required(accion='consultar_logs_o_auditoria')
 def obtener_actividad_web():
     """Devuelve la actividad web en formato JSON."""
     filtros = {

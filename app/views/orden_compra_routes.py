@@ -118,7 +118,7 @@ def editar(id):
 
 
 @orden_compra_bp.route("/<int:id>/rechazar", methods=["POST"])
-@permission_required(accion='crear_orden_de_compra')
+@permission_required(accion='rechazar_orden_de_compra')
 def rechazar(id):
     motivo = request.form.get("motivo", "No especificado")
     resultado = controller.rechazar_orden(id, motivo)

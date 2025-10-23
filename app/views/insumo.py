@@ -31,7 +31,7 @@ usuario_controller = UsuarioController()
 
 
 @insumos_bp.route("/catalogo/nuevo", methods=["GET", "POST"])
-@permission_required(accion='registrar_ingreso_de_materia_prima')
+@permission_required(accion='gestionar_catalogo_de_insumos')
 def crear_insumo():
     try:
         if request.method == "POST":
@@ -91,7 +91,7 @@ def obtener_insumo_por_id(id_insumo):
 @insumos_bp.route(
     "/catalogo/actualizar/<string:id_insumo>", methods=["GET", "POST", "PUT"]
 )
-@permission_required(accion='registrar_ingreso_de_materia_prima')
+@permission_required(accion='gestionar_catalogo_de_insumos')
 def actualizar_insumo(id_insumo):
     try:
         if not validate_uuid(id_insumo):
@@ -119,7 +119,7 @@ def actualizar_insumo(id_insumo):
 
 
 @insumos_bp.route("/catalogo/eliminar/<string:id_insumo>", methods=["DELETE"])
-@permission_required(accion='registrar_ingreso_de_materia_prima')
+@permission_required(accion='gestionar_catalogo_de_insumos')
 def eliminar_insumo(id_insumo):
     try:
         if not validate_uuid(id_insumo):
@@ -132,7 +132,7 @@ def eliminar_insumo(id_insumo):
 
 
 @insumos_bp.route("/catalogo/habilitar/<string:id_insumo>", methods=["POST"])
-@permission_required(accion='registrar_ingreso_de_materia_prima')
+@permission_required(accion='gestionar_catalogo_de_insumos')
 def habilitar_insumo(id_insumo):
     try:
         if not validate_uuid(id_insumo):
