@@ -145,7 +145,7 @@ if (typeof INSUMOS_STOCK_DATA !== 'undefined' && INSUMOS_STOCK_DATA.length > 0) 
     const data = [0];
     const backgroundColors = ['#ccc'];
     const borderColors = ['#999'];
-    
+
     new Chart(ctx, {
         type: 'bar',
         data: {
@@ -171,12 +171,12 @@ if (typeof INSUMOS_STOCK_DATA !== 'undefined' && INSUMOS_STOCK_DATA.length > 0) 
             },
             responsive: true,
             maintainAspectRatio: false,
-animation: {
-                    duration: 1200, 
-                    easing: 'easeInOutQuart', 
-                    animateRotate: true,
-                    animateScale: true,
-                },
+            animation: {
+                duration: 1200,
+                easing: 'easeInOutQuart',
+                animateRotate: true,
+                animateScale: true,
+            },
             plugins: {
                 title: {
                     display: true,
@@ -213,7 +213,7 @@ if (dataForDonut.length > 0) {
         const donutLabels = ['Stock Crítico (Bajo Mínimo)', 'Stock OK (Sobre Mínimo)', 'Sin Stock'];
 
         const donutColors = [COLOR_BAJO, COLOR_OK, COLOR_STOCK0];
-        
+
         new Chart(ctxDonut, {
             type: 'doughnut',
             data: {
@@ -235,7 +235,7 @@ if (dataForDonut.length > 0) {
                     animateScale: true,
                     duration: 1000
                 },
-                
+
                 plugins: {
                     title: {
                         display: true,
