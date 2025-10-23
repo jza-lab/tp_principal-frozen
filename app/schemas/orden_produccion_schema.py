@@ -34,7 +34,7 @@ class OrdenProduccionSchema(Schema):
     estado = fields.Str(required=False, validate=validate.OneOf([
         'PENDIENTE', 'APROBADA', 'EN_PROCESO', 'COMPLETADA', 'CANCELADA',
         'EN ESPERA', 'LISTA PARA PRODUCIR',
-        'EN_LINEA_1', 'EN_LINEA_2',  # <-- ASEGURARSE QUE USEN GUION BAJO
+        'EN_LINEA_1', 'EN_LINEA_2', 
         'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD',
         'FINALIZADA', 'CONSOLIDADA'
     ]))

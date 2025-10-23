@@ -508,3 +508,22 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error contando alertas de vencimiento de producto: {str(e)}")
             return 0
+        
+    def obtener_datos_grafico_inventario(self) -> dict:
+        """
+        Prepara los datos del gráfico de composición del inventario de productos.
+        Retorna (response_dict, status_code).
+        """
+        try:
+            result = self.model.obtener_composicion_inventario()
+            
+            if not result.get('success'):
+                # CORRECCIÓN: self.error_response(...) ya devuelve (dict, 500).
+                return self.error_response(result.get('error', 'Error al obtener datos para el gráfico.'), 500)
+            
+            # CORRECCIÓN: self.success_response(data) ya devuelve (dict, 200).
+            return self.success_response(result['data'])
+
+        except Exception as e:
+            logger.error(f"Error obteniendo datos de gráfico: {e}")
+            return self.error_response(f'Error interno: {str(e)}', 500)

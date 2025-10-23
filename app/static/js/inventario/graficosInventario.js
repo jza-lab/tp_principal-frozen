@@ -229,18 +229,11 @@ if (dataForDonut.length > 0) {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-
-                animation: {
-                    animateRotate: true,
-                    animateScale: true,
-                    duration: 1000
-                },
-
                 plugins: {
                     title: {
                         display: true,
                         text: 'Distribución de Insumos por Estado de Stock',
-                        font: { size: 14 }
+                        font: { size: 14, weight: 'bold' }
                     },
                     legend: {
                         display: true,

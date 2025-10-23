@@ -53,6 +53,33 @@ class LoteProductoModel(BaseModel):
             return {'success': False, 'error': str(e)}
 
 
+    def obtener_composicion_inventario(self) -> Dict:
+        """
+        Obtiene el stock total agrupado por producto, excluyendo estados no disponibles.
+        """
+        try:
+            result = self.db.table(self.table_name).select(
+                'producto_id, cantidad_actual, producto:productos(nombre)'
+            ).in_('estado', ['DISPONIBLE', 'RESERVADO']).gt('cantidad_actual', 0).execute()
+
+            composicion = {}
+            for lote in result.data:
+                producto_id = lote['producto_id']
+                nombre = lote.get('producto', {}).get('nombre', 'Producto Desconocido')
+                cantidad = float(lote.get('cantidad_actual', 0) or 0)
+                
+                if nombre not in composicion:
+                    composicion[nombre] = 0
+                
+                composicion[nombre] += cantidad
+
+            final_data = [{'nombre': k, 'cantidad': v} for k, v in composicion.items()]
+
+            return {'success': True, 'data': final_data}
+        except Exception as e:
+            logger.error(f"Error obteniendo composición de inventario de productos: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
     # --- MÉTODO NUEVO A AÑADIR ---
     def get_all_lotes_for_view(self):
         """

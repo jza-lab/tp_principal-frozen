@@ -104,7 +104,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Obtiene el stock y la unidad del atributo data-* de la opción seleccionada
             const stock = selectedOption ? (selectedOption.dataset.stock || 0) : 0;
-            const unidad = selectedOption ? selectedOption.dataset.unidad : '';
+            const unidad = (selectedOption && selectedOption.dataset.unidad) ? selectedOption.dataset.unidad : '';
 
             // --- LÓGICA DE CONTROL DE DECIMALES Y STEP ---
             // Es entero si la unidad es 'unidades' O si empieza con 'paquete'
