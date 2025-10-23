@@ -414,7 +414,7 @@
                                                 data-precio="{{ producto.precio_unitario | float or 0 }}"
                                                 data-unidad="{{ producto.unidad_medida }}" {% if
                                                 item.producto_id==producto.id %}selected{% endif %}>
-                                                {{ producto.nombre }} ({{ producto.unidad_medida }})
+                                                {{ producto.nombre }}
                                             </option>
                                             {% endfor %}
                                         </select>
@@ -422,6 +422,7 @@
                                     <td>
                                         <div class="input-group input-group-sm">
                                             <input type="number" class="form-control item-quantity"
+                                                style="min-width: 8ch;"
                                                 oninput="limitarDigitos(this, 7)"
                                                 name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10" max="5000"
                                                 min="{{ min_value }}" step="{{ step_value }}"
@@ -476,8 +477,9 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-4">
-            <div class="card sticky-top shadow-sm" style="top: 20px;">
+    
+    <div class="col-lg-4">
+            <div class="card fixed-side-panel" style="top: 10px;">
                 <div class="card-header bg-primary text-black">
                     <h5 class="mb-0">Resumen y Acciones</h5>
                 </div>
@@ -539,7 +541,7 @@
         </td>
         <td>
             <div class="input-group input-group-sm">
-                <input type="number" min="0.01" max="5000" step="0.01" class="form-control item-quantity"
+                <input type="number" min="0.01" max="5000" step="0.01" class="form-control item-quantity" style="min-width: 8ch;"
                     oninput="limitarDigitos(this, 7)" name="items-__prefix__-cantidad" placeholder="Ej: 10" required>
                 <span class="input-group-text unidad-display">--</span>
             </div>
@@ -560,6 +562,7 @@
 
 {% block extra_js %}
 
+
 <script>
     window.CLIENTE_API_URL_BASE = "{{ url_for('clientes_proveedores.buscar_por_cuil', cliente_cuil='0') }}";
     const pedidoId = "{{ pedido.id }}"
@@ -576,6 +579,8 @@
     }
 
 </script>
+
+<script src="{{ url_for('static', filename='js/gestionPanelLateral.js') }}"></script>
 
 <script src="{{ url_for('static', filename='js/orden_venta/gestionClientes.js') }}"></script>
 

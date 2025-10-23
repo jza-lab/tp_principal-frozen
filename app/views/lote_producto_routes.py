@@ -21,7 +21,12 @@ producto_controller = ProductoController() # Para obtener la lista de productos
 def listar_lotes():
     response, _ = controller.obtener_lotes_para_vista()
     lotes = response.get('data', [])
-    return render_template('lotes_productos/listar.html', lotes=lotes)
+
+    grafico_resp_dict, _ = controller.obtener_datos_grafico_inventario()
+
+    datos_grafico_productos = grafico_resp_dict.get('data', [])
+
+    return render_template('lotes_productos/listar.html', lotes=lotes, datos_grafico_productos=datos_grafico_productos)
 
 @lote_producto_bp.route('/<int:id_lote>/detalle')
 @permission_required(accion='consultar_control_de_calidad')

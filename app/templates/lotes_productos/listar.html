@@ -14,58 +14,91 @@
     </div>
 </div>
 
-<div class="card">
-    <div class="card-header"><h5 class="mb-0">Lotes de Productos Terminados</h5></div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-striped table-hover mb-0">
-                <thead>
-                    <tr>
-                        <th>Producto</th>
-                        <th>N° Lote</th>
-                        <th class="text-end">Cantidad Actual</th>
-                        <th>Fecha Creación</th>
-                        <th>Fecha Vencimiento</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for lote in lotes %}
-                    <tr class="align-middle">
-                        <td><div class="fw-bold">{{ lote.producto_nombre or 'N/A' }}</div></td>
-                        <td>{{ lote.numero_lote or 'N/A' }}</td>
-                        <td class="text-end fw-bold">{{ lote.cantidad_actual | round(2) }} unidades</td>
-                        <td>{{ lote.created_at.strftime('%Y-%m-%d') if lote.created_at else 'N/A' }}</td>
-                        <td>
-                            {% if lote.fecha_vencimiento %}
+<div class="row">
+    <div class="card col-lg-8 col-xl-9">
+        <div class="card-header">
+            <h5 class="mb-0">Lotes de Productos Terminados</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Producto</th>
+                            <th>N° Lote</th>
+                            <th class="text-end">Cantidad Actual</th>
+                            <th>Fecha Creación</th>
+                            <th>Fecha Vencimiento</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lote in lotes %}
+                        <tr class="align-middle">
+                            <td>
+                                <div class="fw-bold">{{ lote.producto_nombre or 'N/A' }}</div>
+                            </td>
+                            <td>{{ lote.numero_lote or 'N/A' }}</td>
+                            <td class="text-end fw-bold">{{ lote.cantidad_actual | round(2) }} unidades</td>
+                            <td>{{ lote.created_at.strftime('%Y-%m-%d') if lote.created_at else 'N/A' }}</td>
+                            <td>
+                                {% if lote.fecha_vencimiento %}
                                 {{ lote.fecha_vencimiento.strftime('%Y-%m-%d') if lote.fecha_vencimiento else 'N/A' }}
-                            {% else %}
+                                {% else %}
                                 <span class="text-muted">No aplica</span>
-                            {% endif %}
-                        </td>
-                        <td>
-   				{% if lote.estado == 'AGOTADO' %}
-        			<span class="badge bg-danger">{{ lote.estado }}</span>
-    				{% elif lote.estado == 'DISPONIBLE' %}
-        			<span class="badge bg-success">{{ lote.estado }}</span>
-    				{% else %}
-        			{# Para cualquier otro estado como VENCIDO o RETIRADO, usamos un color neutro #}
-        			<span class="badge bg-secondary">{{ lote.estado or 'Desconocido' }}</span>
-    				{% endif %}
-			</td>
-                        <td>
-                            <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-primary">
-   				<i class="bi bi-eye"></i>
-			    </a>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="7" class="text-center text-muted py-4">No hay lotes de productos en el inventario.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if lote.estado == 'AGOTADO' %}
+                                <span class="badge bg-danger">{{ lote.estado }}</span>
+                                {% elif lote.estado == 'DISPONIBLE' %}
+                                <span class="badge bg-success">{{ lote.estado }}</span>
+                                {% else %}
+                                {# Para cualquier otro estado como VENCIDO o RETIRADO, usamos un color neutro #}
+                                <span class="badge bg-secondary">{{ lote.estado or 'Desconocido' }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}"
+                                    class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">No hay lotes de productos en el
+                                inventario.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+    <div class="col-lg-4 col-xl-3">
+        </h6>
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Gráficos
+            </div>
+            <div class="card-body">
+                <div>
+                    <canvas id="graficoProducto"></canvas>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+<script>
+    const DATOS_GRAFICO_PRODUCTOS = {{ datos_grafico_productos | tojson | safe }};
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='js/productos/graficosInventario.js') }}"></script>
+
 {% endblock %}
