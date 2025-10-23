@@ -228,3 +228,31 @@ def habilitar_proveedor(id):
     except Exception as e:
         logger.error(f"Error inesperado en habilitar_proveedor: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+@cliente_proveedor.route('/clientes/api/buscar/cuil-email', methods=['POST'])
+def buscar_cliente_por_cuil_y_email_api():
+    """
+    Busca un cliente por CUIL/CUIT y Email para precarga de datos.
+    Se registra bajo el nombre de endpoint: clientes_proveedores.buscar_cliente_por_cuil_y_email_api
+    """
+    data = request.get_json()
+    cuil = data.get('cuil')
+    email = data.get('email')
+    
+
+    if not cuil or not email:
+        return jsonify({"success": False, "error": "CUIL/CUIT y Email son requeridos."}), 400
+    
+    try:
+        # Llama al nuevo método dentro de ClienteController
+        resultado_busqueda, status_code = cliente_controller.buscar_cliente_por_cuit_y_email(cuil, email)
+        print(resultado_busqueda)
+    except Exception as e:
+        logger.error(f"Error interno del servidor en búsqueda segura: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor al buscar datos."}), 500
+
+    if resultado_busqueda.get('success'):
+        # La respuesta ya viene serializada desde el controlador
+        return jsonify({"success": True, "data": resultado_busqueda.get('data')}), 200
+    else:
+        return jsonify({"success": False, "error": resultado_busqueda.get('error', 'Credenciales no válidas.')}), status_code

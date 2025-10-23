@@ -3,6 +3,7 @@ from app.controllers.base_controller import BaseController
 from app.models.inventario import InventarioModel
 from app.models.insumo import InsumoModel
 from app.controllers.insumo_controller import InsumoController
+from app.controllers.configuracion_controller import ConfiguracionController
 #from app.services.stock_service import StockService
 from app.schemas.inventario_schema import InsumosInventarioSchema
 from typing import Dict, Optional
@@ -25,9 +26,11 @@ class InventarioController(BaseController):
         super().__init__()
         self.inventario_model = InventarioModel()
         self.insumo_model = InsumoModel()
-        self.insumo_controller = InsumoController() # <-- INSTANCIA AÑADIDA
+        self.insumo_controller = InsumoController()
+        self.config_controller = ConfiguracionController()
         #self.stock_service = StockService()
         self.schema = InsumosInventarioSchema()
+        self.reserva_insumo_model = ReservaInsumoModel()
 
     def reservar_stock_insumos_para_op(self, orden_produccion: Dict, usuario_id: int) -> dict:
         """
@@ -62,7 +65,7 @@ class InventarioController(BaseController):
                 for lote in lotes_disponibles:
                     if cantidad_restante_a_reservar <= 0:
                         break
-                    
+
                     cantidad_en_lote = float(lote.get('cantidad_actual', 0))
                     cantidad_a_reservar_de_lote = min(cantidad_en_lote, cantidad_restante_a_reservar)
 
@@ -171,6 +174,37 @@ class InventarioController(BaseController):
 
         except Exception as e:
             logger.error(f"Error verificando stock para OP {orden_produccion.get('id', 'N/A')}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def obtener_stock_disponible_insumo(self, insumo_id: int) -> dict:
+        """
+        Calcula el stock REALMENTE disponible de un insumo.
+        Fórmula: (Suma de cantidad_actual en lotes 'disponible') - (Suma de cantidad_reservada en reservas 'RESERVADO').
+        """
+        try:
+            # 1. Calcular el stock físico total sumando los lotes DISPONIBLES
+            lotes_result = self.inventario_model.find_all(
+                filters={
+                    'id_insumo': insumo_id,
+                    'estado': 'disponible', # Revisa si es minúscula en tu DB
+                    'cantidad_actual': ('gt', 0)
+                }
+            )
+            if not lotes_result.get('success'):
+                logger.error(f"Fallo al obtener lotes disponibles para insumo {insumo_id}: {lotes_result.get('error')}")
+                stock_fisico_disponible = 0
+            else:
+                stock_fisico_disponible = sum(lote.get('cantidad_actual', 0) for lote in lotes_result.get('data', []))
+
+            stock_disponible_real = stock_fisico_disponible
+
+            if stock_disponible_real < 0: stock_disponible_real = 0 # Asegurar no negativo
+
+            logger.debug(f"Stock disponible calculado para insumo {insumo_id}: {stock_disponible_real}")
+            return {'success': True, 'data': {'stock_disponible': stock_disponible_real}}
+
+        except Exception as e:
+            logger.error(f"Error calculando stock disponible para insumo {insumo_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def obtener_lotes(self, filtros: Optional[Dict] = None) -> tuple:
@@ -299,7 +333,6 @@ class InventarioController(BaseController):
             logger.error(f"Error obteniendo lotes: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
-# --- Dentro de app/controllers/inventario_controller.py (clase InventarioController) ---
 
     def obtener_lote_por_id(self, id_lote: str) -> tuple:
         """Obtener un lote específico por su ID usando el método enriquecido."""
@@ -413,11 +446,12 @@ class InventarioController(BaseController):
     def obtener_alertas(self) -> tuple:
         """Obtener alertas de inventario"""
         try:
+            dias_vencimiento = self.config_controller.obtener_dias_vencimiento()
             # Obtener alertas de stock bajo
             stock_result = self.inventario_model.obtener_stock_consolidado({'estado_stock': 'BAJO'})
 
             # Obtener alertas de vencimiento
-            vencimiento_result = self.inventario_model.obtener_por_vencimiento(7)
+            vencimiento_result = self.inventario_model.obtener_por_vencimiento(dias_vencimiento)
 
             alertas = {
                 'stock_bajo': stock_result['data'] if stock_result['success'] else [],
@@ -447,6 +481,19 @@ class InventarioController(BaseController):
             return 0
         except Exception as e:
             logger.error(f"Error contando alertas de stock: {str(e)}")
+            return 0
+    def obtener_conteo_vencimientos(self) -> int:
+        """Obtiene el conteo de lotes próximos a vencer (crítico)."""
+        try:
+            dias_vencimiento = self.config_controller.obtener_dias_vencimiento()
+            # Llama al método del modelo que busca lotes por vencer en el número de días configurable
+            vencimiento_result = self.inventario_model.obtener_por_vencimiento(dias_vencimiento)
+
+            if vencimiento_result.get('success'):
+                return len(vencimiento_result.get('data', []))
+            return 0
+        except Exception as e:
+            logger.error(f"Error contando alertas de vencimiento: {str(e)}")
             return 0
 
     def eliminar_lote(self, id_lote: str) -> tuple:
@@ -503,14 +550,15 @@ class InventarioController(BaseController):
 
         except Exception as e:
             logger.error(f"Error obteniendo lista de insumos bajo stock: {str(e)}")
+
             return self.error_response(f'Error interno: {str(e)}', 500)
-        
+
     def obtener_conteo_vencimientos(self) -> int:
         """Obtiene el conteo de lotes próximos a vencer (crítico)."""
         try:
             # Llama al método del modelo que busca lotes por vencer en 7 días
             # Se asume que el método del modelo ya está implementado correctamente.
-            vencimiento_result = self.inventario_model.obtener_por_vencimiento(7) 
+            vencimiento_result = self.inventario_model.obtener_por_vencimiento(7)
 
             if vencimiento_result.get('success'):
                 return len(vencimiento_result.get('data', []))
@@ -518,3 +566,4 @@ class InventarioController(BaseController):
         except Exception as e:
             logger.error(f"Error contando alertas de vencimiento: {str(e)}")
             return 0
+

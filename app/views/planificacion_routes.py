@@ -3,6 +3,7 @@ import logging
 from flask import Blueprint, render_template, flash, url_for, request, jsonify, session # Añade request y jsonify
 from app.controllers.planificacion_controller import PlanificacionController
 from app.controllers.usuario_controller import UsuarioController
+from datetime import date, timedelta, datetime # <--- SE AÑADIÓ DATETIME
 from app.utils.decorators import permission_required
 from datetime import date, timedelta
 
@@ -18,17 +19,32 @@ def index():
     """
     # 1. Obtener semana de la URL o usar la actual
     week_str = request.args.get('semana')
-    print(f"DEBUG: 'semana' recibida de URL: {week_str}") # <-- TRAZA 1
+    print(f"DEBUG: 'semana' recibida de URL: {week_str}")
     if not week_str:
         today = date.today()
-        start_of_week = today - timedelta(days=today.weekday())
-        week_str = start_of_week.strftime("%Y-W%W") # Formato YYYY-WNN
+        # --- CORRECCIÓN: Usar %V para semana ISO ---
+        start_of_week_iso = today - timedelta(days=today.isoweekday() - 1) # Lunes
+        week_str = start_of_week_iso.strftime("%Y-W%V") # Formato YYYY-WNN (ISO)
         print(f"DEBUG: No se recibió semana, usando actual: {week_str}")
+        # ------------------------------------------
 
-    # 2. Obtener OPs Pendientes (Bandeja) - Sin cambios
-    response_pendientes, _ = controller.obtener_ops_pendientes_planificacion()
-    ops_pendientes = response_pendientes.get('data', []) if response_pendientes.get('success') else []
-    # ... (manejo de flash si falla) ...
+    # --- LEER HORIZONTE DE LA URL ---
+    try:
+        horizonte_dias = request.args.get('horizonte', default=7, type=int)
+        if horizonte_dias <= 0: horizonte_dias = 7
+    except ValueError:
+        horizonte_dias = 7
+    # ---------------------------------
+
+    response_pendientes, _ = controller.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias)
+    mps_data_para_template = {
+        'mps_agrupado': [], 'inicio_horizonte': 'N/A', 'fin_horizonte': 'N/A', 'dias_horizonte': horizonte_dias
+    }
+    if response_pendientes.get('success'):
+        mps_data_para_template = response_pendientes.get('data', mps_data_para_template)
+    else:
+        flash(response_pendientes.get('error', 'Error cargando MPS.'), 'error')
+        mps_data_para_template['dias_horizonte'] = horizonte_dias
 
     # 3. Obtener OPs para el CALENDARIO SEMANAL
     response_semanal, _ = controller.obtener_planificacion_semanal(week_str)
@@ -43,20 +59,18 @@ def index():
     else:
         flash(response_semanal.get('error', 'Error cargando planificación semanal.'), 'error')
 
-    # 4. Obtener OPs para el KANBAN - Sin cambios
+    # 4. Obtener OPs para el KANBAN
     response_kanban, _ = controller.obtener_ops_para_tablero()
     ordenes_por_estado = response_kanban.get('data', {}) if response_kanban.get('success') else {}
-    # ... (manejo de flash si falla) ...
 
-
-    # 5. Obtener Operarios y Supervisores (para la bandeja) - Sin cambios
+    # 5. Obtener Operarios y Supervisores
     usuario_controller = UsuarioController()
     supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
     operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
     supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []
     operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
 
-    # 6. Definir columnas Kanban - Sin cambios
+    # 6. Definir columnas Kanban
     columnas_kanban = {
         'EN ESPERA': 'En Espera (Sin Insumos)',
         'LISTA PARA PRODUCIR':'Listas para Iniciar',
@@ -64,45 +78,39 @@ def index():
         'CONTROL_DE_CALIDAD': 'Control Calidad', 'COMPLETADA': 'Completadas'
     }
 
-    # 7. Calcular navegación semanal (como en semanal.html)
+    # 7. Calcular navegación semanal
     try:
-        year = int(week_str[:4])
-        week_num = int(week_str[-2:])
-        # Use isocalendar which returns (year, week, weekday)
-        current_week_start = date.fromisocalendar(year, week_num, 1) # Monday
+        # --- CORRECCIÓN: Usar %V para semana ISO ---
+        year, week_num_str = week_str.split('-W')
+        week_num = int(week_num_str)
+        current_week_start = date.fromisocalendar(int(year), week_num, 1) # Lunes
         prev_week_start = current_week_start - timedelta(days=7)
         next_week_start = current_week_start + timedelta(days=7)
-
-        # --- CORRECTION: Use %V for ISO week number ---
         prev_week_str = prev_week_start.strftime("%Y-W%V")
         next_week_str = next_week_start.strftime("%Y-W%V")
-        # Ensure week_str itself uses %V if generated initially
-        if request.args.get('semana') is None: # If it was the default calculation
-             week_str = current_week_start.strftime("%Y-W%V")
         # -----------------------------------------------
-
-        print(f"DEBUG: current_week_start: {current_week_start}")
-        print(f"DEBUG: next_week_start: {next_week_start}")
-        print(f"DEBUG: next_week_str (calculado con %V): {next_week_str}") # Updated log
     except ValueError:
         prev_week_str = None
         next_week_str = None
-        print("DEBUG: Error parseando week_str")
+        print(f"DEBUG: Error parseando week_str {week_str}")
 
     # 8. Renderizar el tablero.html con TODOS los datos
     return render_template(
         'planificacion/tablero.html',
-        ops_pendientes=ops_pendientes,               # Para Bandeja
-        ordenes_por_dia=ordenes_por_dia,             # Para Calendario Semanal
+        mps_data=mps_data_para_template,
+        ordenes_por_dia=ordenes_por_dia,
         inicio_semana=inicio_semana,
         fin_semana=fin_semana,
         semana_actual_str=week_str,
         semana_anterior_str=prev_week_str,
         semana_siguiente_str=next_week_str,
-        ordenes_por_estado=ordenes_por_estado,       # Para Kanban
-        columnas=columnas_kanban,                  # Para Kanban
-        supervisores=supervisores,                   # Para Bandeja
-        operarios=operarios                          # Para Bandeja
+        ordenes_por_estado=ordenes_por_estado,
+        columnas=columnas_kanban,
+        supervisores=supervisores,
+        operarios=operarios,
+        # --- 2. VARIABLE AÑADIDA ---
+        now=datetime.utcnow(), # <--- PASAMOS LA FECHA/HORA ACTUAL A LA PLANTILLA
+        timedelta=timedelta
     )
 
 # Endpoint para la API de consolidación
@@ -146,4 +154,25 @@ def mover_op_api(op_id):
     nuevo_estado = data.get('nuevo_estado')
 
     response, status_code = controller.mover_orden(op_id, nuevo_estado)
+    return jsonify(response), status_code
+
+@planificacion_bp.route('/api/consolidar-y-aprobar', methods=['POST'])
+def consolidar_y_aprobar_api():
+    """
+    API endpoint para el flujo completo de la modal de Plan Maestro:
+    1. Consolida OPs.
+    2. Asigna Línea, Supervisor, Operario.
+    3. Confirma Fecha y ejecuta la aprobación (stock check, etc).
+    """
+    data = request.get_json()
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'success': False, 'error': 'Usuario no autenticado.'}), 401
+
+    # Pasamos todos los datos al nuevo método del controlador
+    response, status_code = controller.consolidar_y_aprobar_lote(
+        op_ids=data.get('op_ids', []),
+        asignaciones=data.get('asignaciones', {}),
+        usuario_id=usuario_id
+    )
     return jsonify(response), status_code

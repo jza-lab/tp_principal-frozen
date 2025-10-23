@@ -114,7 +114,7 @@ class OrdenProduccionModel(BaseModel):
         try:
             # Base query selecting related data
             query = self.db.table(self.get_table_name()).select(
-                "*, productos(nombre), "
+                "*, productos(nombre, unidad_medida), "
                 "creador:usuario_creador_id(nombre, apellido), "
                 "supervisor:supervisor_responsable_id(nombre, apellido), "
                 "operario:operario_asignado_id(nombre, apellido)"
@@ -148,6 +148,13 @@ class OrdenProduccionModel(BaseModel):
                     elif key == 'fecha_inicio_planificada_hasta':
                         query = query.lte('fecha_inicio_planificada', value)
 
+                        # --- AÑADIR/VERIFICAR ESTOS ELIF ---
+                    elif key == 'fecha_meta_desde':
+                        query = query.gte('fecha_meta', value)
+                    elif key == 'fecha_meta_hasta':
+                        query = query.lte('fecha_meta', value)
+                    # --- FIN ---
+
                     # Default to equality filter
                     else:
                         query = query.eq(key, value)
@@ -165,10 +172,17 @@ class OrdenProduccionModel(BaseModel):
                 processed_data = []
                 for item in result.data:
                     # Flatten product info
+                    # --- AÑADIR LÓGICA PARA 'unidad_medida' ---
                     if item.get('productos'):
-                        item['producto_nombre'] = item.pop('productos').get('nombre','N/A')
+                        producto_info = item.pop('productos')
+                        item['producto_nombre'] = producto_info.get('nombre','N/A')
+                        item['producto_presentacion'] = producto_info.get('presentacion') # Mantener por si acaso
+                        item['producto_unidad_medida'] = producto_info.get('unidad_medida') # <-- AÑADIDO
                     else:
-                         item['producto_nombre'] = 'N/A' # Handle case where relation might be null
+                        item['producto_nombre'] = 'N/A'
+                        item['producto_presentacion'] = None
+                        item['producto_unidad_medida'] = None # <-- AÑADIDO
+                    # --- FIN LÓGICA AÑADIDA ---
 
                     # Flatten creator info
                     if item.get('creador'):
@@ -207,7 +221,7 @@ class OrdenProduccionModel(BaseModel):
                             op_id = item['orden_produccion_id']
                             if op_id not in pedidos_por_op:
                                 pedidos_por_op[op_id] = []
-                            
+
                             pedido_info = item.get('pedido')
                             if pedido_info:
                                 # Evitamos duplicados si múltiples items de un mismo pedido apuntan a la misma OP
@@ -234,10 +248,11 @@ class OrdenProduccionModel(BaseModel):
         """
         try:
             # .maybe_single() ejecuta la consulta y devuelve un solo dict o None
-            response = self.db.table(self.table_name).select(
-                "*, productos(nombre, descripcion), recetas(id, descripcion, rendimiento, activa), "
+            response = self.db.table(self.get_table_name()).select(
+                "*, productos(nombre, descripcion, unidad_medida), recetas(id, descripcion, rendimiento, activa), " # Añadido unidad_medida
                 "creador:usuario_creador_id(nombre, apellido), "
-                "supervisor:supervisor_responsable_id(nombre, apellido)"
+                "supervisor:supervisor_responsable_id(nombre, apellido), "
+                "operario:operario_asignado_id(nombre, apellido)" # <-- Incluir operario
             ).eq("id", orden_id).maybe_single().execute()
 
             item = response.data
@@ -264,9 +279,15 @@ class OrdenProduccionModel(BaseModel):
                             item[key] = 'Error de formato de fecha'
                 # Aplanar la respuesta
                 if item.get('productos'):
-                    item['producto_nombre'] = item['productos'].get('nombre', 'N/A')
-                    item['producto_descripcion'] = item['productos'].get('descripcion', 'N/A')
-                    item.pop('productos')
+                    producto_info = item.pop('productos')
+                    item['producto_nombre'] = producto_info.get('nombre', 'N/A')
+                    item['producto_descripcion'] = producto_info.get('descripcion', 'N/A')
+                    item['producto_unidad_medida'] = producto_info.get('unidad_medida') # ¿Está esta línea?
+                else:
+                     item['producto_nombre'] = 'N/A' # Añadir fallback
+                     item['producto_descripcion'] = 'N/A' # Añadir fallback
+                     item['producto_unidad_medida'] = None # Asegurar que existe aunque sea None
+                # --- FIN VERIFICACIÓN ---
 
                 if item.get('recetas'):
                     item['receta_codigo'] = item['recetas'].get('codigo', 'N/A')
@@ -283,6 +304,17 @@ class OrdenProduccionModel(BaseModel):
                     item['supervisor_nombre'] = f"{supervisor_info.get('nombre', '')} {supervisor_info.get('apellido', '')}".strip()
                 else:
                     item['supervisor_nombre'] = 'No asignado'
+
+                # --- AÑADIR ESTE BLOQUE PARA EL OPERARIO ---
+                if item.get('operario'):
+                    operario_info = item.pop('operario')
+                    item['operario_nombre'] = f"{operario_info.get('nombre', '')} {operario_info.get('apellido', '')}".strip()
+                    # Si el nombre resultante está vacío, poner 'No asignado'
+                    if not item['operario_nombre']:
+                         item['operario_nombre'] = 'No asignado'
+                else:
+                    item['operario_nombre'] = 'No asignado'
+                # --- FIN DEL BLOQUE AÑADIDO ---
 
                 return {'success': True, 'data': item}
             else:

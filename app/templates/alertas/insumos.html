@@ -1,0 +1,54 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Configuración de Alertas de Stock{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Umbrales de Stock de Insumos</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item active">Configuración de Alertas</li>
+    </ol>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-warehouse me-1"></i>
+            Listado de Insumos
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="datatablesSimple" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Stock Actual</th>
+                            <th>Stock Mínimo</th>
+                            <th>Stock Máximo</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for insumo in insumos %}
+                        <tr>
+                            <td>{{ insumo.nombre }}</td>
+                            <td>{{ insumo.stock_actual | default('N/A') }}</td>
+                            <form action="{{ url_for('alertas.actualizar_stock_min_max') }}" method="POST">
+                                <input type="hidden" name="id_insumo" value="{{ insumo.id_insumo }}">
+                                <td>
+                                    <input type="number" name="stock_min" class="form-control" value="{{ insumo.stock_min | default(0) }}">
+                                </td>
+                                <td>
+                                    <input type="number" name="stock_max" class="form-control" value="{{ insumo.stock_max | default(0) }}">
+                                </td>
+                                <td>
+                                    <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                                </td>
+                            </form>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

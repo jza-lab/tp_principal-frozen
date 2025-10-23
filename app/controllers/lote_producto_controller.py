@@ -10,6 +10,8 @@ from marshmallow import ValidationError
 from datetime import datetime
 from app.models.reserva_producto import ReservaProductoModel
 from app.schemas.reserva_producto_schema import ReservaProductoSchema
+from app.controllers.configuracion_controller import ConfiguracionController
+
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,7 @@ class LoteProductoController(BaseController):
         self.schema = LoteProductoSchema()
         self.reserva_model = ReservaProductoModel()
         self.reserva_schema = ReservaProductoSchema()
+        self.config_controller = ConfiguracionController()
 
     def crear_lote(self, data: Dict):
         """Crea un nuevo lote de producto."""
@@ -497,17 +500,20 @@ class LoteProductoController(BaseController):
             return {'success': False, 'error': str(e)}
 
     def obtener_conteo_vencimientos(self) -> int:
-        """Obtiene el conteo de lotes de productos próximos a vencer (crítico)."""
-        try:
-            # Llama al método del modelo que busca lotes por vencer en 7 días
-            vencimiento_result = self.model.find_por_vencimiento(7) 
+            """Obtiene el conteo de lotes de productos próximos a vencer (crítico)."""
+            try:
+                # Obtener el umbral de días de la configuración
+                dias_alerta = self.config_controller.obtener_dias_vencimiento() # <--- MODIFICADO
+                
+                # Llama al método del modelo que busca lotes por vencer en el número de días configurado
+                vencimiento_result = self.model.find_por_vencimiento(dias_alerta) 
 
-            if vencimiento_result.get('success'):
-                return len(vencimiento_result.get('data', []))
-            return 0
-        except Exception as e:
-            logger.error(f"Error contando alertas de vencimiento de producto: {str(e)}")
-            return 0
+                if vencimiento_result.get('success'):
+                    return len(vencimiento_result.get('data', []))
+                return 0
+            except Exception as e:
+                logger.error(f"Error contando alertas de vencimiento de producto: {str(e)}")
+                return 0
         
     def obtener_datos_grafico_inventario(self) -> dict:
         """

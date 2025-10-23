@@ -13,6 +13,75 @@ class PedidoModel(BaseModel):
         """Devuelve el nombre de la tabla principal."""
         return 'pedidos'
 
+    def get_one_with_items_and_op_status(self, pedido_id: int) -> Dict:
+        """
+        Obtiene un pedido con sus items, y para cada item vinculado a una OP,
+        añade el estado de esa OP. También añade una bandera 'todas_ops_completadas'
+        al diccionario principal del pedido.
+        """
+        from app.models.orden_produccion import OrdenProduccionModel # Importación local
+
+        pedido_result = self.get_one_with_items(pedido_id) # Reutiliza tu método existente
+
+        if not pedido_result.get('success'):
+            return pedido_result # Devolver el error original
+
+        pedido_data = pedido_result['data']
+        items = pedido_data.get('items', [])
+
+        # 1. Recolectar IDs de OPs vinculadas
+        op_ids_vinculadas = []
+        for item in items:
+            op_id = item.get('orden_produccion_id')
+            if op_id:
+                op_ids_vinculadas.append(op_id)
+
+        # 2. Si hay OPs vinculadas, obtener sus estados
+        op_estados = {}
+        todas_completadas = True # Asumir True inicialmente
+
+        if op_ids_vinculadas:
+            op_model = OrdenProduccionModel()
+            # Usamos find_by_ids para obtener todas las OPs en una sola consulta
+            ops_result = op_model.find_by_ids(list(set(op_ids_vinculadas))) # set() para evitar duplicados
+
+            if ops_result.get('success'):
+                ops_encontradas = ops_result.get('data', [])
+                for op in ops_encontradas:
+                    op_estados[op['id']] = op['estado']
+            else:
+                # Error crítico si no podemos obtener las OPs
+                return {'success': False, 'error': f"Error al obtener estados de OPs vinculadas: {ops_result.get('error')}"}
+
+            # Verificar si todas están completadas
+            if len(op_estados) != len(set(op_ids_vinculadas)):
+                 # Si no encontramos todas las OPs que esperábamos
+                 todas_completadas = False
+                 logging.warning(f"Pedido {pedido_id}: No se encontraron todas las OPs vinculadas en la BD.")
+
+
+            for op_id in op_ids_vinculadas:
+                estado = op_estados.get(op_id)
+                if estado != 'COMPLETADA':
+                    todas_completadas = False
+                    break # Basta con una que no esté completada
+        else:
+             # Si no hay NINGUNA OP vinculada, consideramos que está listo (ej: solo productos comprados)
+             todas_completadas = True
+
+
+        # 3. Añadir estado a cada item y la bandera al pedido
+        for item in items:
+            op_id = item.get('orden_produccion_id')
+            if op_id:
+                item['op_estado'] = op_estados.get(op_id, 'DESCONOCIDO') # Añadir estado al item
+            else:
+                item['op_estado'] = None # No aplica
+
+        pedido_data['todas_ops_completadas'] = todas_completadas # Añadir bandera al pedido
+
+        return {'success': True, 'data': pedido_data}
+
     def contar_pedidos_direccion(self, direccion_id: int, exclude_pedido_id: Optional[int] = None) -> int:
         """
         Cuenta cuántos pedidos están asociados a una dirección.

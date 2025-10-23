@@ -258,7 +258,7 @@ def generar_factura_html(id):
         try:
             pedido_data['created_at'] = datetime.fromisoformat(pedido_data['created_at'])
         except ValueError:
-            pass 
+            pass
     if pedido_data['estado'] == 'PENDIENTE':
         rendered_html = render_template('orden_venta/factura_proforma_pedido.html', pedido=pedido_data, cliente=cliente)
     else:
@@ -267,8 +267,26 @@ def generar_factura_html(id):
             rendered_html = render_template('orden_venta/factura_a_pedido.html', pedido=pedido_data, cliente=cliente)
         else:
             rendered_html = render_template('orden_venta/factura_b_pedido.html', pedido=pedido_data, cliente=cliente)
-        
+
     return jsonify({
         'success': True,
         'html': rendered_html
     }), 200
+
+@orden_venta_bp.route('/nueva/cliente/pasos', methods=['GET'])
+def nueva_cliente_pasos():
+    """
+    Ruta para el formulario de creación de pedidos en dos pasos (vista de cliente).
+    """
+    hoy = datetime.now().strftime('%Y-%m-%d')
+    
+    response, _ = controller.obtener_datos_para_formulario()
+    productos = response.get('data', {}).get('productos', [])
+    
+    # Usamos el nuevo template sin includes
+    return render_template('orden_venta/formulario_cliente_pasos.html', 
+                            productos=productos, 
+                            pedido=None, 
+                            is_edit=False, 
+                            today=hoy,
+                            cliente={})
