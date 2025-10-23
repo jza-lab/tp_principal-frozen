@@ -166,22 +166,6 @@ def cancelar(id):
         flash(response.get('error'), 'error')
     return redirect(url_for('orden_venta.detalle', id=id))
 
-@orden_venta_bp.route('/<int:id>/planificar', methods=['POST'])
-@permission_required(accion='aprobar_ordenes_venta')
-def planificar(id):
-    """Pasa el pedido a estado de PLANIFICACION, guardando la fecha estimada."""
-    fecha_estimativa = request.form.get('fecha_estimativa_proceso')
-    if not fecha_estimativa:
-        flash("Debe seleccionar una fecha estimada de proceso.", "error")
-        return redirect(url_for('orden_venta.detalle', id=id))
-
-    response, _ = controller.planificar_pedido(id, fecha_estimativa)
-    if response.get('success'):
-        flash(response.get('message'), 'success')
-    else:
-        flash(response.get('error'), 'error')
-    return redirect(url_for('orden_venta.detalle', id=id))
-
 @orden_venta_bp.route('/<int:id>/iniciar_proceso', methods=['POST'])
 @permission_required(accion='aprobar_ordenes_venta')
 def iniciar_proceso(id):
@@ -258,7 +242,7 @@ def generar_factura_html(id):
         try:
             pedido_data['created_at'] = datetime.fromisoformat(pedido_data['created_at'])
         except ValueError:
-            pass 
+            pass
     if pedido_data['estado'] == 'PENDIENTE':
         rendered_html = render_template('orden_venta/factura_proforma_pedido.html', pedido=pedido_data, cliente=cliente)
     else:
@@ -267,7 +251,7 @@ def generar_factura_html(id):
             rendered_html = render_template('orden_venta/factura_a_pedido.html', pedido=pedido_data, cliente=cliente)
         else:
             rendered_html = render_template('orden_venta/factura_b_pedido.html', pedido=pedido_data, cliente=cliente)
-        
+
     return jsonify({
         'success': True,
         'html': rendered_html

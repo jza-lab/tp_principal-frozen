@@ -23,12 +23,12 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Información General del Pedido</h5>
+                {# Definición de badges de estado SIN PLANIFICACION #}
                 {% set estado_config = {
                 'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
-                'PLANIFICACION': {'class': 'bg-warning-soft text-warning', 'icon': 'calendar-check'},
                 'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                'LISTO_PARA_ARMAR': {'class': 'bg-success-soft text-succes', 'icon': 'tools'},
-                'LISTO_PARA_ENTREGA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
+                'LISTO_PARA_ARMAR': {'class': 'bg-success-soft text-success', 'icon': 'tools'},
+                'LISTO_PARA_ENTREGAR': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
                 'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
                 'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                 } %}
@@ -39,120 +39,63 @@
                 </span>
             </div>
             <div class="card-body">
-                <!-- ... (sección de información general sin cambios) ... -->
                 <div class="col-md-12">
-
-                    <label class="form-label-sm fw-bold mb-4">
-                        <i class="bi bi-info-circle me-1"></i>Información General
-                    </label>
-
-                    <div class="row g-2">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <label class="form-label-sm fw-bold">
-                                    <i class="bi bi-person-circle me-1"></i>Cliente:
-                                </label>
-                                <p class="form-control-plaintext mb-0">
-                                    {{ pedido.nombre_cliente | default('N/A', true) }}
-                                </p>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label-sm fw-bold">
-                                    <i class="bi bi-person-circle me-1"></i>Cuil:
-                                </label>
-                                <p class="form-control-plaintext mb-0">
-                                    {{ pedido.cliente.cuit | default('N/A', true) }}
-                                </p>
-                            </div>
-
-                        </div>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <label class="form-label-sm fw-bold">
-                                    <i class="bi bi-calendar-event me-1"></i>Fecha de Solicitud:
-                                </label>
-                                <p class="form-control-plaintext mb-0">
-                                    {{ pedido.fecha_solicitud | default('N/A', true) }}
-                                </p>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label-sm fw-bold">
-                                    <i class="bi bi-calendar-event me-1"></i>Fecha de Entrega Requerida:
-                                </label>
-                                <p class="form-control-plaintext mb-0">
-                                    {{ pedido.fecha_requerido | default('N/A', true) }}
-                                </p>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label-sm fw-bold">
-                                <i class="bi bi-calendar-plus me-1"></i>Fecha de Creación:
-                            </label>
-                            <p class="form-control-plaintext mb-0">
-                                {{ pedido.created_at.strftime('%Y-%m-%d %H:%M') if pedido.created_at else 'N/A' }}
-                            </p>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label class="form-label-sm fw-bold">
-                                <i class="bi bi-clock-history me-1"></i>Última Actualización:
-                            </label>
-                            <p class="form-control-plaintext mb-0">
-                                {{ pedido.updated_at.strftime('%Y-%m-%d %H:%M') if pedido.updated_at else 'N/A' }}
-                            </p>
-                        </div>
-
-                    </div>
-                </div>
-                <hr>
-                <div class="col-md-12">
-                    <div class="mb-3">
-                        <label class="form-label-sm fw-bold mb-3">
-                            <i class="bi bi-house me-1"></i>Dirección de Entrega
-                        </label>
-                        <div class="row g-2">
+                     <label class="form-label-sm fw-bold mb-4"><i class="bi bi-info-circle me-1"></i>Información General</label>
+                     <div class="row g-2">
+                         <div class="row">
+                             <div class="col-md-6">
+                                 <label class="form-label-sm fw-bold"><i class="bi bi-person-circle me-1"></i>Cliente:</label>
+                                 <p class="form-control-plaintext mb-0">{{ pedido.nombre_cliente | default('N/A', true) }}</p>
+                             </div>
+                             <div class="col-md-6">
+                                 <label class="form-label-sm fw-bold"><i class="bi bi-person-circle me-1"></i>Cuil:</label>
+                                 <p class="form-control-plaintext mb-0">{{ pedido.cliente.cuit | default('N/A', true) }}</p>
+                             </div>
+                         </div>
+                         <div class="row">
+                             <div class="col-md-6">
+                                 <label class="form-label-sm fw-bold"><i class="bi bi-calendar-event me-1"></i>Fecha de Solicitud:</label>
+                                 <p class="form-control-plaintext mb-0">{{ pedido.fecha_solicitud | default('N/A', true) }}</p>
+                             </div>
+                             <div class="col-md-6">
+                                 <label class="form-label-sm fw-bold"><i class="bi bi-calendar-event me-1"></i>Fecha de Entrega Requerida:</label>
+                                 <p class="form-control-plaintext mb-0">{{ pedido.fecha_requerido | default('N/A', true) }}</p>
+                             </div>
+                         </div>
+                         <div class="col-md-6">
+                             <label class="form-label-sm fw-bold"><i class="bi bi-calendar-plus me-1"></i>Fecha de Creación:</label>
+                             <p class="form-control-plaintext mb-0">{{ pedido.created_at.strftime('%Y-%m-%d %H:%M') if pedido.created_at else 'N/A' }}</p>
+                         </div>
+                         <div class="col-md-6">
+                             <label class="form-label-sm fw-bold"><i class="bi bi-clock-history me-1"></i>Última Actualización:</label>
+                             <p class="form-control-plaintext mb-0">{{ pedido.updated_at.strftime('%Y-%m-%d %H:%M') if pedido.updated_at else 'N/A' }}</p>
+                         </div>
+                     </div>
+                 </div>
+                 <hr>
+                 <div class="col-md-12">
+                     <div class="mb-3">
+                         <label class="form-label-sm fw-bold mb-3"><i class="bi bi-house me-1"></i>Dirección de Entrega</label>
+                         <div class="row g-2">
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold">
-                                    <i class="bi bi-signpost me-1"></i>Calle y Altura:
-                                </label>
-                                <p class="form-control-plaintext">
-                                    {{ pedido.direccion.calle | default('N/A', true) }} {{ pedido.direccion.altura |
-                                    default('N/A', true) }}
-                                </p>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-signpost me-1"></i>Calle y Altura:</label>
+                                <p class="form-control-plaintext">{{ pedido.direccion.calle | default('N/A', true) }} {{ pedido.direccion.altura | default('N/A', true) }}</p>
                             </div>
-
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold">
-                                    <i class="bi bi-geo-alt me-1"></i>Localidad y Provincia:
-                                </label>
-                                <p class="form-control-plaintext">
-                                    {{ pedido.direccion.localidad | default('N/A', true) }}, {{
-                                    pedido.direccion.provincia | default('N/A', true) }}
-                                </p>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-geo-alt me-1"></i>Localidad y Provincia:</label>
+                                <p class="form-control-plaintext">{{ pedido.direccion.localidad | default('N/A', true) }}, {{ pedido.direccion.provincia | default('N/A', true) }}</p>
                             </div>
-
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold">
-                                    <i class="bi bi-building me-1"></i>Piso / Dto (Opcional):
-                                </label>
-                                <p class="form-control-plaintext">
-                                    Piso: {{ pedido.direccion.piso | default('N/A', true) }} | Dto: {{
-                                    pedido.direccion.depto | default('N/A', true) }}
-                                </p>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-building me-1"></i>Piso / Dto (Opcional):</label>
+                                <p class="form-control-plaintext">Piso: {{ pedido.direccion.piso | default('N/A', true) }} | Dto: {{ pedido.direccion.depto | default('N/A', true) }}</p>
                             </div>
-
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold">
-                                    <i class="bi bi-mailbox2 me-1"></i>Código Postal:
-                                </label>
-                                <p class="form-control-plaintext">
-                                    {{ pedido.direccion.codigo_postal | default('N/A', true) }}
-                                </p>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-mailbox2 me-1"></i>Código Postal:</label>
+                                <p class="form-control-plaintext">{{ pedido.direccion.codigo_postal | default('N/A', true) }}</p>
                             </div>
-                        </div>
-                    </div>
-                </div>
+                         </div>
+                     </div>
+                 </div>
             </div>
         </div>
 
@@ -173,11 +116,10 @@
                     <tbody>
                         {% for item in pedido['items'] %}
                         <tr>
-                            <td>
-                                <div class="fw-bold">{{ item.producto_nombre.nombre or 'N/A' }}</div>
-                            </td>
+                            <td><div class="fw-bold">{{ item.producto_nombre.nombre or 'N/A' }}</div></td>
                             <td>{{ item.cantidad }} {{ item.producto_nombre.unidad_medida or 'u.' }}</td>
                             <td>
+                                {# Badges de estado para items #}
                                 {% set item_estado_config = {
                                 'PENDIENTE': {'class': 'text-secondary', 'icon': 'clock'},
                                 'EN_PRODUCCION': {'class': 'text-primary', 'icon': 'play-circle'},
@@ -185,8 +127,7 @@
                                 'COMPLETADO': {'class': 'text-success', 'icon': 'check-circle'},
                                 'CANCELADO': {'class': 'text-danger', 'icon': 'x-circle'}
                                 } %}
-                                {% set item_config = item_estado_config.get(item.estado, {'class': 'text-dark', 'icon':
-                                'question-circle'}) %}
+                                {% set item_config = item_estado_config.get(item.estado, {'class': 'text-dark', 'icon': 'question-circle'}) %}
                                 <span class="{{ item_config.class }}">
                                     <i class="bi bi-{{ item_config.icon }} me-1"></i>{{ item.estado.replace('_', ' ') }}
                                 </span>
@@ -196,22 +137,16 @@
                                 <a href="{{ url_for('orden_produccion.detalle', id=item.orden_produccion_id) }}">
                                     OP-{{ item.orden_produccion_id }}
                                 </a>
-                                {% else %}
-                                <span class="text-muted">N/A</span>
-                                {% endif %}
+                                {% else %} <span class="text-muted">N/A</span> {% endif %}
                             </td>
                         </tr>
-                        <tr>
-
                         {% else %}
-                        <tr>
-                            <td colspan="4" class="text-center text-muted py-4">No hay productos.</td>
-                        </tr>
+                        <tr><td colspan="4" class="text-center text-muted py-4">No hay productos.</td></tr>
                         {% endfor %}
-                                                <td class="text-end fw-bold">Total del pedido:</td>
-                            <td class="text-end fw-bold">${{( pedido.precio_orden | formato_moneda ) if pedido.precio_orden else 0}}</td>
+                         <tr>
+                            <td colspan="3" class="text-end fw-bold">Total del pedido:</td>
+                            <td class="text-end fw-bold">{{( pedido.precio_orden | formato_moneda ) if pedido.precio_orden else '$ 0,00'}}</td>
                         </tr>
-
                     </tbody>
                 </table>
             </div>
@@ -220,79 +155,57 @@
 
     <div class="col-lg-4">
         <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Acciones</h5>
-            </div>
+            <div class="card-header"><h5 class="mb-0">Acciones</h5></div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    <!-- ACCIONES CONDICIONALES POR ESTADO -->
+                    {% if pedido.estado == 'PENDIENTE' and has_permission('modificar_ordenes_venta') %}
+                        <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}" class="btn btn-outline-primary"><i class="bi bi-pencil me-1"></i>Editar Pedido</a>
+                    {% endif %}
 
-                    {% if pedido.estado == 'PENDIENTE' %}
-                    <form method="POST" action="{{ url_for('orden_venta.planificar', id=pedido.id) }}" class="d-grid">
-                        <div class="mb-3">
-                            <label for="fecha_estimativa_proceso" class="form-label">Fecha Estimada de Proceso</label>
-                            <input type="date" class="form-control" id="fecha_estimativa_proceso"
-                                name="fecha_estimativa_proceso" required>
-                        </div>
-                        <button type="submit" class="btn btn-primary"><i class="bi bi-calendar-check me-1"></i>Pasar a
-                            Planificación</button>
-                    </form>
+                    {% if pedido.estado == 'PENDIENTE' and has_permission('aprobar_ordenes_venta') %}
+                        <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}"
+                              class="confirm-form d-grid" data-title="Iniciar Proceso"
+                              data-message="Esto creará las Órdenes de Producción necesarias y cambiará el estado a 'En Proceso' (o 'Completado' si hay stock). ¿Continuar?"
+                              data-button-type="success">
+                            <button type="submit" class="btn btn-success"><i class="bi bi-play-fill me-1"></i>Iniciar Proceso y Crear OPs</button>
+                        </form>
+                    {% endif %}
 
-                    {% elif pedido.estado == 'PLANIFICACION' %}
-                    <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}"
-                        class="confirm-form d-grid" data-title="Iniciar Proceso"
-                        data-message="¿Está seguro de que desea iniciar el proceso de producción para este pedido?"
-                        data-button-type="success">
-                        <button type="submit" class="btn btn-success"><i class="bi bi-play-fill me-1"></i>Iniciar
-                            Proceso y Crear OPs</button>
-                    </form>
+                    {% if pedido.estado in ['EN_PROCESO', 'ALISTADO'] and has_permission('modificar_ordenes_venta') %}
+                         <form method="POST" action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}"
+                               class="confirm-form d-grid" data-title="Preparar para Entrega"
+                               data-message="Esta acción moverá el pedido a 'LISTO PARA ENTREGAR' y descontará el stock reservado. ¿Está seguro?"
+                               data-button-type="info">
+                             <button type="submit" class="btn btn-info"><i class="bi bi-box-seam me-1"></i>Preparar para Entrega</button>
+                         </form>
+                    {% endif %}
 
-                    {% elif pedido.estado == 'LISTO_PARA_ARMAR' %}
-                    <form method="POST" action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}"
-                        class="confirm-form d-grid" data-title="Preparar para Entrega"
-                        data-message="Esta acción moverá el pedido a 'LISTO PARA ENTREGAR' y descontará el stock de los productos del inventario. ¿Está seguro?"
-                        data-button-type="info">
-                        <button type="submit" class="btn btn-info"><i class="bi bi-box-seam me-1"></i>Preparar para
-                            Entrega</button>
-                    </form>
-
-                    {% elif pedido.estado == 'LISTO_PARA_ENTREGA' %}
-                    <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}"
-                        class="confirm-form d-grid" data-title="Completar Pedido"
-                        data-message="¿Confirma que el pedido ha sido entregado? Esta acción lo marcará como 'COMPLETADO'."
-                        data-button-type="success">
-                        <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-1"></i>Marcar como
-                            Completado</button>
-                    </form>
+                    {% if pedido.estado == 'LISTO_PARA_ENTREGAR' and has_permission('modificar_ordenes_venta') %}
+                        <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}"
+                              class="confirm-form d-grid" data-title="Completar Pedido"
+                              data-message="¿Confirma que el pedido ha sido entregado? Esta acción lo marcará como 'COMPLETADO'."
+                              data-button-type="success">
+                            <button type="submit" class="btn btn-success"><i class="bi bi-check-circle me-1"></i>Marcar como Completado</button>
+                        </form>
                     {% endif %}
 
                     <hr>
-                    <!-- ACCIONES GENERALES -->
-                    {% if pedido.estado in ['PENDIENTE', 'PLANIFICACION'] %}
-                    <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}" class="btn btn-outline-primary"><i
-                            class="bi bi-pencil me-1"></i>Editar Pedido</a>
-                    {% endif %}
-
                     <button type="button" id="btn-imprimir-factura" class="btn btn-primary">
-                        <i class="bi bi-printer me-1"></i> {{ 'Imprimir Factura Final' if pedido.estado in
-                        ['LISTO_PARA_ENTREGA', 'LISTO_PARA_ARMAR', 'COMPLETADO'] else 'Imprimir Factura Proforma' }}
+                        <i class="bi bi-printer me-1"></i> {{ 'Imprimir Factura Final' if pedido.estado in ['LISTO_PARA_ENTREGAR', 'LISTO_PARA_ARMAR', 'COMPLETADO'] else 'Imprimir Factura Proforma' }}
                     </button>
 
-
-                    {% if pedido.estado not in ['COMPLETADO', 'CANCELADO'] %}
-                    <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
-                        class="confirm-form d-grid" data-title="Confirmar Cancelación"
-                        data-message="¿Está seguro? Esta acción no se puede deshacer." data-button-type="danger">
-                        <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Cancelar
-                            Pedido</button>
-                    </form>
+                    {% if pedido.estado not in ['COMPLETADO', 'CANCELADO'] and has_permission('cancelar_ordenes_venta') %}
+                        <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
+                              class="confirm-form d-grid" data-title="Confirmar Cancelación"
+                              data-message="¿Está seguro? Esta acción no se puede deshacer." data-button-type="danger">
+                            <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Cancelar Pedido</button>
+                        </form>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block extra_js %}

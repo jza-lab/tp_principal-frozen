@@ -130,7 +130,7 @@ class PedidoController(BaseController):
                 }
                 if not all(direccion_data.get(k) for k in ['calle', 'altura', 'localidad', 'provincia']):
                     return self.error_response("Debe completar todos los campos de la dirección de entrega alternativa.", 400)
-                
+
                 direccion_id = self._get_or_create_direccion(direccion_data)
                 if not direccion_id:
                     return self.error_response("No se pudo procesar la dirección de entrega alternativa.", 500)
@@ -139,13 +139,13 @@ class PedidoController(BaseController):
                 id_cliente = form_data.get('id_cliente')
                 if not id_cliente:
                     return self.error_response("No se ha especificado un cliente.", 400)
-                
+
                 cliente_result = self.cliente_model.find_by_id(id_cliente, 'id')
                 if not cliente_result.get('success') or not cliente_result.get('data'):
                     return self.error_response("Cliente no encontrado.", 404)
-                
+
                 direccion_id = cliente_result['data'].get('direccion_id')
-                
+
                 if not direccion_id:
                     return self.error_response("El cliente no tiene una dirección principal. Por favor, marque la opción 'Enviar a una dirección de entrega distinta' y complete los campos.", 400)
 
@@ -243,33 +243,6 @@ class PedidoController(BaseController):
             logging.error(f"Error interno en crear_pedido_con_items: {e}", exc_info=True)
             return self.error_response(f'Error interno: {str(e)}', 500)
 
-    def planificar_pedido(self, pedido_id: int, fecha_estimativa: str) -> tuple:
-        """
-        Pasa un pedido del estado 'PENDIENTE' a 'PLANIFICACION' y guarda la fecha estimada.
-        """
-        try:
-            pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
-            if not pedido_resp.get('success'):
-                return self.error_response("Pedido no encontrado.", 404)
-
-            pedido_actual = pedido_resp['data']
-            if pedido_actual.get('estado') != 'PENDIENTE':
-                return self.error_response("Solo los pedidos en estado 'PENDIENTE' pueden ser planificados.", 400)
-
-            # Actualizar estado y fecha estimada en un solo paso
-            update_data = {
-                'estado': 'PLANIFICACION',
-                'fecha_estimativa_proceso': fecha_estimativa
-            }
-            result = self.model.update(id_value=pedido_id, data=update_data, id_field='id')
-
-            if result.get('success'):
-                return self.success_response(message="Pedido pasado a estado de PLANIFICACIÓN.")
-            else:
-                return self.error_response(result.get('error', 'Error al planificar el pedido.'), 500)
-        except Exception as e:
-            logging.error(f"Error en planificar_pedido: {e}", exc_info=True)
-            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
     def iniciar_proceso_pedido(self, pedido_id: int, usuario_id: int) -> tuple:
         """
@@ -283,8 +256,8 @@ class PedidoController(BaseController):
                 return self.error_response("Pedido no encontrado.", 404)
 
             pedido_actual = pedido_resp['data']
-            if pedido_actual.get('estado') != 'PLANIFICACION':
-                return self.error_response("Solo los pedidos en 'PLANIFICACION' pueden pasar a 'EN PROCESO'.", 400)
+            if pedido_actual.get('estado') != 'PENDIENTE':
+                return self.error_response("Solo los pedidos en 'PENDIENTE' pueden pasar a 'EN PROCESO'.", 400)
 
             # Extraer la fecha requerida del pedido
             fecha_requerido_pedido = pedido_actual.get('fecha_requerido')
@@ -414,7 +387,7 @@ class PedidoController(BaseController):
                 }
                 if not all(direccion_data.get(k) for k in ['calle', 'altura', 'localidad', 'provincia', 'codigo_postal']):
                     return self.error_response("Debe completar todos los campos de la dirección de entrega alternativa.", 400)
-                
+
                 direccion_id = self._get_or_create_direccion(direccion_data)
                 if not direccion_id:
                     return self.error_response("No se pudo procesar la dirección de entrega alternativa.", 500)
@@ -423,13 +396,13 @@ class PedidoController(BaseController):
                 id_cliente = form_data.get('id_cliente')
                 if not id_cliente:
                     return self.error_response("No se ha especificado un cliente.", 400)
-                
+
                 cliente_result = self.cliente_model.find_by_id(id_cliente, 'id')
                 if not cliente_result.get('success') or not cliente_result.get('data'):
                     return self.error_response("Cliente no encontrado.", 404)
-                
+
                 direccion_id = cliente_result['data'].get('direccion_id')
-                
+
                 if not direccion_id:
                     return self.error_response("El cliente no tiene una dirección principal. Por favor, marque la opción 'Enviar a una dirección de entrega distinta' y complete los campos.", 400)
 
@@ -645,7 +618,7 @@ class PedidoController(BaseController):
 
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
-        
+
     def obtener_cantidad_pedidos_estado(self, estado: str, fecha: Optional[str] = None) -> Optional[Dict]:
         filtros = {'estado': estado} if estado else {}
 
