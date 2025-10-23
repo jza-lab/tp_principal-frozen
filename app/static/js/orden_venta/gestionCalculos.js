@@ -50,6 +50,8 @@ window.calculateOrderTotals = function () {
         const subtotalItemInput = row.querySelector('.subtotal-item');
         const priceDisplay = row.querySelector('.price-display');
         const unitDisplay = row.querySelector('.unidad-display');
+        // Referencia al campo hidden (asumiendo que ya se agregó en el HTML)
+        const priceUnitValueInput = row.querySelector('.item-price-unit-value');
 
         if (productSelect && quantityInput) {
             const productId = productSelect.value;
@@ -73,6 +75,11 @@ window.calculateOrderTotals = function () {
             // **ACTUALIZAR UNIDAD DE MEDIDA**
             if (unitDisplay) {
                 unitDisplay.textContent = unit;
+            }
+
+            // **ACTUALIZAR CAMPO HIDDEN** (Para el payload, añadido en la corrección anterior)
+            if (priceUnitValueInput) {
+                priceUnitValueInput.value = price;
             }
 
             // APLICAR FORMATO AL PRECIO UNITARIO
@@ -101,7 +108,7 @@ window.calculateOrderTotals = function () {
     if (noItemsMsg) noItemsMsg.style.display = visibleRows === 0 ? 'block' : 'none';
 };
 
-// Función Global para adjuntar listeners
+// Función Global para adjuntar listeners (MODIFICADA PARA FORZAR EL CÁLCULO EN 'CHANGE')
 window.attachItemListeners = function (row) {
     const productSelect = row.querySelector('.producto-selector');
     const quantityInput = row.querySelector('.item-quantity');
@@ -109,7 +116,8 @@ window.attachItemListeners = function (row) {
 
     // Los listeners llaman directamente a la función de cálculo
     if (productSelect && !productSelect.disabled) {
-        productSelect.addEventListener('change', window.calculateOrderTotals);
+        // Al cambiar el producto, disparamos el cálculo
+        productSelect.addEventListener('change', window.calculateOrderTotals); 
     }
     if (quantityInput && !quantityInput.disabled) {
         quantityInput.addEventListener('input', window.calculateOrderTotals);

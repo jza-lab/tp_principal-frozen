@@ -272,3 +272,21 @@ def generar_factura_html(id):
         'success': True,
         'html': rendered_html
     }), 200
+
+@orden_venta_bp.route('/nueva/cliente/pasos', methods=['GET'])
+def nueva_cliente_pasos():
+    """
+    Ruta para el formulario de creación de pedidos en dos pasos (vista de cliente).
+    """
+    hoy = datetime.now().strftime('%Y-%m-%d')
+    
+    response, _ = controller.obtener_datos_para_formulario()
+    productos = response.get('data', {}).get('productos', [])
+    
+    # Usamos el nuevo template sin includes
+    return render_template('orden_venta/formulario_cliente_pasos.html', 
+                            productos=productos, 
+                            pedido=None, 
+                            is_edit=False, 
+                            today=hoy,
+                            cliente={})

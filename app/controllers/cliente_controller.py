@@ -200,3 +200,26 @@ class ClienteController(BaseController):
         except Exception as e:
             logger.error(f"Error actualizando Cliente {cliente_id}: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+        
+
+    def buscar_cliente_por_cuit_y_email(self, cuit, email) -> Dict:
+        """
+        Busca un cliente por CUIT y Email.
+        """
+            # 1. Buscar por CUIT
+        cuit_result = self.model.buscar_por_cuit(cuit, include_direccion=True)
+            
+        if not cuit_result.get('success') or not cuit_result.get('data'):
+            return self.error_response('Cliente no encontrado con ese CUIL/CUIT.', 404)
+
+            # 2. Asumimos que buscar_por_cuit devuelve una lista (aunque sea de 1 elemento)
+        cliente_encontrado = cuit_result['data'][0]
+            
+            # 3. Validar coincidencia de Email
+        if cliente_encontrado.get('email', '').strip().lower() != email.strip().lower():
+            return self.error_response('El Email ingresado no coincide con el Email de contacto registrado para ese CUIL/CUIT.', 401)
+            
+            # 4. Serializar y devolver (usando el esquema para incluir la dirección anidada)
+        serialized_data = self.schema.dump(cliente_encontrado)
+
+        return self.success_response(data=serialized_data)

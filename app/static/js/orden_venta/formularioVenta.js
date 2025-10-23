@@ -214,6 +214,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Aplicar la lógica de exclusión después de añadir una fila
             updateAvailableProducts();
         }
+        window.addItemRow = addItem; 
 
         /**
           * Elimina una fila de ítem.
@@ -433,6 +434,7 @@ async function enviarDatos(payload) {
 
 
 function buildPayload() {
+    window.buildPayload = buildPayload;
     function cleanCurrency(value) {
         if (!value) return 0;
         // 1. Remover $ y espacios. 2. Reemplazar punto (miles) por nada. 3. Reemplazar coma (decimal) por punto.
@@ -474,14 +476,23 @@ function buildPayload() {
         const productoSelect = row.querySelector('select[name*="producto_id"]');
         const cantidadInput = row.querySelector('input[name*="cantidad"]');
         const idInput = row.querySelector('input[name*="id"]');
+        // INICIO MODIFICACIÓN: Referencia al campo hidden del precio unitario
+        const precioUnitarioInput = row.querySelector('input[name*="precio_unitario"]');
+        // FIN MODIFICACIÓN
+        
         if (productoSelect && cantidadInput && productoSelect.value) {
             payload.items.push({
                 id: idInput && idInput.value ? parseInt(idInput.value) : null,
                 producto_id: parseInt(productoSelect.value),
-                cantidad: parseInt(cantidadInput.value)
+                cantidad: parseFloat(cantidadInput.value) || 0, // Usar parseFloat para la cantidad para mayor robustez
+                // INICIO MODIFICACIÓN: Añadir el precio unitario del campo hidden
+                precio_unitario: precioUnitarioInput ? parseFloat(precioUnitarioInput.value) : 0 
+                // FIN MODIFICACIÓN
             });
         }
     });
 
     return payload;
 }
+
+window.buildPayload = buildPayload;
