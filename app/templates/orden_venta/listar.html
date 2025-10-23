@@ -48,49 +48,77 @@
     <div class="col-md-4 mb-4">
         <div class="card h-100 insumo-card {% if pedido.estado in ['CANCELADO', 'COMPLETADO'] %}insumo-inactivo{% endif %}">
             <div class="card-body d-flex flex-column">
-                 <div class="d-flex justify-content-between">
-                     <h5 class="card-title">{{ pedido.nombre_cliente }}</h5>
-                     {# Badges de estado SIN PLANIFICACION y SIN LÍNEA COMENTADA CON # #}
-                     {% set estado_config = {
-                     'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
-                     'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                     'LISTO_PARA_ARMAR': {'class': 'bg-success-soft text-success', 'icon': 'tools'},
-                     'LISTO_PARA_ENTREGAR': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
-                     'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
-                     'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
-                     } %}
-                     {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
-                     <span class="badge {{ config.class }}">
-                         <i class="bi bi-{{ config.icon }} me-1"></i>{{ pedido.estado.replace('_', ' ') }}
-                     </span>
-                 </div>
-                 <div class="card-secondary-details mb-3">
-                     <span><i class="bi bi-upc-scan"></i> <code>PED-{{ pedido.id }}</code></span>
-                     <span><i class="bi bi-currency-dollar"></i> <b>{{ pedido.precio_orden | formato_moneda }}</b></span>
-                     <span><i class="bi bi-calendar-event"></i> {{ pedido.fecha_solicitud }}</span>
-                 </div>
-                 <div class="mt-auto">
-                     <hr class="card-divider">
-                     <div class="d-flex justify-content-between align-items-center mb-3">
-                         <div>
-                             <span class="stock-label">Items:</span>
-                             <span class="stock-value"><b>{{ pedido['items']|length }}</b> prod.</span>
-                         </div>
-                     </div>
-                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
-                         <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}"
-                             class="btn btn-sm btn-outline-primary" title="Ver Detalle"><i class="bi bi-eye"></i> Detalle</a>
-                         {% if pedido.estado == 'PENDIENTE' %} {# Solo editable si está PENDIENTE #}
-                         {% set can_edit_sale = has_permission('modificar_ordenes_venta')|trim == 'True' %}
-                         <a href="{{ url_for('orden_venta.editar', id=pedido.id) if can_edit_sale else '#' }}"
-                             class="btn btn-sm btn-outline-warning {% if not can_edit_sale %}disabled{% endif %}"
-                             title="Editar Pedido"><i class="bi bi-pencil"></i></a>
-                         {% endif %}
-                     </div>
-                 </div>
-            </div>
-        </div>
-    </div>
+                {# --- Encabezado: Cliente y Estado --- #}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-person-circle me-1 text-muted"></i>
+                        {{ pedido.nombre_cliente }}
+                    </h5>
+                    {# Badge de estado #}
+                    {% set estado_config = {
+                    'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
+                    'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
+                    'LISTO_PARA_ARMAR': {'class': 'bg-success-soft text-success', 'icon': 'tools'},
+                    'LISTO_PARA_ENTREGAR': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
+                    'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
+                    'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
+                    } %}
+                    {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                    <span class="badge {{ config.class }} ms-2"> {# Margen izquierdo añadido #}
+                        <i class="bi bi-{{ config.icon }} me-1"></i>{{ pedido.estado.replace('_', ' ') }}
+                    </span>
+                </div>
+
+                {# --- Detalles Secundarios (ID y Fechas) - CORREGIDO PARA ESTAR EN LÍNEA --- #}
+                <div class="card-secondary-details mb-2"> {# Margen inferior reducido #}
+                    <span><i class="bi bi-upc-scan"></i> <code>PED-{{ pedido.id }}</code></span>
+                    {# Mostrar fechas en la misma línea usando ms-3 para margen izquierdo #}
+                    <span class="ms-3"><i class="bi bi-calendar-event"></i> Solicitado: {{ pedido.fecha_solicitud }}</span>
+                    {% if pedido.fecha_requerido %}
+                        {# Añadir margen izquierdo (ms-3) para separar #}
+                        <span class="text-danger fw-bold ms-3"><i class="bi bi-calendar-check-fill"></i> Req.: {{ pedido.fecha_requerido }}</span>
+                    {% endif %}
+                </div>
+
+                {# --- Sección de Items --- #}
+                <div class="mb-2"> {# Margen reducido #}
+                     <span class="fw-bold"><i class="bi bi-list-ul me-1"></i>Items:</span>
+                     <span class="badge bg-light text-dark">{{ pedido['items']|length }} producto(s)</span>
+                     {# Lista de items (opcional) #}
+                     {% if pedido['items']|length > 0 and pedido['items']|length <= 3 %}
+                         <ul class="list-unstyled small text-muted mt-1 mb-0 ps-3"> {# ps-3 para indentar #}
+                         {% for item in pedido['items'] %}
+                              <li>• {{ (item.producto_nombre.nombre or 'N/A') | truncate(30, True) }} ({{ item.cantidad }})</li>
+                         {% endfor %}
+                         </ul>
+                     {% elif pedido['items']|length > 3 %}
+                          <small class="d-block text-muted mt-1 ps-3">• {{ (pedido['items'][0].producto_nombre.nombre or 'N/A') | truncate(30, True) }} y {{ pedido['items']|length - 1 }} más...</small>
+                     {% endif %}
+                </div>
+
+                {# --- Total y Acciones (empujados hacia abajo) --- #}
+                <div class="mt-auto"> {# Este div empuja todo lo que sigue hacia abajo #}
+                    <div class="text-end mb-2"> {# Total antes de la línea divisoria #}
+                         <span class="fw-bold fs-5">{{ pedido.precio_orden | formato_moneda }}</span>
+                    </div>
+
+                    <hr class="card-divider my-2"> {# Línea divisoria más delgada #}
+
+                    {# --- Acciones (Botones) --- #}
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                        <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}"
+                            class="btn btn-sm btn-outline-primary" title="Ver Detalle"><i class="bi bi-eye"></i> Detalle</a>
+                        {% if pedido.estado == 'PENDIENTE' %}
+                        {% set can_edit_sale = has_permission('modificar_ordenes_venta')|trim == 'True' %}
+                        <a href="{{ url_for('orden_venta.editar', id=pedido.id) if can_edit_sale else '#' }}"
+                            class="btn btn-sm btn-outline-warning {% if not can_edit_sale %}disabled{% endif %}"
+                            title="Editar Pedido"><i class="bi bi-pencil"></i></a>
+                        {% endif %}
+                    </div>
+                </div> {# Fin mt-auto #}
+            </div> {# Fin card-body #}
+        </div> {# Fin card #}
+    </div> {# Fin col #}
     {% else %}
     <div class="col-12">
         <div class="card bg-light border-0">
