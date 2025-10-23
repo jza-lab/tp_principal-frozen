@@ -21,6 +21,7 @@
                 <span class="tab-indicator"></span>
             </button>
         </li>
+        {% if has_permission('consultar_logs_o_auditoria')|trim == 'True' %}
         <li class="nav-item" role="presentation">
             <button class="nav-link-custom" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity-panel" type="button" role="tab">
                 <i class="bi bi-activity me-2"></i>
@@ -28,6 +29,8 @@
                 <span class="tab-indicator"></span>
             </button>
         </li>
+        {% endif %}
+        {% if has_permission('gestionar_autorizaciones')|trim == 'True' %}
         <li class="nav-item" role="presentation">
             <button class="nav-link-custom" id="authorizations-tab" data-bs-toggle="tab" data-bs-target="#authorizations-panel" type="button" role="tab">
                 <i class="bi bi-patch-check me-2"></i>
@@ -35,6 +38,7 @@
                 <span class="tab-indicator"></span>
             </button>
         </li>
+        {% endif %}
     </ul>
 
     <!-- Contenido de las Pestañas -->
@@ -47,14 +51,18 @@
         </div>
         
         <!-- Panel de Actividad -->
+        {% if has_permission('consultar_logs_o_auditoria')|trim == 'True' %}
         <div class="tab-pane fade" id="activity-panel" role="tabpanel">
             {% include 'usuarios/panel_actividad.html' %}
         </div>
+        {% endif %}
         
         <!-- Panel de Autorizaciones -->
+        {% if has_permission('gestionar_autorizaciones')|trim == 'True' %}
         <div class="tab-pane fade" id="authorizations-panel" role="tabpanel">
             {% include 'usuarios/panel_autorizaciones.html' %}
         </div>
+        {% endif %}
     </div>
 </div>
 

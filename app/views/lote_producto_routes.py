@@ -17,7 +17,7 @@ controller = LoteProductoController()
 producto_controller = ProductoController() # Para obtener la lista de productos
 
 @lote_producto_bp.route('/')
-@permission_required(accion='realizar_control_calidad')
+@permission_required(accion='consultar_control_de_calidad')
 def listar_lotes():
     response, _ = controller.obtener_lotes_para_vista()
     lotes = response.get('data', [])
@@ -29,7 +29,7 @@ def listar_lotes():
     return render_template('lotes_productos/listar.html', lotes=lotes, datos_grafico_productos=datos_grafico_productos)
 
 @lote_producto_bp.route('/<int:id_lote>/detalle')
-@permission_required(accion='realizar_control_calidad')
+@permission_required(accion='consultar_control_de_calidad')
 def detalle_lote(id_lote):
     response, _ = controller.obtener_lote_por_id_para_vista(id_lote)
     if not response.get('success'):
@@ -40,7 +40,7 @@ def detalle_lote(id_lote):
 
 
 @lote_producto_bp.route('/nuevo', methods=['GET', 'POST'])
-@permission_required(accion='control_calidad_lote')
+@permission_required(accion='crear_control_de_calidad_por_lote')
 def nuevo_lote():
     if request.method == 'POST':
         usuario_id = session.get('usuario_id')
@@ -59,7 +59,7 @@ def nuevo_lote():
                            today=date.today().isoformat())
 
 @lote_producto_bp.route("/lotes", methods=["GET"])
-@permission_required(accion='ver_historial_controles')
+@permission_required(accion='consultar_reportes_historicos')
 def obtener_lotes():
     """Obtiene todos los lotes."""
     try:
@@ -76,7 +76,7 @@ def obtener_lotes():
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 @lote_producto_bp.route("/lotes/<int:lote_id>", methods=["GET"])
-@permission_required(accion='ver_historial_controles')
+@permission_required(accion='consultar_reportes_historicos')
 def obtener_lote_por_id(lote_id):
     """Obtiene un lote por su ID."""
     try:
@@ -88,7 +88,7 @@ def obtener_lote_por_id(lote_id):
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 @lote_producto_bp.route("/lotes/<int:lote_id>", methods=["PUT"])
-@permission_required(accion='control_calidad_lote')
+@permission_required(accion='crear_control_de_calidad_por_lote')
 def actualizar_lote(lote_id):
     """Actualiza un lote existente."""
     try:
@@ -107,7 +107,7 @@ def actualizar_lote(lote_id):
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 @lote_producto_bp.route("/lotes/<int:lote_id>", methods=["DELETE"])
-@permission_required(accion='rechazar_lotes')
+@permission_required(accion='registrar_desperdicios')
 def eliminar_lote(lote_id):
     """Eliminación lógica de un lote."""
     try:
@@ -119,7 +119,7 @@ def eliminar_lote(lote_id):
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 @lote_producto_bp.route("/lotes/disponibles", methods=["GET"])
-@permission_required(accion='aprobar_lotes')
+@permission_required(accion='registrar_resultados_de_control')
 def obtener_lotes_disponibles():
     """Obtiene lotes disponibles."""
     try:

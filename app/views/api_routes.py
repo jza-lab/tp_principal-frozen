@@ -11,7 +11,7 @@ usuario_controller = UsuarioController()
 facial_controller = FacialController()
 
 @api_bp.route('/usuarios/actividad_totem', methods=['GET'])
-@permission_any_of('registrar_asistencias', 'ver_reportes_basicos')
+@permission_required(accion='consultar_logs_o_auditoria')
 def obtener_actividad_totem():
     """Devuelve la actividad del tótem en formato JSON."""
     filtros = {
@@ -25,7 +25,7 @@ def obtener_actividad_totem():
     return jsonify(success=False, error=resultado.get('error')), 500
 
 @api_bp.route('/usuarios/actividad_web', methods=['GET'])
-@permission_any_of('registrar_asistencias', 'ver_reportes_basicos')
+@permission_required(accion='consultar_logs_o_auditoria')
 def obtener_actividad_web():
     """Devuelve la actividad web en formato JSON."""
     filtros = {
@@ -39,7 +39,7 @@ def obtener_actividad_web():
     return jsonify(success=False, error=resultado.get('error')), 500
 
 @api_bp.route('/validar/campo_usuario', methods=['POST'])
-@permission_any_of('crear_usuarios', 'modificar_usuarios', 'modificar_info_empleados')
+@permission_any_of('crear_empleado', 'modificar_empleado')
 def validar_campo_usuario():
     """Valida de forma asíncrona si un campo de usuario ya existe."""
     data = request.get_json()
@@ -54,7 +54,7 @@ def validar_campo_usuario():
     return jsonify(resultado)
 
 @api_bp.route('/validar/rostro', methods=['POST'])
-@permission_required(accion='crear_usuarios')
+@permission_required(accion='crear_empleado')
 def validar_rostro():
     """Valida si el rostro en una imagen es válido y no está duplicado."""
     data = request.get_json()
@@ -70,7 +70,7 @@ def validar_rostro():
     return jsonify({'valid': False, 'message': resultado.get('message')})
 
 @api_bp.route('/validar/direccion', methods=['POST'])
-@permission_any_of('crear_usuarios', 'modificar_usuarios', 'modificar_info_empleados')
+@permission_any_of('crear_empleado', 'modificar_empleado')
 def validar_direccion():
     """Verifica una dirección en tiempo real usando Georef."""
     data = request.get_json()
@@ -93,7 +93,7 @@ def validar_direccion():
     return jsonify(resultado)
 
 @api_bp.route('/turnos_para_autorizacion', methods=['GET'])
-@permission_required(accion='aprobar_permisos') 
+@permission_required(accion='consultar_empleados') 
 def get_turnos_para_autorizacion():
     """
     Obtiene una lista de turnos filtrada según el tipo de autorización.
@@ -110,7 +110,7 @@ def get_turnos_para_autorizacion():
     return jsonify({'success': False, 'error': resultado.get('error', 'Error interno del servidor')}), 500
 
 @api_bp.route('/usuarios/buscar', methods=['GET'])
-@permission_required(accion='aprobar_permisos')
+@permission_required(accion='consultar_empleados')
 def buscar_usuario_por_legajo():
     """
     Busca un usuario por su legajo y devuelve sus datos básicos.

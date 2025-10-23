@@ -263,11 +263,26 @@ const itemsContainer = document.getElementById('items-container');
 
 
 // Espera a que el DOM esté completamente cargado para ejecutar el script.
+let initialAddressState = {};
+
 document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('pedido-form');
     if (!form) {
         console.error("No se encontró el formulario con id 'pedido-form'.");
         return;
+    }
+
+    // Capturar el estado inicial de la dirección si estamos en modo edición
+    if (isEditing) {
+        initialAddressState = {
+            calle: document.getElementById('calle').value,
+            altura: document.getElementById('altura').value,
+            piso: document.getElementById('piso').value,
+            depto: document.getElementById('depto').value,
+            localidad: document.getElementById('localidad').value,
+            provincia: document.getElementById('provincia').value,
+            codigo_postal: document.getElementById('codigo_postal').value
+        };
     }
 
     // Asociamos la función handleSubmit al evento 'submit' del formulario.
@@ -343,7 +358,22 @@ async function handleSubmit(event) {
     submitButton.disabled = true;
     submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...`;
 
-    if (payload.usar_direccion_alternativa) {
+    // --- NUEVA LÓGICA DE VALIDACIÓN CONDICIONAL ---
+    const addressHasChanged = () => {
+        if (!isEditing) return true; // Siempre validar en creación
+        const currentState = {
+            calle: document.getElementById('calle').value,
+            altura: document.getElementById('altura').value,
+            piso: document.getElementById('piso').value,
+            depto: document.getElementById('depto').value,
+            localidad: document.getElementById('localidad').value,
+            provincia: document.getElementById('provincia').value,
+            codigo_postal: document.getElementById('codigo_postal').value
+        };
+        return JSON.stringify(currentState) !== JSON.stringify(initialAddressState);
+    };
+
+    if (payload.usar_direccion_alternativa && addressHasChanged()) {
         try {
             const direccionParaVerificar = payload.direccion_entrega;
             const verificationUrl = "/api/validar/direccion";
@@ -359,24 +389,24 @@ async function handleSubmit(event) {
             if (verificationResponse.ok && verificationResult.success) {
                 await enviarDatos(payload);
             } else {
-                let errorMessage = 'Dirección no válida o error de verificación.';
+                let errorMessage = 'La dirección de entrega no es válida o no pudo ser verificada.';
                 if (verificationResult && verificationResult.error) {
                     errorMessage = verificationResult.error;
                 }
-                showNotificationModal(errorMessage, 'Error al verificar la dirección');
+                showNotificationModal('Error de Dirección', errorMessage, 'error');
                 form.classList.remove('was-validated');
                 submitButton.disabled = false;
                 submitButton.innerHTML = `<i class="bi bi-save me-1"></i> ${isEditing ? 'Actualizar Pedido' : 'Guardar Pedido'}`;
             }
         } catch (error) {
             console.error('Error de red al verificar la direccion:', error);
-            showNotificationModal('No se pudo conectar con el servidor de verificación.', 'error');
+            showNotificationModal('Error de Conexión', 'No se pudo conectar con el servidor para verificar la dirección.', 'error');
             submitButton.disabled = false;
             submitButton.innerHTML = `<i class="bi bi-save me-1"></i> ${isEditing ? 'Actualizar Pedido' : 'Guardar Pedido'}`;
             return;
         }
     } else {
-        // Si no se usa dirección alternativa, enviar los datos directamente
+        // Si no se usa dirección alternativa, o si la dirección no ha cambiado, enviar los datos directamente
         await enviarDatos(payload);
     }
 

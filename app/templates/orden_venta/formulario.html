@@ -50,15 +50,15 @@
                                     maxlength="2" pattern="\d{2}" placeholder="XX" required
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
                                     value="{{ cliente.cuit[:2] if cliente and cliente.cuit else '' }}"
-                                    aria-label="Código de provincia" {% if cliente and pedido %} readonly{% endif %}>
+                                    aria-label="Código de provincia" {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}>
 
                                 <span class="input-group-text">-</span>
 
                                 <div class="form-floating" style="flex-grow: 4;">
                                     <input type="text" class="form-control text-center" id="cuil_parte2"
                                         name="cuil_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX"
-                                        value="{{ cliente.cuit[2:10] if cliente and cliente.cuit else '' }}" required {%
-                                        if cliente and pedido %} readonly {% endif %}>
+                                        value="{{ cliente.cuit[2:10] if cliente and cliente.cuit else '' }}" required
+                                        {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}>
                                     <label for="cuil_parte2">
                                         <i class="bi bi-person-badge me-1"></i>CUIL
                                     </label>
@@ -68,8 +68,8 @@
 
                                 <input type="text" class="form-control text-center" id="cuil_parte3" name="cuil_parte3"
                                     value="{{ cliente.cuit[10:] if cliente and cliente.cuit else ''}}" maxlength="1"
-                                    pattern="\d{1}" placeholder="X" required {% if cliente and pedido %} readonly{%
-                                    endif %}
+                                    pattern="\d{1}" placeholder="X" required 
+                                    {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
                                     aria-label="Dígito verificador">
                             </div>
@@ -79,7 +79,7 @@
                             <div class="form-floating">
                                 <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente"
                                     placeholder="Nombre del Cliente"
-                                    value="{{ pedido.nombre_cliente if pedido else '' }}" readonly>
+                                    value="{{ pedido.nombre_cliente if pedido else '' }}" {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}>
                                 <label for="nombre_cliente">
                                     <i class="bi bi-person-circle me-1"></i>Nombre <span class="text-danger">*</span>
                                 </label>
@@ -89,7 +89,7 @@
                         <div class="col-md-6">
                             <div class="form-floating">
                                 <input type="text" class="form-control" name="telefono" id="telefono"
-                                    placeholder="Teléfono" value="{{ cliente.telefono if cliente else '' }}" readonly>
+                                    placeholder="Teléfono" value="{{ cliente.telefono if cliente else '' }}" {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}>
                                 <label for="telefono">
                                     <i class="bi bi-phone me-1"></i>Teléfono <span class="text-danger">*</span>
                                 </label>
@@ -99,7 +99,7 @@
                         <div class="col-md-6">
                             <div class="form-floating">
                                 <input type="email" class="form-control" name="email" id="email" placeholder="Email"
-                                    value="{{ cliente.email if cliente else '' }}" readonly>
+                                    value="{{ cliente.email if cliente else '' }}" {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}>
                                 <label for="email">
                                     <i class="bi bi-envelope me-1"></i>Email <span class="text-danger">*</span>
                                 </label>
@@ -114,7 +114,7 @@
                                         <input type="text" class="form-control" id="calle_facturacion"
                                             name="calle_facturacion" placeholder="Calle"
                                             value="{{ cliente.direccion.calle if cliente and cliente.direccion else '' }}"
-                                            readonly>
+                                            {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}>
                                         <label for="calle_facturacion">
                                             <i class="bi bi-signpost me-1"></i>Calle
                                         </label>
@@ -126,7 +126,7 @@
                                     <div class="form-floating">
                                         <input type="number" class="form-control" id="altura_facturacion"
                                             value="{{ cliente.direccion.altura if cliente and cliente.direccion else '' }}"
-                                            name="altura_facturacion" placeholder="Altura" value="" readonly>
+                                            name="altura_facturacion" placeholder="Altura" value="" {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}>
                                         <label for="altura_facturacion">
                                             <i class="bi bi-123 me-1"></i>Altura
                                         </label>
@@ -137,7 +137,7 @@
                                 <div class="col-md-6">
                                     <div class="form-floating">
                                         <select class="form-select" id="provincia_facturacion"
-                                            name="provincia_facturacion" readonly>
+                                            name="provincia_facturacion" {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}>
                                             <option value="">Seleccionar provincia...</option>
                                             {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
                                             "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
@@ -161,7 +161,7 @@
                                     <div class="form-floating">
                                         <input type="text" class="form-control" id="localidad_facturacion"
                                             value="{{ cliente.direccion.localidad if cliente and cliente.direccion else '' }}"
-                                            name="localidad_facturacion" placeholder="Localidad" value="" readonly>
+                                            name="localidad_facturacion" placeholder="Localidad" value="" {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}>
                                         <label for="localidad_facturacion">
                                             <i class="bi bi-pin-map me-1"></i>Localidad
                                         </label>
@@ -173,7 +173,7 @@
                                     <div class="form-floating">
                                         <input type="text" class="form-control" id="piso_facturacion" maxlength="3"
                                             value="{{ cliente.direccion.piso if cliente and cliente.direccion and cliente.direccion.piso else '' }}"
-                                            name="piso_facturacion" placeholder="Piso (Opcional)" value="" readonly>
+                                            name="piso_facturacion" placeholder="Piso (Opcional)" value="" {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}>
                                         <label for="piso_facturacion">
                                             <i class="bi bi-building me-1"></i>Piso (Opcional)
                                         </label>
@@ -184,7 +184,7 @@
                                     <div class="form-floating">
                                         <input type="text" class="form-control" id="depto_facturacion"
                                             alue="{{ cliente.direccion.depto if cliente and cliente.direccion and cliente.direccion.depto else '' }}"
-                                            name="depto_facturacion" placeholder="Dto (Opcional)" value="" readonly>
+                                            name="depto_facturacion" placeholder="Dto (Opcional)" value="" {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}>
                                         <label for="depto_facturacion">
                                             <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
                                         </label>
@@ -195,7 +195,7 @@
                                     <div class="form-floating">
                                         <input type="text" class="form-control" id="codigo_postal_facturacion"
                                             value="{{ cliente.direccion.codigo_postal if cliente and cliente.direccion else '' }}"
-                                            name="codigo_postal_facturacion" placeholder="Código Postal" readonly>
+                                            name="codigo_postal_facturacion" placeholder="Código Postal" {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}>
                                         <label for="codigo_postal_facturacion">
                                             <i class="bi bi-mailbox me-1"></i>Código Postal
                                         </label>
@@ -215,7 +215,7 @@
                     <div class="row g-3">
                         <div class="form-subsection">
                             <div class="form-check form-switch mb-3">
-                                <input class="form-check-input" type="checkbox" id="usar_direccion_alternativa">
+                                <input class="form-check-input" type="checkbox" id="usar_direccion_alternativa" {% if pedido and pedido.direccion %}checked{% endif %}>
                                 <label class="form-check-label" for="usar_direccion_alternativa">
                                     Enviar a una dirección de entrega distinta
                                 </label>
@@ -332,7 +332,7 @@
                                     class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_solicitud" name="fecha_solicitud"
                                 value="{{ pedido.fecha_solicitud[:10] if  pedido and pedido.fecha_solicitud else today }}"
-                                required {% if pedido %}readonly{% endif %} min="2025-01-01" max="{{ today }}">
+                                required {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %} min="2025-01-01" max="{{ today }}">
                         </div>
 
                         <div class="col-md-6">
@@ -340,14 +340,14 @@
                                     class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_requerido" name="fecha_requerido"
                                 value="{{ pedido.fecha_requerido[:10] if pedido and pedido.fecha_requerido else today}}"
-                                required {% if pedido %}readonly{% endif %} max="{{ fecha_limite }}" min="{{ today }}">
+                                required {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %} max="{{ fecha_limite }}" min="{{ today }}">
                         </div>
 
                         <div class="col-12">
                             <label for="comentarios_adicionales" class="form-label">Comentarios Adicionales</label>
                             <textarea class="form-control" name="comentarios_adicionales" id="comentarios_adicionales"
                                 rows="3"
-                                maxlength="500"> {{ pedido.comentarios_adicionales if pedido and pedido.comentarios_adicionales else ''}}</textarea>
+                                maxlength="500" {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %}> {{ pedido.comentarios_adicionales if pedido and pedido.comentarios_adicionales else ''}}</textarea>
                             <div class="form-text">Opcional - Ingrese comentarios adicionales sobre el pedido</div>
                         </div>
                     </div>
@@ -367,7 +367,7 @@
             <div class="card shadow-sm mt-4 mb-2">
                 <div class="card-header d-flex justify-content-between align-items-center bg-light">
                     <h5 class="mb-0">Productos del Pedido</h5>
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="add-item-btn">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="add-item-btn" {% if pedido and pedido.estado != 'PENDIENTE' %}disabled{% endif %}>
                         <i class="bi bi-plus-circle me-1"></i>Añadir Producto
                     </button>
                 </div>
@@ -511,7 +511,7 @@
                     </div>
 
                     <div class="d-grid gap-2 mt-4">
-                        <button type="submit" class="btn btn-primary btn-lg">
+                        <button type="submit" class="btn btn-primary btn-lg" form="pedido-form">
                             <i class="bi bi-save me-1"></i>
                             {% if pedido %}Actualizar Pedido{% else %}Guardar Pedido{% endif %}
                         </button>
@@ -598,14 +598,16 @@ document.addEventListener('DOMContentLoaded', function () {
         if (show) {
             container.style.display = 'block';
             fields.forEach(field => {
+                field.disabled = false;
                 // Solo hacer requeridos los campos principales
-                if (['calle', 'altura', 'provincia', 'localidad', 'codigo_postal'].includes(field.name)) {
+                if (['calle', 'altura', 'provincia', 'localidad'].includes(field.name)) {
                     field.required = true;
                 }
             });
         } else {
             container.style.display = 'none';
             fields.forEach(field => {
+                field.disabled = true;
                 field.required = false;
             });
         }

@@ -10,10 +10,11 @@
             <p class="text-muted mb-0">Administración de clientes registrados en el sistema</p>
         </div>
         <div class="btn-toolbar">
-            {% set can_manage = has_permission('gestionar_clientes')|trim == 'True' %}
-            <a href="{{ url_for('clientes_proveedores.nuevo_cliente') if can_manage else '#' }}" class="btn btn-primary {% if not can_manage %}disabled{% endif %}">
+            {% if has_permission('gestionar_clientes')|trim == 'True' %}
+            <a href="{{ url_for('clientes_proveedores.nuevo_cliente') }}" class="btn btn-primary">
                 <i class="bi bi-person-plus me-1"></i>Crear Nuevo Cliente
             </a>
+            {% endif %}
         </div>
     </div>
 
@@ -87,25 +88,31 @@
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
                             {% set can_manage = has_permission('gestionar_clientes')|trim == 'True' %}
                             {% if cliente.activo %}
-                                <a href="{{ url_for('clientes_proveedores.editar_cliente', id=cliente.id) if can_manage else '#' }}" 
-                                   class="btn btn-sm btn-outline-primary {% if not can_manage %}disabled{% endif %}" title="Editar cliente">
+                                {% if can_manage %}
+                                <a href="{{ url_for('clientes_proveedores.editar_cliente', id=cliente.id) }}" 
+                                   class="btn btn-sm btn-outline-primary" title="Editar cliente">
                                     <i class="bi bi-pencil"></i>
                                 </a>
+                                {% endif %}
 
                                 <a href="{{ url_for('clientes_proveedores.ver_perfil_cliente', id=cliente.id) }}" class="btn btn-sm btn-outline-primary" title="Ver detalle">
                                     <i class="bi bi-eye"></i>
                                 </a>
 
-                                <a class="btn btn-sm btn-outline-danger {% if not can_manage %}disabled{% endif %}" title="Inhabilitar cliente"
-                                    {% if can_manage %}onClick="eliminarCliente('{{ cliente.id }}')"{% endif %}>
+                                {% if can_manage %}
+                                <a class="btn btn-sm btn-outline-danger" title="Inhabilitar cliente"
+                                    onClick="eliminarCliente('{{ cliente.id }}')">
                                     <i class="bi bi-person-x"></i> Desactivar
                                 </a>
+                                {% endif %}
 
                             {% else %}
-                                <a class="btn btn-sm btn-outline-success {% if not can_manage %}disabled{% endif %}" title="Habilitar cliente"
-                                    {% if can_manage %}onClick="habilitarCliente('{{ cliente.id }}')"{% endif %}>
+                                {% if can_manage %}
+                                <a class="btn btn-sm btn-outline-success" title="Habilitar cliente"
+                                    onClick="habilitarCliente('{{ cliente.id }}')">
                                     <i class="bi bi-person-check"></i> Activar
                                 </a>
+                                {% endif %}
                             {% endif %}
                         </div>
                     </div>

@@ -11,7 +11,7 @@ usuario_controller = UsuarioController()
 autorizacion_controller = AutorizacionController()
 
 @admin_autorizacion_bp.route('/nueva', methods=['GET', 'POST'])
-@permission_required(accion='aprobar_permisos')
+@permission_required(accion='gestionar_autorizaciones')
 def nueva_autorizacion():
     """
     Muestra el formulario para crear una nueva autorización de ingreso y la procesa.
@@ -43,7 +43,7 @@ def nueva_autorizacion():
                          autorizacion={})
 
 @admin_autorizacion_bp.route('/', methods=['GET'])
-@permission_required(accion='aprobar_permisos')
+@permission_required(accion='gestionar_autorizaciones')
 def listar_autorizaciones():
     """
     Obtiene todas las autorizaciones de ingreso en formato JSON.
@@ -59,7 +59,7 @@ def listar_autorizaciones():
     return jsonify(success=False, error=resultado.get('error', 'Error al obtener las autorizaciones.')), 500
 
 @admin_autorizacion_bp.route('/<int:id>/estado', methods=['POST'])
-@permission_required(accion='aprobar_permisos')
+@permission_required(accion='gestionar_autorizaciones')
 def actualizar_estado_autorizacion(id):
     """
     Actualiza el estado de una autorización (APROBADO o RECHAZADO).
