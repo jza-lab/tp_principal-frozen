@@ -13,7 +13,7 @@ facial_controller = FacialController()
 
 
 @admin_usuario_bp.route('/')
-@permission_any_of('ver_info_empleados', 'modificar_usuarios', 'crear_usuarios')
+@permission_any_of('consultar_empleados', 'modificar_empleado', 'crear_empleado')
 def listar_usuarios():
     """Muestra la lista de todos los usuarios del sistema."""
     usuarios = usuario_controller.obtener_todos_los_usuarios()
@@ -23,7 +23,7 @@ def listar_usuarios():
     return render_template('usuarios/gestionEmpleados.html', usuarios=usuarios, turnos=turnos, sectores=sectores)
 
 @admin_usuario_bp.route('/<int:id>')
-@permission_any_of('ver_info_empleados', 'modificar_usuarios')
+@permission_any_of('consultar_empleados', 'modificar_empleado')
 def ver_perfil(id):
     """Muestra el perfil de un usuario específico, delegando la carga de datos al controlador."""
     resultado = usuario_controller.obtener_datos_para_vista_perfil(id)
@@ -35,7 +35,7 @@ def ver_perfil(id):
     return render_template('usuarios/perfil.html', **resultado.get('data', {}))
 
 @admin_usuario_bp.route('/nuevo', methods=['GET', 'POST'])
-@permission_required(accion='crear_usuarios')
+@permission_required(accion='crear_empleado')
 def nuevo_usuario():
     """Gestiona la creación de un nuevo usuario."""
     if request.method == 'POST':
@@ -71,7 +71,7 @@ def nuevo_usuario():
                          usuario_sectores_ids=[])
 
 @admin_usuario_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
-@permission_any_of('modificar_usuarios', 'modificar_info_empleados')
+@permission_any_of('modificar_empleado')
 def editar_usuario(id):
     """Gestiona la edición de un usuario."""
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
@@ -123,7 +123,7 @@ def editar_usuario(id):
                          usuario_sectores_ids=usuario_sectores_ids)
 
 @admin_usuario_bp.route('/<int:id>/eliminar', methods=['POST'])
-@permission_required(accion='inactivar_usuarios')
+@permission_required(accion='eliminar_empleado')
 def eliminar_usuario(id):
     """Realiza una desactivación lógica de un usuario."""
     if session.get('usuario_id') == id:
@@ -144,7 +144,7 @@ def eliminar_usuario(id):
     return redirect(url_for('admin_usuario.listar_usuarios'))
 
 @admin_usuario_bp.route('/<int:id>/habilitar', methods=['POST'])
-@permission_any_of('modificar_usuarios', 'inactivar_usuarios')
+@permission_any_of('modificar_empleado', 'eliminar_empleado')
 def habilitar_usuario(id):
     """Reactiva un usuario lógicamente eliminado."""
     resultado = usuario_controller.habilitar_usuario(id)

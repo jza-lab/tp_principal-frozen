@@ -25,10 +25,11 @@
         </div>
     </div>
     <div class="ms-3">
-        {% set can_create = has_permission('crear_usuarios')|trim == 'True' %}
-        <a href="{{ url_for('admin_usuario.nuevo_usuario') if can_create else '#' }}" class="btn btn-primary {% if not can_create %}disabled{% endif %}">
+        {% if has_permission('crear_empleado')|trim == 'True' %}
+        <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary">
             <i class="bi bi-person-plus me-1"></i>Crear Empleado
         </a>
+        {% endif %}
     </div>
 </div>
 
@@ -86,7 +87,7 @@
                                 <i class="bi bi-person-gear me-2"></i>Gestionar Empleado
                             </a>
                         {% else %}
-                            {% if has_permission('modificar_usuarios') %}
+                            {% if has_permission('modificar_empleado')|trim == 'True' %}
                             <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="w-100">
                                 <button type="submit" class="btn btn-sm btn-outline-success w-100">
                                     <i class="bi bi-person-check me-1"></i>Activar Empleado

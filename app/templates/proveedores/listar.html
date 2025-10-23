@@ -10,10 +10,11 @@
             <p class="text-muted mb-0">Administración de proveedores registrados en el sistema</p>
         </div>
         <div class="btn-toolbar">
-            {% set can_manage = has_permission('gestionar_proveedores')|trim == 'True' %}
-            <a href="{{ url_for('clientes_proveedores.nuevo_proveedor') if can_manage else '#' }}" class="btn btn-primary {% if not can_manage %}disabled{% endif %}">
+            {% if has_permission('consultar_historial_de_pagos')|trim == 'True' %}
+            <a href="{{ url_for('clientes_proveedores.nuevo_proveedor') }}" class="btn btn-primary">
                 <i class="bi bi-person-plus me-1"></i>Crear Nuevo Proveedor
             </a>
+            {% endif %}
         </div>
     </div>
 
@@ -86,28 +87,34 @@
                 <div class="mt-auto">
                     <hr class="card-divider">
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
-                        {% set can_manage = has_permission('gestionar_proveedores')|trim == 'True' %}
+                        {% set can_manage = has_permission('consultar_historial_de_pagos')|trim == 'True' %}
                         {% if proveedor.activo %}
-                            <a href="{{ url_for('clientes_proveedores.editar_proveedor', id=proveedor.id) if can_manage else '#' }}"
-                                class="btn btn-sm btn-outline-primary {% if not can_manage %}disabled{% endif %}" title="Editar proveedor">
+                            {% if can_manage %}
+                            <a href="{{ url_for('clientes_proveedores.editar_proveedor', id=proveedor.id) }}"
+                                class="btn btn-sm btn-outline-primary" title="Editar proveedor">
                                 <i class="bi bi-pencil"></i>
                             </a>
+                            {% endif %}
 
                             <a href="{{ url_for('clientes_proveedores.ver_perfil_proveedor', id=proveedor.id) }}"
                                 class="btn btn-sm btn-outline-primary" title="Ver detalle">
                                 <i class="bi bi-eye"></i>
                             </a>
 
-                            <a class="btn btn-sm btn-outline-danger {% if not can_manage %}disabled{% endif %}" title="Inhabilitar proveedor"
-                                {% if can_manage %}onClick="eliminarProveedor('{{ proveedor.id }}')"{% endif %}>
+                            {% if can_manage %}
+                            <a class="btn btn-sm btn-outline-danger" title="Inhabilitar proveedor"
+                                onClick="eliminarProveedor('{{ proveedor.id }}')">
                                 <i class="bi bi-person-x"></i> Desactivar
                             </a>
+                            {% endif %}
 
                         {% else %}
-                            <a class="btn btn-sm btn-outline-success {% if not can_manage %}disabled{% endif %}" title="Habilitar proveedor"
-                                {% if can_manage %}onClick="habilitarProveedor('{{ proveedor.id }}')"{% endif %}>
+                            {% if can_manage %}
+                            <a class="btn btn-sm btn-outline-success" title="Habilitar proveedor"
+                                onClick="habilitarProveedor('{{ proveedor.id }}')">
                                 <i class="bi bi-person-check"></i> Activar
                             </a>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>

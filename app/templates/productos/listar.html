@@ -7,10 +7,11 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Catálogo de Productos</h1>
     <div class="btn-toolbar">
-        {% set can_create = has_permission('crear_materias_primas')|trim == 'True' %}
-        <a href="{{ url_for('productos.crear_producto') if can_create else '#' }}" class="btn btn-primary {% if not can_create %}disabled{% endif %}">
+        {% if has_permission('gestionar_catalogo_de_productos')|trim == 'True' %}
+        <a href="{{ url_for('productos.crear_producto') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Agregar Nuevo Producto
         </a>
+        {% endif %}
     </div>
 </div>
 
@@ -68,36 +69,40 @@
                     <hr class="card-divider"></hr>
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
                         {% if producto.activo %}
-                        {% set can_edit_price = has_permission('modificar_materias_primas')|trim == 'True' %}
+                        {% if has_permission('gestionar_catalogo_de_productos')|trim == 'True' %}
                         <a 
-                            {% if can_edit_price %}onClick = "recargarPrecioProducto('{{ producto.id }}')"{% endif %}
-                            class="btn btn-sm btn-outline-primary {% if not can_edit_price %}disabled{% endif %}" title="Actualizar precio">
+                            onClick = "recargarPrecioProducto('{{ producto.id }}')"
+                            class="btn btn-sm btn-outline-primary" title="Actualizar precio">
                             <i class="bi bi-arrow-repeat"></i>
                         </a>
+                        {% endif %}
 
-                        {% set can_edit = has_permission('modificar_materias_primas')|trim == 'True' %}
-                        <a href="{{ url_for('productos.actualizar_producto', id_producto=producto.id) if can_edit else '#' }}"
-                            class="btn btn-sm btn-outline-primary {% if not can_edit %}disabled{% endif %}" title="Modificar producto">
+                        {% if has_permission('gestionar_catalogo_de_productos')|trim == 'True' %}
+                        <a href="{{ url_for('productos.actualizar_producto', id_producto=producto.id) }}"
+                            class="btn btn-sm btn-outline-primary" title="Modificar producto">
                             <i class="bi bi-pencil"></i>
                         </a>
+                        {% endif %}
 
                         <a href="{{ url_for('productos.obtener_producto_por_id', id_producto=producto.id) }}"
                             class="btn btn-sm btn-outline-primary" title="Detalle">
                             <i class="bi bi-eye"></i>
                         </a>
 
-                        {% set can_delete = has_permission('eliminar_materias_primas')|trim == 'True' %}
-                        <a class="btn btn-sm btn-outline-danger {% if not can_delete %}disabled{% endif %}" title="Inhabilitar producto"
-                            {% if can_delete %}onClick="eliminarProducto('{{ producto.id }}')"{% endif %}>
+                        {% if has_permission('gestionar_catalogo_de_productos')|trim == 'True' %}
+                        <a class="btn btn-sm btn-outline-danger" title="Inhabilitar producto"
+                            onClick="eliminarProducto('{{ producto.id }}')">
                             <i class="bi bi-slash-circle"></i> Inhabilitar
                         </a>
+                        {% endif %}
 
                         {% else %}
-                        {% set can_edit = has_permission('modificar_materias_primas')|trim == 'True' %}
-                        <a class="btn btn-sm btn-outline-success {% if not can_edit %}disabled{% endif %}" title="Habilitar producto"
-                            {% if can_edit %}onClick="habilitarProducto('{{ producto.id }}')"{% endif %}>
+                        {% if has_permission('gestionar_catalogo_de_productos')|trim == 'True' %}
+                        <a class="btn btn-sm btn-outline-success" title="Habilitar producto"
+                            onClick="habilitarProducto('{{ producto.id }}')">
                             <i class="bi bi-check-circle"></i> Habilitar
                         </a>
+                        {% endif %}
                         {% endif %}
                     </div>
                 </div>

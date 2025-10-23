@@ -69,22 +69,26 @@
 
         <!-- Barra de Acción (Modo Vista) -->
         <div class="profile-action-bar" id="action-bar-view">
-            {% set can_edit = has_permission('modificar_usuarios')|trim == 'True' %}
-            <button class="btn btn-primary btn-action {% if not can_edit %}disabled{% endif %}" id="btn-edit-mode">
+            {% if has_permission('modificar_empleado')|trim == 'True' %}
+            <button class="btn btn-primary btn-action" id="btn-edit-mode">
                 <i class="bi bi-pencil-square me-2"></i>Editar Información
             </button>
+            {% endif %}
             
             {% if usuario.activo %}
-                {% set can_deactivate = has_permission('inactivar_usuarios')|trim == 'True' %}
-                <button class="btn btn-outline-danger btn-action {% if not can_deactivate %}disabled{% endif %}" {% if can_deactivate %}onclick="showDeactivateModal()"{% endif %}>
+                {% if has_permission('eliminar_empleado')|trim == 'True' %}
+                <button class="btn btn-outline-danger btn-action" onclick="showDeactivateModal()">
                     <i class="bi bi-person-x me-2"></i>Desactivar Empleado
                 </button>
+                {% endif %}
             {% else %}
-                <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) if can_edit else '#' }}" class="d-inline">
-                    <button type="submit" class="btn btn-outline-success btn-action {% if not can_edit %}disabled{% endif %}">
+                {% if has_permission('modificar_empleado')|trim == 'True' %}
+                <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-outline-success btn-action">
                         <i class="bi bi-person-check me-2"></i>Activar Empleado
                     </button>
                 </form>
+                {% endif %}
             {% endif %}
         </div>
 

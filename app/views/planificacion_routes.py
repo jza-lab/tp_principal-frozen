@@ -3,6 +3,7 @@ import logging
 from flask import Blueprint, render_template, flash, url_for, request, jsonify, session # Añade request y jsonify
 from app.controllers.planificacion_controller import PlanificacionController
 from app.controllers.usuario_controller import UsuarioController
+from app.utils.decorators import permission_required
 from datetime import date, timedelta
 
 planificacion_bp = Blueprint('planificacion', __name__, url_prefix='/planificacion')
@@ -10,7 +11,7 @@ planificacion_bp = Blueprint('planificacion', __name__, url_prefix='/planificaci
 controller = PlanificacionController()
 
 @planificacion_bp.route('/') # La ruta principal ahora manejará todo
-#@permission_required(...)
+@permission_required(accion='consultar_plan_de_produccion')
 def index():
     """
     Muestra la BANDEJA, el CALENDARIO SEMANAL y el KANBAN.
@@ -106,6 +107,7 @@ def index():
 
 # Endpoint para la API de consolidación
 @planificacion_bp.route('/api/consolidar', methods=['POST'])
+@permission_required(accion='aprobar_plan_de_produccion')
 def consolidar_api():
     """
     API endpoint para consolidar múltiples OPs en una Super OP.
@@ -123,6 +125,7 @@ def consolidar_api():
 
 # Endpoint para la API de recomendación
 @planificacion_bp.route('/api/recomendar-linea/<int:op_id>', methods=['GET'])
+@permission_required(accion='consultar_plan_de_produccion')
 def recomendar_linea_api(op_id):
     """
     API endpoint para analizar una OP y recomendar una línea de producción.
@@ -133,6 +136,7 @@ def recomendar_linea_api(op_id):
 
 # Endpoint para la API de mover OPs (Drag-and-Drop y asignación)
 @planificacion_bp.route('/api/mover-op/<int:op_id>', methods=['POST'])
+@permission_required(accion='aprobar_plan_de_produccion')
 def mover_op_api(op_id):
     """
     API endpoint para cambiar el estado de una OP.

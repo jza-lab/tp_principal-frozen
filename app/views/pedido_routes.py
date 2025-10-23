@@ -43,7 +43,7 @@ def _parse_form_data(form_dict):
     return parsed_data
 
 @orden_venta_bp.route('/')
-@permission_required(accion='ver_ordenes_venta')
+@permission_required(accion='consultar_ordenes_de_venta')
 def listar():
     """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
     estado = request.args.get('estado')
@@ -71,7 +71,7 @@ def listar():
     return render_template('orden_venta/listar.html', pedidos=pedidos, titulo="Pedidos de Venta")
 
 @orden_venta_bp.route('/nueva', methods=['GET', 'POST'])
-@permission_required(accion='crear_ordenes_venta')
+@permission_required(accion='crear_orden_de_venta')
 def nueva():
     """Gestiona la creación de un nuevo pedido de venta."""
     hoy = datetime.now().strftime('%Y-%m-%d')
@@ -100,7 +100,7 @@ def nueva():
     return render_template('orden_venta/formulario.html', productos=productos, pedido=None, is_edit=False, today=hoy)
 
 @orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'PUT'])
-@permission_required(accion='modificar_ordenes_venta')
+@permission_required(accion='modificar_orden_de_venta')
 def editar(id):
     """Gestiona la edición de un pedido. Solo permitido en PENDIENTE y PLANIFICACION."""
     pedido_resp, _ = controller.obtener_pedido_por_id(id)
@@ -139,7 +139,7 @@ def editar(id):
     return render_template('orden_venta/formulario.html', pedido=pedido, productos=productos, is_edit=True, today=hoy, cliente = cliente)
 
 @orden_venta_bp.route('/<int:id>/detalle')
-@permission_required(accion='ver_ordenes_venta')
+@permission_required(accion='consultar_ordenes_de_venta')
 def detalle(id):
     """Muestra la página de detalle de un pedido de venta."""
     response, _ = controller.obtener_pedido_por_id(id)
@@ -156,7 +156,7 @@ def detalle(id):
         return redirect(url_for('orden_venta.listar'))
 
 @orden_venta_bp.route('/<int:id>/cancelar', methods=['POST'])
-@permission_required(accion='cancelar_ordenes_venta')
+@permission_required(accion='modificar_orden_de_venta')
 def cancelar(id):
     """Endpoint para cambiar el estado de un pedido a 'CANCELADO'."""
     response, _ = controller.cancelar_pedido(id)
@@ -167,7 +167,7 @@ def cancelar(id):
     return redirect(url_for('orden_venta.detalle', id=id))
 
 @orden_venta_bp.route('/<int:id>/planificar', methods=['POST'])
-@permission_required(accion='aprobar_ordenes_venta')
+@permission_required(accion='aprobar_orden_de_venta')
 def planificar(id):
     """Pasa el pedido a estado de PLANIFICACION, guardando la fecha estimada."""
     fecha_estimativa = request.form.get('fecha_estimativa_proceso')
@@ -183,7 +183,7 @@ def planificar(id):
     return redirect(url_for('orden_venta.detalle', id=id))
 
 @orden_venta_bp.route('/<int:id>/iniciar_proceso', methods=['POST'])
-@permission_required(accion='aprobar_ordenes_venta')
+@permission_required(accion='aprobar_orden_de_venta')
 def iniciar_proceso(id):
     """Pasa el pedido a EN PROCESO y crea las OPs."""
     usuario_id = session.get("usuario_id")
@@ -199,7 +199,7 @@ def iniciar_proceso(id):
     return redirect(url_for('orden_venta.detalle', id=id))
 
 @orden_venta_bp.route('/<int:id>/preparar_entrega', methods=['POST'])
-@permission_required(accion='modificar_ordenes_venta')
+@permission_required(accion='modificar_orden_de_venta')
 def preparar_entrega(id):
     """Pasa el pedido a LISTO PARA ENTREGAR y descuenta stock."""
     usuario_id = session.get("usuario_id")
@@ -215,7 +215,7 @@ def preparar_entrega(id):
     return redirect(url_for('orden_venta.detalle', id=id))
 
 @orden_venta_bp.route('/<int:id>/completar', methods=['POST'])
-@permission_required(accion='modificar_ordenes_venta')
+@permission_required(accion='modificar_orden_de_venta')
 def completar(id):
     """Endpoint para marcar un pedido como COMPLETADO."""
     usuario_id = session.get('usuario_id')
@@ -231,7 +231,7 @@ def completar(id):
 
 
 @orden_venta_bp.route('/api/<int:id>/generar_factura_html', methods=['GET'])
-@permission_required(accion='ver_ordenes_venta')
+@permission_required(accion='consultar_ordenes_de_venta')
 def generar_factura_html(id):
 
     """

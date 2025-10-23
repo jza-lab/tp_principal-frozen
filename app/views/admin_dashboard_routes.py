@@ -21,7 +21,7 @@ lote_producto_controller = LoteProductoController()
 alertas_stock_count = inventario_controller.obtener_conteo_alertas_stock()
 
 @admin_dashboard_bp.route('/')
-@permission_required(accion='ver_dashboard')
+@permission_required(accion='acceder_al_panel_principal')
 def index():
     """Página principal del panel de administración."""
     hoy = date.today()

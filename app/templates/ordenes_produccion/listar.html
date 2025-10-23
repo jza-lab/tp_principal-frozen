@@ -9,10 +9,11 @@
         <p class="text-muted mb-0">Gestión y seguimiento de órdenes de producción</p>
     </div>
     <div class="btn-toolbar">
-        {% set can_create = has_permission('crear_ordenes_produccion')|trim == 'True' %}
-        <a href="{{ url_for('orden_produccion.nueva') if can_create else '#' }}" class="btn btn-primary {% if not can_create %}disabled{% endif %}">
+        {% if has_permission('crear_orden_de_produccion')|trim == 'True' %}
+        <a href="{{ url_for('orden_produccion.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
         </a>
+        {% endif %}
     </div>
 </div>
 
@@ -211,7 +212,7 @@
                             <i class="bi bi-eye"></i> Detalle
                         </a>
                         {% if orden.estado == 'LISTA PARA PRODUCIR' %}
-                            {% if has_permission('iniciar_produccion') %}
+                            {% if has_permission('supervisar_avance_de_etapas') %}
                             <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                                 data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Iniciar Orden">Iniciar <i class="bi bi-play-fill"></i></button>
@@ -219,7 +220,7 @@
                             {% endif %}
                         {% endif %}
                         {% if orden.estado == 'EN_PROCESO' %}
-                            {% if has_permission('pausar_produccion') %}
+                            {% if has_permission('supervisar_avance_de_etapas') %}
                             <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                                 data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Completar Orden">Completar <i class="bi bi-check-circle-fill"></i></button>
@@ -227,17 +228,18 @@
                             {% endif %}
                         {% endif %}
                         {% if orden.estado == 'PENDIENTE' %}
-                            {% if has_permission('aprobar_ordenes_produccion') %}
+                            {% if has_permission('crear_orden_de_produccion') %}
                             <form method="POST" action="{{ url_for('orden_produccion.aprobar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                                 data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de producción?" data-button-type="success">
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">Aprobar <i class="bi bi-check-circle"></i></button>
                             </form>
                             {% endif %}
-                            {% set can_cancel = has_permission('cancelar_ordenes_produccion')|trim == 'True' %}
-                            <form method="POST" action="{{ url_for('orden_produccion.rechazar', id=orden.id) if can_cancel else '#' }}" style="display: inline;" class="confirm-form"
+                            {% if has_permission('cerrar_orden_de_produccion')|trim == 'True' %}
+                            <form method="POST" action="{{ url_for('orden_produccion.rechazar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                                 data-title="Confirmar Rechazo" data-message="¿Está seguro de que desea rechazar esta orden de producción? Esta acción no se puede deshacer." data-button-type="danger">
-                                <button type="submit" class="btn btn-sm btn-outline-danger {% if not can_cancel %}disabled{% endif %}" title="Rechazar Orden">Rechazar <i class="bi bi-x-circle"></i></button>
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Rechazar Orden">Rechazar <i class="bi bi-x-circle"></i></button>
                             </form>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>

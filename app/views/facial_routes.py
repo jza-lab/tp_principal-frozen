@@ -96,7 +96,7 @@ def panel_totem():
 
 
 @facial_bp.route("/facial/register_face/<string:user_id>", methods=["POST"])
-@permission_required('modificar_info_empleados')
+@permission_required('modificar_empleado')
 def register_face(user_id):
     """Registro facial para un usuario existente (protegido por permiso)."""
     facial_controller = FacialController()
