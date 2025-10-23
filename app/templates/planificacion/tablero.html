@@ -5,36 +5,22 @@
 {% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/planificacion/planificacion.css') }}">
     <style>
-        /* Estilo adicional para la navegación separada */
-        .navegacion-semanal-separada {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 0; /* Sin margen inferior, se pega al acordeón */
-            padding: 0.5rem 1rem;
-            background-color: #f8f9fa; /* Fondo similar al header */
-            border: 1px solid #dee2e6;
-            border-bottom: none; /* Quitar borde inferior */
-            border-top-left-radius: 0.75rem; /* Redondear esquinas superiores */
-            border-top-right-radius: 0.75rem;
-        }
-         /* Ajustar borde superior del acordeón */
-        #accordionSemanal .accordion-item:first-of-type .accordion-button {
-             border-top-left-radius: 0;
-             border-top-right-radius: 0;
-        }
-         /* Asegurar que el botón del acordeón no tenga margen superior */
-         #accordionSemanal .accordion-header {
-             margin-top: 0;
-         }
-         /* Estilos para Kanban (asegurar visibilidad data-attribute) */
+        .navegacion-semanal-separada { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0; padding: 0.5rem 1rem; background-color: #f8f9fa; border: 1px solid #dee2e6; border-bottom: none; border-top-left-radius: 0.75rem; border-top-right-radius: 0.75rem; }
+        #accordionSemanal .accordion-item:first-of-type .accordion-button { border-top-left-radius: 0; border-top-right-radius: 0; }
+        #accordionSemanal .accordion-header { margin-top: 0; }
         .card-assignment-details { font-size: 0.8rem; }
         .card-assignment-details span { display: inline-block; margin-right: 0.5rem; }
+        .celda-sugerencia-agregada { white-space: normal; line-height: 1.4; }
+        /* Estilo para la tabla de revisión en la modal */
+        .tabla-detalle-op-revision {
+            font-size: 0.9em;
+            background-color: #fdfdfd;
+        }
     </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items: center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">Centro de Planificación</h1>
         <p class="text-muted mb-0">Planifique OPs pendientes, vea la semana y gestione el tablero.</p>
@@ -42,90 +28,209 @@
 </div>
 
 <div id="planificador-pendientes">
-    <div class="planificador-header">
-        Bandeja de Entrada: Órdenes Pendientes de Planificar ({{ ops_pendientes|length }})
+    <div class="planificador-header d-flex justify-content-between align-items-center">
+        <span>Plan Maestro (Próximos {{ mps_data.dias_horizonte }} días: {{ mps_data.inicio_horizonte }} al {{ mps_data.fin_horizonte }})</span>
+        <div class="btn-group btn-group-sm">
+            <a href="{{ url_for('planificacion.index', horizonte=7, semana=semana_actual_str) }}" class="btn btn-outline-secondary {% if mps_data.dias_horizonte == 7 %}active{% endif %}">7 Días</a>
+            <a href="{{ url_for('planificacion.index', horizonte=14, semana=semana_actual_str) }}" class="btn btn-outline-secondary {% if mps_data.dias_horizonte == 14 %}active{% endif %}">14 Días</a>
+            <a href="{{ url_for('planificacion.index', horizonte=30, semana=semana_actual_str) }}" class="btn btn-outline-secondary {% if mps_data.dias_horizonte == 30 %}active{% endif %}">30 Días</a>
+        </div>
     </div>
     <div class="planificador-body">
-        <table class="table table-hover planificador-tabla">
-            <thead>
-                <tr>
-                    <th>OP</th>
-                    <th>Producto</th>
-                    <th>Cantidad</th>
-                    <th>Fecha Meta (del Pedido)</th>
-                    <th style="width: 30%;">Sugerencia del Sistema</th>
-                    <th style="width: 20%;">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% if not ops_pendientes %}
-                <tr>
-                    <td colspan="6" class="text-center text-muted">¡Genial! No hay Órdenes de Producción pendientes de planificar.</td>
-                </tr>
-                {% endif %}
-                {% for op in ops_pendientes %}
-                <tr data-op-id="{{ op.id }}">
-                    <td><code>{{ op.codigo }}</code></td>
-                    <td>{{ op.producto_nombre }}</td>
-                    <td>{{ op.cantidad_planificada }}</td>
-                    <td><strong class="text-danger">{{ op.fecha_meta }}</strong></td>
-                    <td class="celda-sugerencia">
-                        {% if op.sugerencia_fecha_inicio %}
-                        <div class="resultado-sugerencia sugerencia-calculada {% if op.sugerencia_t_aprovisionamiento_dias > 0 %}alert alert-warning{% else %}alert alert-success{% endif %}" style="display: block;">
-                            <strong>Inicio Sugerido: <span class="fs-6">{{ op.sugerencia_fecha_inicio }}</span></strong>
-                            (Línea Sug.: <b>{{ op.sugerencia_linea }}</b>)
-                            <hr class="my-1">
-                            Plazo Total: <b>{{ op.sugerencia_plazo_total_dias }} días</b><br>
-                            <ul>
-                                <li>Producción: {{ op.sugerencia_t_produccion_dias }} días</li>
-                                <li>Compras: {{ op.sugerencia_t_aprovisionamiento_dias }} días {% if op.sugerencia_t_aprovisionamiento_dias > 0 %}(Stock Faltante){% else %}(Stock OK){% endif %}</li>
-                            </ul>
-                        </div>
-                        {% else %}
-                        <div class="resultado-sugerencia" style="display: none;"></div>
-                        {% endif %}
-                    </td>
-                    <td class="celda-acciones">
-                        {% if op.sugerencia_fecha_inicio %}
-                        <select class="form-select form-select-sm mb-1 select-linea" title="Seleccionar Línea">
-                            <option value="1" {% if op.sugerencia_linea == 1 %}selected{% endif %}>Línea 1</option>
-                            <option value="2" {% if op.sugerencia_linea == 2 %}selected{% endif %}>Línea 2</option>
-                        </select>
-                        <select class="form-select form-select-sm mb-1 select-supervisor" title="Asignar Supervisor">
-                            <option value="">Supervisor (Opcional)</option>
-                            {% for sup in supervisores %}
-                            <option value="{{ sup.id }}">{{ sup.nombre }} {{ sup.apellido or '' }}</option>
-                            {% endfor %}
-                        </select>
-                        <select class="form-select form-select-sm mb-1 select-operario" title="Asignar Operario">
-                            <option value="">Operario (Opcional)</option>
-                            {% for op_user in operarios %}
-                            <option value="{{ op_user.id }}">{{ op_user.nombre }} {{ op_user.apellido or '' }}</option>
-                            {% endfor %}
-                        </select>
-                         <label for="fecha-inicio-{{ op.id }}" class="form-label form-label-sm visually-hidden">Inicio Confirmado:</label>
-                         <input type="date" id="fecha-inicio-{{ op.id }}" class="form-control form-control-sm mb-1 input-fecha-inicio" value="{{ op.sugerencia_fecha_inicio }}" title="Confirmar Fecha de Inicio">
-                         <button class="btn btn-success btn-sm btn-confirmar-inicio w-100" data-op-id="{{ op.id }}">Confirmar Inicio y Aprobar</button>
-                        {% else %}
-                        <button class="btn btn-primary btn-sm btn-calcular" title="Calcular Fecha de Inicio">
-                            <i class="bi bi-calculator-fill"></i> Calcular
-                        </button>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        {% set mps_items = mps_data.get('mps_agrupado', []) %}
+
+        {% if not mps_items %}
+            <div class="alert alert-success text-center">
+                ¡Excelente! No hay Órdenes de Producción pendientes con fecha meta en los próximos {{ mps_data.dias_horizonte }} días.
+            </div>
+        {% else %}
+            <table class="table table-sm table-hover planificador-tabla">
+                <thead>
+                    <tr>
+                        <th>Producto</th>
+                        <th class="text-center">Cant. Total Req.</th>
+                        <th class="text-center">Fecha Meta Próx.</th>
+                        <th style="width: 25%;">Sugerencia Agregada</th>
+                        <th style="width: 15%;" class="text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item_mps in mps_items %}
+                    <tr class="fila-producto-mps" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#modal-producto-{{ item_mps.producto_id }}"
+                        style="cursor: pointer;"
+                        title="Clic para planificar lote semanal">
+                        <td>
+                            <strong>{{ item_mps.producto_nombre }}</strong>
+                        </td>
+                        <td class="text-center fs-5"><b>{{ item_mps.cantidad_total }}</b></td>
+                        <td class="text-center text-danger"><strong>{{ item_mps.fecha_meta_mas_proxima }}</strong></td>
+                        <td class="celda-sugerencia-agregada">
+                             {% set plazo_total_agg = item_mps.sugerencia_t_prod_dias + item_mps.sugerencia_t_proc_dias %}
+                             {% if plazo_total_agg > 0 %}
+                                <div class="resultado-sugerencia sugerencia-calculada {% if item_mps.sugerencia_t_proc_dias > 0 %}alert alert-warning{% else %}alert alert-success{% endif %}" style="display: block; font-size: 0.85rem; padding: 8px; margin: -5px -5px -5px 0;">
+                                    Línea Sugerida: <b>{{ item_mps.sugerencia_linea or 'N/D' }}</b>
+                                    <hr class="my-1">
+                                    Plazo Total: <b>{{ plazo_total_agg }} días</b>
+                                    <ul class="mb-0 ps-3 mt-1" style="font-size: 0.8rem;">
+                                        <li>Producción: {{ item_mps.sugerencia_t_prod_dias }} días</li>
+                                        {% if item_mps.sugerencia_t_proc_dias > 0 %}
+                                            <li>Compras: {{ item_mps.sugerencia_t_proc_dias }} días (Stock Faltante)</li>
+                                        {% else %}
+                                            <li>Compras: 0 días (Stock OK)</li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                             {% else %} 
+                                 <span class="text-muted">Error cálculo</span> 
+                             {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-primary">
+                                <i class="bi bi-calendar-check me-1"></i> Planificar Lote
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
     </div>
 </div>
 
+{% if mps_items %}
+    {% for item_mps in mps_items %}
+    {# Guardamos la lista de IDs de OP en un atributo de la modal para JS #}
+    {% set op_ids_list = item_mps.ordenes | map(attribute='id') | list %}
+    
+    <div class="modal fade" 
+         id="modal-producto-{{ item_mps.producto_id }}" 
+         tabindex="-1" 
+         aria-labelledby="modalLabel-{{ item_mps.producto_id }}" 
+         aria-hidden="true"
+         data-op-ids="{{ op_ids_list | tojson }}"> {# <--- LISTA DE IDS PARA JS #}
+         
+      <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="modalLabel-{{ item_mps.producto_id }}">
+                Planificar Lote Semanal: <strong>{{ item_mps.producto_nombre }}</strong>
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            
+            <h6>Órdenes Individuales a Consolidar:</h6>
+            <p>Total Requerido: <b>{{ item_mps.cantidad_total }}</b> | Fecha Meta Próxima: <b>{{ item_mps.fecha_meta_mas_proxima }}</b></p>
+            
+            <table class="table table-sm table-bordered tabla-detalle-op-revision mb-4">
+                <thead class="table-light">
+                    <tr>
+                        <th style="width: 15%;">OP</th>
+                        <th class="text-center" style="width: 15%;">Cantidad</th>
+                        <th class="text-center" style="width: 15%;">Fecha Meta</th>
+                        <th style="width: 55%;">Sugerencia Individual (Referencia)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for op in item_mps.ordenes %}
+                    <tr class="detalle-op-row" data-op-id="{{ op.id }}">
+                        <td><small><code>{{ op.codigo }}</code></small></td>
+                        <td class="text-center"><small>{{ op.cantidad_planificada }}</small></td>
+                        <td class="text-center"><small>{{ op.fecha_meta }}</small></td>
+                        <td class="celda-sugerencia">
+                            {% if op.sugerencia_fecha_inicio %}
+                            <div class="resultado-sugerencia sugerencia-calculada {% if op.sugerencia_t_aprovisionamiento_dias > 0 %}alert alert-warning{% else %}alert alert-success{% endif %}" style="display: block; font-size: 0.8rem; padding: 5px;">
+                                <small>
+                                In. Sug.: {{ op.sugerencia_fecha_inicio }} (L: {{ op.sugerencia_linea }}) | 
+                                Plazo: {{ op.sugerencia_plazo_total_dias }}d (P:{{ op.sugerencia_t_produccion_dias }}d + C:{{ op.sugerencia_t_aprovisionamiento_dias }}d)
+                                </small>
+                            </div>
+                            {% else %}
+                            {# Botón para calcular sugerencia individual (opcional) #}
+                            <button classG="btn btn-outline-secondary btn-sm btn-calcular w-100" title="Calcular Sugerencia Individual (Opcional)">
+                                <i class="bi bi-calculator-fill"></i> Calcular Ref.
+                            </button>
+                            <div class="resultado-sugerencia mt-1" style="display: none;"></div>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <hr>
+            <h5 class="mb-3">Planificar Lote Consolidado</h5>
+            
+            {# Calcular la fecha de inicio sugerida basada en el plazo agregado #}
+            {% set plazo_total_agg = item_mps.sugerencia_t_prod_dias + item_mps.sugerencia_t_proc_dias %}
+            {% set fecha_inicio_sugerida = (now.date() + timedelta(days=plazo_total_agg)).strftime('%Y-%m-%d') if plazo_total_agg > 0 else now.date().strftime('%Y-%m-%d') %}
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="resultado-sugerencia sugerencia-calculada {% if item_mps.sugerencia_t_proc_dias > 0 %}alert alert-warning{% else %}alert alert-success{% endif %}" style="display: block; font-size: 0.85rem; padding: 8px;">
+                        Línea Sugerida: <b>{{ item_mps.sugerencia_linea or 'N/D' }}</b>
+                        <hr class="my-1">
+                        Plazo Total: <b>{{ plazo_total_agg }} días</b>
+                        <ul class="mb-0 ps-3 mt-1" style="font-size: 0.8rem;">
+                            <li>Producción: {{ item_mps.sugerencia_t_prod_dias }} días</li>
+                            {% if item_mps.sugerencia_t_proc_dias > 0 %}
+                                <li>Compras: {{ item_mps.sugerencia_t_proc_dias }} días (Stock Faltante)</li>
+                            {% else %}
+                                <li>Compras: 0 días (Stock OK)</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card p-3">
+                        <div class="mb-2">
+                            <label class="form-label form-label-sm fw-bold">Línea de Producción <span class="text-danger">*</span></label>
+                            <select class="form-select form-select-sm mb-1 modal-select-linea" title="Línea">
+                                <option value="1" {% if item_mps.sugerencia_linea == 1 %}selected{% endif %}>L1</option>
+                                <option value="2" {% if item_mps.sugerencia_linea == 2 %}selected{% endif %}>L2</option>
+                            </select>
+                        </div>
+                         <div class="mb-2">
+                            <label class="form-label form-label-sm fw-bold">Fecha de Inicio Planificada <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control form-control-sm mb-1 modal-input-fecha-inicio" value="{{ fecha_inicio_sugerida }}" title="Fecha Inicio">
+                        </div>
+                         <div class="mb-2">
+                            <label class="form-label form-label-sm">Supervisor (Opcional)</label>
+                            <select class="form-select form-select-sm mb-1 modal-select-supervisor" title="Supervisor">
+                                <option value="">Seleccionar...</option> {% for sup in supervisores %}<option value="{{ sup.id }}">{{ sup.nombre }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label form-label-sm">Operario (Opcional)</label>
+                            <select class="form-select form-select-sm mb-1 modal-select-operario" title="Operario">
+                                <option value="">Seleccionar...</option> {% for op_user in operarios %}<option value="{{ op_user.id }}">{{ op_user.nombre }}</option>{% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-success btn-lg btn-consolidar-y-aprobar">
+                <i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+{% endif %}
 <div class="navegacion-semanal-separada">
-    <a href="{{ url_for('planificacion.index', semana=semana_anterior_str) if semana_anterior_str else '#' }}"
+    <a href="{{ url_for('planificacion.index', horizonte=mps_data.dias_horizonte, semana=semana_anterior_str) if semana_anterior_str else '#' }}"
        class="btn btn-sm btn-outline-secondary me-1 {{ 'disabled' if not semana_anterior_str }}">
         &lt; Ant
     </a>
     <span class="fw-bold">Semana {{ semana_actual_str }}</span>
-    <a href="{{ url_for('planificacion.index', semana=semana_siguiente_str) if semana_siguiente_str else '#' }}"
+    <a href="{{ url_for('planificacion.index', horizonte=mps_data.dias_horizonte, semana=semana_siguiente_str) if semana_siguiente_str else '#' }}"
        class="btn btn-sm btn-outline-secondary {{ 'disabled' if not semana_siguiente_str }}">
         Sig &gt;
     </a>
@@ -173,45 +278,48 @@
 </div>
 
 <h3 class="h4 mb-3">Tablero Kanban (Producción en Curso)</h3>
-<div class="kanban-board">
+<div class="row">
     {% for estado_key, titulo_columna in columnas.items() %}
-    <div class="kanban-column" data-estado="{{ estado_key }}">
-        <div class="column-header">
-            <span>{{ titulo_columna }}</span>
-            <span class="badge bg-secondary rounded-pill">{{ ordenes_por_estado.get(estado_key, [])|length }}</span>
-        </div>
-        <div class="kanban-cards">
-            {% if estado_key == 'LISTA PARA PRODUCIR' %} <div class="d-grid"><button id="btn-consolidar" class="btn btn-success mb-2" disabled><i class="bi bi-plus-slash-minus"></i> Consolidar</button></div>
-            {% endif %}
-            {% for orden in ordenes_por_estado.get(estado_key, []) %}
-            <div class="card insumo-card kanban-card"
-                 data-op-id="{{ orden.id }}"
-                 data-producto-id="{{ orden.producto_id }}"
-                 data-linea-asignada="{{ orden.linea_asignada or '' }}">
-                {% if estado_key == 'LISTA PARA PRODUCIR' %}
-                <div class="form-check card-checkbox"><input class="form-check-input op-checkbox" type="checkbox" value="{{ orden.id }}"></div>
-                {% endif %}
-                <div class="card-body">
-                    <h5 class="card-title mb-1">{{ orden.producto_nombre or 'N/A' }}</h5>
-                    <div class="card-secondary-details">
-                        <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
-                        <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b></span>
-                        <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
-                        {% if orden.fecha_inicio_planificada %}
-                        <br><span class="text-primary"><i class="bi bi-play-circle-fill"></i> Inicia: {{ orden.fecha_inicio_planificada }}</span>
-                        {% endif %}
-                    </div>
-                    {% if orden.supervisor_nombre or orden.linea_asignada or orden.operario_nombre %}
-                    <hr class="my-1">
-                    <div class="card-assignment-details">
-                        {% if orden.linea_asignada %}<span class="me-2"><i class="bi bi-diagram-3-fill text-primary"></i> L{{ orden.linea_asignada }}</span>{% endif %}
-                        {% if orden.supervisor_nombre %}<span class="me-2"><i class="bi bi-person-badge-fill text-info"></i> S:{{ orden.supervisor_nombre }}</span>{% endif %}
-                        {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary"></i> O:{{ orden.operario_nombre }}</span>{% endif %}
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
+    <div class="col-12 col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-4 kanban-column-wrapper">
+        <div class="kanban-column h-100" data-estado="{{ estado_key }}">
+             <div class="column-header">
+                 <span>{{ titulo_columna }}</span>
+                 <span class="badge bg-secondary rounded-pill">{{ ordenes_por_estado.get(estado_key, [])|length }}</span>
+             </div>
+             <div class="kanban-cards">
+                 {% if estado_key == 'LISTA PARA PRODUCIR' %}
+                 <div class="d-grid"><button id="btn-consolidar" class="btn btn-success mb-2" disabled><i class="bi bi-plus-slash-minus"></i> Consolidar</button></div>
+                 {% endif %}
+                 {% for orden in ordenes_por_estado.get(estado_key, []) %}
+                 <div class="card insumo-card kanban-card"
+                      data-op-id="{{ orden.id }}"
+                      data-producto-id="{{ orden.producto_id }}"
+                      data-linea-asignada="{{ orden.linea_asignada or '' }}">
+                     {% if estado_key == 'LISTA PARA PRODUCIR' %}
+                     <div class="form-check card-checkbox"><input class="form-check-input op-checkbox" type="checkbox" value="{{ orden.id }}"></div>
+                     {% endif %}
+                     <div class="card-body">
+                          <h5 class="card-title mb-1">{{ orden.producto_nombre or 'N/A' }}</h5>
+                          <div class="card-secondary-details">
+                              <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
+                              <span><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b></span>
+                              <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
+                              {% if orden.fecha_inicio_planificada %}
+                              <br><span class="text-primary"><i class="bi bi-play-circle-fill"></i> Inicia: {{ orden.fecha_inicio_planificada }}</span>
+                              {% endif %}
+                          </div>
+                          {% if orden.supervisor_nombre or orden.linea_asignada or orden.operario_nombre %}
+                          <hr class="my-1">
+                          <div class="card-assignment-details">
+                              {% if orden.linea_asignada %}<span class="me-2"><i class="bi bi-diagram-3-fill text-primary"></i> L{{ orden.linea_asignada }}</span>{% endif %}
+                              {% if orden.supervisor_nombre %}<span class="me-2"><i class="bi bi-person-badge-fill text-info"></i> S:{{ orden.supervisor_nombre }}</span>{% endif %}
+                              {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary"></i> O:{{ orden.operario_nombre }}</span>{% endif %}
+                          </div>
+                          {% endif %}
+                     </div>
+                 </div>
+                 {% endfor %}
+             </div>
         </div>
     </div>
     {% endfor %}

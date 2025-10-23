@@ -508,7 +508,7 @@ class OrdenProduccionController(BaseController):
                 'receta_id': primera_op['receta_id'],
                 'prioridad': 'ALTA', # Las super OPs suelen ser prioritarias
                 'observaciones': f'Super OP consolidada desde las OPs: {", ".join(map(str, op_ids))}',
-                'estado': 'LISTA PARA PRODUCIR' # La Super OP nace lista
+                'estado': 'PENDIENTE' # La Super OP nace lista
             }
 
             resultado_creacion = self.crear_orden(super_op_data, usuario_id)
@@ -524,7 +524,7 @@ class OrdenProduccionController(BaseController):
                 update_result = self.pedido_model.db.table('pedido_items').update({
                     'orden_produccion_id': super_op_id
                 }).in_('orden_produccion_id', op_ids).execute()
-                
+
                 logger.info(f"Relinkeo de items de pedido a Super OP {super_op_id} completado.")
 
             except Exception as e_relink:
