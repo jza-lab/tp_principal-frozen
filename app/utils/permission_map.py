@@ -66,7 +66,7 @@ CANONICAL_PERMISSION_MAP = {
     'solicitar_reposicion_de_insumos': ['SUPERVISOR', 'DEV'],
     'crear_orden_de_compra': ['SUPERVISOR', 'DEV'],
     'aprobar_orden_de_compra': ['SUPERVISOR', 'DEV'],
-    'consultar_control_de_calidad': ['SUPERVISOR', 'DEV'],
+    'consultar_control_de_calidad': ['SUPERVISOR', 'VENDEDOR', 'DEV'],
 
     # Rol: SUPERVISOR_CALIDAD
     'crear_control_de_calidad_por_lote': ['SUPERVISOR_CALIDAD', 'DEV'],
@@ -80,7 +80,7 @@ CANONICAL_PERMISSION_MAP = {
     'consultar_reportes_de_produccion': ['GERENTE', 'DEV'],
     'consultar_reportes_financieros': ['GERENTE', 'DEV'],
     'consultar_metricas_de_stock': ['GERENTE', 'DEV'],
-    'consultar_ordenes_de_venta': ['GERENTE', 'DEV'],
+    'consultar_ordenes_de_venta': ['GERENTE', 'VENDEDOR', 'DEV'],
     'consultar_ordenes_de_compra': ['GERENTE', 'DEV'],
     'consultar_trazabilidad_completa': ['GERENTE', 'DEV'],
     'consultar_indicadores_de_calidad': ['GERENTE', 'DEV'],
@@ -106,7 +106,9 @@ CANONICAL_PERMISSION_MAP = {
     'gestionar_catalogo_de_insumos': ['SUPERVISOR', 'GERENTE'], 
     'rechazar_orden_de_compra': ['SUPERVISOR', 'GERENTE'],
     'ver_panel_notificaciones': ['IT', 'DEV'],
-    'gestionar_autorizaciones': ['ADMIN', 'RRHH', 'DEV'],
+    'gestionar_autorizaciones': ['ADMIN','DEV'],
+    'registrar_lote_de_producto': ['SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE', 'ADMIN', 'DEV'],
+
 }
 
 def get_allowed_roles_for_action(action_name: str) -> list:

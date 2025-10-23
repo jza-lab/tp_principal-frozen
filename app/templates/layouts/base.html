@@ -48,7 +48,7 @@
                                 {% set can_access = true %}
                             {% else %}
                                 {% set allowed_roles = CANONICAL_PERMISSION_MAP.get(action, []) %}
-                                {% if session.get('rol') in allowed_roles %}
+                                {% if session.get('rol')|upper in allowed_roles %}
                                     {% set can_access = true %}
                                 {% endif %}
                             {% endif %}
