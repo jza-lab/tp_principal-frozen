@@ -6,489 +6,562 @@
 {% block content %}
 <section class="container my-5">
     <div class="row justify-content-center">
-        <div class="col-lg-10">
+        <div class="col-xl-11">
             <div class="form-card">
                 <div class="form-header">
                     <i class="bi bi-cart-fill"></i>
                     <h2>{{ form_title }}</h2>
                     <p class="text-muted">Sigue los pasos para ingresar y confirmar tu pedido.</p>
                 </div>
-                
+
                 <div class="step-indicator">
-                <div class="step-item">
-                    <div class="step active" id="step1">
-                        <i class="bi bi-person-lines-fill"></i>
-                    </div>
-                    <span class="step-label">Datos y Productos</span>
-                </div>
-                <div class="step-connector"></div>
-                <div class="step-item">
-                    <div class="step" id="step2">
-                        <i class="bi bi-file-earmark-text-fill"></i>
-                    </div>
-                    <span class="step-label">Factura Proforma y Envío</span>
-                </div>
-            </div>
-
-            <form method="POST" id="pedido-form" novalidate>
-                <input type="hidden" id="id_cliente" name="id_cliente" value="">
-                <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS" value="0">
-                <input type="hidden" id="pedido_data_temp" name="pedido_data_temp">
-
-                <div id="step1Content" class="form-section">
-
-                    <div class="card mb-4 p-4 shadow-sm">
-                        <h4 class="card-title"><i class="bi bi-person-check-fill me-2"></i> Identificación del Cliente
-                        </h4>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label for="cuil_cuit_cliente" class="form-label">CUIL/CUIT <span
-                                        class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="cuil_cuit_cliente" name="cuil_cuit"
-                                        placeholder="XX-XXXXXXXX-X" required pattern="\d{2}-\d{8}-\d{1}" maxlength="13">
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="email_cliente" class="form-label">Email de Contacto <span
-                                        class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <input type="email" class="form-control" id="email_cliente" name="email"
-                                        placeholder="cliente@ejemplo.com" required>
-                                    <button class="btn btn-primary" type="button" id="buscarClienteBtn">
-                                        <span id="searchSpinner" class="spinner-border spinner-border-sm me-1"
-                                            role="status" aria-hidden="true" style="display: none;"></span>
-                                        Buscar Datos
-                                    </button>
-                                </div>
-                                <div id="clienteMessage" class="form-text mt-1">Ingrese CUIL/CUIT y Email para precargar
-                                    sus datos.</div>
-                            </div>
+                    <div class="step-item">
+                        <div class="step active" id="step1">
+                            <i class="bi bi-person-lines-fill"></i>
                         </div>
+                        <span class="step-label">Datos y Productos</span>
                     </div>
+                    <div class="step-connector"></div>
+                    <div class="step-item">
+                        <div class="step" id="step2">
+                            <i class="bi bi-file-earmark-text-fill"></i>
+                        </div>
+                        <span class="step-label">Factura Proforma y Envío</span>
+                    </div>
+                </div>
 
-                    <div id="datosClienteCard" class="card p-4 shadow-sm mb-4" style="display: none;">
-                        <h4 class="card-title"><i class="bi bi-info-circle-fill me-2"></i> Datos del Pedido</h4>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label for="nombre_cliente" class="form-label">Nombre</label>
-                                <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente"
-                                    readonly>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="telefono" class="form-label">Teléfono</label>
-                                <input type="text" class="form-control" id="telefono" name="telefono" readonly>
-                            </div>
+                <form method="POST" id="pedido-form" novalidate>
+                    <input type="hidden" id="id_cliente" name="id_cliente" value="">
+                    <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS" value="0">
+                    <input type="hidden" id="pedido_data_temp" name="pedido_data_temp">
 
-                            <div class="col-md-4">
-                                <label for="condicion_iva_display" class="form-label">Condición IVA</label>
-                                <input type="text" class="form-control" id="condicion_iva_display"
-                                    name="condicion_iva_display" readonly>
-                                <input type="hidden" id="tipo_factura" name="tipo_factura">
-                                <input type="hidden" id="condicion_iva_value" name="condicion_iva_value">
-                            </div>
+                    <div id="step1Content" class="form-section">
 
-                            <div class="col-md-4">
-                                <label for="fecha_requerido" class="form-label">Fecha de Entrega Requerida <span
-                                        class="text-danger">*</span></label>
-                                <input type="date" class="form-control" id="fecha_requerido" name="fecha_requerido"
-                                    value="{{ today }}" required>
-                            </div>
-                            <input id="fecha_solicitud" name="fecha_solicitud" type="hidden" class="form-label"
-                                read-only value="{{ today }}"></label>
-
-                            <div class="col-md-4">
-                                <label for="condicion_venta" class="form-label">Condición de Venta <span
-                                        class="text-danger">*</span></label>
-                                <select class="form-select" id="condicion_venta" name="condicion_venta" required>
-                                    <option value="contado" {% if es_cliente_nuevo %}selected{% endif %}>Al Contado
-                                    </option>
-                                    {% if not es_cliente_nuevo %}
-                                    <option value="credito_30">Crédito 30 días</option>
-                                    <option value="credito_90">Crédito 90 días</option>
-                                    {% endif %}
-                                </select>
-                            </div>
-
-                            <div class="col-md-12">
-                                <div class="form-subsection">
-                                    <label class="form-label"><i class="bi bi-geo-alt-fill me-1"></i>Dirección de
-                                        Entrega</label>
-
-                                    <input type="hidden" id="id_direccion_entrega" name="id_direccion_entrega" value="">
-
-                                    <div class="d-flex justify-content-end mb-3">
-                                        <button type="checkbox" class="btn btn-sm btn-outline-info"
-                                            id="usar_direccion_alternativa">
-                                            <i class="bi bi-truck me-1"></i> Usar otra dirección de entrega
+                        <div class="card mb-4 p-4 shadow-sm">
+                            <h4 class="card-title"><i class="bi bi-person-check-fill me-2"></i> Identificación del
+                                Cliente
+                            </h4>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="cuil_cuit_cliente" class="form-label">CUIL/CUIT <span
+                                            class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="cuil_cuit_cliente" name="cuil_cuit"
+                                            placeholder="XX-XXXXXXXX-X" required pattern="\d{2}-\d{8}-\d{1}"
+                                            maxlength="13">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="email_cliente" class="form-label">Email de Contacto <span
+                                            class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <input type="email" class="form-control" id="email_cliente" name="email"
+                                            placeholder="cliente@ejemplo.com" required>
+                                        <button class="btn btn-primary" type="button" id="buscarClienteBtn">
+                                            <span id="searchSpinner" class="spinner-border spinner-border-sm me-1"
+                                                role="status" aria-hidden="true" style="display: none;"></span>
+                                            <i class="bi bi-search"></i> Buscar
                                         </button>
                                     </div>
+                                </div>
+                                <div class="col-12 mt-2">
+                                    <div id="clienteMessage" class="form-text">Ingrese CUIL/CUIT y Email para precargar
+                                        sus
+                                        datos.</div>
+                                </div>
+                            </div>
+                        </div>
 
-                                    <div id="facturacionAddressFields">
-                                        <small class="form-text text-muted mb-2 d-block">Dirección de Facturación (Usada
-                                            como Entrega
-                                            Predeterminada)</small>
-                                        <div class="row g-3">
-                                            <div class="col-md-8">
-                                                <div class="form-floating">
-                                                    <input type="text" class="form-control" id="calle_facturacion"
-                                                        name="calle_facturacion" placeholder="Calle" readonly>
-                                                    <label for="calle_facturacion"><i
-                                                            class="bi bi-signpost me-1"></i>Calle</label>
+                        <div id="datosClienteCard" class="card p-4 shadow-sm mb-4" style="display: none;">
+                            <h4 class="card-title"><i class="bi bi-info-circle-fill me-2"></i> Datos del Pedido</h4>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="nombre_cliente" class="form-label">Nombre</label>
+                                    <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente"
+                                        readonly>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="telefono" class="form-label">Teléfono</label>
+                                    <input type="text" class="form-control" id="telefono" name="telefono" readonly>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label for="condicion_iva_display" class="form-label">Condición IVA</label>
+                                    <input type="text" class="form-control" id="condicion_iva_display"
+                                        name="condicion_iva_display" readonly>
+                                    <input type="hidden" id="tipo_factura" name="tipo_factura">
+                                    <input type="hidden" id="condicion_iva_value" name="condicion_iva_value">
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label for="fecha_requerido" class="form-label">Fecha de Entrega Requerida <span
+                                            class="text-danger">*</span></label>
+                                    <input type="date" class="form-control" id="fecha_requerido" name="fecha_requerido"
+                                        value="{{ today }}" required>
+                                </div>
+                                <input id="fecha_solicitud" name="fecha_solicitud" type="hidden" class="form-label"
+                                    read-only value="{{ today }}"></label>
+
+                                <div class="col-md-4">
+                                    <label for="condicion_venta" class="form-label">Condición de Venta <span
+                                            class="text-danger">*</span></label>
+                                    <select class="form-select" id="condicion_venta" name="condicion_venta" required>
+                                        <option value="contado" {% if es_cliente_nuevo %}selected{% endif %}>Al Contado
+                                        </option>
+                                        {% if not es_cliente_nuevo %}
+                                        <option value="credito_30">Crédito 30 días</option>
+                                        <option value="credito_90">Crédito 90 días</option>
+                                        {% endif %}
+                                    </select>
+                                </div>
+
+                                <div class="col-md-12">
+                                    <div class="form-subsection">
+                                        <label class="form-label"><i class="bi bi-geo-alt-fill me-1"></i>Dirección de
+                                            Entrega</label>
+
+                                        <input type="hidden" id="id_direccion_entrega" name="id_direccion_entrega"
+                                            value="">
+
+                                        <div class="d-flex justify-content-end mb-3">
+                                            <button type="button" class="btn btn-sm btn-outline-info"
+                                                id="usar_direccion_alternativa">
+                                                <i class="bi bi-truck me-1"></i> Usar otra dirección
+                                            </button>
+                                        </div>
+
+                                        <div id="facturacionAddressFields">
+                                            <small class="form-text text-muted mb-2 d-block">Dirección de Facturación
+                                                (Usada
+                                                como Entrega
+                                                Predeterminada)</small>
+                                            <div class="row g-3">
+                                                <div class="col-md-8">
+                                                    <div class="form-floating">
+                                                        <input type="text" class="form-control" id="calle_facturacion"
+                                                            name="calle_facturacion" placeholder="Calle" readonly>
+                                                        <label for="calle_facturacion"><i
+                                                                class="bi bi-signpost me-1"></i>Calle</label>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="form-floating">
-                                                    <input type="number" class="form-control" id="altura_facturacion"
-                                                        name="altura_facturacion" placeholder="Altura" readonly>
-                                                    <label for="altura_facturacion"><i
-                                                            class="bi bi-123 me-1"></i>Altura</label>
+                                                <div class="col-md-4">
+                                                    <div class="form-floating">
+                                                        <input type="number" class="form-control"
+                                                            id="altura_facturacion" name="altura_facturacion"
+                                                            placeholder="Altura" readonly>
+                                                        <label for="altura_facturacion"><i
+                                                                class="bi bi-123 me-1"></i>Altura</label>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="form-floating">
-                                                    <input type="text" class="form-control" id="provincia_facturacion"
-                                                        name="provincia_facturacion" placeholder="Provincia" readonly>
-                                                    <label for="provincia_facturacion"><i
-                                                            class="bi bi-map me-1"></i>Provincia</label>
+                                                <div class="col-md-6">
+                                                    <div class="form-floating">
+                                                        <div class="form-floating">
+                                                            <select class="form-select" id="provincia_facturacion"
+                                                                name="provincia_facturacion">
+                                                                <option value="">Seleccionar provincia...</option>
+                                                                {% set provincias = ["Buenos Aires", "CABA",
+                                                                "Catamarca", "Chaco", "Chubut",
+                                                                "Córdoba", "Corrientes", "Entre Ríos", "Formosa",
+                                                                "Jujuy", "La Pampa", "La
+                                                                Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro",
+                                                                "Salta", "San Juan",
+                                                                "San Luis", "Santa Cruz", "Santa Fe", "Santiago del
+                                                                Estero", "Tierra del
+                                                                Fuego",
+                                                                "Tucumán"] %}
+
+                                                                {% for p in provincias %}
+                                                                <option value="{{ p }}" {% if pedido and
+                                                                    pedido.direccion.provincia==p %}selected{% endif %}>
+                                                                    {{ p }}</option>
+                                                                {% endfor %}
+                                                            </select>
+                                                            <label for="provincia">
+                                                                <i class="bi bi-map me-1"></i>Provincia
+                                                            </label>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="form-floating">
-                                                    <input type="text" class="form-control" id="localidad_facturacion"
-                                                        name="localidad_facturacion" placeholder="Localidad" readonly>
-                                                    <label for="localidad_facturacion"><i
-                                                            class="bi bi-pin-map me-1"></i>Localidad</label>
+                                                <div class="col-md-6">
+                                                    <div class="form-floating">
+                                                        <input type="text" class="form-control"
+                                                            id="localidad_facturacion" name="localidad_facturacion"
+                                                            placeholder="Localidad" readonly>
+                                                        <label for="localidad_facturacion"><i
+                                                                class="bi bi-pin-map me-1"></i>Localidad</label>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="form-floating">
-                                                    <input type="text" class="form-control" id="piso_facturacion"
-                                                        name="piso_facturacion" placeholder="Piso (Opcional)" readonly>
-                                                    <label for="piso_facturacion"><i
-                                                            class="bi bi-building me-1"></i>Piso (Opcional)</label>
+                                                <div class="col-md-4">
+                                                    <div class="form-floating">
+                                                        <input type="text" class="form-control" id="piso_facturacion"
+                                                            name="piso_facturacion" placeholder="Piso (Opcional)"
+                                                            readonly>
+                                                        <label for="piso_facturacion"><i
+                                                                class="bi bi-building me-1"></i>Piso (Opcional)</label>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="form-floating">
-                                                    <input type="text" class="form-control" id="depto_facturacion"
-                                                        name="depto_facturacion" placeholder="Dto (Opcional)" readonly>
-                                                    <label for="depto_facturacion"><i
-                                                            class="bi bi-door-closed me-1"></i>Dto
-                                                        (Opcional)</label>
+                                                <div class="col-md-4">
+                                                    <div class="form-floating">
+                                                        <input type="text" class="form-control" id="depto_facturacion"
+                                                            name="depto_facturacion" placeholder="Dto (Opcional)"
+                                                            readonly>
+                                                        <label for="depto_facturacion"><i
+                                                                class="bi bi-door-closed me-1"></i>Dto
+                                                            (Opcional)</label>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="form-floating">
-                                                    <input type="text" class="form-control"
-                                                        id="codigo_postal_facturacion" name="codigo_postal_facturacion"
-                                                        placeholder="Código Postal" readonly>
-                                                    <label for="codigo_postal_facturacion"><i
-                                                            class="bi bi-mailbox me-1"></i>Código
-                                                        Postal</label>
+                                                <div class="col-md-4">
+                                                    <div class="form-floating">
+                                                        <input type="text" class="form-control"
+                                                            id="codigo_postal_facturacion"
+                                                            name="codigo_postal_facturacion" placeholder="Código Postal"
+                                                            readonly>
+                                                        <label for="codigo_postal_facturacion"><i
+                                                                class="bi bi-mailbox me-1"></i>Código
+                                                            Postal</label>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <div id="direccionEntregaAlternativaContainer" class="p-3 border rounded mt-3"
-                                        style="display: none;">
-                                        <small class="form-text text-muted mb-2 d-block">Ingrese la dirección de entrega
-                                            diferente a la de
-                                            facturación</small>
-                                        <div class="row g-3">
-                                            <div class="col-md-8">
-                                                <div class="form-floating">
-                                                    <input type="text" class="form-control" id="calle_alternativa"
-                                                        name="calle_alternativa" placeholder="Calle">
-                                                    <label for="calle_alternativa">Calle <span
-                                                            class="text-danger">*</span></label>
+                                        <div id="direccionEntregaAlternativaContainer" class="p-3 border rounded mt-3"
+                                            style="display: none;">
+                                            <small class="form-text text-muted mb-2 d-block">Ingrese la dirección de
+                                                entrega
+                                                diferente a la de
+                                                facturación</small>
+                                            <div class="row g-3">
+                                                <div class="col-md-8">
+                                                    <div class="form-floating">
+                                                        <input type="text" class="form-control" id="calle_alternativa"
+                                                            name="calle_alternativa" placeholder="Calle">
+                                                        <label for="calle_alternativa">Calle <span
+                                                                class="text-danger">*</span></label>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="form-floating">
-                                                    <input type="number" class="form-control" id="altura_alternativa"
-                                                        name="altura_alternativa" placeholder="Altura">
-                                                    <label for="altura_alternativa">Altura <span
-                                                            class="text-danger">*</span></label>
+                                                <div class="col-md-4">
+                                                    <div class="form-floating">
+                                                        <input type="number" class="form-control"
+                                                            id="altura_alternativa" name="altura_alternativa"
+                                                            placeholder="Altura">
+                                                        <label for="altura_alternativa">Altura <span
+                                                                class="text-danger">*</span></label>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="form-floating">
-                                                    <input type="text" class="form-control" id="provincia_alternativa"
-                                                        name="provincia_alternativa" placeholder="Provincia">
-                                                    <label for="provincia_alternativa">Provincia <span
-                                                            class="text-danger">*</span></label>
+                                                <div class="col-md-6">
+                                                    <div class="form-floating">
+
+                                                        <select class="form-select" id="provincia_alternativa"
+                                                            name="provincia_alternativa">
+                                                            <option value="">Seleccionar provincia...</option>
+                                                            {% set provincias = ["Buenos Aires", "CABA",
+                                                            "Catamarca", "Chaco", "Chubut",
+                                                            "Córdoba", "Corrientes", "Entre Ríos", "Formosa",
+                                                            "Jujuy", "La Pampa", "La
+                                                            Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro",
+                                                            "Salta", "San Juan",
+                                                            "San Luis", "Santa Cruz", "Santa Fe", "Santiago del
+                                                            Estero", "Tierra del
+                                                            Fuego",
+                                                            "Tucumán"] %}
+
+                                                            {% for p in provincias %}
+                                                            <option value="{{ p }}">
+                                                                {{ p }}</option>
+                                                            {% endfor %}
+                                                        </select>
+                                                        <label for="provincia">
+                                                            <i class="bi bi-map me-1"></i>Provincia
+                                                        </label>
+
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="form-floating">
-                                                    <input type="text" class="form-control" id="localidad_alternativa"
-                                                        name="localidad_alternativa" placeholder="Localidad">
-                                                    <label for="localidad_alternativa">Localidad <span
-                                                            class="text-danger">*</span></label>
+                                                <div class="col-md-6">
+                                                    <div class="form-floating">
+                                                        <input type="text" class="form-control"
+                                                            id="localidad_alternativa" name="localidad_alternativa"
+                                                            placeholder="Localidad">
+                                                        <label for="localidad_alternativa">Localidad <span
+                                                                class="text-danger">*</span></label>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="form-floating">
-                                                    <input type="text" class="form-control" id="piso_alternativa"
-                                                        name="piso_alternativa" placeholder="Piso (Opcional)">
-                                                    <label for="piso_alternativa">Piso (Opcional)</label>
+                                                <div class="col-md-4">
+                                                    <div class="form-floating">
+                                                        <input type="text" class="form-control" id="piso_alternativa"
+                                                            name="piso_alternativa" placeholder="Piso (Opcional)">
+                                                        <label for="piso_alternativa">Piso (Opcional)</label>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="form-floating">
-                                                    <input type="text" class="form-control" id="depto_alternativa"
-                                                        name="depto_alternativa" placeholder="Dto (Opcional)">
-                                                    <label for="depto_alternativa">Dto (Opcional)</label>
+                                                <div class="col-md-4">
+                                                    <div class="form-floating">
+                                                        <input type="text" class="form-control" id="depto_alternativa"
+                                                            name="depto_alternativa" placeholder="Dto (Opcional)">
+                                                        <label for="depto_alternativa">Dto (Opcional)</label>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <div class="form-floating">
-                                                    <input type="text" class="form-control"
-                                                        id="codigo_postal_alternativa" name="codigo_postal_alternativa"
-                                                        placeholder="Código Postal">
-                                                    <label for="codigo_postal_alternativa">Código Postal <span
-                                                            class="text-danger">*</span></label>
+                                                <div class="col-md-4">
+                                                    <div class="form-floating">
+                                                        <input type="text" class="form-control"
+                                                            id="codigo_postal_alternativa"
+                                                            name="codigo_postal_alternativa"
+                                                            placeholder="Código Postal">
+                                                        <label for="codigo_postal_alternativa">Código Postal <span
+                                                                class="text-danger">*</span></label>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div class="col-12">
-                                <label for="comentarios_adicionales" class="form-label">Comentarios Adicionales</label>
-                                <textarea class="form-control" name="comentarios_adicionales"
-                                    id="comentarios_adicionales" rows="3"
-                                    maxlength="500"> {{ pedido.comentarios_adicionales if pedido and pedido.comentarios_adicionales else ''}}</textarea>
-                                <div class="form-text">Opcional - Ingrese comentarios adicionales sobre el pedido</div>
+                                <div class="col-12">
+                                    <label for="comentarios_adicionales" class="form-label">Comentarios
+                                        Adicionales</label>
+                                    <textarea class="form-control" name="comentarios_adicionales"
+                                        id="comentarios_adicionales" rows="3"
+                                        maxlength="500"> {{ pedido.comentarios_adicionales if pedido and pedido.comentarios_adicionales else ''}}</textarea>
+                                    <div class="form-text">Opcional - Ingrese comentarios adicionales sobre el pedido
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    {% set total_pedido = 0.0 %}
-                    {% if pedido and pedido['items'] %}
-                    {% for item in pedido['items'] %}
-                    {# CORRECCIÓN CRUCIAL: Usamos .get(key, 0) para manejar ítems sin precio o cantidad #}
-                    {% set item_precio = item.get('precio_unitario', 0) %}
-                    {% set item_cantidad = item.get('cantidad', 0) %}
-                    {% set total_pedido = total_pedido + (item_precio * item_cantidad) %}
-                    {% endfor %}
-                    {% endif %}
+                        {% set total_pedido = 0.0 %}
+                        {% if pedido and pedido['items'] %}
+                        {% for item in pedido['items'] %}
+                        {# CORRECCIÓN CRUCIAL: Usamos .get(key, 0) para manejar ítems sin precio o cantidad #}
+                        {% set item_precio = item.get('precio_unitario', 0) %}
+                        {% set item_cantidad = item.get('cantidad', 0) %}
+                        {% set total_pedido = total_pedido + (item_precio * item_cantidad) %}
+                        {% endfor %}
+                        {% endif %}
 
-                    <div id="productosCard" class="card p-4 shadow-sm mb-4" style="display: none;">
-                        <h4 class="card-title mb-5">
-                            <i class="bi bi-basket-fill me-2"></i> Productos del Pedido
-                            <button type="button" class="btn btn-sm btn-primary float-end" id="addItemBtn">
-                                <i class="bi bi-plus-circle me-1"></i> Añadir Producto
-                            </button>
-                        </h4>
+                        <div id="productosCard" class="card p-4 shadow-sm mb-4" style="display: none;">
+                            <h4 class="card-title mb-5">
+                                <i class="bi bi-basket-fill me-2"></i> Productos del Pedido
+                                <button type="button" class="btn btn-sm btn-primary float-end" id="addItemBtn">
+                                    <i class="bi bi-plus-circle me-1"></i> Añadir Producto
+                                </button>
+                            </h4>
 
-                        <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0">
-                                <thead class="bg-light">
-                                    <tr>
-                                        <th style="width: 35%;">Producto <span class="text-danger">*</span></th>
-                                        <th style="width: 25%;">Cantidad</th>
-                                        <th style="width: 20%;">Precio Unitario</th>
-                                        <th style="width: 20%;" class="text-center">Subtotal/Acción</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="items-container">
-                                    <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS"
-                                        value="{{ pedido['items'] | length if pedido and pedido['items'] else 0 }}">
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead class="bg-light">
+                                        <tr>
+                                            <th style="width: 35%;">Producto <span class="text-danger">*</span></th>
+                                            <th style="width: 25%;">Cantidad</th>
+                                            <th style="width: 20%;">Precio Unitario</th>
+                                            <th style="width: 20%;" class="text-center">Subtotal/Acción</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="items-container">
+                                        <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS"
+                                            value="{{ pedido['items'] | length if pedido and pedido['items'] else 0 }}">
 
-                                    {% if pedido and pedido['items'] %}
-                                    {% for item in pedido['items'] %}
-                                    {% set current_product = productos | selectattr('id', 'equalto', item.producto_id) |
-                                    list | first %}
-                                    {% set unidad_medida = current_product.unidad_medida if current_product else
-                                    'unidades'
-                                    %}
+                                        {% if pedido and pedido['items'] %}
+                                        {% for item in pedido['items'] %}
+                                        {% set current_product = productos | selectattr('id', 'equalto',
+                                        item.producto_id) |
+                                        list | first %}
+                                        {% set unidad_medida = current_product.unidad_medida if current_product else
+                                        'unidades'
+                                        %}
 
-                                    {% set is_integer = unidad_medida.startswith('paquete') or unidad_medida ==
-                                    'unidades'
-                                    %}
-                                    {% set step_value = '1' if is_integer else '0.01' %}
-                                    {% set min_value = '1' if is_integer else '0.01' %}
-                                    <tr
-                                        class="item-row {% if pedido and not pedido.estado=='PENDIENTE' %}table-light text-muted{% endif %}">
-                                        <td>
-                                            <input type="hidden" name="items-{{ loop.index0 }}-id"
-                                                value="{{ item.id if item.id else '' }}">
-                                            <select class="form-select form-select-sm producto-selector"
-                                                name="items-{{ loop.index0 }}-producto_id" required {% if pedido and
-                                                pedido.estado !='PENDIENTE' %}disabled{% endif %}>
-                                                <option value="">Seleccione...</option>
-                                                {% for producto in productos %}
-                                                <option value="{{ producto.id }}"
-                                                    data-stock="{{ producto.stock_disponible or 0 }}"
-                                                    data-precio="{{ producto.precio_unitario | float or 0 }}"
-                                                    data-unidad="{{ producto.unidad_medida }}" {% if
-                                                    item.producto_id==producto.id %}selected{% endif %}>
-                                                    {{ producto.nombre }}
-                                                </option>
-                                                {% endfor %}
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <div class="input-group input-group-sm">
-                                                <input type="number" class="form-control item-quantity"
-                                                    style="min-width: 8ch;" oninput="limitarDigitos(this, 7)"
-                                                    name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10"
-                                                    max="5000" min="{{ min_value }}" step="{{ step_value }}"
-                                                    value="{{ item.get('cantidad', 0) }}" required {% if pedido and
+                                        {% set is_integer = unidad_medida.startswith('paquete') or unidad_medida ==
+                                        'unidades'
+                                        %}
+                                        {% set step_value = '1' if is_integer else '0.01' %}
+                                        {% set min_value = '1' if is_integer else '0.01' %}
+                                        <tr
+                                            class="item-row {% if pedido and not pedido.estado=='PENDIENTE' %}table-light text-muted{% endif %}">
+                                            <td>
+                                                <input type="hidden" name="items-{{ loop.index0 }}-id"
+                                                    value="{{ item.id if item.id else '' }}">
+                                                <select class="form-select form-select-sm producto-selector"
+                                                    name="items-{{ loop.index0 }}-producto_id" required {% if pedido and
                                                     pedido.estado !='PENDIENTE' %}disabled{% endif %}>
-                                                <span class="input-group-text unidad-display">
-                                                    {{ unidad_medida if current_product else '--' }}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            {% set precio_u = item.get('precio_unitario', 0) | float %}
-                                            {% set precio_u_formateado = '{:,.2f}'.format(precio_u).replace(',',
-                                            'X').replace('.', ',').replace('X', '.') %}
+                                                    <option value="">Seleccione...</option>
+                                                    {% for producto in productos %}
+                                                    <option value="{{ producto.id }}"
+                                                        data-stock="{{ producto.stock_disponible or 0 }}"
+                                                        data-precio="{{ producto.precio_unitario | float or 0 }}"
+                                                        data-unidad="{{ producto.unidad_medida }}" {% if
+                                                        item.producto_id==producto.id %}selected{% endif %}>
+                                                        {{ producto.nombre }}
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <div class="input-group input-group-sm">
+                                                    <input type="number" class="form-control item-quantity"
+                                                        style="min-width: 8ch;" oninput="limitarDigitos(this, 7)"
+                                                        name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10"
+                                                        max="5000" min="{{ min_value }}" step="{{ step_value }}"
+                                                        value="{{ item.get('cantidad', 0) }}" required {% if pedido and
+                                                        pedido.estado !='PENDIENTE' %}disabled{% endif %}>
+                                                    <span class="input-group-text unidad-display">
+                                                        {{ unidad_medida if current_product else '--' }}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                {% set precio_u = item.get('precio_unitario', 0) | float %}
+                                                {% set precio_u_formateado = '{:,.2f}'.format(precio_u).replace(',',
+                                                'X').replace('.', ',').replace('X', '.') %}
 
-                                            <input type="hidden" class="item-price-unit-value"
-                                                name="items-{{ loop.index0 }}-precio_unitario"
-                                                value="{{ item.get('precio_unitario', 0) | float }}">
-                                            <input type="text" class="form-control form-control-sm price-display"
-                                                value="$ {{ precio_u_formateado }}" readonly>
-                                        </td>
+                                                <input type="hidden" class="item-price-unit-value"
+                                                    name="items-{{ loop.index0 }}-precio_unitario"
+                                                    value="{{ item.get('precio_unitario', 0) | float }}">
+                                                <input type="text" class="form-control form-control-sm price-display"
+                                                    value="$ {{ precio_u_formateado }}" readonly>
+                                            </td>
 
-                                        <td class="text-center">
-                                            {% set subtotal_valor = item.get('cantidad', 0) *
-                                            item.get('precio_unitario', 0)
-                                            | float %}
-                                            {% set subtotal_formateado = '{:,.2f}'.format(subtotal_valor).replace(',',
-                                            'X').replace('.', ',').replace('X', '.') %}
-                                            <input type="text" class="form-control subtotal-item"
-                                                value="$ {{ subtotal_formateado }}" readonly>
-                                        </td>
-                                        <td class="text-center">
-                                            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn"
-                                                title="Eliminar ítem" {% if pedido and not pedido.estado=='PENDIENTE'
-                                                %}disabled{% endif %}><i class="bi bi-trash"></i></button>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                    {% endif %}
-                                </tbody>
-                            </table>
+                                            <td class="text-center">
+                                                {% set subtotal_valor = item.get('cantidad', 0) *
+                                                item.get('precio_unitario', 0)
+                                                | float %}
+                                                {% set subtotal_formateado =
+                                                '{:,.2f}'.format(subtotal_valor).replace(',',
+                                                'X').replace('.', ',').replace('X', '.') %}
+                                                <input type="text" class="form-control subtotal-item"
+                                                    value="$ {{ subtotal_formateado }}" readonly>
+                                            </td>
+                                            <td class="text-center">
+                                                <button type="button"
+                                                    class="btn btn-sm btn-outline-danger remove-item-btn"
+                                                    title="Eliminar ítem" {% if pedido and not
+                                                    pedido.estado=='PENDIENTE' %}disabled{% endif %}><i
+                                                        class="bi bi-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div id="no-items-msg" class="text-center text-muted py-3 border-top"
+                                style="display: none;">
+                                <i class="bi bi-box-seam fs-3"></i>
+                                <p class="mt-2">Añada productos a su pedido.</p>
+                            </div>
                         </div>
 
-                        <div id="no-items-msg" class="text-center text-muted py-3 border-top" style="display: none;">
-                            <i class="bi bi-box-seam fs-3"></i>
-                            <p class="mt-2">Añada productos a su pedido.</p>
-                        </div>
-                    </div>
+                        <template id="item-template">
+                            <tr class="item-row">
+                                <td>
+                                    <input type="hidden" name="items-__prefix__-id" value="">
+                                    <select class="form-select form-select-sm producto-selector"
+                                        name="items-__prefix__-producto_id" required
+                                        data-id-base="items-__prefix__-producto_id">
+                                        <option value="">Seleccione un producto...</option>
+                                        {% for producto in productos %}
+                                        <option value="{{ producto.id }}" data-id="{{ producto.id }}"
+                                            data-precio="{{ producto.precio_unitario | float or 0 }}"
+                                            data-stock="{{ producto.stock_disponible or 0 }}"
+                                            data-unidad="{{ producto.unidad_medida }}">{{ producto.nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <input type="number" min="0.01" max="5000" step="0.01"
+                                            class="form-control item-quantity" name="items-__prefix__-cantidad"
+                                            placeholder="Cant." required>
+                                        <span class="input-group-text unidad-display">--</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <input type="hidden" class="item-price-unit-value"
+                                        name="items-__prefix__-precio_unitario" value="0">
+                                    <input type="text" class="form-control form-control-sm price-display" value="$ 0,00"
+                                        readonly>
+                                </td>
+                                <td class="text-center d-flex align-items-center justify-content-between">
+                                    <input type="text" class="form-control form-control-sm subtotal-item me-2"
+                                        value="$ 0,00" readonly style="min-width: 6rem;">
+                                    <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn"
+                                        title="Eliminar ítem"><i class="bi bi-trash"></i></button>
+                                </td>
+                            </tr>
+                        </template>
 
-                    <template id="item-template">
-                        <tr class="item-row">
-                            <td>
-                                <input type="hidden" name="items-__prefix__-id" value="">
-                                <select class="form-select form-select-sm producto-selector"
-                                    name="items-__prefix__-producto_id" required
-                                    data-id-base="items-__prefix__-producto_id">
-                                    <option value="">Seleccione un producto...</option>
-                                    {% for producto in productos %}
-                                    <option value="{{ producto.id }}" data-id="{{ producto.id }}"
-                                        data-precio="{{ producto.precio_unitario | float or 0 }}"
-                                        data-stock="{{ producto.stock_disponible or 0 }}"
-                                        data-unidad="{{ producto.unidad_medida }}">{{ producto.nombre }}</option>
-                                    {% endfor %}
-                                </select>
-                            </td>
-                            <td>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" min="0.01" max="5000" step="0.01"
-                                        class="form-control item-quantity" name="items-__prefix__-cantidad"
-                                        placeholder="Cant." required>
-                                    <span class="input-group-text unidad-display">--</span>
+                        <div id="resumenCalculos" class="card p-4 shadow-sm" style="display: none;">
+                            <div class="row g-3">
+                                <div class="col-md-6 text-end">Subtotal (Iva incluido): <strong
+                                        id="resumen-subtotal">$0.00</strong></div>
+                                <div type="hidden" class="col-md-6 text-end">Costo de Envío: <strong
+                                        id="resumen-flete">$0.00</strong>
                                 </div>
-                            </td>
-                            <td>
-                                <input type="hidden" class="item-price-unit-value"
-                                    name="items-__prefix__-precio_unitario" value="0">
-                                <input type="text" class="form-control form-control-sm price-display" value="$ 0,00"
-                                    readonly>
-                            </td>
-                            <td class="text-center d-flex align-items-center justify-content-between">
-                                <input type="text" class="form-control form-control-sm subtotal-item me-2"
-                                    value="$ 0,00" readonly style="min-width: 6rem;">
-                                <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn"
-                                    title="Eliminar ítem"><i class="bi bi-trash"></i></button>
-                            </td>
-                        </tr>
-                    </template>
-
-                    <div id="resumenCalculos" class="card p-4 shadow-sm" style="display: none;">
-                        <div class="row g-3">
-                            <div class="col-md-6 text-end">Subtotal (Iva incluido): <strong
-                                    id="resumen-subtotal">$0.00</strong></div>
-                            <div type="hidden" class="col-md-6 text-end">Costo de Envío: <strong
-                                    id="resumen-flete">$0.00</strong>
+                                <div id="iva-row" class="col-md-6 text-end" style="display: none;">
+                                    IVA (<span id="iva-porcentaje">21</span>%): <strong id="resumen-iva">$0.00</strong>
+                                </div>
+                                <div class="col-md-6 text-end">TOTAL FINAL: <strong id="total-final"
+                                        class="text-primary fs-4">$0.00</strong></div>
                             </div>
-                            <div id="iva-row" class="col-md-6 text-end" style="display: none;">
-                                IVA (<span id="iva-porcentaje">21</span>%): <strong id="resumen-iva">$0.00</strong>
-                            </div>
-                            <div class="col-md-6 text-end">TOTAL FINAL: <strong id="total-final"
-                                    class="text-primary fs-4">$0.00</strong></div>
                         </div>
                     </div>
+
+                    <div id="step2Content" class="form-section" style="display: none;">
+
+                        <div id="facturaProformaCard" class="card">
+                            <div class="card-header">
+                                <h4 class="mb-0">Factura Proforma (Previsualización)</h4>
+                            </div>
+                            <div class="card-body">
+                                <div id="proforma-content" class="p-3 text-center text-muted">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between gap-2 mt-4 form-actions-sticky">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="prevStep2">
+                                <i class="bi bi-arrow-left me-1"></i>Modificar Pedido
+                            </button>
+                            <div>
+                                <button type="button" class="btn btn-danger me-2" id="cancelOrderBtn">
+                                    <i class="bi bi-x-lg me-1"></i>Cancelar Pedido
+                                </button>
+                                <button type="submit" class="btn btn-sm btn-success" id="acceptOrderBtn" disabled>
+                                    <i class="bi bi-check-circle me-1"></i>Aceptar y Crear Pedido
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <div id="step1Actions" class="d-flex justify-content-end mt-4 form-actions">
+                    <button type="button" class="btn btn-sm btn-info" id="nextStep1" disabled>
+                        Ver Proforma <i class="bi bi-arrow-right ms-1"></i>
+                    </button>
                 </div>
 
-                <div id="step2Content" class="form-section" style="display: none;">
-
-                    <div id="facturaProformaCard" class="card">
-                        <div class="card-header">
-                            <h4 class="mb-0">Factura Proforma (Previsualización)</h4>
-                        </div>
-                        <div class="card-body">
-                            <div id="proforma-content" class="p-3 text-center text-muted">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="d-flex justify-content-between gap-2 mt-4 form-actions-sticky">
-                        <button type="button" class="btn btn-outline-secondary" id="prevStep2">
-                            <i class="bi bi-arrow-left me-1"></i>Modificar Pedido
-                        </button>
-                        <div>
-                            <button type="button" class="btn btn-danger me-2" id="cancelOrderBtn">
-                                <i class="bi bi-x-lg me-1"></i>Cancelar Pedido
-                            </button>
-                            <button type="submit" class="btn btn-success" id="acceptOrderBtn" disabled>
-                                <i class="bi bi-check-circle me-1"></i>Aceptar y Crear Pedido
-                            </button>
-                        </div>
-                    </div>
+                <div id="step3Content" class="form-section text-center p-4" style="display: none;">
+                    <div id="result-icon"></div>
+                    <h3 id="result-title" class="mb-3"></h3>
+                    <p id="result-message" class="text-muted"></p>
+                    <a href="{{ url_for('public.hacer_pedido') }}" class="btn btn-primary mt-3">
+                        <i class="bi bi-plus-circle me-1"></i> Realizar otro Pedido
+                    </a>
                 </div>
-            </form>
 
-            <div id="step1Actions" class="d-flex justify-content-end mt-4 form-actions">
-                <button type="button" class="btn btn-primary" id="nextStep1" disabled>
-                    Ver Proforma <i class="bi bi-arrow-right ms-1"></i>
-                </button>
             </div>
-
         </div>
     </div>
-</div>
 
-<script>
-    // Variables globales inyectadas por Jinja2 para el formulario PÚBLICO
-    const CLIENTE_API_SEARCH_URL = "{{ url_for('clientes_proveedores.buscar_cliente_por_cuil_y_email_api') }}";
-    const CREAR_URL = "{{ url_for('public.crear_pedido_api') }}"; // Apunta al nuevo endpoint público
-    const PROFORMA_GENERATION_URL = "{{ url_for('orden_venta.generar_proforma_api') }}";
-    const PRODUCTOS_DATA = {{ productos | tojson | safe }};
-    const LISTAR_URL = "{{ url_for('public.index') }}"; // A dónde ir si se cancela
-    const isEditing = false;
-    const pedidoId = 0;
-</script>
+    <script>
+        // Variables globales inyectadas por Jinja2 para el formulario PÚBLICO
+        const CLIENTE_API_SEARCH_URL = "{{ url_for('clientes_proveedores.buscar_cliente_por_cuil_y_email_api') }}";
+        const CREAR_URL = "{{ url_for('public.crear_pedido_api') }}"; // Apunta al nuevo endpoint público
+        const PROFORMA_GENERATION_URL = "{{ url_for('orden_venta.generar_proforma_api') }}";
+        const PRODUCTOS_DATA = {{ productos | tojson | safe }};
+        const LISTAR_URL = "{{ url_for('public.index') }}"; // A dónde ir si se cancela
+        const isEditing = false;
+        const pedidoId = 0;
+    </script>
 
-<script src="{{ url_for('static', filename='js/orden_venta/gestionCalculos.js') }}"></script>
-<script src="{{ url_for('static', filename='js/orden_venta/formularioVenta.js') }}"></script>
-<script src="{{ url_for('static', filename='js/orden_venta/formularioClientePasos.js') }}"></script>
-{% endblock %}
+    <script src="{{ url_for('static', filename='js/orden_venta/gestionCalculos.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/orden_venta/formularioVenta.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/orden_venta/formularioClientePasos.js') }}"></script>
+    {% endblock %}

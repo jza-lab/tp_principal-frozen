@@ -5,6 +5,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('pedido-form');
     const step1Content = document.getElementById('step1Content');
     const step2Content = document.getElementById('step2Content');
+    const step3Content = document.getElementById('step3Content');
+    const resultIcon = document.getElementById('result-icon');
+    const resultTitle = document.getElementById('result-title');
+    const resultMessage = document.getElementById('result-message');
     const step1Actions = document.getElementById('step1Actions');
     const nextStep1Btn = document.getElementById('nextStep1');
     const prevStep2Btn = document.getElementById('prevStep2');
@@ -154,7 +158,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 [datosClienteCard, productosCard, resumenCalculos].forEach(el => el.style.display = 'block');
 
-                checkStep1Validity();
+                nextStep1Btn.disabled = false;
                 updateResumen();
 
             } else {
@@ -264,9 +268,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const hasItems = itemsContainer.querySelectorAll('.item-row').length > 0;
         const isFormValid = form.checkValidity();
 
-        const isValid = isClientSelected && hasItems && isFormValid;
-        nextStep1Btn.disabled = !isValid;
-        return isValid;
+        return isClientSelected && hasItems && isFormValid;
     }
 
     [form, itemsContainer].forEach(el => ['input', 'change', 'DOMSubtreeModified'].forEach(evt => el.addEventListener(evt, checkStep1Validity)));
@@ -278,11 +280,11 @@ document.addEventListener('DOMContentLoaded', function () {
     addItemBtn.addEventListener('click', addItemRow);
     cancelOrderBtn.addEventListener('click', () => { showNotificationModal('Pedido Cancelado', 'El proceso fue cancelado.', 'warning', () => { window.location.href = LISTAR_URL; }); });
 
-    function goToStep(step) {
+    async function goToStep(step) {
         if (step === 1) {
             step1Content.style.display = 'block';
             step2Content.style.display = 'none';
-            step1Actions.style.display = 'flex';
+             step1Actions.classList.remove('d-none');
             step1Indicator.classList.add('active');
             step1Indicator.classList.remove('completed');
             step2Indicator.classList.remove('active');
@@ -290,6 +292,27 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!checkStep1Validity()) {
                 showNotificationModal('Validación Pendiente', 'Complete todos los campos requeridos y añada al menos un producto.', 'warning');
                 return;
+            }
+            
+            if (isUsingAlternativeAddress) {
+                const direccion = {
+                    calle: calleAlternativaInput.value,
+                    altura: alturaAlternativaInput.value,
+                    localidad: localidadAlternativaInput.value,
+                    provincia: provinciaAlternativaInput.value,
+                };
+
+                const response = await fetch('/api/validar/direccion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(direccion)
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    showNotificationModal('Dirección Inválida', result.message || 'La dirección de entrega alternativa no pudo ser validada.', 'error');
+                    return;
+                }
             }
 
             const payload = buildPayload();
@@ -301,7 +324,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             step1Content.style.display = 'none';
             step2Content.style.display = 'block';
-            step1Actions.style.display = 'none';
+            step1Actions.classList.add('d-none');
             step1Indicator.classList.add('completed');
             step2Indicator.classList.add('active');
             loadProforma();
@@ -337,6 +360,23 @@ document.addEventListener('DOMContentLoaded', function () {
             proformaContent.innerHTML = '<div class="p-5 text-center"><p class="text-danger"><i class="bi bi-plug me-1"></i>Error de red.</p></div>';
         }
     }
+    
+    function showResult(type, title, message) {
+        step1Content.style.display = 'none';
+        step2Content.style.display = 'none';
+        step1Actions.style.display = 'none';
+        step3Content.style.display = 'block';
+
+        if (type === 'success') {
+            resultIcon.innerHTML = '<i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>';
+        } else {
+            resultIcon.innerHTML = '<i class="bi bi-x-circle-fill text-danger" style="font-size: 4rem;"></i>';
+        }
+
+        resultTitle.textContent = title;
+        resultMessage.textContent = message;
+    }
+
 
     form.addEventListener('submit', async function (e) {
         e.preventDefault();
