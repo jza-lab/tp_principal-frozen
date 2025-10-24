@@ -17,8 +17,9 @@ from app.utils.date_utils import get_now_in_argentina
 from app.controllers.direccion_controller import GeorefController
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.direccion import DireccionModel
-from flask import session
 from app.models.permisos import PermisosModel
+from app.utils.permission_map import CANONICAL_PERMISSION_MAP
+from app.models.sector import SectorModel
 
 logger = logging.getLogger(__name__)
 
@@ -298,7 +299,7 @@ class UsuarioController(BaseController):
 
         logger.info(f"Active totem session found for user_id: {user_id}. Proceeding to start session.")
         self.model.update(user_id, {'ultimo_login_web': get_now_in_argentina().isoformat()})
-        return self._iniciar_sesion_usuario(user_data)
+        return self._preparar_datos_sesion_usuario(user_data)
 
     def autenticar_usuario_facial_web(self, image_data_url: str) -> Dict:
         """Autentica un usuario para el acceso web por reconocimiento facial."""
@@ -320,7 +321,7 @@ class UsuarioController(BaseController):
 
         self.model.update(user_data['id'], {'ultimo_login_web': get_now_in_argentina().isoformat()})
 
-        return self._iniciar_sesion_usuario(user_data)
+        return self._preparar_datos_sesion_usuario(user_data)
 
     def autenticar_usuario_para_totem(self, legajo: str, password: str) -> Dict:
         """Autentica un usuario exclusivamente para el tótem (solo credenciales)."""
@@ -718,24 +719,38 @@ class UsuarioController(BaseController):
 
         return {'success': True, 'data': user_data}
 
-    def _iniciar_sesion_usuario(self, usuario: Dict) -> Dict:
-        """Helper centralizado para establecer la sesión de Flask de un usuario."""
-        logger.info(f"Initiating session for user_id: {usuario.get('id')}")
-        permisos = PermisosModel().get_user_permissions(usuario.get('role_id'))
-        rol = usuario.get('roles', {})
+    def _preparar_datos_sesion_usuario(self, usuario: Dict) -> Dict:
+        """
+        Helper centralizado para obtener todos los datos necesarios para una sesión de usuario,
+        incluyendo permisos. No manipula la sesión directamente.
+        """
+        logger.info(f"Preparing session data for user_id: {usuario.get('id')}")
+        user_role_code = usuario.get('roles', {}).get('codigo')
 
-        session.clear()
-        session['usuario_id'] = usuario.get('id')
-        session['rol_id'] = usuario.get('role_id')
-        session['rol'] = rol.get('codigo')
-        session['user_level'] = rol.get('nivel', 0)
-        session['usuario_nombre'] = usuario.get('nombre', '')
-        session['user_data'] = usuario
-        session['permisos'] = permisos
+        permisos = {}
+        if user_role_code == 'DEV':
+            # Para DEV, construimos un diccionario con todos los permisos de todos los sectores.
+            all_actions = list(CANONICAL_PERMISSION_MAP.keys())
+            sectores_result = SectorModel().find_all()
+            if sectores_result.get('success'):
+                for sector in sectores_result['data']:
+                    permisos[sector['codigo']] = all_actions
+            permisos_result = {'success': True, 'data': permisos}
+        else:
+            # Para otros roles, consultamos la base de datos.
+            permisos_data = PermisosModel().get_user_permissions(usuario.get('role_id'))
+            permisos_result = {'success': True, 'data': permisos_data}
 
-        logger.info(f"Session successfully created for user_id: {usuario.get('id')}, role: {rol.get('codigo')}")
+        if not permisos_result.get('success'):
+            logger.error(f"Could not get permissions for user_id: {usuario.get('id')}")
+            return {'success': False, 'error': 'No se pudieron cargar los permisos del usuario.'}
 
-        return {'success': True, 'rol_codigo': rol.get('codigo')}
+        datos_completos = usuario.copy()
+        datos_completos['permisos'] = permisos_result['data']
+        
+        logger.info(f"Session data prepared for user_id: {usuario.get('id')}, role: {user_role_code}")
+
+        return {'success': True, 'data': datos_completos}
 
     def _asignar_sectores_usuario(self, usuario_id: int, sectores_ids: List[int]) -> Dict:
         """Helper para asignar una lista de sectores a un usuario."""
