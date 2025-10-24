@@ -1,5 +1,6 @@
 from datetime import date, timedelta
-from flask import Blueprint, session, render_template
+from flask import Blueprint, render_template
+from flask_jwt_extended import jwt_required
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.pedido_controller import PedidoController
@@ -21,6 +22,7 @@ lote_producto_controller = LoteProductoController()
 alertas_stock_count = inventario_controller.obtener_conteo_alertas_stock()
 
 @admin_dashboard_bp.route('/')
+@jwt_required()
 @permission_required(accion='acceder_al_panel_principal')
 def index():
     """Página principal del panel de administración."""
@@ -70,15 +72,6 @@ def index():
     productos_sin_lotes_resp, _ = lote_producto_controller.obtener_conteo_productos_sin_lotes()
 
     lotes_producto_vencimiento_count = lote_producto_controller.obtener_conteo_vencimientos() 
-
-    user_role = session.get('rol')
-    user_permissions = session.get('permisos', {})
-
-    is_dev = (user_role == 'DEV')
-    is_gerente = (user_role == 'GERENTE')
-
-    user_permissions['is_gerente'] = is_gerente
-    user_permissions['is_dev'] = is_dev # Agregar bandera is_dev para desarrolladores
     
     return render_template('dashboard/index.html', 
                            asistencia=asistencia,
@@ -93,5 +86,4 @@ def index():
                            ordenesventa_pendientes=ordenesventa_pendientes,
                            ordenesventa_rechazadas=ordenesventa_rechazadas,
                            lotes_vencimiento_count=lotes_vencimiento_count,
-                           lotes_producto_vencimiento_count=lotes_producto_vencimiento_count,
-                           user_permissions=user_permissions)
+                           lotes_producto_vencimiento_count=lotes_producto_vencimiento_count)

@@ -1,11 +1,10 @@
-from flask import Blueprint, jsonify, redirect, session, url_for
+from flask import Blueprint, jsonify, redirect, url_for
 
 main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/')
 def index():
-    """Ruta raíz que limpia la sesión y redirige al login."""
-    session.clear()
+    """Ruta raíz que redirige al login."""
     return redirect(url_for('auth.login'))
 
 @main_bp.route('/api/health')

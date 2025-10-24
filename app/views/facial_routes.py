@@ -3,10 +3,10 @@ from flask import (
     render_template,
     request,
     jsonify,
-    session,
     redirect,
     url_for
 )
+from flask_jwt_extended import get_jti, jwt_required
 from app.controllers.facial_controller import FacialController
 from app.utils.decorators import permission_required
 import logging
@@ -18,7 +18,6 @@ facial_bp = Blueprint("facial", __name__, template_folder="templates")
 
 @facial_bp.route("/")
 def index():
-    session.clear()
     """Página principal - redirigir al tótem"""
     return render_template("totem/login_totem.html")
 
@@ -26,7 +25,6 @@ def index():
 @facial_bp.route("/index")
 def facial_index():
     """Alias para facial.index"""
-    session.clear()
     return redirect(url_for("facial.login_totem"))
 
 
@@ -40,8 +38,6 @@ def process_access():
     resultado = facial_controller.procesar_acceso_unificado_totem(data["image"])
     if resultado.get("success"):
         tipo_acceso = resultado.get("tipo_acceso")
-        if tipo_acceso == "SALIDA":
-            session.clear()
         return jsonify(
             {
                 "success": True,

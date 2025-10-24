@@ -175,7 +175,8 @@ class UsuarioModel(BaseModel):
         """
         try:            
             query = self.db.table(self.get_table_name())\
-                .select("id, nombre, apellido, legajo, ultimo_login_web, roles(nombre), sectores:usuario_sectores(sectores(nombre))")
+            .select("id, nombre, apellido, legajo, ultimo_login_web, roles(nombre), sectores:usuario_sectores(sectores(nombre))")\
+            .not_.is_('ultimo_login_web', None)
 
             if filtros:
                 if filtros.get('fecha_desde'):

@@ -1,6 +1,7 @@
 # En app/routes/planificacion_routes.py
 import logging
-from flask import Blueprint, render_template, flash, url_for, request, jsonify, session # Añade request y jsonify
+from flask import Blueprint, render_template, flash, url_for, request, jsonify
+from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.controllers.planificacion_controller import PlanificacionController
 from app.controllers.usuario_controller import UsuarioController
 from datetime import date, timedelta, datetime # <--- SE AÑADIÓ DATETIME
@@ -115,18 +116,15 @@ def index():
 
 # Endpoint para la API de consolidación
 @planificacion_bp.route('/api/consolidar', methods=['POST'])
+@jwt_required()
 @permission_required(accion='aprobar_plan_de_produccion')
 def consolidar_api():
     """
     API endpoint para consolidar múltiples OPs en una Super OP.
     """
-    logging.warning(f"Contenido de la sesión al consolidar: {dict(session)}")
     data = request.get_json()
     op_ids = data.get('op_ids', [])
-
-    usuario_id = session.get('usuario_id')
-    if not usuario_id:
-        return jsonify({'success': False, 'error': 'Usuario no autenticado.'}), 401
+    usuario_id = get_jwt_identity()
 
     response, status_code = controller.consolidar_ops(op_ids, usuario_id)
     return jsonify(response), status_code
@@ -157,6 +155,7 @@ def mover_op_api(op_id):
     return jsonify(response), status_code
 
 @planificacion_bp.route('/api/consolidar-y-aprobar', methods=['POST'])
+@jwt_required()
 def consolidar_y_aprobar_api():
     """
     API endpoint para el flujo completo de la modal de Plan Maestro:
@@ -165,9 +164,7 @@ def consolidar_y_aprobar_api():
     3. Confirma Fecha y ejecuta la aprobación (stock check, etc).
     """
     data = request.get_json()
-    usuario_id = session.get('usuario_id')
-    if not usuario_id:
-        return jsonify({'success': False, 'error': 'Usuario no autenticado.'}), 401
+    usuario_id = get_jwt_identity()
 
     # Pasamos todos los datos al nuevo método del controlador
     response, status_code = controller.consolidar_y_aprobar_lote(

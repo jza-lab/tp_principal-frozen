@@ -1,5 +1,6 @@
 # app/routes/lote_producto_routes.py
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.controllers.producto_controller import ProductoController # Para el formulario
 from app.utils.decorators import permission_required
@@ -40,10 +41,11 @@ def detalle_lote(id_lote):
 
 
 @lote_producto_bp.route('/nuevo', methods=['GET', 'POST'])
+@jwt_required()
 @permission_required(accion='crear_control_de_calidad_por_lote')
 def nuevo_lote():
     if request.method == 'POST':
-        usuario_id = session.get('usuario_id')
+        usuario_id = get_jwt_identity()
         response, status_code = controller.crear_lote_desde_formulario(request.form, usuario_id)
         if response.get('success'):
             flash(response.get('message'), 'success')

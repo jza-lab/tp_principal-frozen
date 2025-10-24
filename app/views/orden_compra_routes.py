@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.proveedor_controller import ProveedorController
@@ -32,10 +33,11 @@ def listar():
 
 
 @orden_compra_bp.route("/nueva", methods=["GET", "POST"])
+@jwt_required()
 @permission_required(accion='crear_orden_de_compra')
 def nueva():
     if request.method == "POST":
-        usuario_id = session.get("usuario_id")
+        usuario_id = get_jwt_identity()
         resultado = controller.crear_orden(request.form, usuario_id)
         if resultado.get("success"):
             flash("Orden de compra creada exitosamente.", "success")
@@ -72,10 +74,10 @@ def detalle(id):
 
 
 @orden_compra_bp.route("/<int:id>/aprobar", methods=["POST"])
+@jwt_required()
 @permission_required(accion='aprobar_orden_de_compra')
 def aprobar(id):
-   
-    usuario_id = session.get("usuario_id")
+    usuario_id = get_jwt_identity()
     resultado = controller.aprobar_orden(id, usuario_id)
     if resultado.get("success"):
         flash("Orden de compra aprobada.", "success")
@@ -166,12 +168,10 @@ def marcar_en_transito(id):
 
 
 @orden_compra_bp.route("/recepcion/<int:orden_id>", methods=["POST"])
+@jwt_required()
 @permission_required(accion='registrar_ingreso_de_materia_prima')
 def procesar_recepcion(orden_id):
-    usuario_id = session.get("usuario_id")
-    if not usuario_id:
-        flash("Su sesión ha expirado, por favor inicie sesión de nuevo.", "error")
-        return redirect(url_for("auth.login"))
+    usuario_id = get_jwt_identity()
     resultado = controller.procesar_recepcion(orden_id, request.form, usuario_id, orden_produccion_controller)
     if resultado.get("success"):
         flash(
