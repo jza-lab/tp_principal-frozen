@@ -44,8 +44,8 @@
                                         Pendientes
                                     </a>
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='EN_ESPERA') }}" 
-                                    class="btn btn-sm {% if current_status == 'EN_ESPERA' %}btn-primary{% else %}btn-secondary{% endif %}">
+                                    <a href="{{ url_for('orden_produccion.listar', estado='EN ESPERA') }}" 
+                                    class="btn btn-sm {% if current_status == 'EN ESPERA' %}btn-primary{% else %}btn-secondary{% endif %}">
                                         En Espera
                                     </a>
                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
@@ -94,7 +94,7 @@
                     <h5 class="card-title">{{ orden.producto_nombre or 'Producto no definido' }}</h5>
                     {% set estado_config = {
                         'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
-                        'EN_ESPERA': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
+                        'EN ESPERA': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
                         'LISTA PARA PRODUCIR': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
                         'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
                         'CONSOLIDADA': {'class': 'bg-success text-white', 'icon': 'check-circle'},

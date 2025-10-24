@@ -62,6 +62,9 @@ def index():
 
     respuesta4, _ = orden_venta_controller.obtener_cantidad_pedidos_estado("PENDIENTE")
     ordenesventa_pendientes = respuesta4.get('data', {}).get('cantidad', 0)
+    
+    respuesta5, _ = orden_venta_controller.obtener_cantidad_pedidos_rechazados_recientes()
+    ordenesventa_rechazadas = respuesta5.get('data', {}).get('cantidad', 0)
 
     lotes_vencimiento_count = inventario_controller.obtener_conteo_vencimientos() 
     productos_sin_lotes_resp, _ = lote_producto_controller.obtener_conteo_productos_sin_lotes()
@@ -88,6 +91,7 @@ def index():
                            productos_sin_lotes_count=productos_sin_lotes_count,
                            productos_sin_lotes_list=productos_sin_lotes_list,
                            ordenesventa_pendientes=ordenesventa_pendientes,
+                           ordenesventa_rechazadas=ordenesventa_rechazadas,
                            lotes_vencimiento_count=lotes_vencimiento_count,
                            lotes_producto_vencimiento_count=lotes_producto_vencimiento_count,
                            user_permissions=user_permissions)

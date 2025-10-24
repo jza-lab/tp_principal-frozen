@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 
 from flask import jsonify
 from app.controllers.base_controller import BaseController
@@ -658,3 +658,28 @@ class PedidoController(BaseController):
             error_msg =response.get('error', 'No se pudo contar las ordenes planificadas')
             status_code = 404 if "no encontradas" in str(error_msg).lower() else 500
             return self.error_response(error_msg, status_code)
+
+    def obtener_cantidad_pedidos_rechazados_recientes(self) -> tuple:
+        """
+        Obtiene la cantidad de pedidos rechazados en los últimos 30 días.
+        """
+        try:
+            fecha_hasta = date.today()
+            fecha_desde = fecha_hasta - timedelta(days=30)
+            
+            filtros = {
+                'estado': 'CANCELADO',
+                'fecha_desde': fecha_desde.isoformat(),
+                'fecha_hasta': fecha_hasta.isoformat()
+            }
+            
+            response, _ = self.obtener_pedidos(filtros)
+            
+            if response.get('success'):
+                cantidad = len(response.get('data', []))
+                return self.success_response(data={'cantidad': cantidad})
+            else:
+                error_msg = response.get('error', 'No se pudo contar los pedidos rechazados.')
+                return self.error_response(error_msg, 500)
+        except Exception as e:
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
