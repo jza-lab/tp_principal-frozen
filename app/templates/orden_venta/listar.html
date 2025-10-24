@@ -19,23 +19,6 @@
 
 <div class="card mb-4">
     <div class="card-body card-filter">
-        <form method="get" action="{{ url_for('orden_venta.listar') }}">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label for="estado" class="form-label">Filtrar por Estado</label>
-                    <select name="estado" class="form-select" onchange="this.form.submit()">
-                        <option value="">Todos los pedidos</option>
-                        <option value="PENDIENTE" {% if request.args.get('estado')=='PENDIENTE' %}selected{% endif %}>Pendientes</option>
-                        <option value="EN_PROCESO" {% if request.args.get('estado')=='EN_PROCESO' %}selected{% endif %}>En Proceso</option>
-                        <option value="LISTO_PARA_ARMAR" {% if request.args.get('estado')=='LISTO_PARA_ARMAR' %}selected{% endif %}>Listo para Armar</option>
-                        <option value="LISTO_PARA_ENTREGAR" {% if request.args.get('estado')=='LISTO_PARA_ENTREGAR' %}selected{% endif %}>Listo para Entrega</option>
-                        <option value="COMPLETADO" {% if request.args.get('estado')=='COMPLETADO' %}selected{% endif %}>Completados</option>
-                        <option value="CANCELADO" {% if request.args.get('estado')=='CANCELADO' %}selected{% endif %}>Cancelados</option>
-                    </select>
-                </div>
-                <div class="col-md-8">
-                    <div class="text-muted small">
-                        <p>{{ pedidos|length }} pedidos encontrados</p>
         <div class="row g-3 align-items-end">
             <div class="col-12 mb-3">
                 <h5 class="form-label mb-1 text-white">Filtrar por Estado</h5>
