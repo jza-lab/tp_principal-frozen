@@ -2,10 +2,13 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.configuracion_controller import ConfiguracionController
 from app.utils.decorators import permission_required
+from app.controllers.producto_controller import ProductoController
+
 
 alertas_bp = Blueprint('alertas', __name__, url_prefix='/alertas')
 insumo_controller = InsumoController()
 config_controller = ConfiguracionController()
+producto_controller = ProductoController()
 
 @alertas_bp.route('/insumos', methods=['GET'])
 @permission_required(accion='ver_alertas')
@@ -86,3 +89,48 @@ def configurar_alertas_lotes():
     dias_vencimiento_actual = config_controller.obtener_dias_vencimiento()
     
     return render_template('alertas/lotes.html', dias_vencimiento=dias_vencimiento_actual)
+
+@alertas_bp.route('/productos', methods=['GET'])
+@permission_required(accion='ver_alertas')
+def listar_productos_alertas():
+    """
+    Muestra la lista de productos para configurar alertas de stock.
+    """
+    response, _ = producto_controller.obtener_todos_los_productos()
+    if not response.get('success'):
+        flash('Error al cargar los productos.', 'error')
+        productos = []
+    else:
+        productos = response.get('data', [])
+        
+    return render_template('alertas/productos.html', productos=productos)
+
+@alertas_bp.route('/productos/actualizar', methods=['POST'])
+@permission_required(accion='configurar_alertas')
+def actualizar_stock_min_producto():
+    """
+    Actualiza el stock mínimo de producción para un producto.
+    """
+    try:
+        producto_id = request.form.get('id_producto')
+        stock_min_str = request.form.get('stock_min_produccion')
+
+        if not producto_id or stock_min_str is None:
+            flash('ID de producto o stock mínimo no proporcionado.', 'error')
+            return redirect(url_for('alertas.listar_productos_alertas'))
+
+        stock_min = int(stock_min_str)
+        
+        response, status_code = producto_controller.actualizar_stock_min_produccion(int(producto_id), stock_min)
+
+        if status_code == 200:
+            flash('Límite de stock de producción actualizado correctamente.', 'success')
+        else:
+            flash(f"Error al actualizar: {response.get('error', 'Error desconocido')}", 'error')
+
+    except (ValueError, TypeError):
+        flash('Error: El stock mínimo debe ser un número entero.', 'error')
+    except Exception as e:
+        flash(f'Ocurrió un error inesperado: {str(e)}', 'error')
+
+    return redirect(url_for('alertas.listar_productos_alertas'))
