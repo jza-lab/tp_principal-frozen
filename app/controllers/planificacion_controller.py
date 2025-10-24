@@ -2,16 +2,17 @@ import logging
 from collections import defaultdict
 from app.controllers.base_controller import BaseController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
-from typing import List, Optional # Añade esta importación
+from typing import List, Optional, Dict
 from datetime import date, timedelta
 from collections import defaultdict
-import locale # Para nombres de días en español
-# Importaciones necesarias para los cálculos
+import locale
 from app.models.receta import RecetaModel
 from app.models.insumo import InsumoModel
 import math
 from app.controllers.inventario_controller import InventarioController
-
+from app.models.centro_trabajo_model import CentroTrabajoModel
+from app.models.operacion_receta_model import OperacionRecetaModel
+from decimal import Decimal
 
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,8 @@ class PlanificacionController(BaseController):
         super().__init__()
         self.orden_produccion_controller = OrdenProduccionController()
         self.inventario_controller = InventarioController()
+        self.centro_trabajo_model = CentroTrabajoModel()
+        self.operacion_receta_model = OperacionRecetaModel()
 
     def obtener_ops_para_tablero(self) -> tuple:
         """
@@ -474,4 +477,116 @@ class PlanificacionController(BaseController):
             logger.error(f"Error obteniendo planificación semanal: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
+    def obtener_capacidad_disponible(self, centro_trabajo_ids: List[int], fecha_inicio: date, fecha_fin: date) -> Dict:
+        """
+        Calcula la capacidad disponible (en minutos) para centros de trabajo dados,
+        entre dos fechas (inclusive). Considera estándar, eficiencia y utilización.
+        Devuelve: { centro_id: { fecha_iso: capacidad_minutos, ... }, ... }
+        """
+        capacidad_por_centro_y_fecha = defaultdict(dict)
+        num_dias = (fecha_fin - fecha_inicio).days + 1
 
+        try:
+            # --- CORRECCIÓN: Usar find_all con filtro 'in' ---
+            # Prepara el filtro para buscar por la lista de IDs
+            id_filter = ('in', tuple(centro_trabajo_ids)) # 'in' usualmente espera una tupla
+            ct_result = self.centro_trabajo_model.find_all(filters={'id': id_filter})
+            # ------------------------------------------------
+
+            if not ct_result.get('success'):
+                logger.error(f"Error obteniendo centros de trabajo: {ct_result.get('error')}")
+                return {}
+
+            centros_trabajo = {ct['id']: ct for ct in ct_result.get('data', [])}
+
+            # ... (resto de la lógica para calcular capacidad sin cambios) ...
+            for dia_offset in range(num_dias):
+                fecha_actual = fecha_inicio + timedelta(days=dia_offset)
+                fecha_iso = fecha_actual.isoformat()
+                for ct_id in centro_trabajo_ids:
+                    centro = centros_trabajo.get(ct_id)
+                    if not centro:
+                        capacidad_por_centro_y_fecha[ct_id][fecha_iso] = 0
+                        continue
+                    capacidad_std = Decimal(centro.get('tiempo_disponible_std_dia', 0))
+                    eficiencia = Decimal(centro.get('eficiencia', 1.0))
+                    utilizacion = Decimal(centro.get('utilizacion', 1.0))
+                    num_maquinas = int(centro.get('numero_maquinas', 1))
+                    capacidad_neta_dia = capacidad_std * eficiencia * utilizacion * num_maquinas
+                    capacidad_por_centro_y_fecha[ct_id][fecha_iso] = round(capacidad_neta_dia, 2)
+
+
+            # --- CONVERSIÓN A FLOAT ---
+            resultado_final_float = {}
+            for centro_id, cap_fecha in capacidad_por_centro_y_fecha.items():
+                resultado_final_float[centro_id] = {fecha: float(cap) for fecha, cap in cap_fecha.items()}
+            # --------------------------
+
+            # return dict(capacidad_por_centro_y_fecha) # <- Línea antigua
+            return resultado_final_float # <- Devolver el diccionario con floats
+
+        except Exception as e:
+            logger.error(f"Error calculando capacidad disponible: {e}", exc_info=True)
+            return {}
+
+
+    def obtener_operaciones_receta(self, receta_id: int) -> List[Dict]:
+        """ Obtiene las operaciones de una receta desde el modelo. """
+        result = self.operacion_receta_model.find_by_receta_id(receta_id)
+        return result.get('data', []) if result.get('success') else []
+
+
+    def calcular_carga_capacidad(self, ordenes_planificadas: List[Dict]) -> Dict:
+        """
+        Calcula la carga (en minutos) por centro de trabajo y fecha para las OPs dadas.
+        Usa la 'linea_asignada' de la OP para distribuir la carga.
+        Devuelve: { centro_id: { fecha_iso: carga_minutos, ... }, ... }
+        """
+        carga_por_centro_y_fecha = {1: defaultdict(Decimal), 2: defaultdict(Decimal)} # Inicializa para Linea 1 y 2
+
+        for orden in ordenes_planificadas:
+            try:
+                receta_id = orden.get('receta_id')
+                # Convertir cantidad a Decimal para precisión
+                cantidad = Decimal(orden.get('cantidad_planificada', 0))
+                fecha_inicio_str = orden.get('fecha_inicio_planificada')
+                linea_asignada = orden.get('linea_asignada')
+
+                # Validar datos esenciales
+                if not receta_id or cantidad <= 0 or not fecha_inicio_str or linea_asignada not in [1, 2]:
+                    logger.warning(f"OP {orden.get('codigo', orden.get('id'))} omitida del cálculo de carga (datos incompletos/inválidos: R:{receta_id}, C:{cantidad}, F:{fecha_inicio_str}, L:{linea_asignada})")
+                    continue
+
+                # Convertir fecha a ISO para usar como clave
+                fecha_iso = date.fromisoformat(fecha_inicio_str).isoformat()
+
+                # Obtener operaciones
+                operaciones = self.obtener_operaciones_receta(receta_id)
+                if not operaciones:
+                    logger.warning(f"No se encontraron operaciones para receta {receta_id} (OP {orden.get('codigo')}). Carga no calculada.")
+                    continue
+
+                # Calcular tiempo total para la orden sumando tiempos de operación
+                tiempo_total_orden = Decimal(0)
+                for op in operaciones:
+                    t_prep = Decimal(op.get('tiempo_preparacion', 0))
+                    t_ejec_unit = Decimal(op.get('tiempo_ejecucion_unitario', 0))
+                    tiempo_total_orden += t_prep + (t_ejec_unit * cantidad)
+
+                # Acumular la carga TOTAL en la línea asignada para la fecha de inicio
+                carga_por_centro_y_fecha[linea_asignada][fecha_iso] += tiempo_total_orden
+                # logger.info(f"OP {orden.get('codigo')}: Carga de {tiempo_total_orden:.2f} min asignada a Línea {linea_asignada} en {fecha_iso}")
+
+
+            except (ValueError, TypeError, AttributeError) as e:
+                 logger.error(f"Error procesando OP {orden.get('codigo', orden.get('id'))} para cálculo de carga: {e}", exc_info=True)
+                 continue # Saltar esta OP si hay error en sus datos
+
+        # Convertir defaultdicts a dicts normales y redondear/convertir a float
+        resultado_final_float = {}
+        for centro_id, cargas_fecha in carga_por_centro_y_fecha.items():
+            # Convierte Decimal a float y redondea si quieres (opcional)
+            resultado_final_float[centro_id] = {fecha: float(round(carga, 2)) for fecha, carga in cargas_fecha.items()}
+
+        # return resultado_final # <- Línea antigua
+        return resultado_final_float # <- Devolver el diccionario con floats

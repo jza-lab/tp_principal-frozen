@@ -9,95 +9,120 @@ planificacion_bp = Blueprint('planificacion', __name__, url_prefix='/planificaci
 
 controller = PlanificacionController()
 
-@planificacion_bp.route('/') # La ruta principal ahora manejará todo
+logger = logging.getLogger(__name__)
+
+@planificacion_bp.route('/')
 def index():
-    """
-    Muestra la BANDEJA, el CALENDARIO SEMANAL y el KANBAN.
-    """
-    # 1. Obtener semana de la URL o usar la actual
+    # ... (obtener semana, horizonte, mps_data - sin cambios) ...
     week_str = request.args.get('semana')
-    print(f"DEBUG: 'semana' recibida de URL: {week_str}")
     if not week_str:
         today = date.today()
-        # --- CORRECCIÓN: Usar %V para semana ISO ---
-        start_of_week_iso = today - timedelta(days=today.isoweekday() - 1) # Lunes
-        week_str = start_of_week_iso.strftime("%Y-W%V") # Formato YYYY-WNN (ISO)
-        print(f"DEBUG: No se recibió semana, usando actual: {week_str}")
-        # ------------------------------------------
-
-    # --- LEER HORIZONTE DE LA URL ---
+        start_of_week_iso = today - timedelta(days=today.isoweekday() - 1)
+        week_str = start_of_week_iso.strftime("%Y-W%V")
     try:
         horizonte_dias = request.args.get('horizonte', default=7, type=int)
         if horizonte_dias <= 0: horizonte_dias = 7
-    except ValueError:
-        horizonte_dias = 7
-    # ---------------------------------
-
+    except ValueError: horizonte_dias = 7
     response_pendientes, _ = controller.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias)
-    mps_data_para_template = {
-        'mps_agrupado': [], 'inicio_horizonte': 'N/A', 'fin_horizonte': 'N/A', 'dias_horizonte': horizonte_dias
-    }
-    if response_pendientes.get('success'):
-        mps_data_para_template = response_pendientes.get('data', mps_data_para_template)
-    else:
-        flash(response_pendientes.get('error', 'Error cargando MPS.'), 'error')
-        mps_data_para_template['dias_horizonte'] = horizonte_dias
+    # ... (manejo de mps_data - sin cambios) ...
+    mps_data_para_template = { 'mps_agrupado': [], 'inicio_horizonte': 'N/A', 'fin_horizonte': 'N/A', 'dias_horizonte': horizonte_dias }
+    if response_pendientes.get('success'): mps_data_para_template = response_pendientes.get('data', mps_data_para_template)
+    else: flash(response_pendientes.get('error', 'Error cargando MPS.'), 'error'); mps_data_para_template['dias_horizonte'] = horizonte_dias
+
+
+    # --- INICIALIZACIÓN DE VARIABLES ---
+    ordenes_por_dia = {}
+    inicio_semana = None # Inicializar aquí
+    fin_semana = None    # Inicializar aquí
+    ordenes_para_crp = [] # <--- INICIALIZAR AQUÍ
+    carga_calculada = {}
+    capacidad_disponible = {}
+    ordenes_combinadas = []
+    # ----------------------------------
 
     # 3. Obtener OPs para el CALENDARIO SEMANAL
     response_semanal, _ = controller.obtener_planificacion_semanal(week_str)
-    ordenes_por_dia = {}
-    inicio_semana = None
-    fin_semana = None
     if response_semanal.get('success'):
         data_semanal = response_semanal.get('data', {})
         ordenes_por_dia = data_semanal.get('ordenes_por_dia', {})
-        inicio_semana = data_semanal.get('inicio_semana')
-        fin_semana = data_semanal.get('fin_semana')
+        inicio_semana_str = data_semanal.get('inicio_semana')
+        fin_semana_str = data_semanal.get('fin_semana')
+        if inicio_semana_str: inicio_semana = date.fromisoformat(inicio_semana_str) # Asignar si existe
+        if fin_semana_str: fin_semana = date.fromisoformat(fin_semana_str)       # Asignar si existe
     else:
         flash(response_semanal.get('error', 'Error cargando planificación semanal.'), 'error')
 
-    # 4. Obtener OPs para el KANBAN
+    # --- OBTENER OPS RELEVANTES PARA CRP ---
+    # 1. OPs del Kanban
     response_kanban, _ = controller.obtener_ops_para_tablero()
-    ordenes_por_estado = response_kanban.get('data', {}) if response_kanban.get('success') else {}
+    ordenes_kanban_dict = response_kanban.get('data', {}) if response_kanban.get('success') else {}
+    ops_kanban = [op for estado, lista_ops in ordenes_kanban_dict.items() if estado not in ['COMPLETADA', 'CANCELADA'] for op in lista_ops]
 
-    # 5. Obtener Operarios y Supervisores
+    # 2. OPs de la semana
+    ops_semana = [op for dia, lista_ops in ordenes_por_dia.items() for op in lista_ops if op.get('estado') not in ['COMPLETADA', 'CANCELADA']]
+
+    # 3. Combinar y eliminar duplicados
+    ops_combinadas_dict = {op['id']: op for op in ops_kanban + ops_semana if op.get('id')}
+    ordenes_para_crp = list(ops_combinadas_dict.values()) # Ahora sí, se asigna valor
+    # Ahora 'ordenes_combinadas' siempre será una lista (posiblemente vacía)
+    ordenes_combinadas = list(ops_combinadas_dict.values())
+    logger.info(f"Total OPs consideradas para CRP: {len(ordenes_para_crp)}")
+
+    # --- NUEVO FILTRO POR FECHA ---
+    ordenes_para_crp_filtradas = []
+    if inicio_semana and fin_semana: # Asegurarse que las fechas son válidas
+        for op in ordenes_combinadas:
+            fecha_inicio_op_str = op.get('fecha_inicio_planificada')
+            if fecha_inicio_op_str:
+                try:
+                    fecha_inicio_op = date.fromisoformat(fecha_inicio_op_str)
+                    # Incluir solo si la fecha de inicio está DENTRO de la semana seleccionada
+                    if inicio_semana <= fecha_inicio_op <= fin_semana:
+                        ordenes_para_crp_filtradas.append(op)
+                except ValueError:
+                    logger.warning(f"OP {op.get('codigo')} omitida de CRP (fecha inválida): {fecha_inicio_op_str}")
+            # else: # Opcional: ¿Incluir OPs sin fecha planificada? Probablemente no para CRP.
+            #    logger.warning(f"OP {op.get('codigo')} omitida de CRP (sin fecha inicio planificada)")
+    # -----------------------------
+
+    logger.info(f"Total OPs filtradas para CRP (semana {week_str}): {len(ordenes_para_crp_filtradas)}")
+
+    # --- CALCULAR CARGA Y CAPACIDAD (Usando la lista filtrada) ---
+    carga_calculada = {}
+    capacidad_disponible = {}
+    # Esta condición ahora usa la lista filtrada
+    if ordenes_para_crp_filtradas and inicio_semana and fin_semana:
+        carga_calculada = controller.calcular_carga_capacidad(ordenes_para_crp_filtradas) # <--- PASAR LISTA FILTRADA
+        capacidad_disponible = controller.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
+    # -------------------------------------------------------------
+
+    # ... (lógica para obtener supervisores, operarios, columnas, navegación - sin cambios) ...
     usuario_controller = UsuarioController()
-    supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
-    operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
-    supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []
-    operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
-
-    # 6. Definir columnas Kanban
-    columnas_kanban = {
-        'EN ESPERA': 'En Espera (Sin Insumos)',
-        'LISTA PARA PRODUCIR':'Listas para Iniciar',
-        'EN_LINEA_1': 'Línea 1', 'EN_LINEA_2': 'Línea 2', 'EN_EMPAQUETADO': 'Empaquetado',
-        'CONTROL_DE_CALIDAD': 'Control Calidad', 'COMPLETADA': 'Completadas'
-    }
-
-    # 7. Calcular navegación semanal
+    supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR']); operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
+    supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []; operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
+    columnas_kanban = { 'EN ESPERA': 'En Espera', 'LISTA PARA PRODUCIR':'Listas', 'EN_LINEA_1': 'L1', 'EN_LINEA_2': 'L2', 'EN_EMPAQUETADO': 'Emp.', 'CONTROL_DE_CALIDAD': 'CC', 'COMPLETADA': 'OK' }
+    ordenes_por_estado = ordenes_kanban_dict # Usar el dict obtenido antes
     try:
-        # --- CORRECCIÓN: Usar %V para semana ISO ---
-        year, week_num_str = week_str.split('-W')
-        week_num = int(week_num_str)
-        current_week_start = date.fromisocalendar(int(year), week_num, 1) # Lunes
-        prev_week_start = current_week_start - timedelta(days=7)
-        next_week_start = current_week_start + timedelta(days=7)
-        prev_week_str = prev_week_start.strftime("%Y-W%V")
-        next_week_str = next_week_start.strftime("%Y-W%V")
-        # -----------------------------------------------
-    except ValueError:
-        prev_week_str = None
-        next_week_str = None
-        print(f"DEBUG: Error parseando week_str {week_str}")
+        year, week_num_str = week_str.split('-W'); week_num = int(week_num_str); current_week_start = date.fromisocalendar(int(year), week_num, 1)
+        prev_week_start = current_week_start - timedelta(days=7); next_week_start = current_week_start + timedelta(days=7)
+        prev_week_str = prev_week_start.strftime("%Y-W%V"); next_week_str = next_week_start.strftime("%Y-W%V")
+    except ValueError: prev_week_str = None; next_week_str = None; logger.warning(f"Error parseando week_str {week_str}")
 
-    # 8. Renderizar el tablero.html con TODOS los datos
+    # Justo antes de return render_template(...) en planificacion_routes.py
+    print("--- DEBUG RUTA INDEX ---")
+    print(f"inicio_semana_crp: {inicio_semana.isoformat() if inicio_semana else None}")
+    print(f"fin_semana_crp: {fin_semana.isoformat() if fin_semana else None}")
+    print(f"carga_crp: {carga_calculada}")
+    print(f"capacidad_crp: {capacidad_disponible}")
+    print(f"ordenes_para_crp (cantidad): {len(ordenes_para_crp)}")
+    print("------------------------")
+
     return render_template(
         'planificacion/tablero.html',
         mps_data=mps_data_para_template,
         ordenes_por_dia=ordenes_por_dia,
-        inicio_semana=inicio_semana,
-        fin_semana=fin_semana,
+        inicio_semana=inicio_semana.isoformat() if inicio_semana else None, # Pasar ISO o None
+        fin_semana=fin_semana.isoformat() if fin_semana else None,       # Pasar ISO o None
         semana_actual_str=week_str,
         semana_anterior_str=prev_week_str,
         semana_siguiente_str=next_week_str,
@@ -105,9 +130,13 @@ def index():
         columnas=columnas_kanban,
         supervisores=supervisores,
         operarios=operarios,
-        # --- 2. VARIABLE AÑADIDA ---
-        now=datetime.utcnow(), # <--- PASAMOS LA FECHA/HORA ACTUAL A LA PLANTILLA
-        timedelta=timedelta
+        carga_crp=carga_calculada,
+        capacidad_crp=capacidad_disponible,
+        inicio_semana_crp=inicio_semana.isoformat() if inicio_semana else None, # Usar las mismas fechas
+        fin_semana_crp=fin_semana.isoformat() if fin_semana else None,
+        now=datetime.utcnow(),
+        timedelta=timedelta,
+        date=date
     )
 
 # Endpoint para la API de consolidación

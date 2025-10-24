@@ -156,3 +156,114 @@
     display: inline-block;
     margin-right: 0.5rem;
 }
+
+/* --- ESTILOS MEJORADOS PARA TABLA CRP --- */
+.crp-tabla {
+    border-collapse: separate; /* Permite espaciado entre celdas */
+    border-spacing: 0 0.75rem; /* Espacio vertical ENTRE grupos de filas (Linea 1 vs Linea 2) */
+    font-size: 0.85rem;      /* Tamaño de fuente base */
+    width: 100%;             /* Asegurar ancho completo */
+    margin-top: 1rem;        /* Margen superior */
+}
+
+/* Estilo para la cabecera (Nombres de días) */
+.crp-tabla thead th {
+    background-color: #e9ecef; /* Fondo gris claro */
+    border-bottom: 2px solid #dee2e6; /* Borde inferior más grueso */
+    padding: 0.6rem 0.5rem;
+    font-weight: 600;
+    white-space: nowrap;     /* Evitar que nombres de días se partan */
+    vertical-align: middle;
+    text-align: center;      /* Asegurar centrado */
+}
+/* Primera celda cabecera (Centro Trabajo) */
+.crp-tabla thead th:first-child {
+    text-align: left;        /* Alinear a la izquierda */
+    background-color: #f8f9fa; /* Fondo ligeramente diferente */
+}
+
+/* Estilo general para celdas de datos */
+.crp-tabla tbody td {
+    vertical-align: middle;
+    padding: 0.3rem 0.5rem;
+    text-align: center;      /* Centrar texto por defecto */
+    border: 1px solid #f1f3f5; /* Borde sutil alrededor de cada celda */
+}
+
+/* Estilo específico para la primera columna (Nombre Línea) */
+.crp-tabla tbody td:first-child {
+    font-weight: 600;
+    background-color: #f8f9fa; /* Fondo ligero */
+    text-align: left !important;
+    border-left: 2px solid #dee2e6; /* Borde izquierdo más grueso */
+    border-right: 1px solid #dee2e6;/* Borde derecho separador */
+}
+/* Borde derecho más grueso al final de la fila */
+.crp-tabla tbody td:last-child {
+     border-right: 2px solid #dee2e6;
+}
+
+/* Agrupación visual de las 3 filas por Centro de Trabajo */
+.crp-tabla tbody tr:nth-child(3n+1) td { /* Primera fila (Capacidad) */
+     border-top: 2px solid #dee2e6; /* Borde superior más grueso */
+}
+ .crp-tabla tbody tr:nth-child(3n) td { /* Tercera fila (Utilización) */
+      border-bottom: 2px solid #dee2e6; /* Borde inferior más grueso */
+ }
+
+/* Etiquetas pequeñas (Cap:, Carga:, Util:) */
+.crp-tabla small.text-muted {
+    font-size: 0.7em;
+    display: block;
+    margin-bottom: -3px;
+    color: #6c757d !important;
+}
+
+/* Estilo para el porcentaje de Utilización */
+.crp-utilizacion .fw-bold {
+     font-size: 1.1em;
+}
+.crp-utilizacion .small { /* Para el icono de advertencia */
+     vertical-align: middle;
+}
+
+/* Colores de fondo suaves para utilización (Asegúrate que estén definidos si no usas variables BS) */
+/* Si usas Bootstrap 5, estas clases ya deberían funcionar */
+.bg-danger-soft { background-color: rgba(220, 53, 69, 0.15) !important; }
+.text-danger { color: #dc3545 !important; }
+.bg-warning-soft { background-color: rgba(255, 193, 7, 0.15) !important; }
+.text-warning { color: #ffc107 !important; }
+.bg-success-soft { background-color: rgba(25, 135, 84, 0.15) !important; }
+.text-success { color: #198754 !important; }
+
+/* Mejoras para la nueva estructura */
+.day-column {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.day-column:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+}
+
+.crp-tabla th {
+    position: sticky;
+    top: 0;
+    background: #f8f9fa;
+    z-index: 10;
+}
+
+.table-warning {
+    background-color: rgba(255, 193, 7, 0.05) !important;
+}
+
+.border-warning {
+    border-color: rgba(255, 193, 7, 0.3) !important;
+}
+
+.op-card-mini {
+    transition: all 0.2s ease;
+}
+.op-card-mini:hover {
+    transform: translateX(2px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
