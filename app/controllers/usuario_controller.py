@@ -745,12 +745,24 @@ class UsuarioController(BaseController):
             logger.error(f"Could not get permissions for user_id: {usuario.get('id')}")
             return {'success': False, 'error': 'No se pudieron cargar los permisos del usuario.'}
 
-        datos_completos = usuario.copy()
-        datos_completos['permisos'] = permisos_result['data']
+        # En lugar de devolver el objeto completo, creamos un diccionario limpio
+        # solo con los datos necesarios y serializables para la sesión.
+        session_data = {
+            'id': usuario.get('id'),
+            'legajo': usuario.get('legajo'),
+            'email': usuario.get('email'),
+            'nombre': usuario.get('nombre'),
+            'apellido': usuario.get('apellido'),
+            'activo': usuario.get('activo'),
+            'role_id': usuario.get('role_id'),
+            'turno_id': usuario.get('turno_id'),
+            'roles': usuario.get('roles'), # El rol anidado ya suele ser un dict
+            'permisos': permisos_result['data']
+        }
         
         logger.info(f"Session data prepared for user_id: {usuario.get('id')}, role: {user_role_code}")
 
-        return {'success': True, 'data': datos_completos}
+        return {'success': True, 'data': session_data}
 
     def _asignar_sectores_usuario(self, usuario_id: int, sectores_ids: List[int]) -> Dict:
         """Helper para asignar una lista de sectores a un usuario."""

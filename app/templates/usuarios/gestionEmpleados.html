@@ -21,7 +21,7 @@
                 <span class="tab-indicator"></span>
             </button>
         </li>
-        {% if has_permission('consultar_logs_o_auditoria')|trim == 'True' %}
+        {% if 'consultar_logs_o_auditoria' is has_permission %}
         <li class="nav-item" role="presentation">
             <button class="nav-link-custom" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity-panel" type="button" role="tab">
                 <i class="bi bi-activity me-2"></i>
@@ -30,7 +30,7 @@
             </button>
         </li>
         {% endif %}
-        {% if has_permission('gestionar_autorizaciones')|trim == 'True' %}
+        {% if 'gestionar_autorizaciones' is has_permission %}
         <li class="nav-item" role="presentation">
             <button class="nav-link-custom" id="authorizations-tab" data-bs-toggle="tab" data-bs-target="#authorizations-panel" type="button" role="tab">
                 <i class="bi bi-patch-check me-2"></i>
@@ -51,14 +51,14 @@
         </div>
         
         <!-- Panel de Actividad -->
-        {% if has_permission('consultar_logs_o_auditoria')|trim == 'True' %}
+        {% if 'consultar_logs_o_auditoria' is has_permission %}
         <div class="tab-pane fade" id="activity-panel" role="tabpanel">
             {% include 'usuarios/panel_actividad.html' %}
         </div>
         {% endif %}
         
         <!-- Panel de Autorizaciones -->
-        {% if has_permission('gestionar_autorizaciones')|trim == 'True' %}
+        {% if 'gestionar_autorizaciones' is has_permission %}
         <div class="tab-pane fade" id="authorizations-panel" role="tabpanel">
             {% include 'usuarios/panel_autorizaciones.html' %}
         </div>
@@ -89,7 +89,7 @@
 <script>
     const URL_TOTEM_ACTIVITY = "{{ url_for('api.obtener_actividad_totem') }}";
     const URL_WEB_ACTIVITY = "{{ url_for('api.obtener_actividad_web') }}";
-    const CAN_MANAGE_AUTHORIZATIONS = {{ has_permission('gestionar_autorizaciones')|trim == 'True'|tojson }};
+    const CAN_MANAGE_AUTHORIZATIONS = {{ 'gestionar_autorizaciones' is has_permission | tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/usuarios/gestionEmpleados.js') }}"></script>
 <script src="{{ url_for('static', filename='js/usuarios/panelActividad.js') }}"></script>

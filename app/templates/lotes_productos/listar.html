@@ -5,7 +5,7 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Inventario de Productos</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
-        {% if has_permission('registrar_lote_de_producto')|trim == 'True' %}
+        {% if 'registrar_lote_de_producto' is has_permission %}
         <a href="{{ url_for('lote_producto.nuevo_lote') }}" class="btn btn-primary">
     		<i class="bi bi-plus-circle me-1"></i>
     		Registrar Nuevo Lote

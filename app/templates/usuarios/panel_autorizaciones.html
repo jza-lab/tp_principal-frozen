@@ -2,7 +2,7 @@
 <div class="mb-5">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2 class="h4 mb-0">Autorizaciones Pendientes</h2>
-    {% if has_permission('gestionar_autorizaciones')|trim == 'True' %}
+    {% if 'gestionar_autorizaciones' is has_permission %}
     <a href="{{ url_for('admin_autorizacion.nueva_autorizacion') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>
             Nueva Autorización

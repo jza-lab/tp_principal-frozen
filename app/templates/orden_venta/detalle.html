@@ -164,12 +164,12 @@
             <div class="card-body">
                 <div class="d-grid gap-2">
                     {# Botón Editar (Solo si PENDIENTE) #}
-                    {% if pedido.estado == 'PENDIENTE' and has_permission('modificar_ordenes_venta') %}
+                    {% if pedido.estado == 'PENDIENTE' and 'modificar_ordenes_venta' is has_permission %}
                         <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}" class="btn btn-outline-primary"><i class="bi bi-pencil me-1"></i>Editar Pedido</a>
                     {% endif %}
 
                     {# 1. Botón "Iniciar Proceso" (si está PENDIENTE) #}
-                    {% if pedido.estado == 'PENDIENTE' and has_permission('aprobar_ordenes_venta') %}
+                    {% if pedido.estado == 'PENDIENTE' and 'aprobar_ordenes_venta' is has_permission %}
                         <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}"
                               class="confirm-form d-grid" data-title="Iniciar Proceso"
                               data-message="Esto creará las Órdenes de Producción necesarias y cambiará el estado. ¿Continuar?"
@@ -207,7 +207,7 @@
                     {% endif %}
 
                     {# 3. Botón "Marcar como Completado" (si está LISTO_PARA_ENTREGAR) #}
-                    {% if pedido.estado == 'LISTO_PARA_ENTREGAR' and has_permission('modificar_ordenes_venta') %}
+                    {% if pedido.estado == 'LISTO_PARA_ENTREGAR' and 'modificar_ordenes_venta' is has_permission %}
                         <form action="{{ url_for('orden_venta.completar', id=pedido.id) }}" method="post" 
                               class="d-grid needs-confirmation" 
                               data-confirm-message="¿Confirma que este pedido ha sido entregado y desea marcarlo como completado?">
@@ -228,7 +228,7 @@
                     </button>
 
                     {# Botón Cancelar (si no está Completado o Cancelado) #}
-                    {% if pedido.estado not in ['COMPLETADO', 'CANCELADO'] and has_permission('cancelar_ordenes_venta') %}
+                    {% if pedido.estado not in ['COMPLETADO', 'CANCELADO'] and 'cancelar_ordenes_venta' is has_permission %}
                         <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
                               class="confirm-form d-grid" data-title="Confirmar Cancelación"
                               data-message="¿Está seguro? Esta acción no se puede deshacer." data-button-type="danger">

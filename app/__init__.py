@@ -24,7 +24,10 @@ def user_lookup_callback(_jwt_header, jwt_data):
     Devuelve el objeto de usuario basado en el 'sub' del token JWT.
     """
     identity = jwt_data["sub"]
-    return UsuarioController.obtener_usuario_por_id(identity)
+    # El 'sub' del token es un string, pero la base de datos espera un entero.
+    user_id = int(identity)
+    controller = UsuarioController()
+    return controller.obtener_usuario_por_id(user_id)
 
 def _register_blueprints(app: Flask):
     """Registra todos los blueprints de la aplicación."""

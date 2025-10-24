@@ -1,6 +1,7 @@
 from datetime import datetime
 from app.utils.permission_map import CANONICAL_PERMISSION_MAP
 from flask import Flask
+from flask_jwt_extended import get_jwt
 
 def _format_datetime_filter(value, format='%d/%m/%Y %H:%M'):
     """
@@ -37,6 +38,27 @@ def _formato_moneda_filter(value):
     except (ValueError, TypeError):
         return value
 
+def _has_permission_filter(action: str) -> bool:
+    """
+    Filtro de Jinja2 que verifica si el usuario actual tiene permiso para una acción.
+    """
+    try:
+        claims = get_jwt()
+        user_role = claims.get('rol')
+
+        if not user_role:
+            return False
+        
+        if user_role == 'DEV':
+            return True
+
+        allowed_roles = CANONICAL_PERMISSION_MAP.get(action, [])
+        return user_role in allowed_roles
+    except Exception:
+        # Si no hay un token JWT en el contexto (ej. página de login),
+        # no hay permisos.
+        return False
+
 def register_template_extensions(app: Flask):
     """
     Registra todos los helpers de plantillas (filtros, procesadores de contexto)
@@ -44,4 +66,5 @@ def register_template_extensions(app: Flask):
     """
     app.jinja_env.filters['format_datetime'] = _format_datetime_filter
     app.jinja_env.filters['formato_moneda'] = _formato_moneda_filter
+    app.jinja_env.tests['has_permission'] = _has_permission_filter
     app.context_processor(_inject_permission_map)

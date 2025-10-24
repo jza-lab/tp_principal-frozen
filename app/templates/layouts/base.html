@@ -41,8 +41,6 @@
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         
-                        
-                        {% macro has_permission(action) %}
                             {% set can_access = false %}
                             {% if session.get('rol') == 'DEV' %}
                                 {% set can_access = true %}
@@ -53,13 +51,12 @@
                                 {% endif %}
                             {% endif %}
                             {{ can_access }}
-                        {% endmacro %}
 
-                        {% set can_ver_insumos = has_permission('consultar_stock_de_insumos')|trim == 'True' %}
-                        {% set can_ver_compras = has_permission('consultar_ordenes_de_compra')|trim == 'True' %}
-                        {% set can_ver_inventario = has_permission('consultar_stock')|trim == 'True' %}
-                        {% set can_ver_reservas = has_permission('consultar_trazabilidad_completa')|trim == 'True' %}
-                        {% set can_actualizar_precios = has_permission('consultar_historial_de_pagos')|trim == 'True' %}
+                        {% set can_ver_insumos = 'consultar_stock_de_insumos' is has_permission %}
+                        {% set can_ver_compras = 'consultar_ordenes_de_compra' is has_permission %}
+                        {% set can_ver_inventario = 'consultar_stock' is has_permission %}
+                        {% set can_ver_reservas = 'consultar_trazabilidad_completa' is has_permission %}
+                        {% set can_actualizar_precios = 'consultar_historial_de_pagos' is has_permission %}
                         {% set can_access_logistica_dropdown = can_ver_insumos or can_ver_compras or can_ver_inventario or can_ver_reservas or can_actualizar_precios %}
                         
                         {% if can_access_logistica_dropdown %}
@@ -79,9 +76,9 @@
                         {% endif %}
 
                         
-                        {% set can_ver_productos = has_permission('consultar_stock_de_productos')|trim == 'True' %}
-                        {% set can_ver_ventas = has_permission('consultar_ordenes_de_venta')|trim == 'True' %}
-                        {% set can_ver_inventario_prod = has_permission('consultar_control_de_calidad')|trim == 'True' %}
+                        {% set can_ver_productos = 'consultar_stock_de_productos' is has_permission %}
+                        {% set can_ver_ventas = 'consultar_ordenes_de_venta' is has_permission %}
+                        {% set can_ver_inventario_prod = 'consultar_control_de_calidad' is has_permission %}
                         {% set can_access_comercial_dropdown = can_ver_productos or can_ver_ventas or can_ver_inventario_prod %}
                         {% if can_access_comercial_dropdown %}
                         <li class="nav-item dropdown">
@@ -96,10 +93,9 @@
                             </ul>
                         </li>
                         {% endif %}
-
                         
-                        {% set can_ver_produccion = has_permission('consultar_ordenes_de_produccion')|trim == 'True' %}
-                        {% set can_ver_planificacion = has_permission('consultar_reportes_de_produccion')|trim == 'True' %}
+                        {% set can_ver_produccion = 'consultar_ordenes_de_produccion' is has_permission %}
+                        {% set can_ver_planificacion = 'consultar_reportes_de_produccion' is has_permission %}
                         {% if can_ver_produccion or can_ver_planificacion %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if 'planificacion' in request.endpoint or 'orden_produccion' in request.endpoint %}active{% endif %}"
@@ -114,7 +110,7 @@
                         </li>
                         {% endif %}
 
-                        {% if has_permission('ver_alertas_topbar')|trim == 'True' %}
+                        {% if 'ver_alertas_topbar' is has_permission %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if 'alertas' in request.endpoint %}active{% endif %}"
                                  href="#" id="navbarDropdownAlertas" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -128,9 +124,9 @@
                         </li>
                         {% endif %}
                         
-                        {% set can_gestionar_empleados = has_permission('consultar_empleados')|trim == 'True' or has_permission('modificar_empleado')|trim == 'True' or has_permission('crear_empleado')|trim == 'True' or has_permission('configurar_usuarios_y_roles')|trim == 'True' %}
-                        {% set can_gestionar_clientes = has_permission('gestionar_clientes')|trim == 'True' %}
-                        {% set can_gestionar_proveedores = has_permission('gestionar_proveedores')|trim == 'True' %}
+                        {% set can_gestionar_empleados = 'consultar_empleados' is has_permission or 'modificar_empleado' is has_permission or 'crear_empleado' is has_permission or 'configurar_usuarios_y_roles' is has_permission %}
+                        {% set can_gestionar_clientes = 'gestionar_clientes' is has_permission %}
+                        {% set can_gestionar_proveedores = 'gestionar_proveedores' is has_permission %}
                         {% set can_access_admin_dropdown = can_gestionar_empleados or can_gestionar_clientes or can_gestionar_proveedores %}
 
                         {% if can_access_admin_dropdown %}

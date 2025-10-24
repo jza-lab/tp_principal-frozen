@@ -31,7 +31,7 @@
                         <tr>
                             <td>{{ insumo.nombre }}</td>
                             <td>{{ insumo.stock_actual | default('N/A') }}</td>
-                            {% if has_permission('gestionar_catalogo_de_insumos')|trim == 'True' %}
+                            {% if 'gestionar_catalogo_de_insumos' is has_permission %}
                             <form action="{{ url_for('alertas.actualizar_stock_min_max') }}" method="POST">
                                 <input type="hidden" name="id_insumo" value="{{ insumo.id_insumo }}">
                                 <td>

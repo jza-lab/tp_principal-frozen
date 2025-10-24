@@ -29,10 +29,9 @@ def login():
             # Creamos el token. La 'identity' es el ID del usuario, y pasamos el resto
             # de los datos (rol, permisos) como 'additional_claims'.
             access_token = create_access_token(
-                identity=usuario_data['id'],
+                identity=str(usuario_data['id']),
                 additional_claims={
                     'rol': usuario_data.get('roles', {}).get('codigo'),
-                    'permisos': usuario_data.get('permisos', {}),
                     'user_level': usuario_data.get('roles', {}).get('nivel', 0)
                 }
             )
@@ -70,10 +69,9 @@ def identificar_rostro():
     if respuesta.get('success'):
         usuario_data = respuesta['data']
         access_token = create_access_token(
-            identity=usuario_data['id'],
+            identity=str(usuario_data['id']),
             additional_claims={
                 'rol': usuario_data.get('roles', {}).get('codigo'),
-                'permisos': usuario_data.get('permisos', {}),
                 'user_level': usuario_data.get('roles', {}).get('nivel', 0)
             }
         )

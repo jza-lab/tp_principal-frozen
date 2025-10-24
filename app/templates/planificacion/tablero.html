@@ -87,7 +87,7 @@
                              {% endif %}
                         </td>
                         <td class="text-center">
-                            {% if has_permission('crear_orden_de_produccion')|trim == 'True' %}
+                            {% if 'crear_orden_de_produccion' is has_permission %}
                             <button class="btn btn-sm btn-primary">
                                 <i class="bi bi-calendar-check me-1"></i> Planificar Lote
                             </button>
@@ -217,7 +217,7 @@
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-            {% if has_permission('crear_orden_de_produccion')|trim == 'True' %}
+            {% if 'crear_orden_de_produccion' is has_permission %}
             <button type="button" class="btn btn-success btn-lg btn-consolidar-y-aprobar">
                 <i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote
             </button>
@@ -292,7 +292,7 @@
              </div>
              <div class="kanban-cards">
                  {% if estado_key == 'LISTA PARA PRODUCIR' %}
-                    {% if has_permission('crear_orden_de_produccion')|trim == 'True' %}
+                    {% if 'crear_orden_de_produccion' is has_permission %}
                     <div class="d-grid"><button id="btn-consolidar" class="btn btn-success mb-2" disabled><i class="bi bi-plus-slash-minus"></i> Consolidar</button></div>
                     {% endif %}
                  {% endif %}

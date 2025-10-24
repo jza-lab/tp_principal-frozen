@@ -7,7 +7,7 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Catálogo de Insumos</h1>
     <div class="btn-toolbar">
-        {% if has_permission('gestionar_catalogo_de_insumos')|trim == 'True' %}
+        {% if 'gestionar_catalogo_de_insumos' is has_permission %}
         <a href="{{ url_for('insumos_api.crear_insumo') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Agregar Nuevo Insumo
         </a>
@@ -122,7 +122,7 @@
                             class="btn btn-sm btn-outline-primary" title="Detalle">
                             <i class="bi bi-eye"></i>
                         </a>
-                        {% if has_permission('gestionar_catalogo_de_insumos')|trim == 'True' %}
+                        {% if 'gestionar_catalogo_de_insumos' is has_permission %}
                             {% if insumo.activo %}
                                 <a href="{{ url_for('insumos_api.actualizar_insumo', id_insumo=insumo.id_insumo) }}"
                                    class="btn btn-sm btn-outline-primary" title="Modificar insumo">
