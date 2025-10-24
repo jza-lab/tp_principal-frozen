@@ -14,7 +14,7 @@
         <a href="{{ url_for('inventario_view.listar_lotes') }}" class="btn btn-outline-secondary me-2">
             <i class="bi bi-arrow-left me-1"></i>Volver al Inventario
         </a>
-        {% set can_edit = has_permission('modificar_materias_primas')|trim == 'True' %}
+        {% set can_edit = 'modificar_materias_primas' is has_permission %}
         <a href="{{ url_for('insumos_api.editar_lote', id_insumo=lote.id_insumo, id_lote=lote.id_lote) if can_edit else '#' }}" class="btn btn-primary {% if not can_edit %}disabled{% endif %}">
             <i class="bi bi-pencil-square me-1"></i>Editar Lote
         </a>

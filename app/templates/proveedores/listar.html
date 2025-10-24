@@ -10,7 +10,7 @@
             <p class="text-muted mb-0">Administración de proveedores registrados en el sistema</p>
         </div>
         <div class="btn-toolbar">
-            {% if has_permission('gestionar_proveedores')|trim == 'True' %}
+            {% if 'gestionar_proveedores' is has_permission %}
             <a href="{{ url_for('clientes_proveedores.nuevo_proveedor') }}" class="btn btn-primary">
                 <i class="bi bi-person-plus me-1"></i>Crear Nuevo Proveedor
             </a>
@@ -87,7 +87,7 @@
                 <div class="mt-auto">
                     <hr class="card-divider">
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
-                        {% set can_manage = has_permission('gestionar_proveedores')|trim == 'True' %}
+                        {% set can_manage = 'gestionar_proveedores' is has_permission %}
                         {% if proveedor.activo %}
                             {% if can_manage %}
                             <a href="{{ url_for('clientes_proveedores.editar_proveedor', id=proveedor.id) }}"

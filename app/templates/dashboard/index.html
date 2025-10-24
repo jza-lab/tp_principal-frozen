@@ -14,10 +14,10 @@
 <div class="alert-carousel-wrapper">
     <div class="alert-carousel-container mb-4" id="alertCarouselContainer">
         
-{% set can_ver_produccion = has_permission('consultar_ordenes_de_produccion')|trim == 'True' %}
-{% set can_ver_ventas = has_permission('consultar_ordenes_de_venta')|trim == 'True' %}
-{% set can_ver_almacen = has_permission('consultar_stock')|trim == 'True' %}
-{% set can_ver_admin = has_permission('consultar_empleados')|trim == 'True' %}
+{% set can_ver_produccion = 'consultar_ordenes_de_produccion' is has_permission %}
+{% set can_ver_ventas = 'consultar_ordenes_de_venta' is has_permission %}
+{% set can_ver_almacen = 'consultar_stock' is has_permission %}
+{% set can_ver_admin = 'consultar_empleados' is has_permission %}
 
     {% if can_ver_almacen %}
     <div class="stat-card-item">
@@ -297,7 +297,7 @@
     </div>
     {% endif %}
 
-    {% set can_ver_notificaciones = has_permission('ver_panel_notificaciones')|trim == 'True' %}
+    {% set can_ver_notificaciones = 'ver_panel_notificaciones' is has_permission %}
     {% if can_ver_admin or can_ver_notificaciones %}
     <div class="col-lg-5 mb-4">
         {% if can_ver_admin %}

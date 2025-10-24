@@ -6,6 +6,17 @@ const AutorizacionesPanel = (function() {
 
     // --- FUNCIONES (privadas) ---
     function createPendingCard(auth) {
+        const actionButtons = CAN_MANAGE_AUTHORIZATIONS ? `
+            <div class="mb-3">
+                <label for="comentario-${auth.id}" class="form-label small">Comentario del Supervisor</label>
+                <textarea class="form-control form-control-sm" id="comentario-${auth.id}" rows="2" placeholder="Opcional..."></textarea>
+            </div>
+            <div class="d-flex justify-content-between">
+                <button class="btn btn-sm btn-success btn-approve" data-id="${auth.id}" data-estado="APROBADO">Aprobar</button>
+                <button class="btn btn-sm btn-danger btn-reject" data-id="${auth.id}" data-estado="RECHAZADO">Rechazar</button>
+            </div>
+        ` : '<p class="text-muted small">No tiene permisos para gestionar esta autorización.</p>';
+
         return `
             <div class="col-md-4 mb-4">
                 <div class="card auth-card pending" data-auth-id="${auth.id}">
@@ -18,14 +29,7 @@ const AutorizacionesPanel = (function() {
                             <strong>Tipo:</strong> ${auth.tipo.replace(/_/g, ' ')}<br>
                             <strong>Motivo:</strong> ${auth.motivo || 'No especificado'}
                         </p>
-                        <div class="mb-3">
-                            <label for="comentario-${auth.id}" class="form-label small">Comentario del Supervisor</label>
-                            <textarea class="form-control form-control-sm" id="comentario-${auth.id}" rows="2" placeholder="Opcional..."></textarea>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <button class="btn btn-sm btn-success btn-approve" data-id="${auth.id}" data-estado="APROBADO">Aprobar</button>
-                            <button class="btn btn-sm btn-danger btn-reject" data-id="${auth.id}" data-estado="RECHAZADO">Rechazar</button>
-                        </div>
+                        ${actionButtons}
                     </div>
                 </div>
             </div>

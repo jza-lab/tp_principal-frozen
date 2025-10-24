@@ -1,11 +1,54 @@
-from flask import Flask
+from flask import Flask, redirect, url_for, flash
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager, unset_jwt_cookies
 from app.config import Config
 import logging
 from .json_encoder import CustomJSONEncoder
 
 # Helpers de la aplicación
 from app.utils.template_helpers import register_template_extensions
+from app.models.token_blacklist_model import TokenBlacklistModel
+from app.controllers.usuario_controller import UsuarioController
+from app.models.usuario import UsuarioModel
+from types import SimpleNamespace
+
+jwt = JWTManager()
+
+@jwt.token_in_blocklist_loader
+def check_if_token_in_blocklist(jwt_header, jwt_payload):
+    jti = jwt_payload["jti"]
+    return TokenBlacklistModel.is_blacklisted(jti)
+
+
+@jwt.user_lookup_loader
+def user_lookup_callback(_jwt_header, jwt_data):
+    """
+    Esta función se llama cada vez que se protege una ruta con jwt_required.
+    Devuelve el objeto de usuario basado en el 'sub' del token JWT.
+    """
+    identity = jwt_data["sub"]
+    user_id = int(identity)
+
+    user_model = UsuarioModel()
+    user_data_result = user_model.find_by_id(user_id)
+
+    if user_data_result.get('success'):
+        user_data = user_data_result.get('data')
+        return SimpleNamespace(**user_data)
+
+    return None
+
+
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_payload):
+    """
+    Se ejecuta cuando se accede a una ruta protegida con un token expirado.
+    Redirige al usuario a la página de login.
+    """
+    response = redirect(url_for('auth.login'))
+    unset_jwt_cookies(response)
+    flash('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.', 'warning')
+    return response
 
 def _register_blueprints(app: Flask):
     """Registra todos los blueprints de la aplicación."""
@@ -79,9 +122,11 @@ def create_app() -> Flask:
 
     app = Flask(__name__)
     app.config.from_object(Config)
+    app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
     app.json = CustomJSONEncoder(app)
 
     CORS(app, resources={r"/api/*": {"origins": "*"}})
+    jwt.init_app(app)
 
     _register_blueprints(app)
     _register_error_handlers(app)

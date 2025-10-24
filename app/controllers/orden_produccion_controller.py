@@ -165,44 +165,40 @@ class OrdenProduccionController(BaseController):
         """
         return self.inventario_controller.verificar_stock_para_op(orden_simulada)
 
-    # --- MÉTODO PARA APROBACIÓN FORZADA (VINCULACIÓN OC) ---
+    # --- MÉTODO CORREGIDO ---
     def aprobar_orden_con_oc(self, orden_id: int, usuario_id: int, oc_id: int) -> tuple:
         """
-        Aprueba la OP cuando se sabe que se ha generado la OC (flujo manual).
-
-        MODIFICADO: Este método solo vincula la OC (si es necesario) y mantiene
-        el estado en PENDIENTE, a la espera de la recepción de los insumos.
-        La aprobación formal a 'APROBADA' debe ocurrir en otro flujo.
+        Vincula una OC (conocida) a una OP PENDIENTE (flujo manual).
+        NO cambia el estado de la OP.
         """
         try:
-            # Opcional: Si el modelo de OP tiene un campo para vincular la OC
-            # 1. Asocia la OC a la OP (Descomentar si el modelo de OP soporta orden_compra_id)
-            # update_oc = self.model.update(orden_id, {'orden_compra_id': oc_id}, 'id')
-            # if not update_oc.get('success'):
-            #     return self.error_response("Fallo al vincular la OP con la OC.", 500)
+            # 1. Asocia la OC a la OP (Descomentado)
+            # Asegúrate que tu modelo OP tenga el campo 'orden_compra_id'
+            update_oc_result = self.model.update(orden_id, {'orden_compra_id': oc_id}, 'id')
+            if not update_oc_result.get('success'):
+                 # Si falla la vinculación, devolvemos error
+                 logger.error(f"Fallo al vincular OP {orden_id} con OC {oc_id}: {update_oc_result.get('error')}")
+                 return self.error_response(f"Fallo al vincular la OP con la OC: {update_oc_result.get('error')}", 500)
 
-            # 2. **CAMBIO CLAVE: Se ELIMINA el cambio de estado a 'APROBADA'**
-            # y se ELIMINA la reserva de stock.
-            # La OP permanece en PENDIENTE hasta que se reciba la OC/Stock.
-
-            # NOTA: Si se desea registrar que la OC ya fue generada para esta OP:
-            # Se podría cambiar a un estado intermedio como 'OC_GENERADA' o añadir una bandera,
-            # pero si se pide que se quede en PENDIENTE, se respeta la lógica.
-
-            return self.success_response(None, "Orden de Compra vinculada (o generada). La Orden de Producción permanece en PENDIENTE a la espera de la recepción de insumos.")
-
+            # 2. La OP permanece en PENDIENTE
+            logger.info(f"OP {orden_id} vinculada exitosamente con OC {oc_id}. Estado permanece PENDIENTE.")
+            return self.success_response(
+                data=update_oc_result.get('data'), # Devuelve la OP actualizada
+                message="Orden de Compra vinculada. La Orden de Producción sigue PENDIENTE."
+            )
         except Exception as e:
             logger.error(f"Error en aprobar_orden_con_oc para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
-    def aprobar_orden(self, orden_id: int, usuario_id: int) -> tuple: # Changed return type
+    # --- MÉTODO CORREGIDO ---
+    def aprobar_orden(self, orden_id: int, usuario_id: int) -> tuple:
         """
         Inicia el proceso de una orden PENDIENTE.
-        - Si hay stock, la pasa a 'LISTA_PARA_INICIAR' y reserva insumos.
-        - Si no hay stock, la pasa a 'EN ESPERA' y genera una OC.
+        - Si hay stock, reserva y pasa a 'LISTA PARA PRODUCIR'.
+        - Si no hay stock, genera OC, la VINCULA a la OP y pasa a 'EN ESPERA'.
         """
         try:
-            # 1. Obtain OP and validate state
+            # 1. Obtener OP y validar estado
             orden_result = self.obtener_orden_por_id(orden_id)
             if not orden_result.get('success'):
                 return self.error_response("Orden de producción no encontrada.", 404)
@@ -211,49 +207,66 @@ class OrdenProduccionController(BaseController):
             if orden_produccion['estado'] != 'PENDIENTE':
                 return self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
 
-            # 2. Verify stock
-            # Ensure inventario_controller is initialized in __init__
+            # 2. Verificar stock
             verificacion_result = self.inventario_controller.verificar_stock_para_op(orden_produccion)
             if not verificacion_result.get('success'):
                 return self.error_response(f"Error al verificar stock: {verificacion_result.get('error')}", 500)
 
             insumos_faltantes = verificacion_result['data']['insumos_faltantes']
 
-            # 3. Handle based on stock availability
+            # 3. Manejar según disponibilidad de stock
             if insumos_faltantes:
-                # --- CASE: STOCK MISSING ---
-                # Generate automatic Purchase Order
-                # Ensure orden_compra_controller is initialized in __init__
+                # --- CASO: FALTA STOCK ---
+                logger.info(f"Stock insuficiente para OP {orden_id}. Generando OC...")
                 oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
                 if not oc_result.get('success'):
-                    return self.error_response(f"No se pudo generar la orden de compra: {oc_result.get('error')}", 500)
-                # Change OP state to 'EN ESPERA'
-                # Ensure self.model refers to OrdenProduccionModel
+                    # Si falla la creación de OC, la OP sigue PENDIENTE pero informamos el error
+                    return self.error_response(f"Stock insuficiente, pero no se pudo generar la OC: {oc_result.get('error')}", 500)
+
+                # --- ¡NUEVO!: Vincular la OC creada a la OP ---
+                oc_data = oc_result.get('data', {})
+                created_oc_id = oc_data.get('id') # Asume que el ID de OC está en 'id'
+                if created_oc_id:
+                    logger.info(f"OC {oc_data.get('codigo_oc', created_oc_id)} creada. Vinculando a OP {orden_id}...")
+                    update_op_oc_result = self.model.update(orden_id, {'orden_compra_id': created_oc_id}, 'id')
+                    if not update_op_oc_result.get('success'):
+                         # Loggear advertencia si falla la vinculación, pero continuar
+                         logger.warning(f"OC creada ({created_oc_id}), pero falló la vinculación con OP {orden_id}: {update_op_oc_result.get('error')}")
+                    else:
+                         logger.info(f"OP {orden_id} vinculada exitosamente con OC {created_oc_id}.")
+                else:
+                     logger.error(f"OC creada para OP {orden_id}, ¡pero no se recibió el ID de la OC!")
+                     # Considerar devolver error aquí si la vinculación es crítica
+
+                # Cambiar estado OP a 'EN ESPERA'
+                logger.info(f"Cambiando estado de OP {orden_id} a EN ESPERA.")
                 estado_change_result = self.model.cambiar_estado(orden_id, 'EN ESPERA')
                 if not estado_change_result.get('success'):
-                    return self.error_response(f"Error al cambiar estado a EN ESPERA: {estado_change_result.get('error')}", 500)
+                    # Loggear error si falla el cambio de estado, pero ya creamos la OC
+                    logger.error(f"Error al cambiar estado a EN ESPERA para OP {orden_id}: {estado_change_result.get('error')}")
+                    # Podríamos intentar revertir la OC aquí si fuera transaccional
 
                 return self.success_response(
-                    data={'oc_generada': True, 'oc_codigo': oc_result['data']['codigo_oc']},
+                    data={'oc_generada': True, 'oc_codigo': oc_data.get('codigo_oc'), 'oc_id': created_oc_id},
                     message="Stock insuficiente. Se generó OC y la OP está 'En Espera'."
                 )
             else:
-                # --- CASE: STOCK AVAILABLE ---
-                # Reserve supplies
+                # --- CASO: STOCK DISPONIBLE ---
+                logger.info(f"Stock disponible para OP {orden_id}. Reservando insumos...")
                 reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
                 if not reserva_result.get('success'):
                     return self.error_response(f"Fallo crítico al reservar insumos: {reserva_result.get('error')}", 500)
 
-                # Set new state to 'LISTA_PARA_INICIAR'
                 nuevo_estado_op = 'LISTA PARA PRODUCIR'
-
-                # Change OP state
+                logger.info(f"Cambiando estado de OP {orden_id} a {nuevo_estado_op}.")
                 estado_change_result = self.model.cambiar_estado(orden_id, nuevo_estado_op)
                 if not estado_change_result.get('success'):
+                    # Si falla el cambio de estado, ¿deberíamos cancelar la reserva? (Complejo sin transacciones)
+                    logger.error(f"Error al cambiar estado a {nuevo_estado_op} para OP {orden_id}: {estado_change_result.get('error')}")
                     return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
 
                 return self.success_response(
-                    message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos han sido reservados. Lista para iniciar en fecha planificada."
+                    message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
                 )
 
         except Exception as e:
@@ -500,12 +513,26 @@ class OrdenProduccionController(BaseController):
             cantidad_total = sum(Decimal(op['cantidad_planificada']) for op in ops_originales)
             primera_op = ops_originales[0]
 
+                # --- NUEVO: Encontrar la fecha meta más temprana ---
+            fechas_meta_originales = []
+            for op in ops_originales:
+                fecha_meta_str = op.get('fecha_meta')
+                if fecha_meta_str:
+                    try:
+                        fechas_meta_originales.append(date.fromisoformat(fecha_meta_str))
+                    except ValueError:
+                        logger.warning(f"Formato de fecha meta inválido encontrado en OP {op.get('id')}: {fecha_meta_str}")
+
+            fecha_meta_mas_temprana = min(fechas_meta_originales) if fechas_meta_originales else None
+            # --------------------------------------------------
+
             # 3. Crear la nueva Super OP (reutilizando la lógica de `crear_orden`)
             super_op_data = {
                 'producto_id': primera_op['producto_id'],
                 'cantidad_planificada': str(cantidad_total),
                 'fecha_planificada': primera_op['fecha_planificada'],
                 'receta_id': primera_op['receta_id'],
+                'fecha_meta': fecha_meta_mas_temprana.isoformat() if fecha_meta_mas_temprana else None, # Guardar la fecha meta más temprana
                 'prioridad': 'ALTA', # Las super OPs suelen ser prioritarias
                 'observaciones': f'Super OP consolidada desde las OPs: {", ".join(map(str, op_ids))}',
                 'estado': 'PENDIENTE' # La Super OP nace lista

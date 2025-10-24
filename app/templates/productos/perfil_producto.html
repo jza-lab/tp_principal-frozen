@@ -165,12 +165,12 @@
                 <h6 class="mb-0"><i class="bi bi-arrow-repeat me-1"></i>Acciones</h6>
             </div>
             <div class="card-body d-grid gap-2">
-                {% set can_register_lot = has_permission('registrar_ingresos_stock')|trim == 'True' %}
+                {% set can_register_lot = 'registrar_ingresos_stock' is has_permission %}
                 <a href="{{ url_for('lote_producto.nuevo_lote', id_producto=producto.id) if can_register_lot else '#' }}" class="btn btn-success {% if not can_register_lot %}disabled{% endif %}">
                     <i class="bi bi-box-fill me-1"></i> Registrar Lote
                 </a>
                 
-                {% set can_recalculate = has_permission('modificar_materias_primas')|trim == 'True' %}
+                {% set can_recalculate = 'modificar_materias_primas' is has_permission %}
                 <button type="button" class="btn btn-outline-primary {% if not can_recalculate %}disabled{% endif %}" {% if can_recalculate %}onclick="recargarPrecioProducto('{{ producto.id }}')"{% endif %} title="Recalcular el precio unitario basado en los costos de insumos actuales.">
                     <i class="bi bi-arrow-clockwise me-1"></i> Recalcular Costo
                 </button>

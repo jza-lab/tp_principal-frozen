@@ -1,4 +1,5 @@
-from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
+from flask import Blueprint, jsonify, request, redirect, url_for, flash, render_template
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.autorizacion_controller import AutorizacionController
 from app.utils.decorators import permission_required
@@ -11,6 +12,7 @@ usuario_controller = UsuarioController()
 autorizacion_controller = AutorizacionController()
 
 @admin_autorizacion_bp.route('/nueva', methods=['GET', 'POST'])
+@jwt_required()
 @permission_required(accion='gestionar_autorizaciones')
 def nueva_autorizacion():
     """
@@ -18,7 +20,7 @@ def nueva_autorizacion():
     """
     if request.method == 'POST':
         data = request.form.to_dict()
-        data['supervisor_id'] = session.get('usuario_id')
+        data['supervisor_id'] = get_jwt_identity()
         
         resultado = autorizacion_controller.crear_autorizacion(data)
 

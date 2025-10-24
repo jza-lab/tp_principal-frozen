@@ -1,21 +1,21 @@
 from functools import wraps
-from flask import session, flash, redirect, url_for
+from flask import flash, redirect
+from flask_jwt_extended import jwt_required, get_jwt
 from app.utils.roles import get_redirect_url_by_role
 from app.utils.permission_map import get_allowed_roles_for_action
 
 def permission_required(accion: str):
     """
     Decorador que verifica si el rol de un usuario tiene permiso para una acción específica.
-    Utiliza el mapa canónico de permisos para la validación.
+    Obtiene el rol desde el token JWT.
     """
     def decorator(f):
         @wraps(f)
+        @jwt_required()
         def decorated_function(*args, **kwargs):
-            if 'rol' not in session:
-                flash('Acceso no autorizado. Por favor, inicie sesión.', 'error')
-                return redirect(url_for('auth.login'))
+            claims = get_jwt()
+            user_role_code = claims.get('rol')
 
-            user_role_code = session.get('rol')
             if user_role_code == 'DEV':
                 return f(*args, **kwargs)
 
@@ -31,15 +31,15 @@ def permission_required(accion: str):
 def permission_any_of(*actions):
     """
     Decorador que verifica si el rol del usuario tiene al menos UNO de los permisos especificados.
+    Obtiene el rol desde el token JWT.
     """
     def decorator(f):
         @wraps(f)
+        @jwt_required()
         def decorated_function(*args, **kwargs):
-            if 'rol' not in session:
-                flash('Acceso no autorizado. Por favor, inicie sesión.', 'error')
-                return redirect(url_for('auth.login'))
+            claims = get_jwt()
+            user_role_code = claims.get('rol')
 
-            user_role_code = session.get('rol')
             if user_role_code == 'DEV':
                 return f(*args, **kwargs)
 
@@ -55,17 +55,15 @@ def permission_any_of(*actions):
 def roles_required(min_level: int = 0, allowed_roles: list = None):
     """
     Decorador (posiblemente obsoleto) para restringir el acceso basado en nivel jerárquico o una lista de roles.
-    Se mantiene por compatibilidad, pero se recomienda usar permission_required o permission_any_of.
+    Obtiene los datos del token JWT.
     """
     def decorator(f):
         @wraps(f)
+        @jwt_required()
         def decorated_function(*args, **kwargs):
-            if 'rol' not in session or 'user_level' not in session:
-                flash('Acceso no autorizado. Por favor, inicie sesión.', 'error')
-                return redirect(url_for('auth.login'))
-
-            user_role_code = session.get('rol')
-            user_level = session.get('user_level', 0)
+            claims = get_jwt()
+            user_role_code = claims.get('rol')
+            user_level = claims.get('user_level', 0)
 
             if user_role_code == 'DEV':
                 return f(*args, **kwargs)

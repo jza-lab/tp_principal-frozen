@@ -1,6 +1,7 @@
 import os
 import random
-from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
 from app.utils.decorators import permission_required
@@ -71,6 +72,7 @@ def listar():
     return render_template('orden_venta/listar.html', pedidos=pedidos, titulo="Pedidos de Venta")
 
 @orden_venta_bp.route('/nueva', methods=['GET', 'POST'])
+@jwt_required()
 @permission_required(accion='crear_orden_de_venta')
 def nueva():
     """Gestiona la creación de un nuevo pedido de venta."""
@@ -81,11 +83,8 @@ def nueva():
         if not json_data:
             return jsonify({"success": False, "error": "Datos no válidos"}), 400
 
-        usuario_id = session.get('usuario_id')
-        if not usuario_id:
-            return jsonify({"success": False, "error": "Sesión expirada"}), 401
-
-        response, status_code = controller.crear_pedido_con_items(json_data)
+        usuario_id = get_jwt_identity()
+        response, status_code = controller.crear_pedido_con_items(json_data, usuario_id)
 
         if status_code < 300:
             nuevo_pedido = response.get('data', {})
@@ -183,14 +182,11 @@ def planificar(id):
     return redirect(url_for('orden_venta.detalle', id=id))
 
 @orden_venta_bp.route('/<int:id>/iniciar_proceso', methods=['POST'])
+@jwt_required()
 @permission_required(accion='aprobar_orden_de_venta')
 def iniciar_proceso(id):
     """Pasa el pedido a EN PROCESO y crea las OPs."""
-    usuario_id = session.get("usuario_id")
-    if not usuario_id:
-        flash("Faltan datos para iniciar el proceso.", "error")
-        return redirect(url_for('orden_venta.detalle', id=id))
-
+    usuario_id = get_jwt_identity()
     response, _ = controller.iniciar_proceso_pedido(id, usuario_id)
     if response.get('success'):
         flash(response.get('message'), 'success')
@@ -199,14 +195,11 @@ def iniciar_proceso(id):
     return redirect(url_for('orden_venta.detalle', id=id))
 
 @orden_venta_bp.route('/<int:id>/preparar_entrega', methods=['POST'])
+@jwt_required()
 @permission_required(accion='modificar_orden_de_venta')
 def preparar_entrega(id):
     """Pasa el pedido a LISTO PARA ENTREGAR y descuenta stock."""
-    usuario_id = session.get("usuario_id")
-    if not usuario_id:
-        flash("Sesión expirada.", "error")
-        return redirect(url_for("auth.login"))
-
+    usuario_id = get_jwt_identity()
     response, _ = controller.preparar_para_entrega(id, usuario_id)
     if response.get('success'):
         flash(response.get('message'), 'success')
@@ -215,10 +208,11 @@ def preparar_entrega(id):
     return redirect(url_for('orden_venta.detalle', id=id))
 
 @orden_venta_bp.route('/<int:id>/completar', methods=['POST'])
+@jwt_required()
 @permission_required(accion='modificar_orden_de_venta')
 def completar(id):
     """Endpoint para marcar un pedido como COMPLETADO."""
-    usuario_id = session.get('usuario_id')
+    usuario_id = get_jwt_identity()
     # Llama al NUEVO y correcto método del controlador
     response, _ = controller.marcar_como_completado(id, usuario_id)
 

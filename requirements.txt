@@ -13,7 +13,7 @@ storage3==2.20.0
 postgrest==2.20.0
 httpx[http2]>=0.26,<0.29
 
-# OpenCV y numpy compatibles
+# OpenCV y dependencias
 numpy>=1.24.0,<2.3.0
 opencv-python
 
@@ -36,3 +36,4 @@ numpy==1.26.2
 Pillow==10.1.0
 websockets
 openpyxl
+Flask-JWT-Extended==4.7.1
