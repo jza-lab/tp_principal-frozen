@@ -44,9 +44,9 @@ CANONICAL_PERMISSION_MAP = {
     # Rol: VENDEDOR
     'crear_orden_de_venta': ['VENDEDOR', 'DEV'],
     'modificar_orden_de_venta': ['VENDEDOR', 'DEV'],
-    'consultar_historial_de_clientes': ['VENDEDOR', 'DEV'],
+    'consultar_historial_de_clientes': ['VENDEDOR', 'DEV', 'ADMIN'],
     'emitir_factura_de_venta': ['VENDEDOR', 'DEV'],
-    'consultar_historial_crediticio_de_clientes': ['VENDEDOR', 'DEV'],
+    'consultar_historial_crediticio_de_clientes': ['VENDEDOR', 'ADMIN', 'DEV'],
     'consultar_estado_de_produccion_asociada': ['VENDEDOR', 'DEV'],
     'consultar_disponibilidad_de_productos': ['VENDEDOR', 'DEV'],
 
@@ -65,7 +65,7 @@ CANONICAL_PERMISSION_MAP = {
     'consultar_stock': ['SUPERVISOR', 'DEV'],
     'solicitar_reposicion_de_insumos': ['SUPERVISOR', 'DEV'],
     'crear_orden_de_compra': ['SUPERVISOR', 'DEV'],
-    'aprobar_orden_de_compra': ['SUPERVISOR', 'DEV'],
+    'aprobar_orden_de_compra': ['SUPERVISOR', 'DEV', 'ADMIN'],
     'consultar_control_de_calidad': ['SUPERVISOR', 'VENDEDOR', 'DEV'],
 
     # Rol: SUPERVISOR_CALIDAD
@@ -105,9 +105,10 @@ CANONICAL_PERMISSION_MAP = {
     'gestionar_proveedores': ['ADMIN'], 
     'gestionar_catalogo_de_insumos': ['SUPERVISOR', 'GERENTE'], 
     'rechazar_orden_de_compra': ['SUPERVISOR', 'GERENTE'],
-    'ver_panel_notificaciones': ['IT', 'DEV'],
+    'ver_panel_notificaciones': ['IT', 'DEV', 'ADMIN'],
     'gestionar_autorizaciones': ['ADMIN','DEV'],
     'registrar_lote_de_producto': ['SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE', 'ADMIN', 'DEV'],
+    'ver_alertas_topbar': ['GERENTE', 'SUPERVISOR', 'DEV'],
 
 }
 

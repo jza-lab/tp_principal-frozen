@@ -15,6 +15,7 @@
             Configurar Umbral de Vencimiento
         </div>
         <div class="card-body">
+            {% if has_permission('modificar_parametros_del_sistema')|trim == 'True' %}
             <form action="{{ url_for('alertas.configurar_alertas_lotes') }}" method="POST">
                 <div class="mb-3">
                     <label for="dias_vencimiento" class="form-label">Días de antelación para alerta de vencimiento</label>
@@ -25,6 +26,11 @@
                 </div>
                 <button type="submit" class="btn btn-primary">Guardar Configuración</button>
             </form>
+            {% else %}
+            <div class="alert alert-warning">
+                No tiene permisos para modificar esta configuración. El umbral actual es de <strong>{{ dias_vencimiento }} días</strong>.
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

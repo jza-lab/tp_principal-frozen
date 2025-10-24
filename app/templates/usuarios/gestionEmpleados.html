@@ -89,6 +89,7 @@
 <script>
     const URL_TOTEM_ACTIVITY = "{{ url_for('api.obtener_actividad_totem') }}";
     const URL_WEB_ACTIVITY = "{{ url_for('api.obtener_actividad_web') }}";
+    const CAN_MANAGE_AUTHORIZATIONS = {{ has_permission('gestionar_autorizaciones')|trim == 'True'|tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/usuarios/gestionEmpleados.js') }}"></script>
 <script src="{{ url_for('static', filename='js/usuarios/panelActividad.js') }}"></script>

@@ -114,7 +114,7 @@
                             </button>
                             {% endif %}
                         
-                        {% elif orden.estado == 'APROBADA' %}
+                        {% elif orden.estado == 'APROBADA' and has_permission('aprobar_orden_de_compra')|trim == 'True' %}
                                 <form method="POST" action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id) }}" class="d-inline">
                                     <button type="submit" class="btn btn-sm btn-primary" title="Marcar como En Tránsito">
                                         <i class="bi bi-truck"></i> En Tránsito

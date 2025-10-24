@@ -114,9 +114,9 @@
                         </li>
                         {% endif %}
 
-                        {% set can_ver_alertas = has_permission('ver_alertas') %}
+                        {% if has_permission('ver_alertas_topbar')|trim == 'True' %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle {% if 'alertas' in request.endpoint %}active{% endif %} {% if can_ver_alertas|trim != 'True' %}disabled{% endif %}"
+                            <a class="nav-link dropdown-toggle {% if 'alertas' in request.endpoint %}active{% endif %}"
                                  href="#" id="navbarDropdownAlertas" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-bell-fill me-1"></i> Alertas
                             </a>
@@ -126,11 +126,12 @@
                                 <li><a class="dropdown-item {% if 'lotes' in request.endpoint %}active{% endif %}" href="{{ url_for('alertas.configurar_alertas_lotes') }}"><i class="bi bi-box-seam me-2"></i> Lotes</a></li>
                             </ul>
                         </li>
+                        {% endif %}
                         
                         {% set can_gestionar_empleados = has_permission('consultar_empleados')|trim == 'True' or has_permission('modificar_empleado')|trim == 'True' or has_permission('crear_empleado')|trim == 'True' or has_permission('configurar_usuarios_y_roles')|trim == 'True' %}
-                        {% set can_consultar_clientes = has_permission('consultar_clientes')|trim == 'True' %}
-                        {% set can_consultar_proveedores = has_permission('consultar_proveedores')|trim == 'True' %}
-                        {% set can_access_admin_dropdown = can_gestionar_empleados or can_consultar_clientes or can_consultar_proveedores %}
+                        {% set can_gestionar_clientes = has_permission('gestionar_clientes')|trim == 'True' %}
+                        {% set can_gestionar_proveedores = has_permission('gestionar_proveedores')|trim == 'True' %}
+                        {% set can_access_admin_dropdown = can_gestionar_empleados or can_gestionar_clientes or can_gestionar_proveedores %}
 
                         {% if can_access_admin_dropdown %}
                         <li class="nav-item dropdown">
@@ -140,8 +141,8 @@
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownAdmin">
                                 {% if can_gestionar_empleados %}<li><a class="dropdown-item {% if 'admin_usuario' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_usuario.listar_usuarios') }}"><i class="bi bi-people-fill me-2"></i> Gestión de Empleados</a></li>{% endif %}
-                                {% if can_consultar_clientes %}<li><a class="dropdown-item {% if 'listar_clientes' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_clientes') }}"><i class="bi bi-person-rolodex me-2"></i> Gestión de Clientes</a></li>{% endif %}
-                                {% if can_consultar_proveedores %}<li><a class="dropdown-item {% if 'listar_proveedores' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_proveedores') }}"><i class="bi bi-briefcase-fill me-2"></i> Gestión de Proveedores</a></li>{% endif %}
+                                {% if can_gestionar_clientes %}<li><a class="dropdown-item {% if 'listar_clientes' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_clientes') }}"><i class="bi bi-person-rolodex me-2"></i> Gestión de Clientes</a></li>{% endif %}
+                                {% if can_gestionar_proveedores %}<li><a class="dropdown-item {% if 'listar_proveedores' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_proveedores') }}"><i class="bi bi-briefcase-fill me-2"></i> Gestión de Proveedores</a></li>{% endif %}
                             </ul>
                         </li>
                         {% endif %}

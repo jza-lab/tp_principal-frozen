@@ -31,6 +31,7 @@
                         <tr>
                             <td>{{ insumo.nombre }}</td>
                             <td>{{ insumo.stock_actual | default('N/A') }}</td>
+                            {% if has_permission('gestionar_catalogo_de_insumos')|trim == 'True' %}
                             <form action="{{ url_for('alertas.actualizar_stock_min_max') }}" method="POST">
                                 <input type="hidden" name="id_insumo" value="{{ insumo.id_insumo }}">
                                 <td>
@@ -43,6 +44,11 @@
                                     <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
                                 </td>
                             </form>
+                            {% else %}
+                            <td>{{ insumo.stock_min | default(0) }}</td>
+                            <td>{{ insumo.stock_max | default(0) }}</td>
+                            <td><span class="text-muted">No permitido</span></td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>

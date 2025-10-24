@@ -117,7 +117,7 @@
                         {% endif %}
                         {% endif %}
 
-                        {%if pedido.estado == 'LISTO_PARA_ARMAR' %}
+                        {% if pedido.estado == 'LISTO_PARA_ARMAR' and has_permission('modificar_orden_de_venta')|trim == 'True' %}
                         <form method="POST" action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}"
                             class="confirm-form d-grid" data-title="Preparar para Entrega"
                             data-message="Esta acción moverá el pedido a 'LISTO PARA ENTREGAR' y descontará el stock de los productos del inventario. ¿Está seguro?"
@@ -126,7 +126,7 @@
                                 Entrega</button>
                         </form>
                         {% endif %}
-                        {% if pedido.estado == 'LISTO_PARA_ENTREGA' %}
+                        {% if pedido.estado == 'LISTO_PARA_ENTREGA' and has_permission('modificar_orden_de_venta')|trim == 'True' %}
                         <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}"
                             class="confirm-form d-inline" data-title="Confirmar Entrega"
                             data-message="¿Está seguro de marcar este pedido como 'COMPLETADO'? Esta es la acción final."

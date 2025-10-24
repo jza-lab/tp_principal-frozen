@@ -140,7 +140,7 @@
                             <i class="bi bi-eye"></i> Detalle
                         </a>
                         {% if orden.estado == 'LISTA PARA PRODUCIR' %}
-                            {% if has_permission('supervisar_avance_de_etapas') %}
+                            {% if has_permission('supervisar_avance_de_etapas')|trim == 'True' %}
                             <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                                 data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Iniciar Orden">Iniciar <i class="bi bi-play-fill"></i></button>
@@ -148,7 +148,7 @@
                             {% endif %}
                         {% endif %}
                         {% if orden.estado == 'EN_PROCESO' %}
-                            {% if has_permission('supervisar_avance_de_etapas') %}
+                            {% if has_permission('supervisar_avance_de_etapas')|trim == 'True' %}
                             <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                                 data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Completar Orden">Completar <i class="bi bi-check-circle-fill"></i></button>
@@ -156,7 +156,7 @@
                             {% endif %}
                         {% endif %}
                         {% if orden.estado == 'PENDIENTE' %}
-                            {% if has_permission('crear_orden_de_produccion') %}
+                            {% if has_permission('crear_orden_de_produccion')|trim == 'True' %}
                             <form method="POST" action="{{ url_for('orden_produccion.aprobar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                                 data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de producción?" data-button-type="success">
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">Aprobar <i class="bi bi-check-circle"></i></button>
