@@ -130,12 +130,12 @@
                             <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="navbarDropdownUser" 
                                role="button" data-bs-toggle="dropdown">
                                 <i class="bi bi-person-circle me-2"></i>
-                                {{ current_user.nombre }}
+                                {{ current_user.nombre_completo }}
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownUser">
                                 <li>
                                     <h6 class="dropdown-header">
-                                        <small class="text-muted">{{ current_user.rol }}</small>
+                                        <small class="text-muted">{{ current_user.roles.nombre }}</small>
                                     </h6>
                                 </li>
                                 <li><hr class="dropdown-divider"></li>

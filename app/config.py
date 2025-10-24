@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
 
 load_dotenv(dotenv_path='credenciales.env')
 
@@ -23,3 +24,6 @@ class Config:
     # Pagination
     DEFAULT_PAGE_SIZE = 20
     MAX_PAGE_SIZE = 100
+
+    # JWT Configuration
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=8)

@@ -31,6 +31,8 @@ def login():
             access_token = create_access_token(
                 identity=str(usuario_data['id']),
                 additional_claims={
+                    'nombre': usuario_data.get('nombre'),
+                    'apellido': usuario_data.get('apellido'),
                     'rol': usuario_data.get('roles', {}).get('codigo'),
                     'user_level': usuario_data.get('roles', {}).get('nivel', 0)
                 }
@@ -71,6 +73,8 @@ def identificar_rostro():
         access_token = create_access_token(
             identity=str(usuario_data['id']),
             additional_claims={
+                'nombre': usuario_data.get('nombre'),
+                'apellido': usuario_data.get('apellido'),
                 'rol': usuario_data.get('roles', {}).get('codigo'),
                 'user_level': usuario_data.get('roles', {}).get('nivel', 0)
             }

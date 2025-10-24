@@ -1,6 +1,6 @@
-from flask import Flask
+from flask import Flask, redirect, url_for, flash
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager
+from flask_jwt_extended import JWTManager, unset_jwt_cookies
 from app.config import Config
 import logging
 from .json_encoder import CustomJSONEncoder
@@ -9,6 +9,8 @@ from .json_encoder import CustomJSONEncoder
 from app.utils.template_helpers import register_template_extensions
 from app.models.token_blacklist_model import TokenBlacklistModel
 from app.controllers.usuario_controller import UsuarioController
+from app.models.usuario import UsuarioModel
+from types import SimpleNamespace
 
 jwt = JWTManager()
 
@@ -17,6 +19,7 @@ def check_if_token_in_blocklist(jwt_header, jwt_payload):
     jti = jwt_payload["jti"]
     return TokenBlacklistModel.is_blacklisted(jti)
 
+
 @jwt.user_lookup_loader
 def user_lookup_callback(_jwt_header, jwt_data):
     """
@@ -24,10 +27,28 @@ def user_lookup_callback(_jwt_header, jwt_data):
     Devuelve el objeto de usuario basado en el 'sub' del token JWT.
     """
     identity = jwt_data["sub"]
-    # El 'sub' del token es un string, pero la base de datos espera un entero.
     user_id = int(identity)
-    controller = UsuarioController()
-    return controller.obtener_usuario_por_id(user_id)
+
+    user_model = UsuarioModel()
+    user_data_result = user_model.find_by_id(user_id)
+
+    if user_data_result.get('success'):
+        user_data = user_data_result.get('data')
+        return SimpleNamespace(**user_data)
+
+    return None
+
+
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_payload):
+    """
+    Se ejecuta cuando se accede a una ruta protegida con un token expirado.
+    Redirige al usuario a la página de login.
+    """
+    response = redirect(url_for('auth.login'))
+    unset_jwt_cookies(response)
+    flash('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.', 'warning')
+    return response
 
 def _register_blueprints(app: Flask):
     """Registra todos los blueprints de la aplicación."""

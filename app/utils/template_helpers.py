@@ -67,10 +67,17 @@ def _inject_user_from_jwt():
     """
     try:
         claims = get_jwt()
-        current_user = {
-            'nombre': claims.get('nombre_usuario', 'Usuario'),
-            'rol': claims.get('rol')
-        }
+        nombre = claims.get('nombre')
+        apellido = claims.get('apellido')
+        
+        # Crear un SimpleNamespace para permitir el acceso con notación de punto
+        from types import SimpleNamespace
+        current_user = SimpleNamespace(
+            nombre=nombre,
+            apellido=apellido,
+            nombre_completo=f"{nombre or ''} {apellido or ''}".strip(),
+            roles={'nombre': claims.get('rol')}
+        )
         return {'current_user': current_user}
     except Exception:
         # Si no hay token JWT (p.ej. en la página de login),
