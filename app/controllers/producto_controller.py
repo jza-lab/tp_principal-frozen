@@ -283,3 +283,27 @@ class ProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error habilitando producto: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def actualizar_stock_min_produccion(self, producto_id: int, stock_min: int) -> tuple:
+        """
+        Actualiza el stock mínimo de producción para un producto específico.
+        """
+        try:
+            # Validar que el stock_min sea un número entero no negativo
+            if not isinstance(stock_min, int) or stock_min < 0:
+                return self.error_response("El stock mínimo debe ser un número entero no negativo.", 400)
+
+            # Preparar los datos para la actualización
+            update_data = {'stock_min_produccion': stock_min}
+
+            # Llamar al método de actualización del modelo
+            result = self.model.update(producto_id, update_data, 'id')
+
+            if result.get('success'):
+                return self.success_response(result.get('data'), "Stock mínimo actualizado correctamente.", 200)
+            else:
+                return self.error_response(result.get('error', 'Error desconocido al actualizar.'), 500)
+
+        except Exception as e:
+            logger.error(f"Error en actualizar_stock_min_produccion: {str(e)}", exc_info=True)
+            return self.error_response('Error interno del servidor.', 500)

@@ -42,3 +42,9 @@ class ProductoSchema(Schema):
     
     iva = fields.Bool(
         required=True)
+    
+    stock_min_produccion = fields.Int(
+        required=False,
+        allow_none=True,
+        load_default=0
+    )
