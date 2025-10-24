@@ -1,30 +1,95 @@
-{% extends "public/base.html" %}
+{% extends 'public/base.html' %}
+{% block title %}Producción - Frozen{% endblock %}
 
 {% block content %}
-<div>
-    <h1>Así Producimos</h1>
-    <p class="lead">Nuestro proceso de producción combina tecnología de punta con un estricto control de calidad para garantizar que cada producto que sale de nuestras instalaciones sea seguro, delicioso y nutritivo.</p>
+<div class="page-container">
+    <h1 class="animate-on-load" style="animation-delay: 0.1s;">Así Producimos</h1>
+    <p class="lead animate-on-load" style="animation-delay: 0.2s;">
+        Nuestro proceso de producción combina tecnología de punta con un estricto control de calidad 
+        para garantizar que cada producto que sale de nuestras instalaciones sea seguro, 
+        delicioso y nutritivo.
+    </p>
 
     <div class="features-grid">
-        <div class="feature-card">
+        <div class="feature-card animate-on-load" style="animation-delay: 0.3s;">
+            <div class="feature-icon">
+                <i class="fas fa-leaf"></i> </div>
             <h3>1. Selección de Materia Prima</h3>
             <p>Todo comienza con la selección de los mejores ingredientes. Trabajamos con proveedores certificados que comparten nuestra pasión por la calidad y la frescura.</p>
         </div>
-        <div class="feature-card">
+        
+        <div class="feature-card animate-on-load" style="animation-delay: 0.4s;">
+            <div class="feature-icon">
+                <i class="fas fa-kitchen-set"></i> </div>
             <h3>2. Procesamiento y Preparación</h3>
-            <p>Los alimentos son cuidadosamente lavados, cortados y preparados por nuestro equipo de expertos, siguiendo recetas estandarizadas para asegurar la consistencia del sabor.</p>
+            <p>Los alimentos son cuidadosamente lavados, cortados y preparados por nuestro equipo de expertos, siguiendo recetas estandarizadas para asegurar la consistencia.</p>
         </div>
-        <div class="feature-card">
-            <h3>3. Congelación Rápida Individual (IQF)</h3>
+        
+        <div class="feature-card animate-on-load" style="animation-delay: 0.5s;">
+            <div class="feature-icon">
+                <i class="fas fa-snowflake"></i> </div>
+            <h3>3. Congelación Rápida (IQF)</h3>
             <p>Utilizamos la tecnología de Congelación Rápida Individual (IQF) que preserva la textura, el sabor y los nutrientes de forma óptima.</p>
         </div>
-        <div class="feature-card">
+        
+        <div class="feature-card animate-on-load" style="animation-delay: 0.6s;">
+            <div class="feature-icon">
+                <i class="fas fa-box-archive"></i> </div>
             <h3>4. Empaquetado y Almacenamiento</h3>
             <p>Los productos son empaquetados y almacenados en nuestras cámaras frigoríficas a temperaturas controladas para mantener la cadena de frío.</p>
         </div>
     </div>
     
-    <h2 style="text-align: center; margin-top: 3rem;">Control de Calidad Continuo</h2>
-    <p style="text-align: center;">En cada etapa del proceso, nuestro equipo de control de calidad realiza inspecciones y análisis para asegurar que se cumplan los más altos estándares de seguridad alimentaria y calidad del producto.</p>
-</div>
+    <h2 class="animate-on-load" style="animation-delay: 0.7s; text-align: center; margin-top: 3rem;">
+        Control de Calidad Continuo
+    </h2>
+    <p class="animate-on-load" style="animation-delay: 0.8s; text-align: center;">
+        En cada etapa del proceso, nuestro equipo de control de calidad realiza inspecciones y 
+        análisis para asegurar que se cumplan los más altos estándares de seguridad alimentaria.
+    </p>
+
+
+    <div class="values-section" style="margin-top: 4rem;">
+        <h2 class="animate-on-load" style="animation-delay: 0.9s;">Nuestros Productos Estrella</h2>
+
+        <div class="features-grid products-grid" style="margin-top: 2rem;">
+
+            <div class="feature-card animate-on-load" style="animation-delay: 1.0s;">
+                <div class="feature-icon">
+                    <i class="fas fa-utensils"></i> </div>
+                <h3>Empanadas de Carne</h3>
+                <p>Clásicas empanadas de carne seleccionada, jugosas y listas para hornear. Sabor tradicional garantizado.</p>
+            </div>
+
+            <div class="feature-card animate-on-load" style="animation-delay: 1.1s;">
+                <div class="feature-icon">
+                    <i class="fas fa-leaf"></i> </div>
+                <h3>Hamburguesas de Lentejas</h3>
+                <p>Nuestra opción veggie estrella. Nutritivas, sabrosas y perfectas para una comida rápida y saludable.</p>
+            </div>
+
+            <div class="feature-card animate-on-load" style="animation-delay: 1.2s;">
+                <div class="feature-icon">
+                    <i class="fas fa-drumstick-bite"></i> </div>
+                <h3>Milanesas de Pollo</h3>
+                <p>Hechas con pechuga de pollo premium y un rebozado crocante. Listas en minutos, tiernas por dentro.</p>
+            </div>
+
+            <div class="feature-card animate-on-load" style="animation-delay: 1.3s;">
+                <div class="feature-icon">
+                    <i class="fas fa-plate-wheat"></i> </div>
+                <h3>Ñoquis de Papa</h3>
+                <p>La auténtica receta de ñoquis de papa. Suaves y listos para acompañar con tu salsa favorita.</p>
+            </div>
+
+            <div class="feature-card animate-on-load" style="animation-delay: 1.4s;">
+                <div class="feature-icon">
+                    <i class="fas fa-chart-pie"></i> </div>
+                <h3>Tarta de Jamón y Queso</h3>
+                <p>Irresistible tarta con abundante jamón y queso. Masa hojaldrada y un relleno cremoso.</p>
+            </div>
+
+        </div>
+    </div>
+    </div>
 {% endblock %}

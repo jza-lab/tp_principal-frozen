@@ -1,30 +1,57 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Frozen Foods</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/public_styles.css') }}">
 </head>
 <body>
     <nav class="main-nav">
         <div class="nav-container">
-            <a class="nav-brand" href="{{ url_for('public.index') }}">
-                <img src="{{ url_for('static', filename='img/icon.png') }}" alt="Frozen Foods Logo" class="nav-logo">
-                FROZEN
-            </a>
-            <div class="nav-links">
-                <a class="nav-link" href="{{ url_for('public.index') }}">Inicio</a>
-                <a class="nav-link" href="{{ url_for('public.about') }}">Sobre Nosotros</a>
-                <a class="nav-link" href="{{ url_for('public.clients') }}">Clientes</a>
-                <a class="nav-link" href="{{ url_for('public.production') }}">Producción</a>
+            
+            <div class="nav-left">
+                <a class="nav-brand" href="{{ url_for('public.index') }}">
+                    <img src="{{ url_for('static', filename='img/icon.png') }}" alt="Frozen Foods Logo" class="nav-logo">
+                    FrozenProd
+                </a>
+                
+                <div class="nav-links">
+                    <a class="nav-link {% if active_page == 'about' %}active{% endif %}" href="{{ url_for('public.about') }}">
+                        <i class="fa-solid fa-users"></i>Sobre Nosotros
+                    </a>
+                    <a class="nav-link {% if active_page == 'clients' %}active{% endif %}" href="{{ url_for('public.clients') }}">
+                        <i class="fa-solid fa-handshake"></i>Clientes
+                    </a>
+                    <a class="nav-link {% if active_page == 'production' %}active{% endif %}" href="{{ url_for('public.production') }}">
+                        <i class="fa-solid fa-clipboard-list"></i>¿Cómo Trabajamos?
+                    </a>
+                    <a class="nav-link {% if active_page == 'order' %}active{% endif %}" href="{{ url_for('public.index') }}">
+                        <i class="fa-solid fa-cart-plus"></i>Hace tu Pedido
+                    </a>
+                    <a class="nav-link {% if active_page == 'faq' %}active{% endif %}" href="{{ url_for('public.index') }}">
+                        <i class="fa-solid fa-circle-question"></i>Preguntas Frecuentes
+                    </a>
+                    
+                    <a class="nav-link login-link-mobile {% if active_page == 'login' %}active{% endif %}" href="{{ url_for('public.index') }}">
+                        <i class="fa-solid fa-right-to-bracket"></i>Login
+                    </a>
+                </div>
             </div>
-            <button class="nav-toggle" aria-label="Toggle navigation">
-                <span class="hamburger"></span>
-            </button>
+
+            <div class="nav-right">
+                <a class="nav-link login-link {% if active_page == 'login' %}active{% endif %}" href="{{ url_for('public.index') }}">
+                    <i class="fa-solid fa-right-to-bracket"></i>Login
+                </a>
+                <button class="nav-toggle" aria-label="Toggle navigation">
+                    <span class="hamburger"></span>
+                </button>
+            </div>
+
         </div>
     </nav>
 
@@ -34,6 +61,7 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // 1. Script de Navbar con Scroll (El que ya tenías)
             const nav = document.querySelector('.main-nav');
             window.addEventListener('scroll', function() {
                 if (window.scrollY > 50) {
@@ -42,8 +70,21 @@
                     nav.classList.remove('scrolled');
                 }
             });
+
+            // 2. SCRIPT FALTANTE PARA MENÚ MÓVIL
+            // (Si ya lo tienes en 'public_scripts.js', ignora esta parte)
+            const navToggle = document.querySelector('.nav-toggle');
+            const navLinks = document.querySelector('.nav-links'); // El contenedor de links
+
+            if (navToggle && navLinks) {
+                navToggle.addEventListener('click', function() {
+                    // Animación del botón "X"
+                    navToggle.classList.toggle('active');
+                    // Muestra/oculta el menú
+                    navLinks.classList.toggle('active'); 
+                });
+            }
         });
     </script>
-    <script src="{{ url_for('static', filename='js/public/public_scripts.js') }}"></script>
-</body>
+    </body>
 </html>

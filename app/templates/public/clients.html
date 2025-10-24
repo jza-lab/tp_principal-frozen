@@ -1,34 +1,54 @@
-{% extends "public/base.html" %}
+{% extends 'public/base.html' %}
+{% block title %}Nuestros Clientes - Frozen{% endblock %}
 
 {% block content %}
-<div>
-    <h1>Nuestros Principales Clientes</h1>
-    <p class="lead">Nos enorgullece trabajar con una amplia gama de clientes, desde grandes cadenas de supermercados hasta distribuidores locales. La confianza que depositan en nosotros es nuestro mayor activo.</p>
+<div class="page-container">
+    <h1 class="animate-on-load" style="animation-delay: 0.1s;">Nuestros Clientes</h1>
+    <p class="lead animate-on-load" style="animation-delay: 0.2s;">
+        Nuestra calidad y capacidad de producción nos convierten en el socio estratégico 
+        ideal para una amplia gama de clientes en la cadena de alimentación.
+    </p>
 
-    <div class="features-grid">
-        <div class="feature-card">
-            <h3>Supermercados Gigante</h3>
-            <p>Una de las cadenas de retail más grandes del país.</p>
+    <div class="about-grid" style="grid-template-columns: 1fr 1fr; margin-top: 3rem;">
+        
+        <div class="about-card animate-on-load" style="animation-delay: 0.3s;">
+            <div class="about-icon">
+                <i class="fas fa-truck-field"></i> </div>
+            <h2>Distribuidores Mayoristas</h2>
+            <p>
+                Proveemos a los principales distribuidores del país, asegurando un stock 
+                constante y una logística eficiente para abastecer a sus propios clientes.
+            </p>
         </div>
-        <div class="feature-card">
-            <h3>Distribuidora del Sur</h3>
-            <p>Líder en distribución de alimentos en la región sur.</p>
+
+        <div class="about-card animate-on-load" style="animation-delay: 0.4s;">
+            <div class="about-icon">
+                <i class="fas fa-store"></i> </div>
+            <h2>Cadenas de Supermercados</h2>
+            <p>
+                Nuestros productos se encuentran en las góndolas de las cadenas más importantes, 
+                ofreciendo calidad y confianza al consumidor final.
+            </p>
         </div>
-        <div class="feature-card">
-            <h3>Comedores Industriales S.A.</h3>
-            <p>Servicios de alimentación para grandes empresas.</p>
+
+        <div class="about-card animate-on-load" style="animation-delay: 0.5s;">
+            <div class="about-icon">
+                <i class="fas fa-utensils"></i> </div>
+            <h2>Sector Gastronómico</h2>
+            <p>
+                Somos proveedores clave para restaurantes, hoteles y servicios de catering que 
+                buscan ingredientes congelados de primera línea para sus cocinas.
+            </p>
         </div>
-        <div class="feature-card">
-            <h3>FrigoStock</h3>
-            <p>Especialistas en almacenamiento y logística de congelados.</p>
-        </div>
-        <div class="feature-card">
-            <h3>La Cocina Rápida</h3>
-            <p>Cadena de restaurantes de comida para llevar.</p>
-        </div>
-        <div class="feature-card">
-            <h3>Hoteles Paraíso</h3>
-            <p>Grupo hotelero de lujo con presencia nacional.</p>
+
+        <div class="about-card animate-on-load" style="animation-delay: 0.6s;">
+            <div class="about-icon">
+                <i class="fas fa-tags"></i> </div>
+            <h2>Producción para Terceros</h2>
+            <p>
+                Fabricamos productos para otras marcas (marca blanca) con la misma calidad 
+                y estándares que usamos para nuestros propios productos.
+            </p>
         </div>
     </div>
 </div>
