@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frozen Foods</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/public_styles.css') }}">
+</head>
+<body>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <a class="nav-brand" href="{{ url_for('public.index') }}">
+                <img src="{{ url_for('static', filename='img/icon.png') }}" alt="Frozen Foods Logo" class="nav-logo">
+                FROZEN
+            </a>
+            <div class="nav-links">
+                <a class="nav-link" href="{{ url_for('public.index') }}">Inicio</a>
+                <a class="nav-link" href="{{ url_for('public.about') }}">Sobre Nosotros</a>
+                <a class="nav-link" href="{{ url_for('public.clients') }}">Clientes</a>
+                <a class="nav-link" href="{{ url_for('public.production') }}">Producción</a>
+            </div>
+            <button class="nav-toggle" aria-label="Toggle navigation">
+                <span class="hamburger"></span>
+            </button>
+        </div>
+    </nav>
+
+    <div class="page-container">
+        {% block content %}{% endblock %}
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const nav = document.querySelector('.main-nav');
+            window.addEventListener('scroll', function() {
+                if (window.scrollY > 50) {
+                    nav.classList.add('scrolled');
+                } else {
+                    nav.classList.remove('scrolled');
+                }
+            });
+        });
+    </script>
+    <script src="{{ url_for('static', filename='js/public/public_scripts.js') }}"></script>
+</body>
+</html>

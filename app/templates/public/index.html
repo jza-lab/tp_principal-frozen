@@ -1,0 +1,28 @@
+{% extends "public/base.html" %}
+
+{% block content %}
+<div class="jumbotron">
+    <h1 class="display-4">¡Bienvenido a Frozen!</h1>
+    <p class="lead">Líderes en la producción y distribución de alimentos congelados de alta calidad.</p>
+    <hr>
+    <p>Explora nuestro sitio para conocer más sobre nuestros productos, nuestra historia y nuestros procesos de producción.</p>
+</div>
+
+<div class="features-grid">
+    <div class="feature-card">
+        <h3>Sobre Nosotros</h3>
+        <p>Conoce nuestra historia, misión y valores. Descubre por qué somos la mejor opción en alimentos congelados.</p>
+        <p><a class="btn" href="{{ url_for('public.about') }}">Ver detalles &raquo;</a></p>
+    </div>
+    <div class="feature-card">
+        <h3>Nuestros Clientes</h3>
+        <p>Descubre quiénes confían en nosotros para llevar los mejores productos a su mesa.</p>
+        <p><a class="btn" href="{{ url_for('public.clients') }}">Ver clientes &raquo;</a></p>
+    </div>
+    <div class="feature-card">
+        <h3>Producción</h3>
+        <p>Aprende sobre nuestros innovadores procesos de producción que garantizan la frescura y calidad de cada producto.</p>
+        <p><a class="btn" href="{{ url_for('public.production') }}">Conocer más &raquo;</a></p>
+    </div>
+</div>
+{% endblock %}
