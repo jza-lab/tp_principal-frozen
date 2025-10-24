@@ -1,0 +1,59 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Alertas de Stock de Productos{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Umbrales de Stock de Productos</h1>
+    <ol class="breadcrumb mb-4">
+
+        <li class="breadcrumb-item active">Producción mínima por Producto</li>
+    </ol>
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-bell me-1"></i>
+            Configurar Umbrales de Stock Mínimo
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Stock Mínimo Actual</th>
+                            <th>Nuevo Stock Mínimo</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for producto in productos %}
+                        <tr>
+                            <td>{{ producto.codigo }}</td>
+                            <td>{{ producto.nombre }}</td>
+                            <td>{{ producto.stock_min_produccion if producto.stock_min_produccion is not none else 'No definido' }}</td>
+                            
+                                <form method="POST" action="{{ url_for('alertas.actualizar_stock_min_producto') }}">
+                                    <input type="hidden" name="id_producto" value="{{ producto.id }}">
+                                    <td>
+                                    <div class="input-group">
+                                        <input type="number" name="stock_min_produccion" class="form-control" placeholder="Ej: 100" min="0" required>
+                                    </div>
+                                    </td>
+                                    <td>
+                                    <button type="submit" class="btn btn-primary btn-sm mt-2">Actualizar</button>
+                                    </td>    
+                                </form>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center">No hay productos para mostrar.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

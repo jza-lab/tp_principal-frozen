@@ -6,7 +6,7 @@
 <div class="container-fluid px-4">
     <h1 class="mt-4">Umbrales de Stock de Insumos</h1>
     <ol class="breadcrumb mb-4">
-        <li class="breadcrumb-item active">Configuración de Alertas</li>
+        <li class="breadcrumb-item active">Configuración de stock mínimos y máximos por insumo</li>
     </ol>
     
     <div class="card mb-4">
@@ -15,8 +15,21 @@
             Listado de Insumos
         </div>
         <div class="card-body">
+
+            <div class="mb-3">
+                <label for="filtroNombre" class="form-label"><strong>Buscar por Nombre:</strong></label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="filtroNombre" placeholder="Escribí el nombre del insumo...">
+                    <button class="btn btn-primary" type="button" id="btnBuscar">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                    <button class="btn btn-secondary" type="button" id="btnLimpiar">
+                        Limpiar
+                    </button>
+                </div>
+            </div>
             <div class="table-responsive">
-                <table class="table table-bordered" id="datatablesSimple" width="100%" cellspacing="0">
+                <table class="table table-bordered" id="tablaInsumos" width="100%" cellspacing="0">
                     <thead>
                         <tr>
                             <th>Nombre</th>
@@ -26,35 +39,110 @@
                             <th>Acciones</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    
+                    <tbody id="cuerpoTablaInsumos">
                         {% for insumo in insumos %}
                         <tr>
                             <td>{{ insumo.nombre }}</td>
+                            
                             <td>{{ insumo.stock_actual | default('N/A') }}</td>
-                            {% if 'gestionar_catalogo_de_insumos' is has_permission %}
-                            <form action="{{ url_for('alertas.actualizar_stock_min_max') }}" method="POST">
-                                <input type="hidden" name="id_insumo" value="{{ insumo.id_insumo }}">
-                                <td>
-                                    <input type="number" name="stock_min" class="form-control" value="{{ insumo.stock_min | default(0) }}">
-                                </td>
-                                <td>
-                                    <input type="number" name="stock_max" class="form-control" value="{{ insumo.stock_max | default(0) }}">
-                                </td>
-                                <td>
+                            
+                            <td>
+                                <input type="number" 
+                                       name="stock_min" 
+                                       class="form-control" 
+                                       value="{{ insumo.stock_min | default(0) }}" 
+                                       form="form-insumo-{{ insumo.id_insumo }}">
+                            </td>
+                            
+                            <td>
+                                <input type="number" 
+                                       name="stock_max" 
+                                       class="form-control" 
+                                       value="{{ insumo.stock_max | default(0) }}"
+                                       form="form-insumo-{{ insumo.id_insumo }}">
+                            </td>
+                            
+                            <td>
+                                <form action="{{ url_for('alertas.actualizar_stock_min_max') }}" 
+                                      method="POST" 
+                                      id="form-insumo-{{ insumo.id_insumo }}">
+                                      
+                                    <input type="hidden" 
+                                           name="id_insumo" 
+                                           value="{{ insumo.id_insumo }}">
+                                           
                                     <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
-                                </td>
-                            </form>
-                            {% else %}
-                            <td>{{ insumo.stock_min | default(0) }}</td>
-                            <td>{{ insumo.stock_max | default(0) }}</td>
-                            <td><span class="text-muted">No permitido</span></td>
-                            {% endif %}
+                                </form>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
-                </table>
+                    </table>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+// Espera a que todo el HTML esté cargado
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // 1. Obtenemos los elementos
+    const filtroInput = document.getElementById('filtroNombre');
+    const tablaBody = document.getElementById('cuerpoTablaInsumos');
+    const btnBuscar = document.getElementById('btnBuscar');
+    const btnLimpiar = document.getElementById('btnLimpiar');
+
+    // ¡Verificación! Si alguno es nulo, el script no puede seguir.
+    if (!filtroInput || !tablaBody || !btnBuscar || !btnLimpiar) {
+        console.error("Error: No se pudo encontrar uno o más elementos del DOM (filtro, tabla o botones).");
+        return; // Detiene la ejecución si falta algo
+    }
+
+    // Obtiene las filas DESPUÉS de encontrar la tabla
+    const filas = tablaBody.getElementsByTagName('tr');
+
+    // 2. Función que hace el filtrado
+    function aplicarFiltro() {
+        const textoFiltro = filtroInput.value.toUpperCase();
+
+        for (let i = 0; i < filas.length; i++) {
+            let fila = filas[i];
+            let celdaNombre = fila.getElementsByTagName('td')[0];
+            
+            if (celdaNombre) {
+                let textoCelda = celdaNombre.textContent || celdaNombre.innerText;
+                if (textoCelda.toUpperCase().indexOf(textoFiltro) > -1) {
+                    fila.style.display = "";
+                } else {
+                    fila.style.display = "none";
+                }
+            }
+        }
+    }
+
+    // 3. Función para limpiar el filtro
+    function limpiarFiltro() {
+        filtroInput.value = "";
+        for (let i = 0; i < filas.length; i++) {
+            filas[i].style.display = "";
+        }
+    }
+
+    // 4. Asignamos las funciones a los botones
+    btnBuscar.addEventListener('click', aplicarFiltro);
+    btnLimpiar.addEventListener('click', limpiarFiltro);
+
+    // 5. (Opcional) Hacer que "Enter" en el input también busque
+    filtroInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter' || event.keyCode === 13) {
+            event.preventDefault(); 
+            aplicarFiltro();
+        }
+    });
+
+});
+</script>
+
 {% endblock %}

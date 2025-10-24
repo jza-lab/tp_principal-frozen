@@ -40,9 +40,14 @@ window.calculateOrderTotals = function () {
     const noItemsMsg = document.getElementById('no-items-msg');
     const totalFinalInput = document.getElementById('total-final');
 
+    const resumenSubtotalEl = document.getElementById('resumen-subtotal');
+    const resumenIvaEl = document.getElementById('resumen-iva');
+    const resumenTotalEl = document.getElementById('total-final');
+    const tipoFacturaInput = document.getElementById('tipo_factura')
+
     let subtotalNeto = 0;
 
-    if (!itemsContainer || !totalFinalInput) return;
+    if (!itemsContainer) return;
 
     document.querySelectorAll('#items-container .item-row').forEach(row => {
         const productSelect = row.querySelector('.producto-selector');
@@ -50,47 +55,32 @@ window.calculateOrderTotals = function () {
         const subtotalItemInput = row.querySelector('.subtotal-item');
         const priceDisplay = row.querySelector('.price-display');
         const unitDisplay = row.querySelector('.unidad-display');
-        // Referencia al campo hidden (asumiendo que ya se agregó en el HTML)
         const priceUnitValueInput = row.querySelector('.item-price-unit-value');
 
         if (productSelect && quantityInput) {
             const productId = productSelect.value;
             const quantity = parseFloat(quantityInput.value) || 0;
             
-            // --- INICIO DE LA CORRECCIÓN CLAVE ---
-            // 1. Obtener precio y unidad de los data-attributes de la opción seleccionada.
             const selectedOption = productSelect.options[productSelect.selectedIndex];
             let price = 0;
             let unit = '--';
             
-            if (selectedOption) {
-                // Leer el precio del data-attribute o del mapa global (si está precargado)
+            if (selectedOption && selectedOption.value) { // Asegurarse de que no sea la opción "Seleccione..."
                 price = parseFloat(selectedOption.getAttribute('data-precio')) || window.PRODUCT_PRICES[productId] || 0;
                 unit = selectedOption.getAttribute('data-unidad') || window.PRODUCT_UNITS[productId] || '--';
             }
-            // --- FIN DE LA CORRECCIÓN CLAVE ---
-
             const itemSubtotal = price * quantity;
-
-            // **ACTUALIZAR UNIDAD DE MEDIDA**
             if (unitDisplay) {
                 unitDisplay.textContent = unit;
             }
-
-            // **ACTUALIZAR CAMPO HIDDEN** (Para el payload, añadido en la corrección anterior)
             if (priceUnitValueInput) {
                 priceUnitValueInput.value = price;
             }
-
-            // APLICAR FORMATO AL PRECIO UNITARIO
             if (priceDisplay) {
-                // USAMOS formatToARS para el formato de moneda.
                 priceDisplay.value = formatToARS(price);
             }
             
-            // APLICAR FORMATO AL SUBTOTAL DEL ÍTEM
             if (subtotalItemInput) {
-                // USAMOS formatToARS para el formato de moneda.
                 subtotalItemInput.value = formatToARS(itemSubtotal);
             }
 
@@ -100,8 +90,32 @@ window.calculateOrderTotals = function () {
 
     let totalFinal = subtotalNeto;
     if (totalFinalInput) {
-        // APLICAR FORMATO AL TOTAL FINAL
-        totalFinalInput.value = formatToARS(totalFinal);
+        totalFinalInput.value = formatToARS(subtotalNeto); // O el total con IVA si corresponde
+    }
+    
+    const ivaRowEl = document.getElementById('iva-row');
+    // Para el formulario de cliente (con resumen detallado)
+    if (resumenSubtotalEl && resumenIvaEl && resumenTotalEl) {
+        let costoFlete = 0; // Por ahora, flete es 0. Se puede extender en el futuro.
+        let montoIva = 0;
+
+        const tipoFactura = document.getElementById('tipo_factura');
+        const tipoFacturaValue = tipoFactura ? tipoFactura.value : 'B';
+
+        if (tipoFactura === 'A') {
+            montoIva = subtotalNeto * 0.21;
+            ivaRowEl.style.display = 'block';
+        }
+        else{
+            montoIva = 0;
+            ivaRowEl.style.display = 'none';
+        }
+        
+        const totalFinalConIvaYFlete = subtotalNeto + costoFlete;
+        
+        resumenSubtotalEl.textContent = formatToARS(subtotalNeto);
+        resumenIvaEl.textContent = formatToARS(montoIva);
+        resumenTotalEl.textContent = formatToARS(totalFinalConIvaYFlete);
     }
 
     const visibleRows = itemsContainer.querySelectorAll('.item-row').length;

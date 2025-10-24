@@ -155,7 +155,12 @@ class PedidoModel(BaseModel):
             if filtros:
                 for key, value in filtros.items():
                     if value is not None:
-                        query = query.eq(key, value)
+                        if key == 'fecha_desde':
+                            query = query.gte('fecha_solicitud', value)
+                        elif key == 'fecha_hasta':
+                            query = query.lte('fecha_solicitud', value)
+                        else:
+                            query = query.eq(key, value)
             query = query.order("fecha_solicitud", desc=True).order("id", desc=True)
             result = query.execute()
             return {'success': True, 'data': result.data}

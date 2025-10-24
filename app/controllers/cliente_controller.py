@@ -223,3 +223,45 @@ class ClienteController(BaseController):
         serialized_data = self.schema.dump(cliente_encontrado)
 
         return self.success_response(data=serialized_data)
+    
+    def verificar_credenciales_cliente(self, cuit: str, email: str) -> tuple:
+        """
+        Verifica las credenciales (CUIT y Email) de un cliente para el login.
+        """
+        try:
+            cuit_result = self.model.buscar_por_cuit(cuit, include_direccion=True)
+            
+            if not cuit_result.get('success') or not cuit_result.get('data'):
+                return self.error_response('Cliente no encontrado.', 404)
+
+            cliente_encontrado = cuit_result['data'][0]
+            
+            if cliente_encontrado.get('email', '').strip().lower() != email.strip().lower():
+                return self.error_response('Credenciales incorrectas.', 401)
+            
+            serialized_data = self.schema.dump(cliente_encontrado)
+            return self.success_response(data=serialized_data)
+
+        except Exception as e:
+            logger.error(f"Error verificando credenciales para CUIT {cuit}: {str(e)}")
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
+    def cliente_tiene_pedidos_previos(self, cliente_id: int) -> bool:
+        """
+        Verifica si un cliente tiene pedidos anteriores.
+        """
+        from app.models.pedido import PedidoModel
+        pedido_model = PedidoModel()
+        
+        try:
+            # Buscamos pedidos que NO estén cancelados.
+            pedidos_result = pedido_model.get_all(filtros={'id_cliente': cliente_id})
+            
+            if pedidos_result.get('success') and pedidos_result.get('data'):
+                # Filtramos para asegurarnos de que no sean solo pedidos 'CANCELADO'
+                pedidos_validos = [p for p in pedidos_result['data'] if p.get('estado') != 'CANCELADO']
+                return len(pedidos_validos) > 0
+            return False
+        except Exception as e:
+            logger.error(f"Error verificando pedidos previos para cliente {cliente_id}: {str(e)}")
+            return False

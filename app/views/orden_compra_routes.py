@@ -85,6 +85,15 @@ def aprobar(id):
         flash(
             f"Error al aprobar: {resultado.get('error', 'Error desconocido')}", "error"
         )
+    
+    # Obtener el estado desde los query params de la URL
+    estado_actual = request.args.get('estado', '')
+    
+    print(f"DEBUG: Estado a preservar: '{estado_actual}'")
+    print(f"DEBUG: Redirigiendo a: {url_for('orden_compra.listar', estado=estado_actual) if estado_actual else url_for('orden_compra.listar')}")
+    
+    if estado_actual:
+        return redirect(url_for("orden_compra.listar", estado=estado_actual))
     return redirect(url_for("orden_compra.listar"))
 
 
@@ -131,6 +140,11 @@ def rechazar(id):
         flash(
             f"Error al rechazar: {resultado.get('error', 'Error desconocido')}", "error"
         )
+    
+    # Obtener el estado desde los query params de la URL
+    estado_actual = request.args.get('estado', '')
+    if estado_actual:
+        return redirect(url_for("orden_compra.listar", estado=estado_actual))
     return redirect(url_for("orden_compra.listar"))
 
 
@@ -145,7 +159,13 @@ def marcar_en_transito(id):
             f"Error al actualizar el estado: {resultado.get('error', 'Error desconocido')}",
             "error",
         )
+    
+    # Obtener el estado desde los query params de la URL
+    estado_actual = request.args.get('estado', '')
+    if estado_actual:
+        return redirect(url_for("orden_compra.listar", estado=estado_actual))
     return redirect(url_for("orden_compra.listar"))
+
 
 @orden_compra_bp.route("/recepcion/<int:orden_id>", methods=["POST"])
 @jwt_required()

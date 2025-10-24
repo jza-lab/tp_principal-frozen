@@ -471,11 +471,12 @@ function buildPayload() {
         const cleaned = value.toString().replace(/[$\s]/g, '').replace(/\./g, '').replace(',', '.');
         return parseFloat(cleaned) || 0;
     }
-
+    if(document.getElementById('cuil_parte1') || document.getElementById('cuil_parte2')|| document.getElementById('cuil_parte3')){
     const cuilParte1 = document.getElementById('cuil_parte1').value;
     const cuilParte2 = document.getElementById('cuil_parte2').value;
     const cuilParte3 = document.getElementById('cuil_parte3').value;
-    document.getElementById('cuil').value = `${cuilParte1}-${cuilParte2}-${cuilParte3}`;
+    document.getElementById('cuil').value = `${cuilParte1}-${cuilParte2}-${cuilParte3}`;}
+    
 
     const payload = {
         id_cliente: parseInt(document.getElementById('id_cliente').value),
