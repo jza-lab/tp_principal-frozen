@@ -500,12 +500,26 @@ class OrdenProduccionController(BaseController):
             cantidad_total = sum(Decimal(op['cantidad_planificada']) for op in ops_originales)
             primera_op = ops_originales[0]
 
+                # --- NUEVO: Encontrar la fecha meta más temprana ---
+            fechas_meta_originales = []
+            for op in ops_originales:
+                fecha_meta_str = op.get('fecha_meta')
+                if fecha_meta_str:
+                    try:
+                        fechas_meta_originales.append(date.fromisoformat(fecha_meta_str))
+                    except ValueError:
+                        logger.warning(f"Formato de fecha meta inválido encontrado en OP {op.get('id')}: {fecha_meta_str}")
+
+            fecha_meta_mas_temprana = min(fechas_meta_originales) if fechas_meta_originales else None
+            # --------------------------------------------------
+
             # 3. Crear la nueva Super OP (reutilizando la lógica de `crear_orden`)
             super_op_data = {
                 'producto_id': primera_op['producto_id'],
                 'cantidad_planificada': str(cantidad_total),
                 'fecha_planificada': primera_op['fecha_planificada'],
                 'receta_id': primera_op['receta_id'],
+                'fecha_meta': fecha_meta_mas_temprana.isoformat() if fecha_meta_mas_temprana else None, # Guardar la fecha meta más temprana
                 'prioridad': 'ALTA', # Las super OPs suelen ser prioritarias
                 'observaciones': f'Super OP consolidada desde las OPs: {", ".join(map(str, op_ids))}',
                 'estado': 'PENDIENTE' # La Super OP nace lista
