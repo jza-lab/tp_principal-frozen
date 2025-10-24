@@ -1,0 +1,68 @@
+{% extends "layouts/base.html" %}
+
+{% block title %}Cargar Lotes de Productos desde Excel{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">Cargar Lotes de Productos desde Excel</h4>
+            <a href="{{ url_for('lote_producto.listar_lotes') }}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Volver al Listado
+            </a>
+        </div>
+        <div class="card-body">
+            <p class="card-text">
+                Sube un archivo Excel para crear múltiples lotes de productos de una sola vez.
+                Asegúrate de que el archivo tenga las columnas requeridas.
+            </p>
+            <hr>
+            <div class="mb-3">
+                <a href="{{ url_for('lote_producto.descargar_plantilla_lotes') }}" class="btn btn-success">
+                    <i class="fas fa-file-excel me-1"></i> Descargar Plantilla
+                </a>
+            </div>
+            <form id="upload-form" action="{{ url_for('lote_producto.cargar_lotes_excel') }}" method="post" enctype="multipart/form-data">
+                {{ form.csrf_token }}
+                <div class="mb-3">
+                    <label for="archivo" class="form-label">Seleccionar Archivo Excel</label>
+                    <input class="form-control" type="file" id="archivo" name="archivo" accept=".xlsx, .xls" required>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-upload me-1"></i> Cargar y Procesar
+                </button>
+            </form>
+
+            {% if resultados %}
+            <div class="mt-4">
+                <h5>Resultados del Procesamiento</h5>
+                <div class="alert alert-info">
+                    <ul class="mb-0">
+                        <li><strong>Lotes Creados:</strong> {{ resultados.creados }}</li>
+                        <li><strong>Filas Ignoradas:</strong> {{ resultados.ignorados }}</li>
+                        <li><strong>Errores:</strong> {{ resultados.errores }}</li>
+                    </ul>
+                </div>
+                {% if resultados.detalles %}
+                <div class="card mt-3">
+                    <div class="card-header">Detalles</div>
+                    <ul class="list-group list-group-flush">
+                        {% for detalle in resultados.detalles %}
+                        <li class="list-group-item">{{ detalle }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if error %}
+            <div class="alert alert-danger mt-4">
+                <strong>Error:</strong> {{ error }}
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+{% endblock %}

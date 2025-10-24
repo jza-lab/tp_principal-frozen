@@ -1,6 +1,8 @@
 from flask import Flask, redirect, url_for, flash
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, unset_jwt_cookies
+from flask_wtf.csrf import CSRFProtect
+from flask_wtf import FlaskForm
 from app.config import Config
 import logging
 from .json_encoder import CustomJSONEncoder
@@ -13,6 +15,7 @@ from app.models.usuario import UsuarioModel
 from types import SimpleNamespace
 
 jwt = JWTManager()
+csrf = CSRFProtect()
 
 @jwt.token_in_blocklist_loader
 def check_if_token_in_blocklist(jwt_header, jwt_payload):
@@ -123,10 +126,16 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
     app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
+    app.config["JWT_COOKIE_CSRF_PROTECT"] = False  # Dejar que Flask-WTF maneje CSRF
     app.json = CustomJSONEncoder(app)
 
     CORS(app, resources={r"/api/*": {"origins": "*"}})
+    csrf.init_app(app)
     jwt.init_app(app)
+
+    @app.context_processor
+    def inject_csrf_form():
+        return dict(csrf_form=FlaskForm())
 
     _register_blueprints(app)
     _register_error_handlers(app)

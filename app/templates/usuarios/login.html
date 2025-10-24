@@ -172,7 +172,7 @@ class ModernLogin {
         this.botonVerificarRostro.disabled = true;
         
         try {
-            const response = await fetch('/auth/identificar_rostro', {
+            const response = await fetchWithCSRF('/auth/identificar_rostro', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
