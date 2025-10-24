@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, session, jsonify
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.inventario_controller import InventarioController
 from app.utils.decorators import permission_required
 from app.controllers.insumo_controller import InsumoController
@@ -46,6 +47,7 @@ def listar_lotes():
     return render_template('inventario/listar.html', lotes=lotes, insumos_stock=insumos_stock, insumos_full_data=insumos_full_data)
 
 @inventario_view_bp.route('/lote/nuevo', methods=['GET', 'POST'])
+@jwt_required()
 @permission_required(accion='registrar_ingreso_de_materia_prima')
 def nuevo_lote():
     """
@@ -53,11 +55,7 @@ def nuevo_lote():
     """
     if request.method == 'POST':
         try:
-            usuario_id = session.get('usuario_id')
-            if not usuario_id:
-                flash('Su sesión ha expirado.', 'error')
-                return redirect(url_for('auth.login'))
-
+            usuario_id = get_jwt_identity()
             response, status_code = controller.crear_lote(request.form.to_dict(), usuario_id)
 
             if response.get('success'):

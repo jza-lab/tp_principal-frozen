@@ -7,8 +7,8 @@ from flask import (
     redirect,
     url_for,
     flash,
-    session,
 )
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from marshmallow import ValidationError
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.producto_controller import ProductoController
@@ -77,6 +77,7 @@ def nueva():
 
 
 @orden_produccion_bp.route("/nueva/crear", methods=["POST"])
+@jwt_required()
 @permission_required(accion='crear_orden_de_produccion')
 def crear():
     try:
@@ -84,10 +85,7 @@ def crear():
         if not datos_json:
             return jsonify({"success": False, "error": "No se recibieron datos JSON válidos."}), 400
 
-        usuario_id_creador = session.get("usuario_id")
-        if not usuario_id_creador:
-            return jsonify({"success": False, "error": "Usuario no autenticado."}), 401
-
+        usuario_id_creador = get_jwt_identity()
         resultado = controller.crear_orden(datos_json, usuario_id_creador)
 
         if isinstance(resultado, tuple):
@@ -223,18 +221,12 @@ def listar_pendientes():
 
 
 @orden_produccion_bp.route("/<int:id>/aprobar", methods=["POST"])
+@jwt_required()
 @permission_required(accion='crear_orden_de_produccion')
 def aprobar(id):
     """Aprueba una orden de producción. Devuelve JSON si es una llamada AJAX."""
     try:
-        usuario_id = session.get("usuario_id")
-        if not usuario_id:
-            # Si no está autenticado, siempre devolvemos JSON en un AJAX/API call
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return jsonify({"success": False, "error": "Error de autenticación. Por favor, inicie sesión."}), 401
-            flash("Error de autenticación. Por favor, inicie sesión.", "danger")
-            return redirect(url_for("auth.login"))
-
+        usuario_id = get_jwt_identity()
         # El controller devuelve (response_dict, status_code)
         response = controller.aprobar_orden(id, usuario_id)
 
@@ -266,16 +258,14 @@ def aprobar(id):
 
 
 @orden_produccion_bp.route("/<int:orden_id>/crear_oc_op", methods=["POST"])
+@jwt_required()
 @permission_required(accion='crear_orden_de_produccion')
 def crear_oc_op(orden_id):
     """
     Crea la OC y aprueba la OP después de la confirmación manual del usuario.
     """
     try:
-        usuario_id = session.get("usuario_id")
-        if not usuario_id:
-            return jsonify({"success": False, "error": "Usuario no autenticado."}), 401
-
+        usuario_id = get_jwt_identity()
         datos_json = request.get_json()
         insumos_faltantes = datos_json.get('insumos_faltantes')
 
@@ -350,31 +340,29 @@ def asignar_supervisor(id):
 
 
 @orden_produccion_bp.route('/<int:orden_id>/sugerir-inicio', methods=['GET'])
-#@login_required
+@jwt_required()
 def api_sugerir_fecha_inicio(orden_id):
     """
     API para calcular y sugerir la fecha de inicio óptima para una OP.
     """
-    # Necesitarás pasar el 'usuario_id' real desde la sesión
-    usuario_id = 1
-
+    usuario_id = get_jwt_identity()
     response, status_code = controller.sugerir_fecha_inicio(orden_id, usuario_id)
     return jsonify(response), status_code
 
 # Ruta para guardar las asignaciones (SIN aprobar)
 @orden_produccion_bp.route('/<int:orden_id>/pre-asignar', methods=['POST'])
-#@login_required
+@jwt_required()
 def api_pre_asignar(orden_id):
     data = request.get_json()
-    usuario_id = 1 # Obtener de sesión
+    usuario_id = get_jwt_identity()
     response, status_code = controller.pre_asignar_recursos(orden_id, data, usuario_id)
     return jsonify(response), status_code
 
 # NUEVA Ruta para confirmar fecha y aprobar
 @orden_produccion_bp.route('/<int:orden_id>/confirmar-inicio', methods=['POST'])
-#@login_required
+@jwt_required()
 def api_confirmar_inicio(orden_id):
     data = request.get_json()
-    usuario_id = 1 # Obtener de sesión
+    usuario_id = get_jwt_identity()
     response, status_code = controller.confirmar_inicio_y_aprobar(orden_id, data, usuario_id)
     return jsonify(response), status_code

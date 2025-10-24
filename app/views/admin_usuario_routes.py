@@ -1,5 +1,6 @@
 import json
-from flask import Blueprint, jsonify, session, request, redirect, url_for, flash, render_template
+from flask import Blueprint, jsonify, request, redirect, url_for, flash, render_template
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
 from app.utils.decorators import permission_required, permission_any_of
@@ -123,10 +124,12 @@ def editar_usuario(id):
                          usuario_sectores_ids=usuario_sectores_ids)
 
 @admin_usuario_bp.route('/<int:id>/eliminar', methods=['POST'])
+@jwt_required()
 @permission_required(accion='eliminar_empleado')
 def eliminar_usuario(id):
     """Realiza una desactivación lógica de un usuario."""
-    if session.get('usuario_id') == id:
+    current_user_id = get_jwt_identity()
+    if current_user_id == id:
         msg = 'No puedes desactivar tu propia cuenta.'
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return jsonify(success=False, error=msg), 400

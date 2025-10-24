@@ -20,37 +20,19 @@
 <header>
     <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
         <div class="container-fluid">
-            {% if 'usuario_id' in session %}
-            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('admin_dashboard.index') }}">
-                <i class="bi bi-snow2 me-2 fs-4"></i>
-                FrozenProd
-            </a>
-            {% else %}
-            <a class="navbar-brand d-flex align-items-center" >
-                <i class="bi bi-snow2 me-2 fs-4"></i>
-                FrozenProd
-            </a>
-            {% endif %}
 
-    {% if 'usuario_id' in session %}
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
-                        style="border-color: rgba(255,255,255,0.3);">
-                    <span class="navbar-toggler-icon" style="filter: invert(1);"></span>
-                </button>
-                
-                <div class="collapse navbar-collapse" id="navbarNav">
-                    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                        
-                            {% set can_access = false %}
-                            {% if session.get('rol') == 'DEV' %}
-                                {% set can_access = true %}
-                            {% else %}
-                                {% set allowed_roles = CANONICAL_PERMISSION_MAP.get(action, []) %}
-                                {% if session.get('rol')|upper in allowed_roles %}
-                                    {% set can_access = true %}
-                                {% endif %}
-                            {% endif %}
-                            {{ can_access }}
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('admin_dashboard.index') if current_user else '#' }}">
+                <i class="bi bi-snow2 me-2 fs-4"></i>
+                FrozenProd
+            </a>
+        {% if current_user %}
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                    style="border-color: rgba(255,255,255,0.3);">
+                <span class="navbar-toggler-icon" style="filter: invert(1);"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
                         {% set can_ver_insumos = 'consultar_stock_de_insumos' is has_permission %}
                         {% set can_ver_compras = 'consultar_ordenes_de_compra' is has_permission %}
@@ -148,12 +130,12 @@
                             <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="navbarDropdownUser" 
                                role="button" data-bs-toggle="dropdown">
                                 <i class="bi bi-person-circle me-2"></i>
-                                {{ session.get('usuario_nombre') }}
+                                {{ current_user.nombre }}
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownUser">
                                 <li>
                                     <h6 class="dropdown-header">
-                                        <small class="text-muted">{{ session.get('rol', '') }}</small>
+                                        <small class="text-muted">{{ current_user.rol }}</small>
                                     </h6>
                                 </li>
                                 <li><hr class="dropdown-divider"></li>
@@ -185,15 +167,12 @@
                 </div>
 
                 {% block content %}{% endblock %}
-                
-    {% if 'usuario_id' in session %}
+
             </div>
         </div>
-    </div>
-    {% else %}
-        </div>
-    {% endif %}
-
+        </nav>
+        <br>
+        
     <div class="modal fade" id="confirmationModal" tabindex="-1" aria-labelledby="modalTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">

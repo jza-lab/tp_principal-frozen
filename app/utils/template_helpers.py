@@ -59,6 +59,25 @@ def _has_permission_filter(action: str) -> bool:
         # no hay permisos.
         return False
 
+def _inject_user_from_jwt():
+    """
+    Procesador de contexto para inyectar datos del usuario desde el JWT.
+    Esto hace que 'current_user' esté disponible en todas las plantillas
+    siempre que haya un token JWT válido en la solicitud.
+    """
+    try:
+        claims = get_jwt()
+        current_user = {
+            'nombre': claims.get('nombre_usuario', 'Usuario'),
+            'rol': claims.get('rol')
+        }
+        return {'current_user': current_user}
+    except Exception:
+        # Si no hay token JWT (p.ej. en la página de login),
+        # get_jwt() lanza una excepción. En ese caso, no inyectamos nada.
+        return {}
+
+
 def register_template_extensions(app: Flask):
     """
     Registra todos los helpers de plantillas (filtros, procesadores de contexto)
@@ -68,3 +87,4 @@ def register_template_extensions(app: Flask):
     app.jinja_env.filters['formato_moneda'] = _formato_moneda_filter
     app.jinja_env.tests['has_permission'] = _has_permission_filter
     app.context_processor(_inject_permission_map)
+    app.context_processor(_inject_user_from_jwt)
