@@ -32,14 +32,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const pedidoDataTemp = document.getElementById('pedido_data_temp');
 
     // CAMPOS DE CLIENTE
-    const nombreInput = document.getElementById('nombre');
+    const nombreInput = document.getElementById('nombre_cliente');
     const telefonoInput = document.getElementById('telefono');
     const condicionIvaDisplay = document.getElementById('condicion_iva_display');
     const condicionIvaValue = document.getElementById('condicion_iva_value');
     const tipoFacturaInput = document.getElementById('tipo_factura');
 
     // --- REFERENCIAS DE DIRECCIÓN ---
-    const toggleDireccionEntregaBtn = document.getElementById('toggleDireccionEntregaBtn');
+    const toggleDireccionEntregaBtn = document.getElementById('usar_direccion_alternativa');
     const facturacionAddressFields = document.getElementById('facturacionAddressFields');
     const direccionEntregaAlternativaContainer = document.getElementById('direccionEntregaAlternativaContainer');
     const idDireccionEntregaInput = document.getElementById('id_direccion_entrega');
@@ -61,12 +61,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- MAPEO Y ESTADO ---
 
     // Funciones globales (capturadas con un fallback robusto)
-    const buildPayload = window.buildPayload || (() => { console.error("BuildPayload no definida."); return { items: [] }; });
-    const updateResumen = window.updateResumen || window.calculateOrderTotals || (() => { });
-    const addItemRow = window.addItemRow || (() => {
-        console.error("Error FATAL: addItemRow no está definida en window. Debe corregir formularioVenta.js.");
-        showNotificationModal('Error de Carga', 'No se pudo cargar la función de añadir productos. Revise formularioVenta.js.', 'error');
-    });
+    const updateResumen = window.calculateOrderTotals || (() => { });
+    const addItemRow = window.addItemRow || (() => { showNotificationModal('Error de Carga', 'No se pudo cargar la función para añadir productos.', 'error'); });
     const showNotificationModal = window.showNotificationModal || alert;
 
     // Mapeo de Condición IVA
@@ -81,6 +77,42 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- LÓGICA DE BÚSQUEDA DE CLIENTE SEGURA ---
 
+    function buildClientOrderPayload() {
+        const getAddressData = (prefix) => ({
+            calle: document.getElementById(`calle_${prefix}`).value,
+            altura: document.getElementById(`altura_${prefix}`).value,
+            piso: document.getElementById(`piso_${prefix}`).value || null,
+            depto: document.getElementById(`depto_${prefix}`).value || null,
+            localidad: document.getElementById(`localidad_${prefix}`).value,
+            provincia: document.getElementById(`provincia_${prefix}`).value,
+            codigo_postal: document.getElementById(`codigo_postal_${prefix}`).value
+        });
+
+        const payload = {
+            id_cliente: parseInt(idClienteInput.value, 10),
+            fecha_entrega: document.getElementById('fecha_entrega').value,
+            items: [],
+            direccion_entrega: isUsingAlternativeAddress ? getAddressData('alternativa') : getAddressData('facturacion'),
+            usar_direccion_alternativa: isUsingAlternativeAddress,
+            id_direccion_entrega: isUsingAlternativeAddress ? null : idDireccionEntregaInput.value
+        };
+
+        document.querySelectorAll('#items-container .item-row').forEach(row => {
+            const productoSelect = row.querySelector('.producto-selector');
+            const cantidadInput = row.querySelector('.item-quantity');
+            const precioUnitarioInput = row.querySelector('.item-price-unit-value');
+            if (productoSelect && cantidadInput && precioUnitarioInput && productoSelect.value) {
+                payload.items.push({
+                    producto_id: parseInt(productoSelect.value, 10),
+                    cantidad: parseFloat(cantidadInput.value) || 0,
+                    precio_unitario: parseFloat(precioUnitarioInput.value) || 0
+                });
+            }
+        });
+        return payload;
+    }
+
+    // --- LÓGICA DE BÚSQUEDA DE CLIENTE ---
     cuilCuitInput.addEventListener('input', function (e) {
         let value = e.target.value.replace(/\D/g, '');
         if (value.length > 2) value = value.substring(0, 2) + '-' + value.substring(2);
@@ -89,9 +121,7 @@ document.addEventListener('DOMContentLoaded', function () {
         checkStep1Validity();
     });
 
-    buscarClienteBtn.addEventListener('click', buscarClienteSeguro);
-
-    async function buscarClienteSeguro() {
+    buscarClienteBtn.addEventListener('click', async function () {
         const cuil = cuilCuitInput.value;
         const email = emailInput.value;
 
@@ -117,21 +147,19 @@ document.addEventListener('DOMContentLoaded', function () {
             const result = await response.json();
 
             if (response.ok && result.success) {
-                const cliente = result.data;
-                rellenarDatosCliente(cliente);
-                clienteMessage.textContent = `¡Datos de ${cliente.nombre || cliente.razon_social} precargados con éxito!`;
+
+                rellenarDatosCliente(result.data);
+                clienteMessage.textContent = `¡Datos de ${result.data.nombre || result.data.razon_social} precargados!`;
                 clienteMessage.className = 'form-text mt-1 text-success';
 
-                datosClienteCard.style.display = 'block';
-                productosCard.style.display = 'block';
-                resumenCalculos.style.display = 'block';
+                [datosClienteCard, productosCard, resumenCalculos].forEach(el => el.style.display = 'block');
 
                 checkStep1Validity();
                 updateResumen();
 
             } else {
                 limpiarDatosCliente(true);
-                clienteMessage.textContent = result.error || 'Cliente no encontrado o credenciales incorrectas.';
+                clienteMessage.textContent = result.error || 'Cliente no encontrado.';
                 clienteMessage.className = 'form-text mt-1 text-danger';
             }
 
@@ -144,7 +172,7 @@ document.addEventListener('DOMContentLoaded', function () {
             buscarClienteBtn.disabled = false;
             searchSpinner.style.display = 'none';
         }
-    }
+    })
 
     // Función auxiliar para establecer/quitar el atributo 'required'
     function setRequiredAttribute(element, isRequired) {
@@ -159,6 +187,7 @@ document.addEventListener('DOMContentLoaded', function () {
         [calleFacturacionInput, alturaFacturacionInput, provinciaFacturacionInput, localidadFacturacionInput, cpFacturacionInput, document.getElementById('piso_facturacion'), document.getElementById('depto_facturacion')].forEach(input => input.value = '');
         [calleAlternativaInput, alturaAlternativaInput, provinciaAlternativaInput, localidadAlternativaInput, cpAlternativaInput, document.getElementById('piso_alternativa'), document.getElementById('depto_alternativa')].forEach(input => { input.value = ''; input.classList.remove('is-invalid', 'is-valid'); });
     }
+
 
 
     function rellenarDatosCliente(cliente) {
@@ -178,56 +207,35 @@ document.addEventListener('DOMContentLoaded', function () {
         // --- Lógica de Dirección Detallada (Facturación) ---
         limpiarCamposDireccion();
 
-        let dirPrincipal = cliente.direccion;
+        let dirPrincipal = cliente.direccion || (cliente.direcciones && (cliente.direcciones.find(d => d.es_principal) || cliente.direcciones[0]));
         if (!dirPrincipal && cliente.direcciones && cliente.direcciones.length > 0) {
             dirPrincipal = cliente.direcciones.find(d => d.es_principal) || cliente.direcciones[0];
         }
 
         if (dirPrincipal) {
             // Rellenar campos de Facturación (ReadOnly)
-            calleFacturacionInput.value = dirPrincipal.calle || '';
-            alturaFacturacionInput.value = dirPrincipal.altura || '';
-            provinciaFacturacionInput.value = dirPrincipal.provincia || '';
-            localidadFacturacionInput.value = dirPrincipal.localidad || '';
-            document.getElementById('piso_facturacion').value = dirPrincipal.piso || '';
-            document.getElementById('depto_facturacion').value = dirPrincipal.depto || '';
-            cpFacturacionInput.value = dirPrincipal.codigo_postal || '';
-
+            Object.keys(dirPrincipal).forEach(key => {
+                const el = document.getElementById(`${key}_facturacion`);
+                if (el) el.value = dirPrincipal[key] || '';
+            });
             idDireccionEntregaInput.value = dirPrincipal.id;
             idDireccionEntregaInput.dataset.facturacionId = dirPrincipal.id;
-        } else {
-            idDireccionEntregaInput.value = '';
-            idDireccionEntregaInput.dataset.facturacionId = '';
         }
-
-        // Asegurarse de volver al estado inicial (usando dirección de facturación)
         isUsingAlternativeAddress = true;
         toggleDireccionEntregaBtn.click();
     }
 
     function limpiarDatosCliente(shouldResetAddress = true) {
 
-        idClienteInput.value = '';
-        nombreInput.value = '';
-        telefonoInput.value = '';
-        condicionIvaDisplay.value = '';
-        condicionIvaValue.value = '';
-        tipoFacturaInput.value = '';
-
-        limpiarCamposDireccion();
-        idDireccionEntregaInput.value = '';
         idDireccionEntregaInput.dataset.facturacionId = '';
+        [idClienteInput, nombreInput, telefonoInput, condicionIvaDisplay, condicionIvaValue, tipoFacturaInput, idDireccionEntregaInput].forEach(el => el.value = '');
 
         if (shouldResetAddress) {
             isUsingAlternativeAddress = true;
             toggleDireccionEntregaBtn.click();
         }
 
-        datosClienteCard.style.display = 'none';
-        productosCard.style.display = 'none';
-        resumenCalculos.style.display = 'none';
-
-        // Limpiar productos
+        [datosClienteCard, productosCard, resumenCalculos].forEach(el => el.style.display = 'none');
         itemsContainer.innerHTML = '';
         document.getElementById('id_items-TOTAL_FORMS').value = 0;
         updateResumen();
@@ -238,39 +246,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     toggleDireccionEntregaBtn.addEventListener('click', function () {
         isUsingAlternativeAddress = !isUsingAlternativeAddress;
-
-        if (isUsingAlternativeAddress) {
-            // MOSTRAR DIRECCIÓN ALTERNATIVA
-            facturacionAddressFields.style.display = 'none';
-            direccionEntregaAlternativaContainer.style.display = 'block';
-            toggleDireccionEntregaBtn.innerHTML = '<i class="bi bi-house-door-fill me-1"></i> Usar Dirección de Facturación';
-            toggleDireccionEntregaBtn.classList.remove('btn-outline-info');
-            toggleDireccionEntregaBtn.classList.add('btn-outline-secondary');
-
-            idDireccionEntregaInput.value = '';
-
-            setRequiredAttribute(calleAlternativaInput, true);
-            setRequiredAttribute(alturaAlternativaInput, true);
-            setRequiredAttribute(provinciaAlternativaInput, true);
-            setRequiredAttribute(localidadAlternativaInput, true);
-            setRequiredAttribute(cpAlternativaInput, true);
-
-        } else {
-            // MOSTRAR DIRECCIÓN DE FACTURACIÓN
-            facturacionAddressFields.style.display = 'block';
-            direccionEntregaAlternativaContainer.style.display = 'none';
-            toggleDireccionEntregaBtn.innerHTML = '<i class="bi bi-truck me-1"></i> Usar otra dirección de entrega';
-            toggleDireccionEntregaBtn.classList.remove('btn-outline-secondary');
-            toggleDireccionEntregaBtn.classList.add('btn-outline-info');
-
-            idDireccionEntregaInput.value = idDireccionEntregaInput.dataset.facturacionId || '';
-
-            setRequiredAttribute(calleAlternativaInput, false);
-            setRequiredAttribute(alturaAlternativaInput, false);
-            setRequiredAttribute(provinciaAlternativaInput, false);
-            setRequiredAttribute(localidadAlternativaInput, false);
-            setRequiredAttribute(cpAlternativaInput, false);
-        }
+        facturacionAddressFields.style.display = isUsingAlternativeAddress ? 'none' : 'block';
+        direccionEntregaAlternativaContainer.style.display = isUsingAlternativeAddress ? 'block' : 'none';
+        toggleDireccionEntregaBtn.innerHTML = isUsingAlternativeAddress ? '<i class="bi bi-house-door-fill me-1"></i> Usar Dirección de Facturación' : '<i class="bi bi-truck me-1"></i> Usar otra dirección';
+        idDireccionEntregaInput.value = isUsingAlternativeAddress ? '' : (idDireccionEntregaInput.dataset.facturacionId || '');
+        ['calle', 'altura', 'provincia', 'localidad', 'codigo_postal'].forEach(f => {
+            document.getElementById(`${f}_alternativa`).required = isUsingAlternativeAddress;
+        });
         checkStep1Validity();
     });
 
@@ -278,60 +260,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function checkStep1Validity() {
 
-        const isClientSelected = idClienteInput.value.length > 0;
+        const isClientSelected = !!idClienteInput.value;
         const hasItems = itemsContainer.querySelectorAll('.item-row').length > 0;
-        // Solo valida los campos visibles y con atributo required
         const isFormValid = form.checkValidity();
 
-        let isAddressValid = false;
-
-        if (!isClientSelected) {
-            isAddressValid = false;
-        } else if (!isUsingAlternativeAddress) {
-            isAddressValid = !!idDireccionEntregaInput.value; // Debe haber un ID de dirección de facturación
-        } else {
-            // Si está usando la alternativa, debe estar llena
-            isAddressValid = (
-                calleAlternativaInput.value.trim() &&
-                alturaAlternativaInput.value.trim() &&
-                provinciaAlternativaInput.value.trim() &&
-                localidadAlternativaInput.value.trim() &&
-                cpAlternativaInput.value.trim() &&
-                isFormValid // Usa la validación HTML5 para la alternativa
-            );
-        }
-
-        const isValid = isClientSelected && hasItems && isFormValid && isAddressValid;
+        const isValid = isClientSelected && hasItems && isFormValid;
         nextStep1Btn.disabled = !isValid;
-
-        // AÑADIR ESTA LÍNEA PARA FORZAR EL RECÁLCULO
-        if (isClientSelected && hasItems) { // Opcional: solo calcular si hay cliente y ítems
-            updateResumen(); // Llama a window.calculateOrderTotals
-        }
-
         return isValid;
     }
 
-    // Escucha cambios en los campos y la tabla de productos
-    form.addEventListener('input', checkStep1Validity);
-    form.addEventListener('change', checkStep1Validity);
-    itemsContainer.addEventListener('DOMSubtreeModified', checkStep1Validity);
+    [form, itemsContainer].forEach(el => ['input', 'change', 'DOMSubtreeModified'].forEach(evt => el.addEventListener(evt, checkStep1Validity)));
 
-    // Asignación de event listeners de acción
+
     nextStep1Btn.addEventListener('click', (e) => { e.preventDefault(); goToStep(2); });
     prevStep2Btn.addEventListener('click', () => goToStep(1));
-    addItemBtn.addEventListener('click', addItemRow); // LLAMADA CORREGIDA
 
-    cancelOrderBtn.addEventListener('click', () => {
-        showNotificationModal(
-            'Pedido Cancelado',
-            'El proceso de pedido fue cancelado y no se guardó.',
-            'warning',
-            () => { window.location.href = LISTAR_URL; }
-        );
-    });
-
-    // --- LÓGICA DE NAVEGACIÓN DE PASOS Y ENVÍO FINAL (loadProforma y submit) ---
+    addItemBtn.addEventListener('click', addItemRow);
+    cancelOrderBtn.addEventListener('click', () => { showNotificationModal('Pedido Cancelado', 'El proceso fue cancelado.', 'warning', () => { window.location.href = LISTAR_URL; }); });
 
     function goToStep(step) {
         if (step === 1) {
@@ -343,13 +288,13 @@ document.addEventListener('DOMContentLoaded', function () {
             step2Indicator.classList.remove('active');
         } else if (step === 2) {
             if (!checkStep1Validity()) {
-                showNotificationModal('Validación Pendiente', 'Complete la identificación, la dirección y añada al menos un producto al pedido.', 'warning');
+                showNotificationModal('Validación Pendiente', 'Complete todos los campos requeridos y añada al menos un producto.', 'warning');
                 return;
             }
 
             const payload = buildPayload();
             if (!payload || payload.items.length === 0) {
-                showNotificationModal('Error', 'Debe haber al menos un producto en la lista.', 'warning');
+                showNotificationModal('Error', 'Debe haber al menos un producto.', 'warning');
                 return;
             }
             pedidoDataTemp.value = JSON.stringify(payload);
@@ -357,20 +302,16 @@ document.addEventListener('DOMContentLoaded', function () {
             step1Content.style.display = 'none';
             step2Content.style.display = 'block';
             step1Actions.style.display = 'none';
-            step1Indicator.classList.remove('active');
             step1Indicator.classList.add('completed');
             step2Indicator.classList.add('active');
-
             loadProforma();
         }
     }
 
-
     async function loadProforma() {
         const payloadString = pedidoDataTemp.value;
         if (!payloadString) {
-            proformaContent.innerHTML = '<p class="text-danger">Error: No se encontró la data temporal del pedido.</p>';
-            acceptOrderBtn.disabled = true;
+            proformaContent.innerHTML = '<p class="text-danger">Error: No se encontró la data del pedido.</p>';
             return;
         }
 
@@ -378,24 +319,22 @@ document.addEventListener('DOMContentLoaded', function () {
         acceptOrderBtn.disabled = true;
 
         try {
-            const tempPayload = JSON.parse(payloadString);
-            const tempClienteId = tempPayload.id_cliente || 0;
-
-            const urlApi = PROFORMA_API_URL.replace('/0/generar_factura_html', `/${tempClienteId}/generar_factura_html`);
-
-            const response = await fetch(urlApi, { method: 'GET' });
+            const response = await fetch(PROFORMA_GENERATION_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: payloadString
+            });
             const result = await response.json();
 
-            if (response.ok && result.success && result.html) {
+            if (response.ok && result.success) {
                 proformaContent.innerHTML = result.html;
                 acceptOrderBtn.disabled = false;
             } else {
-                proformaContent.innerHTML = `<div class="p-5"><p class="text-danger"><i class="bi bi-x-circle me-1"></i>Error al generar la proforma: ${result.error || 'Fallo de API.'}</p></div>`;
+                proformaContent.innerHTML = `<div class="p-5 text-center"><p class="text-danger"><i class="bi bi-x-circle me-1"></i>Error: ${result.error || 'Fallo de API.'}</p></div>`;
             }
 
         } catch (error) {
-            console.error('Error al cargar proforma:', error);
-            proformaContent.innerHTML = '<div class="p-5"><p class="text-danger"><i class="bi bi-plug me-1"></i>Error de red al conectar con el servidor.</p></div>';
+            proformaContent.innerHTML = '<div class="p-5 text-center"><p class="text-danger"><i class="bi bi-plug me-1"></i>Error de red.</p></div>';
         }
     }
 
@@ -404,57 +343,36 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (acceptOrderBtn.disabled) return;
 
-        const payload = JSON.parse(pedidoDataTemp.value);
-
         acceptOrderBtn.disabled = true;
-        const originalHtml = acceptOrderBtn.innerHTML;
         acceptOrderBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Creando Pedido...';
 
         try {
             const response = await fetch(CREAR_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
+                body: pedidoDataTemp.value,
             });
 
             const result = await response.json();
 
             if (response.ok && result.success) {
-                showNotificationModal(
-                    'Pedido Creado',
-                    result.message || 'La orden de venta ha sido registrada.',
-                    'success',
-                    () => { window.location.href = LISTAR_URL; }
-                );
+                showNotificationModal('Pedido Creado', result.message || 'La orden ha sido registrada.', 'success', () => { window.location.href = LISTAR_URL; });
             } else {
-                showNotificationModal(
-                    'Error de Creación',
-                    result.message || result.error || 'No se pudo crear la orden.',
-                    'error'
-                );
+                showNotificationModal('Error', result.message || result.error || 'No se pudo crear la orden.', 'error');
+                acceptOrderBtn.disabled = false;
+                acceptOrderBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Aceptar y Crear Pedido';
             }
+
         } catch (error) {
-            showNotificationModal(
-                'Error de Conexión',
-                'Fallo de red al intentar crear la orden.',
-                'error'
-            );
-        } finally {
+            showNotificationModal('Error de Conexión', 'Fallo de red al crear la orden.', 'error');
             acceptOrderBtn.disabled = false;
-            acceptOrderBtn.innerHTML = originalHtml;
+            acceptOrderBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Aceptar y Crear Pedido';
         }
+
     });
 
-    // --- Inicialización ---
-    // Agrega una fila inicial si el contenedor está vacío.
-    if (itemsContainer.children.length === 0) {
-        addItemRow();
-    }
-
-    // Ejecutar cálculo inicial para productos precargados o la fila recién añadida.
-    updateResumen(); // LLAMADA CLAVE: Asegura que la fila inicial tenga sus valores.
-
-    // Establecer el estado inicial de la dirección (Muestra Facturación por defecto)
-    // El 'click' en el botón llama a checkStep1Validity() lo que también dispara updateResumen().
+    if (itemsContainer.children.length === 0) { } addItemRow();
+    updateResumen();
+    checkStep1Validity();
     toggleDireccionEntregaBtn.click();
 });

@@ -102,8 +102,9 @@
                         <h4 class="card-title"><i class="bi bi-info-circle-fill me-2"></i> Datos del Pedido</h4>
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label for="nombre" class="form-label">Nombre</label>
-                                <input type="text" class="form-control" id="nombre" name="nombre" readonly>
+                                <label for="nombre_cliente" class="form-label">Nombre</label>
+                                <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente"
+                                    readonly>
                             </div>
                             <div class="col-md-6">
                                 <label for="telefono" class="form-label">Teléfono</label>
@@ -119,10 +120,25 @@
                             </div>
 
                             <div class="col-md-4">
-                                <label for="fecha_entrega" class="form-label">Fecha de Entrega Requerida <span
+                                <label for="fecha_requerido" class="form-label">Fecha de Entrega Requerida <span
                                         class="text-danger">*</span></label>
-                                <input type="date" class="form-control" id="fecha_entrega" name="fecha_entrega"
+                                <input type="date" class="form-control" id="fecha_requerido" name="fecha_requerido"
                                     value="{{ today }}" required>
+                            </div>
+                            <input id="fecha_solicitud" name="fecha_solicitud" type="hidden" class="form-label"
+                                read-only value="{{ today }}"></label>
+
+                            <div class="col-md-4">
+                                <label for="condicion_venta" class="form-label">Condición de Venta <span
+                                        class="text-danger">*</span></label>
+                                <select class="form-select" id="condicion_venta" name="condicion_venta" required>
+                                    <option value="contado" {% if es_cliente_nuevo %}selected{% endif %}>Al Contado
+                                    </option>
+                                    {% if not es_cliente_nuevo %}
+                                    <option value="credito_30">Crédito 30 días</option>
+                                    <option value="credito_90">Crédito 90 días</option>
+                                    {% endif %}
+                                </select>
                             </div>
 
                             <div class="col-md-12">
@@ -133,8 +149,8 @@
                                     <input type="hidden" id="id_direccion_entrega" name="id_direccion_entrega" value="">
 
                                     <div class="d-flex justify-content-end mb-3">
-                                        <button type="button" class="btn btn-sm btn-outline-info"
-                                            id="toggleDireccionEntregaBtn">
+                                        <button type="checkbox" class="btn btn-sm btn-outline-info"
+                                            id="usar_direccion_alternativa">
                                             <i class="bi bi-truck me-1"></i> Usar otra dirección de entrega
                                         </button>
                                     </div>
@@ -271,6 +287,14 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <div class="col-12">
+                                <label for="comentarios_adicionales" class="form-label">Comentarios Adicionales</label>
+                                <textarea class="form-control" name="comentarios_adicionales"
+                                    id="comentarios_adicionales" rows="3"
+                                    maxlength="500"> {{ pedido.comentarios_adicionales if pedido and pedido.comentarios_adicionales else ''}}</textarea>
+                                <div class="form-text">Opcional - Ingrese comentarios adicionales sobre el pedido</div>
+                            </div>
                         </div>
                     </div>
 
@@ -356,9 +380,9 @@
                                             {% set precio_u = item.get('precio_unitario', 0) | float %}
                                             {% set precio_u_formateado = '{:,.2f}'.format(precio_u).replace(',',
                                             'X').replace('.', ',').replace('X', '.') %}
-                                            
-                                            <input type="hidden" class="item-price-unit-value" 
-                                                name="items-{{ loop.index0 }}-precio_unitario" 
+
+                                            <input type="hidden" class="item-price-unit-value"
+                                                name="items-{{ loop.index0 }}-precio_unitario"
                                                 value="{{ item.get('precio_unitario', 0) | float }}">
                                             <input type="text" class="form-control form-control-sm price-display"
                                                 value="$ {{ precio_u_formateado }}" readonly>
@@ -416,9 +440,8 @@
                                 </div>
                             </td>
                             <td>
-                                <input type="hidden" class="item-price-unit-value" 
-                                    name="items-__prefix__-precio_unitario" 
-                                    value="0">
+                                <input type="hidden" class="item-price-unit-value"
+                                    name="items-__prefix__-precio_unitario" value="0">
                                 <input type="text" class="form-control form-control-sm price-display" value="$ 0,00"
                                     readonly>
                             </td>
@@ -433,13 +456,15 @@
 
                     <div id="resumenCalculos" class="card p-4 shadow-sm" style="display: none;">
                         <div class="row g-3">
-                            <div class="col-md-6 text-end">Subtotal (sin IVA): <strong
+                            <div class="col-md-6 text-end">Subtotal (Iva incluido): <strong
                                     id="resumen-subtotal">$0.00</strong></div>
-                            <div class="col-md-6 text-end">Costo de Envío: <strong id="resumen-flete">$0.00</strong>
+                            <div type="hidden" class="col-md-6 text-end">Costo de Envío: <strong
+                                    id="resumen-flete">$0.00</strong>
                             </div>
-                            <div class="col-md-6 text-end">IVA (<span id="iva-porcentaje">21</span>%): <strong
-                                    id="resumen-iva">$0.00</strong></div>
-                            <div class="col-md-6 text-end">TOTAL FINAL: <strong id="resumen-total"
+                            <div id="iva-row" class="col-md-6 text-end" style="display: none;">
+                                IVA (<span id="iva-porcentaje">21</span>%): <strong id="resumen-iva">$0.00</strong>
+                            </div>
+                            <div class="col-md-6 text-end">TOTAL FINAL: <strong id="total-final"
                                     class="text-primary fs-4">$0.00</strong></div>
                         </div>
                     </div>
@@ -488,7 +513,7 @@
     const CLIENTE_API_SEARCH_URL = "{{ url_for('clientes_proveedores.buscar_cliente_por_cuil_y_email_api') }}";
     const LISTAR_URL = "{{ url_for('orden_venta.listar') }}";
     const CREAR_URL = "{{ url_for('orden_venta.nueva') }}";
-    const PROFORMA_API_URL = "{{ url_for('orden_venta.generar_factura_html', id=0) }}";
+    const PROFORMA_GENERATION_URL = "{{ url_for('orden_venta.generar_proforma_api') }}";
     const PRODUCTOS_DATA = {{ productos | tojson | safe }};
     const isEditing = false;
     const pedidoId = 0;
