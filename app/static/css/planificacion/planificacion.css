@@ -157,84 +157,101 @@
     margin-right: 0.5rem;
 }
 
-/* --- ESTILOS MEJORADOS PARA TABLA CRP --- */
+
+/* --- ESTILOS MEJORADOS V2 PARA TABLA CRP --- */
 .crp-tabla {
-    border-collapse: separate; /* Permite espaciado entre celdas */
-    border-spacing: 0 0.75rem; /* Espacio vertical ENTRE grupos de filas (Linea 1 vs Linea 2) */
-    font-size: 0.85rem;      /* Tamaño de fuente base */
-    width: 100%;             /* Asegurar ancho completo */
-    margin-top: 1rem;        /* Margen superior */
+    border-collapse: collapse; /* Bordes colapsados para mejor apariencia */
+    width: 100%;
+    margin-top: 1rem;
+    font-size: 0.85rem;
 }
 
-/* Estilo para la cabecera (Nombres de días) */
+/* Cabecera */
 .crp-tabla thead th {
-    background-color: #e9ecef; /* Fondo gris claro */
-    border-bottom: 2px solid #dee2e6; /* Borde inferior más grueso */
-    padding: 0.6rem 0.5rem;
+    background-color: #e9ecef;
+    border: 1px solid #dee2e6;
+    padding: 0.5rem;
     font-weight: 600;
-    white-space: nowrap;     /* Evitar que nombres de días se partan */
+    white-space: nowrap;
     vertical-align: middle;
-    text-align: center;      /* Asegurar centrado */
+    text-align: center;
 }
-/* Primera celda cabecera (Centro Trabajo) */
 .crp-tabla thead th:first-child {
-    text-align: left;        /* Alinear a la izquierda */
-    background-color: #f8f9fa; /* Fondo ligeramente diferente */
+    text-align: left;
+    background-color: #f8f9fa;
+}
+/* Resaltar cabecera fin de semana */
+.crp-tabla thead th.weekend-header {
+    background-color: #fff3cd; /* Amarillo pálido */
 }
 
-/* Estilo general para celdas de datos */
+/* Celdas de datos */
 .crp-tabla tbody td {
     vertical-align: middle;
-    padding: 0.3rem 0.5rem;
-    text-align: center;      /* Centrar texto por defecto */
-    border: 1px solid #f1f3f5; /* Borde sutil alrededor de cada celda */
+    padding: 0.4rem 0.5rem;
+    text-align: center;
+    border: 1px solid #e9ecef; /* Borde más claro */
 }
 
-/* Estilo específico para la primera columna (Nombre Línea) */
+/* Primera columna (Nombre Línea / Métrica) */
 .crp-tabla tbody td:first-child {
     font-weight: 600;
-    background-color: #f8f9fa; /* Fondo ligero */
+    background-color: #f8f9fa;
     text-align: left !important;
-    border-left: 2px solid #dee2e6; /* Borde izquierdo más grueso */
-    border-right: 1px solid #dee2e6;/* Borde derecho separador */
+    border-left: 2px solid #dee2e6;
+    border-right: 1px solid #dee2e6;
 }
-/* Borde derecho más grueso al final de la fila */
+.crp-tabla tbody td.metric-label {
+    padding-top: 0.6rem; /* Más espacio vertical para la primera celda */
+    padding-bottom: 0.6rem;
+}
+.crp-tabla tbody td.metric-label small { /* Etiquetas Capacidad/Carga/Util */
+    font-weight: normal;
+    display: block;
+    margin-top: -2px;
+}
+
+/* Resaltar celdas fin de semana */
+.crp-tabla tbody td.weekend-cell {
+    background-color: #fff9e6; /* Amarillo muy pálido */
+}
+
+/* Última columna */
 .crp-tabla tbody td:last-child {
      border-right: 2px solid #dee2e6;
 }
 
-/* Agrupación visual de las 3 filas por Centro de Trabajo */
-.crp-tabla tbody tr:nth-child(3n+1) td { /* Primera fila (Capacidad) */
-     border-top: 2px solid #dee2e6; /* Borde superior más grueso */
-}
- .crp-tabla tbody tr:nth-child(3n) td { /* Tercera fila (Utilización) */
-      border-bottom: 2px solid #dee2e6; /* Borde inferior más grueso */
- }
+/* Bordes para agrupar filas */
+.crp-tabla tbody tr.crp-capacidad td { border-top: 2px solid #adb5bd; } /* Borde superior grupo */
+.crp-tabla tbody tr.crp-utilizacion td { border-bottom: 2px solid #adb5bd; } /* Borde inferior grupo */
 
-/* Etiquetas pequeñas (Cap:, Carga:, Util:) */
+/* Espaciador (fila vacía entre grupos) */
+.crp-tabla tr.row-spacer td {
+    height: 0.75rem;
+    border: none; /* Sin bordes */
+    padding: 0;
+    background-color: transparent !important; /* Asegurar fondo transparente */
+}
+
+/* Etiquetas pequeñas (min) */
 .crp-tabla small.text-muted {
-    font-size: 0.7em;
-    display: block;
-    margin-bottom: -3px;
+    font-size: 0.75em;
     color: #6c757d !important;
 }
 
-/* Estilo para el porcentaje de Utilización */
-.crp-utilizacion .fw-bold {
-     font-size: 1.1em;
-}
-.crp-utilizacion .small { /* Para el icono de advertencia */
-     vertical-align: middle;
-}
+/* Estilo Utilización */
+.crp-utilizacion .fw-bold { font-size: 1.1em; }
+.crp-utilizacion .small { vertical-align: middle; }
 
-/* Colores de fondo suaves para utilización (Asegúrate que estén definidos si no usas variables BS) */
-/* Si usas Bootstrap 5, estas clases ya deberían funcionar */
+/* Colores de fondo suaves (sin cambios) */
 .bg-danger-soft { background-color: rgba(220, 53, 69, 0.15) !important; }
 .text-danger { color: #dc3545 !important; }
 .bg-warning-soft { background-color: rgba(255, 193, 7, 0.15) !important; }
 .text-warning { color: #ffc107 !important; }
 .bg-success-soft { background-color: rgba(25, 135, 84, 0.15) !important; }
 .text-success { color: #198754 !important; }
+.bg-light { background-color: #f8f9fa !important; } /* Para 0% */
+.text-muted { color: #6c757d !important; } /* Para 0% */
 
 /* Mejoras para la nueva estructura */
 .day-column {
@@ -266,4 +283,8 @@
 .op-card-mini:hover {
     transform: translateX(2px);
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+/* En planificacion.css (opcional, usualmente no necesario) */
+.accordion-button > .d-flex { 
+    background-color: inherit !important; /* Forzar herencia del fondo del botón padre */
 }

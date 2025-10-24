@@ -321,15 +321,16 @@
                             </div>
                         </div>
                     </div>
-                    {# Tabla detallada #}
+                    {# --- TABLA DETALLADA CRP (NUEVO DISEÑO) --- #}
                     <div class="table-responsive">
-                        <table class="table table-sm table-bordered text-center crp-tabla table-striped">
-                            <thead class="table-light">
+                        <table class="table table-sm text-center crp-tabla">
+                            <thead>
                                 <tr>
-                                    <th class="text-start" style="width: 12%;">Centro de Trabajo</th>
+                                    <th class="text-start" style="width: 12%;">Centro / Métrica</th> {# Título ajustado #}
                                     {% for i in range(num_dias) %}
                                         {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
-                                        <th class="{% if fecha_dia.weekday() >= 5 %}table-warning{% endif %}">
+                                        {# Marcar fines de semana con clase #}
+                                        <th class="{% if fecha_dia.weekday() >= 5 %}weekend-header{% endif %}">
                                             {{ fecha_dia.strftime('%a') | capitalize }}<br>
                                             <small class="text-muted">{{ fecha_dia.strftime('%d/%m') }}</small>
                                         </th>
@@ -340,15 +341,15 @@
                                 {% for centro_id, nombre_centro in {1: 'Línea 1', 2: 'Línea 2'}.items() %}
                                     {# Fila Capacidad #}
                                     <tr class="crp-capacidad">
-                                        <td class="text-start fw-bold" rowspan="3" style="vertical-align: middle;">
+                                        <td class="text-start fw-bold metric-label">
                                             <div>{{ nombre_centro }}</div>
-                                            <small class="text-muted fw-normal">Capacidad</small>
+                                            <span class="text-muted fw-normal">Capacidad</span>
                                         </td>
                                         {% for i in range(num_dias) %}
                                             {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
                                             {% set fecha_iso = fecha_dia.isoformat() %}
                                             {% set cap = capacidad_crp.get(centro_id, {}).get(fecha_iso, 0) %}
-                                            <td class="{% if fecha_dia.weekday() >= 5 %}table-warning{% endif %}">
+                                            <td class="{% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %}">
                                                 <span class="fw-bold text-primary">{{ cap | round(0) }}</span>
                                                 <small class="text-muted d-block">min</small>
                                             </td>
@@ -356,14 +357,14 @@
                                     </tr>
                                     {# Fila Carga #}
                                     <tr class="crp-carga">
-                                        <td class="text-start fw-bold" style="border: none; background: inherit;">
-                                            <small class="text-muted">Carga Planif.</small>
+                                        <td class="text-start metric-label">
+                                            <span class="text-muted">Carga Planif.</span>
                                         </td>
                                         {% for i in range(num_dias) %}
                                             {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
                                             {% set fecha_iso = fecha_dia.isoformat() %}
                                             {% set carga = carga_crp.get(centro_id, {}).get(fecha_iso, 0) %}
-                                            <td class="{% if fecha_dia.weekday() >= 5 %}table-warning{% endif %}">
+                                            <td class="{% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %}">
                                                 <span class="fw-bold {% if carga > 0 %}text-dark{% else %}text-muted{% endif %}">
                                                     {{ carga | round(0) }}
                                                 </span>
@@ -373,8 +374,8 @@
                                     </tr>
                                     {# Fila Utilización #}
                                     <tr class="crp-utilizacion">
-                                        <td class="text-start fw-bold" style="border: none; background: inherit;">
-                                            <small class="text-muted">Utilización</small>
+                                        <td class="text-start metric-label">
+                                            <span class="text-muted">Utilización</span>
                                         </td>
                                         {% for i in range(num_dias) %}
                                             {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
@@ -382,27 +383,27 @@
                                             {% set cap = capacidad_crp.get(centro_id, {}).get(fecha_iso, 0) %}
                                             {% set carga = carga_crp.get(centro_id, {}).get(fecha_iso, 0) %}
                                             {% set utilizacion = (carga / cap * 100) if cap > 0 else 0 %}
+                                            {# Colores y clases #}
                                             {% set bg_color = 'bg-danger-soft text-danger' if utilizacion > 100 else ('bg-warning-soft text-warning' if utilizacion > 85 else ('bg-success-soft text-success' if utilizacion > 0 else 'bg-light text-muted')) %}
-                                            <td class="{{ bg_color }} {% if fecha_dia.weekday() >= 5 %}border-warning{% endif %}">
+                                            <td class="{{ bg_color }} {% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %}">
                                                 <span class="fw-bold fs-6">{{ utilizacion | round(0) }}%</span>
-                                                {% if utilizacion > 100 %}
-                                                <i class="bi bi-exclamation-triangle-fill small ms-1" title="Sobrecarga - Capacidad insuficiente"></i>
-                                                {% elif utilizacion > 85 %}
-                                                <i class="bi bi-exclamation-circle-fill small ms-1" title="Alta utilización - Monitorear"></i>
-                                                {% elif utilizacion > 0 %}
-                                                <i class="bi bi-check-circle-fill small ms-1" title="Utilización óptima"></i>
+                                                {# Iconos #}
+                                                {% if utilizacion > 100 %}<i class="bi bi-exclamation-triangle-fill small ms-1" title="Sobrecarga"></i>
+                                                {% elif utilizacion > 85 %}<i class="bi bi-exclamation-circle-fill small ms-1" title="Alta utilización"></i>
+                                                {% elif utilizacion > 0 %}<i class="bi bi-check-circle-fill small ms-1" title="Óptimo"></i>
                                                 {% endif %}
                                             </td>
                                         {% endfor %}
                                     </tr>
-                                    {# Espaciado entre líneas #}
+                                    {# Espaciador visual si no es la última línea #}
                                     {% if not loop.last %}
-                                    <tr><td colspan="{{ num_dias + 1 }}" style="height: 1rem; background: transparent;"></td></tr>
+                                    <tr class="row-spacer"><td colspan="{{ num_dias + 1 }}"></td></tr>
                                     {% endif %}
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
+                    {# --- FIN TABLA DETALLADA --- #}
                     
                     {# Explicación de métricas #}
                     <div class="mt-3">

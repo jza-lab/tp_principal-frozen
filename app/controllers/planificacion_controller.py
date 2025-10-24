@@ -396,9 +396,11 @@ class PlanificacionController(BaseController):
             # Configurar locale para español (si no está globalmente)
             try:
                 locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+                logger.info("Locale establecido a es_ES.UTF-8")
             except locale.Error:
                 try:
-                    locale.setlocale(locale.LC_TIME, 'Spanish_Spain.1252') # Windows fallback
+                    locale.setlocale(locale.LC_TIME, 'Spanish_Spain.1252')
+                    logger.info("Locale establecido a Spanish_Spain.1252")
                 except locale.Error:
                     logger.warning("Locale 'es_ES.UTF-8' o 'Spanish_Spain' no disponible. Los días se mostrarán en inglés.")
                     pass # Continuar con el locale por defecto
