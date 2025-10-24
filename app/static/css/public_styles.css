@@ -517,3 +517,150 @@ p {
      color: var(--primary-teal);
      transform: none;
 }
+
+/* --- Estilos para el Formulario de Pedidos --- */
+
+.form-container {
+    width: 100%;
+}
+
+.form-card {
+    background-color: var(--card-bg);
+    border-radius: 12px;
+    padding: 2.5rem;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+}
+
+.form-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+}
+
+.form-header i {
+    color: var(--primary-teal);
+    font-size: 3rem;
+}
+
+.form-header h2 {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.step-indicator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 2.5rem;
+}
+
+.step-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.step {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: #f0f0f0;
+    color: #999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5rem;
+    transition: background-color 0.4s ease, color 0.4s ease, transform 0.3s ease;
+    border: 3px solid #f0f0f0;
+}
+
+.step.active {
+    background-color: var(--primary-teal);
+    color: white;
+    border-color: var(--secondary-teal);
+    transform: scale(1.1);
+}
+
+.step.completed {
+    background-color: var(--secondary-teal);
+    color: white;
+    border-color: var(--light-teal);
+}
+
+.step-label {
+    margin-top: 0.75rem;
+    font-weight: 500;
+    color: #666;
+    font-size: 0.9rem;
+    transition: color 0.3s ease;
+}
+
+.step.active + .step-label {
+    color: var(--primary-teal);
+}
+
+.step-connector {
+    flex-grow: 1;
+    height: 2px;
+    background-color: #e0e0e0;
+    margin: 0 1rem;
+    max-width: 150px;
+}
+
+.form-section {
+    animation: fadeIn 0.6s ease-out;
+}
+
+/* Estilos para los inputs y botones del formulario */
+.form-control, .form-select {
+    border-radius: 8px;
+    border: 1px solid #ced4da;
+    padding: 0.75rem 1rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    color: #333; /* Ensuring text is dark */
+}
+
+.form-control::placeholder {
+    color: #888; /* Darker placeholder text */
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary-teal);
+    box-shadow: 0 0 0 3px rgba(52, 126, 133, 0.15);
+}
+
+.btn-primary {
+    background-color: var(--primary-teal);
+    border-color: var(--primary-teal);
+}
+.btn-primary:hover {
+    background-color: var(--secondary-teal);
+    border-color: var(--secondary-teal);
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+/* Adaptación de la tabla de productos */
+#productosCard .table {
+    margin-top: 1.5rem;
+}
+
+#productosCard .table thead {
+    background-color: var(--bg-color);
+}
+
+#items-container .item-row {
+    transition: background-color 0.3s;
+}
+
+#items-container .item-row:hover {
+    background-color: #f8f9fa;
+}

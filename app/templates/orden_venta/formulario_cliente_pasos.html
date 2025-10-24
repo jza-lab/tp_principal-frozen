@@ -1,51 +1,20 @@
-{% extends 'layouts/base.html' %}
-{% set form_title = 'Realizar Nuevo Pedido' %}
+{% extends 'public/base.html' %}
+{% set form_title = 'Realizá tu Pedido' %}
 
 {% block title %}{{ form_title }} - Sistema Frozen{% endblock %}
-{% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/crearUsuario.css') }}">
-<style>
-    /* Estilos específicos para la proforma */
-    #facturaProformaCard {
-        max-height: 70vh;
-        overflow-y: auto;
-        border: 1px solid #dee2e6;
-        border-radius: 12px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        padding: 0;
-    }
-
-    #facturaProformaCard .card-header {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        /* Asegurar que esté sobre el contenido del body */
-        background-color: var(--app-primary);
-        color: white;
-    }
-
-    .form-actions-sticky {
-        position: sticky;
-        bottom: 0;
-        background-color: white;
-        padding-top: 1rem;
-        border-top: 1px solid #e9ecef;
-        z-index: 1;
-    }
-</style>
-{% endblock %}
 
 {% block content %}
-<div class="form-container">
-    <div class="form-card" style="max-width: 1000px;">
-        <div class="form-header">
-            <i class="bi bi-cart-fill fs-1 mb-3"></i>
-            <h2 class="mb-1">{{ form_title }}</h2>
-            <p class="mb-0 opacity-75">Siga los pasos para ingresar y confirmar su pedido.</p>
-        </div>
-        <div class="form-body">
-
-            <div class="step-indicator">
+<section class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="form-card">
+                <div class="form-header">
+                    <i class="bi bi-cart-fill"></i>
+                    <h2>{{ form_title }}</h2>
+                    <p class="text-muted">Sigue los pasos para ingresar y confirmar tu pedido.</p>
+                </div>
+                
+                <div class="step-indicator">
                 <div class="step-item">
                     <div class="step active" id="step1">
                         <i class="bi bi-person-lines-fill"></i>
@@ -509,12 +478,12 @@
 </div>
 
 <script>
-    // Variables globales inyectadas por Jinja2
+    // Variables globales inyectadas por Jinja2 para el formulario PÚBLICO
     const CLIENTE_API_SEARCH_URL = "{{ url_for('clientes_proveedores.buscar_cliente_por_cuil_y_email_api') }}";
-    const LISTAR_URL = "{{ url_for('orden_venta.listar') }}";
-    const CREAR_URL = "{{ url_for('orden_venta.nueva') }}";
+    const CREAR_URL = "{{ url_for('public.crear_pedido_api') }}"; // Apunta al nuevo endpoint público
     const PROFORMA_GENERATION_URL = "{{ url_for('orden_venta.generar_proforma_api') }}";
     const PRODUCTOS_DATA = {{ productos | tojson | safe }};
+    const LISTAR_URL = "{{ url_for('public.index') }}"; // A dónde ir si se cancela
     const isEditing = false;
     const pedidoId = 0;
 </script>
