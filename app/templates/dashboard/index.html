@@ -109,7 +109,9 @@
 
     {% if can_ver_ventas %}
     <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm {% if ordenesventa_pendientes > 0 %}glow-on-load{% endif %}">
+        <div class="card stat-card h-100 border-0 shadow-sm
+            {% if not can_ver_produccion %}disabled{% endif %}
+            {% if ordenesventa_pendientes > 0 %}glow-on-load{% endif %}">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') }}" style="text-decoration: none;">
@@ -120,6 +122,28 @@
                     </div>
                     </a>
                     <div class="text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">
+                        
+                        <i class="bi bi-hourglass-split fs-1"></i>
+                    
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stat-card-item">
+        <div class="card stat-card h-100 border-0 shadow-sm
+             {% if not can_ver_produccion %}disabled{% endif %}">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('orden_venta.listar', estado='CANCELADO') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
+                    <div>
+                        <div class="stat-label mb-1 text-muted">Órdenes de Venta Rechazadas</div>
+                        <div class="stat-value text-{{ 'danger' if ordenesventa_rechazadas > 0 else 'success' }}">{{ ordenesventa_rechazadas }}</div>
+                        <div class="small text-muted">Últimos 30 días</div>
+                    </div>
+                    </a>
+                    <div class="text-{{ 'danger' if ordenesventa_rechazadas > 0 else 'success' }}">
                         <i class="bi bi-cart-x-fill fs-1"></i>
                     </div>
                 </div>

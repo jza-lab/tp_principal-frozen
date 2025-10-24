@@ -31,8 +31,10 @@ def _register_blueprints(app: Flask):
     from app.views.reservas_routes import reservas_bp
     from app.views.admin_tarea_routes import admin_tasks_bp
     from app.views.alertas_routes import alertas_bp
+    from app.views.public_routes import public_bp
 
     app.register_blueprint(main_bp)
+    app.register_blueprint(public_bp)
     app.register_blueprint(insumos_bp)
     app.register_blueprint(inventario_api_bp)
     app.register_blueprint(inventario_view_bp)

@@ -1,0 +1,43 @@
+{% extends "public/base.html" %}
+{% block title %}Inicio - Frozen{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="jumbotron">
+        <h1 class="display-4 animate-on-load" style="animation-delay: 0.1s;">¡Bienvenido a Frozen!</h1>
+        <p class="lead animate-on-load" style="animation-delay: 0.2s;">
+            Líderes en la producción y distribución de alimentos congelados de alta calidad.
+        </p>
+        <hr class="my-4">
+        <p class="animate-on-load" style="animation-delay: 0.3s;">
+            Explora nuestro sitio para conocer más sobre nuestros productos, nuestra historia y nuestros procesos de producción.
+        </p>
+        </div>
+
+    <div class="features-grid">
+        <div class="feature-card animate-on-load" style="animation-delay: 0.4s;">
+            <div class="feature-icon">
+                <i class="fas fa-building"></i> </div>
+            <h3>Sobre Nosotros</h3>
+            <p>Conoce nuestra historia, misión y valores. Descubre por qué somos la mejor opción en alimentos congelados.</p>
+            <p><a class="btn" href="{{ url_for('public.about') }}">Ver detalles &raquo;</a></p>
+        </div>
+
+        <div class="feature-card animate-on-load" style="animation-delay: 0.5s;">
+            <div class="feature-icon">
+                <i class="fas fa-truck-moving"></i> </div>
+            <h3>Nuestros Clientes</h3>
+            <p>Descubre quiénes confían en nosotros para llevar los mejores productos a su mesa.</p>
+            <p><a class="btn" href="{{ url_for('public.clients') }}">Ver clientes &raquo;</a></p>
+        </div>
+
+        <div class="feature-card animate-on-load" style="animation-delay: 0.6s;">
+            <div class="feature-icon">
+                <i class="fas fa-industry"></i> </div>
+            <h3>¿Cómo Trabajamos?</h3>
+            <p>Aprende sobre nuestros innovadores procesos de producción que garantizan la frescura y calidad de cada producto.</p>
+            <p><a class="btn" href="{{ url_for('public.production') }}">Conocer más &raquo;</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

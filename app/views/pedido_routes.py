@@ -229,6 +229,67 @@ def completar(id):
 
     return redirect(url_for('orden_venta.detalle', id=id))
 
+@orden_venta_bp.route('/api/generar-proforma', methods=['POST'])
+def generar_proforma_api():
+    """
+    API endpoint to generate a proforma invoice HTML from JSON data
+    without creating a persistent order.
+    """
+    pedido_data = request.get_json()
+
+    if not pedido_data or 'id_cliente' not in pedido_data:
+        return jsonify({'success': False, 'error': 'Datos incompletos.'}), 400
+    # Get client data
+    cliente_resp, _ = cliente_controller.obtener_cliente(pedido_data['id_cliente'])
+    if not cliente_resp.get('success'):
+        return jsonify({'success': False, 'error': 'Cliente no encontrado.'}), 404
+    cliente = cliente_resp.get('data')
+
+    # Get all products to embed their names in the items
+    productos_resp, _ = controller.obtener_datos_para_formulario()
+    todos_los_productos = {p['id']: p for p in productos_resp.get('data', {}).get('productos', [])}
+
+    # Enrich items with product details
+    subtotal_neto = 0
+    for item in pedido_data.get('items', []):
+        producto = todos_los_productos.get(item.get('producto_id'))
+        
+        if producto:
+            nombre_producto=producto['nombre']
+            item['producto_nombre'] = producto
+    
+    print("-------------------------")
+    print(pedido_data)
+    print("-------------------------")
+    
+    # Calculate IVA and Total
+    iva = subtotal_neto * 0.21 if cliente.get('condicion_iva') == '1' else 0
+    total = subtotal_neto + iva
+
+
+    pedido_data['subtotal_neto'] = subtotal_neto
+    pedido_data['iva'] = iva
+    pedido_data['total'] = total
+    pedido_data['cliente'] = cliente
+
+    if(pedido_data.get('usar_direccion_alternativa')):
+        direccion_a_usar = pedido_data.get('direccion_entrega')
+    else:
+        direccion_a_usar = cliente.get('direccion')
+    
+    pedido_data['direccion'] = direccion_a_usar
+   
+    # Add fake emitter data for proforma
+    pedido_data['emisor'] = {
+        'ingresos_brutos': '20-12345678-3',
+        'inicio_actividades': '2020-01-01',}
+    # Render the proforma template
+    rendered_html = render_template(
+        'orden_venta/factura_proforma_pedido.html',
+        pedido=pedido_data,
+        cliente=cliente
+    )
+    return jsonify({'success': True, 'html': rendered_html})
 
 @orden_venta_bp.route('/api/<int:id>/generar_factura_html', methods=['GET'])
 @permission_required(accion='consultar_ordenes_de_venta')
@@ -279,6 +340,12 @@ def nueva_cliente_pasos():
     Ruta para el formulario de creación de pedidos en dos pasos (vista de cliente).
     """
     hoy = datetime.now().strftime('%Y-%m-%d')
+    # Verificar si el cliente está logueado y si es nuevo
+    cliente_id = session.get('cliente_id')
+    es_cliente_nuevo = True
+    if cliente_id:
+        es_cliente_nuevo = not cliente_controller.cliente_tiene_pedidos_previos(cliente_id)
+
     
     response, _ = controller.obtener_datos_para_formulario()
     productos = response.get('data', {}).get('productos', [])
@@ -289,4 +356,5 @@ def nueva_cliente_pasos():
                             pedido=None, 
                             is_edit=False, 
                             today=hoy,
-                            cliente={})
+                            cliente={},
+                            es_cliente_nuevo=es_cliente_nuevo)
