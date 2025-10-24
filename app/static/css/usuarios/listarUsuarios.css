@@ -252,7 +252,6 @@
 .search-filter-bar {
     display: flex;
     gap: 1rem;
-    margin-bottom: 2rem;
     flex-wrap: wrap;
     align-items: center;
 }

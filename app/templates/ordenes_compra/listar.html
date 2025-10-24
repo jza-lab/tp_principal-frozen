@@ -20,26 +20,49 @@
 <!-- Filtros por estado -->
 <div class="card mb-4">
     <div class="card-body card-filter">
-        <form method="get" action="{{ url_for('orden_compra.listar') }}">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label for="estado" class="form-label">Filtrar por Estado</label>
-                    <select name="estado" class="form-select" onchange="this.form.submit()">
-                        <option value="">Todas las órdenes</option>
-                        <option value="PENDIENTE" {% if request.args.get('estado') == 'PENDIENTE' %}selected{% endif %}>Pendientes</option>
-                        <option value="APROBADA" {% if request.args.get('estado') == 'APROBADA' %}selected{% endif %}>Aprobadas</option>
-                        <option value="EN_TRANSITO" {% if request.args.get('estado') == 'EN_TRANSITO' %}selected{% endif %}>En Tránsito</option>
-                        <option value="RECIBIDA" {% if request.args.get('estado') == 'RECIBIDA' %}selected{% endif %}>Recibidas</option>
-                        <option value="RECHAZADA" {% if request.args.get('estado') == 'RECHAZADA' %}selected{% endif %}>Rechazadas</option>
-                    </select>
-                </div>
-                <div class="col-md-8">
-                    <div class="text-muted small">
-                        <p>{{ ordenes|length }} órdenes encontradas</p>
+        <div class="row g-3 align-items-end">
+            <div class="col-12 mb-3">
+                <h5 class="form-label mb-1 text-white">Filtrar por Estado</h5>
+                <p class="text-white small mb-0">{{ ordenes|length }} órdenes encontradas</p>
+            </div>
+            
+            <div class="col-12">
+                {% set current_status = request.args.get('estado') %}
+                <div class="d-flex flex-wrap gap-3 align-items-start">
+                    <!-- Column 1: All and Rejected -->
+                    <div class="d-flex flex-column gap-2">
+                        <a href="{{ url_for('orden_compra.listar', estado='') }}" class="btn btn-sm {% if not current_status %}btn-primary{% else %}btn-secondary{% endif %}">
+                            Todas las órdenes
+                        </a>
+                        <a href="{{ url_for('orden_compra.listar', estado='RECHAZADA') }}" class="btn btn-sm {% if current_status == 'RECHAZADA' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                            Rechazadas
+                        </a>
+                    </div>
+
+                    <!-- Separator -->
+                    <div class="vr text-white d-none d-md-block mx-2"></div>
+
+                    <!-- Column 2: Main flow -->
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        {% set estados = [
+                            ('PENDIENTE', 'Pendientes'),
+                            ('APROBADA', 'Aprobadas'),
+                            ('EN_TRANSITO', 'En Tránsito'),
+                            ('RECIBIDA', 'Recibidas')
+                        ] %}
+                        
+                        {% for estado, nombre in estados %}
+                            <a href="{{ url_for('orden_compra.listar', estado=estado) }}" class="btn btn-sm {% if current_status == estado %}btn-primary{% else %}btn-secondary{% endif %}">
+                                {{ nombre }}
+                            </a>
+                            {% if not loop.last %}
+                            <i class="bi bi-arrow-right text-white mx-1"></i>
+                            {% endif %}
+                        {% endfor %}
                     </div>
                 </div>
             </div>
-        </form>
+        </div>
     </div>
 </div>
 
@@ -100,6 +123,8 @@
                         {% if orden.estado == 'PENDIENTE' %}
                             {% if has_permission('aprobar_orden_de_compra')|trim == 'True' %}
                             <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id) }}" class="confirm-form d-inline"
+                            {% set can_approve = has_permission('aprobar_ordenes_compra')|trim == 'True' %}
+                            <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id, estado=request.args.get('estado', '')) if can_approve else '#' }}" class="confirm-form d-inline"
                                   data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de compra?" data-button-type="success">
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
                                     <i class="bi bi-check-lg"></i> Aprobar
@@ -115,7 +140,8 @@
                             {% endif %}
                         
                         {% elif orden.estado == 'APROBADA' %}
-                                <form method="POST" action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id) }}" class="d-inline">
+                                <form method="POST" action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
+                                      data-title="Marcar como 'En Tránsito'" data-message="¿Está seguro de que desea marcar esta orden como 'En Tránsito'?" data-button-type="primary">
                                     <button type="submit" class="btn btn-sm btn-primary" title="Marcar como En Tránsito">
                                         <i class="bi bi-truck"></i> En Tránsito
                                     </button>
@@ -143,7 +169,7 @@
             <h5 class="modal-title" id="rechazarModalLabel-{{ orden.id }}">Rechazar Orden de Compra</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-          <form method="POST" action="{{ url_for('orden_compra.rechazar', id=orden.id) }}">
+          <form method="POST" action="{{ url_for('orden_compra.rechazar', id=orden.id, estado=request.args.get('estado', '')) }}">
               <div class="modal-body">
                 <p>¿Está seguro de que desea rechazar la orden de compra <strong>{{ orden.codigo_oc }}</strong>?</p>
                 <div class="mb-3">
@@ -171,4 +197,30 @@
     </div>
     {% endfor %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const forms = document.querySelectorAll('.confirm-form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            
+            const title = form.dataset.title || 'Confirmar Acción';
+            const message = form.dataset.message || '¿Está seguro de que desea realizar esta acción?';
+            const buttonType = form.dataset.buttonType || 'primary';
+
+            showConfirmationModal(
+                title,
+                message,
+                () => { // Callback de confirmación
+                    form.submit();
+                },
+                buttonType
+            );
+        });
+    });
+});
+</script>
 {% endblock %}
