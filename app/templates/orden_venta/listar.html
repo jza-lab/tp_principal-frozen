@@ -58,35 +58,32 @@
                     {% set estado_config = {
                     'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
                     'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                    'LISTO_PARA_ARMAR': {'class': 'bg-success-soft text-success', 'icon': 'tools'},
+                    'LISTO_PARA_ARMAR': {'class': 'bg-warning-soft text-warning', 'icon': 'tools'},
                     'LISTO_PARA_ENTREGAR': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
                     'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
                     'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
                     {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
-                    <span class="badge {{ config.class }} ms-2"> {# Margen izquierdo añadido #}
+                    <span class="badge {{ config.class }} ms-2">
                         <i class="bi bi-{{ config.icon }} me-1"></i>{{ pedido.estado.replace('_', ' ') }}
                     </span>
                 </div>
 
-                {# --- Detalles Secundarios (ID y Fechas) - CORREGIDO PARA ESTAR EN LÍNEA --- #}
-                <div class="card-secondary-details mb-2"> {# Margen inferior reducido #}
+                {# --- Detalles Secundarios (ID y Fechas) --- #}
+                <div class="card-secondary-details mb-2">
                     <span><i class="bi bi-upc-scan"></i> <code>PED-{{ pedido.id }}</code></span>
-                    {# Mostrar fechas en la misma línea usando ms-3 para margen izquierdo #}
                     <span class="ms-3"><i class="bi bi-calendar-event"></i> Solicitado: {{ pedido.fecha_solicitud }}</span>
                     {% if pedido.fecha_requerido %}
-                        {# Añadir margen izquierdo (ms-3) para separar #}
                         <span class="text-danger fw-bold ms-3"><i class="bi bi-calendar-check-fill"></i> Req.: {{ pedido.fecha_requerido }}</span>
                     {% endif %}
                 </div>
 
                 {# --- Sección de Items --- #}
-                <div class="mb-2"> {# Margen reducido #}
+                <div class="mb-2">
                      <span class="fw-bold"><i class="bi bi-list-ul me-1"></i>Items:</span>
                      <span class="badge bg-light text-dark">{{ pedido['items']|length }} producto(s)</span>
-                     {# Lista de items (opcional) #}
                      {% if pedido['items']|length > 0 and pedido['items']|length <= 3 %}
-                         <ul class="list-unstyled small text-muted mt-1 mb-0 ps-3"> {# ps-3 para indentar #}
+                         <ul class="list-unstyled small text-muted mt-1 mb-0 ps-3">
                          {% for item in pedido['items'] %}
                               <li>• {{ (item.producto_nombre.nombre or 'N/A') | truncate(30, True) }} ({{ item.cantidad }})</li>
                          {% endfor %}
@@ -97,24 +94,67 @@
                 </div>
 
                 {# --- Total y Acciones (empujados hacia abajo) --- #}
-                <div class="mt-auto"> {# Este div empuja todo lo que sigue hacia abajo #}
-                    <div class="text-end mb-2"> {# Total antes de la línea divisoria #}
+                <div class="mt-auto">
+                    <div class="text-end mb-2">
                          <span class="fw-bold fs-5">{{ pedido.precio_orden | formato_moneda }}</span>
                     </div>
 
-                    <hr class="card-divider my-2"> {# Línea divisoria más delgada #}
+                    <hr class="card-divider my-2">
 
-                    {# --- Acciones (Botones) --- #}
+                    {# --- ACCIONES (BOTONES) --- #}
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                        
+                        {# Botón Detalle (Siempre visible) #}
                         <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}"
                             class="btn btn-sm btn-outline-primary" title="Ver Detalle"><i class="bi bi-eye"></i> Detalle</a>
+
+                        {# Botón Editar (Solo si PENDIENTE y con permiso) #}
                         {% if pedido.estado == 'PENDIENTE' %}
                         {% set can_edit_sale = has_permission('modificar_ordenes_venta')|trim == 'True' %}
                         <a href="{{ url_for('orden_venta.editar', id=pedido.id) if can_edit_sale else '#' }}"
                             class="btn btn-sm btn-outline-warning {% if not can_edit_sale %}disabled{% endif %}"
                             title="Editar Pedido"><i class="bi bi-pencil"></i></a>
                         {% endif %}
-                    </div>
+
+                        {# --- INICIO: BOTONES DE ACCIÓN DE ESTADO --- #}
+
+                        {# 1. Botón "Iniciar Proceso" (si está PENDIENTE y con permiso) #}
+                        {% if pedido.estado == 'PENDIENTE' and has_permission('aprobar_ordenes_venta') %}
+                            <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}"
+                                  class="confirm-form d-inline" {# d-inline para que esté junto a otros botones #}
+                                  data-title="Iniciar Proceso"
+                                  data-message="Esto creará las OPs necesarias y cambiará el estado. ¿Continuar?"
+                                  data-button-type="success">
+                                <button type="submit" class="btn btn-sm btn-success" title="Iniciar Proceso y Crear OPs"><i class="bi bi-play-fill"></i></button>
+                            </form>
+                        {% endif %}
+
+                        {# 2. Botón "Preparar Entrega" (si está LISTO_PARA_ARMAR y con permiso) #}
+                        {# Nota: No verificamos OPs aquí por eficiencia. El backend lo hará. #}
+                        {% if pedido.estado == 'LISTO_PARA_ARMAR' and has_permission('modificar_ordenes_venta') %}
+                            <form action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}" method="post"
+                                  class="d-inline needs-confirmation" {# d-inline #}
+                                  data-confirm-message="¿Está seguro? Esta acción despachará el stock y marcará como 'Listo para Entregar'. Asegúrese que las OPs estén completas.">
+                                <button type="submit" class="btn btn-sm btn-primary" title="Preparar Entrega (Despachar Stock)">
+                                    <i class="bi bi-box-seam"></i>
+                                </button>
+                            </form>
+                        {% endif %}
+
+                        {# 3. Botón "Marcar como Completado" (si está LISTO_PARA_ENTREGAR y con permiso) #}
+                        {% if pedido.estado == 'LISTO_PARA_ENTREGAR' and has_permission('modificar_ordenes_venta') %}
+                            <form action="{{ url_for('orden_venta.completar', id=pedido.id) }}" method="post"
+                                  class="d-inline needs-confirmation" {# d-inline #}
+                                  data-confirm-message="¿Confirma que este pedido ha sido entregado?">
+                                <button type="submit" class="btn btn-sm btn-success" title="Marcar como Completado (Entregado)">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                </button>
+                            </form>
+                        {% endif %}
+
+                        {# --- FIN: BOTONES DE ACCIÓN DE ESTADO --- #}
+
+                    </div> {# Fin action-buttons #}
                 </div> {# Fin mt-auto #}
             </div> {# Fin card-body #}
         </div> {# Fin card #}
@@ -137,22 +177,20 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const formateador = new Intl.NumberFormat('es-AR', {
-            style: 'currency',
-            currency: 'ARS',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        });
-
+        // ... (Script de formato de moneda sin cambios) ...
+        const formateador = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const precioElementos = document.querySelectorAll('.price-value');
-        
         precioElementos.forEach(span => {
             const precioOriginal = parseFloat(span.getAttribute('data-price'));
-            
             if (!isNaN(precioOriginal)) {
                 const precioConFormato = formateador.format(precioOriginal);
-                span.querySelector('b').innerHTML = precioConFormato.replace('ARS', '').trim();
-
+                // Asumiendo que el span contiene un <b>
+                const boldElement = span.querySelector('b');
+                if(boldElement) {
+                   boldElement.innerHTML = precioConFormato.replace('ARS', '').trim();
+                } else {
+                   span.innerHTML = precioConFormato.replace('ARS', '').trim(); // Fallback si no hay <b>
+                }
             }
         });
     });
