@@ -166,13 +166,18 @@
                         </div>
                     </div>
                     {% endif %}
-
-                    {# Alerta EN ESPERA #}
+                    
+                    <p>DEBUG: Estado=[{{ orden.estado }}], OC_ID=[{{ orden.orden_compra_id }}]</p>
                     {% if orden.estado == 'EN ESPERA' and orden.orden_compra_id %}
                     <div class="col-12 mt-3">
-                        <div class="alert alert-warning mb-0">
-                            <i class="bi bi-hourglass-split me-2"></i> Esta orden está en espera de insumos.
-                            <a href="{{ url_for('orden_compra.detalle', id=orden.orden_compra_id) }}" class="alert-link">Ver OC asociada</a>.
+                        <div class="alert alert-warning mb-0 d-flex justify-content-between align-items-center">
+                            <span> {# Texto a la izquierda #}
+                                <i class="bi bi-hourglass-split me-2"></i> Esta orden está <strong>EN ESPERA</strong> de insumos. Se generó automáticamente una Orden de Compra.
+                            </span>
+                            {# Botón/Enlace a la derecha #}
+                            <a href="{{ url_for('orden_compra.detalle', id=orden.orden_compra_id) }}" class="btn btn-sm btn-outline-dark ms-3"> {# Cambiado a botón para destacar #}
+                                Ver OC-{{ orden.orden_compra_id }} <i class="bi bi-box-arrow-up-right small"></i>
+                            </a>
                         </div>
                     </div>
                     {% endif %}

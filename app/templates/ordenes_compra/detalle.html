@@ -131,12 +131,17 @@
                     </div>
                     
                     {% if orden.observaciones %}
-                    <div class="col-12">
-                        <h6 class="text-muted mb-2">Observaciones</h6>
-                        <div class="border-start border-3 border-warning ps-3">
-                            <p class="mb-0">{{ orden.observaciones }}</p>
+                    {% if orden.orden_produccion_id %}
+                    <div class="col-12 mt-3"> {# O ajusta el layout según prefieras #}
+                        <h6 class="text-muted mb-2">Orden de Producción Vinculada</h6>
+                        <div class="border-start border-3 border-info ps-3">
+                            <a href="{{ url_for('orden_produccion.detalle', id=orden.orden_produccion_id) }}" class="fw-bold">
+                                Ver OP-{{ orden.orden_produccion_id }} <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+                            </a>
+                            <p class="small text-muted mb-0">Esta orden de compra fue generada para abastecer la OP indicada.</p>
                         </div>
                     </div>
+                    {% endif %}
                     {% endif %}
                 </div>
             </div>

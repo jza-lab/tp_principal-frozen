@@ -82,35 +82,32 @@
                     {% set estado_config = {
                     'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
                     'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                    'LISTO_PARA_ARMAR': {'class': 'bg-success-soft text-success', 'icon': 'tools'},
+                    'LISTO_PARA_ARMAR': {'class': 'bg-warning-soft text-warning', 'icon': 'tools'},
                     'LISTO_PARA_ENTREGAR': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
                     'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
                     'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
                     {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
-                    <span class="badge {{ config.class }} ms-2"> {# Margen izquierdo añadido #}
+                    <span class="badge {{ config.class }} ms-2">
                         <i class="bi bi-{{ config.icon }} me-1"></i>{{ pedido.estado.replace('_', ' ') }}
                     </span>
                 </div>
 
-                {# --- Detalles Secundarios (ID y Fechas) - CORREGIDO PARA ESTAR EN LÍNEA --- #}
-                <div class="card-secondary-details mb-2"> {# Margen inferior reducido #}
+                {# --- Detalles Secundarios (ID y Fechas) --- #}
+                <div class="card-secondary-details mb-2">
                     <span><i class="bi bi-upc-scan"></i> <code>PED-{{ pedido.id }}</code></span>
-                    {# Mostrar fechas en la misma línea usando ms-3 para margen izquierdo #}
                     <span class="ms-3"><i class="bi bi-calendar-event"></i> Solicitado: {{ pedido.fecha_solicitud }}</span>
                     {% if pedido.fecha_requerido %}
-                        {# Añadir margen izquierdo (ms-3) para separar #}
                         <span class="text-danger fw-bold ms-3"><i class="bi bi-calendar-check-fill"></i> Req.: {{ pedido.fecha_requerido }}</span>
                     {% endif %}
                 </div>
 
                 {# --- Sección de Items --- #}
-                <div class="mb-2"> {# Margen reducido #}
+                <div class="mb-2">
                      <span class="fw-bold"><i class="bi bi-list-ul me-1"></i>Items:</span>
                      <span class="badge bg-light text-dark">{{ pedido['items']|length }} producto(s)</span>
-                     {# Lista de items (opcional) #}
                      {% if pedido['items']|length > 0 and pedido['items']|length <= 3 %}
-                         <ul class="list-unstyled small text-muted mt-1 mb-0 ps-3"> {# ps-3 para indentar #}
+                         <ul class="list-unstyled small text-muted mt-1 mb-0 ps-3">
                          {% for item in pedido['items'] %}
                               <li>• {{ (item.producto_nombre.nombre or 'N/A') | truncate(30, True) }} ({{ item.cantidad }})</li>
                          {% endfor %}
@@ -121,15 +118,17 @@
                 </div>
 
                 {# --- Total y Acciones (empujados hacia abajo) --- #}
-                <div class="mt-auto"> {# Este div empuja todo lo que sigue hacia abajo #}
-                    <div class="text-end mb-2"> {# Total antes de la línea divisoria #}
+                <div class="mt-auto">
+                    <div class="text-end mb-2">
                          <span class="fw-bold fs-5">{{ pedido.precio_orden | formato_moneda }}</span>
                     </div>
 
-                    <hr class="card-divider my-2"> {# Línea divisoria más delgada #}
+                    <hr class="card-divider my-2">
 
-                    {# --- Acciones (Botones) --- #}
+                    {# --- ACCIONES (BOTONES) --- #}
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                        
+                        {# Botón Detalle (Siempre visible) #}
                         <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}"
                             class="btn btn-sm btn-outline-primary" title="Ver Detalle"><i class="bi bi-eye"></i></a>
 
@@ -139,6 +138,7 @@
                             class="btn btn-sm btn-outline-primary"
                             title="Editar Pedido"><i class="bi bi-pencil"></i></a>
                         {% endif %}
+
                         {% endif %}
 
                         {% if pedido.estado == 'LISTO_PARA_ARMAR' and 'modificar_orden_de_venta' is has_permission %}
@@ -185,6 +185,7 @@
 
 {% block extra_js %}
 <script>
+
 document.addEventListener('DOMContentLoaded', function () {
     const forms = document.querySelectorAll('.confirm-form');
     forms.forEach(form => {
@@ -203,6 +204,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 buttonType
             );
+
         });
     });
 
