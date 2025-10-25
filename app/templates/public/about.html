@@ -55,4 +55,46 @@
         </div>
     </div>
 </div>
+
+<hr class="my-5">
+
+<div class="container my-5">
+    <h2 class="text-center animate-on-load" style="animation-delay: 0.3s;">Nuestro Equipo</h2>
+    <div class="row gy-4 justify-content-center">
+
+        <div class="col-lg-3 col-md-6 animate-on-load" style="animation-delay: 0.5s;">
+            <div class="team-member-card">
+                <img src="{{ url_for('static', filename='img/team/dueno.jpg') }}" alt="Foto del Dueño">
+                <h5>Martín Rodríguez</h5>
+                <p>Dueño & CEO</p>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 animate-on-load" style="animation-delay: 0.6s;">
+            <div class="team-member-card">
+                <img src="{{ url_for('static', filename='img/team/supervisor.jpg') }}" alt="Foto del Supervisor General">
+                <h5>Javier Torres</h5>
+                <p>Supervisor General</p>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 animate-on-load" style="animation-delay: 0.7s;">
+            <div class="team-member-card">
+                <img src="{{ url_for('static', filename='img/team/admin.jpg') }}" alt="Foto de Administración">
+                <h5>Laura García</h5>
+                <p>Administración</p>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-md-6 animate-on-load" style="animation-delay: 0.8s;">
+            <div class="team-member-card">
+                <img src="{{ url_for('static', filename='img/team/rrhh.jpg') }}" alt="Foto de RRHH">
+                <h5>Carolina Ruiz</h5>
+                <p>Recursos Humanos</p>
+            </div>
+        </div>
+
+    </div>
+</div>
+
 {% endblock %}

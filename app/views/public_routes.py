@@ -20,6 +20,11 @@ def clients():
 def production():
     return render_template('public/produccion.html')
 
+@public_bp.route('/faq')
+def faq():
+    """Muestra la página de preguntas frecuentes."""
+    return render_template('public/faq.html')
+
 @public_bp.route('/hace-tu-pedido')
 def hacer_pedido():
     """
@@ -73,3 +78,4 @@ def crear_pedido_api():
             'success': False, 
             'message': response.get('message', 'Error al procesar el pedido.')
         }), status_code
+
