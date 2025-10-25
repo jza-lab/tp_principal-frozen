@@ -92,6 +92,7 @@ def register_template_extensions(app: Flask):
     """
     app.jinja_env.filters['format_datetime'] = _format_datetime_filter
     app.jinja_env.filters['formato_moneda'] = _formato_moneda_filter
+    app.jinja_env.globals['has_permission'] = _has_permission_filter
     app.jinja_env.tests['has_permission'] = _has_permission_filter
     app.context_processor(_inject_permission_map)
     app.context_processor(_inject_user_from_jwt)

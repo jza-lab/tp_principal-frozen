@@ -47,11 +47,15 @@ def _parse_form_data(form_dict):
 @permission_required(accion='consultar_ordenes_de_venta')
 def listar():
     """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
-    estado = request.args.get('estado')
-    if estado:
-        # Normalizar el estado reemplazando espacios con guiones bajos
-        estado = estado.replace(" ", "_")
-    filtros = {'estado': estado} if estado else {}
+    from app.utils.estados import traducir_a_int
+
+    estado_str = request.args.get('estado')
+    filtros = {}
+    if estado_str:
+        # Normalizar y traducir el estado a su valor entero
+        estado_int = traducir_a_int(estado_str.replace(" ", "_"))
+        if estado_int is not None:
+            filtros['estado'] = estado_int
 
     response, _ = controller.obtener_pedidos(filtros)
     pedidos = []
