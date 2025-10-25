@@ -26,7 +26,14 @@
                         <div class="step" id="step2">
                             <i class="bi bi-file-earmark-text-fill"></i>
                         </div>
-                        <span class="step-label">Factura Proforma y Envío</span>
+                        <span class="step-label">Factura Proforma</span>
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="step-item">
+                        <div class="step" id="step3">
+                            <i class="bi bi-credit-card-fill"></i>
+                        </div>
+                        <span class="step-label">Pago y Confirmación</span>
                     </div>
                 </div>
 
@@ -506,8 +513,11 @@
                     <div id="step2Content" class="form-section" style="display: none;">
 
                         <div id="facturaProformaCard" class="card">
-                            <div class="card-header">
+                            <div class="card-header d-flex justify-content-between align-items-center">
                                 <h4 class="mb-0">Factura Proforma (Previsualización)</h4>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="downloadProformaBtn">
+                                    <i class="bi bi-download me-1"></i> Descargar/Imprimir
+                                </button>
                             </div>
                             <div class="card-body">
                                 <div id="proforma-content" class="p-3 text-center text-muted">
@@ -523,12 +533,46 @@
                                 <button type="button" class="btn btn-danger me-2" id="cancelOrderBtn">
                                     <i class="bi bi-x-lg me-1"></i>Cancelar Pedido
                                 </button>
-                                <button type="submit" class="btn btn-sm btn-success" id="acceptOrderBtn" disabled>
+                                <button type="button" class="btn btn-sm btn-success" id="acceptOrderBtn" disabled>
                                     <i class="bi bi-check-circle me-1"></i>Aceptar y Crear Pedido
                                 </button>
                             </div>
                         </div>
                     </div>
+                    <!-- Paso 3: Simulación de Pago -->
+                    <div id="paymentStepContent" class="form-section" style="display: none;">
+                        <div class="card p-4 shadow-sm">
+                            <h4 class="card-title text-center"><i
+                                    class="bi bi-credit-card-2-front-fill me-2"></i>Simulación de Pago</h4>
+                            <p class="text-center text-muted">Confirme el pago para finalizar su pedido.</p>
+                            <div class="text-center my-4">
+                                <h5>Monto a Pagar:</h5>
+                                <h2 id="paymentTotalAmount" class="text-primary fw-bold">$0.00</h2>
+                            </div>
+                            <div class="d-flex justify-content-center gap-3">
+                                <button type="button" class="btn btn-outline-secondary" id="prevStep3"><i
+                                        class="bi bi-arrow-left me-1"></i> Volver a Proforma</button>
+                                <button type="button" class="btn btn-success" id="paymentConfirmBtn"><i
+                                        class="bi bi-check-circle-fill me-1"></i> Confirmar Pago</button>
+                            </div>
+                        </div>
+                    </div>
+                                        <!-- Paso 3: Simulación de Pago -->
+                    <div id="paymentStepContent" class="form-section" style="display: none;">
+                        <div class="card p-4 shadow-sm">
+                            <h4 class="card-title text-center"><i class="bi bi-credit-card-2-front-fill me-2"></i>Simulación de Pago</h4>
+                            <p class="text-center text-muted">Confirme el pago para finalizar su pedido.</p>
+                            <div class="text-center my-4">
+                                <h5>Monto a Pagar:</h5>
+                                <h2 id="paymentTotalAmount" class="text-primary fw-bold">$0.00</h2>
+                            </div>
+                            <div class="d-flex justify-content-center gap-3">
+                                <button type="button" class="btn btn-outline-secondary" id="prevStep3"><i class="bi bi-arrow-left me-1"></i> Volver a Proforma</button>
+                                <button type="button" class="btn btn-success" id="paymentConfirmBtn"><i class="bi bi-check-circle-fill me-1"></i> Confirmar Pago</button>
+                            </div>
+                        </div>
+                    </div>
+
                 </form>
 
                 <div id="step1Actions" class="d-flex justify-content-end mt-4 form-actions">
@@ -537,14 +581,25 @@
                     </button>
                 </div>
 
-                <div id="step3Content" class="form-section text-center p-4" style="display: none;">
+                <!-- Paso 4: Confirmación Final (fuera del form) -->
+                <div id="confirmationStepContent" class="form-section text-center p-4" style="display: none;">
                     <div id="result-icon"></div>
                     <h3 id="result-title" class="mb-3"></h3>
                     <p id="result-message" class="text-muted"></p>
-                    <a href="{{ url_for('public.hacer_pedido') }}" class="btn btn-primary mt-3">
+
+                    <div id="paymentReceiptContainer" class="mt-4" style="display: none;">
+                        <h5>Comprobante de Pago</h5>
+                        <div id="paymentReceipt" class="border p-3 text-start bg-light"></div>
+                        <button type="button" class="btn btn-sm btn-info mt-3" id="downloadReceiptBtn">
+                            <i class="bi bi-download me-1"></i> Descargar Comprobante
+                        </button>
+                    </div>
+
+                    <a href="{{ url_for('public.hacer_pedido') }}" class="btn btn-primary mt-3" id="newOrderBtn">
                         <i class="bi bi-plus-circle me-1"></i> Realizar otro Pedido
                     </a>
                 </div>
+
 
             </div>
         </div>
