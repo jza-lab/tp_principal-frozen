@@ -32,7 +32,7 @@
                       data-create-url="{{ url_for('insumos_api.crear_lote', id_insumo=insumo.id_insumo) }}"
                       data-edit-url="{{ url_for('insumos_api.actualizar_lote_api', id_insumo=insumo.id_insumo, id_lote=lote.id_lote) if is_edit }}"
                       data-redirect-url="{{ url_for('insumos_api.obtener_insumo_por_id', id_insumo=insumo.id_insumo) }}">
-
+                    {{ form.csrf_token }}
                     <input type="hidden" id="id_insumo" name="id_insumo" value="{{ insumo.id_insumo }}">
                     {% if is_edit %}
                     <input type="hidden" id="id_lote" name="id_lote" value="{{ lote.id_lote }}">

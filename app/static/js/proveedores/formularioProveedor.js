@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const provinciaSelect = document.getElementById('provincia');
     const localidadInput = document.getElementById('localidad');
 
-    async function enviarDatos() {
+async function enviarDatos(csrfToken) {
 
         const formData = new FormData(form);
         const cuit = `${formData.get('cuit_parte1')}-${formData.get('cuit_parte2')}-${formData.get('cuit_parte3')}`;
@@ -35,7 +35,10 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const respuesta = await fetch(url, {
                 method: method,
-                headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
                 body: JSON.stringify(proveedorData)
             });
             const resultado = await respuesta.json();
@@ -58,16 +61,19 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
-    async function verifyAddress() {
+    async function verifyAddress(csrfToken) {
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
             return;
         }
 
         try {
-            const response = await fetch('/admin/usuarios/verificar_direccion', {
+            const response = await fetch('/api/validar/direccion', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({
                     calle: calleInput.value,
                     altura: alturaInput.value,
@@ -79,7 +85,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const verificationResult = await response.json();
 
             if (response.ok && verificationResult.success) {
-                await enviarDatos();
+                await enviarDatos(csrfToken);
             } else {
                 let errorMessage = 'Dirección no válida o error de verificación.';
                 if (verificationResult && verificationResult.error) {
@@ -102,8 +108,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!form.checkValidity()) {
             return;
         }
-
-        await verifyAddress();
+        
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        await verifyAddress(csrfToken);
     });
 
 });

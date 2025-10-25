@@ -28,6 +28,7 @@ Agregar nuevo proveedor
             </div>
             <div class="card-body">
                 <form id="formulario-proveedor" method="POST">
+                    {{ csrf_form.csrf_token }}
                     <div class="row g-3">
                         {% if proveedor %}
                         <div class="col-md-6">

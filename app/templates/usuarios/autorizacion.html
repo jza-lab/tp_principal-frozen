@@ -11,7 +11,7 @@
         </div>
         <div class="card-body">
             <form method="POST" action="{{ url_for('admin_autorizacion.nueva_autorizacion') }}">
-                
+                {{ csrf_form.csrf_token }}
                 <!-- Búsqueda de Empleado por Legajo -->
                 <div class="row g-3 mb-3">
                     <div class="col-md-3">
