@@ -31,13 +31,7 @@ class OrdenProduccionSchema(Schema):
     fecha_meta = fields.Date(allow_none=True)
     linea_asignada = fields.Int(allow_none=True)
     perario_asignado_id = fields.Int(allow_none=True)
-    estado = fields.Str(required=False, validate=validate.OneOf([
-        'PENDIENTE', 'APROBADA', 'EN_PROCESO', 'COMPLETADA', 'CANCELADA',
-        'EN ESPERA', 'LISTA PARA PRODUCIR',
-        'EN_LINEA_1', 'EN_LINEA_2', 
-        'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD',
-        'FINALIZADA', 'CONSOLIDADA'
-    ]))
+    estado = fields.Int()
 
     sugerencia_fecha_inicio = fields.Date(allow_none=True)
     sugerencia_plazo_total_dias = fields.Int(allow_none=True)

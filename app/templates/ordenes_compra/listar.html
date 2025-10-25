@@ -84,7 +84,7 @@
                     {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':
                     'question-circle'}) %}
                     <span class="badge {{ config.class }}">
-                        <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado.replace('_', ' ') }}
+                        <i class="bi bi-{{ config.icon }} me-1"></i>{{ (orden.estado | default('')) .replace('_', ' ') }}
                     </span>
                 </div>
 

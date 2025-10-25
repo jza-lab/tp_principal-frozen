@@ -1,6 +1,7 @@
 from app.models.base_model import BaseModel
 from typing import Dict, Any, List, Optional
 import logging
+from app.utils import estados
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +13,33 @@ class PedidoModel(BaseModel):
     def get_table_name(self) -> str:
         """Devuelve el nombre de la tabla principal."""
         return 'pedidos'
+
+    def _traducir_estado_a_int(self, record: Dict) -> Dict:
+        """Traduce el estado de cadena (DB) a entero (lógica) para un registro."""
+        if record and 'estado' in record and isinstance(record['estado'], str):
+            record['estado'] = estados.traducir_a_int(record['estado'])
+        
+        if record and 'items' in record:
+            for item in record['items']:
+                if 'estado' in item and isinstance(item['estado'], str):
+                    item['estado'] = estados.traducir_a_int(item['estado'])
+        return record
+
+    def _traducir_lista_estados_a_int(self, records: List[Dict]) -> List[Dict]:
+        """Aplica la traducción de estado a una lista de registros."""
+        return [self._traducir_estado_a_int(record) for record in records]
+
+    def _traducir_estado_a_cadena(self, record: Dict) -> Dict:
+        """Traduce el estado de entero (lógica) a cadena (DB) para un registro."""
+        if record and 'estado' in record and isinstance(record['estado'], int):
+            record['estado'] = estados.traducir_a_cadena(record['estado'])
+        return record
+
+    def _traducir_item_estado_a_cadena(self, item: Dict) -> Dict:
+        """Traduce el estado de un item de entero a cadena."""
+        if item and 'estado' in item and isinstance(item['estado'], int):
+            item['estado'] = estados.traducir_a_cadena(item['estado'])
+        return item
 
     def get_one_with_items_and_op_status(self, pedido_id: int) -> Dict:
         """
@@ -78,7 +106,10 @@ class PedidoModel(BaseModel):
             else:
                 item['op_estado'] = None # No aplica
 
-        pedido_data['todas_ops_completadas'] = todas_completadas # Añadir bandera al pedido
+        pedido_data['todas_ops_completadas'] = todas_completadas
+
+        # Traducir estados a enteros antes de devolver
+        pedido_data = self._traducir_estado_a_int(pedido_data)
 
         return {'success': True, 'data': pedido_data}
 
@@ -109,6 +140,9 @@ class PedidoModel(BaseModel):
         Simula una transacción ejecutando las operaciones secuencialmente.
         """
         try:
+            # Traducir estado del pedido principal a cadena antes de crear
+            pedido_data = self._traducir_estado_a_cadena(pedido_data)
+
             if 'id' in pedido_data:
                 pedido_data.pop('id')
             # 1. Crear el pedido principal
@@ -122,11 +156,18 @@ class PedidoModel(BaseModel):
             # 2. Crear los items del pedido
             try:
                 for item in items_data:
+                    # Asignar estado PENDIENTE por defecto si no viene
+                    if 'estado' not in item:
+                        item['estado'] = estados.PENDIENTE
+                    
+                    # Traducir estado del item a cadena
+                    item_traducido = self._traducir_item_estado_a_cadena(item)
+
                     item_data = {
                         'pedido_id': new_pedido_id,
-                        'producto_id': item['producto_id'],
-                        'cantidad': item['cantidad'],
-                        'estado': item.get('estado', 'PENDIENTE')
+                        'producto_id': item_traducido['producto_id'],
+                        'cantidad': item_traducido['cantidad'],
+                        'estado': item_traducido.get('estado') 
                     }
                     item_insert_result = self.db.table('pedido_items').insert(item_data).execute()
                     if not item_insert_result.data:
@@ -163,7 +204,11 @@ class PedidoModel(BaseModel):
                             query = query.eq(key, value)
             query = query.order("fecha_solicitud", desc=True).order("id", desc=True)
             result = query.execute()
-            return {'success': True, 'data': result.data}
+            
+            # Traducir estados a enteros
+            translated_data = self._traducir_lista_estados_a_int(result.data)
+            
+            return {'success': True, 'data': translated_data}
         except Exception as e:
             logger.error(f"Error al obtener pedidos con items: {str(e)}")
             return {'success': False, 'error': str(e)}
@@ -178,7 +223,9 @@ class PedidoModel(BaseModel):
 
 
             if result.data:
-                return {'success': True, 'data': result.data}
+                # Traducir estados a enteros
+                translated_data = self._traducir_estado_a_int(result.data)
+                return {'success': True, 'data': translated_data}
             else:
                 return {'success': False, 'error': 'Pedido no encontrado.'}
         except Exception as e:
@@ -190,6 +237,9 @@ class PedidoModel(BaseModel):
         Actualiza un pedido y sus items.
         """
         try:
+            # Traducir estado del pedido a cadena antes de actualizar
+            pedido_data = self._traducir_estado_a_cadena(pedido_data)
+
             if 'id' in pedido_data:
                 pedido_data.pop('id')
             update_result = self.update(id_value=pedido_id, data=pedido_data, id_field='id')
@@ -213,7 +263,7 @@ class PedidoModel(BaseModel):
             products_to_remove_ids = db_product_ids - form_product_ids
             for pid in products_to_remove_ids:
                 items_for_deletion = existing_items_by_product.get(pid, [])
-                if any(item['estado'] != 'PENDIENTE' for item in items_for_deletion):
+                if any(estados.traducir_a_int(item['estado']) != estados.PENDIENTE for item in items_for_deletion):
                     raise Exception(f"No se puede eliminar el producto ID {pid} porque ya está en producción.")
 
                 item_ids_to_delete = [i['id'] for i in items_for_deletion]
@@ -224,7 +274,11 @@ class PedidoModel(BaseModel):
                 nueva_cantidad_total = int(new_item_data['cantidad'])
                 existing_items = existing_items_by_product.get(pid, [])
 
-                is_simple_case = len(existing_items) == 1 and existing_items[0]['estado'] == 'PENDIENTE'
+                # Traducir los estados de los items existentes a enteros para la lógica
+                for item in existing_items:
+                    item['estado'] = estados.traducir_a_int(item['estado'])
+
+                is_simple_case = len(existing_items) == 1 and existing_items[0]['estado'] == estados.PENDIENTE
 
                 if is_simple_case:
                     simple_item = existing_items[0]
@@ -241,12 +295,12 @@ class PedidoModel(BaseModel):
                 if nueva_cantidad_total > cantidad_existente_total:
                     cantidad_a_anadir = nueva_cantidad_total - cantidad_existente_total
                     self.db.table('pedido_items').insert({
-                        'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': cantidad_a_anadir, 'estado': 'PENDIENTE'
+                        'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': cantidad_a_anadir, 'estado': estados.traducir_a_cadena(estados.PENDIENTE)
                     }).execute()
 
                 elif nueva_cantidad_total < cantidad_existente_total:
                     cantidad_a_reducir = cantidad_existente_total - nueva_cantidad_total
-                    items_pendientes = [i for i in existing_items if i['estado'] == 'PENDIENTE']
+                    items_pendientes = [i for i in existing_items if i['estado'] == estados.PENDIENTE]
                     cantidad_pendiente_total = sum(i['cantidad'] for i in items_pendientes)
 
                     if cantidad_a_reducir > cantidad_pendiente_total:
@@ -258,23 +312,26 @@ class PedidoModel(BaseModel):
                     nueva_cantidad_pendiente = cantidad_pendiente_total - cantidad_a_reducir
                     if nueva_cantidad_pendiente > 0:
                         self.db.table('pedido_items').insert({
-                            'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': nueva_cantidad_pendiente, 'estado': 'PENDIENTE'
+                            'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': nueva_cantidad_pendiente, 'estado': estados.traducir_a_cadena(estados.PENDIENTE)
                         }).execute()
 
-            pedido_status = pedido_data.get('estado')
+            pedido_status_str = pedido_data.get('estado')
+            pedido_status = estados.traducir_a_int(pedido_status_str)
+            
             status_mapping = {
-                'EN_PROCESO': 'EN_PRODUCCION',
-                'LISTO_PARA_ENTREGA': 'ALISTADO',
-                'COMPLETADO': 'COMPLETADO',
-                'CANCELADO': 'CANCELADO'
+                estados.EN_PROCESO: estados.EN_PRODUCCION,
+                estados.LISTO_PARA_ENTREGAR: estados.ALISTADO,
+                estados.COMPLETADO: estados.COMPLETADO,
+                estados.CANCELADA: estados.CANCELADA
             }
 
             if pedido_status in status_mapping:
                 target_item_status = status_mapping[pedido_status]
-                logger.info(f"Propagando estado '{target_item_status}' a items pendientes del pedido {pedido_id}.")
+                target_item_status_str = estados.traducir_a_cadena(target_item_status)
+                logger.info(f"Propagando estado '{target_item_status_str}' a items pendientes del pedido {pedido_id}.")
                 self.db.table('pedido_items').update(
-                    {'estado': target_item_status}
-                ).eq('pedido_id', pedido_id).eq('estado', 'PENDIENTE').execute()
+                    {'estado': target_item_status_str}
+                ).eq('pedido_id', pedido_id).eq('estado', estados.traducir_a_cadena(estados.PENDIENTE)).execute()
 
             logger.info(f"Pedido {pedido_id} y sus items actualizados correctamente.")
             return self.get_one_with_items(pedido_id)
@@ -283,23 +340,27 @@ class PedidoModel(BaseModel):
             logger.error(f"Error actualizando pedido {pedido_id} con items: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    def cambiar_estado(self, pedido_id: int, nuevo_estado: str) -> Dict:
+    def cambiar_estado(self, pedido_id: int, nuevo_estado: int) -> Dict:
         """
-        Cambia el estado de un pedido.
+        Cambia el estado de un pedido. Recibe el estado como entero.
         Si el nuevo estado es 'CANCELADO', también cancela todos los items pendientes asociados.
         """
         try:
-            update_result = self.update(id_value=pedido_id, data={'estado': nuevo_estado}, id_field='id')
+            nuevo_estado_str = estados.traducir_a_cadena(nuevo_estado)
+            update_result = self.update(id_value=pedido_id, data={'estado': nuevo_estado_str}, id_field='id')
 
             if not update_result['success']:
                 return update_result
 
-            if nuevo_estado == 'CANCELADO':
+            if nuevo_estado == estados.CANCELADA:
                 logger.info(f"Pedido {pedido_id} cancelado. Cancelando sus items 'PENDIENTE'...")
+                
+                estado_cancelado_str = estados.traducir_a_cadena(estados.CANCELADA)
+                estado_pendiente_str = estados.traducir_a_cadena(estados.PENDIENTE)
 
                 items_update_result = self.db.table('pedido_items').update(
-                    {'estado': 'CANCELADO'}
-                ).eq('pedido_id', pedido_id).eq('estado', 'PENDIENTE').execute()
+                    {'estado': estado_cancelado_str}
+                ).eq('pedido_id', pedido_id).eq('estado', estado_pendiente_str).execute()
 
                 if items_update_result.data:
                     logger.info(f"Se cancelaron {len(items_update_result.data)} items para el pedido {pedido_id}.")
@@ -321,32 +382,24 @@ class PedidoModel(BaseModel):
                 logger.warning(f"No se encontraron items para el pedido {pedido_id} al actualizar estado agregado.")
                 return {'success': True, 'message': 'No items found.'}
 
-            estados_items = {item['estado'] for item in items_result.data}
+            estados_items_int = {estados.traducir_a_int(item['estado']) for item in items_result.data}
             nuevo_estado_pedido = None
 
             # --- NUEVA LÓGICA DE ESTADOS ---
-            # 1. Si al menos un item está 'EN_PRODUCCION', el pedido está 'EN_PROCESO'.
-            if 'EN_PRODUCCION' in estados_items:
-                nuevo_estado_pedido = 'EN_PROCESO'
-            # 2. Si TODOS los items están 'ALISTADO', el pedido pasa a 'LISTO PARA ARMAR'.
-            elif all(estado == 'ALISTADO' for estado in estados_items):
-                nuevo_estado_pedido = 'LISTO_PARA_ARMAR'
-            # 3. Si no hay items en producción y no todos están alistados, pero al menos uno lo está,
-            #    se mantiene EN_PROCESO (o el estado que tuviera).
-            elif 'ALISTADO' in estados_items and 'EN_PRODUCCION' not in estados_items:
-                 # Esta condición puede ser más compleja. Por ahora, si hay una mezcla
-                 # de PENDIENTE y ALISTADO, se podría considerar EN_PROCESO.
-                 # O simplemente no cambiar el estado hasta que todo esté listo.
-                 # Por simplicidad, no hacemos nada y esperamos a que todos los items avancen.
+            if estados.EN_PRODUCCION in estados_items_int:
+                nuevo_estado_pedido = estados.EN_PROCESO
+            elif all(estado == estados.ALISTADO for estado in estados_items_int):
+                nuevo_estado_pedido = estados.LISTO_PARA_ARMAR
+            elif estados.ALISTADO in estados_items_int and estados.EN_PRODUCCION not in estados_items_int:
                  pass
 
-
-            if nuevo_estado_pedido:
-                # Obtenemos el estado actual para evitar actualizaciones redundantes
+            if nuevo_estado_pedido is not None:
                 pedido_actual_res = self.find_by_id(pedido_id, 'id')
-                if pedido_actual_res.get('success') and pedido_actual_res['data'].get('estado') != nuevo_estado_pedido:
-                    logger.info(f"Actualizando estado del pedido {pedido_id} a '{nuevo_estado_pedido}'.")
-                    return self.cambiar_estado(pedido_id, nuevo_estado_pedido)
+                if pedido_actual_res.get('success'):
+                    estado_actual_int = estados.traducir_a_int(pedido_actual_res['data'].get('estado'))
+                    if estado_actual_int != nuevo_estado_pedido:
+                        logger.info(f"Actualizando estado del pedido {pedido_id} a '{estados.traducir_a_cadena(nuevo_estado_pedido)}'.")
+                        return self.cambiar_estado(pedido_id, nuevo_estado_pedido)
 
             return {'success': True, 'message': 'No state change required.'}
 
@@ -382,7 +435,10 @@ class PedidoModel(BaseModel):
             result = query.order("id", desc=True).execute()
 
             # Limpiar y aplanar los datos anidados para un uso más fácil en la plantilla
-            for item in result.data:
+            # Traducir estados a enteros antes de procesar
+            translated_data = self._traducir_lista_estados_a_int(result.data)
+
+            for item in translated_data:
                 # Extraer el nombre del producto
                 prod_nombre_data = item.get('producto_nombre')
                 if isinstance(prod_nombre_data, dict):
@@ -408,10 +464,14 @@ class PedidoModel(BaseModel):
     def update_item(self, item_id: int, data: Dict) -> Dict:
         """Actualiza un único ítem de pedido."""
         try:
+            # Traducir estado a cadena antes de enviar a la BD
+            data = self._traducir_estado_a_cadena(data)
+
             # Asumiendo que la tabla de items se llama 'pedido_items'
             result = self.db.table('pedido_items').update(data).eq('id', item_id).execute()
             if result.data:
-                return {'success': True, 'data': result.data[0]}
+                translated_data = self._traducir_estado_a_int(result.data[0])
+                return {'success': True, 'data': translated_data}
             return {'success': False, 'error': 'No se pudo actualizar el ítem o no fue encontrado.'}
         except Exception as e:
             logging.error(f"Error actualizando pedido_item {item_id}: {e}")
@@ -470,12 +530,17 @@ class PedidoModel(BaseModel):
         Actualiza todos los ítems de un pedido específico.
         """
         try:
+            # Traducir estado a cadena antes de la actualización
+            data = self._traducir_estado_a_cadena(data)
+
             # Asumiendo que la tabla de items se llama 'pedido_items'
             result = self.db.table('pedido_items').update(data).eq('pedido_id', pedido_id).execute()
 
             # La operación de actualización devuelve los datos modificados
             if result.data:
-                return {'success': True, 'data': result.data}
+                # Traducir la respuesta de vuelta a enteros
+                translated_data = self._traducir_lista_estados_a_int(result.data)
+                return {'success': True, 'data': translated_data}
             else:
                 # Esto puede ocurrir si el pedido no tenía ítems, lo cual no es un error.
                 return {'success': True, 'data': [], 'message': 'No se encontraron ítems para el ID de pedido proporcionado.'}

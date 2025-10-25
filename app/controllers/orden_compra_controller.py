@@ -6,6 +6,7 @@ from app.controllers.inventario_controller import InventarioController
 from app.controllers.insumo_controller import InsumoController
 from datetime import datetime, date
 import logging
+from app.utils import estados
 
 logger = logging.getLogger(__name__)
 
@@ -96,9 +97,12 @@ class OrdenCompraController:
 
             orden_data['usuario_creador_id'] = usuario_id
             orden_data['codigo_oc'] = f"OC-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-            orden_data['estado'] = 'PENDIENTE'
+            orden_data['estado'] = estados.OC_PENDIENTE
 
             result = self.model.create_with_items(orden_data, items_data)
+            
+            if result.get('success'):
+                result['data'] = estados.traducir_objeto_a_cadena(result['data'])
 
             return result
 
@@ -117,6 +121,9 @@ class OrdenCompraController:
                 return {'success': False, 'error': 'El proveedor y la fecha de emisión son obligatorios.'}
 
             result = self.model.update_with_items(orden_id, orden_data, items_data)
+            
+            if result.get('success'):
+                result['data'] = estados.traducir_objeto_a_cadena(result['data'])
 
             return result
 
@@ -131,6 +138,7 @@ class OrdenCompraController:
         try:
             result = self.model.get_one_with_details(orden_id)
             if result.get('success'):
+                result['data'] = estados.traducir_objeto_a_cadena(result['data'])
                 return result, 200
             else:
                 return result, 404
@@ -160,6 +168,10 @@ class OrdenCompraController:
             # Si filtros no incluye ciertos campos, tomar de request.args
             if 'estado' not in filters and request.args.get('estado'):
                 filters['estado'] = request.args.get('estado')
+            
+            if filters.get('estado'):
+                filters['estado'] = estados.traducir_a_int(filters['estado'])
+
             if 'proveedor_id' not in filters and request.args.get('proveedor_id'):
                 filters['proveedor_id'] = int(request.args.get('proveedor_id'))
             if 'prioridad' not in filters and request.args.get('prioridad'):
@@ -168,6 +180,7 @@ class OrdenCompraController:
             result = self.model.get_all(filters)
 
             if result['success']:
+                result['data'] = estados.traducir_lista_a_cadena(result['data'])
                 return result, 200
             else:
                 return result, 400
@@ -178,9 +191,13 @@ class OrdenCompraController:
     def update_orden(self, orden_id):
         try:
             data = request.get_json()
+            
+            if 'estado' in data:
+                data['estado'] = estados.traducir_a_int(data['estado'])
 
             result = self.model.update(orden_id, data)
             if result['success']:
+                result['data'] = estados.traducir_objeto_a_cadena(result['data'])
                 return jsonify({
                     'success': True,
                     'data': result['data'],
@@ -217,19 +234,20 @@ class OrdenCompraController:
                 return jsonify({'success': False, 'error': 'Orden no encontrada'}), 404
 
             orden_data = orden_actual['data']
-            estado_actual = orden_data.get('estado', 'PENDIENTE')
+            estado_actual_int = orden_data.get('estado') # El modelo ya devuelve int
+            estado_actual_str = estados.traducir_a_cadena(estado_actual_int)
 
             # 2. Validar que se puede cancelar (no cancelar órdenes ya completadas/canceladas)
-            estados_no_cancelables = ['COMPLETADA', 'CANCELADA', 'VENCIDA']
-            if estado_actual in estados_no_cancelables:
+            estados_no_cancelables = [estados.OC_COMPLETADA, estados.OC_CANCELADA] # Añadir VENCIDA si existe
+            if estado_actual_int in estados_no_cancelables:
                 return jsonify({
                     'success': False,
-                    'error': f'No se puede cancelar una orden en estado {estado_actual}'
+                    'error': f'No se puede cancelar una orden en estado {estado_actual_str}'
                 }), 400
 
             # 3. Preparar datos para cancelación
             cancelacion_data = {
-                'estado': 'CANCELADA',
+                'estado': estados.OC_CANCELADA,
                 'updated_at': datetime.now().isoformat(),
                 'observaciones': f"{orden_data.get('observaciones', '')} \\n--- CANCELADA ---\\nMotivo: {motivo} \\nFecha: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
             }
@@ -260,11 +278,15 @@ class OrdenCompraController:
         """
         try:
             update_data = {
-                'estado': 'APROBADA',
+                'estado': estados.OC_APROBADA,
                 'usuario_aprobador_id': usuario_id,
                 'updated_at': datetime.now().isoformat()
             }
             result = self.model.update(orden_id, update_data)
+            
+            if result.get('success'):
+                result['data'] = estados.traducir_objeto_a_cadena(result['data'])
+
             return result
         except Exception as e:
             logger.error(f"Error aprobando orden {orden_id}: {e}")
@@ -276,10 +298,14 @@ class OrdenCompraController:
         """
         try:
             update_data = {
-                'estado': 'EN_TRANSITO',
+                'estado': estados.OC_EN_ESPERA_LLEGADA, # Suponiendo que este es el estado correcto
                 'updated_at': datetime.now().isoformat()
             }
             result = self.model.update(orden_id, update_data)
+            
+            if result.get('success'):
+                result['data'] = estados.traducir_objeto_a_cadena(result['data'])
+
             return result
         except Exception as e:
             logger.error(f"Error marcando la orden {orden_id} como EN TRANSITO: {e}")
@@ -298,11 +324,15 @@ class OrdenCompraController:
             observaciones_actuales = orden_actual_result['data'].get('observaciones', '')
 
             update_data = {
-                'estado': 'RECHAZADA',
+                'estado': estados.OC_RECHAZADA,
                 'observaciones': f"{observaciones_actuales}\n\nRechazada por: {motivo}",
                 'updated_at': datetime.now().isoformat()
             }
             result = self.model.update(orden_id, update_data)
+            
+            if result.get('success'):
+                result['data'] = estados.traducir_objeto_a_cadena(result['data'])
+
             return result
         except Exception as e:
             logger.error(f"Error rechazando orden {orden_id}: {e}")
@@ -351,7 +381,7 @@ class OrdenCompraController:
 
                 # 2. Update PO Status
                 orden_update_data = {
-                    'estado': 'RECIBIDA', 'fecha_real_entrega': date.today().isoformat(),
+                    'estado': estados.OC_RECIBIDA, 'fecha_real_entrega': date.today().isoformat(),
                     'observaciones': observaciones, 'updated_at': datetime.now().isoformat()
                 }
                 self.model.update(orden_id, orden_update_data)

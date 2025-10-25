@@ -41,65 +41,108 @@ function showConfirmationModal(title, body, confirmCallback, buttonType = 'prima
 
 
 document.addEventListener('DOMContentLoaded', function () {
+    // Función para obtener el valor de una cookie por su nombre
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Modal de confirmación para formularios (class="needs-confirmation")
+    document.body.addEventListener('submit', function(event) {
+        const form = event.target;
+        if (form.classList.contains('needs-confirmation')) {
+            event.preventDefault(); // Detener el envío del formulario
+            
+            const message = form.dataset.confirmMessage || '¿Está seguro de que desea realizar esta acción?';
+            const title = form.dataset.confirmTitle || 'Confirmar Acción';
+            
+            showConfirmationModal(title, message, function() {
+                // Si el usuario confirma, se envía el formulario
+                form.submit();
+            });
+        }
+    });
+
+    // Modal de confirmación genérico (class="confirm-form")
     const confirmationModal = document.getElementById('confirmationModal');
     if (confirmationModal) {
-        let form = null; 
+        let confirmAction = null;
 
         confirmationModal.addEventListener('show.bs.modal', function (event) {
             const button = event.relatedTarget;
-            if (!button) {
+            if (!button || !button.closest('.confirm-form')) {
+                // Si el modal no fue disparado por un botón dentro de un .confirm-form, no hacer nada.
+                // Limpiamos cualquier acción anterior para evitar ejecuciones accidentales.
+                confirmAction = null;
                 return;
-            }            
-            const url = button.getAttribute('data-url');
-            const message = button.getAttribute('data-message');
-            const title = button.getAttribute('data-title');
+            }
+            
+            const form = button.closest('.confirm-form');
+            const url = form.action;
+            const message = form.dataset.message || '¿Estás seguro?';
+            const title = form.dataset.title || 'Confirmación';
+            const buttonType = form.dataset.buttonType || 'primary';
 
             const modalTitle = confirmationModal.querySelector('#modalTitle');
             const modalBody = confirmationModal.querySelector('#modalBody');
             const modalConfirmButton = confirmationModal.querySelector('#modalConfirmButton');
 
-            // Set title and message
-            modalTitle.textContent = title || 'Confirmación';
-            modalBody.innerHTML = message || '¿Estás seguro de que quieres realizar esta acción?';
+            modalTitle.textContent = title;
+            modalBody.innerHTML = message;
+            modalConfirmButton.className = `btn btn-${buttonType}`;
 
-            if (url) {
-                // Create a form for the action
-                form = document.createElement('form');
-                form.method = 'POST';
-                form.action = url;
-                form.style.display = 'inline';
-
-                // Move the original confirm button inside the form
-                const confirmButtonClone = modalConfirmButton.cloneNode(true);
-                confirmButtonClone.type = 'submit';
-                confirmButtonClone.classList.remove('btn-primary');
-                confirmButtonClone.classList.add('btn-danger');
-                confirmButtonClone.textContent = 'Eliminar';
-
-
-                form.appendChild(confirmButtonClone);
+            // Guardamos la acción a ejecutar cuando se confirme
+            confirmAction = function() {
+                const csrfToken = getCookie('csrf_access_token');
                 
-                modalConfirmButton.style.display = 'none';
-                modalConfirmButton.parentElement.insertBefore(form, modalConfirmButton.nextSibling);
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Content-Type': 'application/json' 
+                    },
+                }).then(response => {
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                    } else {
+                        // Si no hay redirección, recargamos la página para ver los cambios (ej. flash messages)
+                        window.location.reload();
+                    }
+                }).catch(error => {
+                    console.error('Error al realizar la acción:', error);
+                    showNotificationModal('Error', 'Ocurrió un error al procesar la solicitud.', 'error');
+                });
+            };
+        });
 
-            } else {
-                modalConfirmButton.style.display = 'inline-block';
+        // Event listener para el botón de confirmación
+        const confirmButton = confirmationModal.querySelector('#modalConfirmButton');
+        confirmButton.addEventListener('click', function() {
+            if (typeof confirmAction === 'function') {
+                confirmAction();
+                const modal = bootstrap.Modal.getInstance(confirmationModal);
+                modal.hide();
+                confirmAction = null; // Limpiar la acción después de usarla
             }
         });
 
+        // Limpiar la acción si el modal se cierra sin confirmar
         confirmationModal.addEventListener('hide.bs.modal', function() {
-            // Cleanup: remove the dynamically created form
-            if (form) {
-                form.remove();
-                form = null;
-            }
-             const modalConfirmButton = confirmationModal.querySelector('#modalConfirmButton');
-            if(modalConfirmButton) {
-                modalConfirmButton.style.display = 'inline-block';
-            }
+            confirmAction = null;
         });
     }
 });
+
 
 /**
  * Muestra un modal de notificación con un solo botón (OK).

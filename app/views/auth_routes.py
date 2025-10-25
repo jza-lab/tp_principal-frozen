@@ -34,7 +34,8 @@ def login():
                     'nombre': usuario_data.get('nombre'),
                     'apellido': usuario_data.get('apellido'),
                     'rol': usuario_data.get('roles', {}).get('codigo'),
-                    'user_level': usuario_data.get('roles', {}).get('nivel', 0)
+                    'user_level': usuario_data.get('roles', {}).get('nivel', 0),
+                    'permisos': usuario_data.get('permisos', {})
                 }
             )
             
@@ -76,7 +77,8 @@ def identificar_rostro():
                 'nombre': usuario_data.get('nombre'),
                 'apellido': usuario_data.get('apellido'),
                 'rol': usuario_data.get('roles', {}).get('codigo'),
-                'user_level': usuario_data.get('roles', {}).get('nivel', 0)
+                'user_level': usuario_data.get('roles', {}).get('nivel', 0),
+                'permisos': usuario_data.get('permisos', {})
             }
         )
         

@@ -20,6 +20,7 @@ from app.models.pedido import PedidoModel
 from datetime import date
 from app.models.receta import RecetaModel
 from app.models.insumo import InsumoModel # Asegúrate de importar esto
+from app.utils import estados
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +52,14 @@ class OrdenProduccionController(BaseController):
         Devuelve una tupla en formato (datos, http_status_code).
         """
         try:
+            if filtros and 'estado' in filtros and filtros['estado']:
+                filtros['estado'] = estados.traducir_a_int(filtros['estado'])
+
             result = self.model.get_all_enriched(filtros)
 
             if result.get('success'):
-                return self.success_response(data=result.get('data', []))
+                ordenes_traducidas = estados.traducir_lista_a_cadena(result.get('data', []))
+                return self.success_response(data=ordenes_traducidas)
             else:
                 error_msg = result.get('error', 'Error desconocido al obtener órdenes.')
                 status_code = 404 if "no encontradas" in str(error_msg).lower() else 500
@@ -63,7 +68,8 @@ class OrdenProduccionController(BaseController):
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
     def obtener_cantidad_ordenes_estado(self, estado: str, fecha: Optional[str] = None) -> Optional[Dict]:
-        filtros = {'estado': estado} if estado else {}
+        estado_int = estados.traducir_a_int(estado)
+        filtros = {'estado': estado_int} if estado_int is not None else {}
 
         if fecha:
             filtros['fecha_planificada'] = fecha
@@ -85,6 +91,8 @@ class OrdenProduccionController(BaseController):
         Obtiene el detalle de una orden de producción específica.
         """
         result = self.model.get_one_enriched(orden_id)
+        if result.get('success'):
+            result['data'] = estados.traducir_objeto_a_cadena(result['data'])
         return result
 
     def obtener_desglose_origen(self, orden_id: int) -> Dict:
@@ -121,14 +129,17 @@ class OrdenProduccionController(BaseController):
                 form_data['receta_id'] = receta['id']
 
             if 'estado' not in form_data or not form_data['estado']:
-                form_data['estado'] = 'PENDIENTE'
+                form_data['estado'] = estados.OP_PENDIENTE
             # ------------------------------------
 
             validated_data = self.schema.load(form_data)
             validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
             validated_data['usuario_creador_id'] = usuario_id
 
-            return self.model.create(validated_data)
+            result = self.model.create(validated_data)
+            if result.get('success'):
+                result['data'] = estados.traducir_objeto_a_cadena(result['data'])
+            return result
 
         except ValidationError as e:
             # --- CORRECCIÓN AQUÍ ---
@@ -204,7 +215,7 @@ class OrdenProduccionController(BaseController):
                 return self.error_response("Orden de producción no encontrada.", 404)
             orden_produccion = orden_result['data']
 
-            if orden_produccion['estado'] != 'PENDIENTE':
+            if estados.traducir_a_int(orden_produccion['estado']) != estados.OP_PENDIENTE:
                 return self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
 
             # 2. Verificar stock
@@ -240,7 +251,7 @@ class OrdenProduccionController(BaseController):
 
                 # Cambiar estado OP a 'EN ESPERA'
                 logger.info(f"Cambiando estado de OP {orden_id} a EN ESPERA.")
-                estado_change_result = self.model.cambiar_estado(orden_id, 'EN ESPERA')
+                estado_change_result = self.model.cambiar_estado(orden_id, estados.OP_EN_ESPERA)
                 if not estado_change_result.get('success'):
                     # Loggear error si falla el cambio de estado, pero ya creamos la OC
                     logger.error(f"Error al cambiar estado a EN ESPERA para OP {orden_id}: {estado_change_result.get('error')}")
@@ -257,16 +268,17 @@ class OrdenProduccionController(BaseController):
                 if not reserva_result.get('success'):
                     return self.error_response(f"Fallo crítico al reservar insumos: {reserva_result.get('error')}", 500)
 
-                nuevo_estado_op = 'LISTA PARA PRODUCIR'
-                logger.info(f"Cambiando estado de OP {orden_id} a {nuevo_estado_op}.")
-                estado_change_result = self.model.cambiar_estado(orden_id, nuevo_estado_op)
+                nuevo_estado_op_int = estados.OP_APROBADA
+                nuevo_estado_op_str = estados.traducir_a_cadena(nuevo_estado_op_int)
+                logger.info(f"Cambiando estado de OP {orden_id} a {nuevo_estado_op_str}.")
+                estado_change_result = self.model.cambiar_estado(orden_id, nuevo_estado_op_int)
                 if not estado_change_result.get('success'):
                     # Si falla el cambio de estado, ¿deberíamos cancelar la reserva? (Complejo sin transacciones)
-                    logger.error(f"Error al cambiar estado a {nuevo_estado_op} para OP {orden_id}: {estado_change_result.get('error')}")
-                    return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
+                    logger.error(f"Error al cambiar estado a {nuevo_estado_op_str} para OP {orden_id}: {estado_change_result.get('error')}")
+                    return self.error_response(f"Error al cambiar estado a {nuevo_estado_op_str}: {estado_change_result.get('error')}", 500)
 
                 return self.success_response(
-                    message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
+                    message=f"Stock disponible. La orden está '{nuevo_estado_op_str}' y los insumos reservados."
                 )
 
         except Exception as e:
@@ -329,7 +341,7 @@ class OrdenProduccionController(BaseController):
         """
         Rechaza una orden, cambiando su estado a CANCELADA.
         """
-        return self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=f"Rechazada: {motivo}")
+        return self.model.cambiar_estado(orden_id, estados.OP_CANCELADA, observaciones=f"Rechazada: {motivo}")
 
     def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str) -> tuple:
         """
@@ -342,10 +354,11 @@ class OrdenProduccionController(BaseController):
             if not orden_result.get('success'):
                 return self.error_response("Orden de producción no encontrada.", 404)
             orden_produccion = orden_result['data']
-            estado_actual = orden_produccion['estado']
+            estado_actual_int = estados.traducir_a_int(orden_produccion['estado'])
+            nuevo_estado_int = estados.traducir_a_int(nuevo_estado)
 
-            if nuevo_estado == 'COMPLETADA':
-                if estado_actual != 'CONTROL_DE_CALIDAD':
+            if nuevo_estado_int == estados.OP_COMPLETADA:
+                if estado_actual_int != estados.OP_CONTROL_DE_CALIDAD:
                     return self.error_response("La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
 
                 # 1. Verificar si la OP está vinculada a ítems de pedido
@@ -391,11 +404,13 @@ class OrdenProduccionController(BaseController):
                     message_to_use += " y vinculado a los pedidos correspondientes."
 
             # 5. Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
-            result = self.model.cambiar_estado(orden_id, nuevo_estado)
+            result = self.model.cambiar_estado(orden_id, nuevo_estado_int)
             if result.get('success'):
-                if nuevo_estado != 'COMPLETADA':
+                if nuevo_estado_int != estados.OP_COMPLETADA:
                     message_to_use = f"Estado actualizado a {nuevo_estado.replace('_', ' ')}."
-                return self.success_response(data=result.get('data'), message=message_to_use)
+                # Traducir la respuesta final
+                orden_actualizada = estados.traducir_objeto_a_cadena(result.get('data'))
+                return self.success_response(data=orden_actualizada, message=message_to_use)
             else:
                 return self.error_response(result.get('error', 'Error al cambiar el estado.'), 500)
 
@@ -535,7 +550,7 @@ class OrdenProduccionController(BaseController):
                 'fecha_meta': fecha_meta_mas_temprana.isoformat() if fecha_meta_mas_temprana else None, # Guardar la fecha meta más temprana
                 'prioridad': 'ALTA', # Las super OPs suelen ser prioritarias
                 'observaciones': f'Super OP consolidada desde las OPs: {", ".join(map(str, op_ids))}',
-                'estado': 'PENDIENTE' # La Super OP nace lista
+                'estado': estados.OP_PENDIENTE # La Super OP nace lista
             }
 
             resultado_creacion = self.crear_orden(super_op_data, usuario_id)
@@ -564,7 +579,7 @@ class OrdenProduccionController(BaseController):
 
             # 5. Actualizar las OPs originales (antes era el paso 4)
             update_data = {
-                'estado': 'CONSOLIDADA',
+                'estado': estados.OP_CONSOLIDADA,
                 'super_op_id': super_op_id
             }
             for op_id in op_ids:
@@ -590,9 +605,15 @@ class OrdenProduccionController(BaseController):
 
             # Aquí podrías añadir reglas de negocio, ej:
             # "No se puede mover de 'EN LINEA 1' a 'LISTA PARA PRODUCIR'"
+            
+            nuevo_estado_int = estados.traducir_a_int(nuevo_estado)
 
             # Llamamos al método del modelo que ya sabe cómo cambiar estados y fechas
-            result = self.model.cambiar_estado(orden_id, nuevo_estado)
+            result = self.model.cambiar_estado(orden_id, nuevo_estado_int)
+            
+            if result.get('success'):
+                result['data'] = estados.traducir_objeto_a_cadena(result['data'])
+
             return result
 
         except Exception as e:
