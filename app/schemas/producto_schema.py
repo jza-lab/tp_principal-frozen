@@ -25,6 +25,12 @@ class ProductoSchema(Schema):
         load_default=0
     )
 
+    cantidad_maxima_x_pedido = fields.Int(
+        required=False,
+        allow_none=True,
+        load_default=0
+    )
+
     peso_por_paquete_unidad = fields.Str(
         required=False,
         allow_none=True,

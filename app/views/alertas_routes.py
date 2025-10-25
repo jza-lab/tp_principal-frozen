@@ -134,3 +134,33 @@ def actualizar_stock_min_producto():
         flash(f'Ocurrió un error inesperado: {str(e)}', 'error')
 
     return redirect(url_for('alertas.listar_productos_alertas'))
+
+@alertas_bp.route('/productos/actualizar_cantidad_maxima', methods=['POST'])
+@permission_required(accion='configurar_alertas')
+def actualizar_cantidad_maxima_x_pedido():
+    """
+    Actualiza la cantidad máxima por pedido para un producto.
+    """
+    try:
+        producto_id = request.form.get('id_producto')
+        cantidad_maxima_str = request.form.get('cantidad_maxima_x_pedido')
+
+        if not producto_id or cantidad_maxima_str is None:
+            flash('ID de producto o cantidad máxima no proporcionado.', 'error')
+            return redirect(url_for('alertas.listar_productos_alertas'))
+
+        cantidad_maxima = int(cantidad_maxima_str)
+        
+        response, status_code = producto_controller.actualizar_cantidad_maxima_x_pedido(int(producto_id), cantidad_maxima)
+
+        if status_code == 200:
+            flash('Cantidad máxima por pedido actualizada correctamente.', 'success')
+        else:
+            flash(f"Error al actualizar: {response.get('error', 'Error desconocido')}", 'error')
+
+    except (ValueError, TypeError):
+        flash('Error: La cantidad máxima debe ser un número entero.', 'error')
+    except Exception as e:
+        flash(f'Ocurrió un error inesperado: {str(e)}', 'error')
+
+    return redirect(url_for('alertas.listar_productos_alertas'))
