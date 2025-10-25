@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const data = {
             producto_id: parseInt(document.getElementById('producto_id').value),
             cantidad: parseFloat(document.getElementById('cantidad').value),
-            fecha_planificada: document.getElementById('fecha_planificada').value,
+            fecha_meta: document.getElementById('fecha_meta').value, // <-- Usar 'fecha_meta'
             prioridad: document.getElementById('prioridad').value,
             observaciones: document.getElementById('observaciones').value,
             supervisor_responsable_id: document.getElementById('supervisor_responsable_id').value
