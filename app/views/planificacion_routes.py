@@ -108,14 +108,15 @@ def index():
         prev_week_str = prev_week_start.strftime("%Y-W%V"); next_week_str = next_week_start.strftime("%Y-W%V")
     except ValueError: prev_week_str = None; next_week_str = None; logger.warning(f"Error parseando week_str {week_str}")
 
-    # Justo antes de return render_template(...) en planificacion_routes.py
-    print("--- DEBUG RUTA INDEX ---")
-    print(f"inicio_semana_crp: {inicio_semana.isoformat() if inicio_semana else None}")
-    print(f"fin_semana_crp: {fin_semana.isoformat() if fin_semana else None}")
-    print(f"carga_crp: {carga_calculada}")
-    print(f"capacidad_crp: {capacidad_disponible}")
-    print(f"ordenes_para_crp (cantidad): {len(ordenes_para_crp)}")
-    print("------------------------")
+    columnas_kanban = {
+        'EN ESPERA': 'En Espera',
+        'LISTA PARA PRODUCIR':'Lista para producir', # <-- Cambiado
+        'EN_LINEA_1': 'Linea 1',                     # <-- Cambiado
+        'EN_LINEA_2': 'Linea 2',                     # <-- Cambiado
+        'EN_EMPAQUETADO': 'Empaquetado',             # <-- Cambiado
+        'CONTROL_DE_CALIDAD': 'Control de Calidad',  # <-- Cambiado
+        'COMPLETADA': 'Completada'                   # <-- Cambiado
+    }
 
     return render_template(
         'planificacion/tablero.html',

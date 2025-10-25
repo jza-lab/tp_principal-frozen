@@ -24,6 +24,8 @@ class PlanificacionController(BaseController):
         self.inventario_controller = InventarioController()
         self.centro_trabajo_model = CentroTrabajoModel()
         self.operacion_receta_model = OperacionRecetaModel()
+        self.receta_model = RecetaModel() # Asegúrate que esté inicializado
+        self.insumo_model = InsumoModel() # Asegúrate que esté inicializado
 
     def obtener_ops_para_tablero(self) -> tuple:
         """
@@ -236,43 +238,51 @@ class PlanificacionController(BaseController):
 
     def obtener_ops_pendientes_planificacion(self, dias_horizonte: int = 7) -> tuple:
         """
-        Obtiene OPs PENDIENTES en horizonte, agrupa por producto,
-        calcula tiempo de producción total estimado y verifica stock agregado.
+        Obtiene OPs PENDIENTES, agrupa, calcula sugerencias Y AÑADE unidad_medida y linea_compatible.
         """
         try:
-            # 1. Calcular rango de fechas y filtrar OPs (sin cambios)
+            # 1. Calcular rango y filtrar OPs (sin cambios)
             hoy = date.today()
-            # ... (validación dias_horizonte_int) ...
-            dias_horizonte_int = int(dias_horizonte) # Simplificado
+            dias_horizonte_int = int(dias_horizonte)
             fecha_fin_horizonte = hoy + timedelta(days=dias_horizonte_int)
             filtros = {
                 'estado': 'PENDIENTE',
                 'fecha_meta_desde': hoy.isoformat(),
                 'fecha_meta_hasta': fecha_fin_horizonte.isoformat()
             }
+            # Asume que obtener_ordenes trae 'producto_unidad_medida' gracias a get_all_enriched
             response, _ = self.orden_produccion_controller.obtener_ordenes(filtros)
             if not response.get('success'):
                 logger.error(f"Error al obtener OPs pendientes para MPS: {response.get('error')}")
                 return self.error_response("Error al cargar órdenes pendientes.")
             ordenes_en_horizonte = response.get('data', [])
 
-            # 2. Agrupar por Producto y calcular totales (sin cambios)
-            mps_agrupado = defaultdict(lambda: {'cantidad_total': 0, 'ordenes': [], 'fecha_meta_mas_proxima': None, 'receta_id': None}) # Añadir receta_id
+            # 2. Agrupar por Producto y calcular totales
+            mps_agrupado = defaultdict(lambda: {
+                'cantidad_total': 0,
+                'ordenes': [],
+                'fecha_meta_mas_proxima': None,
+                'receta_id': None,
+                'unidad_medida': None # <-- Inicializar unidad_medida
+            })
             for op in ordenes_en_horizonte:
                 producto_id = op.get('producto_id')
                 producto_nombre = op.get('producto_nombre', 'Desconocido')
                 cantidad = op.get('cantidad_planificada', 0)
                 fecha_meta_op_str = op.get('fecha_meta')
-                receta_id_op = op.get('receta_id') # Capturar receta_id
+                receta_id_op = op.get('receta_id')
+                unidad_medida_op = op.get('producto_unidad_medida') # <-- Obtener unidad de medida
 
-                if not producto_id or cantidad <= 0 or not receta_id_op: # Validar receta_id también
-                    continue
+                if not producto_id or cantidad <= 0 or not receta_id_op: continue
+
                 clave_producto = (producto_id, producto_nombre)
                 mps_agrupado[clave_producto]['cantidad_total'] += float(cantidad)
                 mps_agrupado[clave_producto]['ordenes'].append(op)
-                # Guardar el receta_id (asumimos que es el mismo para el mismo producto)
                 if mps_agrupado[clave_producto]['receta_id'] is None:
                     mps_agrupado[clave_producto]['receta_id'] = receta_id_op
+                if mps_agrupado[clave_producto]['unidad_medida'] is None and unidad_medida_op: # <-- Guardar unidad de medida
+                    mps_agrupado[clave_producto]['unidad_medida'] = unidad_medida_op
+
                 # ... (lógica fecha_meta_mas_proxima sin cambios) ...
                 fecha_meta_mas_proxima_actual = mps_agrupado[clave_producto]['fecha_meta_mas_proxima']
                 if fecha_meta_op_str:
@@ -281,37 +291,37 @@ class PlanificacionController(BaseController):
                           mps_agrupado[clave_producto]['fecha_meta_mas_proxima'] = fecha_meta_op_str
 
 
-            # --- INICIO NUEVA LÓGICA: Calcular sugerencia agregada ---
-            receta_model = RecetaModel()
-            insumo_model = InsumoModel()
+            # 3. Calcular sugerencia agregada (T_Prod, Línea, T_Proc, Stock)
+            # Ya tienes receta_model e insumo_model inicializados en __init__
 
             for clave_producto, data in mps_agrupado.items():
-                producto_id = clave_producto[0]
                 cantidad_total_agrupada = data['cantidad_total']
                 receta_id_agrupada = data['receta_id']
 
-                # Inicializar valores de sugerencia agregada
+                # Inicializar valores de sugerencia
                 data['sugerencia_t_prod_dias'] = 0
                 data['sugerencia_linea'] = None
                 data['sugerencia_t_proc_dias'] = 0
                 data['sugerencia_stock_ok'] = False
-                data['sugerencia_insumos_faltantes'] = [] # Lista detallada (opcional)
+                data['sugerencia_insumos_faltantes'] = []
+                data['linea_compatible'] = None # <-- Inicializar linea_compatible
 
-                if not receta_id_agrupada: continue # Saltar si no hay receta
+                if not receta_id_agrupada: continue
 
-                # a) Calcular Tiempo de Producción Agregado
-                receta_res = receta_model.find_by_id(receta_id_agrupada, 'id')
+                # a) Calcular Tiempo de Producción y Línea Sugerida
+                receta_res = self.receta_model.find_by_id(receta_id_agrupada, 'id')
                 if receta_res.get('success'):
                     receta = receta_res['data']
-                    # Reutilizar lógica de selección de línea y cálculo de t_prod_dias
-                    # (Similar a la de sugerir_fecha_inicio, adaptada)
-                    linea_compatible = receta.get('linea_compatible', '2').split(',')
+                    linea_compatible_str = receta.get('linea_compatible', '2') # <-- Obtener linea_compatible
+                    data['linea_compatible'] = linea_compatible_str # <-- Guardar linea_compatible
+
+                    linea_compatible_list = linea_compatible_str.split(',')
                     tiempo_prep = receta.get('tiempo_preparacion_minutos', 0)
                     tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
                     tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
-                    UMBRAL_CANTIDAD_LINEA_1 = 50 # Definir umbral
-                    puede_l1 = '1' in linea_compatible and tiempo_l1 > 0
-                    puede_l2 = '2' in linea_compatible and tiempo_l2 > 0
+                    UMBRAL_CANTIDAD_LINEA_1 = 50
+                    puede_l1 = '1' in linea_compatible_list and tiempo_l1 > 0
+                    puede_l2 = '2' in linea_compatible_list and tiempo_l2 > 0
                     linea_sug_agg = 0
                     tiempo_prod_unit_elegido_agg = 0
                     if puede_l1 and puede_l2:
@@ -322,56 +332,39 @@ class PlanificacionController(BaseController):
 
                     if linea_sug_agg > 0:
                          t_prod_minutos_agg = tiempo_prep + (tiempo_prod_unit_elegido_agg * cantidad_total_agrupada)
-                         data['sugerencia_t_prod_dias'] = math.ceil(t_prod_minutos_agg / 480) # Jornada 8h
+                         data['sugerencia_t_prod_dias'] = math.ceil(t_prod_minutos_agg / 480)
                          data['sugerencia_linea'] = linea_sug_agg
 
-                # b) Verificar Stock Agregado
-                # Necesitamos un método en InventarioController que verifique stock para una cantidad y receta
-                # Adaptaremos verificar_stock_para_op temporalmente aquí (idealmente estaría en el controller)
-                ingredientes_result = receta_model.get_ingredientes(receta_id_agrupada)
+                # b) Verificar Stock Agregado (sin cambios funcionales)
+                ingredientes_result = self.receta_model.get_ingredientes(receta_id_agrupada)
+                # ... (resto de lógica de stock y t_proc_dias sin cambios) ...
                 insumos_faltantes_agg = []
                 stock_ok_agg = True
                 if ingredientes_result.get('success'):
                     for ingrediente in ingredientes_result.get('data', []):
                         insumo_id = ingrediente['id_insumo']
                         cant_necesaria_total = ingrediente['cantidad'] * cantidad_total_agrupada
-                        # Llamar a la función que calcula stock real disponible
                         stock_disp_res = self.inventario_controller.obtener_stock_disponible_insumo(insumo_id)
                         stock_disp = stock_disp_res.get('data', {}).get('stock_disponible', 0) if stock_disp_res.get('success') else 0
-
                         if stock_disp < cant_necesaria_total:
                             stock_ok_agg = False
                             faltante = cant_necesaria_total - stock_disp
-                            insumos_faltantes_agg.append({
-                                'insumo_id': insumo_id,
-                                'nombre': ingrediente.get('nombre_insumo', 'N/A'),
-                                'cantidad_faltante': faltante
-                            })
-                else:
-                     stock_ok_agg = False # Si no podemos obtener ingredientes, asumimos que falta stock
-
+                            insumos_faltantes_agg.append({ 'insumo_id': insumo_id, 'nombre': ingrediente.get('nombre_insumo', 'N/A'), 'cantidad_faltante': faltante })
+                else: stock_ok_agg = False
                 data['sugerencia_stock_ok'] = stock_ok_agg
-                data['sugerencia_insumos_faltantes'] = insumos_faltantes_agg # Guardar lista detallada
+                data['sugerencia_insumos_faltantes'] = insumos_faltantes_agg
 
-                # c) Calcular Tiempo de Aprovisionamiento Agregado (si falta stock)
                 if not stock_ok_agg:
                     tiempos_entrega_agg = []
                     for insumo_f in insumos_faltantes_agg:
-                        insumo_data_res = insumo_model.find_by_id(insumo_f['insumo_id'], 'id_insumo')
-                        if insumo_data_res.get('success'):
-                            tiempo = insumo_data_res['data'].get('tiempo_entrega_dias', 0)
-                            tiempos_entrega_agg.append(tiempo)
+                        insumo_data_res = self.insumo_model.find_by_id(insumo_f['insumo_id'], 'id_insumo')
+                        if insumo_data_res.get('success'): tiempos_entrega_agg.append(insumo_data_res['data'].get('tiempo_entrega_dias', 0))
                     data['sugerencia_t_proc_dias'] = max(tiempos_entrega_agg) if tiempos_entrega_agg else 0
-            # --- FIN NUEVA LÓGICA ---
 
-
-            # 5. Convertir a lista ordenada (sin cambios)
+            # 4. Convertir a lista ordenada (sin cambios)
             mps_lista_ordenada = sorted(
-                [ {
-                    'producto_id': pid, 'producto_nombre': pname,
-                    **data # Añadir todos los datos calculados (cantidad_total, ordenes, sugerencias, etc.)
-                   } for (pid, pname), data in mps_agrupado.items()
-                ],
+                [ { 'producto_id': pid, 'producto_nombre': pname, **data }
+                  for (pid, pname), data in mps_agrupado.items() ],
                 key=lambda x: x.get('fecha_meta_mas_proxima') or '9999-12-31'
             )
 

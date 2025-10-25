@@ -96,12 +96,13 @@ class OrdenProduccionController(BaseController):
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """
         Valida datos y crea una orden.
-        MODIFICADO: Este método ahora siempre devuelve un diccionario.
+        MODIFICADO: Espera 'fecha_meta' en lugar de 'fecha_planificada' desde el formulario.
         """
-        from app.models.receta import RecetaModel
+        from app.models.receta import RecetaModel # Mover importación local si es necesario
         receta_model = RecetaModel()
 
         try:
+            # Limpiar supervisor si viene vacío
             if 'supervisor_responsable_id' in form_data and not form_data['supervisor_responsable_id']:
                 form_data.pop('supervisor_responsable_id')
 
@@ -109,10 +110,24 @@ class OrdenProduccionController(BaseController):
             if not producto_id:
                 return {'success': False, 'error': 'El campo producto_id es requerido.'}
 
+            # Renombrar 'cantidad' a 'cantidad_planificada' para el schema/modelo
             if 'cantidad' in form_data:
                 form_data['cantidad_planificada'] = form_data.pop('cantidad')
 
-            # Si no se provee receta_id, la buscamos (lógica clave para la Super OP)
+            # --- AJUSTE PARA FECHA META ---
+            # Si 'fecha_meta' viene del formulario, usarla.
+            # No establecer 'fecha_planificada' por defecto en este flujo.
+            if 'fecha_meta' not in form_data or not form_data.get('fecha_meta'):
+                 # Podrías poner una fecha meta por defecto si lo deseas, o marcarla como requerida en el form
+                 # return {'success': False, 'error': 'La Fecha Meta es requerida.'}
+                 # Por ahora, si no viene, seguirá sin fecha meta (depende de tu schema/DB)
+                 pass # Opcional: añadir lógica si la fecha meta es obligatoria
+
+            # Eliminar fecha_planificada si existe en los datos del form (no debería con el cambio HTML)
+            form_data.pop('fecha_planificada', None)
+            # -----------------------------
+
+            # Buscar receta si no se provee (sin cambios)
             if not form_data.get('receta_id'):
                 receta_result = receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
                 if not receta_result.get('success') or not receta_result.get('data'):
@@ -120,23 +135,22 @@ class OrdenProduccionController(BaseController):
                 receta = receta_result['data'][0]
                 form_data['receta_id'] = receta['id']
 
+            # Estado por defecto PENDIENTE (sin cambios)
             if 'estado' not in form_data or not form_data['estado']:
                 form_data['estado'] = 'PENDIENTE'
-            # ------------------------------------
 
+            # Validar con el Schema (Asegúrate que tu schema acepte 'fecha_meta')
             validated_data = self.schema.load(form_data)
             validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
             validated_data['usuario_creador_id'] = usuario_id
 
+            # Crear en la base de datos
             return self.model.create(validated_data)
 
         except ValidationError as e:
-            # --- CORRECCIÓN AQUÍ ---
-            # En lugar de devolver una tupla, devolvemos el diccionario de error.
             logger.error(f"Error de validación al crear orden: {e.messages}")
             return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
         except Exception as e:
-            # --- CORRECCIÓN AQUÍ ---
             logger.error(f"Error inesperado en crear_orden: {e}", exc_info=True)
             return {'success': False, 'error': f'Error interno: {str(e)}'}
 
