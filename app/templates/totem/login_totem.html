@@ -58,6 +58,7 @@
                 </div>
 
                 <form id="manualLoginForm">
+                    {{ csrf_form.csrf_token }}
                     <div class="form-floating mb-3">
                         <input type="text" class="form-control" id="legajo" name="legajo" placeholder="Ingrese su legajo" required>
                         <label for="legajo">
