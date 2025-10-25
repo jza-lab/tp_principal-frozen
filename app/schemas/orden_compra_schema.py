@@ -7,10 +7,7 @@ class OrdenCompraSchema(Schema):
     proveedor_id = fields.Int(required=True)
     pedido_id = fields.Int(allow_none=True)
     orden_produccion_id = fields.Int(allow_none=True)
-    estado = fields.Str(validate=validate.OneOf([
-        'PENDIENTE', 'APROBADA', 'RECHAZADA', 'EN_PROCESO',
-        'PARCIAL', 'COMPLETADA', 'CANCELADA', 'VENCIDA'
-    ]))
+    estado = fields.Int()
     fecha_emision = fields.Date(allow_none=True)
     fecha_estimada_entrega = fields.Date(allow_none=True)
     fecha_real_entrega = fields.Date(allow_none=True)

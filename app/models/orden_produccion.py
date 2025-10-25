@@ -2,6 +2,7 @@ from app.models.base_model import BaseModel
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 import logging
+from app.utils import estados
 # Importamos el modelo de Pedido para poder invocar su lógica
 from app.models.pedido import PedidoModel
 
@@ -15,73 +16,75 @@ class OrdenProduccionModel(BaseModel):
         """Devuelve el nombre de la tabla de la base de datos."""
         return 'ordenes_produccion'
 
-    def cambiar_estado(self, orden_id: int, nuevo_estado: str, observaciones: Optional[str] = None) -> Dict:
+    def _traducir_estado_a_int(self, record: Dict) -> Dict:
+        """Traduce el estado de cadena (DB) a entero (lógica) para un registro."""
+        if record and 'estado' in record and isinstance(record['estado'], str):
+            record['estado'] = estados.traducir_a_int(record['estado'])
+        return record
+
+    def _traducir_lista_estados_a_int(self, records: List[Dict]) -> List[Dict]:
+        """Aplica la traducción de estado a una lista de registros."""
+        return [self._traducir_estado_a_int(record) for record in records]
+
+    def _traducir_estado_a_cadena(self, record: Dict) -> Dict:
+        """Traduce el estado de entero (lógica) a cadena (DB) para un registro."""
+        if record and 'estado' in record and isinstance(record['estado'], int):
+            record['estado'] = estados.traducir_a_cadena(record['estado'])
+        return record
+
+    def cambiar_estado(self, orden_id: int, nuevo_estado: int, observaciones: Optional[str] = None) -> Dict:
         """
         Cambia el estado de una orden de producción, actualiza fechas clave
         (incluyendo fecha_inicio real al entrar en línea por primera vez) y el estado
         de los items de pedido asociados.
         """
         try:
-            # 1. Preparar los datos base para la actualización
-            update_data = {'estado': nuevo_estado}
+            nuevo_estado_str = estados.traducir_a_cadena(nuevo_estado)
+            update_data = {'estado': nuevo_estado_str}
             if observaciones:
                 update_data['observaciones'] = observaciones
 
-            now_iso = datetime.now().isoformat() # Timestamp actual en formato ISO
+            now_iso = datetime.now().isoformat()
 
-            # --- LÓGICA DE FECHAS MEJORADA ---
-            # Si la orden entra en una etapa de producción activa por primera vez
-            # Asegúrate que EN_PROCESO usa el formato correcto (guion bajo o espacio) si lo necesitas aquí
-            if nuevo_estado in ['EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD']:
-                # Verificamos si la fecha_inicio ya fue establecida para no sobrescribirla
-                # Usamos find_by_id del propio modelo (self)
+            estados_produccion_activa = [
+                estados.traducir_a_int('EN_LINEA_1'), 
+                estados.traducir_a_int('EN_LINEA_2'), 
+                estados.traducir_a_int('EN_EMPAQUETADO'), 
+                estados.traducir_a_int('CONTROL_DE_CALIDAD')
+            ]
+
+            if nuevo_estado in estados_produccion_activa:
                 orden_actual_res = self.find_by_id(orden_id, 'id')
                 if orden_actual_res.get('success') and orden_actual_res.get('data') and not orden_actual_res['data'].get('fecha_inicio'):
-                    update_data['fecha_inicio'] = now_iso # Solo se establece si era Nulo
+                    update_data['fecha_inicio'] = now_iso
                     logger.info(f"Registrando inicio real de producción para OP {orden_id} a las {now_iso}")
 
-            # Si la orden se completa, registramos la fecha de fin
-            # Quitamos 'FINALIZADA' si no lo usas como estado final que genera lote
-            elif nuevo_estado == 'COMPLETADA':
+            elif nuevo_estado == estados.COMPLETADA:
                 update_data['fecha_fin'] = now_iso
 
-            # Mantenemos la lógica para la fecha de aprobación (si aún la usas)
-            elif nuevo_estado == 'APROBADA':
-                # Nota: Con el nuevo flujo de 'LISTA PARA PRODUCIR', este estado 'APROBADA'
-                # podría ya no ser necesario o tener un significado diferente.
-                # Revisa si esta lógica aún aplica.
+            elif nuevo_estado == estados.APROBADA:
                 fecha_aprobacion = datetime.now()
-                # Considera si la fecha fin estimada debe calcularse aquí o en otro lado
-                # fecha_fin_esperada = fecha_aprobacion + timedelta(weeks=1) # Ejemplo
                 update_data['fecha_aprobacion'] = fecha_aprobacion.isoformat()
-                # update_data['fecha_fin_estimada'] = fecha_fin_esperada.isoformat() # Descomentar si aplica
-            # --- FIN DE LA LÓGICA DE FECHAS ---
 
-            # 2. Actualizar la orden de producción en la base de datos
-            # Usamos el método update de la clase base (o el propio si fue sobreescrito)
             update_result = self.update(id_value=orden_id, data=update_data, id_field='id')
             if not update_result.get('success'):
-                logger.error(f"Fallo al actualizar OP {orden_id} a estado {nuevo_estado}: {update_result.get('error')}")
+                logger.error(f"Fallo al actualizar OP {orden_id} a estado {nuevo_estado_str}: {update_result.get('error')}")
                 return update_result
 
-            # 3. Lógica de actualización en cascada para los pedidos
-            nuevo_estado_item = None
-            # Estados que indican producción activa
-            if nuevo_estado in ['EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD']: # Ajustado
-                nuevo_estado_item = 'EN_PRODUCCION'
-            # Estado final que indica producto listo
-            elif nuevo_estado == 'COMPLETADA':
-                nuevo_estado_item = 'ALISTADO'
+            nuevo_estado_item_int = None
+            if nuevo_estado in estados_produccion_activa:
+                nuevo_estado_item_int = estados.EN_PRODUCCION
+            elif nuevo_estado == estados.COMPLETADA:
+                nuevo_estado_item_int = estados.ALISTADO
 
-            if nuevo_estado_item:
+            if nuevo_estado_item_int is not None:
+                nuevo_estado_item_str = estados.traducir_a_cadena(nuevo_estado_item_int)
                 try:
-                    # Usar el cliente de DB directamente para operaciones en otra tabla
                     items_result = self.db.table('pedido_items').select('id, pedido_id').eq('orden_produccion_id', orden_id).execute()
 
                     if items_result.data:
-                        # Actualizar estado de los items asociados
-                        self.db.table('pedido_items').update({'estado': nuevo_estado_item}).eq('orden_produccion_id', orden_id).execute()
-                        logger.info(f"Items del pedido asociados a OP {orden_id} actualizados a {nuevo_estado_item}.")
+                        self.db.table('pedido_items').update({'estado': nuevo_estado_item_str}).eq('orden_produccion_id', orden_id).execute()
+                        logger.info(f"Items del pedido asociados a OP {orden_id} actualizados a {nuevo_estado_item_str}.")
 
                         # Obtener IDs únicos de los pedidos afectados
                         pedidos_ids_afectados = {item['pedido_id'] for item in items_result.data}
@@ -232,6 +235,8 @@ class OrdenProduccionModel(BaseModel):
                 for op in processed_data:
                     op['pedidos_asociados'] = pedidos_por_op.get(op['id'], [])
 
+                # Traducir estados a enteros
+                processed_data = self._traducir_lista_estados_a_int(processed_data)
                 return {'success': True, 'data': processed_data}
             else:
                 # No data found, but the query was successful
@@ -316,6 +321,8 @@ class OrdenProduccionModel(BaseModel):
                     item['operario_nombre'] = 'No asignado'
                 # --- FIN DEL BLOQUE AÑADIDO ---
 
+                # Traducir estado a entero
+                item = self._traducir_estado_a_int(item)
                 return {'success': True, 'data': item}
             else:
                 return {'success': False, 'error': f'Orden con id {orden_id} no encontrada.'}
@@ -362,7 +369,9 @@ class OrdenProduccionModel(BaseModel):
             ).in_('id', op_ids).execute()
 
             if result.data:
-                return {'success': True, 'data': result.data}
+                # Traducir estados a enteros
+                translated_data = self._traducir_lista_estados_a_int(result.data)
+                return {'success': True, 'data': translated_data}
             else:
                 return {'success': True, 'data': []}
 

@@ -246,7 +246,7 @@ class PlanificacionController(BaseController):
             dias_horizonte_int = int(dias_horizonte) # Simplificado
             fecha_fin_horizonte = hoy + timedelta(days=dias_horizonte_int)
             filtros = {
-                'estado': 'PENDIENTE',
+                'estado': ('in', ['PENDIENTE', 'EN_ESPERA']),
                 'fecha_meta_desde': hoy.isoformat(),
                 'fecha_meta_hasta': fecha_fin_horizonte.isoformat()
             }

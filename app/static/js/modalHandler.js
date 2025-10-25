@@ -1,144 +1,66 @@
 /**
- * Muestra un modal de confirmación genérico con dos botones (Confirmar/Cancelar).
- * @param {string} title - El título del modal.
- * @param {string} body - El mensaje en el cuerpo del modal.
- * @param {function} confirmCallback - La función que se ejecutará si el usuario hace clic en "Confirmar".
- * @param {string} [buttonType='primary'] - El estilo del botón de confirmación ('primary', 'success', 'danger').
+ * @file modalHandler.js
+ * @description Script para gestionar la aparición y comportamiento de un modal de confirmación genérico.
+ *
+ * Funcionalidad:
+ * 1.  Escucha clics en elementos con el atributo `data-bs-toggle="modal"` y `data-bs-target` apuntando a `#confirmationModal`.
+ * 2.  Al abrir el modal, captura los atributos `data-action` y `data-form-id` del botón que lo activó.
+ * 3.  Almacena esta información para que el botón "Confirmar" del modal sepa qué formulario debe enviar.
+ * 4.  (MODIFICADO) Al hacer clic en "Confirmar", en lugar de crear un nuevo formulario, busca el formulario original
+ *     por su ID y lo envía directamente. Esto permite que otros scripts, como `formCSRFHandler.js`,
+ *     intercepten el envío y añadan las cabeceras de seguridad necesarias (CSRF).
  */
-function showConfirmationModal(title, body, confirmCallback, buttonType = 'primary') {
-    const modalElement = document.getElementById('confirmationModal');
-    if (!modalElement) {
-        console.error('Modal element #confirmationModal not found in the DOM.');
-        return;
-    }
 
-    const modalTitle = modalElement.querySelector('#modalTitle');
-    const modalBody = modalElement.querySelector('#modalBody');
-    const modalConfirmButton = modalElement.querySelector('#modalConfirmButton');
-    const modalCancelButton = modalElement.querySelector('#modalCancelButton');
-
-    // Asignar contenido y configurar botones
-    modalTitle.textContent = title;
-    modalBody.textContent = body;
-    modalConfirmButton.textContent = 'Confirmar';
-    modalConfirmButton.className = `btn btn-${buttonType}`; // Asignar clase de estilo
-    modalCancelButton.style.display = ''; // Asegurarse de que el botón Cancelar esté visible
-
-    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-
-    // Clonar y reemplazar el botón para limpiar listeners de eventos anteriores
-    const newConfirmButton = modalConfirmButton.cloneNode(true);
-    modalConfirmButton.parentNode.replaceChild(newConfirmButton, modalConfirmButton);
-    
-    // Asignar el nuevo callback
-    newConfirmButton.addEventListener('click', () => {
-        confirmCallback();
-        modal.hide();
-    });
-
-    modal.show();
-}
-
-
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', function() {
     const confirmationModal = document.getElementById('confirmationModal');
     if (confirmationModal) {
-        let form = null; 
+        let formToSubmit = null;
 
-        confirmationModal.addEventListener('show.bs.modal', function (event) {
-            const button = event.relatedTarget;
-            if (!button) {
-                return;
-            }            
-            const url = button.getAttribute('data-url');
-            const message = button.getAttribute('data-message');
-            const title = button.getAttribute('data-title');
+        confirmationModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget; // Botón que activó el modal
+            const formId = button.getAttribute('data-form-id');
 
-            const modalTitle = confirmationModal.querySelector('#modalTitle');
-            const modalBody = confirmationModal.querySelector('#modalBody');
-            const modalConfirmButton = confirmationModal.querySelector('#modalConfirmButton');
-
-            // Set title and message
-            modalTitle.textContent = title || 'Confirmación';
-            modalBody.innerHTML = message || '¿Estás seguro de que quieres realizar esta acción?';
-
-            if (url) {
-                // Create a form for the action
-                form = document.createElement('form');
-                form.method = 'POST';
-                form.action = url;
-                form.style.display = 'inline';
-
-                // Move the original confirm button inside the form
-                const confirmButtonClone = modalConfirmButton.cloneNode(true);
-                confirmButtonClone.type = 'submit';
-                confirmButtonClone.classList.remove('btn-primary');
-                confirmButtonClone.classList.add('btn-danger');
-                confirmButtonClone.textContent = 'Eliminar';
-
-
-                form.appendChild(confirmButtonClone);
-                
-                modalConfirmButton.style.display = 'none';
-                modalConfirmButton.parentElement.insertBefore(form, modalConfirmButton.nextSibling);
-
+            if (formId) {
+                formToSubmit = document.getElementById(formId);
+                if (!formToSubmit) {
+                    console.error(`Error: No se encontró el formulario con ID: ${formId}`);
+                }
             } else {
-                modalConfirmButton.style.display = 'inline-block';
+                // Fallback para botones que no están asociados a un formulario (ej. un simple enlace)
+                // En este caso, el botón de confirmar podría redirigir o realizar otra acción.
+                const actionUrl = button.getAttribute('data-action');
+                formToSubmit = null; // Limpiamos por si había un formulario anterior
+                
+                const confirmButton = confirmationModal.querySelector('#modalConfirmButton');
+                if(actionUrl) {
+                    confirmButton.onclick = () => {
+                        window.location.href = actionUrl;
+                    };
+                }
             }
         });
 
-        confirmationModal.addEventListener('hide.bs.modal', function() {
-            // Cleanup: remove the dynamically created form
-            if (form) {
-                form.remove();
-                form = null;
-            }
-             const modalConfirmButton = confirmationModal.querySelector('#modalConfirmButton');
-            if(modalConfirmButton) {
-                modalConfirmButton.style.display = 'inline-block';
-            }
-        });
+        const modalConfirmButton = confirmationModal.querySelector('#modalConfirmButton');
+
+        if (modalConfirmButton) {
+            modalConfirmButton.addEventListener('click', function() {
+                if (formToSubmit) {
+                    // Cierra el modal
+                    const modalInstance = bootstrap.Modal.getInstance(confirmationModal);
+                    modalInstance.hide();
+                    
+                    // Envía el formulario original. Esto permitirá que formCSRFHandler.js lo intercepte.
+                    // Usamos requestSubmit() para disparar los eventos de validación y envío del formulario.
+                    if (typeof formToSubmit.requestSubmit === 'function') {
+                        formToSubmit.requestSubmit();
+                    } else {
+                        // Fallback para navegadores más antiguos
+                        formToSubmit.submit();
+                    }
+                } else {
+                    console.log("No hay un formulario para enviar. La acción debería haber sido manejada por un 'onclick' si es un enlace.");
+                }
+            });
+        }
     }
 });
-
-/**
- * Muestra un modal de notificación con un solo botón (OK).
- * @param {string} title - El título del modal.
- * @param {string} body - El mensaje en el cuerpo del modal.
- * @param {string} [type='info'] - El tipo de notificación ('success', 'error', 'info') para colorear el botón.
- * @param {function} [closeCallback] - (Opcional) La función que se ejecutará después de que el modal se cierre.
- */
-function showNotificationModal(title, body, type = 'info', closeCallback) {
-    const modalElement = document.getElementById('notificationModal');
-    if (!modalElement) {
-        console.error('Modal element #notificationModal not found in the DOM.');
-        return;
-    }
-
-    const modalTitle = modalElement.querySelector('#notificationModalTitle');
-    const modalBody = modalElement.querySelector('#notificationModalBody');
-    const modalOkButton = modalElement.querySelector('#notificationModalOkButton');
-
-    // Asignar contenido y configurar botones
-    modalTitle.textContent = title;
-    modalBody.innerHTML = body; // Usar innerHTML para permitir contenido HTML
-
-    // Cambiar color del botón según el tipo de notificación
-    let buttonClass = 'btn btn-primary';
-    if (type === 'success') {
-        buttonClass = 'btn btn-success';
-    } else if (type === 'error') {
-        buttonClass = 'btn btn-danger';
-    }
-    modalOkButton.className = buttonClass;
-
-    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
-
-    // Si hay un callback, lo ejecutamos DESPUÉS de que el modal se oculte.
-    // Usamos { once: true } para que el listener se elimine automáticamente después de ejecutarse una vez.
-    if (closeCallback && typeof closeCallback === 'function') {
-        modalElement.addEventListener('hidden.bs.modal', closeCallback, { once: true });
-    }
-
-    modal.show();
-}

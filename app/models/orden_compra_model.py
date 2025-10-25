@@ -3,6 +3,7 @@ from typing import Optional, Dict, List
 from datetime import datetime, date
 from app.models.base_model import BaseModel
 import logging
+from app.utils import estados
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +61,30 @@ class OrdenCompraModel(BaseModel):
     def get_table_name(self) -> str:
         return 'ordenes_compra'
 
+    def _traducir_estado_a_int(self, record: Dict) -> Dict:
+        """Traduce el estado de cadena (DB) a entero (lógica) para un registro."""
+        if record and 'estado' in record and isinstance(record['estado'], str):
+            record['estado'] = estados.traducir_a_int(record['estado'])
+        return record
+
+    def _traducir_lista_estados_a_int(self, records: List[Dict]) -> List[Dict]:
+        """Aplica la traducción de estado a una lista de registros."""
+        return [self._traducir_estado_a_int(record) for record in records]
+
+    def _traducir_estado_a_cadena(self, record: Dict) -> Dict:
+        """Traduce el estado de entero (lógica) a cadena (DB) para un registro."""
+        if record and 'estado' in record and isinstance(record['estado'], int):
+            record['estado'] = estados.traducir_a_cadena(record['estado'])
+        return record
+
     def create_with_items(self, orden_data: Dict, items_data: List[Dict]) -> Dict:
         """
         Crea una nueva orden de compra junto con sus items, simulando una transacción.
         """
         try:
+            # Traducir estado a cadena antes de crear
+            orden_data = self._traducir_estado_a_cadena(orden_data)
+
             # Eliminar 'id' si existe para permitir que la BD lo genere.
             if 'id' in orden_data:
                 orden_data.pop('id')
@@ -101,7 +121,8 @@ class OrdenCompraModel(BaseModel):
         try:
             response = self.db.table(self.get_table_name()).select("*").eq("id", orden_id).execute()
             if response.data:
-                data_serializada = safe_serialize_simple(response.data[0])
+                translated_data = self._traducir_estado_a_int(response.data[0])
+                data_serializada = safe_serialize_simple(translated_data)
                 return {'success': True, 'data': data_serializada}
             else:
                 return {'success': False, 'error': 'Orden no encontrada'}
@@ -113,7 +134,8 @@ class OrdenCompraModel(BaseModel):
         try:
             result = self.db.table(self.get_table_name()).select('*').eq('codigo_oc', codigo_oc).execute()
             if result.data:
-                data_serializada = safe_serialize_simple(result.data[0])
+                translated_data = self._traducir_estado_a_int(result.data[0])
+                data_serializada = safe_serialize_simple(translated_data)
                 return {'success': True, 'data': data_serializada}
             else:
                 return {'success': False, 'error': 'Orden no encontrada'}
@@ -123,6 +145,9 @@ class OrdenCompraModel(BaseModel):
 
     def update(self, orden_id: int, data: Dict) -> Dict:
         try:
+            # Traducir estado a cadena antes de actualizar
+            data = self._traducir_estado_a_cadena(data)
+
             db_data = {}
             field_mapping = {
                 'proveedor_id': 'proveedor_id',
@@ -172,7 +197,9 @@ class OrdenCompraModel(BaseModel):
 
             if filters:
                 if 'estado' in filters and filters['estado']:
-                    query = query.eq('estado', filters['estado'])
+                    # El filtro vendrá como entero, lo traducimos a cadena para la BD
+                    estado_str = estados.traducir_a_cadena(filters['estado'])
+                    query = query.eq('estado', estado_str)
                 if 'proveedor_id' in filters and filters['proveedor_id']:
                     query = query.eq('proveedor_id', filters['proveedor_id'])
                 if 'prioridad' in filters and filters['prioridad']:
@@ -192,8 +219,11 @@ class OrdenCompraModel(BaseModel):
                     del orden['usuario_creador']
                 else:
                     orden['usuario_creador_nombre'] = 'N/A'
+            
+            # Traducir estados a enteros
+            translated_data = self._traducir_lista_estados_a_int(response.data)
 
-            return {'success': True, 'data': response.data}
+            return {'success': True, 'data': translated_data}
         except Exception as e:
             logger.error(f"Error obteniendo órdenes con detalles: {e}")
             return {'success': False, 'error': str(e)}
@@ -233,6 +263,9 @@ class OrdenCompraModel(BaseModel):
                         item['insumo_nombre'] = item['insumo']['nombre']
                     else:
                         item['insumo_nombre'] = 'N/A'
+            
+            # Traducir estado a entero
+            orden = self._traducir_estado_a_int(orden)
 
             return {'success': True, 'data': orden}
         except Exception as e:

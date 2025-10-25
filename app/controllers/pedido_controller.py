@@ -18,6 +18,7 @@ from app.schemas.cliente_schema import ClienteSchema
 from app.schemas.pedido_schema import PedidoSchema
 from typing import Dict, Optional
 from marshmallow import ValidationError
+from app.utils import estados
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -78,11 +79,17 @@ class PedidoController(BaseController):
     def obtener_pedidos(self, filtros: Optional[Dict] = None) -> tuple:
         """
         Obtiene una lista de pedidos, aplicando filtros.
+        Traduce los filtros de estado de texto a entero y la respuesta de entero a texto.
         """
         try:
+            if filtros and 'estado' in filtros and filtros['estado']:
+                filtros['estado'] = estados.traducir_a_int(filtros['estado'])
+
             result = self.model.get_all_with_items(filtros)
+            
             if result.get('success'):
-                return self.success_response(data=result.get('data', []))
+                pedidos_con_estado_traducido = estados.traducir_lista_a_cadena(result.get('data', []))
+                return self.success_response(data=pedidos_con_estado_traducido)
             else:
                 error_msg = result.get('error', 'Error desconocido al obtener pedidos.')
                 return self.error_response(error_msg, 500)
@@ -101,7 +108,10 @@ class PedidoController(BaseController):
             # -----------------------------------------------
 
             if result.get('success'):
-                return self.success_response(data=result.get('data'))
+                pedido_traducido = estados.traducir_objeto_a_cadena(result.get('data'))
+                if pedido_traducido.get('items'):
+                    pedido_traducido['items'] = estados.traducir_lista_a_cadena(pedido_traducido['items'])
+                return self.success_response(data=pedido_traducido)
             else:
                 error_msg = result.get('error', 'Error desconocido.')
                 status_code = 404 if "no encontrado" in str(error_msg).lower() else 500
@@ -194,12 +204,12 @@ class PedidoController(BaseController):
 
             # Definir el estado inicial basado en la verificación
             if all_in_stock:
-                # Si todo está en stock, el estado inicial es COMPLETADO
-                pedido_data['estado'] = 'LISTO_PARA_ENTREGA'
-                logging.info("Todo el stock disponible. El pedido se creará en estado COMPLETADO.")
+                # Si todo está en stock, el estado inicial es LISTO_PARA_ENTREGAR
+                pedido_data['estado'] = estados.OV_LISTA_PARA_ENTREGAR
+                logging.info("Todo el stock disponible. El pedido se creará en estado LISTO_PARA_ENTREGAR.")
             elif 'estado' not in pedido_data:
                 # Si falta stock, el estado inicial es PENDIENTE
-                pedido_data['estado'] = 'PENDIENTE'
+                pedido_data['estado'] = estados.OV_PENDIENTE
                 logging.warning("Stock insuficiente para uno o más items. El pedido se creará en estado PENDIENTE.")
 
 
@@ -224,22 +234,26 @@ class PedidoController(BaseController):
 
                         if not despacho_result.get('success'):
                             # Si falla el despacho, revertimos el estado a PENDIENTE
-                            self.model.cambiar_estado(nuevo_pedido.get('id'), 'PENDIENTE')
+                            self.model.cambiar_estado(nuevo_pedido.get('id'), estados.OV_PENDIENTE)
                             logging.error(f"Fallo al despachar stock en la creación. Revirtiendo a PENDIENTE. Error: {despacho_result.get('error')}")
                             # Devolvemos un 500 para indicar un fallo en la transacción
                             return self.error_response(f"Pedido creado, pero falló el despacho de stock: {despacho_result.get('error')}", 500)
 
-                        # 3. Éxito en la creación y el despacho. Enviamos un indicador.
-                        nuevo_pedido['estado'] = 'COMPLETADO'
-                        # === CAMBIO SOLICITADO: Mensaje explícito de stock encontrado y completado ===
+                        # 3. Éxito en la creación y el despacho.
+                        nuevo_pedido['estado'] = estados.OV_RECEPCION_OK # Usamos el estado final "COMPLETADO"
+                        
+                        # Traducir a texto para la respuesta
+                        pedido_traducido = estados.traducir_objeto_a_cadena(nuevo_pedido)
+                        
                         return self.success_response(
-                            data={**nuevo_pedido, 'estado_completado_inmediato': True}, # <--- INDICADOR ESPECIAL
+                            data={**pedido_traducido, 'estado_completado_inmediato': True},
                             message="El pedido ha sido puesto en estado COMPLETADO automáticamente porque se encontró stock disponible para despachar todos los ítems.",
                             status_code=201
                         )
 
-                # Caso de éxito normal (all_in_stock era False)
-                return self.success_response(data=nuevo_pedido, message="Pedido creado con éxito.", status_code=201)
+                # Caso de éxito normal (all_in_stock era False), traducir antes de enviar
+                pedido_traducido = estados.traducir_objeto_a_cadena(nuevo_pedido)
+                return self.success_response(data=pedido_traducido, message="Pedido creado con éxito.", status_code=201)
             else:
                 return self.error_response(result.get('error', 'No se pudo crear el pedido.'), 400)
 
@@ -263,7 +277,8 @@ class PedidoController(BaseController):
                 return self.error_response("Pedido no encontrado.", 404)
 
             pedido_actual = pedido_resp['data']
-            if pedido_actual.get('estado') != 'PENDIENTE':
+            # La respuesta ya viene traducida, la lógica interna usa el entero
+            if estados.traducir_a_int(pedido_actual.get('estado')) != estados.OV_PENDIENTE:
                 return self.error_response("Solo los pedidos en 'PENDIENTE' pueden pasar a 'EN PROCESO'.", 400)
 
             # Extraer la fecha requerida del pedido
@@ -292,12 +307,12 @@ class PedidoController(BaseController):
                     if resultado_op.get('success'):
                         orden_creada = resultado_op.get('data', {})
                         ordenes_creadas.append(orden_creada)
-                        self.model.update_item(item['id'], {'estado': 'EN_PRODUCCION', 'orden_produccion_id': orden_creada.get('id')})
+                        self.model.update_item(item['id'], {'estado': estados.OP_EN_PRODUCCION, 'orden_produccion_id': orden_creada.get('id')})
                     else:
                         logging.error(f"No se pudo crear la OP para el producto {item['producto_id']}. Error: {resultado_op.get('error')}")
                 else:
                     # Si no hay receta, el item se considera listo para el siguiente paso.
-                    self.model.update_item(item['id'], {'estado': 'ALISTADO'})
+                    self.model.update_item(item['id'], {'estado': estados.OV_ITEM_ALISTADO})
 
             # 3. Actualizar estado del pedido
             self.model.actualizar_estado_agregado(pedido_id) # Esto lo pasará a EN_PROCESO si se creó alguna OP
@@ -424,7 +439,7 @@ class PedidoController(BaseController):
                 return self.error_response(result.get('error', 'No se pudo actualizar el pedido.'), 400)
 
             # --- Lógica para crear OP si el estado era 'EN_PROCESO' ---
-            if estado_original == 'EN_PROCESO':
+            if estados.traducir_a_int(estado_original) == estados.OV_EN_PROCESO:
                 nuevos_items = result.get('data', {}).get('nuevos_items', [])
                 if nuevos_items:
                     # Necesitamos el ID del usuario para crear la OP
@@ -470,7 +485,7 @@ class PedidoController(BaseController):
                                 orden_creada = resultado_op.get('data', {})
                                 # 4. Actualizar el item del pedido
                                 self.model.update_item(item['id'], {
-                                    'estado': 'EN_PRODUCCION',
+                                    'estado': estados.OP_EN_PRODUCCION,
                                     'orden_produccion_id': orden_creada.get('id')
                                 })
                                 logging.info(f"OP {orden_creada.get('id')} creada para el item {item['id']}.")
@@ -479,8 +494,19 @@ class PedidoController(BaseController):
 
             # Actualizar el estado general del pedido después de los cambios
             self.model.actualizar_estado_agregado(pedido_id)
-
-            return self.success_response(data=result.get('data'), message="Pedido actualizado con éxito.")
+            
+            # Traducir la respuesta final
+            updated_pedido = self.model.get_one_with_items(pedido_id)
+            if updated_pedido.get('success'):
+                pedido_traducido = estados.traducir_objeto_a_cadena(updated_pedido.get('data'))
+                if pedido_traducido.get('items'):
+                    pedido_traducido['items'] = estados.traducir_lista_a_cadena(pedido_traducido['items'])
+                return self.success_response(data=pedido_traducido, message="Pedido actualizado con éxito.")
+            else:
+                # Si falla la re-obtención, devolvemos el resultado original (aunque sin traducir)
+                # Es mejor que un error 500. Logueamos el problema.
+                logger.warning(f"No se pudo re-obtener el pedido {pedido_id} tras actualizar. La respuesta no contendrá los estados traducidos.")
+                return self.success_response(data=result.get('data'), message="Pedido actualizado, pero la recarga de datos falló.")
 
         except ValidationError as e:
             if 'items' in e.messages and isinstance(e.messages['items'], list):
@@ -522,14 +548,15 @@ class PedidoController(BaseController):
                         return self.error_response(f"Error: OP vinculada (ID: {op_id}) no encontrada. No se puede preparar el pedido.", 500)
 
                     op_data = op_resp.get('data')
-                    op_estado = op_data.get('estado')
-                    logger.info(f"Estado de OP ID {op_id}: {op_estado}")
+                    op_estado_int = op_data.get('estado')
+                    op_estado_str = estados.traducir_a_cadena(op_estado_int)
+                    logger.info(f"Estado de OP ID {op_id}: {op_estado_str}")
 
                     # Si CUALQUIER OP vinculada NO está completada, detener el proceso
-                    if op_estado != 'COMPLETADA':
+                    if op_estado_int != estados.OP_COMPLETADA:
                         error_msg = (f"No se puede preparar para entrega. La Orden de Producción "
                                      f"'{op_data.get('codigo', op_id)}' (vinculada al producto '{item.get('producto_nombre', 'N/A')}') "
-                                     f"aún no está completada (Estado actual: {op_estado}).")
+                                     f"aún no está completada (Estado actual: {op_estado_str}).")
                         logger.warning(error_msg)
                         return self.error_response(error_msg, 400) # 400 Bad Request: Acción no permitida aún
 
@@ -542,8 +569,8 @@ class PedidoController(BaseController):
                 return self.error_response(f"No se pudo preparar el pedido: {despacho_result.get('error')}", 400)
 
             # Cambiar estado del pedido y sus items
-            self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
-            self.model.update_items_by_pedido_id(pedido_id, {'estado': 'COMPLETADO'})
+            self.model.cambiar_estado(pedido_id, estados.OV_LISTA_PARA_ENTREGAR)
+            self.model.update_items_by_pedido_id(pedido_id, {'estado': estados.OV_RECEPCION_OK})
             logger.info(f"Pedido {pedido_id} marcado como LISTO_PARA_ENTREGA y stock despachado.")
 
             return self.success_response(message="Pedido preparado para entrega. El stock ha sido despachado.")
@@ -563,18 +590,19 @@ class PedidoController(BaseController):
             if not pedido_actual_res.get('success'):
                 return self.error_response('Pedido no encontrado.', 404)
 
-            estado_actual = pedido_actual_res['data'].get('estado')
-            logger.info(f"[Controlador] Estado actual del pedido: '{estado_actual}'")
+            estado_actual_int = pedido_actual_res['data'].get('estado')
+            estado_actual_str = estados.traducir_a_cadena(estado_actual_int)
+            logger.info(f"[Controlador] Estado actual del pedido: '{estado_actual_str}'")
 
             # 2. Condición de seguridad: Solo se puede completar si está 'LISTO_PARA_ENTREGA'
-            if estado_actual != 'LISTO_PARA_ENTREGA':
-                error_msg = f"El pedido no se puede marcar como completado porque no está 'LISTO PARA ENTREGAR'. Estado actual: {estado_actual}"
+            if estado_actual_int != estados.OV_LISTA_PARA_ENTREGAR:
+                error_msg = f"El pedido no se puede marcar como completado porque no está 'LISTO PARA ENTREGAR'. Estado actual: {estado_actual_str}"
                 logger.warning(f"[Controlador] {error_msg}")
                 return self.error_response(error_msg, 400)
 
             # 3. Llamar al modelo para cambiar el estado a 'COMPLETADO'
             logger.info(f"[Controlador] El estado es correcto. Llamando al modelo para cambiar a 'COMPLETADO'...")
-            resultado_update = self.model.cambiar_estado(pedido_id, 'COMPLETADO')
+            resultado_update = self.model.cambiar_estado(pedido_id, estados.OV_RECEPCION_OK)
 
             if resultado_update.get('success'):
                 logger.info(f"[Controlador] Pedido {pedido_id} marcado como COMPLETADO con éxito.")
@@ -598,10 +626,10 @@ class PedidoController(BaseController):
                  return self.error_response(f"Pedido con ID {pedido_id} no encontrado.", 404)
 
             pedido_actual = pedido_existente_resp.get('data')
-            if pedido_actual and pedido_actual.get('estado') == 'CANCELADO':
+            if pedido_actual and estados.traducir_a_int(pedido_actual.get('estado')) == estados.OV_CANCELADA:
                 return self.error_response("Este pedido ya ha sido cancelado y no puede ser modificado.", 400)
 
-            result = self.model.cambiar_estado(pedido_id, 'CANCELADO')
+            result = self.model.cambiar_estado(pedido_id, estados.OV_CANCELADA)
             if result.get('success'):
                 return self.success_response(message="Pedido cancelado con éxito.")
             else:
@@ -667,7 +695,8 @@ class PedidoController(BaseController):
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
     def obtener_cantidad_pedidos_estado(self, estado: str, fecha: Optional[str] = None) -> Optional[Dict]:
-        filtros = {'estado': estado} if estado else {}
+        estado_int = estados.traducir_a_int(estado)
+        filtros = {'estado': estado_int} if estado_int is not None else {}
 
         response, status_code = self.obtener_pedidos(filtros)
         if(response.get('success')):
@@ -688,7 +717,7 @@ class PedidoController(BaseController):
             fecha_desde = fecha_hasta - timedelta(days=30)
             
             filtros = {
-                'estado': 'CANCELADO',
+                'estado': estados.OV_CANCELADA,
                 'fecha_desde': fecha_desde.isoformat(),
                 'fecha_hasta': fecha_hasta.isoformat()
             }

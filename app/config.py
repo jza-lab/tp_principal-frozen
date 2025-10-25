@@ -26,3 +26,4 @@ class Config:
 
     # JWT Configuration
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=8)
+    JWT_COOKIE_CSRF_PROTECT = True
