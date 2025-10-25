@@ -47,8 +47,10 @@ def index():
 
     # 3. Obtener OPs para el CALENDARIO SEMANAL
     response_semanal, _ = controller.obtener_planificacion_semanal(week_str)
+    ops_visibles_por_dia_formato = {} # <--- Usar nuevo nombre
     if response_semanal.get('success'):
         data_semanal = response_semanal.get('data', {})
+        ops_visibles_por_dia_formato = data_semanal.get('ops_visibles_por_dia', {}) # <--- Usar nuevo nombre
         ordenes_por_dia = data_semanal.get('ordenes_por_dia', {})
         inicio_semana_str = data_semanal.get('inicio_semana')
         fin_semana_str = data_semanal.get('fin_semana')
@@ -113,19 +115,19 @@ def index():
         prev_week_str = prev_week_start.strftime("%Y-W%V"); next_week_str = next_week_start.strftime("%Y-W%V")
     except ValueError: prev_week_str = None; next_week_str = None; logger.warning(f"Error parseando week_str {week_str}")
 
-    # Justo antes de return render_template(...) en planificacion_routes.py
-    print("--- DEBUG RUTA INDEX ---")
-    print(f"inicio_semana_crp: {inicio_semana.isoformat() if inicio_semana else None}")
-    print(f"fin_semana_crp: {fin_semana.isoformat() if fin_semana else None}")
-    print(f"carga_crp: {carga_calculada}")
-    print(f"capacidad_crp: {capacidad_disponible}")
-    print(f"ordenes_para_crp (cantidad): {len(ordenes_para_crp)}")
-    print("------------------------")
+    columnas_kanban = {
+        'EN ESPERA': 'En Espera',
+        'LISTA PARA PRODUCIR':'Lista para producir', # <-- Cambiado
+        'EN_LINEA_1': 'Linea 1',                     # <-- Cambiado
+        'EN_LINEA_2': 'Linea 2',                     # <-- Cambiado
+        'EN_EMPAQUETADO': 'Empaquetado',             # <-- Cambiado
+        'CONTROL_DE_CALIDAD': 'Control de Calidad',  # <-- Cambiado
+        'COMPLETADA': 'Completada'                   # <-- Cambiado
+    }
 
     return render_template(
         'planificacion/tablero.html',
         mps_data=mps_data_para_template,
-        ordenes_por_dia=ordenes_por_dia,
         inicio_semana=inicio_semana.isoformat() if inicio_semana else None, # Pasar ISO o None
         fin_semana=fin_semana.isoformat() if fin_semana else None,       # Pasar ISO o None
         semana_actual_str=week_str,
@@ -137,12 +139,40 @@ def index():
         operarios=operarios,
         carga_crp=carga_calculada,
         capacidad_crp=capacidad_disponible,
+        ordenes_por_dia=ops_visibles_por_dia_formato,
         inicio_semana_crp=inicio_semana.isoformat() if inicio_semana else None, # Usar las mismas fechas
         fin_semana_crp=fin_semana.isoformat() if fin_semana else None,
         now=datetime.utcnow(),
         timedelta=timedelta,
         date=date
     )
+
+# --- NUEVA RUTA PARA CONFIRMACIÓN MULTI-DÍA ---
+@planificacion_bp.route('/api/confirmar-aprobacion', methods=['POST'])
+def confirmar_aprobacion_api():
+    """
+    API endpoint que ejecuta la aprobación final DESPUÉS de que el usuario
+    confirma una planificación multi-día o resuelve una sobrecarga (si se implementa).
+    """
+    data = request.get_json()
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'success': False, 'error': 'Usuario no autenticado.'}), 401
+
+    op_id = data.get('op_id')
+    asignaciones = data.get('asignaciones')
+
+    if not op_id or not asignaciones:
+         return jsonify({'success': False, 'error': 'Faltan datos (op_id o asignaciones).'}), 400
+
+    # Llama al helper que solo ejecuta la aprobación
+    response, status_code = controller._ejecutar_aprobacion_final(
+        op_id,
+        asignaciones,
+        usuario_id
+    )
+    return jsonify(response), status_code
+# --- FIN NUEVA RUTA ---
 
 # Endpoint para la API de consolidación
 @planificacion_bp.route('/api/consolidar', methods=['POST'])

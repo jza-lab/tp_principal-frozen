@@ -455,17 +455,8 @@
                  <span class="badge bg-secondary rounded-pill">{{ ordenes_por_estado.get(estado_key, [])|length }}</span>
              </div>
              <div class="kanban-cards">
-                 {% if estado_key == 'LISTA PARA PRODUCIR' %}
-
-                    {% if 'crear_orden_de_produccion' is has_permission %}
-                    <div class="d-grid"><button id="btn-consolidar" class="btn btn-success mb-2" disabled><i class="bi bi-plus-slash-minus"></i> Consolidar</button></div>
-                    {% endif %}
-                 {% endif %}
                  {% for orden in ordenes_por_estado.get(estado_key, []) %}
                  <div class="card insumo-card kanban-card mb-2" data-op-id="{{ orden.id }}" data-producto-id="{{ orden.producto_id }}" data-linea-asignada="{{ orden.linea_asignada or '' }}"> {# Añadido mb-2 #}
-                     {% if estado_key == 'LISTA PARA PRODUCIR' %}
-                     <div class="form-check card-checkbox"><input class="form-check-input op-checkbox" type="checkbox" value="{{ orden.id }}"></div>
-                     {% endif %}
                      <div class="card-body py-2 px-3"> {# Padding reducido #}
                           <h6 class="card-title mb-1 fw-bold">{{ orden.producto_nombre or 'N/A' }}</h6> {# Título h6 y bold #}
                           <div class="card-secondary-details small mb-1"> {# Texto más pequeño #}
@@ -510,25 +501,57 @@
           </div>
           <div class="modal-body">
             <h6>Órdenes Individuales a Consolidar:</h6>
-            <p>Total Requerido: <b>{{ item_mps.cantidad_total }}</b> | Fecha Meta Próxima: <b>{{ item_mps.fecha_meta_mas_proxima }}</b></p>
+          {# --- MOSTRAR UNIDAD DE MEDIDA --- #}
+          <p>Total Requerido: <b>{{ item_mps.cantidad_total }} {{ item_mps.unidad_medida or 'unidades' }}</b> | Fecha Meta Próxima: <b>{{ item_mps.fecha_meta_mas_proxima }}</b></p>
             <table class="table table-sm table-bordered tabla-detalle-op-revision mb-4">
-                <thead class="table-light"><tr><th style="width: 15%;">OP</th><th class="text-center" style="width: 15%;">Cantidad</th><th class="text-center" style="width: 15%;">Fecha Meta</th><th style="width: 55%;">Sugerencia Individual (Referencia)</th></tr></thead>
+                <thead class="table-light"><tr><th style="width: 15%;">OP</th><th class="text-center" style="width: 15%;">Cantidad</th><th class="text-center" style="width: 15%;">Fecha Meta</th></thead>
                 <tbody>
                     {% for op in item_mps.ordenes %}
                     <tr class="detalle-op-row" data-op-id="{{ op.id }}">
                         <td><small><code>{{ op.codigo }}</code></small></td><td class="text-center"><small>{{ op.cantidad_planificada }}</small></td><td class="text-center"><small>{{ op.fecha_meta }}</small></td>
-                        <td class="celda-sugerencia">
-                            {% if op.sugerencia_fecha_inicio %}
-                            <div class="resultado-sugerencia sugerencia-calculada {% if op.sugerencia_t_aprovisionamiento_dias > 0 %}alert alert-warning{% else %}alert alert-success{% endif %}" style="display: block; font-size: 0.8rem; padding: 5px;"><small>In. Sug.: {{ op.sugerencia_fecha_inicio }} (L: {{ op.sugerencia_linea }}) | Plazo: {{ op.sugerencia_plazo_total_dias }}d (P:{{ op.sugerencia_t_produccion_dias }}d + C:{{ op.sugerencia_t_aprovisionamiento_dias }}d)</small></div>
-                            {% else %}<button class="btn btn-outline-secondary btn-sm btn-calcular w-100" title="Calcular Sugerencia Individual (Opcional)"><i class="bi bi-calculator-fill"></i> Calcular Ref.</button><div class="resultado-sugerencia mt-1" style="display: none;"></div>{% endif %}
-                        </td></tr>{% endfor %}</tbody></table><hr><h5 class="mb-3">Planificar Lote Consolidado</h5>
+                        {% endfor %}</tbody></table><hr><h5 class="mb-3">Planificar Lote Consolidado</h5>
             {% set plazo_total_agg = item_mps.sugerencia_t_prod_dias + item_mps.sugerencia_t_proc_dias %}
             {% set fecha_inicio_sugerida = (now.date() + timedelta(days=plazo_total_agg)).strftime('%Y-%m-%d') if plazo_total_agg > 0 else now.date().strftime('%Y-%m-%d') %}
             <div class="row g-3"><div class="col-md-6"><div class="resultado-sugerencia sugerencia-calculada {% if item_mps.sugerencia_t_proc_dias > 0 %}alert alert-warning{% else %}alert alert-success{% endif %}" style="display: block; font-size: 0.85rem; padding: 8px;">Línea Sugerida: <b>{{ item_mps.sugerencia_linea or 'N/D' }}</b><hr class="my-1">Plazo Total: <b>{{ plazo_total_agg }} días</b><ul class="mb-0 ps-3 mt-1" style="font-size: 0.8rem;"><li>Producción: {{ item_mps.sugerencia_t_prod_dias }} días</li><li>Compras: {{ item_mps.sugerencia_t_proc_dias }} días {% if item_mps.sugerencia_t_proc_dias > 0 %}(Stock Faltante){% else %}(Stock OK){% endif %}</li></ul></div></div>
-                <div class="col-md-6"><div class="card p-3"><div class="mb-2"><label class="form-label form-label-sm fw-bold">Línea <span class="text-danger">*</span></label><select class="form-select form-select-sm mb-1 modal-select-linea" title="Línea"><option value="1" {% if item_mps.sugerencia_linea == 1 %}selected{% endif %}>L1</option><option value="2" {% if item_mps.sugerencia_linea == 2 %}selected{% endif %}>L2</option></select></div><div class="mb-2"><label class="form-label form-label-sm fw-bold">Fecha Inicio <span class="text-danger">*</span></label><input type="date" class="form-control form-control-sm mb-1 modal-input-fecha-inicio" value="{{ fecha_inicio_sugerida }}" title="Fecha Inicio"></div><div class="mb-2"><label class="form-label form-label-sm">Supervisor (Opc)</label><select class="form-select form-select-sm mb-1 modal-select-supervisor" title="Supervisor"><option value="">Seleccionar...</option> {% for sup in supervisores %}<option value="{{ sup.id }}">{{ sup.nombre }}</option>{% endfor %}</select></div><div class="mb-2"><label class="form-label form-label-sm">Operario (Opc)</label><select class="form-select form-select-sm mb-1 modal-select-operario" title="Operario"><option value="">Seleccionar...</option> {% for op_user in operarios %}<option value="{{ op_user.id }}">{{ op_user.nombre }}</option>{% endfor %}</select></div></div></div></div></div>
+                <div class="col-md-6"><div class="card p-3"><div class="mb-2"><label class="form-label form-label-sm fw-bold">Línea <span class="text-danger">*</span></label><select class="form-select form-select-sm mb-1 modal-select-linea" title="Línea"><option value="1" {% if item_mps.sugerencia_linea == 1 %}selected{% endif %}>L1</option><option value="2" {% if item_mps.sugerencia_linea == 2 %}selected{% endif %}>L2</option></select>{# --- MOSTRAR LÍNEAS COMPATIBLES --- #}
+                        {% if item_mps.linea_compatible %}
+                        <div class="form-text small text-info mt-0">
+                            <i class="bi bi-info-circle me-1"></i>Producto compatible solo con: 
+                            {% set lineas = item_mps.linea_compatible.split(',') %}
+                            {% for linea in lineas %}
+                                <strong>Línea {{ linea.strip() }}</strong>{% if not loop.last %}, {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {# ----------------------------------- #}</div><div class="mb-2"><label class="form-label form-label-sm fw-bold">Fecha Inicio <span class="text-danger">*</span></label><input type="date" class="form-control form-control-sm mb-1 modal-input-fecha-inicio" value="{{ fecha_inicio_sugerida }}" title="Fecha Inicio"></div><div class="mb-2"><label class="form-label form-label-sm">Supervisor (Opc)</label><select class="form-select form-select-sm mb-1 modal-select-supervisor" title="Supervisor"><option value="">Seleccionar...</option> {% for sup in supervisores %}<option value="{{ sup.id }}">{{ sup.nombre }}</option>{% endfor %}</select></div><div class="mb-2"><label class="form-label form-label-sm">Operario (Opc)</label><select class="form-select form-select-sm mb-1 modal-select-operario" title="Operario"><option value="">Seleccionar...</option> {% for op_user in operarios %}<option value="{{ op_user.id }}">{{ op_user.nombre }}</option>{% endfor %}</select></div></div></div></div></div>
           <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-success btn-lg btn-consolidar-y-aprobar"><i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote</button></div></div></div></div>
     {% endfor %}
 {% endif %}
+
+{# --- REUSABLE FEEDBACK MODAL --- #}
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"> {# Centered vertically #}
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="feedbackModalLabel">
+            <i class="bi bi-info-circle me-2" id="feedbackModalIcon"></i> {# Icon changes based on type #}
+            <span id="feedbackModalTitle">Título</span> {# Dynamic title #}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="feedbackModalBody">
+        Mensaje del modal. {# Dynamic message #}
+      </div>
+      <div class="modal-footer">
+        {# Button for simple alerts or Cancel #}
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="feedbackModalCancelBtn">Cerrar</button> 
+        {# Button for confirmations #}
+        <button type="button" class="btn btn-primary" id="feedbackModalConfirmBtn">Confirmar</button> 
+      </div>
+    </div>
+  </div>
+</div>
+{# --- END FEEDBACK MODAL --- #}
 
 {% endblock %}
 

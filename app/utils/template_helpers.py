@@ -1,7 +1,7 @@
 from datetime import datetime
 from app.utils.permission_map import CANONICAL_PERMISSION_MAP
 from flask import Flask
-from flask_jwt_extended import get_jwt
+from flask_jwt_extended import get_jwt, current_user
 
 def _format_datetime_filter(value, format='%d/%m/%Y %H:%M'):
     """
@@ -61,27 +61,18 @@ def _has_permission_filter(action: str) -> bool:
 
 def _inject_user_from_jwt():
     """
-    Procesador de contexto para inyectar datos del usuario desde el JWT.
-    Esto hace que 'current_user' esté disponible en todas las plantillas
-    siempre que haya un token JWT válido en la solicitud.
+    Procesador de contexto para inyectar el objeto `current_user` completo,
+    cargado por Flask-JWT-Extended, en todas las plantillas.
     """
     try:
-        claims = get_jwt()
-        nombre = claims.get('nombre')
-        apellido = claims.get('apellido')
-        
-        # Crear un SimpleNamespace para permitir el acceso con notación de punto
-        from types import SimpleNamespace
-        current_user = SimpleNamespace(
-            nombre=nombre,
-            apellido=apellido,
-            nombre_completo=f"{nombre or ''} {apellido or ''}".strip(),
-            roles={'nombre': claims.get('rol')}
-        )
-        return {'current_user': current_user}
+        # Si hay un usuario cargado en el contexto de la solicitud, lo inyectamos.
+        # current_user es un proxy que será None si no hay un usuario autenticado.
+        if current_user:
+            return {'current_user': current_user}
+        return {}
     except Exception:
-        # Si no hay token JWT (p.ej. en la página de login),
-        # get_jwt() lanza una excepción. En ese caso, no inyectamos nada.
+        # En caso de cualquier error (ej. fuera de un contexto de solicitud),
+        # devolvemos un diccionario vacío para no romper la aplicación.
         return {}
 
 
@@ -92,6 +83,7 @@ def register_template_extensions(app: Flask):
     """
     app.jinja_env.filters['format_datetime'] = _format_datetime_filter
     app.jinja_env.filters['formato_moneda'] = _formato_moneda_filter
+    app.jinja_env.globals['has_permission'] = _has_permission_filter
     app.jinja_env.tests['has_permission'] = _has_permission_filter
     app.context_processor(_inject_permission_map)
     app.context_processor(_inject_user_from_jwt)

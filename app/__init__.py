@@ -27,16 +27,26 @@ def check_if_token_in_blocklist(jwt_header, jwt_payload):
 def user_lookup_callback(_jwt_header, jwt_data):
     """
     Esta función se llama cada vez que se protege una ruta con jwt_required.
-    Devuelve el objeto de usuario basado en el 'sub' del token JWT.
+    Devuelve el objeto de usuario basado en el 'sub' del token JWT,
+    y añade los claims adicionales (rol, permisos) al objeto.
     """
     identity = jwt_data["sub"]
     user_id = int(identity)
 
-    user_model = UsuarioModel()
-    user_data_result = user_model.find_by_id(user_id)
+    # El controlador de usuario ya tiene una lógica para preparar los datos de sesión.
+    # Reutilizamos esa lógica para asegurar consistencia.
+    user_controller = UsuarioController()
+    user_result = user_controller.model.find_by_id(user_id)
 
-    if user_data_result.get('success'):
-        user_data = user_data_result.get('data')
+    if user_result.get('success'):
+        user_data = user_result['data']
+        # Añadimos los permisos y otros datos del token directamente al objeto.
+        # Esto asegura que `current_user` tenga todo lo necesario en las plantillas.
+        user_data['permisos'] = jwt_data.get('permisos', {})
+        user_data['rol'] = jwt_data.get('rol')
+        user_data['nombre_completo'] = f"{user_data.get('nombre', '')} {user_data.get('apellido', '')}".strip()
+        
+        # Usamos SimpleNamespace para un acceso más fácil tipo objeto en las plantillas
         return SimpleNamespace(**user_data)
 
     return None

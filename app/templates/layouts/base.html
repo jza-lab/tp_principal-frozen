@@ -188,17 +188,17 @@
     {% endif %}
 </header>
 
-                <div id="flash-messages-container" style="display: none;">
-                    {% with messages = get_flashed_messages(with_categories=true) %}
-                        {% if messages %}
-                            {% for category, message in messages %}
-                                <div data-category="{{ category }}" data-message="{{ message }}"></div>
-                            {% endfor %}
-                        {% endif %}
-                    {% endwith %}
-                </div>
+<div id="flash-messages-container" style="display: none;">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div data-category="{{ category }}" data-message="{{ message }}"></div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+</div>
 
-                {% block content %}{% endblock %}
+{% block content %}{% endblock %}
 
             </div>
         </div>
