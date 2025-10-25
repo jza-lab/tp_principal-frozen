@@ -35,7 +35,8 @@
 <form method="POST" id="pedido-form">
     <input type="hidden" id="id_cliente" name="id_cliente" value="{{ cliente.id if cliente else ''}}">
     <input type="hidden" id="cuil" name="cuil" value="">
-    {{ form.csrf_token }}
+    {{ csrf_form.csrf_token }}
+
     <div class="row">
         <div class="col-lg-8">
             <div class="card shadow-sm">

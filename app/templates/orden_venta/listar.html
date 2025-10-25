@@ -146,7 +146,8 @@
                             class="confirm-form d-grid" data-title="Preparar para Entrega"
                             data-message="Esta acción moverá el pedido a 'LISTO PARA ENTREGAR' y descontará el stock de los productos del inventario. ¿Está seguro?"
                             data-button-type="info">
-                            {{ form.csrf_token }}
+                            {{ csrf_form.csrf_token }}
+
                             <button type="submit" class="btn btn-info"><i class="bi bi-box-seam me-1"></i>Preparar
                                 Entrega</button>
                         </form>
@@ -156,7 +157,8 @@
                             class="confirm-form d-inline" data-title="Confirmar Entrega"
                             data-message="¿Está seguro de marcar este pedido como 'COMPLETADO'? Esta es la acción final."
                             data-button-type="success">
-                            {{ form.csrf_token }}
+                            {{ csrf_form.csrf_token }}
+
                             <button type="submit" class="btn btn-sm btn-success" title="Marcar como Completado">
                                 <i class="bi bi-check-lg me-1"></i>Completar
                             </button>

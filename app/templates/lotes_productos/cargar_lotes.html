@@ -23,7 +23,8 @@
                 </a>
             </div>
             <form id="upload-form" action="{{ url_for('lote_producto.cargar_lotes_excel') }}" method="post" enctype="multipart/form-data">
-                {{ form.csrf_token }}
+                {{ csrf_form.csrf_token }}
+
                 <div class="mb-3">
                     <label for="archivo" class="form-label">Seleccionar Archivo Excel</label>
                     <input class="form-control" type="file" id="archivo" name="archivo" accept=".xlsx, .xls" required>

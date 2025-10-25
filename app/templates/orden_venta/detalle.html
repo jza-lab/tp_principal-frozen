@@ -174,7 +174,8 @@
                               class="confirm-form d-grid" data-title="Iniciar Proceso"
                               data-message="Esto creará las Órdenes de Producción necesarias y cambiará el estado. ¿Continuar?"
                               data-button-type="success">
-                              {{ form.csrf_token }}
+                              {{ csrf_form.csrf_token }}
+
                             <button type="submit" class="btn btn-success"><i class="bi bi-play-fill me-1"></i>Iniciar Proceso y Crear OPs</button>
                         </form>
                     {% endif %}
@@ -186,7 +187,8 @@
                             <form action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}" method="post"
                                   class="d-grid needs-confirmation" 
                                   data-confirm-message="¿Está seguro? Esta acción despachará el stock reservado y marcará el pedido como 'Listo para Entregar'.">
-                                {{ form.csrf_token }}
+                                {{ csrf_form.csrf_token }}
+
                                 <button type="submit" class="btn btn-primary">
                                     <i class="bi bi-box-seam me-1"></i> Preparar Entrega (Despachar Stock)
                                 </button>
@@ -213,7 +215,8 @@
                         <form action="{{ url_for('orden_venta.completar', id=pedido.id) }}" method="post" 
                               class="d-grid needs-confirmation" 
                               data-confirm-message="¿Confirma que este pedido ha sido entregado y desea marcarlo como completado?">
-                                {{ form.csrf_token }}
+                                {{ csrf_form.csrf_token }}
+
                             <button type="submit" class="btn btn-success">
                                 <i class="bi bi-check-circle-fill me-1"></i> Marcar como Completado (Entregado)
                             </button>
@@ -235,7 +238,8 @@
                         <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
                               class="confirm-form d-grid" data-title="Confirmar Cancelación"
                               data-message="¿Está seguro? Esta acción no se puede deshacer." data-button-type="danger">
-                                {{ form.csrf_token }}
+                                {{ csrf_form.csrf_token }}
+
                             <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Cancelar Pedido</button>
                         </form>
                     {% endif %}
