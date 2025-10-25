@@ -525,87 +525,148 @@ class PlanificacionController(BaseController):
             return self.error_response(f"Error interno: {str(e)}", 500)
 
 
+    # --- MÉTODO REESCRITO ---
     def obtener_planificacion_semanal(self, week_str: Optional[str] = None) -> tuple:
         """
-        Obtiene las OPs planificadas para una semana específica y las agrupa por día.
+        Obtiene las OPs planificadas para una semana específica, calculando los días
+        que cada OP ocupa y agrupándolas por día visible.
         """
         try:
-            # Configurar locale para español (si no está globalmente)
-            try:
-                locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
-                logger.info("Locale establecido a es_ES.UTF-8")
+            # Configurar locale (sin cambios)
+            try: locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
             except locale.Error:
-                try:
-                    locale.setlocale(locale.LC_TIME, 'Spanish_Spain.1252')
-                    logger.info("Locale establecido a Spanish_Spain.1252")
-                except locale.Error:
-                    logger.warning("Locale 'es_ES.UTF-8' o 'Spanish_Spain' no disponible. Los días se mostrarán en inglés.")
-                    pass # Continuar con el locale por defecto
+                try: locale.setlocale(locale.LC_TIME, 'Spanish_Spain.1252')
+                except locale.Error: logger.warning("Locale español no disponible.")
 
-            # 1. Determinar la semana
+            # 1. Determinar rango de la semana (sin cambios)
             if week_str:
                 try:
                     year, week_num = map(int, week_str.split('-W'))
-                    # Obtener el lunes de esa semana
                     start_of_week = date.fromisocalendar(year, week_num, 1)
-                except ValueError:
-                    return self.error_response("Formato de semana inválido. Use YYYY-WNN.", 400)
+                except ValueError: return self.error_response("Formato semana inválido.", 400)
             else:
-                today = date.today()
-                start_of_week = today - timedelta(days=today.weekday()) # Lunes de la semana actual
-                week_str = start_of_week.strftime("%Y-W%W")
+                today = date.today(); start_of_week = today - timedelta(days=today.weekday())
+                week_str = start_of_week.strftime("%Y-%W") # Corregido a %W si %V daba error antes
+            end_of_week = start_of_week + timedelta(days=6)
 
-            end_of_week = start_of_week + timedelta(days=6) # Domingo
+            # 2. Obtener OPs RELEVANTES (que podrían estar activas en la semana)
+            #   - Que NO estén completadas/canceladas/consolidadas/pendientes
+            #   - Que empiecen ANTES del FIN de la semana
+            #   - (Opcional: añadir filtro para que terminen DESPUÉS del INICIO de la semana si tienes fecha_fin_estimada)
+            dias_previos_margen = 14 # Traer OPs que empezaron hasta 2 semanas antes, por si son largas
+            fecha_inicio_filtro = start_of_week - timedelta(days=dias_previos_margen)
 
-            # 2. Consultar OPs en ese rango de fechas
-            filtros = {
-            'fecha_inicio_planificada_desde': start_of_week.isoformat(), # Clave para >=
-            'fecha_inicio_planificada_hasta': end_of_week.isoformat(),   # Clave para <=
-            'estado': ('not.in', ['PENDIENTE', 'COMPLETADA', 'CANCELADA', 'CONSOLIDADA'])
+            filtros_amplios = {
+                'fecha_inicio_planificada_desde': fecha_inicio_filtro.isoformat(),
+                'fecha_inicio_planificada_hasta': end_of_week.isoformat(), # Solo necesitamos las que empiezan hasta el final de la semana
+                'estado': ('in', [ # Solo las activas en producción
+                    'EN ESPERA', # Podría cambiar a Lista si llega stock
+                    'LISTA PARA PRODUCIR',
+                    'EN_LINEA_1',
+                    'EN_LINEA_2',
+                    'EN_EMPAQUETADO',
+                    'CONTROL_DE_CALIDAD'
+                 ])
             }
-            # Usamos obtener_ordenes que ya trae datos enriquecidos (supervisor, operario)
-            response_ops, _ = self.orden_produccion_controller.obtener_ordenes(filtros)
-
+            response_ops, _ = self.orden_produccion_controller.obtener_ordenes(filtros_amplios)
             if not response_ops.get('success'):
-                return self.error_response("Error al obtener las órdenes planificadas.", 500)
+                return self.error_response("Error al obtener OPs para cálculo semanal.", 500)
 
-            # 3. Agrupar por día
-            ordenes = response_ops.get('data', [])
-            grouped_by_day = defaultdict(list)
-
-            # Crear entradas para todos los días de la semana, incluso si están vacíos
-            dias_semana_iso = [(start_of_week + timedelta(days=i)).isoformat() for i in range(7)]
-            for dia_iso in dias_semana_iso:
-                 grouped_by_day[dia_iso] = []
-
-            for op in ordenes:
-                fecha_inicio = op.get('fecha_inicio_planificada')
-                if fecha_inicio: # Asegurarse que la fecha existe
-                     # La fecha puede venir como string, la normalizamos a ISO
-                     try:
-                         fecha_dt = date.fromisoformat(fecha_inicio[:10]) # Tomar solo YYYY-MM-DD
-                         grouped_by_day[fecha_dt.isoformat()].append(op)
-                     except ValueError:
-                          logger.warning(f"Formato de fecha inválido para OP {op.get('codigo')}: {fecha_inicio}")
+            ordenes_relevantes = response_ops.get('data', [])
+            if not ordenes_relevantes: # Si no hay OPs, devolver vacío
+                 resultado_vacio = { 'ops_visibles_por_dia': {}, 'inicio_semana': start_of_week.isoformat(), 'fin_semana': end_of_week.isoformat(), 'semana_actual_str': week_str }
+                 return self.success_response(data=resultado_vacio)
 
 
-            # Ordenar el diccionario por fecha para la plantilla
-            ordered_grouped_by_day = dict(sorted(grouped_by_day.items()))
+            # 3. Obtener Capacidad para el rango necesario (desde la OP más temprana hasta el fin de semana)
+            fechas_inicio_ops = [date.fromisoformat(op['fecha_inicio_planificada']) for op in ordenes_relevantes if op.get('fecha_inicio_planificada')]
+            fecha_min_calculo = min(fechas_inicio_ops) if fechas_inicio_ops else start_of_week
+            # Ampliar rango final por si OPs terminan después
+            fecha_max_calculo = end_of_week + timedelta(days=14)
 
-            # Formatear claves con nombre del día
+            capacidad_rango = self.obtener_capacidad_disponible([1, 2], fecha_min_calculo, fecha_max_calculo)
+
+            # 4. Simular duración y días ocupados para CADA OP
+            ops_con_dias_ocupados = []
+            carga_acumulada_simulacion = {1: defaultdict(float), 2: defaultdict(float)} # Para simular carga existente
+
+            # Ordenar para procesar las más antiguas primero (más realista)
+            ordenes_relevantes.sort(key=lambda op: op.get('fecha_inicio_planificada', '9999-12-31'))
+
+            for orden in ordenes_relevantes:
+                op_id = orden.get('id')
+                linea_asignada = orden.get('linea_asignada')
+                fecha_inicio_str = orden.get('fecha_inicio_planificada')
+
+                if not linea_asignada or not fecha_inicio_str: continue # Saltar si faltan datos clave
+
+                try:
+                    fecha_inicio_op = date.fromisoformat(fecha_inicio_str)
+                    carga_total_op = float(self._calcular_carga_op(orden))
+                    if carga_total_op <= 0: continue
+
+                    dias_ocupados_por_esta_op = []
+                    carga_restante_sim = carga_total_op
+                    fecha_actual_sim = fecha_inicio_op
+                    dias_simulados = 0
+                    max_dias_op_sim = 30 # Límite
+
+                    while carga_restante_sim > 0.01 and dias_simulados < max_dias_op_sim:
+                        fecha_actual_sim_str = fecha_actual_sim.isoformat()
+                        cap_dia = capacidad_rango.get(linea_asignada, {}).get(fecha_actual_sim_str, 0.0)
+                        carga_existente_sim = carga_acumulada_simulacion[linea_asignada].get(fecha_actual_sim_str, 0.0)
+                        cap_restante_sim = max(0.0, cap_dia - carga_existente_sim)
+
+                        carga_a_asignar_sim = min(carga_restante_sim, cap_restante_sim)
+
+                        if carga_a_asignar_sim > 0:
+                            dias_ocupados_por_esta_op.append(fecha_actual_sim_str) # Añadir fecha a la lista de la OP
+                            carga_acumulada_simulacion[linea_asignada][fecha_actual_sim_str] += carga_a_asignar_sim
+                            carga_restante_sim -= carga_a_asignar_sim
+
+                        # Si aún queda carga, pasar al siguiente día
+                        if carga_restante_sim > 0.01:
+                             fecha_actual_sim += timedelta(days=1)
+                        dias_simulados += 1
+
+                    # Guardar la OP junto con los días que ocupa
+                    orden['dias_ocupados_calculados'] = dias_ocupados_por_esta_op
+                    ops_con_dias_ocupados.append(orden)
+
+                except Exception as e_sim:
+                     logger.error(f"Error simulando OP {op_id}: {e_sim}", exc_info=True)
+
+
+            # 5. Construir el diccionario final para la plantilla
+            ops_visibles_por_dia = defaultdict(list)
+            # Crear entradas para todos los días de la semana objetivo
+            for i in range(7):
+                dia_semana_actual = start_of_week + timedelta(days=i)
+                ops_visibles_por_dia[dia_semana_actual.isoformat()] = []
+
+            # Llenar con las OPs correspondientes
+            for op in ops_con_dias_ocupados:
+                for fecha_ocupada_iso in op.get('dias_ocupados_calculados', []):
+                    # Solo añadir si la fecha ocupada está DENTRO de la semana que estamos mostrando
+                    if start_of_week.isoformat() <= fecha_ocupada_iso <= end_of_week.isoformat():
+                        # Evitar duplicados si una OP ya fue añadida a ese día
+                        if op not in ops_visibles_por_dia[fecha_ocupada_iso]:
+                             ops_visibles_por_dia[fecha_ocupada_iso].append(op)
+
+
+            # 6. Formatear claves con nombre del día (sin cambios)
             formatted_grouped_by_day = {}
-            for dia_iso, ops_dia in ordered_grouped_by_day.items():
+            # Ordenar por fecha antes de formatear
+            ordered_ops_visibles = dict(sorted(ops_visibles_por_dia.items()))
+            for dia_iso, ops_dia in ordered_ops_visibles.items():
                 try:
                     dia_dt = date.fromisoformat(dia_iso)
-                    # Formato: "Lunes 21/10"
-                    key_display = dia_dt.strftime("%A %d/%m").capitalize()
-                except ValueError:
-                     key_display = dia_iso # Fallback
+                    key_display = dia_dt.strftime("%a %d/%m").capitalize()
+                except ValueError: key_display = dia_iso
                 formatted_grouped_by_day[key_display] = ops_dia
 
-
             resultado = {
-                'ordenes_por_dia': formatted_grouped_by_day,
+                'ops_visibles_por_dia': formatted_grouped_by_day, # <-- Nuevo nombre de variable
                 'inicio_semana': start_of_week.isoformat(),
                 'fin_semana': end_of_week.isoformat(),
                 'semana_actual_str': week_str
@@ -613,7 +674,7 @@ class PlanificacionController(BaseController):
             return self.success_response(data=resultado)
 
         except Exception as e:
-            logger.error(f"Error obteniendo planificación semanal: {e}", exc_info=True)
+            logger.error(f"Error obteniendo planificación semanal (v2): {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
     def obtener_capacidad_disponible(self, centro_trabajo_ids: List[int], fecha_inicio: date, fecha_fin: date) -> Dict:

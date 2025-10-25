@@ -42,8 +42,10 @@ def index():
 
     # 3. Obtener OPs para el CALENDARIO SEMANAL
     response_semanal, _ = controller.obtener_planificacion_semanal(week_str)
+    ops_visibles_por_dia_formato = {} # <--- Usar nuevo nombre
     if response_semanal.get('success'):
         data_semanal = response_semanal.get('data', {})
+        ops_visibles_por_dia_formato = data_semanal.get('ops_visibles_por_dia', {}) # <--- Usar nuevo nombre
         ordenes_por_dia = data_semanal.get('ordenes_por_dia', {})
         inicio_semana_str = data_semanal.get('inicio_semana')
         fin_semana_str = data_semanal.get('fin_semana')
@@ -121,7 +123,6 @@ def index():
     return render_template(
         'planificacion/tablero.html',
         mps_data=mps_data_para_template,
-        ordenes_por_dia=ordenes_por_dia,
         inicio_semana=inicio_semana.isoformat() if inicio_semana else None, # Pasar ISO o None
         fin_semana=fin_semana.isoformat() if fin_semana else None,       # Pasar ISO o None
         semana_actual_str=week_str,
@@ -133,6 +134,7 @@ def index():
         operarios=operarios,
         carga_crp=carga_calculada,
         capacidad_crp=capacidad_disponible,
+        ordenes_por_dia=ops_visibles_por_dia_formato,
         inicio_semana_crp=inicio_semana.isoformat() if inicio_semana else None, # Usar las mismas fechas
         fin_semana_crp=fin_semana.isoformat() if fin_semana else None,
         now=datetime.utcnow(),
