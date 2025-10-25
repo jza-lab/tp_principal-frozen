@@ -35,6 +35,9 @@ pedido_controller = PedidoController()
 def listar():
     """Muestra la lista de órdenes de producción."""
     estado = request.args.get("estado")
+    if estado:
+        # Normalizar el estado reemplazando espacios con guiones bajos
+        estado = estado.replace(" ", "_")
     filtros = {"estado": estado} if estado else {}
     response, status_code = controller.obtener_ordenes(filtros)
     ordenes = []
@@ -53,9 +56,28 @@ def listar():
     elif isinstance(supervisores_response, list):
         supervisores = supervisores_response
 
+    from app.utils.estados import OP_PENDIENTE, OP_EN_ESPERA, OP_APROBADA, OP_EN_PRODUCCION, OP_CONTROL_DE_CALIDAD, OP_COMPLETADA, OP_CANCELADA, OP_RECHAZADA, OP_CONSOLIDADA, OP_PLANIFICADA, OP_EN_LINEA_1, OP_EN_LINEA_2, OP_EN_EMPAQUETADO
+
+    # Lista de estados de OP para los filtros
+    estados_op = {
+        'PENDIENTE': OP_PENDIENTE,
+        'EN_ESPERA': OP_EN_ESPERA,
+        'APROBADA': OP_APROBADA,
+        'EN_PRODUCCION': OP_EN_PRODUCCION,
+        'CONTROL_DE_CALIDAD': OP_CONTROL_DE_CALIDAD,
+        'COMPLETADA': OP_COMPLETADA,
+        'CANCELADA': OP_CANCELADA,
+        'RECHAZADA': OP_RECHAZADA,
+        'CONSOLIDADA': OP_CONSOLIDADA,
+        'PLANIFICADA': OP_PLANIFICADA,
+        'EN_LINEA_1': OP_EN_LINEA_1,
+        'EN_LINEA_2': OP_EN_LINEA_2,
+        'EN_EMPAQUETADO': OP_EN_EMPAQUETADO
+    }
+
     titulo = f"Órdenes de Producción ({'Todas' if not estado else estado.replace('_', ' ').title()})"
     return render_template(
-        "ordenes_produccion/listar.html", ordenes=ordenes, titulo=titulo, supervisores=supervisores
+        "ordenes_produccion/listar.html", ordenes=ordenes, titulo=titulo, supervisores=supervisores, estados_op=estados_op
     )
 
 

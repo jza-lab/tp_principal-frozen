@@ -53,7 +53,13 @@ class OrdenProduccionController(BaseController):
         """
         try:
             if filtros and 'estado' in filtros and filtros['estado']:
-                filtros['estado'] = estados.traducir_a_int(filtros['estado'])
+                estado_filtro = filtros['estado']
+                if isinstance(estado_filtro, (list, tuple)) and len(estado_filtro) == 2 and estado_filtro[0] == 'in':
+                    nombres_estados = estado_filtro[1]
+                    estados_str = [estados.traducir_a_cadena(estados.traducir_a_int(nombre)) for nombre in nombres_estados]
+                    filtros['estado'] = ('in', tuple(estados_str))
+                elif isinstance(estado_filtro, str):
+                    filtros['estado'] = estados.traducir_a_cadena(estados.traducir_a_int(estado_filtro))
 
             result = self.model.get_all_enriched(filtros)
 

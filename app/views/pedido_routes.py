@@ -1,6 +1,6 @@
 import os
 import random
-from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, current_app, render_template, request, redirect, session, url_for, flash, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
@@ -48,6 +48,9 @@ def _parse_form_data(form_dict):
 def listar():
     """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
     estado = request.args.get('estado')
+    if estado:
+        # Normalizar el estado reemplazando espacios con guiones bajos
+        estado = estado.replace(" ", "_")
     filtros = {'estado': estado} if estado else {}
 
     response, _ = controller.obtener_pedidos(filtros)
@@ -69,7 +72,25 @@ def listar():
     else:
         flash(response.get('error', 'Error al cargar los pedidos.'), 'error')
 
-    return render_template('orden_venta/listar.html', pedidos=pedidos, titulo="Pedidos de Venta")
+    from app.utils.estados import OV_PENDIENTE, OV_PLANIFICADA, OV_EN_PROCESO, OV_LISTA_PARA_ENTREGAR, OV_EN_TRANSITO, OV_RECEPCION_OK, OV_RECEPCION_INCOMPLETA, OV_PAGADA, OV_IMPAGA, OV_RECHAZADA, OV_CANCELADA, OV_ITEM_ALISTADO, OV_LISTO_PARA_ARMAR
+
+    estados_ov = {
+        'PENDIENTE': OV_PENDIENTE,
+        'PLANIFICADA': OV_PLANIFICADA,
+        'EN_PROCESO': OV_EN_PROCESO,
+        'LISTA_PARA_ENTREGAR': OV_LISTA_PARA_ENTREGAR,
+        'EN_TRANSITO': OV_EN_TRANSITO,
+        'RECEPCION_OK': OV_RECEPCION_OK,
+        'RECEPCION_INCOMPLETA': OV_RECEPCION_INCOMPLETA,
+        'PAGADA': OV_PAGADA,
+        'IMPAGA': OV_IMPAGA,
+        'RECHAZADA': OV_RECHAZADA,
+        'CANCELADA': OV_CANCELADA,
+        'ITEM_ALISTADO': OV_ITEM_ALISTADO,
+        'LISTO_PARA_ARMAR': OV_LISTO_PARA_ARMAR
+    }
+
+    return render_template('orden_venta/listar.html', pedidos=pedidos, titulo="Pedidos de Venta", estados_ov=estados_ov)
 
 @orden_venta_bp.route('/nueva', methods=['GET', 'POST'])
 @jwt_required()

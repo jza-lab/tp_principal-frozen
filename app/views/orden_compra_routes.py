@@ -20,6 +20,9 @@ insumo_controller = InsumoController()
 def listar():
     """Muestra la lista de órdenes de compra."""
     estado = request.args.get("estado")
+    if estado:
+        # Normalizar el estado reemplazando espacios con guiones bajos
+        estado = estado.replace(" ", "_")
     filtros = {"estado": estado} if estado else {}
     response, status_code = controller.get_all_ordenes(filtros)
     ordenes = []
@@ -28,8 +31,19 @@ def listar():
         ordenes = sorted(ordenes_data, key=lambda x: x.get("estado") == "RECHAZADA")
     else:
         flash(response.get("error", "Error al cargar las órdenes de compra."), "error")
+    from app.utils.estados import OC_PENDIENTE, OC_RECHAZADA, OC_CANCELADA, OC_EN_ESPERA_LLEGADA, OC_APROBADA, OC_RECIBIDA, OC_COMPLETADA
+
+    estados_oc = {
+        'PENDIENTE': OC_PENDIENTE,
+        'RECHAZADA': OC_RECHAZADA,
+        'CANCELADA': OC_CANCELADA,
+        'EN_ESPERA_LLEGADA': OC_EN_ESPERA_LLEGADA,
+        'APROBADA': OC_APROBADA,
+        'RECIBIDA': OC_RECIBIDA,
+        'COMPLETADA': OC_COMPLETADA
+    }
     titulo = f"Órdenes de Compra ({'Todas' if not estado else estado.replace('_', ' ').title()})"
-    return render_template("ordenes_compra/listar.html", ordenes=ordenes, titulo=titulo)
+    return render_template("ordenes_compra/listar.html", ordenes=ordenes, titulo=titulo, estados_oc=estados_oc)
 
 
 @orden_compra_bp.route("/nueva", methods=["GET", "POST"])

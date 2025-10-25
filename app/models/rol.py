@@ -11,14 +11,20 @@ class RoleModel(BaseModel):
     def get_table_name(self) -> str:
         return 'roles'
 
-    def find_all(self) -> Dict:
+    def find_all(self, filters: dict = None) -> Dict:
         """
-        Obtiene todos los roles del sistema.
+        Obtiene todos los roles del sistema, con opción de aplicar filtros.
         """
         try:
-            query = self.db.table(self.get_table_name()).select('*').order('nombre')
-            response = query.execute()
+            query = self.db.table(self.get_table_name()).select('*')
+
+            if filters:
+                for key, value in filters.items():
+                    query = query.eq(key, value)
             
+            query = query.order('nombre')
+            response = query.execute()
+
             if not response.data:
                 return {'success': True, 'data': []}
             

@@ -28,16 +28,16 @@ document.addEventListener('DOMContentLoaded', function () {
             const url = form.action;
             const csrfToken = getCookie('csrf_access_token');
 
-            // Convertir FormData a un objeto plano para enviarlo como JSON
-            const plainFormData = Object.fromEntries(formData.entries());
+            // Convertir FormData a URLSearchParams para enviarlo como form-urlencoded
+            const urlEncodedData = new URLSearchParams(formData);
 
             fetch(url, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/x-www-form-urlencoded',
                     'X-CSRF-TOKEN': csrfToken
                 },
-                body: JSON.stringify(plainFormData)
+                body: urlEncodedData
             })
             .then(response => {
                 if (response.redirected) {
