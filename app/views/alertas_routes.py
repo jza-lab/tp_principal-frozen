@@ -16,6 +16,10 @@ def listar_insumos_alertas():
     """
     Muestra la lista de insumos para configurar alertas de stock.
     """
+    # (Esta ruta también podría beneficiarse de la lógica de 'active_tab'
+    # si esa página también tiene pestañas)
+    active_tab = request.args.get('tab', 'default') # Ejemplo por si lo necesitás
+    
     response, _ = insumo_controller.obtener_insumos()
     if not response.get('success'):
         flash('Error al cargar los insumos.', 'error')
@@ -23,7 +27,7 @@ def listar_insumos_alertas():
     else:
         insumos = response.get('data', [])
         
-    return render_template('alertas/insumos.html', insumos=insumos)
+    return render_template('alertas/insumos.html', insumos=insumos, active_tab=active_tab)
 
 @alertas_bp.route('/insumos/actualizar', methods=['POST'])
 @permission_required(accion='configurar_alertas')
@@ -62,6 +66,7 @@ def actualizar_stock_min_max():
     except Exception as e:
         flash(f'Ocurrió un error inesperado: {str(e)}', 'error')
 
+    # (Acá también podrías agregar el ?tab=... si la página de insumos tuviera tabs)
     return redirect(url_for('alertas.listar_insumos_alertas'))
 
 @alertas_bp.route('/lotes', methods=['GET', 'POST'])
@@ -96,6 +101,10 @@ def listar_productos_alertas():
     """
     Muestra la lista de productos para configurar alertas de stock.
     """
+    # *** 1. LEER EL PARÁMETRO 'tab' DE LA URL ***
+    # Si no se proporciona, 'stock-min' es el valor por defecto.
+    active_tab = request.args.get('tab', 'stock-min')
+    
     response, _ = producto_controller.obtener_todos_los_productos()
     if not response.get('success'):
         flash('Error al cargar los productos.', 'error')
@@ -103,7 +112,8 @@ def listar_productos_alertas():
     else:
         productos = response.get('data', [])
         
-    return render_template('alertas/productos.html', productos=productos)
+    # *** 2. PASAR LA VARIABLE 'active_tab' A LA PLANTILLA ***
+    return render_template('alertas/productos.html', productos=productos, active_tab=active_tab)
 
 @alertas_bp.route('/productos/actualizar', methods=['POST'])
 @permission_required(accion='configurar_alertas')
@@ -133,7 +143,9 @@ def actualizar_stock_min_producto():
     except Exception as e:
         flash(f'Ocurrió un error inesperado: {str(e)}', 'error')
 
-    return redirect(url_for('alertas.listar_productos_alertas'))
+    # *** 3. REDIRIGIR AVISANDO QUÉ PESTAÑA ESTABA ACTIVA ***
+    # (Esta es la pestaña de 'stock-min')
+    return redirect(url_for('alertas.listar_productos_alertas', tab='stock-min'))
 
 @alertas_bp.route('/productos/actualizar_cantidad_maxima', methods=['POST'])
 @permission_required(accion='configurar_alertas')
@@ -163,4 +175,6 @@ def actualizar_cantidad_maxima_x_pedido():
     except Exception as e:
         flash(f'Ocurrió un error inesperado: {str(e)}', 'error')
 
-    return redirect(url_for('alertas.listar_productos_alertas'))
+    # *** 3. REDIRIGIR AVISANDO QUÉ PESTAÑA ESTABA ACTIVA ***
+    # (Esta es la pestaña de 'cantidad-max')
+    return redirect(url_for('alertas.listar_productos_alertas', tab='cantidad-max'))
