@@ -521,6 +521,31 @@
     {% endfor %}
 {% endif %}
 
+{# --- REUSABLE FEEDBACK MODAL --- #}
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"> {# Centered vertically #}
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="feedbackModalLabel">
+            <i class="bi bi-info-circle me-2" id="feedbackModalIcon"></i> {# Icon changes based on type #}
+            <span id="feedbackModalTitle">Título</span> {# Dynamic title #}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="feedbackModalBody">
+        Mensaje del modal. {# Dynamic message #}
+      </div>
+      <div class="modal-footer">
+        {# Button for simple alerts or Cancel #}
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="feedbackModalCancelBtn">Cerrar</button> 
+        {# Button for confirmations #}
+        <button type="button" class="btn btn-primary" id="feedbackModalConfirmBtn">Confirmar</button> 
+      </div>
+    </div>
+  </div>
+</div>
+{# --- END FEEDBACK MODAL --- #}
+
 {% endblock %}
 
 {% block extra_js %}

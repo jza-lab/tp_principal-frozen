@@ -1,5 +1,9 @@
-// --- FUNCIÓN HELPER (FASE 3 y 4) ---
-// Mueve una OP a un nuevo estado (usada por Kanban y recomendación del Kanban)
+/**
+ * Mueve una OP a un nuevo estado (usada por Kanban).
+ * @param {string} opId ID de la OP a mover.
+ * @param {string} nuevoEstado Estado destino.
+ * @returns {Promise<boolean>} True si tuvo éxito, False si falló.
+ */
 async function moverOp(opId, nuevoEstado) {
     try {
         const response = await fetch(`/planificacion/api/mover-op/${opId}`, {
@@ -10,56 +14,97 @@ async function moverOp(opId, nuevoEstado) {
         const result = await response.json();
         if (!result.success) {
             console.error(`Error al mover la OP ${opId}: ${result.error}`);
-            alert(`Hubo un error al mover la OP: ${result.error}`);
+            // Usar modal para error
+            showFeedbackModal('Error al Mover Orden', `Hubo un error al intentar mover la Orden de Producción: ${result.error}`, 'error');
         }
         return result.success;
     } catch (error) {
         console.error(`Error de red al mover la OP ${opId}:`, error);
-        alert('Error de conexión. No se pudo guardar el cambio.');
+        // Usar modal para error de red
+        showFeedbackModal('Error de Conexión', 'No se pudo guardar el cambio. Verifique su conexión.', 'error');
         return false;
     }
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-
-    // --- LÓGICA DE CONSOLIDACIÓN (KANBAN) ---
-    const consolidarBtn = document.getElementById('btn-consolidar');
-    if (consolidarBtn) {
-        const checkboxes = document.querySelectorAll('.op-checkbox');
-        function checkSelection() {
-            const seleccionados = document.querySelectorAll('.op-checkbox:checked');
-            if (seleccionados.length < 2) { consolidarBtn.disabled = true; return; }
-            const primerProductoId = seleccionados[0].closest('.kanban-card').dataset.productoId;
-            const sonMismoProducto = Array.from(seleccionados).every(cb => cb.closest('.kanban-card').dataset.productoId === primerProductoId);
-            consolidarBtn.disabled = !sonMismoProducto;
-        }
-        checkboxes.forEach(cb => cb.addEventListener('change', checkSelection));
-        consolidarBtn.addEventListener('click', async () => {
-            const seleccionados = document.querySelectorAll('.op-checkbox:checked');
-            const opIds = Array.from(seleccionados).map(cb => cb.value);
-            if (!confirm(`¿Estás seguro de que quieres consolidar ${opIds.length} órdenes?`)) return;
-            consolidarBtn.disabled = true; consolidarBtn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Consolidando...`;
-            try {
-                // Llama a la API de consolidación simple (del Kanban)
-                const resCons = await fetch('/planificacion/api/consolidar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op_ids: opIds }) });
-                const resultCons = await resCons.json();
-                if (!resultCons.success) throw new Error(resultCons.error);
-                const newOP = resultCons.data;
-                alert(`¡Éxito! Super OP creada: ${newOP.codigo}`);
-                
-                // Llama a la API de recomendación (del Kanban)
-                const resRec = await fetch(`/planificacion/api/recomendar-linea/${newOP.id}`);
-                const resultRec = await resRec.json();
-                if (resultRec.success) {
-                    const rec = resultRec.data;
-                    const msg = `RECOMENDACIÓN:\nLínea: ${rec.nombre_linea}\nMotivo: ${rec.motivo}\n\nPresiona "Aceptar" para usarla o "Cancelar" para la otra.`;
-                    if (confirm(msg)) { await moverOp(newOP.id, `EN_LINEA_${rec.linea_sugerida}`); }
-                    else { await moverOp(newOP.id, `EN_LINEA_${rec.linea_sugerida === 1 ? 2 : 1}`); }
-                } else { alert('Super OP creada, pero no se pudo obtener recomendación.'); }
-            } catch (error) { console.error('Error en el proceso:', error); alert('Error: ' + error.message); }
-            finally { window.location.reload(); }
-        });
+/**
+ * Muestra un modal de Bootstrap reutilizable para feedback o confirmación.
+ * @param {string} title Título del modal.
+ * @param {string} message Mensaje a mostrar en el cuerpo (soporta \n para saltos de línea).
+ * @param {'info'|'success'|'warning'|'error'|'confirm'} type Tipo de modal ('confirm' muestra dos botones).
+ * @param {function} [confirmCallback] Función a ejecutar si se presiona "Confirmar" (solo para type 'confirm').
+ */
+function showFeedbackModal(title, message, type = 'info', confirmCallback = null) {
+    const modalElement = document.getElementById('feedbackModal');
+    if (!modalElement) {
+        console.error("Elemento modal 'feedbackModal' no encontrado!");
+        alert(`${title}\n\n${message}`); // Fallback a alert simple
+        return;
     }
+
+    const modalTitle = modalElement.querySelector('#feedbackModalTitle');
+    const modalBody = modalElement.querySelector('#feedbackModalBody');
+    const modalIcon = modalElement.querySelector('#feedbackModalIcon');
+    const confirmBtn = modalElement.querySelector('#feedbackModalConfirmBtn');
+    const cancelBtn = modalElement.querySelector('#feedbackModalCancelBtn');
+    const modalHeader = modalElement.querySelector('.modal-header');
+
+    modalTitle.textContent = title;
+    modalBody.innerHTML = message.replace(/\n/g, '<br>'); // Reemplazar \n con <br>
+
+    // Resetear estilos y botones
+    modalHeader.className = 'modal-header';
+    confirmBtn.style.display = 'none';
+    confirmBtn.onclick = null; // Quitar listener anterior
+    cancelBtn.textContent = 'Cerrar';
+    cancelBtn.className = 'btn btn-secondary'; // Resetear clase del botón cancelar/cerrar
+    modalIcon.className = 'bi me-2'; // Resetear icono
+
+    // Configurar según el tipo
+    switch (type) {
+        case 'success':
+            modalIcon.classList.add('bi-check-circle-fill', 'text-success');
+            modalHeader.classList.add('bg-success-subtle');
+            cancelBtn.className = 'btn btn-success'; // Botón verde
+            break;
+        case 'warning':
+            modalIcon.classList.add('bi-exclamation-triangle-fill', 'text-warning');
+            modalHeader.classList.add('bg-warning-subtle');
+            cancelBtn.className = 'btn btn-warning'; // Botón amarillo
+            break;
+        case 'error':
+            modalIcon.classList.add('bi-x-octagon-fill', 'text-danger');
+            modalHeader.classList.add('bg-danger-subtle');
+            cancelBtn.className = 'btn btn-danger'; // Botón rojo
+            break;
+        case 'confirm':
+            modalIcon.classList.add('bi-question-circle-fill', 'text-primary');
+            confirmBtn.style.display = 'block'; // Mostrar botón confirmar
+            cancelBtn.textContent = 'Cancelar'; // Cambiar texto del otro botón
+            if (confirmCallback && typeof confirmCallback === 'function') {
+                confirmBtn.onclick = () => {
+                    // Ocultar modal ANTES de ejecutar el callback puede ser más rápido visualmente
+                    bootstrap.Modal.getInstance(modalElement).hide(); 
+                    confirmCallback(); // Ejecutar acción
+                };
+            }
+            break;
+        default: // info
+            modalIcon.classList.add('bi-info-circle-fill', 'text-info');
+            modalHeader.classList.add('bg-info-subtle');
+            break;
+    }
+
+    // Mostrar el modal
+    let modalInstance = bootstrap.Modal.getInstance(modalElement);
+    if (!modalInstance) {
+        modalInstance = new bootstrap.Modal(modalElement);
+    }
+    modalInstance.show();
+}
+
+
+// --- LÓGICAS AL CARGAR LA PÁGINA ---
+document.addEventListener('DOMContentLoaded', function () {
 
     // --- LÓGICA DE DRAG-AND-DROP (KANBAN) ---
     const columns = document.querySelectorAll('.kanban-column');
@@ -68,66 +113,57 @@ document.addEventListener('DOMContentLoaded', function () {
         if (cardContainer) {
             new Sortable(cardContainer, {
                 group: 'kanban', animation: 150, ghostClass: 'bg-primary-soft',
-                onMove: function (evt) {
+                onMove: function (evt) { // Validaciones de movimiento
                     const fromState = evt.from.closest('.kanban-column').dataset.estado;
                     const toState = evt.to.closest('.kanban-column').dataset.estado;
                     const draggedCard = evt.dragged;
-                    const allowedTransitions = { 'LISTA PARA PRODUCIR': ['EN_LINEA_1', 'EN_LINEA_2'], 'EN ESPERA': [], 'EN_LINEA_1': ['EN_EMPAQUETADO'], 'EN_LINEA_2': ['EN_EMPAQUETADO'], 'EN_EMPAQUETADO': ['CONTROL_DE_CALIDAD'], 'CONTROL_DE_CALIDAD': ['COMPLETADA'], 'COMPLETADA': [] };
+                    const allowedTransitions = { /* ... tus transiciones permitidas ... */ };
                     if (!allowedTransitions[fromState] || !allowedTransitions[fromState].includes(toState)) { return false; }
                     if (fromState === 'LISTA PARA PRODUCIR' && (toState === 'EN_LINEA_1' || toState === 'EN_LINEA_2')) {
-                        const opId = draggedCard.dataset.opId; const lineaAsignada = draggedCard.dataset.lineaAsignada;
+                        const lineaAsignada = draggedCard.dataset.lineaAsignada;
                         const lineaDestino = toState === 'EN_LINEA_1' ? '1' : '2';
-                        if (!lineaAsignada) { console.error(`VALIDACIÓN FALLIDA (onMove): OP ${opId} no tiene data-linea-asignada.`); return false; }
-                        if (lineaAsignada !== lineaDestino) { console.error(`VALIDACIÓN FALLIDA (onMove): Intento de mover OP ${opId} a línea incorrecta. Asignada: ${lineaAsignada}, Destino: ${lineaDestino}`); return false; }
+                        if (!lineaAsignada || lineaAsignada !== lineaDestino) { return false; }
                     }
                     return true;
                 },
-                onEnd: async function (evt) {
+                onEnd: async function (evt) { // Guardar cambio de estado al soltar
                     if (evt.from === evt.to && evt.oldDraggableIndex === evt.newDraggableIndex) { return; }
                     const item = evt.item; const toColumn = evt.to.closest('.kanban-column');
                     if (!toColumn || !toColumn.dataset || !toColumn.dataset.estado) { evt.from.insertBefore(item, evt.from.children[evt.oldDraggableIndex]); return; }
                     const opId = item.dataset.opId; const nuevoEstado = toColumn.dataset.estado;
                     const success = await moverOp(opId, nuevoEstado);
                     if (!success) { evt.from.insertBefore(item, evt.from.children[evt.oldDraggableIndex]); }
+                    else { window.location.reload(); } // Recargar para actualizar todo si fue exitoso
                 }
             });
         }
     });
 
     // =======================================================
-    // --- JAVASCRIPT DE LA BANDEJA DE PLANIFICACIÓN (MODAL) ---
+    // --- LISTENER GLOBAL PARA BOTONES (INCLUYE MODALES) ---
     // =======================================================
-    
     document.addEventListener('click', async function(e) {
-        
-        // --- NUEVA LÓGICA: BOTÓN CONSOLIDAR Y APROBAR ---
+
+        // --- BOTÓN CONSOLIDAR Y APROBAR (MODAL PLAN MAESTRO) ---
         const botonConsolidarAprobar = e.target.closest('.btn-consolidar-y-aprobar');
-        
         if (botonConsolidarAprobar) {
             const modal = botonConsolidarAprobar.closest('.modal');
-            if (!modal) {
-                console.error("No se encontró la modal contenedora."); return;
-            }
+            if (!modal) { console.error("Modal no encontrada."); return; }
 
-            // 1. Obtener la lista de IDs de OP a consolidar (del atributo data-)
             let opIds = [];
-            try {
-                opIds = JSON.parse(modal.dataset.opIds || '[]');
-            } catch (err) {
-                console.error("Error al parsear op-ids:", err);
-            }
-            if (opIds.length === 0) {
-                 alert("Error: No se encontraron IDs de Órdenes de Producción para consolidar."); return;
-            }
+            try { opIds = JSON.parse(modal.dataset.opIds || '[]'); } 
+            catch (err) { console.error("Error parseando op-ids:", err); opIds = []; }
+            if (opIds.length === 0) { showFeedbackModal("Error", "No se encontraron IDs de OP para procesar.", "error"); return; }
 
-            // 2. Obtener los datos del formulario de asignación
             const lineaSelect = modal.querySelector('.modal-select-linea');
             const supervisorSelect = modal.querySelector('.modal-select-supervisor');
             const operarioSelect = modal.querySelector('.modal-select-operario');
             const fechaInput = modal.querySelector('.modal-input-fecha-inicio');
 
-            if (!fechaInput.value) { alert("Por favor, seleccione una Fecha de Inicio."); return; }
-            if (!lineaSelect.value) { alert("Por favor, seleccione una Línea."); return; }
+            if (!fechaInput.value || !lineaSelect.value) {
+                 showFeedbackModal("Datos Faltantes", "Asegúrese de seleccionar una Fecha de Inicio y una Línea.", "warning");
+                 return; 
+            }
 
             const asignaciones = {
                 fecha_inicio: fechaInput.value,
@@ -136,51 +172,95 @@ document.addEventListener('DOMContentLoaded', function () {
                 operario_id: operarioSelect.value ? parseInt(operarioSelect.value) : null
             };
 
-            // 3. Enviar a la NUEVA API
             botonConsolidarAprobar.disabled = true;
-            botonConsolidarAprobar.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Procesando Lote...`;
+            botonConsolidarAprobar.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Verificando Capacidad...`;
 
             try {
+                // Primera llamada: Verificar capacidad y obtener posible confirmación
                 const response = await fetch('/planificacion/api/consolidar-y-aprobar', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        op_ids: opIds,
-                        asignaciones: asignaciones
-                    })
+                    body: JSON.stringify({ op_ids: opIds, asignaciones: asignaciones }) 
                 });
-
                 const result = await response.json();
-                
-                if (result.success) {
-                    alert(result.message || "Lote consolidado y aprobado con éxito.");
-                    window.location.reload(); // Recargar la página para ver los cambios
-                } else {
-                    alert(`Error al planificar el lote: ${result.error}`);
+
+                if (result.success) { // Aprobación directa
+                    showFeedbackModal('Éxito', result.message || "Lote planificado con éxito.", 'success');
+                    setTimeout(() => window.location.reload(), 1500); // Dar tiempo a ver el modal
+                }
+                else if (result.error === 'SOBRECARGA_CAPACIDAD') { // Sobrecarga
+                    showFeedbackModal('Sobrecarga Detectada', result.message + "\n\nElija otra fecha o línea.", 'warning');
                     botonConsolidarAprobar.disabled = false;
                     botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
                 }
+                else if (result.error === 'MULTI_DIA_CONFIRM') { // Requiere confirmación
+                    // Usar showFeedbackModal tipo 'confirm'
+                    showFeedbackModal(
+                        'Confirmación Requerida',
+                        result.message,
+                        'confirm',
+                        async () => { // Función callback si el usuario confirma
+                            botonConsolidarAprobar.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Confirmando...`;
+                            const opIdConfirmar = result.op_id_confirmar;
+                            const asignacionesConfirmar = result.asignaciones_confirmar;
+                            try {
+                                const confirmResponse = await fetch('/planificacion/api/confirmar-aprobacion', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ op_id: opIdConfirmar, asignaciones: asignacionesConfirmar })
+                                });
+                                const confirmResult = await confirmResponse.json();
+                                if (confirmResult.success) {
+                                    showFeedbackModal('Confirmado', confirmResult.message || "Lote planificado.", 'success');
+                                    setTimeout(() => window.location.reload(), 1500);
+                                } else {
+                                    showFeedbackModal('Error al Confirmar', confirmResult.error || confirmResult.message, 'error');
+                                    botonConsolidarAprobar.disabled = false;
+                                    botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
+                                }
+                            } catch (confirmError) {
+                                console.error("Error red al confirmar:", confirmError);
+                                showFeedbackModal('Error de Conexión', 'No se pudo confirmar la planificación.', 'error');
+                                botonConsolidarAprobar.disabled = false;
+                                botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
+                            }
+                        } // Fin callback
+                    ); // Fin showFeedbackModal confirm
 
-            } catch (error) {
-                console.error("Error de red al consolidar y aprobar:", error);
-                alert('Error de conexión. No se pudo planificar el lote.');
+                    // Re-habilitar botón si se cierra el modal de confirmación sin confirmar
+                    const modalElement = document.getElementById('feedbackModal');
+                    const enableButtonOnCancelOrClose = () => {
+                         if (botonConsolidarAprobar.disabled && botonConsolidarAprobar.textContent.includes('Verificando')) { // Solo si estaba esperando confirmación
+                             botonConsolidarAprobar.disabled = false;
+                             botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
+                         }
+                    };
+                    // Escuchar evento 'hidden.bs.modal' para detectar cierre
+                    modalElement.addEventListener('hidden.bs.modal', enableButtonOnCancelOrClose, { once: true });
+
+                } else { // Otros errores
+                    showFeedbackModal('Error', result.error || result.message || 'Error desconocido.', 'error');
+                    botonConsolidarAprobar.disabled = false;
+                    botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
+                }
+            } catch (error) { // Error de red en la primera llamada
+                console.error("Error de red:", error);
+                showFeedbackModal('Error de Conexión', 'No se pudo contactar al servidor.', 'error');
                 botonConsolidarAprobar.disabled = false;
                 botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
             }
         } // Fin if (botonConsolidarAprobar)
 
 
-        // --- Lógica para Calcular Sugerencia (Individual, en modal) ---
-        // (Esta lógica se mantiene por si quieres calcular la referencia)
+        // --- BOTÓN CALCULAR SUGERENCIA INDIVIDUAL (MODAL PLAN MAESTRO) ---
         const botonCalcular = e.target.closest('.btn-calcular');
         if (botonCalcular) {
-            const fila = botonCalcular.closest('tr'); 
+            const fila = botonCalcular.closest('tr');
             if (!fila) { console.error("No se encontró TR para Calcular"); return; }
             const opId = fila.dataset.opId;
-            if (!opId) { console.error("TR para Calcular no tiene data-op-id"); return; }
-
+            if (!opId) { console.error("TR Calcular no tiene data-op-id"); return; }
             const celdaSugerencia = fila.querySelector('.resultado-sugerencia');
-            
+
             botonCalcular.disabled = true;
             botonCalcular.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
             celdaSugerencia.innerHTML = 'Calculando...';
@@ -188,36 +268,32 @@ document.addEventListener('DOMContentLoaded', function () {
             celdaSugerencia.style.display = 'block';
 
             try {
-                // Llama a la API de sugerencia individual
                 const response = await fetch(`/ordenes/${opId}/sugerir-inicio`);
                 const result = await response.json();
-
                 if (result.success) {
                     const data = result.data;
                     let htmlSugerencia = `<small>In. Sug.: ${data.fecha_inicio_sugerida} (L: ${data.linea_sugerida}) | Plazo: ${data.plazo_total_dias}d (P:${data.t_produccion_dias}d + C:${data.t_aprovisionamiento_dias}d)</small>`;
-                    
-                    if (data.t_aprovisionamiento_dias > 0) {
-                        celdaSugerencia.className = 'resultado-sugerencia mt-1 alert alert-warning';
-                    } else {
-                        celdaSugerencia.className = 'resultado-sugerencia mt-1 alert alert-success';
-                    }
+                    celdaSugerencia.className = `resultado-sugerencia mt-1 alert ${data.t_aprovisionamiento_dias > 0 ? 'alert-warning' : 'alert-success'}`;
                     celdaSugerencia.innerHTML = htmlSugerencia;
-                    botonCalcular.style.display = 'none'; // Ocultar botón
-                } else { 
-                    celdaSugerencia.innerHTML = `Error: ${result.error}`; 
-                    celdaSugerencia.className = 'resultado-sugerencia mt-1 alert alert-danger'; 
-                    botonCalcular.disabled = false; 
+                    botonCalcular.style.display = 'none';
+                } else {
+                    celdaSugerencia.innerHTML = `Error: ${result.error}`;
+                    celdaSugerencia.className = 'resultado-sugerencia mt-1 alert alert-danger';
+                    botonCalcular.disabled = false;
                     botonCalcular.innerHTML = '<i class="bi bi-calculator-fill"></i> Calcular Ref.';
+                    // Mostrar modal de error
+                    showFeedbackModal('Error al Calcular', result.error, 'error');
                 }
-            } catch (error) { 
-                console.error("Error al calcular sugerencia:", error); 
-                celdaSugerencia.innerHTML = 'Error de conexión.'; 
-                celdaSugerencia.className = 'resultado-sugerencia mt-1 alert alert-danger'; 
-                botonCalcular.disabled = false; 
+            } catch (error) {
+                console.error("Error al calcular sugerencia:", error);
+                celdaSugerencia.innerHTML = 'Error de conexión.';
+                celdaSugerencia.className = 'resultado-sugerencia mt-1 alert alert-danger';
+                botonCalcular.disabled = false;
                 botonCalcular.innerHTML = '<i class="bi bi-calculator-fill"></i> Calcular Ref.';
+                // Mostrar modal de error de red
+                showFeedbackModal('Error de Conexión', 'No se pudo calcular la sugerencia.', 'error');
             }
         } // Fin if (botonCalcular)
-        
-    }); // Fin addEventListener 'click' en 'document'
 
+    }); // Fin addEventListener 'click' en 'document'
 }); // Fin del DOMContentLoaded

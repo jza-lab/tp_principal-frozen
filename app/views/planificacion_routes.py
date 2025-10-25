@@ -140,6 +140,33 @@ def index():
         date=date
     )
 
+# --- NUEVA RUTA PARA CONFIRMACIÓN MULTI-DÍA ---
+@planificacion_bp.route('/api/confirmar-aprobacion', methods=['POST'])
+def confirmar_aprobacion_api():
+    """
+    API endpoint que ejecuta la aprobación final DESPUÉS de que el usuario
+    confirma una planificación multi-día o resuelve una sobrecarga (si se implementa).
+    """
+    data = request.get_json()
+    usuario_id = session.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'success': False, 'error': 'Usuario no autenticado.'}), 401
+
+    op_id = data.get('op_id')
+    asignaciones = data.get('asignaciones')
+
+    if not op_id or not asignaciones:
+         return jsonify({'success': False, 'error': 'Faltan datos (op_id o asignaciones).'}), 400
+
+    # Llama al helper que solo ejecuta la aprobación
+    response, status_code = controller._ejecutar_aprobacion_final(
+        op_id,
+        asignaciones,
+        usuario_id
+    )
+    return jsonify(response), status_code
+# --- FIN NUEVA RUTA ---
+
 # Endpoint para la API de consolidación
 @planificacion_bp.route('/api/consolidar', methods=['POST'])
 def consolidar_api():
