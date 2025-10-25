@@ -277,6 +277,9 @@
                                 style="display: inline;" class="confirm-form" data-title="Confirmar Inicio"
                                 data-message="¿Está seguro de que desea iniciar esta orden de producción?"
                                 data-button-type="success">
+                                {{ csrf_form.csrf_token }}
+
+
                                 <button type="submit" class="btn btn-sm btn-success shadow-sm" title="Iniciar Orden" style="min-width: 80px;">
                                     <i class="bi bi-play-fill"></i> Iniciar
                                 </button>

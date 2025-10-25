@@ -598,6 +598,7 @@ class UsuarioController(BaseController):
         incluyendo la validación y registro facial.
         """
         datos_usuario = dict(form_data)
+        datos_usuario.pop('csrf_token', None)
         sectores_str = datos_usuario.get('sectores', '[]')
         try:
             sectores_ids = json.loads(sectores_str)
@@ -631,6 +632,7 @@ class UsuarioController(BaseController):
         manejando la normalización de datos.
         """
         datos_actualizados = dict(form_data)
+        datos_actualizados.pop('csrf_token', None)
 
         # Procesamiento de Sectores
         sectores_str = datos_actualizados.get('sectores', '[]')

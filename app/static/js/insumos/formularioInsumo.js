@@ -29,11 +29,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const url = `/api/insumos/catalogo/nuevo`;
         const method = 'POST';
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
 
         fetch(url, {
             method: method,
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify(data)
         })

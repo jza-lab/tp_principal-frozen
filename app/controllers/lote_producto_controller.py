@@ -1,6 +1,8 @@
 # app/controllers/lote_producto_controller.py
 import logging
-from datetime import datetime, date, timedelta 
+from datetime import datetime, date, timedelta
+import pandas as pd
+from io import BytesIO
 from app.controllers.base_controller import BaseController
 from app.models.lote_producto import LoteProductoModel
 from app.models.producto import ProductoModel
@@ -533,3 +535,87 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error obteniendo datos de gráfico: {e}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def procesar_archivo_lotes(self, archivo):
+        """Procesa un archivo Excel para crear lotes de productos masivamente."""
+        try:
+            df = pd.read_excel(archivo)
+            resultados = {'creados': 0, 'ignorados': 0, 'errores': 0, 'detalles': []}
+
+            for index, row in df.iterrows():
+                try:
+                    # 1. Buscar producto
+                    codigo_producto = row.get('codigo_producto')
+                    if not codigo_producto:
+                        raise ValueError("La columna 'codigo_producto' es obligatoria.")
+                    
+                    producto_result = self.producto_model.find_by_codigo(codigo_producto)
+                    if not producto_result.get('success') or not producto_result.get('data'):
+                        raise ValueError(f"Producto con código '{codigo_producto}' no encontrado.")
+                    
+                    producto_id = producto_result['data']['id']
+
+                    # 2. Manejar número de lote
+                    numero_lote = row.get('numero_lote')
+                    if pd.isna(numero_lote) or numero_lote is None:
+                        numero_lote = f"LP-{datetime.now().strftime('%Y%m%d%H%M%S')}-{index}"
+                    else:
+                        numero_lote = str(numero_lote)
+                        lote_existente = self.model.find_by_numero_lote(numero_lote)
+                        if lote_existente.get('data'):
+                            resultados['ignorados'] += 1
+                            resultados['detalles'].append(f"Fila {index + 2}: Lote '{numero_lote}' ya existe, ignorado.")
+                            continue
+
+                    # 3. Preparar datos para el lote
+                    lote_data = {
+                        'producto_id': producto_id,
+                        'numero_lote': numero_lote,
+                        'cantidad_inicial': row.get('cantidad_inicial'),
+                        'cantidad_actual': row.get('cantidad_inicial'), # Asumimos que la cantidad actual es la inicial
+                        'fecha_produccion': pd.to_datetime(row.get('fecha_produccion')).date().isoformat() if pd.notna(row.get('fecha_produccion')) else date.today().isoformat(),
+                        'fecha_vencimiento': pd.to_datetime(row.get('fecha_vencimiento')).date().isoformat() if pd.notna(row.get('fecha_vencimiento')) else None,
+                        'estado': 'DISPONIBLE'
+                    }
+
+                    # 4. Crear el lote
+                    response, status_code = self.crear_lote(lote_data)
+                    if status_code == 201:
+                        resultados['creados'] += 1
+                    else:
+                        raise Exception(response.get('error', 'Error desconocido al crear el lote.'))
+
+                except Exception as e:
+                    resultados['errores'] += 1
+                    resultados['detalles'].append(f"Fila {index + 2}: Error - {str(e)}")
+
+            return self.success_response(data=resultados)
+        
+        except Exception as e:
+            logger.error(f"Error crítico al procesar archivo de lotes: {str(e)}", exc_info=True)
+            return self.error_response(f"Error al leer o procesar el archivo: {str(e)}", 500)
+
+    def generar_plantilla_lotes(self):
+        """Genera un archivo Excel en memoria para la carga masiva de lotes."""
+        try:
+            # Datos de ejemplo
+            datos_ejemplo = {
+                'codigo_producto': ['PROD-001', 'PROD-002'],
+                'numero_lote': ['LOTE-A', 'LOTE-B'],
+                'cantidad_inicial': [100, 200],
+                'fecha_produccion': [date(2023, 1, 1), date(2023, 2, 1)],
+                'fecha_vencimiento': [date(2024, 1, 1), date(2024, 2, 1)]
+            }
+            df = pd.DataFrame(datos_ejemplo)
+
+            # Crear Excel en memoria
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Lotes', index=False)
+            
+            output.seek(0)
+            return output
+
+        except Exception as e:
+            logger.error(f"Error al generar la plantilla de lotes: {str(e)}", exc_info=True)
+            return None

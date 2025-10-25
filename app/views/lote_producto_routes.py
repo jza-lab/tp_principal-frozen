@@ -1,6 +1,7 @@
 # app/routes/lote_producto_routes.py
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_wtf import FlaskForm
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.controllers.producto_controller import ProductoController # Para el formulario
 from app.utils.decorators import permission_required
@@ -131,3 +132,50 @@ def obtener_lotes_disponibles():
     except Exception as e:
         logger.error(f"Error inesperado en obtener_lotes_disponibles: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+class UploadForm(FlaskForm):
+    pass
+
+@lote_producto_bp.route('/cargar-lotes-excel', methods=['GET', 'POST'])
+@permission_required(accion='crear_control_de_calidad_por_lote')
+def cargar_lotes_excel():
+    """Muestra el formulario para cargar un archivo Excel con lotes de productos."""
+    form = UploadForm()
+    if form.validate_on_submit():
+        if 'archivo' not in request.files:
+            flash('No se seleccionó ningún archivo.', 'error')
+            return redirect(request.url)
+        
+        archivo = request.files['archivo']
+        
+        if archivo.filename == '':
+            flash('No se seleccionó ningún archivo.', 'error')
+            return redirect(request.url)
+
+        if archivo and (archivo.filename.endswith('.xlsx') or archivo.filename.endswith('.xls')):
+            response, status_code = controller.procesar_archivo_lotes(archivo)
+            resultados = response.get('data') if response.get('success') else None
+            error = response.get('error') if not response.get('success') else None
+
+            return render_template('lotes_productos/cargar_lotes.html', form=form, resultados=resultados, error=error)
+        else:
+            flash('Formato de archivo no válido. Por favor, sube un archivo .xlsx o .xls.', 'error')
+            return redirect(request.url)
+
+    return render_template('lotes_productos/cargar_lotes.html', form=form, resultados=None, error=None)
+
+@lote_producto_bp.route('/plantilla-lotes-excel', methods=['GET'])
+@permission_required(accion='crear_control_de_calidad_por_lote')
+def descargar_plantilla_lotes():
+    """Descarga la plantilla de Excel para la carga masiva de lotes."""
+    output = controller.generar_plantilla_lotes()
+    if output:
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name='plantilla_carga_lotes.xlsx'
+        )
+    else:
+        flash('Error al generar la plantilla de Excel.', 'error')
+        return redirect(url_for('lote_producto.cargar_lotes_excel'))

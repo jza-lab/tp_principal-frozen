@@ -34,6 +34,7 @@
                             <td>{{ producto.stock_min_produccion if producto.stock_min_produccion is not none else 'No definido' }}</td>
                             
                                 <form method="POST" action="{{ url_for('alertas.actualizar_stock_min_producto') }}">
+                                    {{ csrf_form.csrf_token }}
                                     <input type="hidden" name="id_producto" value="{{ producto.id }}">
                                     <td>
                                     <div class="input-group">

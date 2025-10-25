@@ -62,6 +62,7 @@
             </div>
 
             <form method="POST" id="pedido-form" novalidate>
+                {{ csrf_form.csrf_token }}
                 <input type="hidden" id="id_cliente" name="id_cliente" value="">
                 <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS" value="0">
                 <input type="hidden" id="pedido_data_temp" name="pedido_data_temp">

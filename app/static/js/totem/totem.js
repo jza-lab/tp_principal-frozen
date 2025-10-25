@@ -57,9 +57,14 @@ class TotemLogin {
 
     async sendFaceData(imageData) {
         try {
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
             const response = await fetch('/totem/process_access', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Accept': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({ image: imageData })
             });
             const result = await response.json();
@@ -80,9 +85,14 @@ class TotemLogin {
         this.setLoading(submitBtn, true, 'Verificando...');
 
         try {
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
             const response = await fetch('/totem/manual_access', { // Este será el nuevo endpoint
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Accept': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify(Object.fromEntries(formData))
             });
             const result = await response.json();

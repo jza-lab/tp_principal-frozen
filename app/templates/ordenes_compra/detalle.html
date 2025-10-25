@@ -21,6 +21,8 @@
         </a>
         {% elif orden.estado == 'APROBADA' %}
         <form action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id) }}" method="POST" class="d-inline">
+            {{ csrf_form.csrf_token }}
+
             <button type="submit" class="btn btn-info">
                 <i class="bi bi-truck me-1"></i>Marcar como 'En Tránsito'
             </button>
@@ -148,6 +150,8 @@
         </div>
 
         <form id="recepcionForm" action="{{ url_for('orden_compra.procesar_recepcion', orden_id=orden.id) if orden.estado == 'EN_TRANSITO' else '' }}" method="POST">
+            {{ csrf_form.csrf_token }}
+
             <div class="card mt-4">
                 <div class="card-header">
                     <h5 class="mb-0">Ítems de la Orden</h5>

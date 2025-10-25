@@ -51,7 +51,7 @@
             <form method="POST"
                 action="{{ url_for('admin_usuario.nuevo_usuario') if is_new else url_for('admin_usuario.editar_usuario', id=usuario.id) }}"
                 enctype="multipart/form-data" id="userForm" novalidate>
-
+                {{ csrf_form.csrf_token }}
                 <!-- Paso 1: Información Personal y Laboral -->
                 <div id="personalInfo" class="form-section">
                     {% include 'usuarios/utils/formularioPersonal.html' %}

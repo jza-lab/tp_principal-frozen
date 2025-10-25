@@ -120,6 +120,7 @@ class ClienteController(BaseController):
     def crear_cliente(self, data: Dict) -> tuple:
         
         try:
+            data.pop('csrf_token', None)
             direccion_data = data.pop('direccion', None)
             data['codigo'] = self.generar_codigo_unico()
             

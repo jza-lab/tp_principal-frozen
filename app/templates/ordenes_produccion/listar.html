@@ -172,6 +172,7 @@
                             {% if 'supervisar_avance_de_etapas' is has_permission %}
                             <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                                 data-title="Confirmar Inicio" data-message="¿Está seguro de que desea iniciar esta orden de producción?" data-button-type="success">
+                                {{ csrf_form.csrf_token }}
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Iniciar Orden">Iniciar <i class="bi bi-play-fill"></i></button>
                             </form>
                             {% endif %}
@@ -180,6 +181,7 @@
                             {% if 'supervisar_avance_de_etapas' is has_permission %}
                             <form method="POST" action="{{ url_for('orden_produccion.completar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                                 data-title="Confirmar Finalización" data-message="¿Está seguro de que desea marcar esta orden como completada?" data-button-type="success">
+                                {{ csrf_form.csrf_token }}
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Completar Orden">Completar <i class="bi bi-check-circle-fill"></i></button>
                             </form>
                             {% endif %}
@@ -188,12 +190,14 @@
                             {% if 'crear_orden_de_produccion' is has_permission %}
                             <form method="POST" action="{{ url_for('orden_produccion.aprobar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                                 data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de producción?" data-button-type="success">
+                                {{ csrf_form.csrf_token }}
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">Aprobar <i class="bi bi-check-circle"></i></button>
                             </form>
                             {% endif %}
                             {% if 'cerrar_orden_de_produccion' is has_permission %}
                             <form method="POST" action="{{ url_for('orden_produccion.rechazar', id=orden.id) }}" style="display: inline;" class="confirm-form"
                                 data-title="Confirmar Rechazo" data-message="¿Está seguro de que desea rechazar esta orden de producción? Esta acción no se puede deshacer." data-button-type="danger">
+                                {{ csrf_form.csrf_token }}
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Rechazar Orden">Rechazar <i class="bi bi-x-circle"></i></button>
                             </form>
                             {% endif %}

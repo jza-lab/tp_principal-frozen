@@ -84,6 +84,7 @@
             {% else %}
                 {% if 'modificar_empleado' is has_permission %}
                 <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="d-inline">
+                    {{ csrf_form.csrf_token }}
                     <button type="submit" class="btn btn-outline-success btn-action">
                         <i class="bi bi-person-check me-2"></i>Activar Empleado
                     </button>
@@ -131,6 +132,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <form method="POST" action="{{ url_for('admin_usuario.eliminar_usuario', id=usuario.id) }}" class="d-inline">
+                    {{ csrf_form.csrf_token }}
                     <button type="submit" class="btn btn-danger">
                         <i class="bi bi-person-x me-2"></i>Desactivar Empleado
                     </button>
