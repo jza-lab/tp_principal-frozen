@@ -252,10 +252,6 @@ def generar_proforma_api():
             nombre_producto=producto['nombre']
             item['producto_nombre'] = producto
     
-    print("-------------------------")
-    print(pedido_data)
-    print("-------------------------")
-    
     # Calculate IVA and Total
     iva = subtotal_neto * 0.21 if cliente.get('condicion_iva') == '1' else 0
     total = subtotal_neto + iva

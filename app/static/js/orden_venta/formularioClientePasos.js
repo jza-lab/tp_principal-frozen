@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const step1Content = document.getElementById('step1Content');
     const step2Content = document.getElementById('step2Content');
     const step3Content = document.getElementById('step3Content');
+    const step4Content = document.getElementById('step4Content');
     const resultIcon = document.getElementById('result-icon');
     const resultTitle = document.getElementById('result-title');
     const resultMessage = document.getElementById('result-message');
@@ -17,6 +18,19 @@ document.addEventListener('DOMContentLoaded', function () {
     const proformaContent = document.getElementById('proforma-content');
     const step1Indicator = document.getElementById('step1');
     const step2Indicator = document.getElementById('step2');
+    const step3Indicator = document.getElementById('step3');
+
+    // --- Elementos del Paso 3: Pago (Simulación) ---
+    const paymentStepContent = document.getElementById('paymentStepContent');
+    const paymentConfirmBtn = document.getElementById('paymentConfirmBtn');
+    const paymentTotalAmount = document.getElementById('paymentTotalAmount');
+    const prevStep3Btn = document.getElementById('prevStep3');
+
+    // --- Elementos del Paso 4: Confirmación Final ---
+    const confirmationStepContent = document.getElementById('confirmationStepContent');
+    const paymentReceipt = document.getElementById('paymentReceipt');
+    const downloadReceiptBtn = document.getElementById('downloadReceiptBtn');
+    const newOrderBtn = document.getElementById('newOrderBtn');
 
     // Elementos de Identificación
     const cuilCuitInput = document.getElementById('cuil_cuit_cliente');
@@ -192,8 +206,6 @@ document.addEventListener('DOMContentLoaded', function () {
         [calleAlternativaInput, alturaAlternativaInput, provinciaAlternativaInput, localidadAlternativaInput, cpAlternativaInput, document.getElementById('piso_alternativa'), document.getElementById('depto_alternativa')].forEach(input => { input.value = ''; input.classList.remove('is-invalid', 'is-valid'); });
     }
 
-
-
     function rellenarDatosCliente(cliente) {
 
         idClienteInput.value = cliente.id;
@@ -281,19 +293,25 @@ document.addEventListener('DOMContentLoaded', function () {
     cancelOrderBtn.addEventListener('click', () => { showNotificationModal('Pedido Cancelado', 'El proceso fue cancelado.', 'warning', () => { window.location.href = LISTAR_URL; }); });
 
     async function goToStep(step) {
+        step1Content.style.display = 'none';
+        step2Content.style.display = 'none';
+        paymentStepContent.style.display = 'none';
+        confirmationStepContent.style.display = 'none';
+        step1Actions.style.display = 'none';
         if (step === 1) {
             step1Content.style.display = 'block';
-            step2Content.style.display = 'none';
-             step1Actions.classList.remove('d-none');
+            step1Actions.style.display = 'flex';
             step1Indicator.classList.add('active');
             step1Indicator.classList.remove('completed');
-            step2Indicator.classList.remove('active');
+            step2Indicator.classList.remove('active', 'completed');
+            step3Indicator.classList.remove('active', 'completed');
         } else if (step === 2) {
             if (!checkStep1Validity()) {
                 showNotificationModal('Validación Pendiente', 'Complete todos los campos requeridos y añada al menos un producto.', 'warning');
+                goToStep(1); // Forzar regreso
                 return;
             }
-            
+
             if (isUsingAlternativeAddress) {
                 const direccion = {
                     calle: calleAlternativaInput.value,
@@ -321,13 +339,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             pedidoDataTemp.value = JSON.stringify(payload);
-
-            step1Content.style.display = 'none';
+            step1Actions.style.display = 'none'
+            nextStep1Btn.style.display = 'none'
             step2Content.style.display = 'block';
-            step1Actions.classList.add('d-none');
             step1Indicator.classList.add('completed');
             step2Indicator.classList.add('active');
+            step3Indicator.classList.remove('active', 'completed');
             loadProforma();
+        } else if (step === 3) {
+            // Lógica para el paso de pago
+            paymentStepContent.style.display = 'block';
+            step2Indicator.classList.add('completed');
+            step3Indicator.classList.add('active');
+            const total = document.getElementById('total-final').textContent;
+            paymentTotalAmount.textContent = total;
+        } else if (step === 4) {
+            // Lógica para la confirmación final
+            confirmationStepContent.style.display = 'block';
+            step3Indicator.classList.add('completed');
         }
     }
 
@@ -360,31 +389,35 @@ document.addEventListener('DOMContentLoaded', function () {
             proformaContent.innerHTML = '<div class="p-5 text-center"><p class="text-danger"><i class="bi bi-plug me-1"></i>Error de red.</p></div>';
         }
     }
-    
-    function showResult(type, title, message) {
-        step1Content.style.display = 'none';
-        step2Content.style.display = 'none';
-        step1Actions.style.display = 'none';
-        step3Content.style.display = 'block';
 
-        if (type === 'success') {
-            resultIcon.innerHTML = '<i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>';
+    acceptOrderBtn.addEventListener('click', async function () {
+        const condicionVenta = document.getElementById('condicion_venta').value;
+        const esClienteNuevo = document.getElementById('es_cliente_nuevo')?.value === 'true';
+
+        if (condicionVenta === 'contado' || esClienteNuevo) {
+            goToStep(3);
         } else {
-            resultIcon.innerHTML = '<i class="bi bi-x-circle-fill text-danger" style="font-size: 4rem;"></i>';
+            await submitOrder(false);
         }
+    });
 
-        resultTitle.textContent = title;
-        resultMessage.textContent = message;
-    }
+    paymentConfirmBtn.addEventListener('click', async () => {
+        await submitOrder(true);
+    });
 
+    prevStep3Btn.addEventListener('click', () => {
+        goToStep(2);
+    });
 
-    form.addEventListener('submit', async function (e) {
-        e.preventDefault();
+    async function submitOrder(isPayment = false) {
+        const createButton = acceptOrderBtn; // Can be acceptOrderBtn or paymentConfirmBtn
+        const originalButtonText = createButton.innerHTML;
 
-        if (acceptOrderBtn.disabled) return;
+        if (createButton.disabled) return;
 
-        acceptOrderBtn.disabled = true;
-        acceptOrderBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Creando Pedido...';
+        createButton.disabled = true;
+        createButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Procesando...';
+
 
         try {
             const response = await fetch(CREAR_URL, {
@@ -396,23 +429,138 @@ document.addEventListener('DOMContentLoaded', function () {
             const result = await response.json();
 
             if (response.ok && result.success) {
-                showNotificationModal('Pedido Creado', result.message || 'La orden ha sido registrada.', 'success', () => { window.location.href = LISTAR_URL; });
+                goToStep(4);
+                if (isPayment) {
+                    const payload = JSON.parse(pedidoDataTemp.value);
+                    const date = new Date().toLocaleDateString('es-AR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                    const total = document.getElementById('total-final')?.textContent || 'N/A';
+
+                    const receiptHTML = `
+                        <div class="card-body">
+                            <h5 class="card-title text-primary"><i class="bi bi-receipt-cutoff me-2"></i>Comprobante de Pago</h5>
+                            <hr>
+                        <p><strong>Fecha:</strong> ${date}</p>
+                        <p><strong>Nº Pedido:</strong> #${result.pedido_id || 'N/A'}</p>
+                            <p><strong>Monto Pagado:</strong> ${total}</p>
+                        <p><strong>Monto Pagado:</strong> ${total}</p>
+                        <p class="text-center text-success fw-bold fs-5 mt-3">PAGO APROBADO</p>
+                        </div>
+                    `;
+                    paymentReceipt.innerHTML = receiptHTML;
+                    document.getElementById('paymentReceiptContainer').style.display = 'block';
+                } else {
+                    document.getElementById('paymentReceiptContainer').style.display = 'none';
+                }
+
             } else {
-                showNotificationModal('Error', result.message || result.error || 'No se pudo crear la orden.', 'error');
-                acceptOrderBtn.disabled = false;
-                acceptOrderBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Aceptar y Crear Pedido';
+                showNotificationModal('Error al Crear el Pedido', result.message || result.error || 'No se pudo crear la orden.', 'error');
+                createButton.disabled = false;
+                createButton.innerHTML = originalButtonText;
             }
 
         } catch (error) {
-            showNotificationModal('Error de Conexión', 'Fallo de red al crear la orden.', 'error');
-            acceptOrderBtn.disabled = false;
-            acceptOrderBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Aceptar y Crear Pedido';
+            console.log(error)
+            showNotificationModal('Error de Conexión', 'Fallo de red al crear la orden. Por favor, intente de nuevo.', 'error');
+            createButton.disabled = false;
+            createButton.innerHTML = originalButtonText;
         }
 
-    });
+    }
+
 
     if (itemsContainer.children.length === 0) { } addItemRow();
     updateResumen();
     checkStep1Validity();
     toggleDireccionEntregaBtn.click();
+
+    newOrderBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.href = LISTAR_URL.replace('pedidos_cliente', 'hacer_pedido');
+    });
+
+    function printHtmlContent(htmlContent) {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.id = 'proforma-print-frame';
+        document.body.appendChild(iframe);
+        const iframeDocument = iframe.contentWindow.document;
+        // Construct the full HTML document for the iframe
+        let headContent = '';
+        document.head.querySelectorAll('link[rel="stylesheet"], style').forEach(node => {
+            headContent += node.outerHTML;
+        });
+
+        const fullHtml = `
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <title>Factura Proforma</title>
+                    ${headContent}
+                </head>
+                <body>
+                    ${htmlContent}
+                </body>
+            </html>
+        `;
+        iframeDocument.open();
+        iframeDocument.write(fullHtml);
+        iframeDocument.close();
+        iframe.onload = function () {
+            setTimeout(() => {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+                setTimeout(() => { document.body.removeChild(iframe); }, 500);
+            }, 250); // Short delay for styles to apply
+        }
+    }
+
+    const downloadProformaBtn = document.getElementById('downloadProformaBtn');
+    if (downloadProformaBtn) {
+        downloadProformaBtn.addEventListener('click', () => {
+            const proformaHTML = proformaContent.innerHTML;
+            if (proformaHTML && proformaHTML.trim().length > 0) {
+                printHtmlContent(proformaHTML);
+            } else {
+                showNotificationModal('Error', 'No se ha generado la proforma para imprimir.', 'error');
+            }
+        });
+    }
+
+    // Nota: La descarga del recibo de pago sigue usando html2canvas, lo cual es adecuado para ese elemento más simple.
+    downloadReceiptBtn.addEventListener('click', () => {
+        const { jsPDF } = window.jspdf;
+        const receiptElement = document.getElementById('paymentReceipt');
+        if (receiptElement) {
+            html2canvas(receiptElement, { scale: 2 }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const imgProps = pdf.getImageProperties(imgData);
+                const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, imgHeight);
+                pdf.save('comprobante-pago.pdf');
+            });
+        }
+    });
+    // Show payment receipt container when it has content
+    const observer = new MutationObserver(() => {
+        const paymentReceiptContainer = document.getElementById('paymentReceiptContainer');
+        if (paymentReceipt.innerHTML.trim() !== '') {
+            paymentReceiptContainer.style.display = 'block';
+        } else {
+            paymentReceiptContainer.style.display = 'none';
+        }
+    });
+    observer.observe(paymentReceipt, { childList: true, subtree: true });
+
+    function showResult(type, title, message) {
+        goToStep(4);
+        if (type === 'success') {
+            resultIcon.innerHTML = '<i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>';
+        } else {
+            resultIcon.innerHTML = '<i class="bi bi-x-circle-fill text-danger" style="font-size: 4rem;"></i>';
+        }
+        resultTitle.textContent = title;
+        resultMessage.textContent = message;
+    }
 });
