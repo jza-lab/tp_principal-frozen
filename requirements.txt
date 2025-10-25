@@ -37,3 +37,4 @@ Pillow==10.1.0
 websockets
 openpyxl
 Flask-JWT-Extended==4.7.1
+flask-wtf==1.1.1

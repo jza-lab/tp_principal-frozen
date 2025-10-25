@@ -4,7 +4,6 @@ from datetime import timedelta
 
 load_dotenv(dotenv_path='credenciales.env')
 
-
 class Config:
 
     # Supabase Configuration

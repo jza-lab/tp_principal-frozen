@@ -153,11 +153,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         addressFeedback.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Verificando dirección...';
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
         
         try {
             const response = await fetch('/api/validar/direccion', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({
                     calle: calleInput.value,
                     altura: alturaInput.value,
@@ -257,11 +261,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
         capturePhotoBtn.disabled = true;
         capturePhotoBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Verificando...';
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
 
         try {
             const response = await fetch('/api/validar/rostro', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({ image: imageData })
             });
             const result = await response.json();

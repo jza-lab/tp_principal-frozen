@@ -17,6 +17,7 @@
         <div class="card-body">
             {% if 'modificar_parametros_del_sistema' is has_permission %}
             <form action="{{ url_for('alertas.configurar_alertas_lotes') }}" method="POST">
+                {{ csrf_form.csrf_token }}
                 <div class="mb-3">
                     <label for="dias_vencimiento" class="form-label">Días de antelación para alerta de vencimiento</label>
                     <input type="number" class="form-control" id="dias_vencimiento" name="dias_vencimiento" value="{{ dias_vencimiento }}" required>

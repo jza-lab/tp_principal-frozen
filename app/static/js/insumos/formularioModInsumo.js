@@ -24,10 +24,12 @@ document.addEventListener('DOMContentLoaded', () => {
             id_proveedor: parseInt(document.getElementById('proveedor').value)
         };
 
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
         fetch(url, {
             method: method,
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify(data)
         })

@@ -77,6 +77,7 @@
                 </div>
             </div>
         </div>
+<<<<<<< HEAD
 
         <!-- Pestaña de Cantidad Máxima por Pedido -->
         <div class="tab-pane fade" id="pills-cantidad-max" role="tabpanel" aria-labelledby="pills-cantidad-max-tab">
@@ -124,6 +125,47 @@
                         </table>
                     </div>
                 </div>
+=======
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Stock Mínimo Actual</th>
+                            <th>Nuevo Stock Mínimo</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for producto in productos %}
+                        <tr>
+                            <td>{{ producto.codigo }}</td>
+                            <td>{{ producto.nombre }}</td>
+                            <td>{{ producto.stock_min_produccion if producto.stock_min_produccion is not none else 'No definido' }}</td>
+                            
+                                <form method="POST" action="{{ url_for('alertas.actualizar_stock_min_producto') }}">
+                                    {{ csrf_form.csrf_token }}
+                                    <input type="hidden" name="id_producto" value="{{ producto.id }}">
+                                    <td>
+                                    <div class="input-group">
+                                        <input type="number" name="stock_min_produccion" class="form-control" placeholder="Ej: 100" min="0" required>
+                                    </div>
+                                    </td>
+                                    <td>
+                                    <button type="submit" class="btn btn-primary btn-sm mt-2">Actualizar</button>
+                                    </td>    
+                                </form>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center">No hay productos para mostrar.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+>>>>>>> develop
             </div>
         </div>
     </div>

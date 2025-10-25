@@ -58,6 +58,8 @@ class AutorizacionController(BaseController):
             return validation_result
 
         # 4. Creación del registro si todas las validaciones pasan
+        data.pop('csrf_token', None)
+        data.pop('_method', None)
         return self.model.create(data)
 
     def obtener_todas_las_autorizaciones(self) -> dict:

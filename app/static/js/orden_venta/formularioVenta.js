@@ -298,6 +298,7 @@ document.addEventListener('DOMContentLoaded', function () {
 async function handleSubmit(event) {
     // 1. Prevenimos que la página se recargue (comportamiento por defecto del formulario).
     event.preventDefault();
+    const csrfToken = document.querySelector('input[name="csrf_token"]').value;
 
     // --- VALIDACIONES DEL LADO DEL CLIENTE ---
     const form = event.target; // Obtenemos el formulario desde el evento
@@ -380,14 +381,17 @@ async function handleSubmit(event) {
 
             const verificationResponse = await fetch(verificationUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify(direccionParaVerificar),
             });
 
             const verificationResult = await verificationResponse.json();
 
             if (verificationResponse.ok && verificationResult.success) {
-                await enviarDatos(payload);
+                await enviarDatos(payload, csrfToken);
             } else {
                 let errorMessage = 'La dirección de entrega no es válida o no pudo ser verificada.';
                 if (verificationResult && verificationResult.error) {
@@ -407,13 +411,13 @@ async function handleSubmit(event) {
         }
     } else {
         // Si no se usa dirección alternativa, o si la dirección no ha cambiado, enviar los datos directamente
-        await enviarDatos(payload);
+        await enviarDatos(payload, csrfToken);
     }
 
 
 }
 
-async function enviarDatos(payload) {
+async function enviarDatos(payload, csrfToken) {
     const submitButton = form.querySelector('button[type="submit"]');
     const url = isEditing ? `/orden-venta/${pedidoId}/editar` : '/orden-venta/nueva';
     const method = isEditing ? 'PUT' : 'POST';
@@ -424,6 +428,7 @@ async function enviarDatos(payload) {
             method: method,
             headers: {
                 'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify(payload),
         });

@@ -18,6 +18,8 @@
             <div class="card-header"><h5 class="mb-0">Datos del Lote</h5></div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('lote_producto.nuevo_lote') }}">
+                    {{ csrf_form.csrf_token }}
+
                     <div class="row g-3">
                         
                         <div class="col-md-6">

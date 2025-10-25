@@ -28,6 +28,7 @@ Agregar nuevo cliente
             </div>
             <div class="card-body">
                 <form id="formulario-cliente" method="POST">
+                    {{ csrf_form.csrf_token }}
                     <div class="row g-3">
                         {% if cliente %}
                         <div class="col-md-6">

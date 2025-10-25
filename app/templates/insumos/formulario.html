@@ -28,6 +28,7 @@ Agregar nuevo insumo al catálogo
             </div>
             <div class="card-body">
                 <form id="formulario-insumo" method="POST">
+                    {{ csrf_form.csrf_token }}
                     <div class="row g-3">
                         {% if insumo %}
                         <div class="col-md-6">
