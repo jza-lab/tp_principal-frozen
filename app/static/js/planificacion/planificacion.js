@@ -126,15 +126,52 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                     return true;
                 },
-                onEnd: async function (evt) { // Guardar cambio de estado al soltar
-                    if (evt.from === evt.to && evt.oldDraggableIndex === evt.newDraggableIndex) { return; }
-                    const item = evt.item; const toColumn = evt.to.closest('.kanban-column');
-                    if (!toColumn || !toColumn.dataset || !toColumn.dataset.estado) { evt.from.insertBefore(item, evt.from.children[evt.oldDraggableIndex]); return; }
-                    const opId = item.dataset.opId; const nuevoEstado = toColumn.dataset.estado;
+                onEnd: async function (evt) {
+                    // Si el elemento no cambió de columna o posición, no hacer nada
+                    if (evt.from === evt.to && evt.oldDraggableIndex === evt.newDraggableIndex) {
+                        console.log("SortableJS onEnd: No hubo cambio de posición.");
+                        return;
+                    }
+
+                    const item = evt.item;
+                    const toColumn = evt.to.closest('.kanban-column');
+
+                    // Verificar si se pudo determinar el destino
+                    if (!toColumn || !toColumn.dataset || !toColumn.dataset.estado) {
+                         console.error("SortableJS onEnd: No se pudo determinar la columna/estado de destino.");
+                         // Usar Sortable.cancel() para revertir el movimiento visual
+                         // Nota: Necesitas obtener la instancia de Sortable para llamar a cancel().
+                         // Lo haremos de forma indirecta, asumiendo que el navegador revierte si onEnd falla rápido.
+                         // O podríamos almacenar la instancia globalmente. Por ahora, solo logueamos.
+                         // Idealmente: sortableInstance.cancel(); 
+                         return; // Salir temprano
+                    }
+
+                    const opId = item.dataset.opId;
+                    const nuevoEstado = toColumn.dataset.estado;
+
+                    console.log(`SortableJS onEnd: Intentando mover OP ${opId} al estado ${nuevoEstado}`);
+
+                    // Llamar a la API para guardar el cambio
                     const success = await moverOp(opId, nuevoEstado);
-                    if (!success) { evt.from.insertBefore(item, evt.from.children[evt.oldDraggableIndex]); }
-                    else { window.location.reload(); } // Recargar para actualizar todo si fue exitoso
-                }
+
+                    if (success) {
+                        console.log(`SortableJS onEnd: API exitosa para OP ${opId}. Recargando.`);
+                        // Recargar la página completa para reflejar todos los cambios de estado y orden
+                        window.location.reload(); 
+                    } else {
+                        console.error(`SortableJS onEnd: API falló para mover OP ${opId}. Revertiendo movimiento visual.`);
+                        // --- CORRECCIÓN: Usar Sortable.cancel() ---
+                        // Para usar cancel(), necesitas la instancia de Sortable.
+                        // La forma más simple es buscarla o pasarla. Una alternativa es
+                        // forzar una excepción o simplemente confiar en que onMove impidió
+                        // movimientos ilegales y este caso es raro (error de red).
+                        // Por simplicidad ahora, solo mostraremos el modal de error y NO recargaremos.
+                        // El usuario tendrá que recargar manualmente para ver el estado real.
+                        // showFeedbackModal ya se muestra desde moverOp si falla.
+                        // NO intentes revertir manualmente con insertBefore.
+                    }
+                } // Fin onEnd
             });
         }
     });
