@@ -10,8 +10,7 @@ cliente_controller = ClienteController()
 def register():
     try:
         if request.method == 'PUT' or request.method == 'POST':
-
-            datos_json = request.get_json()
+            datos_json = request.get_json(force=True) 
             if not datos_json:
                 return jsonify(
                     {"success": False, "error": "No se recibieron datos JSON válidos"}

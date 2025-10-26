@@ -2,6 +2,56 @@ document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('formulario-cliente');
     if (!form) return;
 
+    function getCsrfToken() {
+        const tokenElement = form.querySelector('input[name="csrf_token"]');
+        return tokenElement ? tokenElement.value : null;
+    }
+    const csrfToken = getCsrfToken();
+    if (!csrfToken) {
+        console.error("CSRF Token no encontrado en el formulario.");
+        showNotificationModal('Error de Seguridad', 'Fallo al obtener el token de seguridad CSRF.');
+        return;
+    }
+
+
+    async function verifyAddress() {
+        const calleInput = document.getElementById('calle');
+        const alturaInput = document.getElementById('altura');
+        const provinciaSelect = document.getElementById('provincia');
+        const localidadInput = document.getElementById('localidad');
+
+        try {
+            const response = await fetch('/api/validar/direccion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken },
+                
+                body: JSON.stringify({
+                    calle: calleInput.value,
+                    altura: alturaInput.value,
+                    localidad: localidadInput.value,
+                    provincia: provinciaSelect.value
+                })
+            });
+
+            const verificationResult = await response.json();
+
+            if (response.ok && verificationResult.success) {
+                await enviarDatos();
+            } else {
+                let errorMessage = 'Dirección no válida o error de verificación.';
+                if (verificationResult && verificationResult.error) {
+                    errorMessage = verificationResult.error;
+                }
+                showNotificationModal(errorMessage, 'Error al verificar la dirección');
+                form.classList.add('was-validated');
+            }
+        } catch (error) {
+            console.error('Error de red al verificar la direccion:', error);
+            showNotificationModal('No se pudo conectar con el servidor de verificación.', 'error');
+        }
+    }
+
     async function enviarDatos() {
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
@@ -19,7 +69,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const formData = new FormData(form);
         const cuit = `${formData.get('cuit_parte1')}-${formData.get('cuit_parte2')}-${formData.get('cuit_parte3')}`;
-        
+
         const clienteData = {
             nombre: formData.get('nombre'),
             cuit: cuit,
@@ -39,8 +89,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         };
 
-        console.log(clienteData)
-
         const url = '/cliente/register';
         const method = 'POST';
 
@@ -48,7 +96,8 @@ document.addEventListener('DOMContentLoaded', function () {
             const respuesta = await fetch(url, {
                 method: method,
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
                 },
                 body: JSON.stringify(clienteData)
             });
@@ -76,6 +125,6 @@ document.addEventListener('DOMContentLoaded', function () {
     form.addEventListener('submit', function (event) {
         event.preventDefault();
         event.stopPropagation();
-        enviarDatos();
+        verifyAddress();
     });
 });

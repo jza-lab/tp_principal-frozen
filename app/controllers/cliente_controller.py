@@ -126,6 +126,12 @@ class ClienteController(BaseController):
             data.pop('csrf_token', None)
             direccion_data = data.pop('direccion', None)
             data['codigo'] = self.generar_codigo_unico()
+
+            contrasena = data.get('contrasena')
+            if contrasena:
+                data['contrasena'] = generate_password_hash(contrasena)
+            else:
+                return self.error_response('La contraseña es obligatoria', 400)
             
             if data.get('email'):
                 respuesta= self.model.buscar_por_email(data['email'])

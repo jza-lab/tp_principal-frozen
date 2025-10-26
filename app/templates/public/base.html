@@ -232,6 +232,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/modalHandler.js') }}"></script>
     <script src="{{ url_for('static', filename='js/flashModal.js') }}"></script>
+    {% block scripts %}{% endblock %}
 </body>
 
 </html>
