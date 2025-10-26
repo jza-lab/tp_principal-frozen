@@ -59,7 +59,6 @@
                     {% set estado_config = {
                     'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
                     'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                    'LISTO_PARA_ARMAR': {'class': 'bg-warning-soft text-warning', 'icon': 'tools'},
                     'LISTO_PARA_ENTREGAR': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
                     'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
                     'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
@@ -115,29 +114,23 @@
                             class="btn btn-sm btn-outline-primary"
                             title="Editar Pedido"><i class="bi bi-pencil"></i></a>
                         
-                        <button class="btn btn-sm btn-outline-info" 
-                                title="Planificar Pedido"
-                                onclick="planificarPedido({{ pedido.id }})">
-                            <i class="bi bi-calendar-check"></i>
-                        </button>
-                        {% endif %}
-
-                        {% endif %}
-
-                        {% if pedido.estado == 'LISTO_PARA_ARMAR' and 'modificar_orden_de_venta' is has_permission %}
-                        <form method="POST" action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}"
-                            class="confirm-form d-grid" data-title="Preparar para Entrega"
-                            data-message="Esta acción moverá el pedido a 'LISTO PARA ENTREGAR' y descontará el stock de los productos del inventario. ¿Está seguro?"
-                            data-button-type="info">
+                        {# --- Botón Planificar (ahora un formulario) --- #}
+                        <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}"
+                              class="confirm-form d-inline" data-title="Confirmar Planificación"
+                              data-message="Esta acción creará las Órdenes de Producción necesarias y pondrá el pedido 'En Proceso'. ¿Está seguro?"
+                              data-button-type="success">
                             {{ csrf_form.csrf_token }}
-
-                            <button type="submit" class="btn btn-info"><i class="bi bi-box-seam me-1"></i>Preparar
-                                Entrega</button>
+                            <button type="submit" class="btn btn-sm btn-outline-success" title="Planificar y Crear OPs">
+                                <i class="bi bi-play-fill">Planificar y crear OPs</i>
+                            </button>
                         </form>
                         {% endif %}
-                        {% if pedido.estado == 'LISTO_PARA_ENTREGAR' and 'modificar_orden_de_venta' is has_permission %}
+
+                        {% endif %}
+
+                        {% if pedido.estado == 'LISTO_PARA_ENTREGA' and 'modificar_orden_de_venta' is has_permission %}
                         <a href="{{ url_for('orden_venta.despachar', id=pedido.id) }}" class="btn btn-sm btn-info" title="Despachar Pedido">
-                            <i class="bi bi-truck me-1"></i>Despachar
+                            <i class="bi bi-truck me-1"></i> Despachar
                         </a>
                         {% endif %}
                         {% if pedido.estado == 'EN_TRANSITO' and 'modificar_orden_de_venta' is has_permission %}
@@ -176,36 +169,6 @@
 
 {% block extra_js %}
 <script>
-function planificarPedido(pedidoId) {
-    showConfirmationModal(
-        'Confirmar Planificación',
-        '¿Está seguro de que desea mover este pedido a "Planificada"?',
-        () => {
-            fetch(`/api/pedidos/${pedidoId}/planificar`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('#csrf_token').value
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showToast(data.message || 'Pedido planificado con éxito.', 'success');
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    showToast(data.error || 'Error al planificar el pedido.', 'error');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showToast('Error de red al intentar planificar el pedido.', 'error');
-            });
-        },
-        'info'
-    );
-}
-
 document.addEventListener('DOMContentLoaded', function () {
     const forms = document.querySelectorAll('.confirm-form');
     forms.forEach(form => {

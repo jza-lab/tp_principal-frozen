@@ -43,7 +43,7 @@ class PedidoSchema(Schema):
     fecha_estimativa_proceso = fields.Date(allow_none=True)
     precio_orden = fields.Decimal(as_string=True, allow_none=True)
 
-    estado = fields.Str(validate=validate.OneOf(['PENDIENTE', 'EN_PROCESO', 'LISTO_PARA_ENTREGA', 'LISTO_PARA_ARMAR', 'EN_VIAJE', 'RECIBIDO', 'COMPLETADO', 'CANCELADO']))
+    estado = fields.Str(validate=validate.OneOf(['PENDIENTE', 'EN_PROCESO', 'LISTO_PARA_ENTREGAR', 'EN_TRANSITO', 'RECIBIDO', 'COMPLETADO', 'CANCELADO']))
 
     items = fields.List(
         fields.Nested(PedidoItemSchema),

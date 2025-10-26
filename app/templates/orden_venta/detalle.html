@@ -27,7 +27,6 @@
                 {% set estado_config = {
                 'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
                 'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                'LISTO_PARA_ARMAR': {'class': 'bg-warning-soft text-warning', 'icon': 'tools'},
                 'LISTO_PARA_ENTREGAR': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
                 'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
                 'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
@@ -194,46 +193,16 @@
                         <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}" class="btn btn-outline-primary"><i class="bi bi-pencil me-1"></i>Editar Pedido</a>
                     {% endif %}
 
-                    {# 1. Botón "Iniciar Proceso" (si está PENDIENTE) #}
+                    {# 1. Botón "Planificar" (antes Iniciar Proceso) #}
                     {% if pedido.estado == 'PENDIENTE' and 'aprobar_ordenes_venta' is has_permission %}
                         <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}"
-                              class="confirm-form d-grid" data-title="Iniciar Proceso"
-                              data-message="Esto creará las Órdenes de Producción necesarias y cambiará el estado. ¿Continuar?"
+                              class="confirm-form d-grid" data-title="Confirmar Planificación"
+                              data-message="Esta acción creará las Órdenes de Producción necesarias y pondrá el pedido 'En Proceso'. ¿Está seguro?"
                               data-button-type="success">
                               {{ csrf_form.csrf_token }}
 
-                            <button type="submit" class="btn btn-success"><i class="bi bi-play-fill me-1"></i>Iniciar Proceso y Crear OPs</button>
+                            <button type="submit" class="btn btn-success"><i class="bi bi-play-fill me-1"></i>Planificar y Crear OPs</button>
                         </form>
-                    {% endif %}
-
-                    {# 2. Botón "Preparar Entrega" (si está LISTO_PARA_ARMAR y OPs completas) #}
-                    {% if pedido.estado == 'LISTO_PARA_ARMAR' %}
-                        {% if pedido.todas_ops_completadas %}
-                            {# Si está listo para armar Y TODAS las OPs están completas, mostrar botón activo #}
-                            <form action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}" method="post"
-                                  class="d-grid needs-confirmation" 
-                                  data-confirm-message="¿Está seguro? Esta acción despachará el stock reservado y marcará el pedido como 'Listo para Entregar'.">
-                                {{ csrf_form.csrf_token }}
-
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="bi bi-box-seam me-1"></i> Preparar Entrega (Despachar Stock)
-                                </button>
-                            </form>
-                        {% else %}
-                            {# Si está listo para armar PERO alguna OP falta, mostrar botón desactivado #}
-                            <button type="button" class="btn btn-secondary d-grid w-100" disabled
-                                    title="Aún no se puede preparar la entrega. Verifique que todas las Órdenes de Producción asociadas estén en estado 'COMPLETADA'.">
-                                <i class="bi bi-hourglass-split me-1"></i> Esperando OPs Completadas
-                            </button>
-                            {# Opcional: Mostrar OPs faltantes #}
-                            <ul class="list-unstyled small mt-2 text-muted">
-                             {% for item in pedido.items %}
-                                {% if item.orden_produccion_id and item.op_estado != 'COMPLETADA' %}
-                                    <li><small><i class="bi bi-arrow-right-short"></i>OP para {{ item.producto_nombre.nombre }}: {{ item.op_estado | default('Estado Desconocido') }}</small></li>
-                                {% endif %}
-                             {% endfor %}
-                           </ul>
-                        {% endif %}
                     {% endif %}
 
                     {# 3. Botón "Despachar" (si está LISTO_PARA_ENTREGAR) - Reemplaza 'Marcar como Completado' #}

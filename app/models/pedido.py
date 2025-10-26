@@ -328,9 +328,9 @@ class PedidoModel(BaseModel):
             # 1. Si al menos un item está 'EN_PRODUCCION', el pedido está 'EN_PROCESO'.
             if 'EN_PRODUCCION' in estados_items:
                 nuevo_estado_pedido = 'EN_PROCESO'
-            # 2. Si TODOS los items están 'ALISTADO', el pedido pasa a 'LISTO PARA ARMAR'.
+            # 2. Si TODOS los items están 'ALISTADO', el pedido pasa a 'LISTO PARA ENTREGAR'.
             elif all(estado == 'ALISTADO' for estado in estados_items):
-                nuevo_estado_pedido = 'LISTO_PARA_ARMAR'
+                nuevo_estado_pedido = 'LISTO_PARA_ENTREGAR'
             # 3. Si no hay items en producción y no todos están alistados, pero al menos uno lo está,
             #    se mantiene EN_PROCESO (o el estado que tuviera).
             elif 'ALISTADO' in estados_items and 'EN_PRODUCCION' not in estados_items:

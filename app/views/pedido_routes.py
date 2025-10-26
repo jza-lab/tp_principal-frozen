@@ -177,7 +177,7 @@ def despachar(id):
         return redirect(url_for('orden_venta.listar'))
     
     pedido = pedido_resp.get('data')
-    if pedido.get('estado') != 'LISTO_PARA_ENTREGAR':
+    if pedido.get('estado') != 'LISTO_PARA_ENTREGA':
         flash(f"El pedido no está listo para ser despachado (Estado actual: {pedido.get('estado')}).", 'warning')
         return redirect(url_for('orden_venta.detalle', id=id))
 

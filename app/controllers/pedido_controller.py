@@ -194,7 +194,10 @@ class PedidoController(BaseController):
             if all_in_stock:
                 # Si todo está en stock, el estado inicial es LISTO_PARA_ENTREGA
                 pedido_data['estado'] = 'LISTO_PARA_ENTREGA'
-                logging.info("Todo el stock disponible. El pedido se creará en estado LISTO_PARA_ENTREGA.")
+                # Y cada item se marca como ALISTADO, ya que el stock está disponible.
+                for item in items_data:
+                    item['estado'] = 'ALISTADO'
+                logging.info("Todo el stock disponible. El pedido se creará en estado LISTO_PARA_ENTREGA y los items como ALISTADO.")
             elif 'estado' not in pedido_data:
                 # Si falta stock, el estado inicial es PENDIENTE
                 pedido_data['estado'] = 'PENDIENTE'

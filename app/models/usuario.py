@@ -84,7 +84,7 @@ class UsuarioModel(BaseModel):
         sus relaciones (rol, turno, sectores) en una única consulta.
         """
         try:
-            select_query = "*, roles:role_id(*), turno:turno_id(*), sectores:usuario_sectores(sectores(*))"
+            select_query = "*, roles:role_id(codigo), turno:turno_id(*), sectores:usuario_sectores(sectores(*))"
             if include_direccion:
                 select_query += ", direccion:direccion_id(*)"
 
