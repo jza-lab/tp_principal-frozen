@@ -493,45 +493,50 @@ function buildPayload() {
         fecha_solicitud: document.getElementById('fecha_solicitud')?.value,
         fecha_requerido: document.getElementById('fecha_requerido').value,
         estado: document.getElementById('estado')?.value || 'PENDIENTE',
+        condicion_venta: document.getElementById('condicion_venta')?.value,
         precio_orden: cleanCurrency(document.getElementById('total-final').textContent),
         comentarios_adicionales: document.getElementById('comentarios_adicionales')?.value,
         items: []
     };
     const direccionControl = document.getElementById('usar_direccion_alternativa');
-    payload.usar_direccion_alternativa = (direccionControl.type === 'checkbox')
+    const usar_alternativa = (direccionControl.type === 'checkbox')
         ? direccionControl.checked
         : (direccionControl.dataset.active === 'true');
-        
-    if (payload.usar_direccion_alternativa) {
-        const calle = document.getElementById(isClientForm ? 'calle_alternativa' : 'calle').value;
-        const altura = document.getElementById(isClientForm ? 'altura_alternativa' : 'altura').value;
-        const piso = document.getElementById(isClientForm ? 'piso_alternativa' : 'piso')?.value || null;
-        const depto = document.getElementById(isClientForm ? 'depto_alternativa' : 'depto')?.value || null;
-        const localidad = document.getElementById(isClientForm ? 'localidad_alternativa' : 'localidad').value;
-        const provincia = document.getElementById(isClientForm ? 'provincia_alternativa' : 'provincia').value;
-        const codigo_postal = document.getElementById(isClientForm ? 'codigo_postal_alternativa' : 'codigo_postal').value;
-        payload.direccion_entrega = { calle, altura, piso, depto, localidad, provincia, codigo_postal };
+
+    payload.usar_direccion_alternativa = usar_alternativa;
+
+    if (usar_alternativa) {
+        const idSuffix = isClientForm ? '_alternativa' : '';
+        payload.direccion_entrega = {
+            calle: document.getElementById(`calle${idSuffix}`).value,
+            altura: document.getElementById(`altura${idSuffix}`).value,
+            piso: document.getElementById(`piso${idSuffix}`)?.value || null,
+            depto: document.getElementById(`depto${idSuffix}`)?.value || null,
+            localidad: document.getElementById(`localidad${idSuffix}`).value,
+            provincia: document.getElementById(`provincia${idSuffix}`).value,
+            codigo_postal: document.getElementById(`codigo_postal${idSuffix}`).value
+        };
+    }
+        const itemRows = document.querySelectorAll('#items-container .item-row');
+        itemRows.forEach(row => {
+            const productoSelect = row.querySelector('select[name*="producto_id"]');
+            const cantidadInput = row.querySelector('input[name*="cantidad"]');
+            const idInput = row.querySelector('input[name*="id"]');
+            const precioUnitarioInput = row.querySelector('input[name*="precio_unitario"]');
+
+            if (productoSelect && cantidadInput && productoSelect.value) {
+                payload.items.push({
+                    id: idInput?.value ? parseInt(idInput.value) : null,
+                    producto_id: parseInt(productoSelect.value),
+                    cantidad: parseFloat(cantidadInput.value) || 0,
+                    precio_unitario: precioUnitarioInput ? parseFloat(precioUnitarioInput.value) : 0
+                });
+            }
+        });
+
+        return payload;
     }
 
-    const itemRows = document.querySelectorAll('#items-container .item-row');
-    itemRows.forEach(row => {
-        const productoSelect = row.querySelector('select[name*="producto_id"]');
-        const cantidadInput = row.querySelector('input[name*="cantidad"]');
-        const idInput = row.querySelector('input[name*="id"]');
-        const precioUnitarioInput = row.querySelector('input[name*="precio_unitario"]');
+    // Para asegurar que la función esté disponible globalmente después de redefinirla.
+    window.buildPayload = buildPayload;
 
-        if (productoSelect && cantidadInput && productoSelect.value) {
-            payload.items.push({
-                id: idInput?.value ? parseInt(idInput.value) : null,
-                producto_id: parseInt(productoSelect.value),
-                cantidad: parseFloat(cantidadInput.value) || 0,
-                precio_unitario: precioUnitarioInput ? parseFloat(precioUnitarioInput.value) : 0
-            });
-        }
-    });
-
-    return payload;
-}
-
-// Para asegurar que la función esté disponible globalmente después de redefinirla.
-window.buildPayload = buildPayload;

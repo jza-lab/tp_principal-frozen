@@ -70,7 +70,6 @@ def validar_rostro():
     return jsonify({'valid': False, 'message': resultado.get('message')})
 
 @api_bp.route('/validar/direccion', methods=['POST'])
-@permission_any_of('crear_empleado', 'modificar_empleado')
 def validar_direccion():
     """Verifica una dirección en tiempo real usando Georef."""
     data = request.get_json()

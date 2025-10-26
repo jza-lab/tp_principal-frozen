@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, url_for
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.controllers.pedido_controller import PedidoController
+from app.controllers.cliente_controller import ClienteController
 from flask_wtf import FlaskForm
 
 public_bp = Blueprint('public', __name__, url_prefix='/public')
@@ -36,7 +37,8 @@ def hacer_pedido():
     """
     csrf_form = CSRFOnlyForm()
     pedido_controller = PedidoController()
-    hoy = datetime.now().strftime('%Y-%m-%d')
+    hoy = datetime.now()
+    min_fecha_entrega = hoy + timedelta(days=7)
     response, _ = pedido_controller.obtener_datos_para_formulario()
     productos = response.get('data', {}).get('productos', [])
 
@@ -46,7 +48,8 @@ def hacer_pedido():
         pedido=None, 
         is_edit=False, 
         csrf_form=csrf_form,
-        today=hoy,
+        today=hoy.strftime('%Y-%m-%d'),
+        min_fecha_entrega=min_fecha_entrega.strftime('%Y-%m-%d'),
         cliente={},
         es_cliente_nuevo=True 
     )
@@ -62,12 +65,14 @@ def crear_pedido_api():
         return jsonify({"success": False, "error": "Datos no válidos"}), 400
     pedido_controller = PedidoController()
     response, status_code = pedido_controller.crear_pedido_con_items(json_data)
-
+    nuevo_pedido = response.get('data', {})
     if status_code < 300:
         return jsonify({
             'success': True, 
             'message': '¡Pedido recibido con éxito! Nos pondremos en contacto a la brevedad.',
-            'redirect_url': url_for('public.index') 
+            'data': {
+            'id': nuevo_pedido.get('id')
+            }
         }), 201
     else:
         return jsonify({
@@ -82,9 +87,41 @@ def ver_comprobante(pedido_id):
     """
     pedido_controller = PedidoController()
     response, status_code = pedido_controller.obtener_pedido_por_id(pedido_id)
-
+    
     if response.get('success'):
         pedido_data = response.get('data')
-        return render_template('public/comprobante_pago.html', pedido=pedido_data)
+        return render_template('orden_venta/comprobante_pago.html', pedido=pedido_data)
     else:
         return "Pedido no encontrado o error al cargar los datos.", 404
+
+@public_bp.route('/api/cliente/<int:cliente_id>/condicion-pago', methods=['GET'])
+def obtener_condicion_pago_cliente(cliente_id):
+    """
+    Determina si un cliente es nuevo o existente y devuelve las 
+    condiciones de pago permitidas.
+    """
+    cliente_controller = ClienteController()
+    es_cliente_nuevo = not cliente_controller.cliente_tiene_pedidos_previos(cliente_id)
+
+    if es_cliente_nuevo:
+        # Los clientes nuevos solo pueden pagar al contado
+        condiciones_pago = [{'valor': 'contado', 'texto': 'Al Contado'}]
+    else:
+        response, _ = cliente_controller.obtener_cliente(cliente_id)
+        if not response.get('success'):
+            return jsonify({'success': False, 'error': 'Cliente no encontrado'}), 404
+
+        cliente = response.get('data')
+        condicion_venta = cliente.get('condicion_venta')
+
+        condiciones_pago = [{'valor': 'contado', 'texto': 'Al Contado'}]
+        if condicion_venta >= 2:
+            condiciones_pago.append({'valor': 'credito_30', 'texto': 'Crédito a 30 días'})
+        if condicion_venta >= 3:
+            condiciones_pago.append({'valor': 'credito_90', 'texto': 'Crédito a 90 días'})
+
+    return jsonify({
+        'success': True,
+        'es_cliente_nuevo': es_cliente_nuevo,
+        'condiciones_pago': condiciones_pago
+    })

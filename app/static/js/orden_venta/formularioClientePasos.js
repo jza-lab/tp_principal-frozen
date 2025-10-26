@@ -99,7 +99,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (value.length > 2) value = value.substring(0, 2) + '-' + value.substring(2);
         if (value.length > 11) value = value.substring(0, 11) + '-' + value.substring(11);
         e.target.value = value.substring(0, 13);
-        checkStep1Validity();
     });
 
     buscarClienteBtn.addEventListener('click', async function () {
@@ -174,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function rellenarDatosCliente(cliente) {
-
+        actualizarCondicionVenta(cliente.id);
         idClienteInput.value = cliente.id;
         nombreInput.value = cliente.nombre || cliente.razon_social || '';
         telefonoInput.value = cliente.telefono || '';
@@ -237,22 +236,36 @@ document.addEventListener('DOMContentLoaded', function () {
         ['calle', 'altura', 'provincia', 'localidad', 'codigo_postal'].forEach(f => {
             document.getElementById(`${f}_alternativa`).required = isUsingAlternativeAddress;
         });
-        checkStep1Validity();
     });
 
     // --- LÓGICA DE VALIDACIÓN DEL PASO 1 ---
 
-    function checkStep1Validity() {
+    function validateAndHighlightFields(container) {
+        let firstInvalidField = null;
+        const fields = container.querySelectorAll('input:not([type="hidden"]), select, textarea');
 
-        const isClientSelected = !!idClienteInput.value;
-        const hasItems = itemsContainer.querySelectorAll('.item-row').length > 0;
-        const isFormValid = form.checkValidity();
+        fields.forEach(field => {
+            if (!field.checkValidity()) {
+                field.classList.add('is-invalid');
+                if (!firstInvalidField) {
+                    firstInvalidField = field;
+                }
+            } else {
+                field.classList.remove('is-invalid');
+            }
+        });
 
-        return isClientSelected && hasItems && isFormValid;
+        return {
+            isValid: firstInvalidField === null,
+            firstInvalidField: firstInvalidField
+        };
     }
 
-    [form, itemsContainer].forEach(el => ['input', 'change', 'DOMSubtreeModified'].forEach(evt => el.addEventListener(evt, checkStep1Validity)));
-
+    [form, itemsContainer].forEach(el => ['input', 'change', 'DOMSubtreeModified'].forEach(evt => el.addEventListener(evt, () => {
+        const isClientSelected = !!idClienteInput.value;
+        const hasItems = itemsContainer.querySelectorAll('.item-row').length > 0;
+        nextStep1Btn.disabled = !(isClientSelected && hasItems);
+    })));
 
     nextStep1Btn.addEventListener('click', (e) => { e.preventDefault(); goToStep(2); });
     prevStep2Btn.addEventListener('click', () => goToStep(1));
@@ -269,46 +282,48 @@ document.addEventListener('DOMContentLoaded', function () {
         if (step === 1) {
             step1Content.style.display = 'block';
             step1Actions.style.display = 'flex';
+            nextStep1Btn.style.display = 'block';
             step1Indicator.classList.add('active');
             step1Indicator.classList.remove('completed');
             step2Indicator.classList.remove('active', 'completed');
             step3Indicator.classList.remove('active', 'completed');
         } else if (step === 2) {
-            if (!checkStep1Validity()) {
-                showNotificationModal('Validación Pendiente', 'Complete todos los campos requeridos y añada al menos un producto.', 'warning');
-                goToStep(1); // Forzar regreso
+            // 1. Validar que se haya identificado un cliente
+            if (!idClienteInput.value) {
+                goToStep(1)
+                showNotificationModal('Cliente no Identificado', 'Por favor, busque y seleccione un cliente antes de continuar.', 'warning');
+                cuilCuitInput.focus();
                 return;
             }
+
+            // 2. Validar que haya al menos un ítem en el pedido
+            if (itemsContainer.querySelectorAll('.item-row').length === 0) {
+                goToStep(1)
+                showNotificationModal('Sin Productos', 'Debe añadir al menos un producto al pedido.', 'warning');
+                addItemBtn.focus();
+            }
+
+            const validationResult = validateAndHighlightFields(step1Content);
+            if (!validationResult.isValid) {
+                goToStep(1)
+                showNotificationModal('Campos Incompletos', 'Por favor, corrija los campos marcados en rojo antes de continuar.', 'warning');
+                validationResult.firstInvalidField.focus();
+                validationResult.firstInvalidField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+
             if (isUsingAlternativeAddress) {
-                const direccion = {
-                    calle: calleAlternativaInput.value,
-                    altura: alturaAlternativaInput.value,
-                    localidad: localidadAlternativaInput.value,
-                    provincia: provinciaAlternativaInput.value,
+                const isValid = await validateAlternativeAddress();
+                if (!isValid) {
+                    goToStep(1)
+                    goToStep(1)
+                    return;
                 };
-
-                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-                const response = await fetch('/api/validar/direccion', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    },
-                    body: JSON.stringify(direccion)
-                });
-                const result = await response.json();
-
-                if (!result.success) {
-                    showNotificationModal('Dirección Inválida', result.message || 'La dirección de entrega alternativa no pudo ser validada.', 'error');
-                    return; // Detener el avance si la dirección es inválida
-                }
             }
 
             let cantidadEsInvalida = false;
             let productoInvalido = '';
-            const itemRows = itemsContainer.querySelectorAll('.item-row');
-
-            itemRows.forEach(row => {
+            itemsContainer.querySelectorAll('.item-row').forEach(row => {
                 const productoSelect = row.querySelector('select[name*="producto_id"]');
                 const cantidadInput = row.querySelector('input[name*="cantidad"]');
 
@@ -331,32 +346,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     'Error en la Cantidad',
                     `La cantidad para el producto "${productoInvalido}" debe ser un número entero (sin decimales), ya que se mide por unidades o paquetes.`,
                     'error'
-                );
-                return; // Detener el avance
-            }
-
-            if (isUsingAlternativeAddress) {
-                const direccion = {
-                    calle: calleAlternativaInput.value,
-                    altura: alturaAlternativaInput.value,
-                    localidad: localidadAlternativaInput.value,
-                    provincia: provinciaAlternativaInput.value,
-                };
-                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-                const response = await fetch('/api/validar/direccion', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    },
-                    body: JSON.stringify(direccion)
-                });
-                const result = await response.json();
-
-                if (!result.success) {
-                    showNotificationModal('Dirección Inválida', result.message || 'La dirección de entrega alternativa no pudo ser validada.', 'error');
-                    return;
-                }
+                )
+                return;
             }
 
             const payload = buildPayload();
@@ -365,8 +356,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             pedidoDataTemp.value = JSON.stringify(payload);
-            step1Actions.style.display = 'none'
-            nextStep1Btn.style.display = 'none'
+            step1Actions.style.display = 'none';
+            nextStep1Btn.style.display = 'none';
             step2Content.style.display = 'block';
             step1Indicator.classList.add('completed');
             step2Indicator.classList.add('active');
@@ -463,18 +454,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const result = await response.json();
 
-            if (result.success && result.data && result.data.id) {
+            if (response.ok && result.success) {
+                const pedidoId = result.data.id;
+
                 if (isPayment) {
-                    const comprobanteUrl = `/public/comprobante-pago/${result.data.id}`;
+                    const comprobanteUrl = `/public/comprobante-pago/${pedidoId}`;
+                    console.log(comprobanteUrl)
                     window.location.href = comprobanteUrl;
                 } else {
                     showNotificationModal(
                         'Pedido Creado con Éxito',
                         'Su pedido a crédito ha sido recibido y será procesado a la brevedad.',
-                        'success');
-                    setTimeout(() => {
-                        window.location.href = LISTAR_URL; 
-                    }, 2500);
+                        'success', // Tipo correcto
+                        () => { window.location.href = LISTAR_URL; });
                 }
 
             } else {
@@ -495,7 +487,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (itemsContainer.children.length === 0) { } addItemRow();
     updateResumen();
-    checkStep1Validity();
     toggleDireccionEntregaBtn.click();
 
     newOrderBtn.addEventListener('click', (e) => {
@@ -595,5 +586,74 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         resultTitle.textContent = title;
         resultMessage.textContent = message;
+    }
+
+    async function actualizarCondicionVenta(clienteId) {
+        const condicionVentaSelect = document.getElementById('condicion_venta');
+        if (!clienteId) {
+            condicionVentaSelect.innerHTML = '<option value="contado">Al Contado</option>';
+            condicionVentaSelect.disabled = true;
+            return;
+        }
+
+        try {
+            const response = await fetch(`/public/api/cliente/${clienteId}/condicion-pago`);
+            const result = await response.json();
+
+            if (result.success) {
+                condicionVentaSelect.innerHTML = '';
+                result.condiciones_pago.forEach(condicion => {
+                    const option = document.createElement('option');
+                    option.value = condicion.valor;
+                    option.textContent = condicion.texto;
+                    condicionVentaSelect.appendChild(option);
+                });
+                condicionVentaSelect.disabled = false;
+            } else {
+                showNotificationModal('Error', 'No se pudo determinar la condición de pago del cliente.', 'error');
+            }
+        } catch (error) {
+            console.error('Error al obtener la condición de venta:', error);
+            showNotificationModal('Error de Red', 'No se pudo conectar con el servidor para verificar la condición de pago.', 'error');
+        }
+    }
+
+    async function validateAlternativeAddress() {
+        const direccion = {
+            calle: calleAlternativaInput.value,
+            altura: alturaAlternativaInput.value,
+            localidad: localidadAlternativaInput.value,
+            provincia: provinciaAlternativaInput.value,
+        };
+
+        if (!direccion.calle || !direccion.altura || !direccion.localidad || !direccion.provincia) {
+            showNotificationModal('Campos Incompletos', 'Por favor, complete todos los campos de la dirección de entrega.', 'warning');
+            return false;
+        }
+
+        try {
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            const response = await fetch('/api/validar/direccion', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify(direccion)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                return true;
+            } else {
+                showNotificationModal('Dirección Inválida', result.message || 'La dirección de entrega alternativa no pudo ser validada.', 'error');
+                return false;
+            }
+        } catch (error) {
+            console.error('Error en la validación de dirección:', error);
+            showNotificationModal('Error de Red', 'No se pudo conectar con el servidor para validar la dirección.', 'error');
+            return false;
+        }
     }
 });

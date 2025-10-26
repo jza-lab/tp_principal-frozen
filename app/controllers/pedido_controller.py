@@ -207,38 +207,40 @@ class PedidoController(BaseController):
 
             if result.get('success'):
                 nuevo_pedido = result.get('data')
+                id_cliente = nuevo_pedido.get('id_cliente')
+                if id_cliente:
+                    pedidos_previos,_ = self.obtener_pedidos(filtros={'id_cliente': id_cliente})
+                    pedidos_validos = [p for p in pedidos_previos.get('data', []) if p.get('estado') != 'CANCELADO']
+                    num_pedidos = len(pedidos_validos)
+
+                    if num_pedidos == 1:
+                        self.cliente_model.update(id_cliente, {'condicion_venta': 2})
+                    elif num_pedidos == 2:
+                        self.cliente_model.update(id_cliente, {'condicion_venta': 3})
 
                 if all_in_stock:
-                    # --- Lógica de Despacho/Consumo Inmediato (Solo si all_in_stock es True) ---
 
-                    # 1. Recuperar el pedido con IDs de item para el despacho
                     pedido_con_items_resp = self.model.get_one_with_items(nuevo_pedido.get('id'))
                     if pedido_con_items_resp.get('success'):
                         items_del_pedido_con_id = pedido_con_items_resp.get('data', {}).get('items', [])
 
-                        # 2. ** Despacho/Consumo de Stock **
                         despacho_result = self.lote_producto_controller.despachar_stock_directo_por_pedido(
                             pedido_id=nuevo_pedido.get('id'),
                             items_del_pedido=items_del_pedido_con_id
                         )
 
                         if not despacho_result.get('success'):
-                            # Si falla el despacho, revertimos el estado a PENDIENTE
                             self.model.cambiar_estado(nuevo_pedido.get('id'), 'PENDIENTE')
                             logging.error(f"Fallo al despachar stock en la creación. Revirtiendo a PENDIENTE. Error: {despacho_result.get('error')}")
-                            # Devolvemos un 500 para indicar un fallo en la transacción
                             return self.error_response(f"Pedido creado, pero falló el despacho de stock: {despacho_result.get('error')}", 500)
 
-                        # 3. Éxito en la creación y el despacho. Enviamos un indicador.
                         nuevo_pedido['estado'] = 'COMPLETADO'
-                        # === CAMBIO SOLICITADO: Mensaje explícito de stock encontrado y completado ===
                         return self.success_response(
-                            data={**nuevo_pedido, 'estado_completado_inmediato': True}, # <--- INDICADOR ESPECIAL
+                            data={**nuevo_pedido, 'estado_completado_inmediato': True},
                             message="El pedido ha sido puesto en estado COMPLETADO automáticamente porque se encontró stock disponible para despachar todos los ítems.",
                             status_code=201
                         )
-
-                # Caso de éxito normal (all_in_stock era False)
+                    
                 return self.success_response(data=nuevo_pedido, message="Pedido creado con éxito.", status_code=201)
             else:
                 return self.error_response(result.get('error', 'No se pudo crear el pedido.'), 400)

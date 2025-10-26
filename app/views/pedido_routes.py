@@ -1,6 +1,6 @@
 import os
 import random
-from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, current_app, render_template, request, redirect, session, url_for, flash, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
@@ -84,7 +84,7 @@ def nueva():
             return jsonify({"success": False, "error": "Datos no válidos"}), 400
 
         usuario_id = get_jwt_identity()
-        response, status_code = controller.crear_pedido_con_items(json_data, usuario_id)
+        response, status_code = controller.crear_pedido_con_items(json_data)
 
         if status_code < 300:
             nuevo_pedido = response.get('data', {})

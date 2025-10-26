@@ -2,6 +2,7 @@
 from app.controllers.base_controller import BaseController
 from app.models.cliente import ClienteModel
 from app.schemas.cliente_schema import ClienteSchema
+from app.controllers.pedido_controller import PedidoController
 from typing import Dict, Optional
 import logging
 
@@ -14,6 +15,7 @@ class ClienteController(BaseController):
         super().__init__()
         self.model = ClienteModel()
         self.schema = ClienteSchema()
+        self.pedido_controller=PedidoController()
 
     def obtener_clientes_activos(self) -> tuple:
         """Obtener lista de Clientes activos"""
@@ -256,7 +258,7 @@ class ClienteController(BaseController):
         
         try:
             # Buscamos pedidos que NO estén cancelados.
-            pedidos_result = pedido_model.get_all(filtros={'id_cliente': cliente_id})
+            pedidos_result , _ = self.pedido_controller.obtener_pedidos(filtros={'id_cliente': cliente_id})
             
             if pedidos_result.get('success') and pedidos_result.get('data'):
                 # Filtramos para asegurarnos de que no sean solo pedidos 'CANCELADO'

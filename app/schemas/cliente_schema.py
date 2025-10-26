@@ -42,3 +42,8 @@ class ClienteSchema(Schema):
         allow_none=True,
         load_default=None
     )
+
+    condicion_venta = fields.Int(
+        allow_none=True,
+        load_default=1
+    )   

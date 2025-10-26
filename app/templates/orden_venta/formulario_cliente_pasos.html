@@ -105,7 +105,7 @@
                                     <label for="fecha_requerido" class="form-label">Fecha de Entrega Requerida <span
                                             class="text-danger">*</span></label>
                                     <input type="date" class="form-control" id="fecha_requerido" name="fecha_requerido"
-                                        value="{{ today }}" required>
+                                        value="{{ min_fecha_entrega }}" min="{{ min_fecha_entrega }}" required>
                                 </div>
                                 <input id="fecha_solicitud" name="fecha_solicitud" type="hidden" class="form-label"
                                     read-only value="{{ today }}"></label>
@@ -242,7 +242,9 @@
                                                 <div class="col-md-8">
                                                     <div class="form-floating">
                                                         <input type="text" class="form-control" id="calle_alternativa"
-                                                            name="calle_alternativa" placeholder="Calle">
+                                                            name="calle_alternativa" placeholder="Calle" required
+                                                            minlength="3" maxlength="80"
+                                                            pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}">
                                                         <label for="calle_alternativa">Calle <span
                                                                 class="text-danger">*</span></label>
                                                     </div>
@@ -251,7 +253,8 @@
                                                     <div class="form-floating">
                                                         <input type="number" class="form-control"
                                                             id="altura_alternativa" name="altura_alternativa"
-                                                            placeholder="Altura">
+                                                            placeholder="Altura" required pattern="\d{1,5}"
+                                                            maxlength="5" max="99999" min="1">
                                                         <label for="altura_alternativa">Altura <span
                                                                 class="text-danger">*</span></label>
                                                     </div>
@@ -260,7 +263,7 @@
                                                     <div class="form-floating">
 
                                                         <select class="form-select" id="provincia_alternativa"
-                                                            name="provincia_alternativa">
+                                                            name="provincia_alternativa" required>
                                                             <option value="">Seleccionar provincia...</option>
                                                             {% set provincias = ["Buenos Aires", "CABA",
                                                             "Catamarca", "Chaco", "Chubut",
@@ -288,7 +291,8 @@
                                                     <div class="form-floating">
                                                         <input type="text" class="form-control"
                                                             id="localidad_alternativa" name="localidad_alternativa"
-                                                            placeholder="Localidad">
+                                                            placeholder="Localidad" required minlength="3"
+                                                            maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}">
                                                         <label for="localidad_alternativa">Localidad <span
                                                                 class="text-danger">*</span></label>
                                                     </div>
@@ -296,14 +300,16 @@
                                                 <div class="col-md-4">
                                                     <div class="form-floating">
                                                         <input type="text" class="form-control" id="piso_alternativa"
-                                                            name="piso_alternativa" placeholder="Piso (Opcional)">
+                                                            name="piso_alternativa" placeholder="Piso (Opcional)"
+                                                            maxlength="3" pattern="[A-Za-z0-9\s]*">
                                                         <label for="piso_alternativa">Piso (Opcional)</label>
                                                     </div>
                                                 </div>
                                                 <div class="col-md-4">
                                                     <div class="form-floating">
                                                         <input type="text" class="form-control" id="depto_alternativa"
-                                                            name="depto_alternativa" placeholder="Dto (Opcional)">
+                                                            name="depto_alternativa" placeholder="Dto (Opcional)"
+                                                            maxlength="5" pattern="[A-Za-z0-9\s]*">
                                                         <label for="depto_alternativa">Dto (Opcional)</label>
                                                     </div>
                                                 </div>
@@ -311,8 +317,9 @@
                                                     <div class="form-floating">
                                                         <input type="text" class="form-control"
                                                             id="codigo_postal_alternativa"
-                                                            name="codigo_postal_alternativa"
-                                                            placeholder="Código Postal">
+                                                            name="codigo_postal_alternativa" placeholder="Código Postal"
+                                                            required minlength="4" maxlength="8"
+                                                            pattern="([A-Za-z]\d{4}[A-Za-z]{3})|\d{4}">
                                                         <label for="codigo_postal_alternativa">Código Postal <span
                                                                 class="text-danger">*</span></label>
                                                     </div>
@@ -475,8 +482,9 @@
                                 <td>
                                     <div class="input-group input-group-sm">
                                         <input type="number" min="0.01" max="5000" step="0.01"
-                                            class="form-control item-quantity" name="items-__prefix__-cantidad"
-                                            placeholder="Cant." required>
+                                            class="form-control item-quantity" style="min-width: 8ch;"
+                                            oninput="limitarDigitos(this, 7)" name="items-__prefix__-cantidad"
+                                            placeholder="Ej: 10" required>
                                         <span class="input-group-text unidad-display">--</span>
                                     </div>
                                 </td>
@@ -558,18 +566,21 @@
                             </div>
                         </div>
                     </div>
-                                        <!-- Paso 3: Simulación de Pago -->
+                    <!-- Paso 3: Simulación de Pago -->
                     <div id="paymentStepContent" class="form-section" style="display: none;">
                         <div class="card p-4 shadow-sm">
-                            <h4 class="card-title text-center"><i class="bi bi-credit-card-2-front-fill me-2"></i>Simulación de Pago</h4>
+                            <h4 class="card-title text-center"><i
+                                    class="bi bi-credit-card-2-front-fill me-2"></i>Simulación de Pago</h4>
                             <p class="text-center text-muted">Confirme el pago para finalizar su pedido.</p>
                             <div class="text-center my-4">
                                 <h5>Monto a Pagar:</h5>
                                 <h2 id="paymentTotalAmount" class="text-primary fw-bold">$0.00</h2>
                             </div>
                             <div class="d-flex justify-content-center gap-3">
-                                <button type="button" class="btn btn-outline-secondary" id="prevStep3"><i class="bi bi-arrow-left me-1"></i> Volver a Proforma</button>
-                                <button type="button" class="btn btn-success" id="paymentConfirmBtn"><i class="bi bi-check-circle-fill me-1"></i> Confirmar Pago</button>
+                                <button type="button" class="btn btn-outline-secondary" id="prevStep3"><i
+                                        class="bi bi-arrow-left me-1"></i> Volver a Proforma</button>
+                                <button type="button" class="btn btn-success" id="paymentConfirmBtn"><i
+                                        class="bi bi-check-circle-fill me-1"></i> Confirmar Pago</button>
                             </div>
                         </div>
                     </div>
@@ -605,6 +616,16 @@
             </div>
         </div>
     </div>
+
+    <script>
+
+        function limitarDigitos(input, maxLength) {
+            if (input.value.length > maxLength) {
+                input.value = input.value.slice(0, maxLength);
+            }
+        }
+
+    </script>
 
     <script>
         // Variables globales inyectadas por Jinja2 para el formulario PÚBLICO

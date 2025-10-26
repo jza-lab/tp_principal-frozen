@@ -63,3 +63,10 @@ class PedidoSchema(Schema):
     direccion_entrega= fields.Nested(DireccionSchema, allow_none=True)
 
     comentarios_adicionales= fields.Str(allow_none=True)
+
+    
+    condicion_venta = fields.Str(
+        validate=validate.Length(max=50),
+        allow_none=True,
+        load_default=None
+    )
