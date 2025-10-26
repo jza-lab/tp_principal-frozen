@@ -162,6 +162,43 @@ def cancelar(id):
         flash(response.get('error'), 'error')
     return redirect(url_for('orden_venta.detalle', id=id))
 
+@orden_venta_bp.route('/<int:id>/despachar', methods=['GET', 'POST'])
+@jwt_required()
+@permission_required(accion='modificar_orden_de_venta')
+def despachar(id):
+    """
+    Gestiona el despacho de un pedido.
+    GET: Muestra la página de despacho con detalles del pedido y formulario.
+    POST: Procesa el formulario y cambia el estado del pedido a EN_TRANSITO.
+    """
+    pedido_resp, _ = controller.obtener_pedido_por_id(id)
+    if not pedido_resp.get('success'):
+        flash('Pedido no encontrado.', 'error')
+        return redirect(url_for('orden_venta.listar'))
+    
+    pedido = pedido_resp.get('data')
+    if pedido.get('estado') != 'LISTO_PARA_ENTREGAR':
+        flash(f"El pedido no está listo para ser despachado (Estado actual: {pedido.get('estado')}).", 'warning')
+        return redirect(url_for('orden_venta.detalle', id=id))
+
+    if request.method == 'POST':
+        # Lógica de procesar el despacho
+        response, status_code = controller.despachar_pedido(id, request.form)
+        if status_code < 300:
+            flash('Pedido despachado con éxito.', 'success')
+            return redirect(url_for('orden_venta.detalle', id=id))
+        else:
+            flash(response.get('message', 'Error al despachar el pedido.'), 'error')
+            return redirect(url_for('orden_venta.despachar', id=id))
+
+    # Lógica para GET
+    from app.controllers.usuario_controller import UsuarioController
+    usuario_controller = UsuarioController()
+    transportistas_resp, _ = usuario_controller.obtener_usuarios_por_rol('LOGISTICA')
+    transportistas = transportistas_resp.get('data', [])
+
+    return render_template('orden_venta/despacho.html', pedido=pedido, transportistas=transportistas)
+
 @orden_venta_bp.route('/<int:id>/planificar', methods=['POST'])
 @permission_required(accion='aprobar_orden_de_venta')
 def planificar(id):
@@ -219,6 +256,26 @@ def completar(id):
         flash(response.get('error'), 'error')
 
     return redirect(url_for('orden_venta.detalle', id=id))
+
+@orden_venta_bp.route('/api/pedidos/<int:id>/despachar', methods=['POST'])
+@jwt_required()
+@permission_required(accion='modificar_orden_de_venta') # Ajustar permiso si es necesario
+def api_despachar_pedido(id):
+    """API endpoint para despachar un pedido."""
+    json_data = request.get_json()
+    if not json_data:
+        return jsonify({"success": False, "error": "Datos no válidos"}), 400
+    
+    response, status_code = controller.despachar_pedido(id, json_data)
+    return jsonify(response), status_code
+
+@orden_venta_bp.route('/api/pedidos/<int:id>/planificar', methods=['POST'])
+@jwt_required()
+@permission_required(accion='modificar_orden_de_venta') # Ajustar permiso si es necesario
+def api_planificar_pedido(id):
+    """API endpoint para cambiar el estado de un pedido a 'PLANIFICADA'."""
+    response, status_code = controller.planificar_pedido(id)
+    return jsonify(response), status_code
 
 @orden_venta_bp.route('/api/<int:id>/cambiar-estado', methods=['POST'])
 @jwt_required()

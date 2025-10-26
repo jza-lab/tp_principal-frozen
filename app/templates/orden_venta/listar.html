@@ -3,6 +3,7 @@
 {% block title %}Pedidos de Venta - Sistema Frozen{% endblock %}
 
 {% block content %}
+<input type="hidden" id="csrf_token" value="{{ csrf_form.csrf_token._value() }}">
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">{{ titulo | default('Pedidos de Venta') }}</h1>
@@ -113,6 +114,12 @@
                         <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}"
                             class="btn btn-sm btn-outline-primary"
                             title="Editar Pedido"><i class="bi bi-pencil"></i></a>
+                        
+                        <button class="btn btn-sm btn-outline-info" 
+                                title="Planificar Pedido"
+                                onclick="planificarPedido({{ pedido.id }})">
+                            <i class="bi bi-calendar-check"></i>
+                        </button>
                         {% endif %}
 
                         {% endif %}
@@ -128,13 +135,17 @@
                                 Entrega</button>
                         </form>
                         {% endif %}
-                        {% if pedido.estado == 'LISTO_PARA_ENTREGA' and 'modificar_orden_de_venta' is has_permission %}
+                        {% if pedido.estado == 'LISTO_PARA_ENTREGAR' and 'modificar_orden_de_venta' is has_permission %}
+                        <a href="{{ url_for('orden_venta.despachar', id=pedido.id) }}" class="btn btn-sm btn-info" title="Despachar Pedido">
+                            <i class="bi bi-truck me-1"></i>Despachar
+                        </a>
+                        {% endif %}
+                        {% if pedido.estado == 'EN_TRANSITO' and 'modificar_orden_de_venta' is has_permission %}
                         <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}"
                             class="confirm-form d-inline" data-title="Confirmar Entrega"
-                            data-message="¿Está seguro de marcar este pedido como 'COMPLETADO'? Esta es la acción final."
+                            data-message="¿Confirma que el cliente ha recibido el pedido?"
                             data-button-type="success">
                             {{ csrf_form.csrf_token }}
-
                             <button type="submit" class="btn btn-sm btn-success" title="Marcar como Completado">
                                 <i class="bi bi-check-lg me-1"></i>Completar
                             </button>
@@ -165,6 +176,35 @@
 
 {% block extra_js %}
 <script>
+function planificarPedido(pedidoId) {
+    showConfirmationModal(
+        'Confirmar Planificación',
+        '¿Está seguro de que desea mover este pedido a "Planificada"?',
+        () => {
+            fetch(`/api/pedidos/${pedidoId}/planificar`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('#csrf_token').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast(data.message || 'Pedido planificado con éxito.', 'success');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showToast(data.error || 'Error al planificar el pedido.', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showToast('Error de red al intentar planificar el pedido.', 'error');
+            });
+        },
+        'info'
+    );
+}
 
 document.addEventListener('DOMContentLoaded', function () {
     const forms = document.querySelectorAll('.confirm-form');

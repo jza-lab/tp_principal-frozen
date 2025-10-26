@@ -387,7 +387,8 @@ class OrdenCompraController:
                         # If it returns a tuple (dict, status), use this:
                         # lote_result, _ = self.inventario_controller.crear_lote(lote_data, usuario_id)
 
-                        if lote_result.get('success'): lotes_creados_count += 1
+                        if lote_result.get('success'):
+                            lotes_creados_count += 1
                         else:
                             logger.error(f"Failed to create lot for insumo {lote_data.get('id_insumo')}: {lote_result.get('error')}")
                             lotes_error_count += 1
