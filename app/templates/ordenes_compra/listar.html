@@ -47,6 +47,7 @@
                         {% set estados = [
                             ('PENDIENTE', 'Pendientes'),
                             ('APROBADA', 'Aprobadas'),
+                            ('EN ESPERA DE INSUMO', 'En Espera'),
                             ('EN_TRANSITO', 'En Tránsito'),
                             ('RECIBIDA', 'Recibidas')
                         ] %}
@@ -77,8 +78,9 @@
                     {% set estado_config = {
                         'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
                         'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
+                        'EN ESPERA DE INSUMO': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
                         'EN_TRANSITO': {'class': 'bg-primary-soft text-primary', 'icon': 'truck'},
-                        'RECIBIDA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
+                        'RECIBIDA': {'class': 'bg-success-soft text-success', 'icon': 'box-seam'},
                         'RECHAZADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
                     {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':

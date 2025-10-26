@@ -109,47 +109,69 @@
 
     {% if can_ver_ventas %}
     <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm
-            {% if not can_ver_produccion %}disabled{% endif %}
-            {% if ordenesventa_pendientes > 0 %}glow-on-load{% endif %}">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') }}" style="text-decoration: none;">
-                    <div>
-                        <div class="stat-label mb-1 text-muted">Órdenes de Venta Pendientes</div>
-                        <div class="stat-value text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">{{ ordenesventa_pendientes }}</div>
-                        <div class="small text-muted">OVs esperando aprobación</div>
-                    </div>
-                    </a>
-                    <div class="text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">
-                        
-                        <i class="bi bi-hourglass-split fs-1"></i>
-                    
+        <div class="card stat-card h-100 border-0 shadow-sm {% if ordenesventa_pendientes > 0 %}glow-on-load{% endif %}">
+            <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') }}" style="text-decoration: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="stat-label mb-1 text-muted">Órdenes de Venta Pendientes</div>
+                             <div class="stat-value text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">{{ ordenesventa_pendientes }}</div>
+                            {% if ordenesventa_pendientes_list %}
+                            <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                {% for orden in ordenesventa_pendientes_list[:3] %}
+                                <li class="text-truncate">
+                                    <a href="{{ url_for('orden_venta.detalle', id=orden.id) }}" class="text-danger text-decoration-underline">Ver Orden: {{ orden.id }}</a>
+                                </li>
+                                {% endfor %}
+                                {% if ordenesventa_pendientes > 3 %}
+                                <li class="small">y {{ ordenesventa_pendientes - 3 }} más...</li>
+                                {% endif %}
+                            </ul>
+                            {% else %}
+                            <div class="small text-muted">Sin OVs pendientes</div>
+                            {% endif %}
+                        </div>
+                        <div class="text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">
+                            <i class="bi bi-hourglass-split fs-1"></i>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
     </div>
 
     <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm
-             {% if not can_ver_produccion %}disabled{% endif %}">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <a href="{{ url_for('orden_venta.listar', estado='CANCELADO') if can_ver_produccion else '#' }}" style="text-decoration: none;" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
-                    <div>
-                        <div class="stat-label mb-1 text-muted">Órdenes de Venta Rechazadas</div>
-                        <div class="stat-value text-{{ 'danger' if ordenesventa_rechazadas > 0 else 'success' }}">{{ ordenesventa_rechazadas }}</div>
-                        <div class="small text-muted">Últimos 30 días</div>
-                    </div>
-                    </a>
-                    <div class="text-{{ 'danger' if ordenesventa_rechazadas > 0 else 'success' }}">
-                        <i class="bi bi-cart-x-fill fs-1"></i>
+        <div class="card stat-card h-100 border-0 shadow-sm">
+            <a href="{{ url_for('orden_venta.listar', estado='CANCELADO') }}" style="text-decoration: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="stat-label mb-1 text-muted">Órdenes de Venta Rechazadas</div>
+                            <div class="stat-value text-{{ 'dark' if ordenesventa_rechazadas > 0 else 'success' }}">{{ ordenesventa_rechazadas }}</div>
+                            {% if ordenesventa_rechazadas_list %}
+                            <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                {% for orden in ordenesventa_rechazadas_list[:3] %}
+                                <li class="text-truncate">
+                                    <a href="{{ url_for('orden_venta.detalle', id=orden.id) }}" class="text-primary text-decoration-underline">Ver Orden: {{ orden.id }}</a>
+                                </li>
+                                {% endfor %}
+                                {% if ordenesventa_rechazadas > 3 %}
+                                <li class="small">y {{ ordenesventa_rechazadas - 3 }} más...</li>
+                                {% endif %}
+                            </ul>
+                            {% else %}
+                            <div class="small text-muted">Sin OVs rechazadas</div>
+                            {% endif %}
+                        </div>
+                        <div class="text-{{ 'dark' if ordenesventa_rechazadas > 0 else 'success' }}">
+                            <i class="bi bi-cart-x-fill fs-1"></i>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
     </div>
+
     {% endif %}
     
     {% if can_ver_produccion %}
@@ -211,20 +233,33 @@
     {% if can_ver_produccion %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" style="text-decoration: none;">
-                    <div>
-                        <div class="stat-label mb-1 text-muted">Órdenes en Proceso</div>
-                        <div class="stat-value text-primary">{{ ordenes_pendientes }}</div>
-                        <div class="small text-muted">OPs en fabricación</div>
-                    </div>
-                    </a>
-                    <div class="text-primary">
-                        <i class="bi bi-gear-fill fs-1"></i>
+            <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" style="text-decoration: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="stat-label mb-1 text-muted">Órdenes en Proceso</div>
+                            <div class="stat-value text-primary">{{ ordenesproduccion_proceso_count }}</div>
+                            {% if ordenesproduccion_proceso_list %}
+                            <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                {% for orden in ordenesproduccion_proceso_list[:3] %}
+                                <li class="text-truncate">
+                                    <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" class="text-primary text-decoration-underline">Ver Orden: {{ orden.codigo }}</a>
+                                </li>
+                                {% endfor %}
+                                {% if ordenesproduccion_proceso_count > 3 %}
+                                <li class="small">y {{ ordenesproduccion_proceso_count - 3 }} más...</li>
+                                {% endif %}
+                            </ul>
+                            {% else %}
+                            <div class="small text-muted">Ninguna orden en proceso</div>
+                            {% endif %}
+                        </div>
+                        <div class="text-primary">
+                            <i class="bi bi-gear-fill fs-1"></i>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
     </div>
     {% endif %}
