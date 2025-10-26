@@ -536,61 +536,117 @@ class LoteProductoController(BaseController):
             logger.error(f"Error obteniendo datos de gráfico: {e}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
+    def _validar_fila_para_lote(self, row, numero_fila):
+        """Valida una única fila del archivo Excel para la creación de un lote."""
+        try:
+            def error_msg(mensaje):
+                return f"Fila {numero_fila}: {mensaje}"
+
+            # 1. Validar Codigo Producto
+            codigo_producto = row.get('codigo_producto')
+            if pd.isna(codigo_producto) or codigo_producto is None:
+                return False, error_msg("La columna 'codigo_producto' no puede estar vacía.")
+            
+            producto_result = self.producto_model.find_by_codigo(str(codigo_producto))
+            if not producto_result.get('success') or not producto_result.get('data'):
+                return False, error_msg(f"Producto con código '{codigo_producto}' no encontrado.")
+            
+            producto_id = producto_result['data']['id']
+
+            # 2. Validar Cantidad
+            cantidad_inicial = row.get('cantidad_inicial')
+            if pd.isna(cantidad_inicial) or cantidad_inicial is None:
+                return False, error_msg("La columna 'cantidad_inicial' no puede estar vacía.")
+            
+            try:
+                cantidad_inicial = float(cantidad_inicial)
+                if cantidad_inicial <= 0:
+                    return False, error_msg(f"La cantidad inicial debe ser un número positivo, pero se recibió: '{cantidad_inicial}'.")
+            except (ValueError, TypeError):
+                return False, error_msg(f"La cantidad inicial debe ser un número, pero se recibió: '{cantidad_inicial}'.")
+
+            # 3. Validar y manejar Número de Lote
+            numero_lote = row.get('numero_lote')
+            if pd.isna(numero_lote) or numero_lote is None:
+                numero_lote = f"LP-{datetime.now().strftime('%Y%m%d%H%M%S')}-{numero_fila}"
+            else:
+                numero_lote = str(numero_lote)
+                lote_existente = self.model.find_by_numero_lote(numero_lote)
+                if lote_existente.get('data'):
+                    return False, error_msg(f"El número de lote '{numero_lote}' ya existe.")
+
+            # 4. Validar Fechas
+            fecha_produccion_str = row.get('fecha_produccion')
+            try:
+                fecha_produccion = pd.to_datetime(fecha_produccion_str).date() if pd.notna(fecha_produccion_str) else date.today()
+            except (ValueError, TypeError):
+                return False, error_msg(f"Formato de 'fecha_produccion' inválido: '{fecha_produccion_str}'. Use AAAA-MM-DD.")
+            
+            fecha_vencimiento_str = row.get('fecha_vencimiento')
+            fecha_vencimiento = None
+            if pd.notna(fecha_vencimiento_str):
+                try:
+                    fecha_vencimiento = pd.to_datetime(fecha_vencimiento_str).date()
+                except (ValueError, TypeError):
+                    return False, error_msg(f"Formato de 'fecha_vencimiento' inválido: '{fecha_vencimiento_str}'. Use AAAA-MM-DD.")
+
+            if fecha_vencimiento and fecha_vencimiento < fecha_produccion:
+                return False, error_msg(f"La fecha de vencimiento ({fecha_vencimiento}) no puede ser anterior a la fecha de producción ({fecha_produccion}).")
+
+            # 5. Si todo es válido, devolver los datos limpios
+            lote_data = {
+                'producto_id': producto_id,
+                'numero_lote': numero_lote,
+                'cantidad_inicial': cantidad_inicial,
+                'cantidad_actual': cantidad_inicial,
+                'fecha_produccion': fecha_produccion.isoformat(),
+                'fecha_vencimiento': fecha_vencimiento.isoformat() if fecha_vencimiento else None,
+                'estado': 'DISPONIBLE'
+            }
+            return True, lote_data
+
+        except Exception as e:
+            return False, f"Fila {numero_fila}: Error inesperado al validar la fila - {str(e)}"
+
     def procesar_archivo_lotes(self, archivo):
-        """Procesa un archivo Excel para crear lotes de productos masivamente."""
+        """Procesa un archivo Excel para crear lotes de productos masivamente con validación completa previa."""
         try:
             df = pd.read_excel(archivo)
-            resultados = {'creados': 0, 'ignorados': 0, 'errores': 0, 'detalles': []}
+            
+            lotes_a_crear = []
+            errores = []
 
+            # 1. Fase de Validación
             for index, row in df.iterrows():
-                try:
-                    # 1. Buscar producto
-                    codigo_producto = row.get('codigo_producto')
-                    if not codigo_producto:
-                        raise ValueError("La columna 'codigo_producto' es obligatoria.")
-                    
-                    producto_result = self.producto_model.find_by_codigo(codigo_producto)
-                    if not producto_result.get('success') or not producto_result.get('data'):
-                        raise ValueError(f"Producto con código '{codigo_producto}' no encontrado.")
-                    
-                    producto_id = producto_result['data']['id']
+                is_valid, data_o_error = self._validar_fila_para_lote(row, index + 2)
+                if is_valid:
+                    lotes_a_crear.append(data_o_error)
+                else:
+                    errores.append(data_o_error)
+            
+            # 2. Fase de Creación (Todo o Nada)
+            if errores:
+                resultados = {'creados': 0, 'errores': len(errores), 'detalles': errores, 'estado_general': 'ERROR'}
+                return self.success_response(data=resultados)
 
-                    # 2. Manejar número de lote
-                    numero_lote = row.get('numero_lote')
-                    if pd.isna(numero_lote) or numero_lote is None:
-                        numero_lote = f"LP-{datetime.now().strftime('%Y%m%d%H%M%S')}-{index}"
+            else:
+                creados_count = 0
+                detalles_creacion = []
+                for lote_data in lotes_a_crear:
+                    result = self.model.create(lote_data)
+                    if result.get('success'):
+                        creados_count += 1
                     else:
-                        numero_lote = str(numero_lote)
-                        lote_existente = self.model.find_by_numero_lote(numero_lote)
-                        if lote_existente.get('data'):
-                            resultados['ignorados'] += 1
-                            resultados['detalles'].append(f"Fila {index + 2}: Lote '{numero_lote}' ya existe, ignorado.")
-                            continue
+                        detalles_creacion.append(f"Error al crear lote para producto {lote_data.get('producto_id')}: {result.get('error')}")
 
-                    # 3. Preparar datos para el lote
-                    lote_data = {
-                        'producto_id': producto_id,
-                        'numero_lote': numero_lote,
-                        'cantidad_inicial': row.get('cantidad_inicial'),
-                        'cantidad_actual': row.get('cantidad_inicial'), # Asumimos que la cantidad actual es la inicial
-                        'fecha_produccion': pd.to_datetime(row.get('fecha_produccion')).date().isoformat() if pd.notna(row.get('fecha_produccion')) else date.today().isoformat(),
-                        'fecha_vencimiento': pd.to_datetime(row.get('fecha_vencimiento')).date().isoformat() if pd.notna(row.get('fecha_vencimiento')) else None,
-                        'estado': 'DISPONIBLE'
-                    }
+                resultados = {
+                    'creados': creados_count,
+                    'errores': len(detalles_creacion),
+                    'detalles': detalles_creacion,
+                    'estado_general': 'OK' if not detalles_creacion else 'ERROR'
+                }
+                return self.success_response(data=resultados)
 
-                    # 4. Crear el lote
-                    response, status_code = self.crear_lote(lote_data)
-                    if status_code == 201:
-                        resultados['creados'] += 1
-                    else:
-                        raise Exception(response.get('error', 'Error desconocido al crear el lote.'))
-
-                except Exception as e:
-                    resultados['errores'] += 1
-                    resultados['detalles'].append(f"Fila {index + 2}: Error - {str(e)}")
-
-            return self.success_response(data=resultados)
-        
         except Exception as e:
             logger.error(f"Error crítico al procesar archivo de lotes: {str(e)}", exc_info=True)
             return self.error_response(f"Error al leer o procesar el archivo: {str(e)}", 500)
