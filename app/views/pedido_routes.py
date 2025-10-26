@@ -5,6 +5,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
 from app.utils.decorators import permission_required
+from app.utils.estados import OV_FILTROS_UI, OV_MAP_STRING_TO_INT
 import re
 from datetime import datetime
 import base64
@@ -56,20 +57,16 @@ def listar():
     if response.get('success'):
         todos_los_pedidos = response.get('data', [])
         # --- LÓGICA DE ORDENAMIENTO POR ESTADO ---
-        estado_orden = {
-            'PENDIENTE': 1,
-            'PLANIFICACION': 2,
-            'EN_PROCESO': 3,
-            'LISTO_PARA_ARMAR': 4,
-            'LISTO_PARA_ENTREGAR': 5,
-            'COMPLETADO': 6,
-            'CANCELADO': 7
-        }
-        pedidos = sorted(todos_los_pedidos, key=lambda p: estado_orden.get(p.get('estado'), 99))
+        # Se utiliza el mapeo centralizado de estados para el ordenamiento
+        pedidos = sorted(todos_los_pedidos, key=lambda p: OV_MAP_STRING_TO_INT.get(p.get('estado'), 999))
     else:
         flash(response.get('error', 'Error al cargar los pedidos.'), 'error')
 
-    return render_template('orden_venta/listar.html', pedidos=pedidos, titulo="Pedidos de Venta")
+    # Se pasa la lista de filtros de la UI a la plantilla
+    return render_template('orden_venta/listar.html', 
+                           pedidos=pedidos, 
+                           titulo="Pedidos de Venta", 
+                           filtros_ui=OV_FILTROS_UI)
 
 @orden_venta_bp.route('/nueva', methods=['GET', 'POST'])
 @jwt_required()
@@ -222,6 +219,24 @@ def completar(id):
         flash(response.get('error'), 'error')
 
     return redirect(url_for('orden_venta.detalle', id=id))
+
+@orden_venta_bp.route('/api/<int:id>/cambiar-estado', methods=['POST'])
+@jwt_required()
+@permission_required(accion='modificar_orden_de_venta')
+def cambiar_estado(id):
+    """
+    API endpoint para cambiar el estado de un pedido de venta.
+    Espera un JSON con {'estado': 'NUEVO_ESTADO'}.
+    """
+    data = request.get_json()
+    nuevo_estado = data.get('estado')
+
+    if not nuevo_estado:
+        return jsonify({'success': False, 'error': "El campo 'estado' es requerido."}), 400
+
+    response, status_code = controller.cambiar_estado_pedido(id, nuevo_estado)
+
+    return jsonify(response), status_code
 
 @orden_venta_bp.route('/api/generar-proforma', methods=['POST'])
 def generar_proforma_api():

@@ -19,67 +19,27 @@
 
 <div class="card mb-4">
     <div class="card-body card-filter">
-        <form method="get" action="{{ url_for('orden_produccion.listar') }}">
-            <div class="row g-3 align-items-end">
-                <div class="card-body card-filter">
-                    <form method="get" action="{{ url_for('orden_produccion.listar') }}">
-                        <div class="row g-3 align-items-end">   
-                            <div class="col-12 mb-3">
-                                <h5 class="form-label mb-1 text-white">Filtrar por Estado</h5>
-                                <p class="text-white small mb-0">{{ ordenes|length }} órdenes encontradas</p>
-                            </div>
-                            
-                            <div class="col-12 d-flex">
-                                {% set current_status = request.args.get('estado') %}
-                                
-                                <div class="d-flex flex-wrap gap-2 align-items-center" role="group" aria-label="Filtro de Órdenes">
-                                    
-                                    <a href="{{ url_for('orden_produccion.listar', estado='') }}" 
-                                    class="btn btn-sm {% if not current_status %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Todas las órdenes
-                                    </a>
-                                    <span class="text-white fw-bold mx-1 justify-content-center">|</span>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='PENDIENTE') }}" 
-                                    class="btn btn-sm {% if current_status == 'PENDIENTE' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Pendientes
-                                    </a>
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='EN ESPERA') }}" 
-                                    class="btn btn-sm {% if current_status == 'EN ESPERA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        En Espera
-                                    </a>
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='LISTA PARA PRODUCIR') }}" 
-                                    class="btn btn-sm {% if current_status == 'LISTA PARA PRODUCIR' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Lista para Producir
-                                    </a>
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" 
-                                    class="btn btn-sm {% if current_status == 'EN_PROCESO' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        En Proceso
-                                    </a>                                    
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='CONSOLIDADA') }}" 
-                                    class="btn btn-sm {% if current_status == 'CONSOLIDADA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Consolidadas
-                                    </a>
-                                    <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='COMPLETADA') }}" 
-                                    class="btn btn-sm {% if current_status == 'COMPLETADA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Completadas
-                                    </a>
-                                     <i class="bi bi-arrow-right text-white mx-1 justify-content-center"></i>
-                                    <a href="{{ url_for('orden_produccion.listar', estado='CANCELADA') }}" 
-                                    class="btn btn-sm {% if current_status == 'CANCELADA' %}btn-primary{% else %}btn-secondary{% endif %}">
-                                        Canceladas
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
+        <div class="row g-3 align-items-end">
+            <div class="col-12 mb-3">
+                <h5 class="form-label mb-1 text-white">Filtrar por Estado</h5>
+                <p class="text-white small mb-0">{{ ordenes|length }} órdenes encontradas</p>
+            </div>
+            
+            <div class="col-12">
+                {% set current_status = request.args.get('estado') %}
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <a href="{{ url_for('orden_produccion.listar', estado='') }}" class="btn btn-sm {% if not current_status %}btn-dark{% else %}btn-secondary{% endif %}">
+                        Todas
+                    </a>
+                    {% for estado_key, estado_nombre in filtros_ui %}
+                        <a href="{{ url_for('orden_produccion.listar', estado=estado_key) }}" 
+                           class="btn btn-sm {% if current_status == estado_key %}btn-dark{% else %}btn-secondary{% endif %}">
+                            {{ estado_nombre }}
+                        </a>
+                    {% endfor %}
                 </div>
             </div>
-        </form>
+        </div>
     </div>
 </div>
 

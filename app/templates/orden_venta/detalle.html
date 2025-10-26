@@ -95,6 +95,32 @@
                          </div>
                      </div>
                  </div>
+                 <hr>
+                 {# --- SECCIÓN DE TRANSPORTE (SIMULACIÓN) --- #}
+                 <div id="seccion-transporte" class="col-md-12" {% if pedido.estado not in ['DESPACHADO', 'ENTREGADO'] %}style="display: none;"{% endif %}>
+                     <div class="mb-3">
+                         <label class="form-label-sm fw-bold mb-3"><i class="bi bi-truck me-1"></i>Información de Despacho (Simulación)</label>
+                         <div class="row g-2">
+                            <div class="col-sm-6">
+                                <label class="form-label-sm fw-bold"><i class="bi bi-person-badge me-1"></i>Transportista:</label>
+                                <p class="form-control-plaintext">Andreani Cargas</p>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label-sm fw-bold"><i class="bi bi-upc-scan me-1"></i>Código de Seguimiento:</label>
+                                <p class="form-control-plaintext">AR123456789</p>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label-sm fw-bold"><i class="bi bi-truck-front me-1"></i>Vehículo:</label>
+                                <p class="form-control-plaintext">Camión Iveco (Patente: AE 456 RF)</p>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label-sm fw-bold"><i class="bi bi-person-lines-fill me-1"></i>Conductor:</label>
+                                <p class="form-control-plaintext">Carlos Rodriguez</p>
+                            </div>
+                         </div>
+                     </div>
+                 </div>
+                 {# --- FIN SECCIÓN TRANSPORTE --- #}
             </div>
         </div>
 
@@ -210,22 +236,20 @@
                         {% endif %}
                     {% endif %}
 
-                    {# 3. Botón "Marcar como Completado" (si está LISTO_PARA_ENTREGAR) #}
-                    {% if pedido.estado == 'LISTO_PARA_ENTREGAR' and 'modificar_ordenes_venta' is has_permission %}
-                        <form action="{{ url_for('orden_venta.completar', id=pedido.id) }}" method="post" 
-                              class="d-grid needs-confirmation" 
-                              data-confirm-message="¿Confirma que este pedido ha sido entregado y desea marcarlo como completado?">
-                                {{ csrf_form.csrf_token }}
-
-                            <button type="submit" class="btn btn-success">
-                                <i class="bi bi-check-circle-fill me-1"></i> Marcar como Completado (Entregado)
-                            </button>
-                        </form>
+                    {# 3. Botón "Despachar" (si está LISTO_PARA_ENTREGAR) - Reemplaza 'Marcar como Completado' #}
+                    {% if pedido.estado == 'LISTO_PARA_ENTREGAR' and 'modificar_orden_de_venta' is has_permission %}
+                        <button type="button" id="btn-despachar" class="btn btn-warning w-100">
+                            <i class="bi bi-truck me-1"></i> Despachar Pedido
+                        </button>
                     {% endif %}
-                    {# --- FIN BLOQUE ÚNICO Y CORRECTO --- #}
-                    
-                    {# --- BLOQUES DUPLICADOS ELIMINADOS --- #}
-                    {# Ya no están los bloques if/elif/endif adicionales que causaban conflicto #}
+
+                    {# 4. Botón "Confirmar Entrega" (si está DESPACHADO) #}
+                    {% if pedido.estado == 'DESPACHADO' and 'modificar_orden_de_venta' is has_permission %}
+                        <button type="button" id="btn-confirmar-entrega" class="btn btn-success w-100">
+                            <i class="bi bi-check2-all me-1"></i> Confirmar Entrega (Recepción OK)
+                        </button>
+                    {% endif %}
+                    {# --- FIN NUEVO FLUJO DE ENTREGA --- #}
 
                     <hr>
                     {# Botón Imprimir Factura #}
@@ -321,4 +345,71 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const pedidoId = {{ pedido.id }};
+    const btnDespachar = document.getElementById('btn-despachar');
+    const btnConfirmarEntrega = document.getElementById('btn-confirmar-entrega');
+    const seccionTransporte = document.getElementById('seccion-transporte');
+
+    // Función reutilizable para cambiar el estado del pedido
+    async function cambiarEstadoPedido(nuevoEstado, button) {
+        const originalHtml = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Procesando...`;
+
+        try {
+            const response = await fetch(`/orden-venta/api/${pedidoId}/cambiar-estado`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                },
+                body: JSON.stringify({ estado: nuevoEstado })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                showNotificationModal('Éxito', result.message || 'El estado del pedido fue actualizado.', 'success', () => {
+                    window.location.reload();
+                });
+            } else {
+                showNotificationModal('Error', result.error || 'No se pudo actualizar el estado.', 'error');
+                button.disabled = false;
+                button.innerHTML = originalHtml;
+            }
+        } catch (error) {
+            console.error('Error al cambiar estado:', error);
+            showNotificationModal('Error de Red', 'No se pudo conectar con el servidor.', 'error');
+            button.disabled = false;
+            button.innerHTML = originalHtml;
+        }
+    }
+
+    // Event listener para el botón de despachar
+    if (btnDespachar) {
+        btnDespachar.addEventListener('click', () => {
+            showConfirmationModal(
+                'Confirmar Despacho',
+                '¿Está seguro de que desea marcar este pedido como despachado? Se mostrará la información del transporte.',
+                'warning',
+                () => { cambiarEstadoPedido('DESPACHADO', btnDespachar); }
+            );
+        });
+    }
+
+    // Event listener para el botón de confirmar entrega
+    if (btnConfirmarEntrega) {
+        btnConfirmarEntrega.addEventListener('click', () => {
+            showConfirmationModal(
+                'Confirmar Entrega',
+                '¿Confirma que el cliente ha recibido el pedido? El estado cambiará a Entregado.',
+                'success',
+                () => { cambiarEstadoPedido('ENTREGADO', btnConfirmarEntrega); }
+            );
+        });
+    }
+});
+</script>
 {% endblock %}

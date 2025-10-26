@@ -492,6 +492,37 @@ class PedidoController(BaseController):
         except Exception as e:
             return self.error_response(f'Error interno: {str(e)}', 500)
 
+    def cambiar_estado_pedido(self, pedido_id: int, nuevo_estado: str) -> tuple:
+        """
+        Cambia el estado de un pedido a un nuevo estado especificado.
+        Realiza validaciones básicas sobre la transición de estado.
+        """
+        logger.info(f"Intento de cambiar estado del pedido {pedido_id} a '{nuevo_estado}'")
+        try:
+            # Validar que el nuevo estado sea uno de los conocidos (opcional pero recomendado)
+            from app.utils.estados import OV_MAP_STRING_TO_INT
+            if nuevo_estado not in OV_MAP_STRING_TO_INT:
+                return self.error_response(f"Estado '{nuevo_estado}' no es válido.", 400)
+
+            # Verificar que el pedido existe
+            pedido_existente_resp = self.model.find_by_id(pedido_id, 'id')
+            if not pedido_existente_resp.get('success'):
+                return self.error_response(f"Pedido con ID {pedido_id} no encontrado.", 404)
+
+            # Lógica de transición (Aquí se pueden añadir reglas más complejas)
+            # Por ahora, simplemente cambiamos el estado.
+            result = self.model.cambiar_estado(pedido_id, nuevo_estado)
+            if result.get('success'):
+                logger.info(f"Pedido {pedido_id} cambiado a estado '{nuevo_estado}' con éxito.")
+                return self.success_response(message=f"Pedido actualizado al estado '{nuevo_estado}'.")
+            else:
+                logger.error(f"Error al cambiar estado del pedido {pedido_id}: {result.get('error')}")
+                return self.error_response(result.get('error', 'Error al actualizar el estado del pedido.'), 500)
+        except Exception as e:
+            logger.error(f"Error interno en cambiar_estado_pedido: {e}", exc_info=True)
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
+
     # --- MÉTODO CORREGIDO ---
     def preparar_para_entrega(self, pedido_id: int, usuario_id: int) -> tuple:
         """

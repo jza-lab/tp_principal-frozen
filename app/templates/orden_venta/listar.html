@@ -27,40 +27,16 @@
             
             <div class="col-12">
                 {% set current_status = request.args.get('estado') %}
-                <div class="d-flex flex-wrap gap-3 align-items-start">
-                    <!-- Column 1: All and Canceled -->
-                    <div class="d-flex flex-column gap-2">
-                        <a href="{{ url_for('orden_venta.listar', estado='') }}" class="btn btn-sm {% if not current_status %}btn-primary{% else %}btn-secondary{% endif %}">
-                            Todos los pedidos
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <a href="{{ url_for('orden_venta.listar', estado='') }}" class="btn btn-sm {% if not current_status %}btn-dark{% else %}btn-secondary{% endif %}">
+                        Todos
+                    </a>
+                    {% for estado_key, estado_nombre in filtros_ui %}
+                        <a href="{{ url_for('orden_venta.listar', estado=estado_key) }}" 
+                           class="btn btn-sm {% if current_status == estado_key %}btn-dark{% else %}btn-secondary{% endif %}">
+                            {{ estado_nombre }}
                         </a>
-                        <a href="{{ url_for('orden_venta.listar', estado='CANCELADO') }}" class="btn btn-sm {% if current_status == 'CANCELADO' %}btn-danger{% else %}btn-outline-danger{% endif %}">
-                            Cancelados
-                        </a>
-                    </div>
-
-                    <!-- Separator -->
-                    <div class="vr text-white d-none d-md-block mx-2"></div>
-
-                    <!-- Column 2: Main flow -->
-                    <div class="d-flex flex-wrap gap-2 align-items-center">
-                        {% set estados = [
-                            ('PENDIENTE', 'Pendientes'),
-                            ('PLANIFICACION', 'Planificación'),
-                            ('EN_PROCESO', 'En Proceso'),
-                            ('LISTO_PARA_ARMAR', 'Listo para Armar'),
-                            ('LISTO_PARA_ENTREGA', 'Listo para Entrega'),
-                            ('COMPLETADO', 'Completados')
-                        ] %}
-                        
-                        {% for estado, nombre in estados %}
-                            <a href="{{ url_for('orden_venta.listar', estado=estado) }}" class="btn btn-sm {% if current_status == estado %}btn-primary{% else %}btn-secondary{% endif %}">
-                                {{ nombre }}
-                            </a>
-                            {% if not loop.last %}
-                            <i class="bi bi-arrow-right text-white mx-1"></i>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
