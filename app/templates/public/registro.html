@@ -1,0 +1,191 @@
+{% extends 'public/base.html' %}
+
+{% block title %}Registro de Cliente{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Registro de Nuevo Cliente</h2>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="registration-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" id="cuit" name="cuit">
+
+                        <h4>Información del Cliente</h4>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="nombre" name="nombre"
+                                        placeholder="Nombre y Apellido" required>
+                                    <label for="nombre"><i class="bi bi-person-circle me-1"></i>Nombre y Apellido
+                                        *</label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="razon_social" name="razon_social"
+                                        placeholder="Razón Social">
+                                    <label for="razon_social">Razón Social</label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">CUIT/CUIL *</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control text-center" id="cuit_parte1"
+                                        name="cuit_parte1" maxlength="2" pattern="\d{2}" placeholder="XX" required
+                                        style="flex: 0 0 4em;">
+                                    <span class="input-group-text">-</span>
+                                    <input type="text" class="form-control text-center" id="cuit_parte2"
+                                        name="cuit_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX" required
+                                        style="flex: 1 1 auto;">
+                                    <span class="input-group-text">-</span>
+                                    <input type="text" class="form-control text-center" id="cuit_parte3"
+                                        name="cuit_parte3" maxlength="1" pattern="\d{1}" placeholder="X" required
+                                        style="flex: 0 0 3em;">
+                                </div>
+                                <small id="cuit-error" class="form-text text-danger"></small>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="email" class="form-control" id="email" name="email" placeholder="Email"
+                                        required>
+                                    <label for="email"><i class="bi bi-envelope me-1"></i>Email *</label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="telefono" name="telefono"
+                                        placeholder="Teléfono" required>
+                                    <label for="telefono"><i class="bi bi-phone me-1"></i>Teléfono *</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <select class="form-select" id="condicion-iva" name="condicion_iva" required>
+                                        <option value="" disabled selected>Seleccione una opción...</option>
+                                        <option value="Responsable Inscripto">Responsable Inscripto</option>
+                                        <option value="Monotributista">Monotributista</option>
+                                        <option value="IVA Exento">IVA Exento</option>
+                                        <option value="Consumidor Final">Consumidor Final</option>
+                                    </select>
+                                    <label for="condicion-iva"><i class="bi bi-file-earmark-person me-1"></i>Condición
+                                        de IVA *</label>
+                                </div>
+                            </div>
+                        </div>
+                        <hr class="my-4">
+
+                        <h4>Dirección de Facturación</h4>
+                        <div class="row g-3">
+                            <div class="col-md-8">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="calle" name="calle" minlength="3"
+                                        maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" placeholder="Calle" required>
+
+                                    <label for="calle">Calle</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input type="number" class="form-control" id="altura" name="altura"
+                                        pattern="\d{1,5}" maxlength="5" max="99999" min="1" placeholder="Altura"
+                                        required>
+                                    <label for="altura">Altura</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <select class="form-select" id="provincia" name="provincia" required>
+                                        <option value="">Seleccionar provincia...</option>
+                                        {% set provincias = ["Buenos Aires", "CABA", "Catamarca", "Chaco", "Chubut",
+                                        "Córdoba", "Corrientes", "Entre Ríos", "Formosa", "Jujuy", "La Pampa", "La
+                                        Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro", "Salta", "San Juan",
+                                        "San Luis", "Santa Cruz", "Santa Fe", "Santiago del Estero", "Tierra del
+                                        Fuego", "Tucumán"] %}
+                                        {% for p in provincias %}
+                                        <option value="{{ p }}">{{ p }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <label for="provincia">Provincia</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="localidad" name="localidad"
+                                        minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
+                                        placeholder="Localidad" required>
+                                    <label for="localidad">Localidad</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="piso" name="piso" maxlength="10"
+                                        pattern="[A-Za-z0-9\s]*" placeholder="Piso (Opcional)">
+                                    <label for="piso">Piso (Opcional)</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="depto" name="depto" maxlength="5"
+                                        pattern="[A-Za-z0-9\s]*" placeholder="Dto (Opcional)">
+                                    <label for="depto">Dto (Opcional)</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-floating">
+                                    <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                                        minlength="4" maxlength="8"
+                                        pattern="([A-Za-z]\d{4}[A-Za-z]{3})|([A-Za-z]\d{4})|\d{4}"
+                                        placeholder="Código Postal" required>
+                                    <label for="codigo_postal">Código Postal</label>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <hr class="my-4">
+
+                        <h4>Seguridad</h4>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="password" class="form-control" id="contrasena" name="contrasena"
+                                        placeholder="Contraseña" required minlength="8">
+                                    <label for="contrasena">Contraseña</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating">
+                                    <input type="password" class="form-control" id="confirm_contrasena"
+                                        name="confirm_contrasena" placeholder="Confirmar Contraseña" required>
+                                    <label for="confirm_contrasena">Confirmar Contraseña</label>
+                                    <small id="password-match-error" class="form-text text-danger"></small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg btn-block mt-4">Registrarse</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+<script>
+
+</script>
+
+{% block scripts %}
+{{ super() }}
+<script src="{{ url_for('static', filename='js/clientes/formularioCliente.js') }}"></script>
+{% endblock %}

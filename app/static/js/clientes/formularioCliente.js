@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const form = document.getElementById('formulario-cliente');
-
+    const form = document.querySelector('form#formulario-cliente, form#registration-form');
+    if (!form) return;
     const calleInput = document.getElementById('calle');
     const alturaInput = document.getElementById('altura');
     const provinciaSelect = document.getElementById('provincia');
@@ -12,7 +12,13 @@ document.addEventListener('DOMContentLoaded', function () {
             form.classList.add('was-validated');
             return;
         }
-
+        const contrasena = document.getElementById('contrasena')
+        const confirm_contrasena = document.getElementById('confirm_contrasena')
+        if (contrasena.value !== confirm_contrasena.value) {
+            showNotificationModal('Error de Contraseña', 'Las contraseñas ingresadas no coinciden, por favor, revisela.');
+            contrasena.focus();
+            return;
+        }
         const formData = new FormData(form);
         const cuit = `${formData.get('cuit_parte1')}-${formData.get('cuit_parte2')}-${formData.get('cuit_parte3')}`;
         const clienteData = {
@@ -21,6 +27,9 @@ document.addEventListener('DOMContentLoaded', function () {
             email: formData.get('email'),
             telefono: formData.get('telefono'),
             condicion_iva: formData.get('condicion_iva'),
+            razon_social: formData.get('razon_social') || '',
+            contrasena: formData.get('contrasena'),
+            csrf_token: formData.get('csrf_token'),
             direccion: {
                 calle: formData.get('calle'),
                 altura: formData.get('altura'),
@@ -32,8 +41,18 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         };
 
-        const url = isEditBoolean ? `/administrar/clientes/${ID_cliente}/editar` : '/administrar/clientes/nuevo';
-        const method = isEditBoolean ? 'PUT' : 'POST';
+        const isPublicRegistration = form.id === 'registration-form';
+        let url;
+        let method = 'POST';
+
+        if (isPublicRegistration) {
+            url = '/cliente/register'; // Ruta pública
+        } else {
+            // Asumimos que ID_cliente y isEditBoolean están definidas en el HTML de admin
+            const isEdit = typeof isEditBoolean !== 'undefined' && isEditBoolean;
+            url = isEdit ? `/administrar/clientes/${ID_cliente}/editar` : '/administrar/clientes/nuevo';
+            method = isEdit ? 'PUT' : 'POST';
+        }
 
         try {
             const respuesta = await fetch(url, {

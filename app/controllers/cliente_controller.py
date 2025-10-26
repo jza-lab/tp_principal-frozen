@@ -3,6 +3,7 @@ from app.controllers.base_controller import BaseController
 from app.models.cliente import ClienteModel
 from app.schemas.cliente_schema import ClienteSchema
 from app.controllers.pedido_controller import PedidoController
+from werkzeug.security import generate_password_hash, check_password_hash
 from typing import Dict, Optional
 import logging
 
@@ -125,7 +126,9 @@ class ClienteController(BaseController):
             data.pop('csrf_token', None)
             direccion_data = data.pop('direccion', None)
             data['codigo'] = self.generar_codigo_unico()
-            
+            contrasena = data.pop('contrasena')
+            data['contrasena'] = generate_password_hash(contrasena)
+
             if data.get('email'):
                 respuesta= self.model.buscar_por_email(data['email'])
                 
@@ -268,3 +271,29 @@ class ClienteController(BaseController):
         except Exception as e:
             logger.error(f"Error verificando pedidos previos para cliente {cliente_id}: {str(e)}")
             return False
+    
+    
+    def autenticar_cliente(self, cuit: str, contrasena: str) -> tuple:
+        """
+        Autentica a un cliente por CUIT y contraseña.
+        """
+        try:
+            cuit_result = self.model.buscar_por_cuit(cuit, include_direccion=True)
+            
+            if not cuit_result.get('success') or not cuit_result.get('data'):
+                return self.error_response('Credenciales incorrectas.', 401)
+
+            cliente_encontrado = cuit_result['data'][0]
+            
+            if not check_password_hash(cliente_encontrado.get('contrasena', ''), contrasena):
+                return self.error_response('Credenciales incorrectas.', 401)
+            
+            # No devolver el hash de la contraseña
+            cliente_encontrado.pop('contrasena', None)
+            
+            serialized_data = self.schema.dump(cliente_encontrado)
+            return self.success_response(data=serialized_data)
+
+        except Exception as e:
+            logger.error(f"Error en la autenticación para CUIT {cuit}: {str(e)}")
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)

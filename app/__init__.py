@@ -88,6 +88,8 @@ def _register_blueprints(app: Flask):
     from app.views.admin_tarea_routes import admin_tasks_bp
     from app.views.alertas_routes import alertas_bp
     from app.views.public_routes import public_bp
+    from app.views.cliente_routes import cliente_bp
+
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
@@ -112,6 +114,7 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(reservas_bp)
     app.register_blueprint(admin_tasks_bp)
     app.register_blueprint(alertas_bp)
+    app.register_blueprint(cliente_bp)
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""

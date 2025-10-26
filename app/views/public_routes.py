@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify, url_for
+from flask import Blueprint, flash, redirect, render_template, request, jsonify, session, url_for
 from datetime import datetime, timedelta
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
@@ -35,12 +35,25 @@ def hacer_pedido():
     """
     Muestra el formulario para que un cliente haga un pedido desde la web pública.
     """
+    if 'cliente_id' not in session:
+        flash('Por favor, inicia sesión para realizar un pedido.', 'info')
+        return redirect(url_for('cliente.login'))
+
+    if not session.get('cliente_aprobado'):
+        flash('Tu cuenta está pendiente de aprobación. No puedes realizar pedidos en este momento.', 'warning')
+        return redirect(url_for('public.index'))
+    
     csrf_form = CSRFOnlyForm()
     pedido_controller = PedidoController()
     hoy = datetime.now()
     min_fecha_entrega = hoy + timedelta(days=7)
     response, _ = pedido_controller.obtener_datos_para_formulario()
     productos = response.get('data', {}).get('productos', [])
+    cliente_controller = ClienteController()
+    cliente_response, _ = cliente_controller.obtener_cliente(session['cliente_id'])
+    cliente = cliente_response.get('data', {})
+    es_nuevo = not cliente_controller.cliente_tiene_pedidos_previos(session['cliente_id'])
+
 
     return render_template(
         'orden_venta/formulario_cliente_pasos.html', 
@@ -50,8 +63,8 @@ def hacer_pedido():
         csrf_form=csrf_form,
         today=hoy.strftime('%Y-%m-%d'),
         min_fecha_entrega=min_fecha_entrega.strftime('%Y-%m-%d'),
-        cliente={},
-        es_cliente_nuevo=True 
+        cliente=cliente,
+        es_cliente_nuevo=es_nuevo
     )
 
 @public_bp.route('/api/crear-pedido', methods=['POST'])
