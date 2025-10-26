@@ -39,7 +39,7 @@
 
                 <form method="POST" id="pedido-form" novalidate>
                     {{ csrf_form.csrf_token }}
-                    <input type="hidden" id="id_cliente" name="id_cliente" value="">
+                    <input type="hidden" id="id_cliente" name="id_cliente" value="{{ cliente.id if cliente else '' }}">
                     <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS" value="0">
                     <input type="hidden" id="pedido_data_temp" name="pedido_data_temp">
 
@@ -51,46 +51,36 @@
                             </h4>
                             <div class="row">
                                 <div class="col-md-6">
-                                    <label for="cuil_cuit_cliente" class="form-label">CUIL/CUIT <span
-                                            class="text-danger">*</span></label>
+                                    <label for="cuil_cuit_cliente" class="form-label">CUIL/CUIT</label>
                                     <div class="input-group">
                                         <input type="text" class="form-control" id="cuil_cuit_cliente" name="cuil_cuit"
-                                            placeholder="XX-XXXXXXXX-X" required pattern="\d{2}-\d{8}-\d{1}"
-                                            maxlength="13">
+                                            value="{{ cliente.cuit if cliente else '' }}" readonly>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <label for="email_cliente" class="form-label">Email de Contacto <span
-                                            class="text-danger">*</span></label>
-                                    <div class="input-group">
-                                        <input type="email" class="form-control" id="email_cliente" name="email"
-                                            placeholder="cliente@ejemplo.com" required>
-                                        <button class="btn btn-primary" type="button" id="buscarClienteBtn">
-                                            <span id="searchSpinner" class="spinner-border spinner-border-sm me-1"
-                                                role="status" aria-hidden="true" style="display: none;"></span>
-                                            <i class="bi bi-search"></i> Buscar
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="col-12 mt-2">
-                                    <div id="clienteMessage" class="form-text">Ingrese CUIL/CUIT y Email para precargar
-                                        sus
-                                        datos.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="email_cliente" class="form-label">Email de Contacto</label>
+                                <div class="input-group">
+                                    <input type="email" class="form-control" id="email_cliente" name="email"
+                                        value="{{ cliente.email if cliente else '' }}" readonly>
                                 </div>
                             </div>
                         </div>
 
-                        <div id="datosClienteCard" class="card p-4 shadow-sm mb-4" style="display: none;">
+
+                        <div id="datosClienteCard" class="card p-4 shadow-sm mb-4">
                             <h4 class="card-title"><i class="bi bi-info-circle-fill me-2"></i> Datos del Pedido</h4>
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <label for="nombre_cliente" class="form-label">Nombre</label>
                                     <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente"
+                                        value="{{ cliente.nombre or cliente.razon_social if cliente else '' }}"
                                         readonly>
                                 </div>
                                 <div class="col-md-6">
                                     <label for="telefono" class="form-label">Teléfono</label>
-                                    <input type="text" class="form-control" id="telefono" name="telefono" readonly>
+                                    <input type="text" class="form-control" id="telefono" name="telefono"
+                                        value="{{ cliente.telefono if cliente else '' }}" readonly>
                                 </div>
 
                                 <div class="col-md-4">
@@ -98,7 +88,8 @@
                                     <input type="text" class="form-control" id="condicion_iva_display"
                                         name="condicion_iva_display" readonly>
                                     <input type="hidden" id="tipo_factura" name="tipo_factura">
-                                    <input type="hidden" id="condicion_iva_value" name="condicion_iva_value">
+                                    <input type="hidden" id="condicion_iva_value" name="condicion_iva_value"
+                                        value="{{ cliente.condicion_iva if cliente else '' }}">
                                 </div>
 
                                 <div class="col-md-4">
@@ -147,7 +138,9 @@
                                                 <div class="col-md-8">
                                                     <div class="form-floating">
                                                         <input type="text" class="form-control" id="calle_facturacion"
-                                                            name="calle_facturacion" placeholder="Calle" readonly>
+                                                            name="calle_facturacion" placeholder="Calle"
+                                                            value="{{ cliente.direccion.calle if cliente and cliente.direccion else '' }}"
+                                                            readonly>
                                                         <label for="calle_facturacion"><i
                                                                 class="bi bi-signpost me-1"></i>Calle</label>
                                                     </div>
@@ -156,45 +149,30 @@
                                                     <div class="form-floating">
                                                         <input type="number" class="form-control"
                                                             id="altura_facturacion" name="altura_facturacion"
-                                                            placeholder="Altura" readonly>
+                                                            placeholder="Altura"
+                                                            value="{{ cliente.direccion.altura if cliente and cliente.direccion else '' }}"
+                                                            readonly>
                                                         <label for="altura_facturacion"><i
                                                                 class="bi bi-123 me-1"></i>Altura</label>
                                                     </div>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <div class="form-floating">
-                                                        <div class="form-floating">
-                                                            <select class="form-select" id="provincia_facturacion"
-                                                                name="provincia_facturacion">
-                                                                <option value="">Seleccionar provincia...</option>
-                                                                {% set provincias = ["Buenos Aires", "CABA",
-                                                                "Catamarca", "Chaco", "Chubut",
-                                                                "Córdoba", "Corrientes", "Entre Ríos", "Formosa",
-                                                                "Jujuy", "La Pampa", "La
-                                                                Rioja", "Mendoza", "Misiones", "Neuquén", "Río Negro",
-                                                                "Salta", "San Juan",
-                                                                "San Luis", "Santa Cruz", "Santa Fe", "Santiago del
-                                                                Estero", "Tierra del
-                                                                Fuego",
-                                                                "Tucumán"] %}
-
-                                                                {% for p in provincias %}
-                                                                <option value="{{ p }}" {% if pedido and
-                                                                    pedido.direccion.provincia==p %}selected{% endif %}>
-                                                                    {{ p }}</option>
-                                                                {% endfor %}
-                                                            </select>
-                                                            <label for="provincia">
-                                                                <i class="bi bi-map me-1"></i>Provincia
-                                                            </label>
-                                                        </div>
+                                                        <input type="text" class="form-control"
+                                                            id="provincia_facturacion" name="provincia_facturacion"
+                                                            value="{{ cliente.direccion.provincia if cliente and cliente.direccion else '' }}"
+                                                            readonly>
+                                                        <label for="provincia_facturacion"><i
+                                                                class="bi bi-map me-1"></i>Provincia</label>
                                                     </div>
                                                 </div>
                                                 <div class="col-md-6">
                                                     <div class="form-floating">
                                                         <input type="text" class="form-control"
                                                             id="localidad_facturacion" name="localidad_facturacion"
-                                                            placeholder="Localidad" readonly>
+                                                            placeholder="Localidad"
+                                                            value="{{ cliente.direccion.localidad if cliente and cliente.direccion else '' }}"
+                                                            readonly>
                                                         <label for="localidad_facturacion"><i
                                                                 class="bi bi-pin-map me-1"></i>Localidad</label>
                                                     </div>
@@ -203,6 +181,7 @@
                                                     <div class="form-floating">
                                                         <input type="text" class="form-control" id="piso_facturacion"
                                                             name="piso_facturacion" placeholder="Piso (Opcional)"
+                                                            value="{{ cliente.direccion.piso if cliente and cliente.direccion else '' }}"
                                                             readonly>
                                                         <label for="piso_facturacion"><i
                                                                 class="bi bi-building me-1"></i>Piso (Opcional)</label>
@@ -212,6 +191,7 @@
                                                     <div class="form-floating">
                                                         <input type="text" class="form-control" id="depto_facturacion"
                                                             name="depto_facturacion" placeholder="Dto (Opcional)"
+                                                            value="{{ cliente.direccion.depto if cliente and cliente.direccion else '' }}"
                                                             readonly>
                                                         <label for="depto_facturacion"><i
                                                                 class="bi bi-door-closed me-1"></i>Dto
@@ -223,10 +203,11 @@
                                                         <input type="text" class="form-control"
                                                             id="codigo_postal_facturacion"
                                                             name="codigo_postal_facturacion" placeholder="Código Postal"
+                                                            value="{{ cliente.direccion.codigo_postal if cliente and cliente.direccion else '' }}"
                                                             readonly>
                                                         <label for="codigo_postal_facturacion"><i
-                                                                class="bi bi-mailbox me-1"></i>Código
-                                                            Postal</label>
+                                                                class="bi bi-mailbox me-1"></i>Código Postal</label>
+
                                                     </div>
                                                 </div>
                                             </div>
@@ -351,8 +332,8 @@
                         {% endfor %}
                         {% endif %}
 
-                        <div id="productosCard" class="card p-4 shadow-sm mb-4" style="display: none;">
-                            <h4 class="card-title mb-5">
+                        <div id="productosCard" class="card p-4 shadow-sm mb-4">
+                            <h4 class="card-title mb-3">
                                 <i class="bi bi-basket-fill me-2"></i> Productos del Pedido
                                 <button type="button" class="btn btn-sm btn-primary float-end" id="addItemBtn">
                                     <i class="bi bi-plus-circle me-1"></i> Añadir Producto
@@ -503,7 +484,7 @@
                             </tr>
                         </template>
 
-                        <div id="resumenCalculos" class="card p-4 shadow-sm" style="display: none;">
+                        <div id="resumenCalculos" class="card p-4 shadow-sm">
                             <div class="row g-3">
                                 <div class="col-md-6 text-end">Subtotal (Iva incluido): <strong
                                         id="resumen-subtotal">$0.00</strong></div>
@@ -552,7 +533,8 @@
                     <div id="paymentStepContent" class="form-section" style="display: none;">
                         <div class="card p-4 shadow-sm">
                             <h4 class="card-title text-center"><i
-                                    class="bi bi-credit-card-2-front-fill me-2"></i>Simulación de Pago</h4>
+                                    class="bi bi-credit-card-2-front-fill me-2"></i>Simulación de
+                                Pago</h4>
                             <p class="text-center text-muted">Confirme el pago para finalizar su pedido.</p>
                             <div class="text-center my-4">
                                 <h5>Monto a Pagar:</h5>
@@ -570,7 +552,8 @@
                     <div id="paymentStepContent" class="form-section" style="display: none;">
                         <div class="card p-4 shadow-sm">
                             <h4 class="card-title text-center"><i
-                                    class="bi bi-credit-card-2-front-fill me-2"></i>Simulación de Pago</h4>
+                                    class="bi bi-credit-card-2-front-fill me-2"></i>Simulación de
+                                Pago</h4>
                             <p class="text-center text-muted">Confirme el pago para finalizar su pedido.</p>
                             <div class="text-center my-4">
                                 <h5>Monto a Pagar:</h5>
@@ -626,16 +609,16 @@
         }
 
     </script>
-
+    {% set clienteJs= cliente %}
     <script>
         // Variables globales inyectadas por Jinja2 para el formulario PÚBLICO
-        const CLIENTE_API_SEARCH_URL = "{{ url_for('clientes_proveedores.buscar_cliente_por_cuil_y_email_api') }}";
         const CREAR_URL = "{{ url_for('public.crear_pedido_api') }}"; // Apunta al nuevo endpoint público
         const PROFORMA_GENERATION_URL = "{{ url_for('orden_venta.generar_proforma_api') }}";
         const PRODUCTOS_DATA = {{ productos | tojson | safe }};
         const LISTAR_URL = "{{ url_for('public.index') }}"; // A dónde ir si se cancela
         const isEditing = false;
         const pedidoId = 0;
+        const cliente = {{ clienteJs | tojson | safe }};
     </script>
 
     <script src="{{ url_for('static', filename='js/orden_venta/gestionCalculos.js') }}"></script>

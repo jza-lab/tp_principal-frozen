@@ -32,13 +32,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const downloadReceiptBtn = document.getElementById('downloadReceiptBtn');
     const newOrderBtn = document.getElementById('newOrderBtn');
 
-    // Elementos de Identificación
-    const cuilCuitInput = document.getElementById('cuil_cuit_cliente');
-    const emailInput = document.getElementById('email_cliente');
-    const buscarClienteBtn = document.getElementById('buscarClienteBtn');
-    const searchSpinner = document.getElementById('searchSpinner');
-    const clienteMessage = document.getElementById('clienteMessage');
-
     // Elementos de Datos del Cliente y Productos
     const datosClienteCard = document.getElementById('datosClienteCard');
     const productosCard = document.getElementById('productosCard');
@@ -76,8 +69,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const localidadAlternativaInput = document.getElementById('localidad_alternativa');
     const cpAlternativaInput = document.getElementById('codigo_postal_alternativa');
 
-    // --- MAPEO Y ESTADO ---
-
     // Funciones globales (capturadas con un fallback robusto)
     const updateResumen = window.calculateOrderTotals || (() => { });
     const addItemRow = window.addItemRow || (() => { showNotificationModal('Error de Carga', 'No se pudo cargar la función para añadir productos.', 'error'); });
@@ -92,149 +83,57 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     let isUsingAlternativeAddress = false;
-
-    // --- LÓGICA DE BÚSQUEDA DE CLIENTE ---
-    cuilCuitInput.addEventListener('input', function (e) {
-        let value = e.target.value.replace(/\D/g, '');
-        if (value.length > 2) value = value.substring(0, 2) + '-' + value.substring(2);
-        if (value.length > 11) value = value.substring(0, 11) + '-' + value.substring(11);
-        e.target.value = value.substring(0, 13);
-    });
-
-    buscarClienteBtn.addEventListener('click', async function () {
-        const cuil = cuilCuitInput.value;
-        const email = emailInput.value;
-
-        if (cuil.length !== 13 || !email) {
-            showNotificationModal('Advertencia', 'Ingrese un CUIL/CUIT de 11 dígitos y un Email válidos.', 'warning');
-            return;
-        }
-
-        buscarClienteBtn.disabled = true;
-        searchSpinner.style.display = 'inline-block';
-        clienteMessage.textContent = 'Buscando cliente...';
-        clienteMessage.className = 'form-text mt-1 text-muted';
-
-        limpiarDatosCliente(false);
-
-        try {
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-            const response = await fetch(CLIENTE_API_SEARCH_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify({ cuil: cuil, email: email })
-            });
-
-            const result = await response.json();
-
-            if (response.ok && result.success) {
-
-                rellenarDatosCliente(result.data);
-                clienteMessage.textContent = `¡Datos de ${result.data.nombre || result.data.razon_social} precargados!`;
-                clienteMessage.className = 'form-text mt-1 text-success';
-
-                [datosClienteCard, productosCard, resumenCalculos].forEach(el => el.style.display = 'block');
-
-                nextStep1Btn.disabled = false;
-                updateResumen();
-
-            } else {
-                limpiarDatosCliente(true);
-                clienteMessage.textContent = result.error || 'Cliente no encontrado.';
-                clienteMessage.className = 'form-text mt-1 text-danger';
-            }
-
-        } catch (error) {
-            console.error('Error en la búsqueda:', error);
-            limpiarDatosCliente(true);
-            clienteMessage.textContent = 'Error de conexión con el servidor.';
-            clienteMessage.className = 'form-text mt-1 text-danger';
-        } finally {
-            buscarClienteBtn.disabled = false;
-            searchSpinner.style.display = 'none';
-        }
-    })
-
-    // Función auxiliar para establecer/quitar el atributo 'required'
-    function setRequiredAttribute(element, isRequired) {
-        if (isRequired) {
-            element.setAttribute('required', 'required');
-        } else {
-            element.removeAttribute('required');
-        }
+    let dirPrincipal = cliente.direccion || (cliente.direcciones && (cliente.direcciones.find(d => d.es_principal) || cliente.direcciones[0]));
+    if (!dirPrincipal && cliente.direcciones && cliente.direcciones.length > 0) {
+        dirPrincipal = cliente.direcciones.find(d => d.es_principal) || cliente.direcciones[0];
     }
 
-    function limpiarCamposDireccion() {
-        [calleFacturacionInput, alturaFacturacionInput, provinciaFacturacionInput, localidadFacturacionInput, cpFacturacionInput, document.getElementById('piso_facturacion'), document.getElementById('depto_facturacion')].forEach(input => input.value = '');
-        [calleAlternativaInput, alturaAlternativaInput, provinciaAlternativaInput, localidadAlternativaInput, cpAlternativaInput, document.getElementById('piso_alternativa'), document.getElementById('depto_alternativa')].forEach(input => { input.value = ''; input.classList.remove('is-invalid', 'is-valid'); });
-    }
 
-    function rellenarDatosCliente(cliente) {
-        actualizarCondicionVenta(cliente.id);
-        idClienteInput.value = cliente.id;
-        nombreInput.value = cliente.nombre || cliente.razon_social || '';
-        telefonoInput.value = cliente.telefono || '';
 
-        // Mapeo de Condición IVA 
-        const ivaCode = String(cliente.condicion_iva);
-        const ivaData = CONDICION_IVA_MAP[ivaCode] || { text: 'N/A', factura: 'B' };
-
-        condicionIvaDisplay.value = ivaData.text;
-        condicionIvaValue.value = ivaCode;
-        tipoFacturaInput.value = ivaData.factura;
-
-        // --- Lógica de Dirección Detallada (Facturación) ---
-        limpiarCamposDireccion();
-
-        let dirPrincipal = cliente.direccion || (cliente.direcciones && (cliente.direcciones.find(d => d.es_principal) || cliente.direcciones[0]));
-        if (!dirPrincipal && cliente.direcciones && cliente.direcciones.length > 0) {
-            dirPrincipal = cliente.direcciones.find(d => d.es_principal) || cliente.direcciones[0];
-        }
-
-        if (dirPrincipal) {
-            // Rellenar campos de Facturación (ReadOnly)
-            Object.keys(dirPrincipal).forEach(key => {
-                const el = document.getElementById(`${key}_facturacion`);
-                if (el) el.value = dirPrincipal[key] || '';
-            });
-            idDireccionEntregaInput.value = dirPrincipal.id;
-            idDireccionEntregaInput.dataset.facturacionId = dirPrincipal.id;
-        }
-        isUsingAlternativeAddress = true;
-        toggleDireccionEntregaBtn.click();
-    }
-
-    function limpiarDatosCliente(shouldResetAddress = true) {
-
-        idDireccionEntregaInput.dataset.facturacionId = '';
-        [idClienteInput, nombreInput, telefonoInput, condicionIvaDisplay, condicionIvaValue, tipoFacturaInput, idDireccionEntregaInput].forEach(el => el.value = '');
-
-        if (shouldResetAddress) {
+    function inicializarFormularioCliente() {
+        const clienteId = idClienteInput.value;
+        
+        if (clienteId) {
             isUsingAlternativeAddress = true;
-            toggleDireccionEntregaBtn.click();
-        }
+            toggleDireccionEntregaBtn.click()
+            // El cliente ya está cargado, así que procedemos a inicializar
+            actualizarCondicionVenta(clienteId);
 
-        [datosClienteCard, productosCard, resumenCalculos].forEach(el => el.style.display = 'none');
-        itemsContainer.innerHTML = '';
-        document.getElementById('id_items-TOTAL_FORMS').value = 0;
-        updateResumen();
+            const ivaCode = condicionIvaValue.value;
+            const ivaData = CONDICION_IVA_MAP[ivaCode] || { text: 'N/A', factura: 'B' };
+            condicionIvaDisplay.value = ivaData.text;
+            tipoFacturaInput.value = ivaData.factura;
+
+            nextStep1Btn.disabled = false;
+        } else {
+            nextStep1Btn.disabled = true;
+            showNotificationModal('Error', 'No se pudo cargar la información del cliente. Por favor, inicie sesión nuevamente.', 'error');
+        }
     }
 
-
-    // --- LÓGICA DE TOGGLE DE DIRECCIÓN ---
 
     toggleDireccionEntregaBtn.addEventListener('click', function () {
         isUsingAlternativeAddress = !isUsingAlternativeAddress;
         this.dataset.active = isUsingAlternativeAddress;
+        const camposAlternativos = ['calle', 'altura', 'provincia', 'localidad', 'codigo_postal', 'piso', 'depto'];
         facturacionAddressFields.style.display = isUsingAlternativeAddress ? 'none' : 'block';
         direccionEntregaAlternativaContainer.style.display = isUsingAlternativeAddress ? 'block' : 'none';
-        toggleDireccionEntregaBtn.innerHTML = isUsingAlternativeAddress ? '<i class="bi bi-house-door-fill me-1"></i> Usar Dirección de Facturación' : '<i class="bi bi-truck me-1"></i> Usar otra dirección';
+        toggleDireccionEntregaBtn.innerHTML = isUsingAlternativeAddress
+            ? '<i class="bi bi-house-door-fill me-1"></i> Usar Dirección de Facturación'
+            : '<i class="bi bi-truck me-1"></i> Usar otra dirección';
         idDireccionEntregaInput.value = isUsingAlternativeAddress ? '' : (idDireccionEntregaInput.dataset.facturacionId || '');
-        ['calle', 'altura', 'provincia', 'localidad', 'codigo_postal'].forEach(f => {
-            document.getElementById(`${f}_alternativa`).required = isUsingAlternativeAddress;
+        camposAlternativos.forEach(f => {
+            const campo = document.getElementById(`${f}_alternativa`);
+            if (campo) {
+                const esRequerido = ['calle', 'altura', 'provincia', 'localidad', 'codigo_postal'].includes(f);
+                campo.required = isUsingAlternativeAddress && esRequerido;
+
+                // Si se oculta la dirección alternativa, limpiar los campos
+                if (!isUsingAlternativeAddress) {
+                    campo.value = '';
+                    campo.classList.remove('is-invalid');
+                }
+            }
         });
     });
 
@@ -288,13 +187,6 @@ document.addEventListener('DOMContentLoaded', function () {
             step2Indicator.classList.remove('active', 'completed');
             step3Indicator.classList.remove('active', 'completed');
         } else if (step === 2) {
-            // 1. Validar que se haya identificado un cliente
-            if (!idClienteInput.value) {
-                goToStep(1)
-                showNotificationModal('Cliente no Identificado', 'Por favor, busque y seleccione un cliente antes de continuar.', 'warning');
-                cuilCuitInput.focus();
-                return;
-            }
 
             // 2. Validar que haya al menos un ítem en el pedido
             if (itemsContainer.querySelectorAll('.item-row').length === 0) {
@@ -484,10 +376,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     }
 
-
-    if (itemsContainer.children.length === 0) { } addItemRow();
     updateResumen();
-    toggleDireccionEntregaBtn.click();
+    inicializarFormularioCliente();
 
     newOrderBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -576,17 +466,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
     observer.observe(paymentReceipt, { childList: true, subtree: true });
-
-    function showResult(type, title, message) {
-        goToStep(4);
-        if (type === 'success') {
-            resultIcon.innerHTML = '<i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>';
-        } else {
-            resultIcon.innerHTML = '<i class="bi bi-x-circle-fill text-danger" style="font-size: 4rem;"></i>';
-        }
-        resultTitle.textContent = title;
-        resultMessage.textContent = message;
-    }
 
     async function actualizarCondicionVenta(clienteId) {
         const condicionVentaSelect = document.getElementById('condicion_venta');

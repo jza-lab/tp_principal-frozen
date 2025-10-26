@@ -283,6 +283,10 @@ class ClienteController(BaseController):
         """
         try:
             email_result = self.model.buscar_por_email(email, include_direccion=True)
+
+            if email_result.get('estado_aprobacion') == 'rechazado':
+                return self.error_response('La validez de los datos de este cliente fue rechazada por administración.', 400)
+
             if not email_result.get('success') or not email_result.get('data'):
                 return self.error_response('Credenciales incorrectas.', 401)
             

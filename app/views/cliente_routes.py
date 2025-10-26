@@ -31,6 +31,10 @@ def login():
         
         if response.get('success'):
             cliente_data = response.get('data')
+            if cliente_data.get('estado_aprobacion') == 'rechazado':
+                flash('Su cuenta ha sido rechazada y no puede iniciar sesión. Contacte a administración.', 'error')
+                return redirect(url_for('cliente.login'))
+            
             session['cliente_id'] = cliente_data['id']
             session['cliente_nombre'] = cliente_data['nombre']
             session['cliente_aprobado'] = cliente_data.get('estado_aprobacion') == 'aprobado'
