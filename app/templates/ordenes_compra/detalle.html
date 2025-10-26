@@ -14,11 +14,11 @@
         <a href="{{ url_for('orden_compra.listar') }}" class="btn btn-outline-secondary me-2">
             <i class="bi bi-arrow-left me-1"></i>Volver
         </a>
-        {% if orden.estado == 'PENDIENTE' %}
-        {% set can_edit = 'modificar_ordenes_compra' is has_permission %}
-        <a href="{{ url_for('orden_compra.editar', id=orden.id) if can_edit else '#' }}" class="btn btn-primary {% if not can_edit %}disabled{% endif %}">
+        {% if orden.estado == 'PENDIENTE' and 'modificar_ordenes_compra' is has_permission %}
+        <a href="{{ url_for('orden_compra.editar', id=orden.id) }}" class="btn btn-primary">
             <i class="bi bi-pencil-square me-1"></i>Editar
         </a>
+        {% elif orden.estado not in ['RECIBIDA', 'CANCELADA', 'RECHAZADA', 'EN ESPERA DE INSUMO'] %}
         {% elif orden.estado == 'APROBADA' %}
         <form action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id) }}" method="POST" class="d-inline">
             {{ csrf_form.csrf_token }}
@@ -38,11 +38,12 @@
                 <h5 class="mb-0">Información General</h5>
                 <div>
                     {% set estado_config = {
-                        'PENDIENTE': {'class': 'bg-secondary', 'icon': 'clock'},
-                        'APROBADA': {'class': 'bg-success', 'icon': 'check-circle'},
-                        'EN_TRANSITO': {'class': 'bg-primary', 'icon': 'truck'},
-                        'RECIBIDA': {'class': 'bg-info', 'icon': 'box-seam'},
-                        'RECHAZADA': {'class': 'bg-danger', 'icon': 'x-circle'}
+                        'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
+                        'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
+                        'EN ESPERA DE INSUMO': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
+                        'EN_TRANSITO': {'class': 'bg-primary-soft text-primary', 'icon': 'truck'},
+                        'RECIBIDA': {'class': 'bg-success-soft text-success', 'icon': 'box-seam'},
+                        'RECHAZADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
                     {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
                     <span class="badge {{ config.class }} fs-6 me-2">
@@ -145,6 +146,28 @@
                     </div>
                     {% endif %}
                     {% endif %}
+                    
+                    {% if orden.complementa_a_orden or orden.continuada_por_orden %}
+                    <div class="col-12 mt-3">
+                        <h6 class="text-muted mb-2">Órdenes Vinculadas</h6>
+                        {% if orden.complementa_a_orden %}
+                        <div class="border-start border-3 border-secondary ps-3 mb-2">
+                            <span class="small text-muted">Esta orden complementa a</span>
+                            <a href="{{ url_for('orden_compra.detalle', id=orden.complementa_a_orden.id) }}" class="fw-bold d-block">
+                                {{ orden.complementa_a_orden.codigo_oc }} <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% if orden.continuada_por_orden %}
+                        <div class="border-start border-3 border-secondary ps-3">
+                            <span class="small text-muted">Esta orden es continuada por</span>
+                            <a href="{{ url_for('orden_compra.detalle', id=orden.continuada_por_orden.id) }}" class="fw-bold d-block">
+                                {{ orden.continuada_por_orden.codigo_oc }} <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -246,6 +269,25 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="confirmacionRecepcionParcialModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalLabel">Confirmar Recepción Parcial</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Ha ingresado una cantidad menor a la solicitada para al menos un ítem.</p>
+                <p><strong>Esto creará automáticamente una nueva orden de compra con los insumos restantes.</strong></p>
+                <p>¿Desea continuar con la recepción?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="confirmarRecepcionBtn">Sí, continuar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 {# --- INICIO DE LA CORRECCIÓN --- #}
 {# El script ahora está dentro del bloque extra_js, asegurando que se cargue en el orden correcto #}
@@ -309,26 +351,55 @@ document.addEventListener('DOMContentLoaded', function () {
         {% endif %}
 
         // El manejador del submit es necesario siempre que el formulario exista.
+        const recepcionModal = new bootstrap.Modal(document.getElementById('confirmacionRecepcionParcialModal'));
+
         formularioRecepcion.addEventListener('submit', function (e) {
             e.preventDefault();
             const submitter = e.submitter;
-            if (!submitter) {
+            if (!submitter || submitter.value !== 'aceptar') {
                 this.submit();
                 return;
             }
+
+            let esRecepcionParcial = false;
+            document.querySelectorAll('.item-row').forEach(fila => {
+                const cantidadSolicitada = parseFloat(fila.querySelector('td:nth-child(2)').textContent);
+                const cantidadRecibida = parseFloat(fila.querySelector('.cantidad-recibida').value);
+                if (cantidadRecibida < cantidadSolicitada) {
+                    esRecepcionParcial = true;
+                }
+            });
+
+            if (esRecepcionParcial) {
+                recepcionModal.show();
+            } else {
+                submitFormulario(submitter);
+            }
+        });
+
+        document.getElementById('confirmarRecepcionBtn').addEventListener('click', function() {
+            const submitter = document.querySelector('button[name="accion"][value="aceptar"]');
+            submitFormulario(submitter);
+        });
+
+        function submitFormulario(submitter) {
+            if (!submitter) return;
+            
             const hiddenInput = document.createElement('input');
             hiddenInput.type = 'hidden';
             hiddenInput.name = 'accion';
             hiddenInput.value = submitter.value;
-            this.appendChild(hiddenInput);
+            formularioRecepcion.appendChild(hiddenInput);
+
             const overlay = document.getElementById('loadingOverlay');
             if (overlay) {
                 overlay.style.display = 'flex';
             }
+            
             setTimeout(() => {
-                this.submit(); 
+                formularioRecepcion.submit(); 
             }, 50);
-        });
+        }
     }
 });
 </script>
