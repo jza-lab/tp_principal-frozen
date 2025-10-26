@@ -1,8 +1,12 @@
 from flask import Blueprint, render_template, request, jsonify, url_for
 from datetime import datetime
 from app.controllers.pedido_controller import PedidoController
+from flask_wtf import FlaskForm
 
 public_bp = Blueprint('public', __name__, url_prefix='/public')
+
+class CSRFOnlyForm(FlaskForm):
+    pass
 
 @public_bp.route('/')
 def index():
@@ -30,21 +34,19 @@ def hacer_pedido():
     """
     Muestra el formulario para que un cliente haga un pedido desde la web pública.
     """
+    csrf_form = CSRFOnlyForm()
     pedido_controller = PedidoController()
     hoy = datetime.now().strftime('%Y-%m-%d')
-    
-    # Reutilizamos la lógica del controlador para obtener los datos necesarios
     response, _ = pedido_controller.obtener_datos_para_formulario()
     productos = response.get('data', {}).get('productos', [])
-    
-    # Renderizamos el mismo formulario, que luego adaptaremos para el look&feel público
+
     return render_template(
         'orden_venta/formulario_cliente_pasos.html', 
         productos=productos, 
         pedido=None, 
         is_edit=False, 
+        csrf_form=csrf_form,
         today=hoy,
-        # Pasamos un cliente vacío y marcamos como nuevo por defecto para la lógica del template
         cliente={},
         es_cliente_nuevo=True 
     )
@@ -58,24 +60,31 @@ def crear_pedido_api():
     json_data = request.get_json()
     if not json_data:
         return jsonify({"success": False, "error": "Datos no válidos"}), 400
-
-    # Instanciamos el controlador para usar su lógica de negocio
     pedido_controller = PedidoController()
-    
-    # Llamamos al método del controlador que sabe cómo crear el pedido
     response, status_code = pedido_controller.crear_pedido_con_items(json_data)
 
     if status_code < 300:
-        # Podríamos redirigir a una página de "gracias" o simplemente dar una respuesta exitosa
         return jsonify({
             'success': True, 
             'message': '¡Pedido recibido con éxito! Nos pondremos en contacto a la brevedad.',
-            'redirect_url': url_for('public.index') # O una página de agradecimiento
+            'redirect_url': url_for('public.index') 
         }), 201
     else:
-        # Devolvemos el error que nos da el controlador
         return jsonify({
             'success': False, 
             'message': response.get('message', 'Error al procesar el pedido.')
         }), status_code
 
+@public_bp.route('/comprobante-pago/<int:pedido_id>')
+def ver_comprobante(pedido_id):
+    """
+    Muestra una página de confirmación y comprobante de pago para un pedido específico.
+    """
+    pedido_controller = PedidoController()
+    response, status_code = pedido_controller.obtener_pedido_por_id(pedido_id)
+
+    if response.get('success'):
+        pedido_data = response.get('data')
+        return render_template('public/comprobante_pago.html', pedido=pedido_data)
+    else:
+        return "Pedido no encontrado o error al cargar los datos.", 404

@@ -93,43 +93,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let isUsingAlternativeAddress = false;
 
-    // --- LÓGICA DE BÚSQUEDA DE CLIENTE SEGURA ---
-
-    function buildClientOrderPayload() {
-        const getAddressData = (prefix) => ({
-            calle: document.getElementById(`calle_${prefix}`).value,
-            altura: document.getElementById(`altura_${prefix}`).value,
-            piso: document.getElementById(`piso_${prefix}`).value || null,
-            depto: document.getElementById(`depto_${prefix}`).value || null,
-            localidad: document.getElementById(`localidad_${prefix}`).value,
-            provincia: document.getElementById(`provincia_${prefix}`).value,
-            codigo_postal: document.getElementById(`codigo_postal_${prefix}`).value
-        });
-
-        const payload = {
-            id_cliente: parseInt(idClienteInput.value, 10),
-            fecha_entrega: document.getElementById('fecha_entrega').value,
-            items: [],
-            direccion_entrega: isUsingAlternativeAddress ? getAddressData('alternativa') : getAddressData('facturacion'),
-            usar_direccion_alternativa: isUsingAlternativeAddress,
-            id_direccion_entrega: isUsingAlternativeAddress ? null : idDireccionEntregaInput.value
-        };
-
-        document.querySelectorAll('#items-container .item-row').forEach(row => {
-            const productoSelect = row.querySelector('.producto-selector');
-            const cantidadInput = row.querySelector('.item-quantity');
-            const precioUnitarioInput = row.querySelector('.item-price-unit-value');
-            if (productoSelect && cantidadInput && precioUnitarioInput && productoSelect.value) {
-                payload.items.push({
-                    producto_id: parseInt(productoSelect.value, 10),
-                    cantidad: parseFloat(cantidadInput.value) || 0,
-                    precio_unitario: parseFloat(precioUnitarioInput.value) || 0
-                });
-            }
-        });
-        return payload;
-    }
-
     // --- LÓGICA DE BÚSQUEDA DE CLIENTE ---
     cuilCuitInput.addEventListener('input', function (e) {
         let value = e.target.value.replace(/\D/g, '');
@@ -156,9 +119,13 @@ document.addEventListener('DOMContentLoaded', function () {
         limpiarDatosCliente(false);
 
         try {
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
             const response = await fetch(CLIENTE_API_SEARCH_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({ cuil: cuil, email: email })
             });
 
@@ -262,6 +229,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     toggleDireccionEntregaBtn.addEventListener('click', function () {
         isUsingAlternativeAddress = !isUsingAlternativeAddress;
+        this.dataset.active = isUsingAlternativeAddress;
         facturacionAddressFields.style.display = isUsingAlternativeAddress ? 'none' : 'block';
         direccionEntregaAlternativaContainer.style.display = isUsingAlternativeAddress ? 'block' : 'none';
         toggleDireccionEntregaBtn.innerHTML = isUsingAlternativeAddress ? '<i class="bi bi-house-door-fill me-1"></i> Usar Dirección de Facturación' : '<i class="bi bi-truck me-1"></i> Usar otra dirección';
@@ -311,7 +279,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 goToStep(1); // Forzar regreso
                 return;
             }
-
             if (isUsingAlternativeAddress) {
                 const direccion = {
                     calle: calleAlternativaInput.value,
@@ -320,9 +287,68 @@ document.addEventListener('DOMContentLoaded', function () {
                     provincia: provinciaAlternativaInput.value,
                 };
 
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
                 const response = await fetch('/api/validar/direccion', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify(direccion)
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    showNotificationModal('Dirección Inválida', result.message || 'La dirección de entrega alternativa no pudo ser validada.', 'error');
+                    return; // Detener el avance si la dirección es inválida
+                }
+            }
+
+            let cantidadEsInvalida = false;
+            let productoInvalido = '';
+            const itemRows = itemsContainer.querySelectorAll('.item-row');
+
+            itemRows.forEach(row => {
+                const productoSelect = row.querySelector('select[name*="producto_id"]');
+                const cantidadInput = row.querySelector('input[name*="cantidad"]');
+
+                if (productoSelect && cantidadInput && !cantidadEsInvalida) {
+                    const selectedOption = productoSelect.options[productoSelect.selectedIndex];
+                    const unidad = selectedOption ? selectedOption.dataset.unidad : '';
+                    const cantidad = parseFloat(cantidadInput.value);
+                    const requiereEntero = unidad.startsWith('paquete') || unidad === 'unidades';
+
+                    if (requiereEntero && (cantidad % 1 !== 0)) {
+                        cantidadEsInvalida = true;
+                        productoInvalido = selectedOption.textContent.trim().split('(')[0].trim();
+                        cantidadInput.focus();
+                    }
+                }
+            });
+
+            if (cantidadEsInvalida) {
+                showNotificationModal(
+                    'Error en la Cantidad',
+                    `La cantidad para el producto "${productoInvalido}" debe ser un número entero (sin decimales), ya que se mide por unidades o paquetes.`,
+                    'error'
+                );
+                return; // Detener el avance
+            }
+
+            if (isUsingAlternativeAddress) {
+                const direccion = {
+                    calle: calleAlternativaInput.value,
+                    altura: alturaAlternativaInput.value,
+                    localidad: localidadAlternativaInput.value,
+                    provincia: provinciaAlternativaInput.value,
+                };
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+                const response = await fetch('/api/validar/direccion', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
                     body: JSON.stringify(direccion)
                 });
                 const result = await response.json();
@@ -369,11 +395,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         proformaContent.innerHTML = `<div class="p-5"><span class="spinner-border text-primary"></span><p class="text-muted mt-3">Generando factura proforma...</p></div>`;
         acceptOrderBtn.disabled = true;
-
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
         try {
             const response = await fetch(PROFORMA_GENERATION_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: payloadString
             });
             const result = await response.json();
@@ -392,9 +421,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     acceptOrderBtn.addEventListener('click', async function () {
         const condicionVenta = document.getElementById('condicion_venta').value;
-        const esClienteNuevo = document.getElementById('es_cliente_nuevo')?.value === 'true';
 
-        if (condicionVenta === 'contado' || esClienteNuevo) {
+        if (condicionVenta === 'contado') {
             goToStep(3);
         } else {
             await submitOrder(false);
@@ -410,7 +438,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     async function submitOrder(isPayment = false) {
-        const createButton = acceptOrderBtn; // Can be acceptOrderBtn or paymentConfirmBtn
+        const createButton = isPayment ? paymentConfirmBtn : acceptOrderBtn;
         const originalButtonText = createButton.innerHTML;
 
         if (createButton.disabled) return;
@@ -418,48 +446,45 @@ document.addEventListener('DOMContentLoaded', function () {
         createButton.disabled = true;
         createButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Procesando...';
 
+        if (isPayment) {
+            await new Promise(resolve => setTimeout(resolve, 1500)); // Simula espera de pasarela
+        }
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
 
         try {
             const response = await fetch(CREAR_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: pedidoDataTemp.value,
             });
 
             const result = await response.json();
 
-            if (response.ok && result.success) {
-                goToStep(4);
+            if (result.success && result.data && result.data.id) {
                 if (isPayment) {
-                    const payload = JSON.parse(pedidoDataTemp.value);
-                    const date = new Date().toLocaleDateString('es-AR', { year: 'numeric', month: '2-digit', day: '2-digit' });
-                    const total = document.getElementById('total-final')?.textContent || 'N/A';
-
-                    const receiptHTML = `
-                        <div class="card-body">
-                            <h5 class="card-title text-primary"><i class="bi bi-receipt-cutoff me-2"></i>Comprobante de Pago</h5>
-                            <hr>
-                        <p><strong>Fecha:</strong> ${date}</p>
-                        <p><strong>Nº Pedido:</strong> #${result.pedido_id || 'N/A'}</p>
-                            <p><strong>Monto Pagado:</strong> ${total}</p>
-                        <p><strong>Monto Pagado:</strong> ${total}</p>
-                        <p class="text-center text-success fw-bold fs-5 mt-3">PAGO APROBADO</p>
-                        </div>
-                    `;
-                    paymentReceipt.innerHTML = receiptHTML;
-                    document.getElementById('paymentReceiptContainer').style.display = 'block';
+                    const comprobanteUrl = `/public/comprobante-pago/${result.data.id}`;
+                    window.location.href = comprobanteUrl;
                 } else {
-                    document.getElementById('paymentReceiptContainer').style.display = 'none';
+                    showNotificationModal(
+                        'Pedido Creado con Éxito',
+                        'Su pedido a crédito ha sido recibido y será procesado a la brevedad.',
+                        'success');
+                    setTimeout(() => {
+                        window.location.href = LISTAR_URL; 
+                    }, 2500);
                 }
 
             } else {
-                showNotificationModal('Error al Crear el Pedido', result.message || result.error || 'No se pudo crear la orden.', 'error');
+                showNotificationModal('Error al Crear el Pedido', result.message || 'No se pudo procesar la solicitud.', 'error');
                 createButton.disabled = false;
                 createButton.innerHTML = originalButtonText;
             }
 
         } catch (error) {
-            console.log(error)
+            console.error('Error en submitOrder:', error);
             showNotificationModal('Error de Conexión', 'Fallo de red al crear la orden. Por favor, intente de nuevo.', 'error');
             createButton.disabled = false;
             createButton.innerHTML = originalButtonText;
@@ -484,21 +509,29 @@ document.addEventListener('DOMContentLoaded', function () {
         iframe.id = 'proforma-print-frame';
         document.body.appendChild(iframe);
         const iframeDocument = iframe.contentWindow.document;
-        // Construct the full HTML document for the iframe
-        let headContent = '';
-        document.head.querySelectorAll('link[rel="stylesheet"], style').forEach(node => {
-            headContent += node.outerHTML;
-        });
-
+        const bootstrapCss = '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">';
+        const bodyContent = `
+            <div class="container-fluid p-4">
+                ${htmlContent}
+            </div>
+        `;
         const fullHtml = `
             <!DOCTYPE html>
-            <html>
-                <head>
+            <html lang="es">
+            
                     <title>Factura Proforma</title>
-                    ${headContent}
+                        ${bootstrapCss}
+                    <style>
+                        /* Estilos específicos para la impresión, si fueran necesarios */
+                        body { font-family: sans-serif; }
+                        @media print {
+                            .no-print { display: none; }
+                            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        }
+                    </style>
                 </head>
-                <body>
-                    ${htmlContent}
+                <body>           
+                    ${bodyContent}
                 </body>
             </html>
         `;
@@ -509,8 +542,8 @@ document.addEventListener('DOMContentLoaded', function () {
             setTimeout(() => {
                 iframe.contentWindow.focus();
                 iframe.contentWindow.print();
-                setTimeout(() => { document.body.removeChild(iframe); }, 500);
-            }, 250); // Short delay for styles to apply
+                setTimeout(() => { document.body.removeChild(iframe); }, 1000);
+            }, 500);
         }
     }
 
