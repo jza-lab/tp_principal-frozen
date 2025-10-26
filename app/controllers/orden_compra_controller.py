@@ -331,32 +331,44 @@ class OrdenCompraController:
                     return {'success': False, 'error': 'Datos de ítems inconsistentes.'}
 
                 items_para_lote = []
-                # 1. Update PO Items
+                recepcion_completa = True
                 for i in range(len(item_ids)):
                     try:
                         item_id = int(item_ids[i])
-                        cantidad = float(cantidades_recibidas[i]) if cantidades_recibidas[i] else 0
-                        # Ensure item_model exists on self.model if using it like this
-                        self.model.item_model.update(item_id, {'cantidad_recibida': cantidad})
-                        if cantidad > 0:
-                            item_info_result = self.model.item_model.find_by_id(item_id, 'id')
-                            if item_info_result.get('success'):
-                                items_para_lote.append({
-                                    'data': item_info_result['data'],
-                                    'cantidad_recibida': cantidad
-                                })
+                        cantidad_recibida = float(cantidades_recibidas[i]) if cantidades_recibidas[i] else 0
+                        
+                        item_original_result = self.model.item_model.find_by_id(item_id, 'id')
+                        if not item_original_result.get('success'):
+                            logger.warning(f"Could not find original item with id {item_id}. Skipping.")
+                            continue
+
+                        item_original = item_original_result['data']
+                        cantidad_solicitada = float(item_original.get('cantidad_solicitada', 0))
+
+                        if cantidad_recibida < cantidad_solicitada:
+                            recepcion_completa = False
+
+                        self.model.item_model.update(item_id, {'cantidad_recibida': cantidad_recibida})
+                        
+                        if cantidad_recibida > 0:
+                            items_para_lote.append({
+                                'data': item_original,
+                                'cantidad_recibida': cantidad_recibida
+                            })
                     except (ValueError, IndexError, AttributeError) as e:
                          logger.warning(f"Skipping item due to error during update/fetch: {e}")
-                         continue # Skip this item if there's an issue
+                         continue
 
-                # 2. Update PO Status
+                nuevo_estado = 'RECEPCION_OK' if recepcion_completa else 'RECEPCION_INCOMPLETA'
+                
                 orden_update_data = {
-                    'estado': 'RECIBIDA', 'fecha_real_entrega': date.today().isoformat(),
-                    'observaciones': observaciones, 'updated_at': datetime.now().isoformat()
+                    'estado': nuevo_estado, 
+                    'fecha_real_entrega': date.today().isoformat(),
+                    'observaciones': observaciones, 
+                    'updated_at': datetime.now().isoformat()
                 }
                 self.model.update(orden_id, orden_update_data)
 
-                # 3. Create Inventory Lots
                 lotes_creados_count = 0; lotes_error_count = 0
                 for item_lote in items_para_lote:
                     item_data = item_lote['data']

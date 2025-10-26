@@ -155,10 +155,12 @@ OC_MAP_STRING_TO_INT = {
 
 # --- Lista para la UI de filtros (Orden y nombres actualizados según imagen) ---
 OC_FILTROS_UI = [
+    (OC_PENDIENTE, 'Pendiente'),
+    (OC_APROBADA, 'Aprobada'),
     (OC_EN_TRANSITO, 'En Transito'),
     (OC_RECEPCION_OK, 'Recepcion Ok'),
     (OC_RECEPCION_INCOMPLETA, 'Recepcion Incompleta'),
-    (OC_PAGADA, 'Pagada')
+    (OC_RECHAZADA, 'Rechazada')
 ]
 
 # -----------------------------------------------------------------------------
