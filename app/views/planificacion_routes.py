@@ -1,6 +1,6 @@
 # En app/routes/planificacion_routes.py
 import logging
-from flask import Blueprint, render_template, flash, url_for, request, jsonify
+from flask import Blueprint, render_template, flash, url_for, request, jsonify, session # Añade request y jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.controllers.planificacion_controller import PlanificacionController
 from app.controllers.usuario_controller import UsuarioController
