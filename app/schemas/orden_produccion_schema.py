@@ -7,7 +7,7 @@ class OrdenProduccionSchema(Schema):
     # Campos obligatorios para la creación
     producto_id = fields.Int(required=True)
     cantidad_planificada = fields.Decimal(as_string=True, required=True, validate=validate.Range(min=0.01, error="La cantidad debe ser mayor que cero."))
-    fecha_planificada = fields.Date(required=True)
+    fecha_meta = fields.Date(required=True)
     receta_id = fields.Int(required=True)
 
     # Campos opcionales
@@ -34,7 +34,7 @@ class OrdenProduccionSchema(Schema):
     estado = fields.Str(required=False, validate=validate.OneOf([
         'PENDIENTE', 'APROBADA', 'EN_PROCESO', 'COMPLETADA', 'CANCELADA',
         'EN ESPERA', 'LISTA PARA PRODUCIR',
-        'EN_LINEA_1', 'EN_LINEA_2', 
+        'EN_LINEA_1', 'EN_LINEA_2',
         'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD',
         'FINALIZADA', 'CONSOLIDADA'
     ]))
