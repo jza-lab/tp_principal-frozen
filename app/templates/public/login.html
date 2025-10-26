@@ -4,18 +4,12 @@
 
 {% block extra_css %}
 <style>
-    /* ------------------------------------- */
-    /* ESTILOS ELEGANTES Y MINIMALISTAS DE LOGIN CLIENTE */
-    /* ------------------------------------- */
-    
-    /* Variables de Color (Asegúrate de que estas estén definidas en public/base.html si se usan globalmente) */
     :root {
-        --primary-teal: #347e85; /* Color principal de la empresa (Azul/Teal) */
-        --secondary-teal: #2c686f; /* Tono más oscuro para hover */
-        --bg-color-elegant: #f0f2f5; /* Fondo más sutil */
+        --primary-teal: #347e85;
+        --secondary-teal: #2c686f;
+        --bg-color-elegant: #f0f2f5;
     }
 
-    /* 1. Contenedor principal: Fondo sutil degradado y centrado */
     .client-login-container {
         min-height: 100vh;
         background: var(--bg-color-elegant);
@@ -25,26 +19,23 @@
         padding: 2rem;
     }
 
-    /* 2. Tarjeta principal: Elegancia y minimalismo */
     .client-login-card {
         max-width: 400px;
         width: 100%;
         background-color: rgba(255, 255, 255, 0.9);
-        border-radius: 18px; 
+        border-radius: 18px;
         border: 1px solid rgba(0, 0, 0, 0.05);
         box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1), 0 5px 15px rgba(0, 0, 0, 0.05);
         backdrop-filter: blur(5px);
-        padding: 3rem; /* Más padding interno */
+        padding: 3rem;
         animation: fadeInDown 0.7s ease-out;
     }
 
-    /* 3. Header: Minimalista y sin logo */
     .client-login-header {
         text-align: center;
         margin-bottom: 2rem;
-        /* El logo y su margen se eliminan */
     }
-    
+
     .client-login-header h2 {
         font-weight: 700;
         font-size: 1.6rem;
@@ -57,30 +48,27 @@
         color: #777;
     }
 
-    /* 4. Formularios flotantes */
-    .form-floating > .form-control:focus,
-    .form-floating > .form-control:not(:placeholder-shown) {
+    .form-floating>.form-control:focus,
+    .form-floating>.form-control:not(:placeholder-shown) {
         border-color: var(--primary-teal);
-        box-shadow: 0 0 0 2px rgba(52, 126, 133, 0.25); 
+        box-shadow: 0 0 0 2px rgba(52, 126, 133, 0.25);
     }
-    
-    .form-floating > .form-control:focus ~ label,
-    .form-floating > .form-control:not(:placeholder-shown) ~ label {
+
+    .form-floating>.form-control:focus~label,
+    .form-floating>.form-control:not(:placeholder-shown)~label {
         color: var(--primary-teal);
         opacity: 0.8;
     }
-
-    /* Estilo de los iconos dentro de los labels */
     .form-floating label i {
         color: #999;
         transition: color 0.3s;
     }
 
-    .form-floating > .form-control:focus ~ label i,
-    .form-floating > .form-control:not(:placeholder-shown) ~ label i {
+    .form-floating>.form-control:focus~label i,
+    .form-floating>.form-control:not(:placeholder-shown)~label i {
         color: var(--primary-teal);
     }
-    
+
     /* 5. Botón principal: Color y efecto elegante */
     .btn-primary.btn-lg {
         background-color: var(--primary-teal);
@@ -98,7 +86,7 @@
         transform: translateY(-2px);
         box-shadow: 0 8px 20px rgba(52, 126, 133, 0.4);
     }
-    
+
     /* 6. Enlace de registro */
     .card-body .register-link a {
         color: var(--primary-teal);
@@ -126,14 +114,16 @@
                 <div class="card-body p-0">
                     <form method="POST" action="{{ url_for('cliente.login') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        
+
                         <div class="form-floating mb-3">
-                            <input type="text" class="form-control" id="cuit" name="cuit" placeholder="CUIT/CUIL" required>
-                            <label for="cuit"><i class="bi bi-person-badge me-2"></i>CUIT/CUIL</label>
+                            <input type="email" class="form-control" id="email" name="email"
+                                placeholder="Correo Electrónico" required>
+                            <label for="email"><i class="bi bi-envelope me-2"></i>Correo Electrónico</label>
                         </div>
 
                         <div class="form-floating mb-4">
-                            <input type="password" class="form-control" id="password" name="password" placeholder="Contraseña" required>
+                            <input type="password" class="form-control" id="password" name="password"
+                                placeholder="Contraseña" required>
                             <label for="password"><i class="bi bi-lock me-2"></i>Contraseña</label>
                         </div>
 

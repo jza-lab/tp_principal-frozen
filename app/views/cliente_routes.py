@@ -22,14 +22,12 @@ def register():
     except Exception as e:
         flash(f"Error al crear al cliente: {str(e)}", 'error')
     return render_template('public/registro.html')
-
 @cliente_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        cuit = request.form.get('cuit')
+        email = request.form.get('email')
         password = request.form.get('password')
-        
-        response, status_code = cliente_controller.autenticar_cliente(cuit, password)
+        response, status_code = cliente_controller.autenticar_cliente(email, password)
         
         if response.get('success'):
             cliente_data = response.get('data')
@@ -43,7 +41,6 @@ def login():
             flash(response.get('error', 'Credenciales incorrectas.'), 'error')
             
     return render_template('public/login.html')
-
 @cliente_bp.route('/logout')
 def logout():
     session.pop('cliente_id', None)

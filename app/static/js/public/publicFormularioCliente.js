@@ -2,6 +2,67 @@ document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('formulario-cliente');
     if (!form) return;
 
+    function validarCuil(cuil) {
+        if (!cuil || cuil.length !== 11) {
+            return false;
+        }
+
+        const cuilLimpio = cuil.replace(/[^0-9]/g, '');
+        if (cuilLimpio.length !== 11) {
+            return false;
+        }
+
+        const base = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+        const digitoVerificador = parseInt(cuilLimpio.charAt(10), 10);
+        let suma = 0;
+
+        for (let i = 0; i < 10; i++) {
+            suma += parseInt(cuilLimpio.charAt(i), 10) * base[i];
+        }
+
+        let resultado = 11 - (suma % 11);
+        if (resultado === 11) {
+            resultado = 0;
+        } else if (resultado === 10) {
+            // Caso especial para CUIT 20, 23, 24, 27, 30, etc. (se usa 9 en su lugar o se valida directamente)
+            // En Argentina, los digitos verificadores 10 se convierten a 9.
+            return digitoVerificador === 9;
+        }
+        
+        return resultado === digitoVerificador;
+    }
+
+    const cuitPartes = ['cuit_parte1', 'cuit_parte2', 'cuit_parte3'];
+    const cuitFeedback = document.getElementById('cuit-feedback');
+
+    cuitPartes.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', () => {
+                const parte1 = document.getElementById('cuit_parte1').value;
+                const parte2 = document.getElementById('cuit_parte2').value;
+                const parte3 = document.getElementById('cuit_parte3').value;
+                const cuilCompleto = parte1 + parte2 + parte3;
+                
+                // Solo validar cuando las 11 partes estén ingresadas
+                if (cuilCompleto.length === 11) {
+                    if (validarCuil(cuilCompleto)) {
+                        cuitFeedback.textContent = 'CUIT/CUIL Válido.';
+                        cuitFeedback.className = 'form-text text-success';
+                    } else {
+                        cuitFeedback.textContent = 'CUIT/CUIL Inválido. Revise el número.';
+                        cuitFeedback.className = 'form-text text-danger';
+                    }
+                } else if (cuilCompleto.length > 0) {
+                    cuitFeedback.textContent = 'Faltan dígitos (11 en total).';
+                    cuitFeedback.className = 'form-text text-warning';
+                } else {
+                    cuitFeedback.textContent = '';
+                }
+            });
+        }
+    });
+
     function getCsrfToken() {
         const tokenElement = form.querySelector('input[name="csrf_token"]');
         return tokenElement ? tokenElement.value : null;

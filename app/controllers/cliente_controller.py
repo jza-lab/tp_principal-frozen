@@ -144,7 +144,7 @@ class ClienteController(BaseController):
                 
                 if respuesta.get('success'):
                     return self.error_response('El CUIT/CUIL ya está registrado para otro cliente', 400)
-            
+            data['estado_aprobado'] = 'pendiente'
             direccion_id = self._get_or_create_direccion(direccion_data)
             if direccion_id:
                 data['direccion_id'] = direccion_id
@@ -277,27 +277,25 @@ class ClienteController(BaseController):
             return False
     
     
-    def autenticar_cliente(self, cuit: str, contrasena: str) -> tuple:
+    def autenticar_cliente(self, email: str, contrasena: str) -> tuple:
         """
         Autentica a un cliente por CUIT y contraseña.
         """
         try:
-            cuit_result = self.model.buscar_por_cuit(cuit, include_direccion=True)
-            
-            if not cuit_result.get('success') or not cuit_result.get('data'):
+            email_result = self.model.buscar_por_email(email, include_direccion=True)
+            if not email_result.get('success') or not email_result.get('data'):
                 return self.error_response('Credenciales incorrectas.', 401)
-
-            cliente_encontrado = cuit_result['data'][0]
             
+            cliente_encontrado = email_result['data'][0]
+
             if not check_password_hash(cliente_encontrado.get('contrasena', ''), contrasena):
                 return self.error_response('Credenciales incorrectas.', 401)
             
-            # No devolver el hash de la contraseña
             cliente_encontrado.pop('contrasena', None)
             
             serialized_data = self.schema.dump(cliente_encontrado)
             return self.success_response(data=serialized_data)
 
         except Exception as e:
-            logger.error(f"Error en la autenticación para CUIT {cuit}: {str(e)}")
-            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+            logger.error(f"Error durante la autenticación del cliente: {str(e)}")
+            return self.error_response('Error interno del servidor.', 500)

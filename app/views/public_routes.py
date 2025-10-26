@@ -35,13 +35,13 @@ def hacer_pedido():
     """
     Muestra el formulario para que un cliente haga un pedido desde la web pública.
     """
-    # if 'cliente_id' not in session:
-    #     flash('Por favor, inicia sesión para realizar un pedido.', 'info')
-    #     return redirect(url_for('cliente.login'))
+    if 'cliente_id' not in session:
+        flash('Por favor, inicia sesión para realizar un pedido.', 'info')
+        return redirect(url_for('cliente.login'))
 
-    # if not session.get('cliente_aprobado'):
-    #     flash('Tu cuenta está pendiente de aprobación. No puedes realizar pedidos en este momento.', 'warning')
-    #     return redirect(url_for('public.index'))
+    if not session.get('cliente_aprobado'):
+        flash('Tu cuenta está pendiente de aprobación. No puedes realizar pedidos en este momento.', 'warning')
+        return redirect(url_for('public.index'))
     
     csrf_form = CSRFOnlyForm()
     pedido_controller = PedidoController()
