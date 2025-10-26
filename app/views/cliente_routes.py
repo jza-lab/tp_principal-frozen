@@ -1,24 +1,27 @@
 from flask import Blueprint, request, render_template, jsonify, session, redirect, url_for, flash
 from app.controllers.cliente_controller import ClienteController
+from app.utils.decorators import permission_required, permission_any_of
 
 cliente_bp = Blueprint('cliente', __name__, url_prefix='/cliente')
 cliente_controller = ClienteController()
 
 @cliente_bp.route('/register', methods=['GET', 'POST'])
+@permission_required(accion='gestionar_clientes')
 def register():
-    if request.method == 'POST':
-        print(f"Request Content-Type: {request.content_type}")
-        print(f"Request Data: {request.data}")
-        
-        data = request.get_json(silent=True) 
-        
-        if not data:
-            # Esta línea se ejecuta si el Content-Type es incorrecto o el JSON está mal
-            return jsonify({"success": False, "error": "Invalid JSON or Content-Type is not application/json"}), 400
-        
-        response, status_code = cliente_controller.crear_cliente(data)
-        return jsonify(response), status_code
+    try:
+        if request.method == 'PUT' or request.method == 'POST':
+
+            datos_json = request.get_json()
+            if not datos_json:
+                return jsonify(
+                    {"success": False, "error": "No se recibieron datos JSON válidos"}
+                ), 400
             
+            resultado, status = cliente_controller.crear_cliente(datos_json)
+            
+            return jsonify(resultado), status
+    except Exception as e:
+        flash(f"Error al crear al cliente: {str(e)}", 'error')
     return render_template('public/registro.html')
 
 @cliente_bp.route('/login', methods=['GET', 'POST'])

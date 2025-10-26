@@ -47,11 +47,6 @@ class ClienteSchema(Schema):
         allow_none=True,
         load_default=1
     )   
-    contrasena = fields.Str(
-        required=True,
-        load_only=True,
-        validate=validate.Length(min=8)
-    )
     razon_social = fields.Str(
         required=False,
         allow_none=True,

@@ -11,8 +11,8 @@
                     <h2>Registro de Nuevo Cliente</h2>
                 </div>
                 <div class="card-body">
-                    <form method="POST" id="registration-form">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <form method="POST" id="formulario-cliente">
+                        {{ csrf_form.csrf_token }}
                         <input type="hidden" id="cuit" name="cuit">
 
                         <h4>Información del Cliente</h4>
@@ -182,10 +182,10 @@
 {% endblock %}
 
 <script>
-
+    const isEditBoolean = false;
 </script>
 
 {% block scripts %}
 {{ super() }}
-<script src="{{ url_for('static', filename='js/clientes/formularioCliente.js') }}"></script>
+<script src="{{ url_for('static', filename='js/public/publicFormularioCliente.js', v='2') }}"></script>
 {% endblock %}

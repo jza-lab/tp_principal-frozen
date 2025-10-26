@@ -65,7 +65,7 @@ def nuevo_cliente():
             
             return jsonify(resultado), status
     except Exception as e:
-        flash(f"Error al actualizar el proveedor: {str(e)}", 'error')
+        flash(f"Error al crear cliente: {str(e)}", 'error')
     cliente=None
     return render_template('clientes/formulario.html', cliente=cliente)
 

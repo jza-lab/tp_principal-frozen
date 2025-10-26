@@ -55,17 +55,6 @@
                         href="{{ url_for('public.faq') }}">
                         <i class="fa-solid fa-circle-question"></i>Preguntas Frecuentes
                     </a>
-
-                    {% if session.cliente_id %}
-                    <span class="nav-link">¡Hola, {{ session.cliente_nombre }}!</span>
-                    <a class="nav-link login-link" href="{{ url_for('cliente.logout') }}">
-                        <i class="fa-solid fa-right-from-bracket"></i>Cerrar Sesión
-                    </a>
-                    {% else %}
-                    <a class="nav-link login-link" href="{{ url_for('cliente.login') }}">
-                        <i class="fa-solid fa-right-to-bracket"></i>Iniciar Sesión
-                    </a>
-                    {% endif %}
                 </div>
             </div>
 
@@ -74,10 +63,18 @@
                     href="{{ url_for('public.hacer_pedido') }}">
                     <i class="fa-solid fa-cart-plus"></i>Hace tu Pedido
                 </a>
+                {% if session.cliente_id %}
+
+                <span class="nav-link">¡Hola, {{ session.cliente_nombre }}!</span>
+                <a class="nav-link login-link" href="{{ url_for('cliente.logout') }}">
+                    <i class="fa-solid fa-right-from-bracket"></i>Cerrar Sesión
+                </a>
+                {% else %}
                 <a class="nav-link login-link {% if active_page == 'login' %}active{% endif %}"
-                    href="{{ url_for('public.index') }}">
+                    href="{{ url_for('cliente.login') }}">
                     <i class="fa-solid fa-right-to-bracket"></i>Login
                 </a>
+                {% endif %}
                 <button class="nav-toggle" aria-label="Toggle navigation">
                     <span class="hamburger"></span>
                 </button>
