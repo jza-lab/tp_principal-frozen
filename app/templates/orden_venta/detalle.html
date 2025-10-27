@@ -27,7 +27,7 @@
                 {% set estado_config = {
                 'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
                 'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                'LISTO_PARA_ENTREGAR': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
+                'LISTO_PARA_ENTREGA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
                 'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
                 'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                 } %}
@@ -205,8 +205,8 @@
                         </form>
                     {% endif %}
 
-                    {# 3. Botón "Despachar" (si está LISTO_PARA_ENTREGAR) - Reemplaza 'Marcar como Completado' #}
-                    {% if pedido.estado == 'LISTO_PARA_ENTREGAR' and 'modificar_orden_de_venta' is has_permission %}
+                    {# 3. Botón "Despachar" (si está LISTO_PARA_ENTREGA) - Reemplaza 'Marcar como Completado' #}
+                    {% if pedido.estado == 'LISTO_PARA_ENTREGA' and 'modificar_orden_de_venta' is has_permission %}
                         <button type="button" id="btn-despachar" class="btn btn-warning w-100">
                             <i class="bi bi-truck me-1"></i> Despachar Pedido
                         </button>
@@ -223,7 +223,7 @@
                     <hr>
                     {# Botón Imprimir Factura #}
                     <button type="button" id="btn-imprimir-factura" class="btn btn-info"> {# Cambiado a btn-info #}
-                        <i class="bi bi-printer me-1"></i> {{ 'Imprimir Factura Final' if pedido.estado in ['LISTO_PARA_ENTREGAR', 'COMPLETADO'] else 'Imprimir Factura Proforma' }}
+                        <i class="bi bi-printer me-1"></i> {{ 'Imprimir Factura Final' if pedido.estado in ['LISTO_PARA_ENTREGA', 'COMPLETADO'] else 'Imprimir Factura Proforma' }}
                     </button>
 
                     {# Botón Cancelar (si no está Completado o Cancelado) #}

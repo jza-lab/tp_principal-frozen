@@ -696,10 +696,10 @@ class PedidoController(BaseController):
             todas_en_proceso_o_mas = all(estado in ['EN_PRODUCCION', 'CONTROL_DE_CALIDAD', 'COMPLETADA'] for estado in estados_ops)
 
             if todas_completadas:
-                self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGAR')
-                logger.info(f"Todas las OPs del pedido {pedido_id} están completadas. Pedido actualizado a 'LISTO_PARA_ENTREGAR'.")
+                self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
+                logger.info(f"Todas las OPs del pedido {pedido_id} están completadas. Pedido actualizado a 'LISTO_PARA_ENTREGA'.")
             elif todas_en_proceso_o_mas:
-                if pedido_data.get('estado') not in ['EN_PROCESO', 'LISTO_PARA_ENTREGAR']:
+                if pedido_data.get('estado') not in ['EN_PROCESO', 'LISTO_PARA_ENTREGA']:
                     self.model.cambiar_estado(pedido_id, 'EN_PROCESO')
                     logger.info(f"Todas las OPs del pedido {pedido_id} han iniciado. Pedido actualizado a 'EN_PROCESO'.")
             
@@ -743,8 +743,8 @@ class PedidoController(BaseController):
             if not pedido_existente_resp.get('success'):
                 return self.error_response(f"Pedido con ID {pedido_id} no encontrado.", 404)
             pedido_actual = pedido_existente_resp.get('data')
-            if pedido_actual.get('estado') != 'LISTO_PARA_ENTREGAR':
-                return self.error_response("Solo se pueden despachar pedidos en estado 'LISTO_PARA_ENTREGAR'.", 400)
+            if pedido_actual.get('estado') != 'LISTO_PARA_ENTREGA':
+                return self.error_response("Solo se pueden despachar pedidos en estado 'LISTO_PARA_ENTREGA'.", 400)
 
             # 2. Recolectar y validar datos del formulario
             conductor_nombre = form_data.get('conductor_nombre', '').strip()
