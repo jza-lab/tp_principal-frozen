@@ -84,7 +84,7 @@ class OrdenCompraController:
 
         return orden_data, items_data
 
-    def crear_orden(self, orden_data, items_data, usuario_id):
+    def crear_orden(self, orden_data, items_data, usuario_id: int) -> Dict:
         """
         Crea una nueva orden de compra a partir de diccionarios de datos.
         """
@@ -330,15 +330,15 @@ class OrdenCompraController:
                 orden_res = self.model.find_by_id(current_id)
                 if not orden_res.get('success'):
                     break
-                
+
                 orden_actual = orden_res['data']
-                
+
                 # Update the current order status
                 self.model.update(current_id, {
                     'estado': 'RECIBIDA',
                     'fecha_real_entrega': date.today().isoformat()
                 })
-                
+
                 current_id = orden_actual.get('complementa_a_orden_id')
 
         except Exception as e:
@@ -364,7 +364,7 @@ class OrdenCompraController:
         if orden_produccion.get('estado') == 'EN ESPERA':
             logger.info(f"OP {op_id} está EN ESPERA. Intentando reservar insumos tras recepción de OC.")
             reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
-            
+
             if not reserva_result.get('success'):
                 op_error_msg = f"Insumos recibidos pero la reserva automática para OP {op_id} falló. Error: {reserva_result.get('error')}"
                 op_transition_message = f"ADVERTENCIA: {op_error_msg}"
@@ -372,7 +372,7 @@ class OrdenCompraController:
             else:
                 nuevo_estado_op = 'LISTA PARA PRODUCIR'
                 op_update_result = orden_produccion_controller.cambiar_estado_orden_simple(op_id, nuevo_estado_op)
-                
+
                 if not op_update_result.get('success'):
                     op_error_msg = op_update_result.get('error', 'Error desconocido.')
                     op_transition_message = f"ADVERTENCIA: Falló al actualizar la OP {op_id} a {nuevo_estado_op}. Error: {op_error_msg}"
@@ -383,7 +383,7 @@ class OrdenCompraController:
         else:
             logger.info(f"OC {orden_data['id']} recibida, pero la OP {op_id} asociada ya estaba en estado '{orden_produccion.get('estado')}'. No se realizaron cambios.")
             op_transition_message = f"La OP {op_id} no estaba 'EN ESPERA', por lo que no fue modificada."
-            
+
         return op_transition_message
 
     def _crear_lotes_para_items_recibidos(self, items_para_lote, orden_data, usuario_id):
@@ -430,14 +430,14 @@ class OrdenCompraController:
 
                 items_faltantes = []
                 items_para_lote = []
-                
+
                 # Mapear item_id a su cantidad solicitada original
                 items_originales = {str(item['id']): item for item in orden_data.get('items', [])}
 
                 for i in range(len(item_ids)):
                     item_id_str = item_ids[i]
                     item_original = items_originales.get(item_id_str)
-                    
+
                     if not item_original:
                         logger.warning(f"Se recibió el item ID {item_id_str} que no pertenece a la orden {orden_id}.")
                         continue
@@ -463,7 +463,7 @@ class OrdenCompraController:
                     except (ValueError, IndexError) as e:
                         logger.warning(f"Error procesando item {item_id_str}: {e}")
                         continue
-                
+
                 lotes_creados, lotes_error = self._crear_lotes_para_items_recibidos(items_para_lote, orden_data, usuario_id)
 
                 if items_faltantes:
@@ -475,11 +475,11 @@ class OrdenCompraController:
                         'estado': 'EN ESPERA DE INSUMO',
                         'observaciones': f"{observaciones}\nRecepción parcial. Pendiente completado en OC: {nueva_orden_result['data']['codigo_oc']}"
                     })
-                    
+
                     return {'success': True, 'message': f'Recepción parcial registrada. Se creó la orden {nueva_orden_result["data"]["codigo_oc"]} para los insumos restantes.'}
                 else:
                     self._marcar_cadena_como_recibida(orden_id)
-                    
+
                     final_message = f'Recepción completada. {lotes_creados} lotes creados.'
                     if lotes_error > 0: final_message += f' ({lotes_error} con error).'
 
@@ -499,7 +499,7 @@ class OrdenCompraController:
             return {'success': False, 'error': str(e)}
 
     def _crear_orden_complementaria(self, orden_original_data, items_faltantes, usuario_id):
-        
+
         nueva_orden_data = {
             'proveedor_id': orden_original_data.get('proveedor_id'),
             'fecha_emision': date.today().isoformat(),
@@ -510,7 +510,7 @@ class OrdenCompraController:
             'complementa_a_orden_id': orden_original_data.get('id')
         }
 
-        
+
         items_para_nueva_orden = []
         for item in items_faltantes:
             items_para_nueva_orden.append({
@@ -519,8 +519,8 @@ class OrdenCompraController:
                 'precio_unitario': item['precio_unitario'],
                 'cantidad_recibida': 0.0
             })
-        
-        
+
+
         subtotal = sum(item['cantidad_faltante'] * item['precio_unitario'] for item in items_faltantes)
         iva = subtotal * 0.21 if orden_original_data.get('iva', 0) > 0 else 0
         total = subtotal + iva
@@ -531,5 +531,5 @@ class OrdenCompraController:
             'total': round(total, 2)
         })
 
-        
+
         return self.crear_orden(nueva_orden_data, items_para_nueva_orden, usuario_id)

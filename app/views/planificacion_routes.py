@@ -149,13 +149,18 @@ def index():
 
 # --- NUEVA RUTA PARA CONFIRMACIÓN MULTI-DÍA ---
 @planificacion_bp.route('/api/confirmar-aprobacion', methods=['POST'])
+@jwt_required()
 def confirmar_aprobacion_api():
     """
     API endpoint que ejecuta la aprobación final DESPUÉS de que el usuario
     confirma una planificación multi-día o resuelve una sobrecarga (si se implementa).
     """
     data = request.get_json()
-    usuario_id = session.get('usuario_id')
+
+    # --- OBTENER USUARIO DESDE JWT ---
+    usuario_id = get_jwt_identity()
+    # ---------------------------------
+
     if not usuario_id:
         return jsonify({'success': False, 'error': 'Usuario no autenticado.'}), 401
 

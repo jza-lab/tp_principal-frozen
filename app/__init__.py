@@ -1,23 +1,18 @@
 from flask import Flask, redirect, url_for, flash, session
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, unset_jwt_cookies, get_jwt, current_user
+from flask_jwt_extended import JWTManager, unset_jwt_cookies, jwt_required
 from flask_wtf.csrf import CSRFProtect
 from flask_wtf import FlaskForm
 from app.config import Config
 import logging
 from .json_encoder import CustomJSONEncoder
-from datetime import timedelta, datetime
+from datetime import timedelta
 
-# Helpers de la aplicación
-# (Quitamos la importación de 'register_template_extensions')
 from app.utils.template_helpers import _format_datetime_filter, _formato_moneda_filter, _has_permission_filter, _inject_permission_map, _inject_user_from_jwt
 from app.models.token_blacklist_model import TokenBlacklistModel
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.cliente_controller import ClienteController
-from app.models.reclamo import ReclamoModel 
-from app.utils.permission_map import CANONICAL_PERMISSION_MAP # <-- Importamos el MAP
-
-from app.models.usuario import UsuarioModel
+from app.models.reclamo import ReclamoModel
 from types import SimpleNamespace
 
 jwt = JWTManager()
@@ -33,28 +28,19 @@ def check_if_token_in_blocklist(jwt_header, jwt_payload):
 def user_lookup_callback(_jwt_header, jwt_data):
     """
     Esta función se llama cada vez que se protege una ruta con jwt_required.
-    Devuelve el objeto de usuario basado en el 'sub' del token JWT,
-    y añade los claims adicionales (rol, permisos) al objeto.
+    Devuelve el objeto de usuario basado en el 'sub' del token JWT.
+    El rol y los permisos se cargan desde la base de datos, no desde el token.
     """
     identity = jwt_data["sub"]
     user_id = int(identity)
 
-    # El controlador de usuario ya tiene una lógica para preparar los datos de sesión.
-    # Reutilizamos esa lógica para asegurar consistencia.
     user_controller = UsuarioController()
     user_result = user_controller.model.find_by_id(user_id)
 
     if user_result.get('success'):
         user_data = user_result['data']
-        # Añadimos los permisos y otros datos del token directamente al objeto.
-        # Esto asegura que `current_user` tenga todo lo necesario en las plantillas.
-        user_data['permisos'] = jwt_data.get('permisos', {})
-        user_data['rol'] = jwt_data.get('rol')
         user_data['nombre_completo'] = f"{user_data.get('nombre', '')} {user_data.get('apellido', '')}".strip()
-
-        # Usamos SimpleNamespace para un acceso más fácil tipo objeto en las plantillas
         return SimpleNamespace(**user_data)
-
     return None
 
 
@@ -215,6 +201,17 @@ def create_app() -> Flask:
     _register_error_handlers(app)
     
     # Eliminamos la llamada conflictiva
-    # register_template_extensions(app) 
+    # register_template_extensions(app)
+
+    @app.before_request
+    @jwt_required(optional=True)
+    def before_request_loader():
+        """
+        Asegura que el `current_user` se cargue desde el token JWT
+        en cada solicitud, si el token está presente.
+        Esto resuelve problemas de caché donde `current_user` no está disponible
+        en la primera carga para las plantillas.
+        """
+        pass
 
     return app
