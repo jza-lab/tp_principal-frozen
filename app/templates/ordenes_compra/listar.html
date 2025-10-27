@@ -37,10 +37,11 @@
                            class="btn btn-sm {% if current_status == estado_key %}btn-dark{% else %}btn-secondary{% endif %}">
                             {{ estado_nombre }}
                         </a>
-                        <a href="{{ url_for('orden_compra.listar', estado='RECHAZADA') }}" class="btn btn-sm {% if current_status == 'RECHAZADA' %}btn-danger{% else %}btn-outline-danger{% endif %}">
-                            Rechazadas
-                        </a>
-                    </div>
+                    {% endfor %}
+                    <a href="{{ url_for('orden_compra.listar', estado='RECHAZADA') }}" class="btn btn-sm {% if current_status == 'RECHAZADA' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                        Rechazadas
+                    </a>
+                </div>
 
                     <!-- Separator -->
                     <div class="vr text-white d-none d-md-block mx-2"></div>
@@ -127,9 +128,7 @@
                         
                         {% if orden.estado == 'PENDIENTE' %}
                             {% if 'aprobar_orden_de_compra' is has_permission %}
-                            <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id) }}" class="confirm-form d-inline"
-                            {% set can_approve = 'aprobar_orden_de_compra' is has_permission %}
-                            <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id, estado=request.args.get('estado', '')) if can_approve else '#' }}" class="confirm-form d-inline"
+                            <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
                                   data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de compra?" data-button-type="success">
                                 {{ csrf_form.csrf_token }}
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
