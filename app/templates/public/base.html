@@ -72,7 +72,7 @@
                     </a>
                     <ul class="nav-link navbar-nav ms-auto">
                         <li class="nav-item dropdown">
-                            <a class="dropdown-toggle d-flex align-items-center" href="#"
+                            <a class="justify-content-center dropdown-toggle d-flex align-items-center" href="#"
                                 id="navbarDropdownUser" role="button" data-bs-toggle="dropdown" style="text-decoration: none; color: rgb(0, 0, 0);">
                                 <i class="bi bi-person-circle me-2"></i>
                                 {{ session.cliente_nombre }}
@@ -100,7 +100,7 @@
                 </div>
             </div>
 
-            <div class="nav-mobile-controls d-flex d-lg-none">
+            <div class="nav-mobile-controls d-flex">
                 
                 <!-- ESTA ES LA CAMPANA MÓVIL (COPIA) -->
                 {% if session.cliente_id and conteo_reclamos_respondidos > 0 %}
@@ -249,17 +249,22 @@
             }
         });
 
-        // 2. Lógica del menú hamburguesa
+        // 2. Lógica del menú hamburguesa MEJORADA
         const navToggle = document.querySelector('.nav-toggle');
         const navLinksContainer = document.querySelector('.nav-links-container');
 
-        if (navToggle && navLinksContainer) {
+        // Aseguramos que existan los 3 elementos
+        if (navToggle && navLinksContainer && nav) { 
             navToggle.addEventListener('click', function () {
                 // Animación del botón "X"
                 navToggle.classList.toggle('active');
                 
                 // Muestra/oculta el contenedor de todos los links
                 navLinksContainer.classList.toggle('active');
+                
+                // [ESTA ES LA LÍNEA CLAVE AÑADIDA]
+                // Toggle en el nav principal para estilos de menú abierto (como el botón CTA)
+                nav.classList.toggle('mobile-menu-active'); 
             });
         }
     });

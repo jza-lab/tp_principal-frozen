@@ -518,20 +518,34 @@ p {
 
 
 /* --- Responsive Styles --- */
-@media (max-width: 1300px) {
+
+/* Breakpoint 1: Laptop/Desktop pequeño (1250px) - Colapsa el menú */
+@media (max-width: 1250px) {
+
+    .nav-toggle {
+        display: block;
+    }
     body {
         margin-top: 0;
     }
+
+    .dropdown-menu-end {
+        justify-self: anchor-center;
+        margin-top:10px !important;
+    }
+    
     .nav-links-container {
         display: none;
+        margin: 0 !important;
         flex-direction: column;
         position: absolute;
-        top: 80px; /* Ajusta según la altura del nav */
+        top: 100%; /* Se posiciona justo debajo del nav */
         left: 0;
         width: 100%;
         background-color: rgba(255, 255, 255, 0.98);
         box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         padding: 10px 0;
+        z-index: -1; /* Para que quede detrás del nav principal */
     }
 
     .nav-links-container.active {
@@ -550,6 +564,7 @@ p {
         margin-top: 10px;
         padding-top: 10px;
         border-top: 1px solid #e0e0e0;
+        align-items: center; /* Centrar items */
     }
     
     .nav-link {
@@ -559,10 +574,16 @@ p {
         justify-content: center;
     }
 
+    /* Ocultar subrayado en móvil/tablet */
     .nav-link::after {
         display: none;
     }
+
+    .nav-link.notification-bell {
+        padding: 15px 0; /* Mismo padding que otros links */
+    }
     
+    /* Mostrar hamburguesa */
     .nav-toggle {
         display: block;
     }
@@ -571,7 +592,19 @@ p {
         display: flex;
         justify-content: center;
     }
+}
 
+/* Breakpoint 2: Tablet (992px) - Ajusta grids principales */
+@media (max-width: 992px) {
+    /* --- Ajuste de Grids para Tablet --- */
+    .values-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+
+/* Breakpoint 3: Móvil (768px) - Layout a 1 columna */
+@media (max-width: 768px) {
     .page-container {
         padding: 20px;
         margin: 0 0 30px 0;
@@ -582,16 +615,16 @@ p {
     .values-section {
         margin-left: -20px;
         margin-right: -20px;
+        padding: 2.5rem 1.5rem;
     }
 
+    /* Tipografía móvil */
     h1 {
         font-size: 2.2rem;
     }
-
     h2 {
         font-size: 1.8rem;
     }
-
     p {
         font-size: 1rem;
     }
@@ -600,19 +633,58 @@ p {
         padding: 2rem 1rem;
     }
 
+    /* Grids a 1 columna */
     .about-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
+    }
+    
+    .features-grid {
+        grid-template-columns: 1fr !important;
     }
 
     .values-grid {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr !important; /* 'Valores' a 1 columna en móvil */
+    }
+    
+    /* Indicador de pasos en formulario de pedido */
+    .step-indicator {
+        flex-wrap: wrap; 
+        justify-content: space-around;
+    }
+    .step-connector {
+        display: none; /* Ocultar conectores en móvil */
+    }
+    .step-item {
+        flex-basis: 33%; /* 3 por fila */
+        margin-bottom: 1rem;
     }
 }
 
 
-@media (max-width: 700px) {
-    .values-grid {
-        grid-template-columns: repeat(1, 1fr);
+/* Breakpoint 4: Móvil Pequeño (576px) - Ajustes finos */
+@media (max-width: 576px) {
+    .step-item {
+        flex-basis: 50%; /* 2 por fila en móvil muy pequeño */
+    }
+
+    /* Arreglo para input CUIT en registro.html */
+    .cuit-input-group {
+        flex-wrap: wrap; /* Permite que los inputs bajen */
+        gap: 8px; /* Espacio entre inputs cuando bajan */
+    }
+    
+    /* Hacemos que los 3 inputs ocupen el 100% */
+    .cuit-input-group > input[name="cuit_parte1"],
+    .cuit-input-group > input[name="cuit_parte2"],
+    .cuit-input-group > input[name="cuit_parte3"] {
+         flex-basis: 100% !important; /* Forzamos que cada uno ocupe una línea */
+         width: 100%;
+         flex-grow: 1 !important;
+    }
+    
+    /* Ocultamos los guiones que separan */
+    .cuit-input-group > .input-group-text {
+        display: none;
     }
 }
 
@@ -952,7 +1024,7 @@ p {
 }
 
 /* Ajuste para el menú móvil */
-@media (max-width: 1300px) {
+@media (max-width: 1250px) {
     .nav-links-right {
         align-items: center; /* Centrar items */
     }
