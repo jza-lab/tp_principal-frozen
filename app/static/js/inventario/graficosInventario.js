@@ -140,54 +140,6 @@ if (typeof INSUMOS_STOCK_DATA !== 'undefined' && INSUMOS_STOCK_DATA.length > 0) 
     });
 
 
-} else {
-    const labels = ['Sin insumos relevantes'];
-    const data = [0];
-    const backgroundColors = ['#ccc'];
-    const borderColors = ['#999'];
-
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Stock Actual',
-                data: data,
-                backgroundColor: backgroundColors,
-                borderColor: borderColors,
-                borderWidth: 1,
-                barThickness: BAR_THICKNESS,
-                barSkipped: false,
-                barPercentage: 0.95,
-                categoryPercentage: 0.95
-            }]
-        },
-        options: {
-            indexAxis: 'y',
-            elements: {
-                bar: {
-                    borderWidth: 2,
-                }
-            },
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: {
-                duration: 1200,
-                easing: 'easeInOutQuart',
-                animateRotate: true,
-                animateScale: true,
-            },
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'No hay datos de insumos para el gráfico (Stock 0 o no críticos)'
-                },
-                legend: {
-                    display: false
-                }
-            }
-        }
-    });
 }
 
 // --- GRÁFICO DE DONA (Stock BAJO vs. Stock OK) ---

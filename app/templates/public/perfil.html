@@ -80,12 +80,12 @@
                                     }}</span></td>
                             <td>{{ pedido.condicion_venta }}</td>
                             <td>
-                                {% if pedido.condicion_venta == 'credito_30' %}
+                                {% if pedido.fecha_entrega and pedido.condicion_venta == 'credito_30' %}
                                 <span class="countdown"
                                     data-due-date="{{ (pedido.fecha_entrega + timedelta(days=30)).isoformat() }}"></span>
-                                {% elif pedido.condicion_venta == 'credito_90' %}
+                                {% elif pedido.fecha_entrega and pedido.condicion_venta == 'credito_90' %}
                                 <span class="countdown"
-                                    data-due-date="{{ (pedido.fecha_entrega + timedelta(days=90)).isoformat() }}"></span>
+                                    data-due-date="{{ (pedido.fecha_entrega + timedelta(days=90)).isoformat()  }}"></span>
                                 {% else %}
                                 N/A
                                 {% endif %}
