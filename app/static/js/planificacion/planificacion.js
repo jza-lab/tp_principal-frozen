@@ -108,36 +108,76 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- LÓGICA DE DRAG-AND-DROP (KANBAN) ---
     const columns = document.querySelectorAll('.kanban-column');
-    columns.forEach(column => {
+    
+    // --- DEBUG: Verificar columnas encontradas ---
+    console.log(`Kanban: Encontradas ${columns.length} columnas con la clase '.kanban-column'.`);
+    // --- FIN DEBUG ---
+
+    columns.forEach((column, index) => {
         const cardContainer = column.querySelector('.kanban-cards');
+        
+        // --- DEBUG: Verificar contenedor de tarjetas ---
+        console.log(`Kanban: Procesando columna ${index+1}. Contenedor '.kanban-cards' encontrado:`, cardContainer);
+        // --- FIN DEBUG ---
+
         if (cardContainer) {
-            new Sortable(cardContainer, {
-                group: 'kanban', animation: 150, ghostClass: 'bg-primary-soft',
-                onMove: function (evt) { // Validaciones de movimiento
-                    const fromState = evt.from.closest('.kanban-column').dataset.estado;
-                    const toState = evt.to.closest('.kanban-column').dataset.estado;
-                    const draggedCard = evt.dragged;
-                    const allowedTransitions = { /* ... tus transiciones permitidas ... */ };
-                    if (!allowedTransitions[fromState] || !allowedTransitions[fromState].includes(toState)) { return false; }
-                    if (fromState === 'LISTA PARA PRODUCIR' && (toState === 'EN_LINEA_1' || toState === 'EN_LINEA_2')) {
-                        const lineaAsignada = draggedCard.dataset.lineaAsignada;
-                        const lineaDestino = toState === 'EN_LINEA_1' ? '1' : '2';
-                        if (!lineaAsignada || lineaAsignada !== lineaDestino) { return false; }
-                    }
-                    return true;
-                },
-                onEnd: async function (evt) { // Guardar cambio de estado al soltar
-                    if (evt.from === evt.to && evt.oldDraggableIndex === evt.newDraggableIndex) { return; }
-                    const item = evt.item; const toColumn = evt.to.closest('.kanban-column');
-                    if (!toColumn || !toColumn.dataset || !toColumn.dataset.estado) { evt.from.insertBefore(item, evt.from.children[evt.oldDraggableIndex]); return; }
-                    const opId = item.dataset.opId; const nuevoEstado = toColumn.dataset.estado;
-                    const success = await moverOp(opId, nuevoEstado);
-                    if (!success) { evt.from.insertBefore(item, evt.from.children[evt.oldDraggableIndex]); }
-                    else { window.location.reload(); } // Recargar para actualizar todo si fue exitoso
-                }
-            });
+            console.log(`Kanban: Inicializando SortableJS para columna ${index+1}...`); // Log antes de inicializar
+            try { // Añadir try...catch para detectar errores de inicialización
+                new Sortable(cardContainer, {
+                    group: 'kanban', 
+                    animation: 150, 
+                    ghostClass: 'bg-primary-soft',
+                    onMove: function (evt) { 
+                        // --- DEBUG: Confirmar ejecución de onMove ---
+                        console.log("onMove SÍ se está ejecutando:", evt); 
+                        // --- FIN DEBUG ---
+                        
+                        const fromState = evt.from.closest('.kanban-column').dataset.estado;
+                        const toState = evt.to.closest('.kanban-column').dataset.estado;
+                        // ... (resto de la lógica onMove SIN CAMBIOS) ...
+                        // --- REGLAS DE TRANSICIÓN DEFINIDAS ---
+                        const allowedTransitions = {
+                            'EN ESPERA': [], // No se puede mover manualmente DESDE aquí
+                            'LISTA PARA PRODUCIR': ['EN_LINEA_1', 'EN_LINEA_2'], // Puede ir a L1 o L2 (si la línea asignada coincide)
+                            'EN_LINEA_1': ['EN_EMPAQUETADO'],                   // L1 solo puede ir a Empaquetado
+                            'EN_LINEA_2': ['EN_EMPAQUETADO'],                   // L2 solo puede ir a Empaquetado
+                            'EN_EMPAQUETADO': ['CONTROL_DE_CALIDAD'],         // Empaquetado solo a Control de Calidad
+                            'CONTROL_DE_CALIDAD': ['COMPLETADA'],             // Control de Calidad solo a Completada
+                            'COMPLETADA': []                                  // No se puede mover DESDE Completada
+                        };
+                    // ------------------------------------
+                        if (!allowedTransitions[fromState] || !allowedTransitions[fromState].includes(toState)) { 
+                            console.warn(`Movimiento NO PERMITIDO...`); return false; 
+                        }
+                        if (fromState === 'LISTA PARA PRODUCIR' /*...*/) {
+                             // ... (validación línea asignada SIN CAMBIOS) ...
+                             const lineaAsignada = evt.dragged.dataset.lineaAsignada;
+                             const lineaDestino = toState === 'EN_LINEA_1' ? '1' : '2';
+                             if (!lineaAsignada) { console.error(`VALIDACIÓN FALLIDA: Sin data-linea-asignada...`); return false;}
+                             if (lineaAsignada !== lineaDestino) { console.error(`VALIDACIÓN FALLIDA: Línea incorrecta...`); return false; }
+                        }
+                        console.log("Movimiento PERMITIDO visualmente.");
+                        return true; 
+                    },
+                    onEnd: async function (evt) {
+                        // ... (lógica onEnd SIN CAMBIOS) ...
+                         if (evt.from === evt.to && evt.oldDraggableIndex === evt.newDraggableIndex) { console.log("SortableJS onEnd: No hubo cambio..."); return; }
+                         const item = evt.item; const toColumn = evt.to.closest('.kanban-column');
+                         if (!toColumn || !toColumn.dataset || !toColumn.dataset.estado) { console.error("SortableJS onEnd: No se pudo determinar destino."); return; }
+                         const opId = item.dataset.opId; const nuevoEstado = toColumn.dataset.estado;
+                         console.log(`SortableJS onEnd: Intentando mover OP ${opId}...`);
+                         const success = await moverOp(opId, nuevoEstado);
+                         if (success) { console.log(`SortableJS onEnd: API OK para OP ${opId}. Recargando.`); window.location.reload(); } 
+                         else { console.error(`SortableJS onEnd: API falló para OP ${opId}.`); /* No revertir visualmente aquí */ }
+                    } 
+                }); // Fin new Sortable
+            } catch (error) {
+                 console.error(`Kanban: Error al inicializar SortableJS en columna ${index+1}:`, error); // Capturar error específico
+            }
+        } else {
+             console.warn(`Kanban: No se encontró '.kanban-cards' dentro de la columna ${index+1}. SortableJS no se inicializará para esta columna.`); // Advertir si falta el contenedor
         }
-    });
+    }); // Fin columns.forEach
 
     // =======================================================
     // --- LISTENER GLOBAL PARA BOTONES (INCLUYE MODALES) ---

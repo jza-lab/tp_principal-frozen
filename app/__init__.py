@@ -45,7 +45,7 @@ def user_lookup_callback(_jwt_header, jwt_data):
         user_data['permisos'] = jwt_data.get('permisos', {})
         user_data['rol'] = jwt_data.get('rol')
         user_data['nombre_completo'] = f"{user_data.get('nombre', '')} {user_data.get('apellido', '')}".strip()
-        
+
         # Usamos SimpleNamespace para un acceso más fácil tipo objeto en las plantillas
         return SimpleNamespace(**user_data)
 
