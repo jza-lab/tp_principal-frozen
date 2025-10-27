@@ -1,5 +1,8 @@
 document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('formulario-cliente');
+    const contrasenaInput = document.getElementById('contrasena');
+    const confirm_contrasenaInput = document.getElementById('confirm_contrasena');
+
     if (!form) return;
 
     function restrictToLetters(event) {
@@ -59,6 +62,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         return resultado === digitoVerificador;
+    }
+
+    const alturaInput = document.getElementById('altura');
+
+    if (alturaInput) {
+        alturaInput.addEventListener('input', function () {
+            if (this.value.length > 5) {
+                this.value = this.value.slice(0, 5);
+            }
+        });
     }
 
     const cuitPartes = ['cuit_parte1', 'cuit_parte2', 'cuit_parte3'];
@@ -203,11 +216,19 @@ document.addEventListener('DOMContentLoaded', function () {
         const contrasena = document.getElementById('contrasena').value;
         const confirm_contrasena = document.getElementById('confirm_contrasena').value;
 
+        if (contrasena.length < 8) {
+            showNotificationModal('Error de Contraseña', 'La contraseña debe tener al menos 8 caracteres.');
+            contrasenaInput.classList.add('is-invalid');
+            confirm_contrasenaInput.classList.add('is-invalid');
+            contrasenaInput.focus()
+            return;
+        }
+
         if (contrasena !== confirm_contrasena) {
             showNotificationModal('Error de Contraseña', 'Las contraseñas no coinciden.');
             contrasenaInput.classList.add('is-invalid');
             confirm_contrasenaInput.classList.add('is-invalid');
-            contrasena.focus()
+            contrasenaInput.focus()
             return;
         }
 
