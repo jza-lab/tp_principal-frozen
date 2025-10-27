@@ -111,150 +111,185 @@ class PedidoController(BaseController):
             logger.error(f"Error interno obteniendo detalle de pedido {pedido_id}: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
-    def crear_pedido_con_items(self, form_data: Dict) -> tuple:
+    def crear_pedido_con_items(self, form_data: Dict, usuario_id: int) -> tuple: # <-- Aceptar usuario_id
         """
-        Valida y crea un nuevo pedido con sus items, verificando el stock previamente.
-        Si todo el stock está disponible, lo marca como 'COMPLETADO' y despacha el stock.
+        Valida y crea pedido. Verifica stock/mínimo y puede iniciar proceso auto.
+        Recibe usuario_id como parámetro.
         """
         try:
-            if 'items-TOTAL_FORMS' in form_data:
-                form_data.pop('items-TOTAL_FORMS')
+            # Consolidar items y manejar dirección
+            if 'items-TOTAL_FORMS' in form_data: form_data.pop('items-TOTAL_FORMS')
+            if 'items' in form_data: form_data['items'] = self._consolidar_items(form_data['items'])
 
-            if 'items' in form_data:
-                form_data['items'] = self._consolidar_items(form_data['items'])
-
-            direccion_id = None
-            usar_alternativa = form_data.get('usar_direccion_alternativa')
-
-            if usar_alternativa:
-                # El usuario quiere usar una dirección temporal, validamos que la haya provisto.
-                direccion_payload = form_data.get('direccion_entrega', {})
-                direccion_data = {
-                    'calle': direccion_payload.get('calle'), 'altura': direccion_payload.get('altura'),
-                    'provincia': direccion_payload.get('provincia'), 'localidad': direccion_payload.get('localidad'),
-                    'piso': direccion_payload.get('piso'), 'depto': direccion_payload.get('depto'),
-                    'codigo_postal': direccion_payload.get('codigo_postal')
-                }
-                if not all(direccion_data.get(k) for k in ['calle', 'altura', 'localidad', 'provincia']):
-                    return self.error_response("Debe completar todos los campos de la dirección de entrega alternativa.", 400)
-
-                direccion_id = self._get_or_create_direccion(direccion_data)
-                if not direccion_id:
-                    return self.error_response("No se pudo procesar la dirección de entrega alternativa.", 500)
-            else:
-                # El usuario quiere usar la dirección principal del cliente, verificamos que exista.
-                id_cliente = form_data.get('id_cliente')
-                if not id_cliente:
-                    return self.error_response("No se ha especificado un cliente.", 400)
-
-                cliente_result = self.cliente_model.find_by_id(id_cliente, 'id')
-                if not cliente_result.get('success') or not cliente_result.get('data'):
-                    return self.error_response("Cliente no encontrado.", 404)
-
-                direccion_id = cliente_result['data'].get('direccion_id')
-
-                if not direccion_id:
-                    return self.error_response("El cliente no tiene una dirección principal. Por favor, marque la opción 'Enviar a una dirección de entrega distinta' y complete los campos.", 400)
-
-            # Añadimos el id de la dirección al payload principal para la validación/creación.
+            direccion_id = self._obtener_o_crear_direccion_para_pedido(form_data)
+            if direccion_id is None:
+                 return self.error_response("Error procesando la dirección de entrega.", 400)
             form_data['id_direccion_entrega'] = direccion_id
-            form_data.pop('direccion_entrega', None)
-            form_data.pop('usar_direccion_alternativa', None)
+            form_data.pop('direccion_entrega', None); form_data.pop('usar_direccion_alternativa', None)
 
-            # FIX: Se elimina el intento de añadir el ID del creador al modelo `pedidos`
-            # La tabla `pedidos` no tiene esta columna, causando el error PGRST204.
-
-            items_data = form_data.pop('items')
+            items_data = form_data.pop('items', [])
             pedido_data = form_data
 
-            # --- NUEVA LÓGICA: Verificación de Stock (Dry Run) y determinación de estado ---
-            all_in_stock = True # Indicador para la nueva lógica
+            # --- VERIFICACIÓN DE STOCK Y UMBRAL ---
+            all_in_stock = True
+            produccion_requerida = False
+            auto_aprobar_produccion = True
+
+            if not items_data:
+                 return self.error_response("El pedido debe contener al menos un producto.", 400)
 
             for item in items_data:
                 producto_id = item['producto_id']
                 cantidad_solicitada = item['cantidad']
 
-                producto_info = self.producto_model.find_by_id(producto_id, 'id')
-                nombre_producto = producto_info['data']['nombre'] if producto_info.get('success') and producto_info.get('data') else f"ID {producto_id}"
+                producto_info_res = self.producto_model.find_by_id(producto_id, 'id')
+                if not producto_info_res.get('success') or not producto_info_res.get('data'):
+                    return self.error_response(f"Producto ID {producto_id} no encontrado.", 404)
+
+                producto_data = producto_info_res['data']
+                nombre_producto = producto_data.get('nombre', f"ID {producto_id}")
+                stock_min = float(producto_data.get('stock_min_produccion', 0)) # Usar atributo de producto.py
 
                 stock_response, _ = self.lote_producto_controller.obtener_stock_producto(producto_id)
-
                 if not stock_response.get('success'):
-                    logging.error(f"No se pudo verificar el stock para el producto '{nombre_producto}'. Error: {stock_response.get('error')}")
-                    all_in_stock = False # Si no se puede verificar, asumimos que no hay stock
-                    continue
+                    logger.error(f"Fallo al verificar stock para '{nombre_producto}'. Asumiendo insuficiente.")
+                    all_in_stock = False; produccion_requerida = True; continue
 
                 stock_disponible = stock_response['data']['stock_total']
 
-                if stock_disponible >= cantidad_solicitada:
-                    logging.info(f"STOCK SUFICIENTE para '{nombre_producto}': Solicitados: {cantidad_solicitada}, Disponible: {stock_disponible}")
-                else:
-                    logging.warning(f"STOCK INSUFICIENTE para '{nombre_producto}': Solicitados: {cantidad_solicitada}, Disponible: {stock_disponible}")
-                    all_in_stock = False # Marcar como insuficiente
+                if stock_disponible < cantidad_solicitada:
+                    all_in_stock = False; produccion_requerida = True
+                    logger.warning(f"STOCK INSUFICIENTE para '{nombre_producto}': Sol: {cantidad_solicitada}, Disp: {stock_disponible}")
+                elif (stock_disponible - cantidad_solicitada) < stock_min:
+                    produccion_requerida = True
+                    logger.warning(f"STOCK BAJARÍA DEL MÍNIMO ({stock_min}) para '{nombre_producto}'. Producción requerida.")
 
-            # Definir el estado inicial basado en la verificación
-            if all_in_stock:
-                # Si todo está en stock, el estado inicial es LISTO_PARA_ENTREGA
-                pedido_data['estado'] = 'LISTO_PARA_ENTREGA'
-                # Y cada item se marca como ALISTADO, ya que el stock está disponible.
-                for item in items_data:
-                    item['estado'] = 'ALISTADO'
-                logging.info("Todo el stock disponible. El pedido se creará en estado LISTO_PARA_ENTREGA y los items como ALISTADO.")
-            elif 'estado' not in pedido_data:
-                # Si falta stock, el estado inicial es PENDIENTE
-                pedido_data['estado'] = 'PENDIENTE'
-                logging.warning("Stock insuficiente para uno o más items. El pedido se creará en estado PENDIENTE.")
+                if cantidad_solicitada > stock_min and stock_min > 0:
+                    auto_aprobar_produccion = False
+                    logger.info(f"Cantidad ({cantidad_solicitada}) para '{nombre_producto}' supera stock_min ({stock_min}). Requiere aprobación manual.")
+            # --- FIN VERIFICACIÓN ---
 
+            # --- DECIDIR ESTADO INICIAL Y ACCIÓN ---
+            estado_inicial = 'PENDIENTE'
+            accion_post_creacion = None
 
+            if not produccion_requerida and all_in_stock:
+                estado_inicial = 'LISTO_PARA_ENTREGA'
+                accion_post_creacion = 'DESPACHAR_Y_COMPLETAR'
+                for item in items_data: item['estado'] = 'ALISTADO'
+                logger.info("Stock OK. Estado inicial: LISTO_PARA_ENTREGA.")
+            elif produccion_requerida and auto_aprobar_produccion:
+                 estado_inicial = 'PENDIENTE' # Inicia PENDIENTE
+                 accion_post_creacion = 'INICIAR_PROCESO_AUTO'
+                 logger.info("Producción requerida (cant. pequeña). Estado inicial: PENDIENTE, se intentará iniciar proceso auto.")
+            else: # Producción requerida, cantidad grande
+                 logger.info("Producción requerida (cant. grande). Estado inicial: PENDIENTE (espera aprobación manual).")
+
+            pedido_data['estado'] = estado_inicial
+            # ----------------------------------------
+
+            # Crear el pedido en la BD
             result = self.model.create_with_items(pedido_data, items_data)
-
-            if result.get('success'):
-                nuevo_pedido = result.get('data')
-                id_cliente = nuevo_pedido.get('id_cliente')
-                if id_cliente:
-                    pedidos_previos,_ = self.obtener_pedidos(filtros={'id_cliente': id_cliente})
-                    pedidos_validos = [p for p in pedidos_previos.get('data', []) if p.get('estado') != 'CANCELADO']
-                    num_pedidos = len(pedidos_validos)
-
-                    if num_pedidos == 1:
-                        self.cliente_model.update(id_cliente, {'condicion_venta': 2})
-                    elif num_pedidos == 2:
-                        self.cliente_model.update(id_cliente, {'condicion_venta': 3})
-
-                if all_in_stock:
-
-                    pedido_con_items_resp = self.model.get_one_with_items(nuevo_pedido.get('id'))
-                    if pedido_con_items_resp.get('success'):
-                        items_del_pedido_con_id = pedido_con_items_resp.get('data', {}).get('items', [])
-
-                        despacho_result = self.lote_producto_controller.despachar_stock_directo_por_pedido(
-                            pedido_id=nuevo_pedido.get('id'),
-                            items_del_pedido=items_del_pedido_con_id
-                        )
-
-                        if not despacho_result.get('success'):
-                            self.model.cambiar_estado(nuevo_pedido.get('id'), 'PENDIENTE')
-                            logging.error(f"Fallo al despachar stock en la creación. Revirtiendo a PENDIENTE. Error: {despacho_result.get('error')}")
-                            return self.error_response(f"Pedido creado, pero falló el despacho de stock: {despacho_result.get('error')}", 500)
-
-                        nuevo_pedido['estado'] = 'COMPLETADO'
-                        return self.success_response(
-                            data={**nuevo_pedido, 'estado_completado_inmediato': True},
-                            message="El pedido ha sido puesto en estado COMPLETADO automáticamente porque se encontró stock disponible para despachar todos los ítems.",
-                            status_code=201
-                        )
-                    
-                return self.success_response(data=nuevo_pedido, message="Pedido creado con éxito.", status_code=201)
-            else:
+            if not result.get('success'):
                 return self.error_response(result.get('error', 'No se pudo crear el pedido.'), 400)
 
-        except ValidationError as e:
-            return self.error_response(str(e.messages), 400)
+            nuevo_pedido = result.get('data')
+            pedido_id_creado = nuevo_pedido.get('id')
+            mensaje_final = f"Pedido {pedido_id_creado} creado en estado '{estado_inicial}'."
 
+            # --- EJECUTAR ACCIÓN POST-CREACIÓN ---
+            if accion_post_creacion == 'DESPACHAR_Y_COMPLETAR':
+                logger.info(f"Intentando despachar y completar pedido {pedido_id_creado}...")
+                pedido_con_items_resp = self.model.get_one_with_items(pedido_id_creado)
+                if pedido_con_items_resp.get('success'):
+                    items_del_pedido_con_id = pedido_con_items_resp.get('data', {}).get('items', [])
+                    despacho_result = self.lote_producto_controller.despachar_stock_directo_por_pedido(
+                        pedido_id=pedido_id_creado, items_del_pedido=items_del_pedido_con_id
+                    )
+                    if despacho_result.get('success'):
+                        self.model.cambiar_estado(pedido_id_creado, 'COMPLETADO')
+                        mensaje_final = f"Pedido {pedido_id_creado} COMPLETADO automáticamente (stock disponible y despachado)."
+                        nuevo_pedido['estado'] = 'COMPLETADO'
+                    else:
+                        self.model.cambiar_estado(pedido_id_creado, 'PENDIENTE')
+                        logger.error(f"Fallo despacho en creación pedido {pedido_id_creado}. Revirtiendo a PENDIENTE. Error: {despacho_result.get('error')}")
+                        return self.error_response(f"Pedido creado, pero falló despacho: {despacho_result.get('error')}", 500)
+                else:
+                    logger.error(f"No se pudieron obtener items para despachar pedido {pedido_id_creado}. Dejado en LISTO_PARA_ENTREGA.")
+
+            elif accion_post_creacion == 'INICIAR_PROCESO_AUTO':
+                logger.info(f"Intentando iniciar proceso automáticamente para pedido {pedido_id_creado}...")
+                # --- USAR usuario_id RECIBIDO ---
+                if not usuario_id:
+                     logger.error(f"No se pudo iniciar proceso auto para pedido {pedido_id_creado}: Usuario ID no válido proporcionado.")
+                     mensaje_final += " (No se pudo iniciar proceso automáticamente por falta de usuario)."
+                else:
+                    # Llamar a iniciar_proceso_pedido usando el usuario_id del parámetro
+                    inicio_resp, inicio_status = self.iniciar_proceso_pedido(pedido_id_creado, usuario_id)
+                    if inicio_resp.get('success'):
+                        # Consultar estado final después de iniciar proceso
+                        nuevo_estado_despues_inicio = self.model.find_by_id(pedido_id_creado, 'id')['data']['estado']
+                        mensaje_final = f"Pedido {pedido_id_creado} creado y proceso iniciado automáticamente (Estado final: {nuevo_estado_despues_inicio}). {inicio_resp.get('message', '')}"
+                        nuevo_pedido['estado'] = nuevo_estado_despues_inicio # Actualizar estado para la respuesta
+                    else:
+                         logger.error(f"Fallo al iniciar proceso auto para pedido {pedido_id_creado}: {inicio_resp.get('error')}")
+                         mensaje_final += f" (Fallo al iniciar proceso automáticamente: {inicio_resp.get('error')})"
+                # --- FIN USO usuario_id ---
+
+            # --- FIN EJECUCIÓN ACCIÓN ---
+
+            # Actualizar condición de venta del cliente
+            id_cliente = nuevo_pedido.get('id_cliente')
+            if id_cliente:
+                pedidos_previos,_ = self.obtener_pedidos(filtros={'id_cliente': id_cliente})
+                pedidos_validos = [p for p in pedidos_previos.get('data', []) if p.get('estado') != 'CANCELADO']
+                num_pedidos = len(pedidos_validos)
+                if num_pedidos == 1: self.cliente_model.update(id_cliente, {'condicion_venta': 2})
+                elif num_pedidos == 2: self.cliente_model.update(id_cliente, {'condicion_venta': 3})
+
+            return self.success_response(data=nuevo_pedido, message=mensaje_final, status_code=201)
+
+        except ValidationError as e:
+            error_msg = str(e.messages)
+            logger.warning(f"Error de validación al crear pedido: {error_msg}")
+            return self.error_response(f"Datos inválidos: {error_msg}", 400)
         except Exception as e:
             logging.error(f"Error interno en crear_pedido_con_items: {e}", exc_info=True)
-            return self.error_response(f'Error interno: {str(e)}', 500)
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
+    # --- NUEVO HELPER para Dirección ---
+    def _obtener_o_crear_direccion_para_pedido(self, form_data: Dict) -> Optional[int]:
+         """ Centraliza la lógica de obtener/crear dirección para un pedido. """
+         direccion_id = None
+         usar_alternativa = form_data.get('usar_direccion_alternativa')
+         try:
+             if usar_alternativa:
+                 direccion_payload = form_data.get('direccion_entrega', {})
+                 direccion_data = {k: direccion_payload.get(k) for k in ['calle', 'altura', 'provincia', 'localidad', 'piso', 'depto', 'codigo_postal']}
+                 if not all(direccion_data.get(k) for k in ['calle', 'altura', 'localidad', 'provincia']):
+                     logger.error("Faltan campos en dirección alternativa.")
+                     return None # Error
+                 direccion_id = self._get_or_create_direccion(direccion_data) # Llama al helper existente
+                 if not direccion_id:
+                      logger.error("No se pudo obtener/crear dirección alternativa.")
+                      return None # Error
+             else:
+                 id_cliente = form_data.get('id_cliente')
+                 if not id_cliente:
+                     logger.error("Cliente no especificado para dirección principal.")
+                     return None # Error
+                 cliente_result = self.cliente_model.find_by_id(id_cliente, 'id')
+                 if not cliente_result.get('success') or not cliente_result.get('data'):
+                     logger.error(f"Cliente {id_cliente} no encontrado.")
+                     return None # Error
+                 direccion_id = cliente_result['data'].get('direccion_id')
+                 if not direccion_id:
+                     logger.error(f"Cliente {id_cliente} sin dirección principal.")
+                     return None # Error
+             return direccion_id
+         except Exception as e:
+             logger.error(f"Excepción en _obtener_o_crear_direccion_para_pedido: {e}", exc_info=True)
+             return None
 
     def iniciar_proceso_pedido(self, pedido_id: int, usuario_id: int) -> tuple:
         """
@@ -704,7 +739,7 @@ class PedidoController(BaseController):
 
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
-        
+
     def obtener_pedidos_por_cliente(self, cliente_id: int) -> tuple:
         """
         Obtiene todos los pedidos de un cliente específico.
@@ -749,7 +784,7 @@ class PedidoController(BaseController):
                 if pedido_data.get('estado') not in ['EN_PROCESO', 'LISTO_PARA_ENTREGA']:
                     self.model.cambiar_estado(pedido_id, 'EN_PROCESO')
                     logger.info(f"Todas las OPs del pedido {pedido_id} han iniciado. Pedido actualizado a 'EN_PROCESO'.")
-            
+
         except Exception as e:
             logger.error(f"Error actualizando el estado del pedido {pedido_id} según OPs: {e}", exc_info=True)
 
@@ -789,7 +824,7 @@ class PedidoController(BaseController):
             pedido_existente_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_existente_resp.get('success'):
                 return self.error_response(f"Pedido con ID {pedido_id} no encontrado.", 404)
-            
+
             pedido_actual = pedido_existente_resp.get('data')
             if pedido_actual.get('estado') != 'LISTO_PARA_ENTREGA':
                 return self.error_response("Solo se pueden despachar pedidos en estado 'LISTO_PARA_ENTREGA'.", 400)
@@ -800,7 +835,7 @@ class PedidoController(BaseController):
             patente_vehiculo = form_data.get('vehiculo_patente', '').strip()
             telefono_transportista = form_data.get('conductor_telefono', '').strip()
             observaciones = form_data.get('observaciones', '').strip()
-            
+
             # (Aquí se pueden agregar validaciones más estrictas si es necesario)
             if not all([nombre_transportista, dni_transportista, patente_vehiculo, telefono_transportista]):
                  return self.error_response('Todos los campos del transportista y vehículo son requeridos.', 400)
@@ -821,7 +856,7 @@ class PedidoController(BaseController):
                 error_msg = resultado_despacho.get('error', 'Error desconocido al guardar los datos del despacho.')
                 logger.error(f"Error al crear registro de despacho para pedido {pedido_id}: {error_msg}")
                 return self.error_response(error_msg, 500)
-                
+
             # 5. Actualizar el estado del pedido
             update_data = {'estado': 'EN_TRANSITO'}
             result = self.model.update(pedido_id, update_data)
@@ -833,7 +868,7 @@ class PedidoController(BaseController):
                 # En un caso real, aquí se debería considerar revertir la creación del despacho (transacción)
                 logger.error(f"Error al despachar pedido {pedido_id} después de guardar despacho: {result.get('error')}")
                 return self.error_response(result.get('error', 'El despacho fue registrado, pero no se pudo actualizar el estado del pedido.'), 500)
-                
+
         except Exception as e:
             logger.error(f"Error interno en despachar_pedido: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
@@ -858,15 +893,15 @@ class PedidoController(BaseController):
         try:
             fecha_hasta = date.today()
             fecha_desde = fecha_hasta - timedelta(days=30)
-            
+
             filtros = {
                 'estado': 'CANCELADO',
                 'fecha_desde': fecha_desde.isoformat(),
                 'fecha_hasta': fecha_hasta.isoformat()
             }
-            
+
             response, _ = self.obtener_pedidos(filtros)
-            
+
             if response.get('success'):
                 cantidad = len(response.get('data', []))
                 return self.success_response(data={'cantidad': cantidad})

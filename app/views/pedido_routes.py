@@ -63,9 +63,9 @@ def listar():
         flash(response.get('error', 'Error al cargar los pedidos.'), 'error')
 
     # Se pasa la lista de filtros de la UI a la plantilla
-    return render_template('orden_venta/listar.html', 
-                           pedidos=pedidos, 
-                           titulo="Pedidos de Venta", 
+    return render_template('orden_venta/listar.html',
+                           pedidos=pedidos,
+                           titulo="Pedidos de Venta",
                            filtros_ui=OV_FILTROS_UI)
 
 @orden_venta_bp.route('/nueva', methods=['GET', 'POST'])
@@ -81,7 +81,8 @@ def nueva():
             return jsonify({"success": False, "error": "Datos no válidos"}), 400
 
         usuario_id = get_jwt_identity()
-        response, status_code = controller.crear_pedido_con_items(json_data)
+
+        response, status_code = controller.crear_pedido_con_items(json_data, usuario_id)
 
         if status_code < 300:
             nuevo_pedido = response.get('data', {})
@@ -175,7 +176,7 @@ def despachar(id):
     if not pedido_resp.get('success'):
         flash('Pedido no encontrado.', 'error')
         return redirect(url_for('orden_venta.listar'))
-    
+
     pedido = pedido_resp.get('data')
     if pedido.get('estado') != 'LISTO_PARA_ENTREGA':
         flash(f"El pedido no está listo para ser despachado (Estado actual: {pedido.get('estado')}).", 'warning')
@@ -264,7 +265,7 @@ def api_despachar_pedido(id):
     json_data = request.get_json()
     if not json_data:
         return jsonify({"success": False, "error": "Datos no válidos"}), 400
-    
+
     response, status_code = controller.despachar_pedido(id, json_data)
     return jsonify(response), status_code
 
@@ -318,11 +319,11 @@ def generar_proforma_api():
     subtotal_neto = 0
     for item in pedido_data.get('items', []):
         producto = todos_los_productos.get(item.get('producto_id'))
-        
+
         if producto:
             nombre_producto=producto['nombre']
             item['producto_nombre'] = producto
-    
+
     # Calculate IVA and Total
     iva = subtotal_neto * 0.21 if cliente.get('condicion_iva') == '1' else 0
     total = subtotal_neto + iva
@@ -337,9 +338,9 @@ def generar_proforma_api():
         direccion_a_usar = pedido_data.get('direccion_entrega')
     else:
         direccion_a_usar = cliente.get('direccion')
-    
+
     pedido_data['direccion'] = direccion_a_usar
-   
+
     # Add fake emitter data for proforma
     pedido_data['emisor'] = {
         'ingresos_brutos': '20-12345678-3',
@@ -407,15 +408,15 @@ def nueva_cliente_pasos():
     if cliente_id:
         es_cliente_nuevo = not cliente_controller.cliente_tiene_pedidos_previos(cliente_id)
 
-    
+
     response, _ = controller.obtener_datos_para_formulario()
     productos = response.get('data', {}).get('productos', [])
-    
+
     # Usamos el nuevo template sin includes
-    return render_template('orden_venta/formulario_cliente_pasos.html', 
-                            productos=productos, 
-                            pedido=None, 
-                            is_edit=False, 
+    return render_template('orden_venta/formulario_cliente_pasos.html',
+                            productos=productos,
+                            pedido=None,
+                            is_edit=False,
                             today=hoy,
                             cliente={},
                             es_cliente_nuevo=es_cliente_nuevo)
