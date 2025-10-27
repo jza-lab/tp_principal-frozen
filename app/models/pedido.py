@@ -80,6 +80,13 @@ class PedidoModel(BaseModel):
 
         pedido_data['todas_ops_completadas'] = todas_completadas # Añadir bandera al pedido
 
+        # 4. Obtener datos de despacho si existen
+        despacho_result = self.db.table('despachos').select('*').eq('id_pedido', pedido_id).execute()
+        if despacho_result.data:
+            pedido_data['despacho'] = despacho_result.data[0]
+        else:
+            pedido_data['despacho'] = None
+
         return {'success': True, 'data': pedido_data}
 
     def contar_pedidos_direccion(self, direccion_id: int, exclude_pedido_id: Optional[int] = None) -> int:

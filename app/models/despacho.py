@@ -1,8 +1,8 @@
 from app.models.base_model import BaseModel
 
 class DespachoModel(BaseModel):
-    def __init__(self):
-        super().__init__(table_name='despachos')
+    def get_table_name(self) -> str:
+        return 'despachos'
 
     def create(self, data):
         """

@@ -10,7 +10,7 @@ from app.models.receta import RecetaModel
 # -------------------------
 from app.models.cliente import ClienteModel
 from app.models.pedido import PedidoModel
-from app.models.despacho_model import DespachoModel
+from app.models.despacho import DespachoModel
 from app.models.producto import ProductoModel
 from app.models.direccion import DireccionModel
 from app.schemas.direccion_schema import DireccionSchema
@@ -33,7 +33,7 @@ class PedidoController(BaseController):
         self.model = PedidoModel()
         self.schema = PedidoSchema()
         self.producto_model = ProductoModel()
-        self.despacho_model = DespachoModel()
+        self.despacho = DespachoModel()
         self.cliente_model = ClienteModel()
         self.direccion_model= DireccionModel()
         self.dcliente_schema = ClienteSchema()
@@ -771,7 +771,7 @@ class PedidoController(BaseController):
             }
 
             # 4. Crear el registro de despacho
-            resultado_despacho = self.despacho_model.create(datos_despacho)
+            resultado_despacho = self.despacho.create(datos_despacho)
             if not resultado_despacho.get('success'):
                 error_msg = resultado_despacho.get('error', 'Error desconocido al guardar los datos del despacho.')
                 logger.error(f"Error al crear registro de despacho para pedido {pedido_id}: {error_msg}")
