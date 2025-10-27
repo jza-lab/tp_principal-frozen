@@ -31,7 +31,7 @@ class ReclamoSchema(Schema):
 
     estado = fields.Str(
         validate=validate.OneOf(["pendiente", "respondida", "solucionada", "cancelado"]), # Añadidos nuevos estados
-        missing="pendiente",  # Valor por defecto al cargar datos
+        load_default="pendiente",  # Valor por defecto al cargar datos
         dump_default="pendiente"  # Valor por defecto al serializar
     )
 
