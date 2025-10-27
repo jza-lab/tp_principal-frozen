@@ -31,13 +31,12 @@
     <nav class="main-nav">
         <div class="nav-container">
 
-            <div class="nav-left">
-                <a class="nav-brand" href="{{ url_for('public.index') }}">
-                    <img src="{{ url_for('static', filename='img/icon.png') }}" alt="Frozen Foods Logo"
-                        class="nav-logo">
-                    FrozenProd
-                </a>
+            <a class="nav-brand" href="{{ url_for('public.index') }}">
+                <img src="{{ url_for('static', filename='img/icon.png') }}" alt="Frozen Foods Logo" class="nav-logo">
+                FrozenProd
+            </a>
 
+            <div class="nav-links-container">
                 <div class="nav-links">
                     <a class="nav-link {% if request.endpoint == 'public.about' %}active{% endif %}"
                         href="{{ url_for('public.about') }}">
@@ -56,54 +55,46 @@
                         <i class="fa-solid fa-circle-question"></i>Preguntas Frecuentes
                     </a>
                 </div>
-            </div>
 
-            <div class="nav-right">
-                <div class="nav-links">
+                <div class="nav-links nav-links-right">
                     {% if session.cliente_id %}
-                    
                     <a class="nav-link cta-button {% if request.endpoint == 'public.hacer_pedido' %}active{% endif %}"
                         href="{{ url_for('public.hacer_pedido') }}">
                         <i class="fa-solid fa-cart-plus"></i>
                     </a>
-
-                    <ul class="navbar-nav ms-auto">
+                    <ul class="nav-link navbar-nav ms-auto">
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="navbarDropdownUser"
-                                role="button" data-bs-toggle="dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#"
+                                id="navbarDropdownUser" role="button" data-bs-toggle="dropdown">
                                 <i class="bi bi-person-circle me-2"></i>
                                 {{ session.cliente_nombre }}
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownUser">
                                 <li>
                                     <a class="dropdown-item" href="{{ url_for('cliente.perfil') }}">
-                                        <i class="bi bi-person-rolodex me-2"></i>
-                                        Perfil
+                                        <i class="bi bi-person-rolodex me-2"></i> Perfil
                                     </a>
                                 </li>
                                 <li>
                                     <a class="dropdown-item" href="{{ url_for('cliente.logout') }}">
-                                        <i class="fa-solid fa-right-from-bracket me-2"></i>
-                                        Logout
+                                        <i class="fa-solid fa-right-from-bracket me-2"></i> Logout
                                     </a>
                                 </li>
                             </ul>
                         </li>
                     </ul>
-
                     {% else %}
-                    
                     <a class="nav-link login-link {% if active_page == 'login' %}active{% endif %}"
                         href="{{ url_for('cliente.login') }}">
-                        <i class="fa-solid fa-right-to-bracket"></i>Login
+                        <i class="fa-solid fa-right-to-bracket"></i> Login
                     </a>
                     {% endif %}
                 </div>
-                    
-                    <button class="nav-toggle" aria-label="Toggle navigation">
-                    <span class="hamburger"></span>
-                </button>
             </div>
+
+            <button class="nav-toggle" aria-label="Toggle navigation">
+                <span class="hamburger"></span>
+            </button>
 
         </div>
     </nav>
@@ -226,7 +217,7 @@
     </footer>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        // 1. Script de Navbar con Scroll (El que ya tenías)
+        // 1. Script de Navbar con Scroll
         const nav = document.querySelector('.main-nav');
         window.addEventListener('scroll', function () {
             if (window.scrollY > 50) {
@@ -236,22 +227,17 @@
             }
         });
 
+        // 2. Lógica del menú hamburguesa
         const navToggle = document.querySelector('.nav-toggle');
-        
-        const navLinksMenus = document.querySelectorAll('.nav-left .nav-links');
+        const navLinksContainer = document.querySelector('.nav-links-container');
 
-        // CAMBIO 2: Verificamos que existan con .length
-        if (navToggle && navLinksMenus) {
+        if (navToggle && navLinksContainer) {
             navToggle.addEventListener('click', function () {
-                
                 // Animación del botón "X"
                 navToggle.classList.toggle('active');
-
-                // CAMBIO 3: Usamos un bucle para activar/desactivar AMBOS menús
-                navLinksMenus.forEach(function(menu) {
-                    menu.classList.toggle('active');
-                    mainLinksMenu.classList.toggle('active');
-                });
+                
+                // Muestra/oculta el contenedor de todos los links
+                navLinksContainer.classList.toggle('active');
             });
         }
     });

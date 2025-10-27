@@ -52,16 +52,12 @@ body {
     box-sizing: border-box;
 }
 
-.nav-left {
+.nav-links-container {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 25px;
-}
-
-.nav-right {
-    display: flex;
-    align-items: center;
-    gap: 20px;
+    flex-grow: 1;
+    margin-left: 25px; /* Replaces old gap from nav-left */
 }
 
 .nav-brand {
@@ -526,25 +522,34 @@ p {
     body {
         margin-top: 0;
     }
-    .nav-left {
-        gap: 0;
+    .nav-links-container {
+        display: none;
+        flex-direction: column;
+        position: absolute;
+        top: 80px; /* Ajusta según la altura del nav */
+        left: 0;
+        width: 100%;
+        background-color: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        padding: 10px 0;
+    }
+
+    .nav-links-container.active {
+        display: flex;
     }
 
     .nav-links {
-            display: none;
-            flex-direction: column;
-            position: absolute;
-            top: 80px; /* Ajusta esto si la altura de tu nav es diferente */
-            left: 0;
-            width: 100%;
-            background-color: rgba(255, 255, 255, 0.98);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-            padding: 20px 0;
-            gap: 0;
-        }
+        flex-direction: column;
+        width: 100%;
+        align-items: center;
+        padding: 0;
+        gap: 0;
+    }
 
-    .nav-links.active {
-        display: flex;
+    .nav-links-right {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #e0e0e0;
     }
     
     .nav-link {
@@ -554,22 +559,12 @@ p {
         justify-content: center;
     }
 
-    /* El subrayado en móvil puede ser molesto, lo quitamos */
     .nav-link::after {
         display: none;
     }
     
     .nav-toggle {
         display: block;
-    }
-
-    .nav-right .login-link {
-        display: none;
-    }
-
-    /* Ocultamos el CTA de escritorio en móvil (se duplica) */
-    .nav-right .cta-button {
-        display: none;
     }
 
     .login-link-mobile {
