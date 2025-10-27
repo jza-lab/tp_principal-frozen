@@ -132,11 +132,12 @@
                         {% set can_gestionar_empleados = 'consultar_empleados' is has_permission or 'modificar_empleado' is has_permission or 'crear_empleado' is has_permission or 'configurar_usuarios_y_roles' is has_permission %}
                         {% set can_gestionar_clientes = 'gestionar_clientes' is has_permission %}
                         {% set can_gestionar_proveedores = 'gestionar_proveedores' is has_permission %}
-                        {% set can_access_admin_dropdown = can_gestionar_empleados or can_gestionar_clientes or can_gestionar_proveedores %}
+                        {% set can_gestionar_reclamos = 'gestionar_reclamos' is has_permission %}
+                        {% set can_access_admin_dropdown = can_gestionar_empleados or can_gestionar_clientes or can_gestionar_proveedores or can_gestionar_reclamos %}
 
                         {% if can_access_admin_dropdown %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle {% if is_admin_section %}active{% endif %}"
+                            <a class="nav-link dropdown-toggle {% if is_admin_section or request.endpoint.startswith('admin_reclamo') %}active{% endif %}"
                             href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-gear-fill me-1"></i> Administración
                             </a>
@@ -158,10 +159,18 @@
                                 {% if can_gestionar_proveedores %}
                                 <li><a class="dropdown-item {% if 'listar_proveedores' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_proveedores') }}"><i class="bi bi-briefcase-fill me-2"></i> Gestión de Proveedores</a></li>
                                 {% endif %}
-                            </ul>
+                                {% if can_gestionar_reclamos %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item {% if request.endpoint.startswith('admin_reclamo') %}active{% endif %}" href="{{ url_for('admin_reclamo.listar_reclamos') }}">
+                                        <i class="bi bi-chat-right-quote-fill me-2"></i> Gestión de Reclamos
+                                    </a>
+                                </li>
+                                {% endif %}
+                                </ul>
                         </li>
                         {% endif %}
-                    </ul>
+                        </ul>
                     <ul class="navbar-nav ms-auto">
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="navbarDropdownUser" 

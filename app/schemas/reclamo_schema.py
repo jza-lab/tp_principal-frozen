@@ -1,4 +1,5 @@
 from marshmallow import Schema, fields, validate
+from app.schemas.reclamo_mensaje_schema import ReclamoMensajeSchema # Importar el nuevo schema
 
 class ReclamoSchema(Schema):
     """
@@ -26,9 +27,15 @@ class ReclamoSchema(Schema):
     
     # Campo de solo lectura para la fecha de creación
     created_at = fields.DateTime(dump_only=True)
+    updated_at = fields.DateTime(dump_only=True)
 
     estado = fields.Str(
-        validate=validate.OneOf(["pendiente", "resuelto"]),
+        validate=validate.OneOf(["pendiente", "respondida", "solucionada", "cancelado"]), # Añadidos nuevos estados
         missing="pendiente",  # Valor por defecto al cargar datos
         dump_default="pendiente"  # Valor por defecto al serializar
     )
+
+    # Campos anidados (solo para serialización)
+    mensajes = fields.List(fields.Nested(ReclamoMensajeSchema()), dump_only=True)
+    cliente = fields.Nested('ClienteSchema', dump_only=True, only=('nombre',))
+    pedido = fields.Nested('PedidoSchema', dump_only=True, only=('id',))

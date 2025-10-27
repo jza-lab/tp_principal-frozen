@@ -1,0 +1,139 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Detalle Reclamo #{{ reclamo.id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chat-container { max-height: 500px; overflow-y: auto; background: #f8f9fa; border-radius: 8px; }
+    .chat-bubble { max-width: 80%; padding: 10px 15px; border-radius: 15px; margin-bottom: 10px; }
+    .chat-bubble.admin { background-color: #e7f5ff; border-bottom-right-radius: 0; align-self: flex-end; }
+    .chat-bubble.client { background-color: #ffffff; border: 1px solid #e0e0e0; border-bottom-left-radius: 0; align-self: flex-start; }
+    .chat-bubble .sender { font-weight: bold; font-size: 0.8rem; margin-bottom: 2px; }
+    .chat-bubble .timestamp { font-size: 0.75rem; color: #6c757d; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set estado_config = {
+    'pendiente': {'class': 'bg-danger-soft text-danger', 'text': 'Pendiente (Admin)'},
+    'respondida': {'class': 'bg-warning-soft text-warning', 'text': 'Respondido (Cliente)'},
+    'solucionada': {'class': 'bg-success-soft text-success', 'text': 'Solucionado'},
+    'cancelado': {'class': 'bg-secondary-soft text-secondary', 'text': 'Cancelado'}
+} %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">Detalle Reclamo #{{ reclamo.id }}</h1>
+        <p class="text-muted mb-0">Cliente: <strong>{{ reclamo.cliente.nombre }}</strong> | Pedido: <strong>PED-{{ reclamo.pedido_id }}</strong></p>
+    </div>
+    <a href="{{ url_for('admin_reclamo.listar_reclamos') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Volver al Listado
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Conversación</h5>
+                {% set config = estado_config.get(reclamo.estado, {'class': 'bg-light', 'text': reclamo.estado}) %}
+                <span class="badge {{ config.class }}">{{ config.text }}</span>
+            </div>
+            <div class="card-body chat-container d-flex flex-column p-3">
+                {% for msg in reclamo.mensajes %}
+                    {% if msg.usuario_id %}
+                    <div class="chat-bubble admin">
+                        <div class="sender text-primary">
+                            {% if msg.autor_admin %}
+                                {{ msg.autor_admin.nombre }} {{ msg.autor_admin.apellido }} (Admin)
+                            {% else %}
+                                Administración
+                            {% endif %}
+                        </div>
+                        <p class="mb-1">{{ msg.mensaje }}</p>
+                        <div class="timestamp text-end">{{ msg.created_at | format_datetime }}</div>
+                    </div>
+                    {% else %}
+                    <div class="chat-bubble client">
+                        <div class="sender text-success">
+                            {% if msg.autor_cliente %}
+                                {{ msg.autor_cliente.nombre }} (Cliente)
+                            {% else %}
+                                Cliente
+                            {% endif %}
+                        </div>
+                        <p class="mb-1">{{ msg.mensaje }}</p>
+                        <div class="timestamp text-end">{{ msg.created_at | format_datetime }}</div>
+                    </div>
+                    {% endif %}
+                {% else %}
+                <p class="text-muted text-center">No hay mensajes en esta conversación.</p>
+                {% endfor %}
+            </div>
+            
+            {% if reclamo.estado not in ['solucionada', 'cancelado'] %}
+            <div class="card-footer">
+                <form action="{{ url_for('admin_reclamo.responder_reclamo', reclamo_id=reclamo.id) }}" method="POST">
+                    {{ csrf_form.csrf_token }}
+                    <div class="mb-3">
+                        <label for="mensaje" class="form-label">Escribir Respuesta:</label>
+                        <textarea class="form-control" id="mensaje" name="mensaje" rows="3" required placeholder="Escriba su respuesta al cliente..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Enviar Respuesta</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">Info del Reclamo</h5></div>
+            <div class="card-body">
+                <p><strong>Categoría:</strong><br> {{ reclamo.categoria.replace('_', ' ') | title }}</p>
+                <p><strong>Fecha Recepción Pedido:</strong><br> {{ reclamo.fecha_recepcion }}</p>
+                <p><strong>Fecha Creación Reclamo:</strong><br> {{ reclamo.created_at | format_datetime }}</p>
+                
+                {% if reclamo.estado not in ['solucionada', 'cancelado'] %}
+                <hr>
+                <form action="{{ url_for('admin_reclamo.cancelar_reclamo', reclamo_id=reclamo.id) }}" method="POST" class="confirm-form d-grid"
+                      data-title="Confirmar Cancelación"
+                      data-message="¿Está seguro de que desea cancelar este reclamo? Esta acción es administrativa y no puede deshacerse."
+                      data-button-type="danger">
+                    {{ csrf_form.csrf_token }}
+                    <button type="submit" class="btn btn-outline-danger">
+                        <i class="bi bi-x-circle me-1"></i> Cancelar Reclamo (Admin)
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Scroll al final del chat
+    const chatContainer = document.querySelector('.chat-container');
+    if (chatContainer) {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    
+    // Confirmación para el botón de cancelar
+    const forms = document.querySelectorAll('.confirm-form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const title = form.dataset.title || 'Confirmar';
+            const message = form.dataset.message || '¿Está seguro?';
+            const buttonType = form.dataset.buttonType || 'primary';
+
+            showConfirmationModal(title, message, () => {
+                form.submit();
+            }, buttonType);
+        });
+    });
+});
+</script>
+{% endblock %}

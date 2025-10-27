@@ -8,6 +8,7 @@ from app.controllers.notificación_controller import NotificacionController
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.utils.decorators import permission_required
+from app.models.reclamo import ReclamoModel
 
 # Blueprint para el dashboard de administración
 admin_dashboard_bp = Blueprint('admin_dashboard', __name__, url_prefix='/admin')
@@ -81,6 +82,11 @@ def index():
     productos_sin_lotes_resp, _ = lote_producto_controller.obtener_conteo_productos_sin_lotes()
 
     lotes_producto_vencimiento_count = lote_producto_controller.obtener_conteo_vencimientos() 
+
+    reclamo_stats = ReclamoModel().get_count_by_estado('pendiente')
+    conteo_reclamos = 0
+    if reclamo_stats.get('success'):
+        conteo_reclamos = reclamo_stats.get('count', 0)
     
     return render_template('dashboard/index.html', 
                            asistencia=asistencia,
@@ -99,4 +105,5 @@ def index():
                            ordenesproduccion_proceso_count=ordenesproduccion_proceso_count,
                            ordenesproduccion_proceso_list=ordenesproduccion_proceso_list,
                            lotes_vencimiento_count=lotes_vencimiento_count,
+                           conteo_reclamos_pendientes=conteo_reclamos,
                            lotes_producto_vencimiento_count=lotes_producto_vencimiento_count)

@@ -1,9 +1,11 @@
 from flask import Blueprint, request, render_template, jsonify, session, redirect, url_for, flash
 from app.controllers.cliente_controller import ClienteController
 from app.utils.decorators import permission_required, permission_any_of
+from app.controllers.reclamo_controller import ReclamoController
 
 cliente_bp = Blueprint('cliente', __name__, url_prefix='/cliente')
 cliente_controller = ClienteController()
+reclamo_controller = ReclamoController()
 
 @cliente_bp.route('/register', methods=['GET', 'POST'])
 @permission_required(accion='gestionar_clientes')
@@ -65,6 +67,14 @@ def perfil():
 
     if status_code == 200:
         cliente_data = response.get('data')
+
+        # Cargar los reclamos del cliente
+        reclamos_response, _ = reclamo_controller.obtener_reclamos_por_cliente(cliente_id)
+        if reclamos_response.get('success'):
+            cliente_data['reclamos'] = reclamos_response.get('data', [])
+        else:
+            cliente_data['reclamos'] = []
+            
         return render_template('public/perfil.html', cliente=cliente_data)
     else:
         flash(response.get('error', 'No se pudo cargar tu perfil.'), 'error')

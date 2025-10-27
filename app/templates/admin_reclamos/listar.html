@@ -1,0 +1,83 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %}Gestión de Reclamos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">Gestión de Reclamos</h1>
+        <p class="text-muted mb-0">Reclamos recibidos de clientes</p>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body card-filter">
+        {% set current_status = request.args.get('estado') %}
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <a href="{{ url_for('admin_reclamo.listar_reclamos') }}" class="btn btn-sm {% if not current_status %}btn-primary{% else %}btn-secondary{% endif %}">Todos</a>
+            <a href="{{ url_for('admin_reclamo.listar_reclamos', estado='pendiente') }}" class="btn btn-sm {% if current_status == 'pendiente' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+                Pendientes (Admin)
+            </a>
+            <a href="{{ url_for('admin_reclamo.listar_reclamos', estado='respondida') }}" class="btn btn-sm {% if current_status == 'respondida' %}btn-warning text-dark{% else %}btn-outline-warning{% endif %}">
+                Respondidos (Cliente)
+            </a>
+            <a href="{{ url_for('admin_reclamo.listar_reclamos', estado='solucionada') }}" class="btn btn-sm {% if current_status == 'solucionada' %}btn-success{% else %}btn-outline-success{% endif %}">
+                Solucionados
+            </a>
+             <a href="{{ url_for('admin_reclamo.listar_reclamos', estado='cancelado') }}" class="btn btn-sm {% if current_status == 'cancelado' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                Cancelados
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID Reclamo</th>
+                        <th>Cliente</th>
+                        <th>Pedido</th>
+                        <th>Categoría</th>
+                        <th>Fecha Creación</th>
+                        <th>Estado</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reclamo in reclamos %}
+                    <tr>
+                        <td><strong>#{{ reclamo.id }}</strong></td>
+                        <td>{{ reclamo.cliente.nombre if reclamo.cliente else 'N/A' }}</td>
+                        <td>PED-{{ reclamo.pedido_id }}</td>
+                        <td>{{ reclamo.categoria.replace('_', ' ') | title }}</td>
+                        <td>{{ reclamo.created_at | format_datetime }}</td>
+                        <td>
+                            {% set estado_config = {
+                                'pendiente': {'class': 'bg-danger-soft text-danger', 'text': 'Pendiente (Admin)'},
+                                'respondida': {'class': 'bg-warning-soft text-warning', 'text': 'Respondido (Cliente)'},
+                                'solucionada': {'class': 'bg-success-soft text-success', 'text': 'Solucionado'},
+                                'cancelado': {'class': 'bg-secondary-soft text-secondary', 'text': 'Cancelado'}
+                            } %}
+                            {% set config = estado_config.get(reclamo.estado, {'class': 'bg-light', 'text': reclamo.estado}) %}
+                            <span class="badge {{ config.class }}">{{ config.text }}</span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('admin_reclamo.detalle_reclamo', reclamo_id=reclamo.id) }}" class="btn btn-sm btn-primary">
+                                Ver / Responder
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">No se encontraron reclamos con este filtro.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -63,6 +63,30 @@
         </div>
     </div>
     {% endif %}
+
+    {% if 'gestionar_reclamos' is has_permission and conteo_reclamos_pendientes > 0 %}
+    <div class="stat-card-item">
+        <div class="card stat-card h-100 border-0 shadow-sm glow-on-load">
+            <a href="{{ url_for('admin_reclamo.listar_reclamos', estado='pendiente') }}" style="text-decoration: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="stat-label mb-1 text-muted">Atención Requerida</div>
+                            <div class="small text-muted">Reclamos de clientes sin responder:</div>
+                            <div class="stat-value text-danger">{{ conteo_reclamos_pendientes }}</div>
+                            <div class="small text-danger" style="min-height: 50px;">
+                                <i class="bi bi-arrow-right-short"></i> Ir a Gestionar Reclamos
+                            </div>
+                        </div>
+                        <div class="text-danger">
+                            <i class="bi bi-chat-right-quote-fill fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+    {% endif %}
     
     {% if can_ver_produccion %}
     <div class="stat-card-item">
@@ -469,34 +493,54 @@ document.addEventListener('DOMContentLoaded', function () {
     const carouselContainer = document.getElementById('alertCarouselContainer');
     const prevBtn = document.getElementById('prevAlertBtn');
     const nextBtn = document.getElementById('nextAlertBtn');
+    
+    // CORRECCIÓN: Salir si los elementos no existen (ej. dashboard sin alertas)
+    if (!carouselContainer || !prevBtn || !nextBtn) {
+        console.log("Carrusel de alertas no inicializado (elementos no encontrados).");
+        return;
+    }
+
     const cards = carouselContainer.querySelectorAll('.stat-card-item');
     
-    if (cards.length === 0) return;
+    // CORRECCIÓN: Salir si no hay tarjetas
+    if (cards.length === 0) {
+        console.log("Carrusel de alertas no inicializado (no hay tarjetas).");
+        // Ocultar botones si no hay tarjetas
+        prevBtn.style.display = 'none';
+        nextBtn.style.display = 'none';
+        return;
+    }
 
     const gap = 55; 
-    const scrollDration = 4000;
+    const scrollDuration = 4000; // Renombrada de 'scrollDration'
     let currentIndex = 0;
     let autoScrollInterval;
 
     function calculateMaxScroll() {
         const totalWidth = carouselContainer.scrollWidth;
         const visibleWidth = carouselWrapper.clientWidth;
-        return totalWidth - visibleWidth + gap;
+        // CORRECCIÓN: Asegurarse de que maxScroll no sea negativo si el contenido es más pequeño
+        return Math.max(0, totalWidth - visibleWidth + gap);
     }
 
     function updateCarousel() {
-        const cardWidth = cards[0].offsetWidth;
+        // CORRECCIÓN: Asegurarse de que cards[0] exista
+        const cardWidth = cards[0] ? cards[0].offsetWidth : 0;
+        if (cardWidth === 0) return; // No hacer nada si el ancho es 0
+
         const offset = currentIndex * (cardWidth + gap);
         const maxScroll = calculateMaxScroll();
 
-        // Asegurarse de que el desplazamiento no exceda el máximo
         const finalOffset = Math.min(offset, maxScroll);
 
         carouselContainer.style.transform = `translateX(-${finalOffset}px)`;
 
-        // Actualizar el estado de los botones
-        prevBtn.disabled = (finalOffset === 0);
-        nextBtn.disabled = (finalOffset >= maxScroll);
+        // CORRECCIÓN: Verificar si maxScroll es 0
+        const isAtEnd = finalOffset >= maxScroll;
+        const isAtStart = finalOffset === 0;
+
+        prevBtn.disabled = isAtStart;
+        nextBtn.disabled = isAtEnd;
 
         prevBtn.style.opacity = prevBtn.disabled ? '0.5' : '1';
         nextBtn.style.opacity = nextBtn.disabled ? '0.5' : '1';
@@ -506,14 +550,14 @@ document.addEventListener('DOMContentLoaded', function () {
         if (autoScrollInterval) clearInterval(autoScrollInterval);
 
         autoScrollInterval = setInterval(() => {
+            // CORRECCIÓN: Usar la variable booleana actualizada
             if (nextBtn.disabled) {
-                // Si el botón 'next' está desactivado, hemos llegado al final. Reinicia.
                 currentIndex = 0;
             } else {
                 currentIndex++;
             }
             updateCarousel();
-        }, scrollDuration);
+        }, scrollDuration); // Usar la variable renombrada
     }
 
     function resetAutoScroll() {
@@ -537,10 +581,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Añadir un listener para recalcular en caso de que cambie el tamaño de la ventana
     window.addEventListener('resize', updateCarousel);
 
-    // Configuración inicial
     updateCarousel();
     startAutoScroll();
 });

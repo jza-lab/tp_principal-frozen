@@ -914,3 +914,62 @@ p {
 .form-control.is-valid {
     padding-right: 0.75rem !important;
 }
+
+.nav-link.notification-bell {
+    position: relative;
+    font-size: 1.2rem; /* Un poco más grande que el texto */
+    color: var(--primary-teal);
+    padding-left: 10px;
+    padding-right: 10px;
+    transition: color 0.3s ease, transform 0.3s ease;
+}
+
+.nav-link.notification-bell:hover {
+    color: var(--secondary-teal);
+    transform: scale(1.1); /* Efecto de "pulso" al pasar el mouse */
+}
+
+/* El subrayado no se aplica a la campana */
+.nav-link.notification-bell::after {
+    display: none;
+}
+
+.notification-badge {
+    position: absolute;
+    top: 4px; /* Ajustar posición */
+    right: 0px; /* Ajustar posición */
+    background-color: #dc3545; /* Rojo de alerta */
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid white;
+}
+
+/* Ajuste para el menú móvil */
+@media (max-width: 1300px) {
+    .nav-links-right {
+        align-items: center; /* Centrar items */
+    }
+    .nav-link.notification-bell {
+        padding: 15px 0; /* Mismo padding que otros links */
+    }
+}
+
+.chat-container { max-height: 500px; overflow-y: auto; background: #f8f9fa; border-radius: 8px; }
+.chat-bubble { max-width: 80%; padding: 10px 15px; border-radius: 15px; margin-bottom: 10px; }
+.chat-bubble.admin { background-color: #e7f5ff; border-bottom-right-radius: 0; align-self: flex-end; }
+.chat-bubble.client { background-color: #ffffff; border: 1px solid #e0e0e0; border-bottom-left-radius: 0; align-self: flex-start; }
+.chat-bubble .sender { font-weight: bold; font-size: 0.8rem; margin-bottom: 2px; }
+.chat-bubble .timestamp { font-size: 0.75rem; color: #6c757d; }
+
+/* Clases de estado (para que coincidan con el perfil) */
+.state-pendiente { background-color: #dc3545 !important; color: white !important; }
+.state-respondida { background-color: #ffc107 !important; color: #343a40 !important; }
+.state-solucionada { background-color: #198754 !important; color: white !important; }
+.state-cancelado { background-color: #6c757d !important; color: white !important; }

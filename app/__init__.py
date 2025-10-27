@@ -1,18 +1,21 @@
 from flask import Flask, redirect, url_for, flash, session
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, unset_jwt_cookies
+from flask_jwt_extended import JWTManager, unset_jwt_cookies, get_jwt, current_user
 from flask_wtf.csrf import CSRFProtect
 from flask_wtf import FlaskForm
 from app.config import Config
 import logging
 from .json_encoder import CustomJSONEncoder
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 # Helpers de la aplicación
-from app.utils.template_helpers import register_template_extensions
+# (Quitamos la importación de 'register_template_extensions')
+from app.utils.template_helpers import _format_datetime_filter, _formato_moneda_filter, _has_permission_filter, _inject_permission_map, _inject_user_from_jwt
 from app.models.token_blacklist_model import TokenBlacklistModel
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.cliente_controller import ClienteController
+from app.models.reclamo import ReclamoModel 
+from app.utils.permission_map import CANONICAL_PERMISSION_MAP # <-- Importamos el MAP
 
 from app.models.usuario import UsuarioModel
 from types import SimpleNamespace
@@ -93,6 +96,7 @@ def _register_blueprints(app: Flask):
     from app.views.public_routes import public_bp
     from app.views.cliente_routes import cliente_bp
     from app.views.reclamo_routes import reclamo_bp
+    from app.views.admin_reclamo_routes import admin_reclamo_bp # <-- IMPORTACIÓN DE ADMIN RECLAMO
     
 
     app.register_blueprint(main_bp)
@@ -120,6 +124,7 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(alertas_bp)
     app.register_blueprint(cliente_bp)
     app.register_blueprint(reclamo_bp)
+    app.register_blueprint(admin_reclamo_bp) # <-- REGISTRO DE ADMIN RECLAMO
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""
@@ -151,11 +156,12 @@ def create_app() -> Flask:
     csrf.init_app(app)
     jwt.init_app(app)
 
+    # --- INICIO DE LA CORRECCIÓN ---
+    # Todos los context processors y filtros se definen aquí centralizadamente.
+
     @app.context_processor
     def inject_globals():
-        return dict(
-            timedelta=timedelta  # Hace que timedelta esté disponible en TODAS las plantillas
-        )
+        return dict(timedelta=timedelta)
 
     @app.context_processor
     def inject_csrf_form():
@@ -163,15 +169,52 @@ def create_app() -> Flask:
 
     @app.context_processor
     def inject_pending_client_count():
+        conteo = 0
+        # (Lógica para obtener conteo)
         if 'rol' in session and session['rol'] in ['DEV', 'GERENTE']:
             cliente_controller = ClienteController()
             _, status = cliente_controller.obtener_conteo_clientes_pendientes()
             if status == 200:
-                return dict(pending_client_count=_.get('data', {}).get('count', 0))
-        return dict(pending_client_count=0)
+                conteo = _.get('data', {}).get('count', 0)
+        return dict(pending_client_count=conteo)
+
+    @app.context_processor
+    def inject_cliente_notifications():
+        """
+        Inyecta el conteo de reclamos respondidos para el cliente logueado
+        en todas las plantillas.
+        """
+        conteo = 0
+        if 'cliente_id' in session:
+            try:
+                cliente_id = session['cliente_id']
+                reclamo_model = ReclamoModel()
+                resultado = reclamo_model.get_count_by_cliente_and_estado(cliente_id, 'respondida')
+                if resultado.get('success'):
+                    conteo = resultado.get('count', 0)
+            except Exception as e:
+                print(f"Error al inyectar conteo de reclamos: {e}")
+                conteo = 0
+        return dict(conteo_reclamos_respondidos=conteo)
+
+    # --- Lógica movida desde template_helpers.py ---
+    
+    # Registrar filtros
+    app.jinja_env.filters['format_datetime'] = _format_datetime_filter
+    app.jinja_env.filters['formato_moneda'] = _formato_moneda_filter
+    app.jinja_env.globals['has_permission'] = _has_permission_filter
+    app.jinja_env.tests['has_permission'] = _has_permission_filter
+    
+    # Registrar context processors que estaban en template_helpers
+    app.context_processor(_inject_permission_map)
+    app.context_processor(_inject_user_from_jwt)
+    
+    # --- FIN DE LA CORRECCIÓN ---
 
     _register_blueprints(app)
     _register_error_handlers(app)
-    register_template_extensions(app)
+    
+    # Eliminamos la llamada conflictiva
+    # register_template_extensions(app) 
 
     return app

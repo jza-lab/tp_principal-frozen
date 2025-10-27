@@ -58,6 +58,14 @@
 
                 <div class="nav-links nav-links-right">
                     {% if session.cliente_id %}
+                    {% if conteo_reclamos_respondidos > 0 %}
+                    <a class="nav-link notification-bell d-none d-lg-flex" 
+                       href="{{ url_for('cliente.perfil') }}" 
+                       title="{{ conteo_reclamos_respondidos }} reclamo(s) respondido(s)">
+                        <i class="fa-solid fa-bell"></i>
+                        <span class="notification-badge">{{ conteo_reclamos_respondidos }}</span>
+                    </a>
+                    {% endif %}
                     <a class="nav-link cta-button {% if request.endpoint == 'public.hacer_pedido' %}active{% endif %}"
                         href="{{ url_for('public.hacer_pedido') }}">
                         <i class="fa-solid fa-cart-plus"></i>
@@ -92,9 +100,23 @@
                 </div>
             </div>
 
-            <button class="nav-toggle" aria-label="Toggle navigation">
-                <span class="hamburger"></span>
-            </button>
+            <div class="nav-mobile-controls d-flex d-lg-none">
+                
+                <!-- ESTA ES LA CAMPANA MÓVIL (COPIA) -->
+                {% if session.cliente_id and conteo_reclamos_respondidos > 0 %}
+                <a class="nav-link notification-bell" 
+                   href="{{ url_for('cliente.perfil') }}" 
+                   title="{{ conteo_reclamos_respondidos }} reclamo(s) respondido(s)">
+                    <i class="fa-solid fa-bell"></i>
+                    <span class="notification-badge">{{ conteo_reclamos_respondidos }}</span>
+                </a>
+                {% endif %}
+
+                <!-- Este es el botón toggle hamburguesa -->
+                <button class="nav-toggle" aria-label="Toggle navigation">
+                    <span class="hamburger"></span>
+                </button>
+            </div>
 
         </div>
     </nav>
