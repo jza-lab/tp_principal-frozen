@@ -144,7 +144,7 @@ class ClienteController(BaseController):
                 
                 if respuesta.get('success'):
                     return self.error_response('El CUIT/CUIL ya está registrado para otro cliente', 400)
-            data['estado_aprobado'] = 'pendiente'
+            data['estado_aprobacion'] = 'pendiente'
             direccion_id = self._get_or_create_direccion(direccion_data)
             if direccion_id:
                 data['direccion_id'] = direccion_id
@@ -299,3 +299,42 @@ class ClienteController(BaseController):
         except Exception as e:
             logger.error(f"Error durante la autenticación del cliente: {str(e)}")
             return self.error_response('Error interno del servidor.', 500)
+
+    def actualizar_estado_cliente(self, cliente_id: int, nuevo_estado: str) -> tuple:
+        """
+        Actualiza el estado de aprobación de un cliente.
+        """
+        try:
+            estados_validos = ['aprobado', 'rechazado', 'pendiente']
+            if nuevo_estado not in estados_validos:
+                return self.error_response(f'Estado no válido. Los estados permitidos son: {", ".join(estados_validos)}.', 400)
+
+            existing = self.model.find_by_id(cliente_id)
+            if not existing.get('success'):
+                return self.error_response('Cliente no encontrado', 404)
+
+            update_data = {'estado_aprobacion': nuevo_estado}
+            resultado_actualizar = self.model.update(cliente_id, update_data, 'id')
+
+            if not resultado_actualizar.get('success'):
+                return self.error_response(resultado_actualizar.get('error', 'Error al actualizar el estado del cliente'))
+
+            return self.success_response(message='Estado del cliente actualizado exitosamente')
+
+        except Exception as e:
+            logger.error(f"Error actualizando estado del cliente {cliente_id}: {str(e)}")
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
+    def obtener_conteo_clientes_pendientes(self) -> tuple:
+        """
+        Obtiene el número de clientes con estado de aprobación 'pendiente'.
+        """
+        try:
+            result = self.model.get_count(filtros={'estado_aprobacion': 'pendiente'})
+            if not result['success']:
+                return self.error_response(result['error'])
+            
+            return self.success_response(data={'count': result['data']})
+        except Exception as e:
+            logger.error(f"Error contando clientes pendientes: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)

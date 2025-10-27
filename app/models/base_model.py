@@ -171,3 +171,22 @@ class BaseModel(ABC):
         except Exception as e:
             logger.error(f"Error al eliminar en {self.table_name}: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def get_count(self, filtros: Optional[Dict] = None) -> Dict:
+        """
+        Cuenta el número de registros que coinciden con los filtros.
+        """
+        try:
+            query = self.db.table(self.table_name).select('id', count='exact')
+
+            if filtros:
+                for key, value in filtros.items():
+                    if value is not None:
+                        query = query.eq(key, value)
+            
+            response = query.execute()
+            
+            return {'success': True, 'data': response.count}
+        except Exception as e:
+            logger.error(f"Error contando registros en {self.table_name}: {e}")
+            return {'success': False, 'error': str(e)}

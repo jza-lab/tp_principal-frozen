@@ -175,6 +175,48 @@
     </div>
 
     <div class="col-lg-4 col-xl-3">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="bi bi-shield-check me-1"></i>
+                    Estado de Aprobación
+                </h6>
+            </div>
+            <div class="card-body">
+                {% set estado_config = {
+                    'aprobado': {'class': 'bg-success-soft text-success', 'icon': 'bi-check-circle-fill', 'text': 'Aprobado'},
+                    'rechazado': {'class': 'bg-danger-soft text-danger', 'icon': 'bi-x-circle-fill', 'text': 'Rechazado'},
+                    'pendiente': {'class': 'bg-warning-soft text-warning', 'icon': 'bi-hourglass-split', 'text': 'Pendiente'}
+                } %}
+                {% set current_status = cliente.get('estado_aprobacion', 'pendiente') %}
+                {% set config = estado_config.get(current_status, estado_config['pendiente']) %}
+                
+                <p>Estado actual:</p>
+                <h4><span class="badge {{ config.class }}"><i class="bi {{ config.icon }} me-1"></i>{{ config.text }}</span></h4>
+
+                {% if 'gestionar_clientes' is has_permission %}
+                <hr>
+                <form action="{{ url_for('clientes_proveedores.actualizar_estado_cliente', id=cliente.id) }}" method="POST">
+                    {{ csrf_form.csrf_token }}
+                    <div class="mb-3">
+                        <label for="estado_aprobacion" class="form-label">Cambiar Estado:</label>
+                        <select name="estado_aprobacion" id="estado_aprobacion" class="form-select">
+                            <option value="pendiente" {% if current_status == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                            <option value="aprobado" {% if current_status == 'aprobado' %}selected{% endif %}>Aprobado</option>
+                            <option value="rechazado" {% if current_status == 'rechazado' %}selected{% endif %}>Rechazado</option>
+                        </select>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i>
+                            Guardar Cambio
+                        </button>
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">
                 <h6 class="mb-0">

@@ -145,6 +145,14 @@
                                 <li><a class="dropdown-item {% if 'admin_usuario' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_usuario.listar_usuarios') }}"><i class="bi bi-people-fill me-2"></i> Gestión de Empleados</a></li>
                                 {% endif %}
                                 {% if can_gestionar_clientes %}
+                                <li>
+                                    <a class="dropdown-item {% if 'solicitudes' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_solicitudes_clientes') }}">
+                                        <i class="bi bi-person-plus-fill me-2"></i> Solicitudes de Clientes
+                                        {% if pending_client_count > 0 %}
+                                        <span class="badge rounded-pill bg-danger ms-2">{{ pending_client_count }}</span>
+                                        {% endif %}
+                                    </a>
+                                </li>
                                 <li><a class="dropdown-item {% if 'listar_clientes' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_clientes') }}"><i class="bi bi-person-rolodex me-2"></i> Gestión de Clientes</a></li>
                                 {% endif %}
                                 {% if can_gestionar_proveedores %}
