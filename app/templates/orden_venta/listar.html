@@ -93,10 +93,9 @@
                      {% endif %}
                 </div>
 
-                {# --- Total y Acciones (empujados hacia abajo) --- #}
-                <div class="mt-auto">
-                    <div class="text-end mb-2">
-                         <span class="fw-bold fs-5">{{ pedido.precio_orden | formato_moneda }}</span>
+                <div class="mt-auto"> 
+                    <div class="text-end mb-2"> 
+                         <span class="fw-bold fs-5">$ {{ pedido.precio_orden | formato_moneda }}</span>
                     </div>
 
                     <hr class="card-divider my-2">

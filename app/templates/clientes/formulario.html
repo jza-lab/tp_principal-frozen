@@ -55,24 +55,27 @@ Agregar nuevo cliente
                                 </label>
                             </div>
                         </div>
-
                         <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="razon_social" name="razon_social"
+                                    placeholder="Razón Social" value="{{ cliente.razon_social if cliente else '' }}">
+                                <label for="razon_social">Razón Social</label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-12">
                             <div class="input-group">
                                 <input type="text" class="form-control text-center" id="cuit_parte1" name="cuit_parte1"
-                                    maxlength="2" pattern="\d{2}" placeholder="XX" value="{{  cliente.cuit.split('-')[0] if cliente and cliente.cuit else ''  }}" required
+                                    maxlength="2" pattern="\d{2}" placeholder="XX" required
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
-                                    aria-label="Código de provincia"
-                                    >
-
+                                    aria-label="Código de provincia">
                                 <span class="input-group-text">-</span>
 
                                 <div class="form-floating" style="flex-grow: 4;">
                                     <input type="text" class="form-control text-center" id="cuit_parte2"
                                         name="cuit_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX"
-                                        required value="{{ cliente.cuit.split('-')[1] if cliente and cliente.cuit else '' }}">
-                                    <label for="cuit_parte2">
-                                        <i class="bi bi-person-badge me-1"></i>Cuit
-                                    </label>
+                                        required>
+                                    <label for="cuit_parte2">CUIT</label>
                                 </div>
 
                                 <span class="input-group-text">-</span>
@@ -80,12 +83,10 @@ Agregar nuevo cliente
                                 <input type="text" class="form-control text-center" id="cuit_parte3" name="cuit_parte3"
                                     maxlength="1" pattern="\d{1}" placeholder="X" required
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
-                                    aria-label="Dígito verificador"
-                                    value="{{ cliente.cuit.split('-')[2] if cliente and cliente.cuit else '' }}">
-
+                                    aria-label="Dígito verificador">
                             </div>
+                            <small id="cuit-error" class="form-text text-danger"></small>
                         </div>
-
 
                         <div class="col-md-6">
                             <div class="form-floating">
@@ -108,20 +109,20 @@ Agregar nuevo cliente
                                 </label>
                             </div>
                         </div>
-                        
+
                         <div class="col-md-6">
                             <div class="form-floating">
                                 <select class="form-select" id="condicion-iva" name="condicion_iva" required>
                                     <option value="" disabled selected>Seleccione una opción...</option>
 
-                                    <option value="1" {{ 'selected' if cliente and cliente.condicion_iva|string=='1'
-                                        }}>Responsable Inscripto</option>
-                                    <option value="2" {{ 'selected' if cliente and cliente.condicion_iva|string=='2'
-                                        }}>Monotributista</option>
-                                    <option value="3" {{ 'selected' if cliente and cliente.condicion_iva|string=='3'
-                                        }}>IVA Exento</option>
-                                    <option value="4" {{ 'selected' if cliente and cliente.condicion_iva|string=='4'
-                                        }}>Consumidor Final</option>
+                                    <option value="1" {{ 'selected' if cliente and cliente.condicion_iva|string=='1' }}>
+                                        Responsable Inscripto</option>
+                                    <option value="2" {{ 'selected' if cliente and cliente.condicion_iva|string=='2' }}>
+                                        Monotributista</option>
+                                    <option value="3" {{ 'selected' if cliente and cliente.condicion_iva|string=='3' }}>
+                                        IVA Exento</option>
+                                    <option value="4" {{ 'selected' if cliente and cliente.condicion_iva|string=='4' }}>
+                                        Consumidor Final</option>
                                 </select>
 
                                 <label for="condicion-iva">
@@ -140,8 +141,10 @@ Agregar nuevo cliente
                             <div class="row g-3">
                                 <div class="col-md-8">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="calle" name="calle"  minlength="3" maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
-                                            placeholder="Calle" value="{{ cliente.direccion.calle if cliente and cliente.direccion }}" required>
+                                        <input type="text" class="form-control" id="calle" name="calle" minlength="3"
+                                            maxlength="80" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" placeholder="Calle"
+                                            value="{{ cliente.direccion.calle if cliente and cliente.direccion }}"
+                                            required>
                                         <label for="calle">
                                             <i class="bi bi-signpost me-1"></i>Calle
                                         </label>
@@ -151,8 +154,10 @@ Agregar nuevo cliente
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="number" class="form-control" id="altura" name="altura" pattern="\d{1,5}" maxlength="5" max="99999" min="1"
-                                            placeholder="Altura" value="{{ cliente.direccion.altura if cliente and cliente.direccion }}" required>
+                                        <input type="number" class="form-control" id="altura" name="altura"
+                                            pattern="\d{1,5}" maxlength="5" max="99999" min="1" placeholder="Altura"
+                                            value="{{ cliente.direccion.altura if cliente and cliente.direccion }}"
+                                            required>
                                         <label for="altura">
                                             <i class="bi bi-123 me-1"></i>Altura
                                         </label>
@@ -171,7 +176,8 @@ Agregar nuevo cliente
                                             Fuego",
                                             "Tucumán"] %}
                                             {% for p in provincias %}
-                                            <option value="{{ p }}" {{ 'selected' if cliente and cliente.direccion and cliente.direccion.provincia == p }}>{{ p }}</option>
+                                            <option value="{{ p }}" {{ 'selected' if cliente and cliente.direccion and
+                                                cliente.direccion.provincia==p }}>{{ p }}</option>
                                             {% endfor %}
                                         </select>
                                         <label for="provincia">
@@ -183,8 +189,12 @@ Agregar nuevo cliente
 
                                 <div class="col-md-6">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="localidad" name="localidad" minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}" title="Ingresá un nombre de localidad válido (solo letras y espacios)."
-                                            placeholder="Localidad" value="{{ cliente.direccion.localidad if cliente and cliente.direccion }}" required>
+                                        <input type="text" class="form-control" id="localidad" name="localidad"
+                                            minlength="3" maxlength="60" pattern="[A-Za-zÀ-ÿ0-9\s.'-]{3,}"
+                                            title="Ingresá un nombre de localidad válido (solo letras y espacios)."
+                                            placeholder="Localidad"
+                                            value="{{ cliente.direccion.localidad if cliente and cliente.direccion }}"
+                                            required>
                                         <label for="localidad">
                                             <i class="bi bi-pin-map me-1"></i>Localidad
                                         </label>
@@ -194,8 +204,11 @@ Agregar nuevo cliente
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="10" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
-                                            placeholder="Piso (Opcional)" value="{{ (cliente.get('direccion') or {}).get('piso', '') if cliente and cliente.direccion }}">
+                                        <input type="text" class="form-control" id="piso" name="piso" maxlength="10"
+                                            pattern="[A-Za-z0-9\s]*"
+                                            title="Solo se permiten letras, números y espacios."
+                                            placeholder="Piso (Opcional)"
+                                            value="{{ (cliente.get('direccion') or {}).get('piso', '') if cliente and cliente.direccion }}">
                                         <label for="piso">
                                             <i class="bi bi-building me-1"></i>Piso (Opcional)
                                         </label>
@@ -204,8 +217,11 @@ Agregar nuevo cliente
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="depto" name="depto" maxlength="5" pattern="[A-Za-z0-9\s]*"  title="Solo se permiten letras, números y espacios."
-                                            placeholder="Dto (Opcional)" value="{{ (cliente.get('direccion') or {}).get('depto', '') if cliente and cliente.direccion }}">
+                                        <input type="text" class="form-control" id="depto" name="depto" maxlength="5"
+                                            pattern="[A-Za-z0-9\s]*"
+                                            title="Solo se permiten letras, números y espacios."
+                                            placeholder="Dto (Opcional)"
+                                            value="{{ (cliente.get('direccion') or {}).get('depto', '') if cliente and cliente.direccion }}">
                                         <label for="depto">
                                             <i class="bi bi-door-closed me-1"></i>Dto (Opcional)
                                         </label>
@@ -214,11 +230,33 @@ Agregar nuevo cliente
 
                                 <div class="col-md-4">
                                     <div class="form-floating">
-                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"  minlength="4" maxlength="8" pattern="([A-Za-z]\d{4}[A-Za-z]{3})|([A-Za-z]\d{4})|\d{4}" title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
-                                            placeholder="Código Postal" value="{{ (cliente.get('direccion') or {}).get('codigo_postal', '') if cliente and cliente.direccion }}" required>
+                                        <input type="text" class="form-control" id="codigo_postal" name="codigo_postal"
+                                            minlength="4" maxlength="8"
+                                            pattern="([A-Za-z]\d{4}[A-Za-z]{3})|([A-Za-z]\d{4})|\d{4}"
+                                            title="Ingresá 4 números (ej: 1663) o el formato CPA de 8 caracteres (ej: C1425BUP)."
+                                            placeholder="Código Postal"
+                                            value="{{ (cliente.get('direccion') or {}).get('codigo_postal', '') if cliente and cliente.direccion }}"
+                                            required>
                                         <label for="codigo_postal">
                                             <i class="bi bi-mailbox me-1"></i>Código Postal
                                         </label>
+                                    </div>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <div class="form-floating">
+                                            <input type="password" class="form-control" id="contrasena" name="contrasena"
+                                                placeholder="Contraseña" required minlength="8">
+                                            <label for="contrasena">Contraseña</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-floating">
+                                            <input type="password" class="form-control" id="confirm_contrasena"
+                                                name="confirm_contrasena" placeholder="Confirmar Contraseña" required>
+                                            <label for="confirm_contrasena">Confirmar Contraseña</label>
+                                            <small id="password-match-error" class="form-text text-danger"></small>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

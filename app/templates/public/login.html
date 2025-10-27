@@ -1,0 +1,142 @@
+{% extends 'public/base.html' %}
+
+{% block title %}Iniciar Sesión - Clientes{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-teal: #347e85;
+        --secondary-teal: #2c686f;
+        --bg-color-elegant: #f0f2f5;
+    }
+
+    .client-login-container {
+        min-height: 100vh;
+        background: var(--bg-color-elegant);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+    }
+
+    .client-login-card {
+        max-width: 400px;
+        width: 100%;
+        background-color: rgba(255, 255, 255, 0.9);
+        border-radius: 18px;
+        border: 1px solid rgba(0, 0, 0, 0.05);
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1), 0 5px 15px rgba(0, 0, 0, 0.05);
+        backdrop-filter: blur(5px);
+        padding: 3rem;
+        animation: fadeInDown 0.7s ease-out;
+    }
+
+    .client-login-header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .client-login-header h2 {
+        font-weight: 700;
+        font-size: 1.6rem;
+        color: #333;
+        margin-bottom: 0.25rem;
+    }
+
+    .client-login-header p {
+        font-size: 0.9rem;
+        color: #777;
+    }
+
+    .form-floating>.form-control:focus,
+    .form-floating>.form-control:not(:placeholder-shown) {
+        border-color: var(--primary-teal);
+        box-shadow: 0 0 0 2px rgba(52, 126, 133, 0.25);
+    }
+
+    .form-floating>.form-control:focus~label,
+    .form-floating>.form-control:not(:placeholder-shown)~label {
+        color: var(--primary-teal);
+        opacity: 0.8;
+    }
+    .form-floating label i {
+        color: #999;
+        transition: color 0.3s;
+    }
+
+    .form-floating>.form-control:focus~label i,
+    .form-floating>.form-control:not(:placeholder-shown)~label i {
+        color: var(--primary-teal);
+    }
+
+    /* 5. Botón principal: Color y efecto elegante */
+    .btn-primary.btn-lg {
+        background-color: var(--primary-teal);
+        border-color: var(--primary-teal);
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        border-radius: 10px;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(52, 126, 133, 0.3);
+    }
+
+    .btn-primary.btn-lg:hover {
+        background-color: var(--secondary-teal);
+        border-color: var(--secondary-teal);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(52, 126, 133, 0.4);
+    }
+
+    /* 6. Enlace de registro */
+    .card-body .register-link a {
+        color: var(--primary-teal);
+        font-weight: 600;
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+
+    .card-body .register-link a:hover {
+        text-decoration: underline;
+        color: var(--secondary-teal);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="client-login-container">
+    <div class="row justify-content-center w-100">
+        <div class="col-md-6 col-lg-5">
+            <div class="client-login-card">
+                <div class="client-login-header">
+                    <h2>Inicio de Sesión</h2>
+                    <p class="text-muted">Accede a tu cuenta de cliente</p>
+                </div>
+                <div class="card-body p-0">
+                    <form method="POST" action="{{ url_for('cliente.login') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="form-floating mb-3">
+                            <input type="email" class="form-control" id="email" name="email"
+                                placeholder="Correo Electrónico" required>
+                            <label for="email"><i class="bi bi-envelope me-2"></i>Correo Electrónico</label>
+                        </div>
+
+                        <div class="form-floating mb-4">
+                            <input type="password" class="form-control" id="password" name="password"
+                                placeholder="Contraseña" required>
+                            <label for="password"><i class="bi bi-lock me-2"></i>Contraseña</label>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary btn-lg w-100">Ingresar</button>
+                    </form>
+                    <div class="mt-4 text-center register-link">
+                        <p class="text-muted small mb-0">
+                            ¿No tienes una cuenta? <a href="{{ url_for('cliente.register') }}">Regístrate aquí</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

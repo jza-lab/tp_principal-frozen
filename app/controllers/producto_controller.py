@@ -307,3 +307,24 @@ class ProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error en actualizar_stock_min_produccion: {str(e)}", exc_info=True)
             return self.error_response('Error interno del servidor.', 500)
+
+    def actualizar_cantidad_maxima_x_pedido(self, producto_id: int, cantidad_maxima: int) -> tuple:
+        """
+        Actualiza la cantidad máxima por pedido para un producto específico.
+        """
+        try:
+            if not isinstance(cantidad_maxima, int) or cantidad_maxima < 0:
+                return self.error_response("La cantidad máxima debe ser un número entero no negativo.", 400)
+
+            update_data = {'cantidad_maxima_x_pedido': cantidad_maxima}
+
+            result = self.model.update(producto_id, update_data, 'id')
+
+            if result.get('success'):
+                return self.success_response(result.get('data'), "Cantidad máxima por pedido actualizada correctamente.", 200)
+            else:
+                return self.error_response(result.get('error', 'Error desconocido al actualizar.'), 500)
+
+        except Exception as e:
+            logger.error(f"Error en actualizar_cantidad_maxima_x_pedido: {str(e)}", exc_info=True)
+            return self.error_response('Error interno del servidor.', 500)

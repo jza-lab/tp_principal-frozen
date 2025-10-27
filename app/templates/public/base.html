@@ -1,52 +1,80 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Frozen Foods</title>
+    <link rel="icon" href="/static/img/icon.png" type="image/png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+        integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/public_styles.css') }}">
+    <style>
+        @media print {
+
+            .main-nav,
+            .main-footer {
+                display: none;
+            }
+        }
+    </style>
 </head>
+
 <body>
     <nav class="main-nav">
         <div class="nav-container">
-            
+
             <div class="nav-left">
                 <a class="nav-brand" href="{{ url_for('public.index') }}">
-                    <img src="{{ url_for('static', filename='img/icon.png') }}" alt="Frozen Foods Logo" class="nav-logo">
+                    <img src="{{ url_for('static', filename='img/icon.png') }}" alt="Frozen Foods Logo"
+                        class="nav-logo">
                     FrozenProd
                 </a>
-                
+
                 <div class="nav-links">
-                    <a class="nav-link {% if active_page == 'about' %}active{% endif %}" href="{{ url_for('public.about') }}">
+                    <a class="nav-link {% if active_page == 'about' %}active{% endif %}"
+                        href="{{ url_for('public.about') }}">
                         <i class="fa-solid fa-users"></i>Sobre Nosotros
                     </a>
-                    <a class="nav-link {% if active_page == 'clients' %}active{% endif %}" href="{{ url_for('public.clients') }}">
+                    <a class="nav-link {% if active_page == 'clients' %}active{% endif %}"
+                        href="{{ url_for('public.clients') }}">
                         <i class="fa-solid fa-handshake"></i>Clientes
                     </a>
-                    <a class="nav-link {% if active_page == 'production' %}active{% endif %}" href="{{ url_for('public.production') }}">
+                    <a class="nav-link {% if active_page == 'production' %}active{% endif %}"
+                        href="{{ url_for('public.production') }}">
                         <i class="fa-solid fa-clipboard-list"></i>¿Cómo Trabajamos?
                     </a>
-                    <a class="nav-link {% if active_page == 'order' %}active{% endif %}" href="{{ url_for('public.index') }}">
-                        <i class="fa-solid fa-cart-plus"></i>Hace tu Pedido
-                    </a>
-                    <a class="nav-link {% if active_page == 'faq' %}active{% endif %}" href="{{ url_for('public.index') }}">
+                    <a class="nav-link {% if request.endpoint == 'public.faq' %}active{% endif %}"
+                        href="{{ url_for('public.faq') }}">
                         <i class="fa-solid fa-circle-question"></i>Preguntas Frecuentes
-                    </a>
-                    
-                    <a class="nav-link login-link-mobile {% if active_page == 'login' %}active{% endif %}" href="{{ url_for('public.index') }}">
-                        <i class="fa-solid fa-right-to-bracket"></i>Login
                     </a>
                 </div>
             </div>
 
             <div class="nav-right">
-                <a class="nav-link login-link {% if active_page == 'login' %}active{% endif %}" href="{{ url_for('public.index') }}">
+                {% if session.cliente_id %}
+                <a class="nav-link cta-button {% if request.endpoint == 'public.hacer_pedido' %}active{% endif %}"
+                    href="{{ url_for('public.hacer_pedido') }}">
+                    <i class="fa-solid fa-cart-plus"></i>Hace tu Pedido
+                </a>
+
+                <span class="nav-link">¡Hola, {{ session.cliente_nombre }}!</span>
+                <a class="nav-link login-link" href="{{ url_for('cliente.logout') }}">
+                    <i class="fa-solid fa-right-from-bracket"></i>Cerrar Sesión
+                </a>
+                {% else %}
+                <a class="nav-link login-link {% if active_page == 'login' %}active{% endif %}"
+                    href="{{ url_for('cliente.login') }}">
                     <i class="fa-solid fa-right-to-bracket"></i>Login
                 </a>
+                {% endif %}
                 <button class="nav-toggle" aria-label="Toggle navigation">
                     <span class="hamburger"></span>
                 </button>
@@ -59,11 +87,123 @@
         {% block content %}{% endblock %}
     </div>
 
+    <div id="flash-messages-container" style="display: none;">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div data-category="{{ category }}" data-message="{{ message }}"></div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+    </div>
+
+    <div class="modal fade" id="confirmationModal" tabindex="-1" aria-labelledby="modalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle">Confirmación</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="modalBody">
+                    ¿Estás seguro de que quieres realizar esta acción?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"
+                        id="modalCancelButton">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="modalConfirmButton">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="notificationModal" tabindex="-1" aria-labelledby="notificationModalTitle"
+        aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="notificationModalTitle">Notificación</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="notificationModalBody">
+                    ...
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal"
+                        id="notificationModalOkButton">OK</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="resultadoAprobacionModal" tabindex="-1" aria-labelledby="resultadoModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="resultadoModalLabel">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>¡Éxito!
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="resultadoModalBody">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <a href="{{ url_for('orden_produccion.listar') }}" class="btn btn-primary">Ir a Producción</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="main-footer">
+        <div class="footer-container">
+            <div class="footer-column">
+                <a class="nav-brand" href="{{ url_for('public.index') }}"
+                    style="color: white; font-size: 22px; margin-bottom: 10px; display: inline-block;">
+                    <img src="{{ url_for('static', filename='img/icon.png') }}" alt="Frozen Foods Logo" class="nav-logo"
+                        style="height: 40px; margin-right: 10px;">
+                    FrozenProd
+                </a>
+                <p>Líderes en la producción y distribución de alimentos congelados de alta calidad.</p>
+            </div>
+
+            <div class="footer-column">
+                <h5>Enlaces Rápidos</h5>
+                <ul>
+                    <li><a href="{{ url_for('public.about') }}">Sobre Nosotros</a></li>
+                    <li><a href="{{ url_for('public.clients') }}">Clientes</a></li>
+                    <li><a href="{{ url_for('public.production') }}">Cómo Trabajamos</a></li>
+                    <li><a href="{{ url_for('public.faq') }}">Preguntas Frecuentes</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-column">
+                <h5>Contacto</h5>
+                <p>
+                    <i class="fas fa-map-marker-alt"></i> Calle Ficticia 123, Ciudad<br>
+                    <i class="fas fa-phone"></i> +54 11 1234-5678<br>
+                    <i class="fas fa-envelope"></i> info@frozenprod.com
+                </p>
+            </div>
+
+            <div class="footer-column">
+                <h5>Seguinos</h5>
+                <div class="footer-socials">
+                    <a href="#" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+                    <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+                    <a href="#" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-copyright">
+            &copy; 2025 FrozenProd. Todos los derechos reservados.
+        </div>
+    </footer>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             // 1. Script de Navbar con Scroll (El que ya tenías)
             const nav = document.querySelector('.main-nav');
-            window.addEventListener('scroll', function() {
+            window.addEventListener('scroll', function () {
                 if (window.scrollY > 50) {
                     nav.classList.add('scrolled');
                 } else {
@@ -77,14 +217,22 @@
             const navLinks = document.querySelector('.nav-links'); // El contenedor de links
 
             if (navToggle && navLinks) {
-                navToggle.addEventListener('click', function() {
+                navToggle.addEventListener('click', function () {
                     // Animación del botón "X"
                     navToggle.classList.toggle('active');
                     // Muestra/oculta el menú
-                    navLinks.classList.toggle('active'); 
+                    navLinks.classList.toggle('active');
                 });
             }
         });
     </script>
-    </body>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.3/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='js/modalHandler.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/flashModal.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+
 </html>

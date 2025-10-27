@@ -201,7 +201,17 @@
         <tr>
             <td style="width: 60%; vertical-align: top; padding-right: 5px;">
                 <div style="border: 1px solid #000; padding: 5px;">
-                    <strong>Condiciones de Venta:</strong> Contado / Transferencia Bancaria<br>
+                   <strong>Condiciones de Venta:</strong>
+                    {% if pedido.condicion_venta == 'contado' %}
+                        Contado / Transferencia Bancaria
+                    {% elif pedido.condicion_venta == 'credito_30' %}
+                        Crédito a 30 días
+                    {% elif pedido.condicion_venta == 'credito_90' %}
+                        Crédito a 90 días
+                    {% else %}
+                        A convenir
+                    {% endif %}
+                    <br>
                     {% if pedido.comentarios_adicionales %}
                     <strong>Observaciones:</strong> {{ pedido.comentarios_adicionales }}<br>
                     {% endif %}

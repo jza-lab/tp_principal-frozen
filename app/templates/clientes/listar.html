@@ -63,6 +63,20 @@
                             <span class="badge bg-danger-soft text-danger"><i class="bi bi-x-circle me-1"></i>Inactivo</span>
                         {% endif %}
                     </div>
+
+                    <!-- Gestión de Estado de Aprobación -->
+                    <div>
+                        {% set estado_config = {
+                            'aprobado': {'class': 'bg-success-soft text-success', 'icon': 'bi-check-circle-fill', 'text': 'Aprobado'},
+                            'rechazado': {'class': 'bg-danger-soft text-danger', 'icon': 'bi-x-circle-fill', 'text': 'Rechazado'},
+                            'pendiente': {'class': 'bg-warning-soft text-warning', 'icon': 'bi-hourglass-split', 'text': 'Pendiente'}
+                        } %}
+                        {% set current_status = cliente.get('estado_aprobacion', 'pendiente') %}
+                        {% set config = estado_config.get(current_status, estado_config['pendiente']) %}
+                        
+                        <h6 class="text-muted small fw-bold mt-2 mb-1">Estado de Aprobación</h6>
+                        <span class="badge {{ config.class }} mb-2"><i class="bi {{ config.icon }} me-1"></i>{{ config.text }}</span>
+                    </div>
                     <div class="card-secondary-details mb-3">
                         <h6 class="text-muted small fw-bold mt-2 mb-1">Contacto y Entrega</h6>
                         

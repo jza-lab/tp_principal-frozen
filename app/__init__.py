@@ -1,4 +1,4 @@
-from flask import Flask, redirect, url_for, flash
+from flask import Flask, redirect, url_for, flash, session
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, unset_jwt_cookies
 from flask_wtf.csrf import CSRFProtect
@@ -11,6 +11,7 @@ from .json_encoder import CustomJSONEncoder
 from app.utils.template_helpers import register_template_extensions
 from app.models.token_blacklist_model import TokenBlacklistModel
 from app.controllers.usuario_controller import UsuarioController
+from app.controllers.cliente_controller import ClienteController
 from app.models.usuario import UsuarioModel
 from types import SimpleNamespace
 
@@ -88,6 +89,8 @@ def _register_blueprints(app: Flask):
     from app.views.admin_tarea_routes import admin_tasks_bp
     from app.views.alertas_routes import alertas_bp
     from app.views.public_routes import public_bp
+    from app.views.cliente_routes import cliente_bp
+
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
@@ -112,6 +115,7 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(reservas_bp)
     app.register_blueprint(admin_tasks_bp)
     app.register_blueprint(alertas_bp)
+    app.register_blueprint(cliente_bp)
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""
@@ -146,6 +150,15 @@ def create_app() -> Flask:
     @app.context_processor
     def inject_csrf_form():
         return dict(csrf_form=FlaskForm())
+
+    @app.context_processor
+    def inject_pending_client_count():
+        if 'rol' in session and session['rol'] in ['DEV', 'GERENTE']:
+            cliente_controller = ClienteController()
+            _, status = cliente_controller.obtener_conteo_clientes_pendientes()
+            if status == 200:
+                return dict(pending_client_count=_.get('data', {}).get('count', 0))
+        return dict(pending_client_count=0)
 
     _register_blueprints(app)
     _register_error_handlers(app)

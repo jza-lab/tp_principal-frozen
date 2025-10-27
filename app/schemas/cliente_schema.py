@@ -27,11 +27,11 @@ class ClienteSchema(Schema):
     )
     
     direccion_id = fields.Int(allow_none=True, load_only=True)
-    direccion = fields.Nested(DireccionSchema, allow_none=True)
+    direccion = fields.Nested(DireccionSchema, required=True)
     cuit = fields.Str(
         validate=validate.Length(max=15),
         allow_none=True,
-        load_default=None
+        load_default=None,
     )
     activo = fields.Bool(dump_only=True)
     created_at = fields.Str(dump_only=True)
@@ -41,4 +41,18 @@ class ClienteSchema(Schema):
         validate=validate.Length(max=50),
         allow_none=True,
         load_default=None
+    )
+
+    condicion_venta = fields.Int(
+        allow_none=True,
+        load_default=1
+    )   
+    razon_social = fields.Str(
+        required=False,
+        allow_none=True,
+        validate=validate.Length(max=100)
+    )
+    estado_aprobacion = fields.Str(
+        dump_only=True,
+        load_default='pendiente'
     )

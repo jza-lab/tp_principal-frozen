@@ -2,57 +2,134 @@
 
 {% block title %}Alertas de Stock de Productos{% endblock %}
 
+{% block extra_css %}
+<!-- Asumo que tenés un CSS para los tabs, si no, podés borrar esta línea -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/listarUsuarios.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid px-4">
-    <h1 class="mt-4">Umbrales de Stock de Productos</h1>
-    <ol class="breadcrumb mb-4">
+    <h1 class="mt-4">Umbrales de Productos</h1>
 
-        <li class="breadcrumb-item active">Producción mínima por Producto</li>
-    </ol>
-    <div class="card mb-4">
-        <div class="card-header">
-            <i class="fas fa-bell me-1"></i>
-            Configurar Umbrales de Stock Mínimo
+    <!-- Botonera para switcher -->
+    <ul class="nav nav-tabs-custom mb-3" id="pills-tab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link-custom {% if active_tab == 'stock-min' %}active{% endif %}" id="pills-stock-min-tab" data-bs-toggle="pill" data-bs-target="#pills-stock-min" type="button" role="tab" aria-controls="pills-stock-min" aria-selected="{% if active_tab == 'stock-min' %}true{% else %}false{% endif %}">
+                <i class="fas fa-bell me-1"></i>
+                Stock Mínimo de Producción
+                <span class="tab-indicator"></span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link-custom {% if active_tab == 'cantidad-max' %}active{% endif %}" id="pills-cantidad-max-tab" data-bs-toggle="pill" data-bs-target="#pills-cantidad-max" type="button" role="tab" aria-controls="pills-cantidad-max" aria-selected="{% if active_tab == 'cantidad-max' %}true{% else %}false{% endif %}">
+                <i class="fas fa-box-open me-1"></i>
+                Cantidad Máxima por Pedido
+                <span class="tab-indicator"></span>
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="pills-tabContent">
+        <div class="tab-pane fade {% if active_tab == 'stock-min' %}show active{% endif %}" id="pills-stock-min" role="tabpanel" aria-labelledby="pills-stock-min-tab">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-bell me-1"></i>
+                    Configurar Umbrales de Stock Mínimo
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Nombre</th>
+                                    <th>Stock Mínimo Actual</th>
+                                    <th>Nuevo Stock Mínimo</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for producto in productos %}
+                                <tr>
+                                    <td>{{ producto.codigo }}</td>
+                                    <td>{{ producto.nombre }}</td>
+                                    <td>{{ producto.stock_min_produccion if producto.stock_min_produccion is not none else 'No definido' }}</td>
+                                    <form method="POST" action="{{ url_for('alertas.actualizar_stock_min_producto') }}">
+                                        {# Asumo que csrf_form viene por contexto o base.html #}
+                                        {% if csrf_form %} 
+                                            {{ csrf_form.csrf_token }}
+                                        {% endif %}
+                                        <input type="hidden" name="id_producto" value="{{ producto.id }}">
+                                        <td>
+                                            <div class="input-group">
+                                                <input type="number" name="stock_min_produccion" class="form-control" placeholder="Ej: 100" min="0" required>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <button type="submit" class="btn btn-primary btn-sm">Actualizar</button>
+                                        </td>    
+                                    </form>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No hay productos para mostrar.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Nombre</th>
-                            <th>Stock Mínimo Actual</th>
-                            <th>Nuevo Stock Mínimo</th>
-                            <th>Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for producto in productos %}
-                        <tr>
-                            <td>{{ producto.codigo }}</td>
-                            <td>{{ producto.nombre }}</td>
-                            <td>{{ producto.stock_min_produccion if producto.stock_min_produccion is not none else 'No definido' }}</td>
-                            
-                                <form method="POST" action="{{ url_for('alertas.actualizar_stock_min_producto') }}">
-                                    {{ csrf_form.csrf_token }}
-                                    <input type="hidden" name="id_producto" value="{{ producto.id }}">
-                                    <td>
-                                    <div class="input-group">
-                                        <input type="number" name="stock_min_produccion" class="form-control" placeholder="Ej: 100" min="0" required>
-                                    </div>
-                                    </td>
-                                    <td>
-                                    <button type="submit" class="btn btn-primary btn-sm mt-2">Actualizar</button>
-                                    </td>    
-                                </form>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="5" class="text-center">No hay productos para mostrar.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        <div class="tab-pane fade {% if active_tab == 'cantidad-max' %}show active{% endif %}" id="pills-cantidad-max" role="tabpanel" aria-labelledby="pills-cantidad-max-tab">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-box-open me-1"></i>
+                    Configurar Cantidad Máxima por Pedido
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Nombre</th>
+                                    <th>Cantidad Máxima Actual</th>
+                                    <th>Nueva Cantidad Máxima</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for producto in productos %}
+                                <tr>
+                                    <td>{{ producto.codigo }}</td>
+                                    <td>{{ producto.nombre }}</td>
+                                    <td>{{ producto.cantidad_maxima_x_pedido if producto.cantidad_maxima_x_pedido is not none else 'No definido' }}</td>
+                                    <form method="POST" action="{{ url_for('alertas.actualizar_cantidad_maxima_x_pedido') }}">
+                                        {# Asumo que csrf_form viene por contexto o base.html #}
+                                        {% if csrf_form %} 
+                                            {{ csrf_form.csrf_token }}
+                                        {% endif %}
+                                        <input type="hidden" name="id_producto" value="{{ producto.id }}">
+                                        <td>
+                                            <div class="input-group">
+                                                <input type="number" name="cantidad_maxima_x_pedido" class="form-control" placeholder="Ej: 10" min="0" required>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <button type="submit" class="btn btn-primary btn-sm">Actualizar</button>
+                                        </td>
+                                    </form>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No hay productos para mostrar.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

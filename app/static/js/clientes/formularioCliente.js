@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', function () {
             email: formData.get('email'),
             telefono: formData.get('telefono'),
             condicion_iva: formData.get('condicion_iva'),
+            razon_social: formData.get('razon_social') || '',
             direccion: {
                 calle: formData.get('calle'),
                 altura: formData.get('altura'),

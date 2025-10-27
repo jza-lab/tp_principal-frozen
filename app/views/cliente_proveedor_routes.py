@@ -19,6 +19,15 @@ insumo_controller = InsumoController()
 usuario_controller = UsuarioController()
 cliente_controller = ClienteController()
 
+@cliente_proveedor.route('/solicitudes/clientes/')
+@permission_required(accion='gestionar_clientes')
+def listar_solicitudes_clientes():
+    clientes_result, status = cliente_controller.obtener_clientes(filtros={'estado_aprobacion': 'pendiente'})
+    
+    clientes = clientes_result.get('data', []) if clientes_result.get('success') else []
+    
+    return render_template('clientes/solicitudes.html', clientes=clientes)
+
 @cliente_proveedor.route('/clientes/')
 @permission_required(accion='consultar_historial_de_clientes')
 def listar_clientes():
@@ -65,7 +74,7 @@ def nuevo_cliente():
             
             return jsonify(resultado), status
     except Exception as e:
-        flash(f"Error al actualizar el proveedor: {str(e)}", 'error')
+        flash(f"Error al crear cliente: {str(e)}", 'error')
     cliente=None
     return render_template('clientes/formulario.html', cliente=cliente)
 
@@ -130,6 +139,30 @@ def habilitar_cliente(id):
     except Exception as e:
         logger.error(f"Error inesperado en habilitar_proveedor: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+@cliente_proveedor.route('/clientes/<int:id>/actualizar-estado', methods=['POST'])
+@permission_required(accion='gestionar_clientes')
+def actualizar_estado_cliente(id):
+    """Actualiza el estado de aprobación de un cliente."""
+    nuevo_estado = request.form.get('estado_aprobacion')
+    next_page = request.args.get('next')
+
+    if not nuevo_estado:
+        flash('No se proporcionó un nuevo estado.', 'error')
+        if next_page == 'solicitudes':
+            return redirect(url_for('clientes_proveedores.listar_solicitudes_clientes'))
+        return redirect(url_for('clientes_proveedores.ver_perfil_cliente', id=id))
+
+    resultado, status = cliente_controller.actualizar_estado_cliente(id, nuevo_estado)
+    
+    if resultado.get('success'):
+        flash(resultado.get('message', 'Estado del cliente actualizado con éxito.'), 'success')
+    else:
+        flash(resultado.get('error', 'Ocurrió un error al actualizar el estado.'), 'error')
+
+    if next_page == 'solicitudes':
+        return redirect(url_for('clientes_proveedores.listar_solicitudes_clientes'))
+    return redirect(url_for('clientes_proveedores.ver_perfil_cliente', id=id))
 
 #------------------- Proveedores ------------------#
 

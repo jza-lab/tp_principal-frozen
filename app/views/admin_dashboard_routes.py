@@ -62,13 +62,22 @@ def index():
     productos_sin_lotes_list = data_sin_lotes.get('productos_sin_lotes', [])
 
 
-    respuesta4, _ = orden_venta_controller.obtener_cantidad_pedidos_estado("PENDIENTE")
-    ordenesventa_pendientes = respuesta4.get('data', {}).get('cantidad', 0)
-    
-    respuesta5, _ = orden_venta_controller.obtener_cantidad_pedidos_rechazados_recientes()
-    ordenesventa_rechazadas = respuesta5.get('data', {}).get('cantidad', 0)
+    # Órdenes de Venta Pendientes
+    respuesta_ov_pendientes, _ = orden_venta_controller.obtener_pedidos({'estado': 'PENDIENTE'})
+    ordenesventa_pendientes_list = respuesta_ov_pendientes.get('data', [])
+    ordenesventa_pendientes_count = len(ordenesventa_pendientes_list)
 
-    lotes_vencimiento_count = inventario_controller.obtener_conteo_vencimientos() 
+    # Órdenes de Venta Rechazadas
+    respuesta_ov_rechazadas, _ = orden_venta_controller.obtener_pedidos({'estado': 'CANCELADO'})
+    ordenesventa_rechazadas_list = respuesta_ov_rechazadas.get('data', [])
+    ordenesventa_rechazadas_count = len(ordenesventa_rechazadas_list)
+
+    # Órdenes de Producción en Proceso
+    respuesta_op_proceso, _ = orden_produccion_controller.obtener_ordenes({'estado': 'EN_PROCESO'})
+    ordenesproduccion_proceso_list = respuesta_op_proceso.get('data', [])
+    ordenesproduccion_proceso_count = len(ordenesproduccion_proceso_list)
+
+    lotes_vencimiento_count = inventario_controller.obtener_conteo_vencimientos()
     productos_sin_lotes_resp, _ = lote_producto_controller.obtener_conteo_productos_sin_lotes()
 
     lotes_producto_vencimiento_count = lote_producto_controller.obtener_conteo_vencimientos() 
@@ -83,7 +92,11 @@ def index():
                            insumos_bajo_stock_list=insumos_bajo_stock_list,
                            productos_sin_lotes_count=productos_sin_lotes_count,
                            productos_sin_lotes_list=productos_sin_lotes_list,
-                           ordenesventa_pendientes=ordenesventa_pendientes,
-                           ordenesventa_rechazadas=ordenesventa_rechazadas,
+                           ordenesventa_pendientes=ordenesventa_pendientes_count,
+                           ordenesventa_pendientes_list=ordenesventa_pendientes_list,
+                           ordenesventa_rechazadas=ordenesventa_rechazadas_count,
+                           ordenesventa_rechazadas_list=ordenesventa_rechazadas_list,
+                           ordenesproduccion_proceso_count=ordenesproduccion_proceso_count,
+                           ordenesproduccion_proceso_list=ordenesproduccion_proceso_list,
                            lotes_vencimiento_count=lotes_vencimiento_count,
                            lotes_producto_vencimiento_count=lotes_producto_vencimiento_count)

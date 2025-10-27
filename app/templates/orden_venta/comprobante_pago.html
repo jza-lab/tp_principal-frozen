@@ -1,0 +1,47 @@
+{% extends 'public/base.html' %}
+{% block title %}Comprobante de Pago - Pedido {{ pedido.id }}{% endblock %}
+
+{% block content %}
+<section class="container my-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-md-10">
+            <div class="card shadow-sm">
+                <div class="card-header text-white text-center py-4" style="background-color: #509360;">
+                    <i class="bi bi-check-circle-fill" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                    <h1 class="h3 mb-0">Pago Aprobado</h1>
+                </div>
+                <div class="card-body p-4 p-md-5">
+                    <h5 class="card-title text-center mb-4">Comprobante de Pago</h5>
+                    <div class="d-flex justify-content-between">
+                        <p><strong>Pedido N°:</strong></p>
+                        <p>PED-{{ pedido.id }}</p>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <p><strong>Fecha de Pago:</strong></p>
+                        <p>{{ pedido.created_at | format_datetime }}</p>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <p><strong>Cliente:</strong></p>
+                        <p>{{ pedido.nombre_cliente }}</p>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="d-flex justify-content-between align-items-center bg-light p-3 rounded">
+                        <span class="fw-bold fs-5">Monto Pagado:</span>
+                        <span class="fw-bold fs-4 text-success">$ {{ pedido.precio_orden | formato_moneda }}</span>
+                    </div>
+                </div>
+                <div class="card-footer text-center py-4">
+                    <p class="text-muted small mb-3">Gracias por su compra. Recibirá una notificación cuando su pedido
+                        esté listo para ser entregado.</p>
+                    <button onclick="window.print()" class="btn btn-info text-white"><i class="bi bi-printer me-1"></i>
+                        Imprimir Comprobante</button>
+                    <a href="{{ url_for('public.hacer_pedido') }}" class="btn btn-outline-secondary"><i
+                            class="bi bi-plus-circle me-1"></i> Realizar un Nuevo Pedido</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock%}

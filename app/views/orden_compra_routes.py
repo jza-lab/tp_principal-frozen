@@ -42,7 +42,7 @@ def listar():
 def nueva():
     if request.method == "POST":
         usuario_id = get_jwt_identity()
-        resultado = controller.crear_orden(request.form, usuario_id)
+        resultado = controller.crear_orden_desde_form(request.form, usuario_id)
         if resultado.get("success"):
             flash("Orden de compra creada exitosamente.", "success")
             return redirect(url_for("orden_compra.listar"))

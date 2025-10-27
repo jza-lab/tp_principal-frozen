@@ -2,6 +2,8 @@
 from app.controllers.base_controller import BaseController
 from app.models.cliente import ClienteModel
 from app.schemas.cliente_schema import ClienteSchema
+from app.controllers.pedido_controller import PedidoController
+from werkzeug.security import generate_password_hash, check_password_hash
 from typing import Dict, Optional
 import logging
 
@@ -14,6 +16,7 @@ class ClienteController(BaseController):
         super().__init__()
         self.model = ClienteModel()
         self.schema = ClienteSchema()
+        self.pedido_controller=PedidoController()
 
     def obtener_clientes_activos(self) -> tuple:
         """Obtener lista de Clientes activos"""
@@ -123,6 +126,12 @@ class ClienteController(BaseController):
             data.pop('csrf_token', None)
             direccion_data = data.pop('direccion', None)
             data['codigo'] = self.generar_codigo_unico()
+
+            contrasena = data.get('contrasena')
+            if contrasena:
+                data['contrasena'] = generate_password_hash(contrasena)
+            else:
+                return self.error_response('La contraseña es obligatoria', 400)
             
             if data.get('email'):
                 respuesta= self.model.buscar_por_email(data['email'])
@@ -135,7 +144,7 @@ class ClienteController(BaseController):
                 
                 if respuesta.get('success'):
                     return self.error_response('El CUIT/CUIL ya está registrado para otro cliente', 400)
-            
+            data['estado_aprobacion'] = 'pendiente'
             direccion_id = self._get_or_create_direccion(direccion_data)
             if direccion_id:
                 data['direccion_id'] = direccion_id
@@ -256,7 +265,7 @@ class ClienteController(BaseController):
         
         try:
             # Buscamos pedidos que NO estén cancelados.
-            pedidos_result = pedido_model.get_all(filtros={'id_cliente': cliente_id})
+            pedidos_result , _ = self.pedido_controller.obtener_pedidos(filtros={'id_cliente': cliente_id})
             
             if pedidos_result.get('success') and pedidos_result.get('data'):
                 # Filtramos para asegurarnos de que no sean solo pedidos 'CANCELADO'
@@ -266,3 +275,70 @@ class ClienteController(BaseController):
         except Exception as e:
             logger.error(f"Error verificando pedidos previos para cliente {cliente_id}: {str(e)}")
             return False
+    
+    
+    def autenticar_cliente(self, email: str, contrasena: str) -> tuple:
+        """
+        Autentica a un cliente por CUIT y contraseña.
+        """
+        try:
+            email_result = self.model.buscar_por_email(email, include_direccion=True)
+
+            if email_result.get('estado_aprobacion') == 'rechazado':
+                return self.error_response('La validez de los datos de este cliente fue rechazada por administración.', 400)
+
+            if not email_result.get('success') or not email_result.get('data'):
+                return self.error_response('Credenciales incorrectas.', 401)
+            
+            cliente_encontrado = email_result['data'][0]
+
+            if not check_password_hash(cliente_encontrado.get('contrasena', ''), contrasena):
+                return self.error_response('Credenciales incorrectas.', 401)
+            
+            cliente_encontrado.pop('contrasena', None)
+            
+            serialized_data = self.schema.dump(cliente_encontrado)
+            return self.success_response(data=serialized_data)
+
+        except Exception as e:
+            logger.error(f"Error durante la autenticación del cliente: {str(e)}")
+            return self.error_response('Error interno del servidor.', 500)
+
+    def actualizar_estado_cliente(self, cliente_id: int, nuevo_estado: str) -> tuple:
+        """
+        Actualiza el estado de aprobación de un cliente.
+        """
+        try:
+            estados_validos = ['aprobado', 'rechazado', 'pendiente']
+            if nuevo_estado not in estados_validos:
+                return self.error_response(f'Estado no válido. Los estados permitidos son: {", ".join(estados_validos)}.', 400)
+
+            existing = self.model.find_by_id(cliente_id)
+            if not existing.get('success'):
+                return self.error_response('Cliente no encontrado', 404)
+
+            update_data = {'estado_aprobacion': nuevo_estado}
+            resultado_actualizar = self.model.update(cliente_id, update_data, 'id')
+
+            if not resultado_actualizar.get('success'):
+                return self.error_response(resultado_actualizar.get('error', 'Error al actualizar el estado del cliente'))
+
+            return self.success_response(message='Estado del cliente actualizado exitosamente')
+
+        except Exception as e:
+            logger.error(f"Error actualizando estado del cliente {cliente_id}: {str(e)}")
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
+    def obtener_conteo_clientes_pendientes(self) -> tuple:
+        """
+        Obtiene el número de clientes con estado de aprobación 'pendiente'.
+        """
+        try:
+            result = self.model.get_count(filtros={'estado_aprobacion': 'pendiente'})
+            if not result['success']:
+                return self.error_response(result['error'])
+            
+            return self.success_response(data={'count': result['data']})
+        except Exception as e:
+            logger.error(f"Error contando clientes pendientes: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)

@@ -48,6 +48,7 @@ class OrdenCompra:
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     fecha_creacion: Optional[datetime] = None
+    complementa_a_orden_id: Optional[int] = None
 
 class OrdenCompraModel(BaseModel):
     """
@@ -137,7 +138,8 @@ class OrdenCompraModel(BaseModel):
                 'iva': 'iva',
                 'total': 'total',
                 'observaciones': 'observaciones',
-                'usuario_aprobador_id': 'usuario_aprobador_id'
+                'usuario_aprobador_id': 'usuario_aprobador_id',
+                'complementa_a_orden_id': 'complementa_a_orden_id'
             }
 
             for model_field, db_field in field_mapping.items():
@@ -200,9 +202,11 @@ class OrdenCompraModel(BaseModel):
 
     def get_one_with_details(self, orden_id: int) -> Dict:
         """
-        Obtiene una orden de compra específica con detalles del proveedor y los items.
+        Obtiene una orden de compra específica con detalles del proveedor y los items,
+        manejando las órdenes vinculadas con consultas separadas para mayor robustez.
         """
         try:
+            # Consulta principal simplificada
             query = self.db.table(self.get_table_name()).select(
                 "*, proveedor:proveedores(nombre), items:orden_compra_items(*, insumo:insumos_catalogo(nombre)), usuario_creador:usuarios!usuario_creador_id(nombre), usuario_aprobador:usuarios!usuario_aprobador_id(nombre)"
             )
@@ -212,6 +216,19 @@ class OrdenCompraModel(BaseModel):
             if not orden:
                 return {'success': False, 'error': 'Orden no encontrada'}
 
+            # Consulta separada para la orden que esta complementa (su "padre")
+            if orden.get('complementa_a_orden_id'):
+                complementa_a_res = self.db.table(self.get_table_name()).select("id, codigo_oc").eq("id", orden['complementa_a_orden_id']).maybe_single().execute()
+                if complementa_a_res and complementa_a_res.data:
+                    orden['complementa_a_orden'] = complementa_a_res.data
+
+            # Consulta separada para la orden que la continúa (su "hija")
+            continuada_por_res = self.db.table(self.get_table_name()).select("id, codigo_oc").eq("complementa_a_orden_id", orden_id).maybe_single().execute()
+            if continuada_por_res and continuada_por_res.data:
+                orden['continuada_por_orden'] = continuada_por_res.data
+
+
+            # Procesamiento de datos anidados (sin cambios)
             if orden.get('proveedor'):
                 orden['proveedor_nombre'] = orden['proveedor']['nombre']
             else:

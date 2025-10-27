@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Aplicar la lógica de exclusión después de añadir una fila
             updateAvailableProducts();
         }
-        window.addItemRow = addItem; 
+        window.addItemRow = addItem;
 
         /**
           * Elimina una fila de ítem.
@@ -333,7 +333,7 @@ async function handleSubmit(event) {
                 cantidadEsInvalida = true;
                 productoInvalido = selectedOption.textContent.trim().split('(')[0].trim();
                 cantidadInput.focus();
-                return; 
+                return;
             }
         }
     });
@@ -381,7 +381,7 @@ async function handleSubmit(event) {
 
             const verificationResponse = await fetch(verificationUrl, {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrfToken
                 },
@@ -467,68 +467,76 @@ async function enviarDatos(payload, csrfToken) {
     }
 }
 
-
 function buildPayload() {
     window.buildPayload = buildPayload;
+
     function cleanCurrency(value) {
         if (!value) return 0;
-        // 1. Remover $ y espacios. 2. Reemplazar punto (miles) por nada. 3. Reemplazar coma (decimal) por punto.
         const cleaned = value.toString().replace(/[$\s]/g, '').replace(/\./g, '').replace(',', '.');
         return parseFloat(cleaned) || 0;
     }
-    if(document.getElementById('cuil_parte1') || document.getElementById('cuil_parte2')|| document.getElementById('cuil_parte3')){
-    const cuilParte1 = document.getElementById('cuil_parte1').value;
-    const cuilParte2 = document.getElementById('cuil_parte2').value;
-    const cuilParte3 = document.getElementById('cuil_parte3').value;
-    document.getElementById('cuil').value = `${cuilParte1}-${cuilParte2}-${cuilParte3}`;}
-    
+
+    const isClientForm = !!document.getElementById('cuil_cuit_cliente');
+
+    if (document.getElementById('cuil_parte1') && document.getElementById('cuil_parte2') && document.getElementById('cuil_parte3')) {
+        const cuilParte1 = document.getElementById('cuil_parte1').value;
+        const cuilParte2 = document.getElementById('cuil_parte2').value;
+        const cuilParte3 = document.getElementById('cuil_parte3').value;
+        if (document.getElementById('cuil')) {
+            document.getElementById('cuil').value = `${cuilParte1}-${cuilParte2}-${cuilParte3}`;
+        }
+    }
 
     const payload = {
         id_cliente: parseInt(document.getElementById('id_cliente').value),
         nombre_cliente: document.getElementById('nombre_cliente').value,
-        fecha_solicitud: document.getElementById('fecha_solicitud').value,
+        fecha_solicitud: document.getElementById('fecha_solicitud')?.value,
         fecha_requerido: document.getElementById('fecha_requerido').value,
-        estado: document.getElementById('estado') ? document.getElementById('estado').value : 'PENDIENTE',
-        precio_orden: cleanCurrency(document.getElementById('total-final').value),
-        comentarios_adicionales: document.getElementById('comentarios_adicionales').value,
-        usar_direccion_alternativa: document.getElementById('usar_direccion_alternativa').checked,
+        estado: document.getElementById('estado')?.value || 'PENDIENTE',
+        condicion_venta: document.getElementById('condicion_venta')?.value,
+        precio_orden: cleanCurrency(document.getElementById('total-final').textContent),
+        comentarios_adicionales: document.getElementById('comentarios_adicionales')?.value,
         items: []
     };
+    const direccionControl = document.getElementById('usar_direccion_alternativa');
+    const usar_alternativa = (direccionControl.type === 'checkbox')
+        ? direccionControl.checked
+        : (direccionControl.dataset.active === 'true');
 
-    if (payload.usar_direccion_alternativa) {
+    payload.usar_direccion_alternativa = usar_alternativa;
+
+    if (usar_alternativa) {
+        const idSuffix = isClientForm ? '_alternativa' : '';
         payload.direccion_entrega = {
-            calle: document.getElementById('calle').value,
-            altura: document.getElementById('altura').value,
-            piso: document.getElementById('piso').value || null,
-            depto: document.getElementById('depto').value || null,
-            localidad: document.getElementById('localidad').value,
-            provincia: document.getElementById('provincia').value,
-            codigo_postal: document.getElementById('codigo_postal').value
+            calle: document.getElementById(`calle${idSuffix}`).value,
+            altura: document.getElementById(`altura${idSuffix}`).value,
+            piso: document.getElementById(`piso${idSuffix}`)?.value || null,
+            depto: document.getElementById(`depto${idSuffix}`)?.value || null,
+            localidad: document.getElementById(`localidad${idSuffix}`).value,
+            provincia: document.getElementById(`provincia${idSuffix}`).value,
+            codigo_postal: document.getElementById(`codigo_postal${idSuffix}`).value
         };
     }
+        const itemRows = document.querySelectorAll('#items-container .item-row');
+        itemRows.forEach(row => {
+            const productoSelect = row.querySelector('select[name*="producto_id"]');
+            const cantidadInput = row.querySelector('input[name*="cantidad"]');
+            const idInput = row.querySelector('input[name*="id"]');
+            const precioUnitarioInput = row.querySelector('input[name*="precio_unitario"]');
 
-    const itemRows = document.querySelectorAll('#items-container .item-row');
-    itemRows.forEach(row => {
-        const productoSelect = row.querySelector('select[name*="producto_id"]');
-        const cantidadInput = row.querySelector('input[name*="cantidad"]');
-        const idInput = row.querySelector('input[name*="id"]');
-        // INICIO MODIFICACIÓN: Referencia al campo hidden del precio unitario
-        const precioUnitarioInput = row.querySelector('input[name*="precio_unitario"]');
-        // FIN MODIFICACIÓN
-        
-        if (productoSelect && cantidadInput && productoSelect.value) {
-            payload.items.push({
-                id: idInput && idInput.value ? parseInt(idInput.value) : null,
-                producto_id: parseInt(productoSelect.value),
-                cantidad: parseFloat(cantidadInput.value) || 0, // Usar parseFloat para la cantidad para mayor robustez
-                // INICIO MODIFICACIÓN: Añadir el precio unitario del campo hidden
-                precio_unitario: precioUnitarioInput ? parseFloat(precioUnitarioInput.value) : 0 
-                // FIN MODIFICACIÓN
-            });
-        }
-    });
+            if (productoSelect && cantidadInput && productoSelect.value) {
+                payload.items.push({
+                    id: idInput?.value ? parseInt(idInput.value) : null,
+                    producto_id: parseInt(productoSelect.value),
+                    cantidad: parseFloat(cantidadInput.value) || 0,
+                    precio_unitario: precioUnitarioInput ? parseFloat(precioUnitarioInput.value) : 0
+                });
+            }
+        });
 
-    return payload;
-}
+        return payload;
+    }
 
-window.buildPayload = buildPayload;
+    // Para asegurar que la función esté disponible globalmente después de redefinirla.
+    window.buildPayload = buildPayload;
+

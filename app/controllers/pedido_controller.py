@@ -111,7 +111,7 @@ class PedidoController(BaseController):
             logger.error(f"Error interno obteniendo detalle de pedido {pedido_id}: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
-    def crear_pedido_con_items(self, form_data: Dict, usuario_id: int) -> tuple:
+    def crear_pedido_con_items(self, form_data: Dict) -> tuple:
         """
         Valida y crea un nuevo pedido con sus items, verificando el stock previamente.
         Si todo el stock está disponible, lo marca como 'COMPLETADO' y despacha el stock.
@@ -210,10 +210,41 @@ class PedidoController(BaseController):
 
             if result.get('success'):
                 nuevo_pedido = result.get('data')
-                message = "Pedido creado con éxito."
+                id_cliente = nuevo_pedido.get('id_cliente')
+                if id_cliente:
+                    pedidos_previos,_ = self.obtener_pedidos(filtros={'id_cliente': id_cliente})
+                    pedidos_validos = [p for p in pedidos_previos.get('data', []) if p.get('estado') != 'CANCELADO']
+                    num_pedidos = len(pedidos_validos)
+
+                    if num_pedidos == 1:
+                        self.cliente_model.update(id_cliente, {'condicion_venta': 2})
+                    elif num_pedidos == 2:
+                        self.cliente_model.update(id_cliente, {'condicion_venta': 3})
+
                 if all_in_stock:
-                    message = "Stock disponible para todos los productos. El pedido se ha creado en estado 'LISTO PARA ENTREGAR'."
-                return self.success_response(data=nuevo_pedido, message=message, status_code=201)
+
+                    pedido_con_items_resp = self.model.get_one_with_items(nuevo_pedido.get('id'))
+                    if pedido_con_items_resp.get('success'):
+                        items_del_pedido_con_id = pedido_con_items_resp.get('data', {}).get('items', [])
+
+                        despacho_result = self.lote_producto_controller.despachar_stock_directo_por_pedido(
+                            pedido_id=nuevo_pedido.get('id'),
+                            items_del_pedido=items_del_pedido_con_id
+                        )
+
+                        if not despacho_result.get('success'):
+                            self.model.cambiar_estado(nuevo_pedido.get('id'), 'PENDIENTE')
+                            logging.error(f"Fallo al despachar stock en la creación. Revirtiendo a PENDIENTE. Error: {despacho_result.get('error')}")
+                            return self.error_response(f"Pedido creado, pero falló el despacho de stock: {despacho_result.get('error')}", 500)
+
+                        nuevo_pedido['estado'] = 'COMPLETADO'
+                        return self.success_response(
+                            data={**nuevo_pedido, 'estado_completado_inmediato': True},
+                            message="El pedido ha sido puesto en estado COMPLETADO automáticamente porque se encontró stock disponible para despachar todos los ítems.",
+                            status_code=201
+                        )
+                    
+                return self.success_response(data=nuevo_pedido, message="Pedido creado con éxito.", status_code=201)
             else:
                 return self.error_response(result.get('error', 'No se pudo crear el pedido.'), 400)
 
