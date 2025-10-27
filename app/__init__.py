@@ -1,6 +1,6 @@
 from flask import Flask, redirect, url_for, flash, session
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, unset_jwt_cookies
+from flask_jwt_extended import JWTManager, unset_jwt_cookies, jwt_required
 from flask_wtf.csrf import CSRFProtect
 from flask_wtf import FlaskForm
 from app.config import Config
@@ -8,8 +8,6 @@ import logging
 from .json_encoder import CustomJSONEncoder
 from datetime import timedelta
 
-# Helpers de la aplicación
-# (Quitamos la importación de 'register_template_extensions')
 from app.utils.template_helpers import _format_datetime_filter, _formato_moneda_filter, _has_permission_filter, _inject_permission_map, _inject_user_from_jwt
 from app.models.token_blacklist_model import TokenBlacklistModel
 from app.controllers.usuario_controller import UsuarioController
@@ -41,7 +39,6 @@ def user_lookup_callback(_jwt_header, jwt_data):
 
     if user_result.get('success'):
         user_data = user_result['data']
-        
         user_data['nombre_completo'] = f"{user_data.get('nombre', '')} {user_data.get('apellido', '')}".strip()
         return SimpleNamespace(**user_data)
     return None
@@ -204,6 +201,17 @@ def create_app() -> Flask:
     _register_error_handlers(app)
     
     # Eliminamos la llamada conflictiva
-    # register_template_extensions(app) 
+    # register_template_extensions(app)
+
+    @app.before_request
+    @jwt_required(optional=True)
+    def before_request_loader():
+        """
+        Asegura que el `current_user` se cargue desde el token JWT
+        en cada solicitud, si el token está presente.
+        Esto resuelve problemas de caché donde `current_user` no está disponible
+        en la primera carga para las plantillas.
+        """
+        pass
 
     return app
