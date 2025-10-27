@@ -6,6 +6,7 @@ from flask_wtf import FlaskForm
 from app.config import Config
 import logging
 from .json_encoder import CustomJSONEncoder
+from datetime import timedelta
 
 # Helpers de la aplicación
 from app.utils.template_helpers import register_template_extensions
@@ -149,6 +150,12 @@ def create_app() -> Flask:
     CORS(app, resources={r"/api/*": {"origins": "*"}})
     csrf.init_app(app)
     jwt.init_app(app)
+
+    @app.context_processor
+    def inject_globals():
+        return dict(
+            timedelta=timedelta  # Hace que timedelta esté disponible en TODAS las plantillas
+        )
 
     @app.context_processor
     def inject_csrf_form():
