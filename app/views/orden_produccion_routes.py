@@ -56,9 +56,9 @@ def listar():
 
     titulo = f"Órdenes de Producción ({'Todas' if not estado else estado.replace('_', ' ').title()})"
     return render_template(
-        "ordenes_produccion/listar.html", 
-        ordenes=ordenes, 
-        titulo=titulo, 
+        "ordenes_produccion/listar.html",
+        ordenes=ordenes,
+        titulo=titulo,
         supervisores=supervisores,
         filtros_ui=OP_FILTROS_UI
     )
@@ -76,8 +76,12 @@ def nueva():
     supervisores_resp = supervisores_tupla[0] if supervisores_tupla else {}
     supervisores = supervisores_resp.get("data", [])
 
+    # --- AÑADIR FECHA DE HOY ---
+    fecha_hoy = date.today().isoformat() # Obtener YYYY-MM-DD
+    # --------------------------
+
     return render_template(
-        "ordenes_produccion/formulario.html", productos=productos, supervisores=supervisores
+        "ordenes_produccion/formulario.html", productos=productos, supervisores=supervisores, fecha_hoy=fecha_hoy
     )
 
 
@@ -129,11 +133,16 @@ def modificar(id):
         else:
              operarios_list = []
 
+        # --- AÑADIR FECHA DE HOY ---
+        fecha_hoy = date.today().isoformat()
+        # --------------------------
+
         return render_template(
             "ordenes_produccion/formulario.html",
             orden_m=orden,
             productos=productos,
-            operarios=operarios_list
+            operarios=operarios_list,
+            fecha_hoy=fecha_hoy
         )
     except Exception as e:
         print(f"Error inesperado en modificar: {str(e)}")
