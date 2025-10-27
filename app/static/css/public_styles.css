@@ -164,6 +164,21 @@ body {
     display: none;
 }
 
+.main-nav.mobile-menu-active .nav-link.cta-button {
+		background-color: transparent;
+		color: #333 !important;
+		padding: 14px 20px;
+		margin-left: 0;
+		/* ... tus otras reglas ... */
+		display: flex !important;  /* <-- AGREGÁ ESTA LÍNEA */
+	}
+.main-nav.mobile-menu-active .navbar-nav {
+    width: 100%;
+    padding: 0;
+    margin: 0 !important; /* Resetear márgenes de Bootstrap */
+    display: block;          /* <-- AGREGÁ ESTA LÍNEA */
+}
+
 
 /* --- Animations --- */
 /* --- MEJORA: Animación 'fadeInUp' --- */
