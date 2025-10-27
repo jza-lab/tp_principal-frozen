@@ -973,3 +973,8 @@ p {
 .state-respondida { background-color: #ffc107 !important; color: #343a40 !important; }
 .state-solucionada { background-color: #198754 !important; color: white !important; }
 .state-cancelado { background-color: #6c757d !important; color: white !important; }
+/* Clases de estado (para que coincidan con el perfil) */
+.state-pendiente { background-color: #dc3545 !important; color: white !important; }
+.state-en_proceso { background-color: #ffc107 !important; color: #343a40 !important; }
+.state-completado { background-color: #198754 !important; color: white !important; }
+.state-cancelado { background-color: #6c757d !important; color: white !important; }
