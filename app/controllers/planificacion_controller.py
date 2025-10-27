@@ -111,7 +111,11 @@ class PlanificacionController(BaseController):
             return res_conf_dict, res_conf_status
         except Exception as e:
             logger.error(f"Error en _ejecutar_aprobacion_final para OP {op_id}: {e}", exc_info=True)
-            return self.error_response(f"Error interno al ejecutar aprobación final: {str(e)}", 500)
+            # --- CORRECCIÓN AQUÍ ---
+            # Devolver tupla explícitamente
+            error_dict = self.error_response(f"Error interno al ejecutar aprobación final: {str(e)}", 500)
+            return error_dict, 500
+        # ----------------------
 
     # --- MÉTODO PRINCIPAL MODIFICADO ---
     def consolidar_y_aprobar_lote(self, op_ids: List[int], asignaciones: dict, usuario_id: int) -> tuple:
@@ -123,13 +127,23 @@ class PlanificacionController(BaseController):
         """
         try:
             op_a_planificar_id, op_data = self._obtener_datos_op_a_planificar(op_ids, usuario_id)
-            if not op_a_planificar_id: return self.error_response(op_data, 500) # op_data tiene el error si falló
+            # --- CORRECCIÓN AQUÍ ---
+            if not op_a_planificar_id:
+                error_dict = self.error_response(op_data, 500) # op_data tiene el mensaje de error
+                return error_dict, 500
+            # ----------------------
 
             linea_propuesta = asignaciones.get('linea_asignada')
             fecha_inicio_propuesta_str = asignaciones.get('fecha_inicio')
-            if not linea_propuesta or not fecha_inicio_propuesta_str: return self.error_response("Faltan línea o fecha.", 400)
+            if not linea_propuesta or not fecha_inicio_propuesta_str:
+             error_dict = self.error_response("Faltan línea o fecha.", 400)
+             return error_dict, 400
             try: fecha_inicio_propuesta = date.fromisoformat(fecha_inicio_propuesta_str)
-            except ValueError: return self.error_response("Formato fecha inválido.", 400)
+            except ValueError:
+                 # --- CORRECCIÓN AQUÍ ---
+                 error_dict = self.error_response("Formato fecha inválido.", 400)
+                 return error_dict, 400
+                 # ----------------------
 
             logger.info(f"Verificando capacidad multi-día para OP {op_a_planificar_id} en Línea {linea_propuesta} desde {fecha_inicio_propuesta_str}...")
 
@@ -222,7 +236,10 @@ class PlanificacionController(BaseController):
 
         except Exception as e:
             logger.error(f"Error crítico en consolidar_y_aprobar_lote: {e}", exc_info=True)
-            return self.error_response(f"Error interno: {str(e)}", 500)
+            # --- CORRECCIÓN AQUÍ ---
+            error_dict = self.error_response(f"Error interno: {str(e)}", 500)
+            return error_dict, 500
+            # ----------------------
 
 
     # --- NUEVO HELPER para obtener datos OP (MODIFICADO) ---

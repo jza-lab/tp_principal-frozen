@@ -290,49 +290,60 @@ class OrdenProduccionController(BaseController):
     def _generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int, orden_produccion_id: int) -> Dict:
         """
         Helper para crear una OC a partir de una lista de insumos faltantes.
-        Aplica redondeo hacia arriba (ceil) en las cantidades solicitadas.
         """
-        # Simplificación: Asumimos un proveedor por defecto o el primero que encontremos.
         proveedor_id_por_defecto = 1
+        items_oc_para_datos = [] # Renombrar para claridad
 
-        items_oc_para_form = []
+        # Preparar lista de items para la OC (sin cambios)
         for insumo in insumos_faltantes:
-            # FIX: Aplicar math.ceil() al faltante
             cantidad_redondeada = math.ceil(insumo['cantidad_faltante'])
+            if cantidad_redondeada <= 0: continue
 
-            if cantidad_redondeada == 0:
-                continue
-
+            precio = 0
             try:
                 response_data, status_code = self.insumo_controller.obtener_insumo_por_id(insumo['insumo_id'])
-                precio = response_data['data']['precio_unitario'] if status_code < 400 else 0
-            except Exception as e:
-                 logger.error(f"Error obteniendo precio para insumo {insumo.get('insumo_id')}: {e}")
-                 precio = 0
+                if status_code < 400 and response_data.get('success'):
+                    precio = response_data['data'].get('precio_unitario', 0)
+                else: logger.warning(f"No se pudo obtener precio para insumo {insumo.get('insumo_id')}. Usando 0.")
+            except Exception as e: logger.error(f"Error obteniendo precio para insumo {insumo.get('insumo_id')}: {e}")
 
-            items_oc_para_form.append({
+            items_oc_para_datos.append({ # Añadir a la lista correcta
                 'insumo_id': insumo['insumo_id'],
-                'cantidad_faltante': cantidad_redondeada, # Usamos la cantidad redondeada
-                'precio_unitario': precio
+                'cantidad_solicitada': cantidad_redondeada, # Usar cantidad_solicitada como espera crear_orden
+                'precio_unitario': precio,
+                'cantidad_recibida': 0.0 # Inicializar cantidad recibida
             })
 
-        datos_oc = {
+        if not items_oc_para_datos:
+             logger.warning(f"No se generó OC para OP {orden_produccion_id} (sin items válidos).")
+             return {'success': False, 'error': 'No hay insumos válidos para generar la OC.'}
+
+        # Preparar datos principales de la OC (sin cambios)
+        datos_oc_principales = {
             'proveedor_id': proveedor_id_por_defecto,
             'fecha_emision': date.today().isoformat(),
             'prioridad': 'ALTA',
-            'observaciones': f"Orden de Compra generada automáticamente para la OP ID: {orden_produccion_id}",
+            'observaciones': f"Generada automáticamente para OP ID: {orden_produccion_id}",
             'orden_produccion_id': orden_produccion_id
         }
 
-        # Simulamos los datos como si vinieran de un form para reusar el método del controlador
-        form_data_simulado = {
-            **datos_oc,
-            'insumo_id[]': [item['insumo_id'] for item in items_oc_para_form],
-            'cantidad_faltante[]': [item['cantidad_faltante'] for item in items_oc_para_form],
-            'precio_unitario[]': [item['precio_unitario'] for item in items_oc_para_form]
-        }
+        # Calcular totales (subtotal, iva, total) - Necesario para crear_orden
+        subtotal_calculado = sum(float(item.get('cantidad_solicitada', 0)) * float(item.get('precio_unitario', 0)) for item in items_oc_para_datos)
+        iva_calculado = subtotal_calculado * 0.21 # Asumiendo 21%
+        total_calculado = subtotal_calculado + iva_calculado
 
-        return self.orden_compra_controller.crear_orden(form_data_simulado, usuario_id)
+        datos_oc_principales['subtotal'] = round(subtotal_calculado, 2)
+        datos_oc_principales['iva'] = round(iva_calculado, 2)
+        datos_oc_principales['total'] = round(total_calculado, 2)
+
+        # --- CORRECCIÓN EN LA LLAMADA ---
+        # Llamar a crear_orden pasando orden_data, items_data y usuario_id
+        return self.orden_compra_controller.crear_orden(
+            orden_data=datos_oc_principales,
+            items_data=items_oc_para_datos,
+            usuario_id=usuario_id
+        )
+        # --------------------------------
 
     def generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int, orden_produccion_id: int) -> Dict:
         """Wrapper publico para el helper privado _generar_orden_de_compra_automatica."""

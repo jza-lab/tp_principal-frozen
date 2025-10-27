@@ -100,17 +100,16 @@ CANONICAL_PERMISSION_MAP = {
     'consultar_logs_o_auditoria': ['IT', 'GERENTE', 'SUPERVISOR', 'ADMIN', 'DEV'],
 
     # Permisos nuevos para asignación de roles
-    'gestionar_catalogo_de_productos': ['SUPERVISOR', 'GERENTE'],
-    'consultar_catalogo_de_insumos': ['OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'],
-    'aprobar_orden_de_venta': ['SUPERVISOR', 'GERENTE', 'VENDEDOR'], 
-    'gestionar_clientes': ['VENDEDOR', 'ADMIN', 'GERENTE'], 
-    'gestionar_proveedores': ['ADMIN'], 
-    'gestionar_catalogo_de_insumos': ['SUPERVISOR', 'GERENTE'], 
-    'rechazar_orden_de_compra': ['SUPERVISOR', 'GERENTE'],
+    'gestionar_catalogo_de_productos': ['SUPERVISOR', 'GERENTE', 'DEV'],
+    'consultar_catalogo_de_insumos': ['OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE', 'DEV'],
+    'aprobar_orden_de_venta': ['SUPERVISOR', 'GERENTE', 'VENDEDOR', 'DEV'], 
+    'gestionar_clientes': ['VENDEDOR', 'ADMIN', 'GERENTE', 'DEV'], 
+    'gestionar_proveedores': ['ADMIN', 'DEV'], 
+    'gestionar_catalogo_de_insumos': ['SUPERVISOR', 'GERENTE', 'DEV'], 
+    'rechazar_orden_de_compra': ['SUPERVISOR', 'GERENTE', 'DEV'],
     'ver_panel_notificaciones': ['IT', 'DEV', 'ADMIN'],
     'gestionar_autorizaciones': ['ADMIN','DEV'],
     'registrar_lote_de_producto': ['SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE', 'ADMIN', 'DEV'],
-    'ver_alertas_topbar': ['GERENTE', 'SUPERVISOR', 'DEV'],
 
 }
 
