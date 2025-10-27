@@ -23,3 +23,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
+// Asegurarse de que el cuerpo sea visible al mostrar la página (incluyendo bfcache)
+window.addEventListener('pageshow', function(event) {
+    // Eliminar la clase 'fade-out' independientemente de si viene de caché o no
+    document.body.classList.remove('fade-out');
+    
+    // Opcional: Log para saber si vino de bfcache
+    if (event.persisted) {
+        console.log('Page loaded from bfcache. Ensuring fade-out is removed.');
+    } else {
+        console.log('Page loaded normally. Ensuring fade-out is removed.');
+    }
+});

@@ -8,7 +8,7 @@ class ReclamoSchema(Schema):
     id = fields.Int(dump_only=True)
     pedido_id = fields.Int(required=True, error_messages={"required": "El ID del pedido es obligatorio."})
     cliente_id = fields.Int(required=True, error_messages={"required": "El ID del cliente es obligatorio."})
-    
+
     categoria = fields.Str(
         required=True,
         validate=validate.OneOf(
@@ -17,14 +17,14 @@ class ReclamoSchema(Schema):
         ),
         error_messages={"required": "La categoría del reclamo es obligatoria."}
     )
-    
+
     fecha_recepcion = fields.Date(
         required=True,
         error_messages={"required": "La fecha de recepción es obligatoria."}
     )
-    
+
     comentarios = fields.Str(required=False, allow_none=True)
-    
+
     # Campo de solo lectura para la fecha de creación
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
