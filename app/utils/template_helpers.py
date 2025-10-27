@@ -1,7 +1,7 @@
 from datetime import datetime
 from app.utils.permission_map import CANONICAL_PERMISSION_MAP
 from flask import Flask
-from flask_jwt_extended import get_jwt, current_user
+from flask_jwt_extended import current_user
 
 def _format_datetime_filter(value, format='%d/%m/%Y %H:%M'):
     """
@@ -44,13 +44,9 @@ def _has_permission_filter(action: str) -> bool:
     Utiliza el objeto `current_user` cargado en cada petición.
     """
     try:
-        # `current_user` es un proxy gestionado por Flask-JWT-Extended.
-        # Si no hay un usuario autenticado, será None.
         if not current_user:
             return False
 
-        # El rol del usuario ahora se obtiene del objeto `current_user`.
-        # Se accede de forma segura al objeto de rol anidado y a su código.
         user_role_obj = getattr(current_user, 'roles', None)
         user_role_code = None
         if isinstance(user_role_obj, dict):
@@ -60,14 +56,16 @@ def _has_permission_filter(action: str) -> bool:
 
         if not user_role_code:
             return False
+
+        user_role_code = user_role_code.strip()
+
         if user_role_code == 'DEV':
             return True
 
         allowed_roles = CANONICAL_PERMISSION_MAP.get(action, [])
         return user_role_code in allowed_roles
     except Exception as e:
-        # Capturamos cualquier error inesperado y evitamos que la aplicación falle.
-        print(f"Error en _has_permission_filter: {e}") # Log para depuración
+        # Evita que la aplicación falle si hay un error inesperado.
         return False
 
 def _inject_user_from_jwt():
@@ -75,16 +73,7 @@ def _inject_user_from_jwt():
     Procesador de contexto para inyectar el objeto `current_user` completo,
     cargado por Flask-JWT-Extended, en todas las plantillas.
     """
-    try:
-        # Si hay un usuario cargado en el contexto de la solicitud, lo inyectamos.
-        # current_user es un proxy que será None si no hay un usuario autenticado.
-        if current_user:
-            return {'current_user': current_user}
-        return {}
-    except Exception:
-        # En caso de cualquier error (ej. fuera de un contexto de solicitud),
-        # devolvemos un diccionario vacío para no romper la aplicación.
-        return {}
+    return {'current_user': current_user}
 
 
 def register_template_extensions(app: Flask):
