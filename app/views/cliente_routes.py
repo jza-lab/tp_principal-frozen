@@ -22,6 +22,7 @@ def register():
     except Exception as e:
         flash(f"Error al crear al cliente: {str(e)}", 'error')
     return render_template('public/registro.html')
+
 @cliente_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -52,3 +53,19 @@ def logout():
     session.pop('cliente_aprobado', None)
     flash('Has cerrado sesión.', 'info')
     return redirect(url_for('public.index'))
+
+@cliente_bp.route('/perfil')
+def perfil():
+    if 'cliente_id' not in session:
+        flash('Por favor, inicia sesión para ver tu perfil.', 'info')
+        return redirect(url_for('cliente.login'))
+
+    cliente_id = session['cliente_id']
+    response, status_code = cliente_controller.obtener_perfil_cliente(cliente_id)
+
+    if status_code == 200:
+        cliente_data = response.get('data')
+        return render_template('public/perfil.html', cliente=cliente_data)
+    else:
+        flash(response.get('error', 'No se pudo cargar tu perfil.'), 'error')
+        return redirect(url_for('public.index'))

@@ -111,6 +111,9 @@ class PedidoModel(BaseModel):
         try:
             if 'id' in pedido_data:
                 pedido_data.pop('id')
+                pedido_data.setdefault('condicion_venta', 'contado')
+                pedido_data.setdefault('pago', 'pendiente')
+
             # 1. Crear el pedido principal
             pedido_result = self.create(pedido_data)
             if not pedido_result['success']:
@@ -483,3 +486,4 @@ class PedidoModel(BaseModel):
             logger.error(f"Error actualizando los ítems del pedido {pedido_id}: {e}")
             return {'success': False, 'error': str(e)}
     # --- FIN DEL MÉTODO NUEVO ---
+

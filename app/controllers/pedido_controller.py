@@ -667,6 +667,20 @@ class PedidoController(BaseController):
 
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+        
+    def obtener_pedidos_por_cliente(self, cliente_id: int) -> tuple:
+        """
+        Obtiene todos los pedidos de un cliente específico.
+        """
+        try:
+            result = self.model.get_all_with_items({'id_cliente': cliente_id})
+            if result.get('success'):
+                return self.success_response(data=result.get('data', []))
+            else:
+                error_msg = result.get('error', 'Error desconocido al obtener los pedidos del cliente.')
+                return self.error_response(error_msg, 500)
+        except Exception as e:
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
     def obtener_cantidad_pedidos_estado(self, estado: str, fecha: Optional[str] = None) -> Optional[Dict]:
         filtros = {'estado': estado} if estado else {}

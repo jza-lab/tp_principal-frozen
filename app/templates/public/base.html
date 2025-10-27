@@ -65,7 +65,7 @@
                     <i class="fa-solid fa-cart-plus"></i>Hace tu Pedido
                 </a>
 
-                <span class="nav-link">¡Hola, {{ session.cliente_nombre }}!</span>
+                <a href="{{ url_for('cliente.perfil') }}" class="nav-link">¡Hola, {{ session.cliente_nombre }}!</a>
                 <a class="nav-link login-link" href="{{ url_for('cliente.logout') }}">
                     <i class="fa-solid fa-right-from-bracket"></i>Cerrar Sesión
                 </a>

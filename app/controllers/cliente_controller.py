@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from typing import Dict, Optional
 import logging
 
+
 logger = logging.getLogger(__name__)
 
 class ClienteController(BaseController):
@@ -167,6 +168,7 @@ class ClienteController(BaseController):
                 return self.error_response('Cliente no encontrado', 404)
 
             direccion_data = data.pop('direccion', None)
+            data.pop('contrasena', None)
             validated_data = self.schema.load(data, partial=True)
 
             if validated_data.get('email') and validated_data['email'] != existing['data'].get('email'):
@@ -342,3 +344,33 @@ class ClienteController(BaseController):
         except Exception as e:
             logger.error(f"Error contando clientes pendientes: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+        
+
+    def obtener_perfil_cliente(self, cliente_id: int) -> tuple:
+        """
+        Obtiene el perfil completo de un cliente, incluyendo sus pedidos.
+        """
+        try:
+            # 1. Obtener los datos del cliente
+            cliente_response, status_code = self.obtener_cliente(cliente_id)
+            if status_code != 200:
+                return self.error_response('Cliente no encontrado', 404)
+
+            cliente_data = cliente_response.get('data', {})
+
+            # 2. Obtener los pedidos del cliente
+            pedidos_response, _ = self.pedido_controller.obtener_pedidos_por_cliente(cliente_id)
+            
+            pedidos_data = []
+            if pedidos_response.get('success'):
+                pedidos_data = pedidos_response.get('data', [])
+
+            # 3. Combinar los datos
+            perfil_completo = cliente_data
+            perfil_completo['pedidos'] = pedidos_data
+            
+            return self.success_response(data=perfil_completo)
+
+        except Exception as e:
+            logger.error(f"Error obteniendo el perfil del cliente {cliente_id}: {str(e)}")
+            return self.error_response('Error interno del servidor.', 500)

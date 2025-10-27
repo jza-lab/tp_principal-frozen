@@ -12,6 +12,7 @@ from app.utils.template_helpers import register_template_extensions
 from app.models.token_blacklist_model import TokenBlacklistModel
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.cliente_controller import ClienteController
+
 from app.models.usuario import UsuarioModel
 from types import SimpleNamespace
 
@@ -90,7 +91,8 @@ def _register_blueprints(app: Flask):
     from app.views.alertas_routes import alertas_bp
     from app.views.public_routes import public_bp
     from app.views.cliente_routes import cliente_bp
-
+    from app.views.reclamo_routes import reclamo_bp
+    
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
@@ -116,6 +118,7 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(admin_tasks_bp)
     app.register_blueprint(alertas_bp)
     app.register_blueprint(cliente_bp)
+    app.register_blueprint(reclamo_bp)
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""
@@ -140,7 +143,7 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
     app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
-    app.config["JWT_COOKIE_CSRF_PROTECT"] = False  # Dejar que Flask-WTF maneje CSRF
+    app.config["JWT_COOKIE_CSRF_PROTECT"] = False  
     app.json = CustomJSONEncoder(app)
 
     CORS(app, resources={r"/api/*": {"origins": "*"}})

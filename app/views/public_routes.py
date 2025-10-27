@@ -4,7 +4,10 @@ from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
 from flask_wtf import FlaskForm
 
+
 public_bp = Blueprint('public', __name__, url_prefix='/public')
+
+
 
 class CSRFOnlyForm(FlaskForm):
     pass
@@ -138,3 +141,15 @@ def obtener_condicion_pago_cliente(cliente_id):
         'es_cliente_nuevo': es_cliente_nuevo,
         'condiciones_pago': condiciones_pago
     })
+
+
+@public_bp.route('/crear-reclamo/<int:pedido_id>')
+def crear_reclamo_page(pedido_id):
+    """
+    Muestra el formulario para crear un reclamo para un pedido específico.
+    """
+    csrf_form = CSRFOnlyForm()
+
+    hoy = datetime.now().strftime('%Y-%m-%d')
+    # Aquí podrías añadir lógica para verificar que el pedido pertenece al cliente en sesión si fuera necesario.
+    return render_template('public/crear_reclamo.html', pedido_id=pedido_id, today=hoy, csrf_form=csrf_form)

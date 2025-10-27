@@ -3,8 +3,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!form) return;
 
     function restrictToLetters(event) {
-        if (event.ctrlKey || event.metaKey || 
-            [8, 9, 13, 27, 46].includes(event.keyCode) || 
+        if (event.ctrlKey || event.metaKey ||
+            [8, 9, 13, 27, 46].includes(event.keyCode) ||
             (event.keyCode >= 35 && event.keyCode <= 40)
         ) {
             return;
@@ -13,13 +13,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const isLetterOrSpace = /[A-Za-zñÑáéíóúÁÉÍÓÚ\s]/.test(event.key);
 
         if (!isLetterOrSpace) {
-            event.preventDefault(); 
+            event.preventDefault();
         }
     }
 
     function restrictToNumbers(event) {
-        if (event.ctrlKey || event.metaKey || 
-            [8, 9, 13, 27, 46].includes(event.keyCode) || 
+        if (event.ctrlKey || event.metaKey ||
+            [8, 9, 13, 27, 46].includes(event.keyCode) ||
             (event.keyCode >= 35 && event.keyCode <= 40)
         ) {
             return;
@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const isDigit = /[0-9]/.test(event.key);
 
         if (!isDigit) {
-            event.preventDefault(); 
+            event.preventDefault();
         }
     }
 
@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // En Argentina, los digitos verificadores 10 se convierten a 9.
             return digitoVerificador === 9;
         }
-        
+
         return resultado === digitoVerificador;
     }
 
@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const parte2 = document.getElementById('cuit_parte2').value;
                 const parte3 = document.getElementById('cuit_parte3').value;
                 const cuilCompleto = parte1 + parte2 + parte3;
-                
+
                 // Solo validar cuando las 11 partes estén ingresadas
                 if (cuilCompleto.length === 11) {
                     if (validarCuil(cuilCompleto)) {
@@ -161,9 +161,11 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const response = await fetch('/api/validar/direccion', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken },
-                
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+
                 body: JSON.stringify({
                     calle: calleInput.value,
                     altura: alturaInput.value,
@@ -203,6 +205,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (contrasena !== confirm_contrasena) {
             showNotificationModal('Error de Contraseña', 'Las contraseñas no coinciden.');
+            contrasenaInput.classList.add('is-invalid');
+            confirm_contrasenaInput.classList.add('is-invalid');
+            contrasena.focus()
             return;
         }
 

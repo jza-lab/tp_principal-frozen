@@ -96,7 +96,6 @@ class ClienteModel(BaseModel):
             logger.error(f"Error buscando cliente por email {email}: {e}")
             return {'success': False, 'error': 'Ocurrió un error inesperado al buscar el cliente.'}
 
-
     def buscar_por_cuit(self, cuit: str, include_direccion: bool = False) -> Dict:
         """Buscar cliente por CUIT/CUIL"""
         try:

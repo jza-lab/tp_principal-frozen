@@ -9,43 +9,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const recalculate = typeof window.calculateOrderTotals === 'function' ? window.calculateOrderTotals : () => { };
         const attachListeners = typeof window.attachItemListeners === 'function' ? window.attachItemListeners : () => { };
-
-        // Si faltan elementos esenciales, salimos para evitar errores de null
+        
         if (!container || !totalFormsInput) {
             console.error("Faltan elementos esenciales (container o TOTAL_FORMS) para inicializar el formset de ítems.");
             return;
         }
 
-        // Prefijo utilizado por el formset framework (e.g., 'items')
         const prefix = 'items';
 
-        /**
-         * Gestiona la exclusión de productos ya seleccionados en otros selectores.
-         * Deshabilita las opciones para evitar duplicados.
-         */
         function updateAvailableProducts() {
-            // 1. Recopilar todos los IDs de producto seleccionados en CUALQUIER fila.
             const selectedProductIds = new Set();
             document.querySelectorAll('.producto-selector').forEach(select => {
                 if (select.value) {
                     selectedProductIds.add(select.value);
                 }
             });
-
-            // 2. Iterar sobre todos los selectores para aplicar la exclusión.
             document.querySelectorAll('.producto-selector').forEach(currentSelect => {
                 const currentValue = currentSelect.value;
-
-                // Iterar sobre todas las opciones con data-id
                 currentSelect.querySelectorAll('option[data-id]').forEach(option => {
                     const optionId = option.getAttribute('data-id');
-
-                    // Habilitar la opción por defecto (limpiar el estado anterior)
                     option.disabled = false;
                     option.style.display = 'block';
-
-                    // 3. Lógica de Inhabilitación:
-                    // Deshabilita la opción si ha sido seleccionada, Y NO es la opción actual de ESTA fila.
                     if (selectedProductIds.has(optionId) && optionId !== currentValue) {
                         option.style.display = 'none';
                     }
@@ -60,9 +44,7 @@ document.addEventListener('DOMContentLoaded', function () {
           * @param {number} index Nuevo índice.
           */
         function updateElementIndex(el, prefix, index) {
-            // Expresión regular para encontrar el índice anterior (e.g., -0-, -1-, etc.)
             const idRegex = new RegExp('(' + prefix + '-\\d+-)(.*)');
-            // El reemplazo se hará con el nuevo índice
             const replacement = prefix + '-' + index + '-$2';
 
             if (el.id) {
@@ -73,9 +55,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        /**
-          * Gestiona la visibilidad del mensaje "Añada productos".
-          */
         function toggleNoItemsMessage() {
             if (noItemsMsg) {
                 const rowCount = container.querySelectorAll('.item-row').length;
@@ -91,23 +70,16 @@ document.addEventListener('DOMContentLoaded', function () {
         function handleProductChange(event) {
             const select = event.target;
             const row = select.closest('.item-row');
-
-            // Verificación defensiva
             if (!row) return;
 
             const stockDisplay = row.querySelector('.stock-display');
-            // Nota: Se asume que el input de cantidad tiene la clase 'item-quantity'
             const cantidadInput = row.querySelector('.item-quantity');
 
-            // Buscamos la opción seleccionada
             const selectedOption = select.options[select.selectedIndex];
 
-            // Obtiene el stock y la unidad del atributo data-* de la opción seleccionada
             const stock = selectedOption ? (selectedOption.dataset.stock || 0) : 0;
             const unidad = (selectedOption && selectedOption.dataset.unidad) ? selectedOption.dataset.unidad : '';
 
-            // --- LÓGICA DE CONTROL DE DECIMALES Y STEP ---
-            // Es entero si la unidad es 'unidades' O si empieza con 'paquete'
             const esEntero = unidad.startsWith('paquete') || unidad === 'unidades';
 
             if (cantidadInput) {
@@ -137,48 +109,34 @@ document.addEventListener('DOMContentLoaded', function () {
             recalculate();
         }
 
-        /**
-          * Re-indexa todas las filas después de una adición o eliminación.
-          */
         function reindexRows() {
             const rows = container.querySelectorAll('.item-row');
             let newIndex = 0;
 
             rows.forEach(row => {
-                // Re-indexar todos los elementos con atributos 'name' o 'id' que empiecen con el prefijo
                 row.querySelectorAll('[name^="' + prefix + '-"], [id^="' + prefix + '-"]').forEach(el => {
                     updateElementIndex(el, prefix, newIndex);
                 });
-
-                // Re-adjuntar listeners y actualizar stock para la fila re-indexada
                 const productSelect = row.querySelector('select[name$="-producto_id"]');
                 const removeButton = row.querySelector('.remove-item-btn');
 
                 attachListeners(row);
 
                 if (productSelect) {
-                    // Limpiar y adjuntar listener de cambio de producto/stock
                     productSelect.removeEventListener('change', handleProductChange);
                     productSelect.addEventListener('change', handleProductChange);
-
-                    // Limpiar y adjuntar listener para la EXCLUSIÓN DE PRODUCTOS
                     productSelect.removeEventListener('change', updateAvailableProducts);
                     productSelect.addEventListener('change', updateAvailableProducts);
-
-                    // Llamar a handleProductChange para actualizar el stock visible
                     handleProductChange({ target: productSelect });
                 }
 
                 if (removeButton) {
-                    // Limpiar y adjuntar listener de eliminación
                     removeButton.removeEventListener('click', removeItem);
                     removeButton.addEventListener('click', removeItem);
                 }
 
                 newIndex++;
             });
-
-            // Actualizar TOTAL_FORMS
             if (totalFormsInput) {
                 totalFormsInput.value = newIndex;
             }
@@ -188,13 +146,8 @@ document.addEventListener('DOMContentLoaded', function () {
             recalculate()
         }
 
-        /**
-          * Añade una nueva fila de ítem.
-          */
         function addItem() {
             if (!itemTemplate || !totalFormsInput) return;
-
-            // Clonar la plantilla y reemplazar el prefijo con el índice actual
             const newIndex = parseInt(totalFormsInput.value, 10);
             const newRowContent = itemTemplate.content.cloneNode(true);
             const newRow = newRowContent.querySelector('.item-row');
@@ -207,11 +160,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 behavior: 'smooth',
                 block: 'nearest'
             });
-
-            // La reindexación se encarga de adjuntar los listeners
             reindexRows();
-
-            // Aplicar la lógica de exclusión después de añadir una fila
             updateAvailableProducts();
         }
         window.addItemRow = addItem;
@@ -225,32 +174,20 @@ document.addEventListener('DOMContentLoaded', function () {
             if (row) {
                 const nextRow = row.nextElementSibling;
                 row.remove();
-                reindexRows(); // Reindexar después de eliminar
+                reindexRows(); 
                 if (nextRow) {
-                    // Usamos 'start' para alinear el tope del nuevo elemento con el tope de la vista,
-                    // lo cual obliga al scroll a moverse hacia arriba para seguir el contenido.
                     nextRow.scrollIntoView({
                         behavior: 'smooth',
                         block: 'start'
                     });
                 }
-
-                // Re-habilitar los productos después de eliminar una fila
                 updateAvailableProducts();
             }
         }
-
-        // --- Inicialización y Event Listeners ---
-
-        // 1. Botón de añadir ítem
         if (addItemBtn) {
             addItemBtn.addEventListener('click', addItem);
         }
-
-        // 2. Inicializar listeners para filas existentes (al cargar la página)
         reindexRows();
-
-        // 3. Aplicar la lógica de exclusión inicial para cualquier producto precargado
         updateAvailableProducts();
 
     } catch (e) {
@@ -258,11 +195,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
-const form = document.getElementById('pedido-form'); // Usamos el ID del formulario en tu HTML
+const form = document.getElementById('pedido-form'); 
 const itemsContainer = document.getElementById('items-container');
 
 
-// Espera a que el DOM esté completamente cargado para ejecutar el script.
 let initialAddressState = {};
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -271,8 +207,6 @@ document.addEventListener('DOMContentLoaded', function () {
         console.error("No se encontró el formulario con id 'pedido-form'.");
         return;
     }
-
-    // Capturar el estado inicial de la dirección si estamos en modo edición
     if (isEditing) {
         initialAddressState = {
             calle: document.getElementById('calle').value,
@@ -284,8 +218,6 @@ document.addEventListener('DOMContentLoaded', function () {
             codigo_postal: document.getElementById('codigo_postal').value
         };
     }
-
-    // Asociamos la función handleSubmit al evento 'submit' del formulario.
     form.addEventListener('submit', handleSubmit);
 });
 
@@ -296,18 +228,12 @@ document.addEventListener('DOMContentLoaded', function () {
  * @param {Event} event - El evento 'submit' del formulario.
  */
 async function handleSubmit(event) {
-    // 1. Prevenimos que la página se recargue (comportamiento por defecto del formulario).
     event.preventDefault();
     const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-
-    // --- VALIDACIONES DEL LADO DEL CLIENTE ---
-    const form = event.target; // Obtenemos el formulario desde el evento
+    const form = event.target; 
     const itemsContainer = document.getElementById('items-container');
-
-    // Validación A: Campos requeridos, patrones, etc. de HTML5
     if (!form.checkValidity()) {
         form.classList.add('was-validated');
-        // MODIFICADO: Usamos el modal personalizado
         showNotificationModal('Campos Incompletos', 'Por favor, complete todos los campos obligatorios correctamente.', 'warning');
         return;
     }

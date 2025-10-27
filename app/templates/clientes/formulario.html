@@ -27,7 +27,7 @@ Agregar nuevo cliente
                 <h5 class="mb-0">Información del cliente</h5>
             </div>
             <div class="card-body">
-                <form id="formulario-cliente" method="POST">
+                <form id="formulario-cliente" method="POST" novalidate>
                     {{ csrf_form.csrf_token }}
                     <div class="row g-3">
                         {% if cliente %}
@@ -64,17 +64,17 @@ Agregar nuevo cliente
                         </div>
 
                         <div class="col-md-12">
-                            <div class="input-group">
-                                <input type="text" class="form-control text-center" id="cuit_parte1" name="cuit_parte1"
+                           <div class="input-group">
+                                 <input type="text" class="form-control text-center" id="cuit_parte1" name="cuit_parte1"
                                     maxlength="2" pattern="\d{2}" placeholder="XX" required
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
-                                    aria-label="Código de provincia">
+                                    aria-label="Código de provincia" value="{{ cliente.cuit.split('-')[0] if cliente and cliente.cuit else '' }}">
                                 <span class="input-group-text">-</span>
 
                                 <div class="form-floating" style="flex-grow: 4;">
                                     <input type="text" class="form-control text-center" id="cuit_parte2"
                                         name="cuit_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX"
-                                        required>
+                                        required value="{{ cliente.cuit.split('-')[1] if cliente and cliente.cuit else '' }}">
                                     <label for="cuit_parte2">CUIT</label>
                                 </div>
 
@@ -83,9 +83,10 @@ Agregar nuevo cliente
                                 <input type="text" class="form-control text-center" id="cuit_parte3" name="cuit_parte3"
                                     maxlength="1" pattern="\d{1}" placeholder="X" required
                                     style="width: 3em; flex-grow: 0; padding-top: 0.5em; padding-bottom: 0.5em;"
-                                    aria-label="Dígito verificador">
+                                    aria-label="Dígito verificador" value="{{ cliente.cuit.split('-')[2] if cliente and cliente.cuit else '' }}">
                             </div>
-                            <small id="cuit-error" class="form-text text-danger"></small>
+                            <small id="cuit-feedback" class="form-text"></small>
+                            <input type="hidden" id="cuit" name="cuit">
                         </div>
 
                         <div class="col-md-6">
@@ -241,6 +242,7 @@ Agregar nuevo cliente
                                         </label>
                                     </div>
                                 </div>
+                                {% if not cliente %}
                                 <div class="row g-3">
                                     <div class="col-md-4">
                                         <div class="form-floating">
@@ -249,8 +251,9 @@ Agregar nuevo cliente
                                             <label for="contrasena">Contraseña</label>
                                         </div>
                                     </div>
+                                    
                                     <div class="col-md-4">
-                                        <div class="form-floating">
+                                        <div class="form-floating" >
                                             <input type="password" class="form-control" id="confirm_contrasena"
                                                 name="confirm_contrasena" placeholder="Confirmar Contraseña" required>
                                             <label for="confirm_contrasena">Confirmar Contraseña</label>
@@ -258,6 +261,7 @@ Agregar nuevo cliente
                                         </div>
                                     </div>
                                 </div>
+                                {% endif %}
                             </div>
                         </div>
                     </div>

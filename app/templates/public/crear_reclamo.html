@@ -1,0 +1,112 @@
+{% extends "public/base.html" %}
+
+{% block title %}Crear Reclamo - La Escondida{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h2>Registrar un Reclamo</h2>
+                </div>
+                <div class="card-body">
+                    <p><strong>Pedido N°:</strong> {{ pedido_id }}</p>
+                    <form id="reclamo-form">
+                        {{ csrf_form.csrf_token }}
+                        <input type="hidden" id="pedido_id" name="pedido_id" value="{{ pedido_id }}">
+
+                        <div class="mb-3">
+                            <label for="categoria" class="form-label">Categoría del Reclamo</label>
+                            <select class="form-select" id="categoria" name="categoria" required>
+                                <option value="" disabled selected>Seleccione una categoría...</option>
+                                <option value="no_llego">El pedido no llegó</option>
+                                <option value="mal_estado">Productos en mal estado</option>
+                                <option value="envio_incorrecto">Envío incorrecto</option>
+                                <option value="pedido_incompleto">El pedido llegó incompleto</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="fecha_recepcion" class="form-label">Fecha de Recepción del Pedido</label>
+                            <input type="date" class="form-control" id="fecha_recepcion" name="fecha_recepcion"
+                                max="{{ today }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="comentarios" class="form-label">Comentarios Adicionales</label>
+                            <textarea class="form-control" id="comentarios" name="comentarios" rows="4"
+                                placeholder="Describa el problema con más detalle..."></textarea>
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">Enviar Reclamo</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('reclamo-form');
+
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            const formData = {
+                pedido_id: parseInt(document.getElementById('pedido_id').value, 10),
+                categoria: document.getElementById('categoria').value,
+                fecha_recepcion: document.getElementById('fecha_recepcion').value,
+                comentarios: document.getElementById('comentarios').value,
+            };
+
+            // Validaciones básicas del lado del cliente
+            if (!formData.categoria || !formData.fecha_recepcion) {
+                showNotificationModal('Error', 'Por favor, complete todos los campos obligatorios.', false);
+                return;
+            }
+
+            function getCsrfToken() {
+                const tokenElement = form.querySelector('input[name="csrf_token"]');
+                return tokenElement ? tokenElement.value : null;
+            }
+            const csrfToken = getCsrfToken();
+            if (!csrfToken) {
+                console.error("CSRF Token no encontrado en el formulario.");
+                showNotificationModal('Error de Seguridad', 'Fallo al obtener el token de seguridad CSRF.');
+                return;
+            }
+
+            fetch('/api/reclamos/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify(formData),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotificationModal('Éxito', 'Su reclamo ha sido registrado correctamente.', true, () => {
+                            window.location.href = "{{ url_for('cliente.perfil') }}";
+                        });
+                    } else {
+                        const errorMessage = data.errors ? Object.values(data.errors).flat().join('<br>') : (data.error || 'Ocurrió un error desconocido.');
+                        showNotificationModal('Error', errorMessage, false);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error al enviar el reclamo:', error);
+                    showNotificationModal('Error', 'No se pudo conectar con el servidor. Por favor, intente de nuevo más tarde.', false);
+                });
+        });
+    });
+</script>
+{% endblock %}

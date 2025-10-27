@@ -6,11 +6,175 @@ document.addEventListener('DOMContentLoaded', function () {
     const provinciaSelect = document.getElementById('provincia');
     const localidadInput = document.getElementById('localidad');
 
+    function restrictToLetters(event) {
+        if (event.ctrlKey || event.metaKey ||
+            [8, 9, 13, 27, 46].includes(event.keyCode) ||
+            (event.keyCode >= 35 && event.keyCode <= 40)
+        ) {
+            return;
+        }
+
+        const isLetterOrSpace = /[A-Za-zñÑáéíóúÁÉÍÓÚ\s]/.test(event.key);
+
+        if (!isLetterOrSpace) {
+            event.preventDefault();
+        }
+    }
+
+    function restrictToNumbers(event) {
+        if (event.ctrlKey || event.metaKey ||
+            [8, 9, 13, 27, 46].includes(event.keyCode) ||
+            (event.keyCode >= 35 && event.keyCode <= 40)
+        ) {
+            return;
+        }
+        const isDigit = /[0-9]/.test(event.key);
+
+        if (!isDigit) {
+            event.preventDefault();
+        }
+    }
+
+    function validarCuil(cuil) {
+        if (!cuil || cuil.length !== 11) {
+            return false;
+        }
+
+        const cuilLimpio = cuil.replace(/[^0-9]/g, '');
+        if (cuilLimpio.length !== 11) {
+            return false;
+        }
+
+        const base = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+        const digitoVerificador = parseInt(cuilLimpio.charAt(10), 10);
+        let suma = 0;
+
+        for (let i = 0; i < 10; i++) {
+            suma += parseInt(cuilLimpio.charAt(i), 10) * base[i];
+        }
+
+        let resultado = 11 - (suma % 11);
+        if (resultado === 11) {
+            resultado = 0;
+        } else if (resultado === 10) {
+            // Caso especial para CUIT 20, 23, 24, 27, 30, etc. (se usa 9 en su lugar o se valida directamente)
+            // En Argentina, los digitos verificadores 10 se convierten a 9.
+            return digitoVerificador === 9;
+        }
+
+        return resultado === digitoVerificador;
+    }
+
+    const cuitPartes = ['cuit_parte1', 'cuit_parte2', 'cuit_parte3'];
+    const cuitFeedback = document.getElementById('cuit-feedback');
+
+    cuitPartes.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('keypress', restrictToNumbers);
+            input.addEventListener('input', () => {
+                const parte1 = document.getElementById('cuit_parte1').value;
+                const parte2 = document.getElementById('cuit_parte2').value;
+                const parte3 = document.getElementById('cuit_parte3').value;
+                const cuilCompleto = parte1 + parte2 + parte3;
+
+                // Solo validar cuando las 11 partes estén ingresadas
+                if (cuilCompleto.length === 11) {
+                    if (validarCuil(cuilCompleto)) {
+                        cuitFeedback.textContent = 'CUIT/CUIL Válido.';
+                        cuitFeedback.className = 'form-text text-success';
+                    } else {
+                        cuitFeedback.textContent = 'CUIT/CUIL Inválido. Revise el número.';
+                        cuitFeedback.className = 'form-text text-danger';
+                    }
+                } else if (cuilCompleto.length > 0) {
+                    const faltantes = 11 - cuilCompleto.length
+                    cuitFeedback.textContent = `Falta${faltantes > 1 ? 'n' : ''} ${faltantes} dígito${faltantes > 1 ? 's' : ''} (11 en total).`;
+                    cuitFeedback.className = 'form-text text-warning';
+                } else {
+                    cuitFeedback.textContent = '';
+                }
+            });
+        }
+    });
+
+    const telefonoInput = document.getElementById('telefono');
+    if (telefonoInput) {
+        telefonoInput.addEventListener('keypress', restrictToNumbers);
+    }
+
+    const nombreInput = document.getElementById('nombre');
+    if (nombreInput) {
+        nombreInput.addEventListener('keypress', restrictToLetters);
+    }
+
+
+    const addressInputs = ['calle', 'altura', 'localidad', 'provincia', 'codigo_postal', 'piso', 'depto'];
+    function setAddressValidationState(isValid) {
+        addressInputs.forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.classList.remove(isValid ? 'is-invalid' : 'is-valid');
+                input.classList.add(isValid ? 'is-valid' : 'is-invalid');
+            }
+        });
+    }
+
+    function validateNonAddressFields() {
+        let allValid = true;
+        form.querySelectorAll('input, select, textarea').forEach(input => {
+            if (addressInputs.includes(input.id)) {
+                input.classList.remove('is-valid', 'is-invalid');
+                return;
+            }
+            if (!input.checkValidity()) {
+                input.classList.add('is-invalid');
+                input.classList.remove('is-valid');
+                allValid = false;
+            } else {
+                input.classList.add('is-valid');
+                input.classList.remove('is-invalid');
+            }
+        });
+        if (!allValid) {
+            showNotificationModal('Formulario Incompleto', 'Por favor, complete correctamente todos los campos requeridos (excepto dirección).');
+        }
+        return allValid;
+    }
+
+    function getCsrfToken() {
+        const tokenElement = form.querySelector('input[name="csrf_token"]');
+        return tokenElement ? tokenElement.value : null;
+    }
+    const csrfToken = getCsrfToken();
+    if (!csrfToken) {
+        console.error("CSRF Token no encontrado en el formulario.");
+        showNotificationModal('Error de Seguridad', 'Fallo al obtener el token de seguridad CSRF.');
+        return;
+    }
 
     async function enviarDatos() {
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
             return;
+        }
+        const contrasena = document.getElementById('contrasena')
+        const confirm_contrasena = document.getElementById('confirm_contrasena')
+
+
+       if (!isEditBoolean) {
+            const contrasenaInput = document.getElementById('contrasena');
+            const confirm_contrasenaInput = document.getElementById('confirm_contrasena');
+            
+            if (contrasenaInput.value !== confirm_contrasenaInput.value) {
+                showNotificationModal('Las contraseñas no coinciden', 'Por favor, revise que las contraseñas coincidan.');
+                contrasenaInput.classList.add('is-invalid');
+                confirm_contrasenaInput.classList.add('is-invalid');
+                contrasenaInput.focus();
+                return; 
+            }
+            contrasenaInput.classList.add('is-valid');
+            confirm_contrasenaInput.classList.add('is-valid');
         }
 
         const formData = new FormData(form);
@@ -22,6 +186,7 @@ document.addEventListener('DOMContentLoaded', function () {
             telefono: formData.get('telefono'),
             condicion_iva: formData.get('condicion_iva'),
             razon_social: formData.get('razon_social') || '',
+            ...(isEditBoolean ? {} : { contrasena: formData.get('contrasena') }),
             direccion: {
                 calle: formData.get('calle'),
                 altura: formData.get('altura'),
@@ -39,7 +204,10 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const respuesta = await fetch(url, {
                 method: method,
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify(clienteData)
             });
             const resultado = await respuesta.json();
@@ -63,10 +231,16 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     async function verifyAddress() {
+        if (!validateNonAddressFields()) {
+            return;
+        }
         try {
             const response = await fetch('/api/validar/direccion', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
                 body: JSON.stringify({
                     calle: calleInput.value,
                     altura: alturaInput.value,
@@ -78,6 +252,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const verificationResult = await response.json();
 
             if (response.ok && verificationResult.success) {
+                setAddressValidationState(true);
                 await enviarDatos();
             } else {
                 let errorMessage = 'Dirección no válida o error de verificación.';
@@ -85,7 +260,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     errorMessage = verificationResult.error;
                 }
                 showNotificationModal(errorMessage, 'Error al verificar la dirección');
-                form.classList.add('was-validated');
+                setAddressValidationState(false);
             }
         } catch (error) {
             console.error('Error de red al verificar la direccion:', error);
@@ -96,13 +271,14 @@ document.addEventListener('DOMContentLoaded', function () {
     form.addEventListener('submit', async function (event) {
         event.preventDefault();
         event.stopPropagation();
-
-        if (!form.checkValidity()) {
-            form.classList.add('was-validated');
-            return;
-        }
-
         await verifyAddress();
     });
-
+    if (ID_cliente && isEditBoolean) { // Se usa ID_cliente para ser más explícito en Flask
+        // Ejecutamos el evento 'input' de cualquiera de las partes para forzar la validación
+        const parte1Input = document.getElementById('cuit_parte1');
+        if (parte1Input) {
+            // Disparamos el evento manualmente para que se ejecute la lógica de validación
+            parte1Input.dispatchEvent(new Event('input')); 
+        }
+    }
 });
