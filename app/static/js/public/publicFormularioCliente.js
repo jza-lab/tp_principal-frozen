@@ -2,6 +2,35 @@ document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('formulario-cliente');
     if (!form) return;
 
+    function restrictToLetters(event) {
+        if (event.ctrlKey || event.metaKey || 
+            [8, 9, 13, 27, 46].includes(event.keyCode) || 
+            (event.keyCode >= 35 && event.keyCode <= 40)
+        ) {
+            return;
+        }
+
+        const isLetterOrSpace = /[A-Za-zñÑáéíóúÁÉÍÓÚ\s]/.test(event.key);
+
+        if (!isLetterOrSpace) {
+            event.preventDefault(); 
+        }
+    }
+
+    function restrictToNumbers(event) {
+        if (event.ctrlKey || event.metaKey || 
+            [8, 9, 13, 27, 46].includes(event.keyCode) || 
+            (event.keyCode >= 35 && event.keyCode <= 40)
+        ) {
+            return;
+        }
+        const isDigit = /[0-9]/.test(event.key);
+
+        if (!isDigit) {
+            event.preventDefault(); 
+        }
+    }
+
     function validarCuil(cuil) {
         if (!cuil || cuil.length !== 11) {
             return false;
@@ -38,6 +67,7 @@ document.addEventListener('DOMContentLoaded', function () {
     cuitPartes.forEach(id => {
         const input = document.getElementById(id);
         if (input) {
+            input.addEventListener('keypress', restrictToNumbers);
             input.addEventListener('input', () => {
                 const parte1 = document.getElementById('cuit_parte1').value;
                 const parte2 = document.getElementById('cuit_parte2').value;
@@ -54,7 +84,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         cuitFeedback.className = 'form-text text-danger';
                     }
                 } else if (cuilCompleto.length > 0) {
-                    cuitFeedback.textContent = 'Faltan dígitos (11 en total).';
+                    const faltantes = 11 - cuilCompleto.length
+                    cuitFeedback.textContent = `Falta${faltantes > 1 ? 'n' : ''} ${faltantes} dígito${faltantes > 1 ? 's' : ''} (11 en total).`;
                     cuitFeedback.className = 'form-text text-warning';
                 } else {
                     cuitFeedback.textContent = '';
@@ -62,6 +93,16 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
     });
+
+    const telefonoInput = document.getElementById('telefono');
+    if (telefonoInput) {
+        telefonoInput.addEventListener('keypress', restrictToNumbers);
+    }
+
+    const nombreInput = document.getElementById('nombre');
+    if (nombreInput) {
+        nombreInput.addEventListener('keypress', restrictToLetters);
+    }
 
     function getCsrfToken() {
         const tokenElement = form.querySelector('input[name="csrf_token"]');
@@ -74,8 +115,44 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
+    const addressInputs = ['calle', 'altura', 'localidad', 'provincia', 'codigo_postal', 'piso', 'depto'];
+    function setAddressValidationState(isValid) {
+        addressInputs.forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.classList.remove(isValid ? 'is-invalid' : 'is-valid');
+                input.classList.add(isValid ? 'is-valid' : 'is-invalid');
+            }
+        });
+    }
+
+    function validateNonAddressFields() {
+        let allValid = true;
+        form.querySelectorAll('input, select, textarea').forEach(input => {
+            if (addressInputs.includes(input.id)) {
+                input.classList.remove('is-valid', 'is-invalid');
+                return;
+            }
+            if (!input.checkValidity()) {
+                input.classList.add('is-invalid');
+                input.classList.remove('is-valid');
+                allValid = false;
+            } else {
+                input.classList.add('is-valid');
+                input.classList.remove('is-invalid');
+            }
+        });
+        if (!allValid) {
+            showNotificationModal('Formulario Incompleto', 'Por favor, complete correctamente todos los campos requeridos (excepto dirección).');
+        }
+        return allValid;
+    }
+
 
     async function verifyAddress() {
+        if (!validateNonAddressFields()) {
+            return;
+        }
         const calleInput = document.getElementById('calle');
         const alturaInput = document.getElementById('altura');
         const provinciaSelect = document.getElementById('provincia');
@@ -98,14 +175,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const verificationResult = await response.json();
 
             if (response.ok && verificationResult.success) {
+                setAddressValidationState(true);
                 await enviarDatos();
             } else {
                 let errorMessage = 'Dirección no válida o error de verificación.';
                 if (verificationResult && verificationResult.error) {
                     errorMessage = verificationResult.error;
                 }
-                showNotificationModal(errorMessage, 'Error al verificar la dirección');
-                form.classList.add('was-validated');
+                showNotificationModal(errorMessage, 'No se pudo validar la dirección.');
+                setAddressValidationState(false);
             }
         } catch (error) {
             console.error('Error de red al verificar la direccion:', error);

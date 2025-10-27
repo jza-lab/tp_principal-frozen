@@ -31,6 +31,10 @@ body {
     transition: background-color 0.4s ease, box-shadow 0.4s ease, padding 0.4s ease;
 }
 
+.bg-primary {
+    background-color: rgba(19, 29, 27, 0.95) !important;
+}
+
 .main-nav.scrolled {
     background-color: rgba(255, 255, 255, 0.95);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
@@ -884,3 +888,19 @@ p {
     font-size: 0.9rem;
 }
 
+.form-control.is-valid,
+.was-validated .form-control:valid {
+    background-image: none !important; 
+    border-color: #198754 !important;
+    padding-right: 0.75rem !important; 
+}
+
+.form-select.is-valid,
+.was-validated .form-select:valid {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important; /* Reemplaza el tick con la flecha de dropdown estándar (esto es clave para selects) */
+    border-color: #198754 !important;
+}
+
+.form-control.is-valid {
+    padding-right: 0.75rem !important;
+}

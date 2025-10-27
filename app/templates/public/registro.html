@@ -11,15 +11,13 @@
                     <h2>Registro de Nuevo Cliente</h2>
                 </div>
                 <div class="card-body">
-                    <form method="POST" id="formulario-cliente">
+                    <form method="POST" id="formulario-cliente" novalidate>
                         {{ csrf_form.csrf_token }}
-                        <input type="hidden" id="cuit" name="cuit">
-
                         <h4>Información del Cliente</h4>
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <div class="form-floating">
-                                    <input type="text" class="form-control" id="nombre" name="nombre"
+                                    <input type="text" class="form-control" id="nombre" name="nombre" maxlength="60"
                                         placeholder="Nombre y Apellido" required>
                                     <label for="nombre"><i class="bi bi-person-circle me-1"></i>Nombre y Apellido
                                         *</label>
@@ -42,12 +40,12 @@
                                         style="flex: 0 0 4em;">
                                     <span class="input-group-text">-</span>
                                     <input type="text" class="form-control text-center" id="cuit_parte2"
-                                        name="cuit_parte2" maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX" required
+                                        name="cuit_parte2"  maxlength="8" pattern="\d{8}" placeholder="XXXXXXXX" required
                                         style="flex: 1 1 auto;">
                                     <span class="input-group-text">-</span>
                                     <input type="text" class="form-control text-center" id="cuit_parte3"
-                                        name="cuit_parte3" maxlength="1" pattern="\d{1}" placeholder="X" required
-                                        style="flex: 0 0 3em;">
+                                        name="cuit_parte3"  maxlength="1" pattern="\d{1}" placeholder="X" required
+                                        style="flex: 0 0 4em;">
                                 </div>
                                 <small id="cuit-feedback" class="form-text"></small>
                                 <input type="hidden" id="cuit" name="cuit">
@@ -55,7 +53,7 @@
 
                             <div class="col-md-6">
                                 <div class="form-floating">
-                                    <input type="email" class="form-control" id="email" name="email" placeholder="Email"
+                                    <input type="email" class="form-control" id="email" name="email" placeholder="Email" maxlength="100"
                                         required>
                                     <label for="email"><i class="bi bi-envelope me-1"></i>Email *</label>
                                 </div>
@@ -63,7 +61,7 @@
 
                             <div class="col-md-6">
                                 <div class="form-floating">
-                                    <input type="text" class="form-control" id="telefono" name="telefono"
+                                    <input type="text" class="form-control" id="telefono" name="telefono" maxlength="11"  pattern="\d{7,11}"
                                         placeholder="Teléfono" required>
                                     <label for="telefono"><i class="bi bi-phone me-1"></i>Teléfono *</label>
                                 </div>
@@ -72,10 +70,15 @@
                                 <div class="form-floating">
                                     <select class="form-select" id="condicion-iva" name="condicion_iva" required>
                                         <option value="" disabled selected>Seleccione una opción...</option>
-                                        <option value="Responsable Inscripto">Responsable Inscripto</option>
-                                        <option value="Monotributista">Monotributista</option>
-                                        <option value="IVA Exento">IVA Exento</option>
-                                        <option value="Consumidor Final">Consumidor Final</option>
+
+                                        <option value="1">
+                                            Responsable Inscripto</option>
+                                        <option value="2">
+                                            Monotributista</option>
+                                        <option value="3">
+                                            IVA Exento</option>
+                                        <option value="4">
+                                            Consumidor Final</option>
                                     </select>
                                     <label for="condicion-iva"><i class="bi bi-file-earmark-person me-1"></i>Condición
                                         de IVA *</label>
