@@ -110,7 +110,6 @@ CANONICAL_PERMISSION_MAP = {
     'ver_panel_notificaciones': ['IT', 'DEV', 'ADMIN'],
     'gestionar_autorizaciones': ['ADMIN','DEV'],
     'registrar_lote_de_producto': ['SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE', 'ADMIN', 'DEV'],
-    'ver_alertas_topbar': ['GERENTE', 'SUPERVISOR', 'DEV'],
 
 }
 
