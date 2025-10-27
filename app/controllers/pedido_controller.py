@@ -10,6 +10,7 @@ from app.models.receta import RecetaModel
 # -------------------------
 from app.models.cliente import ClienteModel
 from app.models.pedido import PedidoModel
+from app.models.despacho_model import DespachoModel
 from app.models.producto import ProductoModel
 from app.models.direccion import DireccionModel
 from app.schemas.direccion_schema import DireccionSchema
@@ -32,6 +33,7 @@ class PedidoController(BaseController):
         self.model = PedidoModel()
         self.schema = PedidoSchema()
         self.producto_model = ProductoModel()
+        self.despacho_model = DespachoModel()
         self.cliente_model = ClienteModel()
         self.direccion_model= DireccionModel()
         self.dcliente_schema = ClienteSchema()
@@ -734,7 +736,7 @@ class PedidoController(BaseController):
     def despachar_pedido(self, pedido_id: int, form_data: Dict) -> tuple:
         """
         Cambia el estado de un pedido a 'EN_TRANSITO' y guarda los datos
-        del despacho en el campo de observaciones.
+        del despacho en la nueva tabla 'despachos'.
         """
         logger.info(f"Intento de despachar el pedido {pedido_id}")
         try:
@@ -742,67 +744,51 @@ class PedidoController(BaseController):
             pedido_existente_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_existente_resp.get('success'):
                 return self.error_response(f"Pedido con ID {pedido_id} no encontrado.", 404)
+            
             pedido_actual = pedido_existente_resp.get('data')
             if pedido_actual.get('estado') != 'LISTO_PARA_ENTREGA':
                 return self.error_response("Solo se pueden despachar pedidos en estado 'LISTO_PARA_ENTREGA'.", 400)
 
             # 2. Recolectar y validar datos del formulario
-            conductor_nombre = form_data.get('conductor_nombre', '').strip()
-            if not conductor_nombre:
-                return self.error_response('El nombre del conductor es requerido.', 400)
-            if any(char.isdigit() for char in conductor_nombre):
-                return self.error_response('El nombre del conductor no puede contener números.', 400)
+            nombre_transportista = form_data.get('conductor_nombre', '').strip()
+            dni_transportista = form_data.get('conductor_dni', '').strip()
+            patente_vehiculo = form_data.get('vehiculo_patente', '').strip()
+            telefono_transportista = form_data.get('conductor_telefono', '').strip()
+            observaciones = form_data.get('observaciones', '').strip()
+            
+            # (Aquí se pueden agregar validaciones más estrictas si es necesario)
+            if not all([nombre_transportista, dni_transportista, patente_vehiculo, telefono_transportista]):
+                 return self.error_response('Todos los campos del transportista y vehículo son requeridos.', 400)
 
-            conductor_dni = form_data.get('conductor_dni', '').strip()
-            if not conductor_dni:
-                return self.error_response('El DNI del conductor es requerido.', 400)
-            if not conductor_dni.isdigit():
-                return self.error_response('El DNI solo puede contener números.', 400)
-
-            conductor_telefono = form_data.get('conductor_telefono', '').strip()
-            if not conductor_telefono:
-                return self.error_response('El teléfono del conductor es requerido.', 400)
-            if not conductor_telefono.isdigit():
-                return self.error_response('El teléfono solo puede contener números.', 400)
-
-            vehiculo_tipo = form_data.get('vehiculo_tipo', '').strip()
-            if not vehiculo_tipo:
-                return self.error_response('El tipo de vehículo es requerido.', 400)
-
-            vehiculo_patente = form_data.get('vehiculo_patente', '').strip()
-            if not vehiculo_patente:
-                return self.error_response('La patente del vehículo es requerida.', 400)
-
-            # 3. Construir el texto estructurado para las observaciones
-            observaciones_despacho = (
-                f"**Información de Despacho**\n"
-                f"---------------------------\n"
-                f"**Hora de Partida:** {form_data.get('hora_partida', 'N/A')}\n\n"
-                f"**Conductor:**\n"
-                f"- **Nombre:** {conductor_nombre}\n"
-                f"- **DNI:** {conductor_dni}\n"
-                f"- **Teléfono:** {form_data.get('conductor_telefono', 'N/A')}\n\n"
-                f"**Vehículo:**\n"
-                f"- **Tipo:** {form_data.get('vehiculo_tipo', 'N/A')}\n"
-                f"- **Patente:** {vehiculo_patente}\n\n"
-                f"**Observaciones Adicionales:**\n"
-                f"{form_data.get('observaciones', 'Sin observaciones.')}"
-            )
-
-            # 4. Actualizar el pedido
-            update_data = {
-                'estado': 'EN_TRANSITO',
-                'observaciones': observaciones_despacho
-                # Ya no guardamos transportista_id
+            # 3. Preparar datos para el nuevo modelo de despacho
+            datos_despacho = {
+                'id_pedido': pedido_id,
+                'nombre_transportista': nombre_transportista,
+                'dni_transportista': dni_transportista,
+                'patente_vehiculo': patente_vehiculo,
+                'telefono_transportista': telefono_transportista,
+                'observaciones': observaciones if observaciones else None
             }
 
+            # 4. Crear el registro de despacho
+            resultado_despacho = self.despacho_model.create(datos_despacho)
+            if not resultado_despacho.get('success'):
+                error_msg = resultado_despacho.get('error', 'Error desconocido al guardar los datos del despacho.')
+                logger.error(f"Error al crear registro de despacho para pedido {pedido_id}: {error_msg}")
+                return self.error_response(error_msg, 500)
+                
+            # 5. Actualizar el estado del pedido
+            update_data = {'estado': 'EN_TRANSITO'}
             result = self.model.update(pedido_id, update_data)
+
             if result.get('success'):
                 logger.info(f"Pedido {pedido_id} cambiado a estado 'EN_TRANSITO' con éxito.")
                 return self.success_response(message="Pedido despachado con éxito.")
             else:
-                logger.error(f"Error al despachar pedido {pedido_id}: {result.get('error')}")
-                return self.error_response(result.get('error', 'Error al actualizar el estado del pedido.'), 500)
+                # En un caso real, aquí se debería considerar revertir la creación del despacho (transacción)
+                logger.error(f"Error al despachar pedido {pedido_id} después de guardar despacho: {result.get('error')}")
+                return self.error_response(result.get('error', 'El despacho fue registrado, pero no se pudo actualizar el estado del pedido.'), 500)
+                
         except Exception as e:
             logger.error(f"Error interno en despachar_pedido: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
