@@ -85,7 +85,7 @@ class ClienteModel(BaseModel):
             query = "*, direccion:direccion_id(*)" if include_direccion else "*"
             response = self.db.table(self.get_table_name())\
                            .select(query)\
-                           .eq("email", email.strip().lower())\
+                           .eq("email", email.strip())\
                            .execute()
             
             if len(response.data)>=1:    
