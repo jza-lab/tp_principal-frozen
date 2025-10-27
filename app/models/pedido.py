@@ -169,13 +169,17 @@ class PedidoModel(BaseModel):
             return {'success': False, 'error': str(e)}
 
     def get_one_with_items(self, pedido_id: int) -> Dict:
-        """Obtiene un pedido con sus items, especificando la relación."""
+        """
+        Obtiene un pedido con sus items, cliente (incluyendo email) y dirección de entrega.
+        """
         try:
-
+            # Consulta corregida y optimizada
             result = self.db.table(self.get_table_name()).select(
-                '*, cliente:clientes(*), items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre, precio_unitario, unidad_medida)), direccion:usuario_direccion(*)'
+                '*, '
+                'cliente:clientes(email, nombre, cuit), '
+                'items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre, precio_unitario, unidad_medida)), '
+                'direccion:id_direccion_entrega(*)'
             ).eq('id', pedido_id).single().execute()
-
 
             if result.data:
                 return {'success': True, 'data': result.data}

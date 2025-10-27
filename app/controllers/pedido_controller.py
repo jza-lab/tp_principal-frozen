@@ -733,26 +733,67 @@ class PedidoController(BaseController):
 
     def despachar_pedido(self, pedido_id: int, form_data: Dict) -> tuple:
         """
-        Cambia el estado de un pedido a 'EN_TRANSITO' y guarda las observaciones del despacho.
+        Cambia el estado de un pedido a 'EN_TRANSITO' y guarda los datos
+        del despacho en el campo de observaciones.
         """
         logger.info(f"Intento de despachar el pedido {pedido_id}")
         try:
+            # 1. Validar que el pedido se pueda despachar
             pedido_existente_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_existente_resp.get('success'):
                 return self.error_response(f"Pedido con ID {pedido_id} no encontrado.", 404)
-
             pedido_actual = pedido_existente_resp.get('data')
             if pedido_actual.get('estado') != 'LISTO_PARA_ENTREGAR':
                 return self.error_response("Solo se pueden despachar pedidos en estado 'LISTO_PARA_ENTREGAR'.", 400)
 
-            transportista_id = form_data.get('transportista_id')
-            if not transportista_id:
-                return self.error_response("Debe seleccionar un transportista.", 400)
+            # 2. Recolectar y validar datos del formulario
+            conductor_nombre = form_data.get('conductor_nombre', '').strip()
+            if not conductor_nombre:
+                return self.error_response('El nombre del conductor es requerido.', 400)
+            if any(char.isdigit() for char in conductor_nombre):
+                return self.error_response('El nombre del conductor no puede contener números.', 400)
 
+            conductor_dni = form_data.get('conductor_dni', '').strip()
+            if not conductor_dni:
+                return self.error_response('El DNI del conductor es requerido.', 400)
+            if not conductor_dni.isdigit():
+                return self.error_response('El DNI solo puede contener números.', 400)
+
+            conductor_telefono = form_data.get('conductor_telefono', '').strip()
+            if not conductor_telefono:
+                return self.error_response('El teléfono del conductor es requerido.', 400)
+            if not conductor_telefono.isdigit():
+                return self.error_response('El teléfono solo puede contener números.', 400)
+
+            vehiculo_tipo = form_data.get('vehiculo_tipo', '').strip()
+            if not vehiculo_tipo:
+                return self.error_response('El tipo de vehículo es requerido.', 400)
+
+            vehiculo_patente = form_data.get('vehiculo_patente', '').strip()
+            if not vehiculo_patente:
+                return self.error_response('La patente del vehículo es requerida.', 400)
+
+            # 3. Construir el texto estructurado para las observaciones
+            observaciones_despacho = (
+                f"**Información de Despacho**\n"
+                f"---------------------------\n"
+                f"**Hora de Partida:** {form_data.get('hora_partida', 'N/A')}\n\n"
+                f"**Conductor:**\n"
+                f"- **Nombre:** {conductor_nombre}\n"
+                f"- **DNI:** {conductor_dni}\n"
+                f"- **Teléfono:** {form_data.get('conductor_telefono', 'N/A')}\n\n"
+                f"**Vehículo:**\n"
+                f"- **Tipo:** {form_data.get('vehiculo_tipo', 'N/A')}\n"
+                f"- **Patente:** {vehiculo_patente}\n\n"
+                f"**Observaciones Adicionales:**\n"
+                f"{form_data.get('observaciones', 'Sin observaciones.')}"
+            )
+
+            # 4. Actualizar el pedido
             update_data = {
                 'estado': 'EN_TRANSITO',
-                'observaciones': form_data.get('observaciones', ''),
-                'transportista_id': transportista_id
+                'observaciones': observaciones_despacho
+                # Ya no guardamos transportista_id
             }
 
             result = self.model.update(pedido_id, update_data)

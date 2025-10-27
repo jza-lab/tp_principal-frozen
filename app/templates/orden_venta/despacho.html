@@ -6,68 +6,214 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">Despachar Pedido <code>PED-{{ pedido.id }}</code></h1>
-        <p class="text-muted mb-0">Confirme los detalles y asigne un transportista para el despacho.</p>
+        <p class="text-muted mb-0">Complete la información de despacho y confirme la salida.</p>
     </div>
     <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}" class="btn btn-outline-secondary">
         <i class="bi bi-arrow-left me-1"></i>Volver al Detalle
     </a>
 </div>
 
-<div class="row">
-    <!-- Columna de Detalles del Pedido -->
-    <div class="col-lg-7">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Detalles del Pedido</h5>
-            </div>
-            <div class="card-body">
-                <p><strong>Cliente:</strong> {{ pedido.nombre_cliente }}</p>
-                <p><strong>Fecha de Solicitud:</strong> {{ pedido.fecha_solicitud }}</p>
-                <p><strong>Fecha Requerida:</strong> {{ pedido.fecha_requerido }}</p>
-                
-                <h6 class="mt-4">Items del Pedido</h6>
-                <ul class="list-group">
-                    {% for item in pedido.items %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        {{ item.producto_nombre.nombre }}
-                        <span class="badge bg-primary rounded-pill">{{ item.cantidad }}</span>
-                    </li>
-                    {% endfor %}
-                </ul>
+<form method="POST" action="{{ url_for('orden_venta.despachar', id=pedido.id) }}" id="form-despacho" novalidate>
+    {{ csrf_form.csrf_token }}
+    <div class="row">
+        <!-- Columna de Resumen del Pedido y Cliente -->
+        <div class="col-lg-5 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><h5 class="mb-0">Resumen del Pedido</h5></div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label-sm fw-bold"><i class="bi bi-person-circle me-1"></i>Cliente:</label>
+                        <p class="form-control-plaintext mb-0">{{ pedido.cliente.nombre | default('N/A', true) }}</p>
+                        <small class="text-muted">{{ pedido.cliente.email | default('Sin email') }}</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label-sm fw-bold"><i class="bi bi-geo-alt me-1"></i>Dirección de Entrega:</label>
+                        {% if pedido.direccion %}
+                            <p class="form-control-plaintext lh-sm">{{ pedido.direccion.calle }} {{ pedido.direccion.altura }}, {{ pedido.direccion.localidad }}, {{ pedido.direccion.provincia }}</p>
+                        {% else %}
+                            <p class="form-control-plaintext text-muted">No especificada</p>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label-sm fw-bold"><i class="bi bi-calendar-check me-1"></i>Fecha de Entrega Requerida:</label>
+                        <p class="form-control-plaintext">{{ pedido.fecha_requerido | default('N/A', true) }}</p>
+                    </div>
+                     <div class="mb-3">
+                        <label class="form-label-sm fw-bold"><i class="bi bi-clock me-1"></i>Hora de Partida:</label>
+                        <p class="form-control-plaintext">{{ hora_partida }}</p>
+                        <input type="hidden" name="hora_partida" value="{{ hora_partida }}">
+                    </div>
+                    
+                    <h6 class="mt-4">Items del Pedido</h6>
+                    <ul class="list-group">
+                        {% for item in pedido['items'] %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ item.producto_nombre.nombre }}
+                            <span class="badge bg-primary rounded-pill">{{ item.cantidad }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Columna del Formulario de Despacho -->
-    <div class="col-lg-5">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Formulario de Despacho</h5>
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('orden_venta.despachar', id=pedido.id) }}">
-                    {{ csrf_form.csrf_token }}
-                    <div class="mb-3">
-                        <label for="transportista_id" class="form-label">Seleccionar Transportista</label>
-                        <select class="form-select" id="transportista_id" name="transportista_id" required>
-                            <option value="">Seleccione un transportista...</option>
-                            {% for transportista in transportistas %}
-                                <option value="{{ transportista.id }}">{{ transportista.nombre }} {{ transportista.apellido }}</option>
-                            {% endfor %}
-                        </select>
+        <!-- Columna del Formulario de Despacho -->
+        <div class="col-lg-7 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><h5 class="mb-0">Información de Despacho</h5></div>
+                <div class="card-body">
+                    <!-- Datos del Conductor -->
+                    <h6 class="mb-3">Datos del Conductor</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="conductor_nombre" class="form-label">Nombre y Apellido</label>
+                            <input type="text" class="form-control" id="conductor_nombre" name="conductor_nombre" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="conductor_dni" class="form-label">DNI</label>
+                            <input type="text" class="form-control" id="conductor_dni" name="conductor_dni" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="conductor_telefono" class="form-label">Teléfono</label>
+                            <input type="tel" class="form-control" id="conductor_telefono" name="conductor_telefono" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="observaciones" class="form-label">Observaciones (Opcional)</label>
-                        <textarea class="form-control" id="observaciones" name="observaciones" rows="4"></textarea>
+
+                    <hr class="my-4">
+
+                    <!-- Datos del Vehículo -->
+                    <h6 class="mb-3">Datos del Vehículo</h6>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="vehiculo_tipo" class="form-label">Tipo de Vehículo</label>
+                            <input type="text" class="form-control" id="vehiculo_tipo" name="vehiculo_tipo" placeholder="Ej: Camión, Furgoneta" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="vehiculo_patente" class="form-label">Patente</label>
+                            <input type="text" class="form-control" id="vehiculo_patente" name="vehiculo_patente" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
                     </div>
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary">
+
+                    <hr class="my-4">
+
+                    <!-- Observaciones Adicionales -->
+                    <div class="mb-3">
+                        <label for="observaciones" class="form-label">Observaciones Adicionales (Opcional)</label>
+                        <textarea class="form-control" id="observaciones" name="observaciones" rows="3"></textarea>
+                    </div>
+
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">
                             <i class="bi bi-truck me-2"></i>Confirmar Despacho
                         </button>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
-</div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('form-despacho');
+    const fields = {
+        conductor_nombre: {
+            validate: (value) => {
+                if (!value) return 'El nombre es obligatorio.';
+                if (/\d/.test(value)) return 'El nombre no puede contener números.';
+                return '';
+            }
+        },
+        conductor_dni: {
+            validate: (value) => {
+                if (!value) return 'El DNI es obligatorio.';
+                if (!/^\d+$/.test(value)) return 'El DNI solo puede contener números.';
+                return '';
+            }
+        },
+        conductor_telefono: {
+            validate: (value) => {
+                if (!value) return 'El teléfono es obligatorio.';
+                if (!/^\d+$/.test(value)) return 'El teléfono solo puede contener números.';
+                return '';
+            }
+        },
+        vehiculo_tipo: {
+            validate: (value) => {
+                if (!value) return 'El tipo de vehículo es obligatorio.';
+                return '';
+            }
+        },
+        vehiculo_patente: {
+            validate: (value) => {
+                if (!value) return 'La patente es obligatoria.';
+                return '';
+            }
+        }
+    };
+
+    const showError = (input, message) => {
+        const feedback = input.nextElementSibling;
+        input.classList.add('is-invalid');
+        feedback.textContent = message;
+    };
+
+    const showSuccess = (input) => {
+        input.classList.remove('is-invalid');
+        input.classList.add('is-valid');
+    };
+    
+    const resetField = (input) => {
+        input.classList.remove('is-invalid');
+        input.classList.remove('is-valid');
+    };
+
+    const validateField = (input) => {
+        const fieldName = input.id;
+        const value = input.value.trim();
+        const errorMessage = fields[fieldName].validate(value);
+        
+        if (errorMessage) {
+            showError(input, errorMessage);
+            return false;
+        } else {
+            showSuccess(input);
+            return true;
+        }
+    };
+
+    Object.keys(fields).forEach(fieldName => {
+        const input = document.getElementById(fieldName);
+        input.addEventListener('input', () => {
+            validateField(input);
+        });
+        // También valida al salir del campo para una mejor UX
+        input.addEventListener('blur', () => {
+            validateField(input);
+        });
+    });
+
+    form.addEventListener('submit', function (event) {
+        let isFormValid = true;
+        Object.keys(fields).forEach(fieldName => {
+            const input = document.getElementById(fieldName);
+            if (!validateField(input)) {
+                isFormValid = false;
+            }
+        });
+
+        if (!isFormValid) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    });
+});
+</script>
 {% endblock %}

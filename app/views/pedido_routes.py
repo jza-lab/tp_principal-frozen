@@ -188,16 +188,15 @@ def despachar(id):
             flash('Pedido despachado con éxito.', 'success')
             return redirect(url_for('orden_venta.detalle', id=id))
         else:
-            flash(response.get('message', 'Error al despachar el pedido.'), 'error')
+            # Corrección: Usar el mensaje de error específico del controlador
+            flash(response.get('error', 'Error al despachar el pedido.'), 'error')
             return redirect(url_for('orden_venta.despachar', id=id))
 
     # Lógica para GET
-    from app.controllers.usuario_controller import UsuarioController
-    usuario_controller = UsuarioController()
-    transportistas_resp, _ = usuario_controller.obtener_usuarios_por_rol('LOGISTICA')
-    transportistas = transportistas_resp.get('data', [])
+    # Generamos la fecha y hora actual para la "Hora de Partida"
+    hora_partida = datetime.now().strftime('%Y-%m-%d %H:%M')
 
-    return render_template('orden_venta/despacho.html', pedido=pedido, transportistas=transportistas)
+    return render_template('orden_venta/despacho.html', pedido=pedido, hora_partida=hora_partida)
 
 @orden_venta_bp.route('/<int:id>/planificar', methods=['POST'])
 @permission_required(accion='aprobar_orden_de_venta')
