@@ -12,47 +12,71 @@
             </a>
         </div>
         <div class="card-body">
-            <p class="card-text">
-                Sube un archivo Excel para crear múltiples lotes de productos de una sola vez.
-                Asegúrate de que el archivo tenga las columnas requeridas.
-            </p>
-            <hr>
-            <div class="mb-3">
-                <a href="{{ url_for('lote_producto.descargar_plantilla_lotes') }}" class="btn btn-success">
-                    <i class="fas fa-file-excel me-1"></i> Descargar Plantilla
-                </a>
-            </div>
-            <form id="upload-form" action="{{ url_for('lote_producto.cargar_lotes_excel') }}" method="post" enctype="multipart/form-data">
-                {{ csrf_form.csrf_token }}
-
-                <div class="mb-3">
-                    <label for="archivo" class="form-label">Seleccionar Archivo Excel</label>
-                    <input class="form-control" type="file" id="archivo" name="archivo" accept=".xlsx, .xls" required>
+            <div class="row">
+                <!-- Columna izquierda para el formulario -->
+                <div class="col-md-7">
+                    <p class="card-text">
+                        Sube un archivo Excel para crear múltiples lotes de productos de una sola vez.
+                        El sistema validará el archivo completo antes de guardar cualquier dato.
+                    </p>
+                    <hr>
+                    <a href="{{ url_for('lote_producto.descargar_plantilla_lotes') }}" class="btn btn-success mb-3">
+                        <i class="fas fa-file-excel me-1"></i> Descargar Plantilla
+                    </a>
+                    <form id="upload-form" action="{{ url_for('lote_producto.cargar_lotes_excel') }}" method="post" enctype="multipart/form-data">
+                        {{ csrf_form.csrf_token }}
+                        <div class="mb-3">
+                            <label for="archivo" class="form-label">Seleccionar Archivo Excel</label>
+                            <input class="form-control" type="file" id="archivo" name="archivo" accept=".xlsx, .xls" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload me-1"></i> Cargar y Validar
+                        </button>
+                    </form>
                 </div>
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-upload me-1"></i> Cargar y Procesar
-                </button>
-            </form>
+
+                <!-- Columna derecha para la ayuda -->
+                <div class="col-md-5">
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h5 class="card-title"><i class="fas fa-info-circle me-2"></i>Formato Requerido</h5>
+                            <p class="card-text">El archivo Excel debe contener las siguientes columnas:</p>
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item bg-light ps-1"><span class="badge bg-primary me-2">Obligatorio</span><strong>codigo_producto</strong></li>
+                                <li class="list-group-item bg-light ps-1"><span class="badge bg-primary me-2">Obligatorio</span><strong>cantidad_inicial</strong> (Numérico y > 0)</li>
+                                <li class="list-group-item bg-light ps-1"><span class="badge bg-secondary me-2">Opcional</span><strong>numero_lote</strong> (Se autogenera si está vacío)</li>
+                                <li class="list-group-item bg-light ps-1"><span class="badge bg-secondary me-2">Opcional</span><strong>fecha_produccion</strong> (Formato: AAAA-MM-DD)</li>
+                                <li class="list-group-item bg-light ps-1"><span class="badge bg-secondary me-2">Opcional</span><strong>fecha_vencimiento</strong> (Formato: AAAA-MM-DD)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             {% if resultados %}
-            <div class="mt-4">
+            <hr class="mt-4">
+            <div class="mt-3">
                 <h5>Resultados del Procesamiento</h5>
-                <div class="alert alert-info">
-                    <ul class="mb-0">
-                        <li><strong>Lotes Creados:</strong> {{ resultados.creados }}</li>
-                        <li><strong>Filas Ignoradas:</strong> {{ resultados.ignorados }}</li>
-                        <li><strong>Errores:</strong> {{ resultados.errores }}</li>
-                    </ul>
-                </div>
-                {% if resultados.detalles %}
-                <div class="card mt-3">
-                    <div class="card-header">Detalles</div>
-                    <ul class="list-group list-group-flush">
-                        {% for detalle in resultados.detalles %}
-                        <li class="list-group-item">{{ detalle }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
+                {% if resultados.estado_general == 'OK' %}
+                    <div class="alert alert-success">
+                        <h5 class="alert-heading">¡Éxito!</h5>
+                        <p class="mb-0">Se han creado <strong>{{ resultados.creados }}</strong> lotes de productos correctamente.</p>
+                    </div>
+                {% elif resultados.estado_general == 'ERROR' %}
+                    <div class="alert alert-danger">
+                        <h5 class="alert-heading">Se encontraron errores</h5>
+                        <p>El archivo no se ha procesado. Se encontraron <strong>{{ resultados.errores }}</strong> error(es) en las siguientes filas:</p>
+                    </div>
+                    {% if resultados.detalles %}
+                    <div class="card mt-3">
+                        <div class="card-header">Detalles de Errores</div>
+                        <ul class="list-group list-group-flush">
+                            {% for detalle in resultados.detalles %}
+                            <li class="list-group-item text-danger"><i class="fas fa-times-circle me-2"></i>{{ detalle }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
                 {% endif %}
             </div>
             {% endif %}
@@ -62,7 +86,6 @@
                 <strong>Error:</strong> {{ error }}
             </div>
             {% endif %}
-
         </div>
     </div>
 </div>
