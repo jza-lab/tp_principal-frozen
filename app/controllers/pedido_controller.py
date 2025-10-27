@@ -5,12 +5,12 @@ from flask import jsonify
 from app.controllers.base_controller import BaseController
 # --- IMPORTACIONES NUEVAS ---
 from app.controllers.lote_producto_controller import LoteProductoController
-from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.models.receta import RecetaModel
 
 # -------------------------
 from app.models.cliente import ClienteModel
 from app.models.pedido import PedidoModel
+from app.models.despacho import DespachoModel
 from app.models.producto import ProductoModel
 from app.models.direccion import DireccionModel
 from app.schemas.direccion_schema import DireccionSchema
@@ -33,6 +33,7 @@ class PedidoController(BaseController):
         self.model = PedidoModel()
         self.schema = PedidoSchema()
         self.producto_model = ProductoModel()
+        self.despacho = DespachoModel()
         self.cliente_model = ClienteModel()
         self.direccion_model= DireccionModel()
         self.dcliente_schema = ClienteSchema()
@@ -40,7 +41,6 @@ class PedidoController(BaseController):
         self.receta_model = RecetaModel()
         # --- INSTANCIAS NUEVAS ---
         self.lote_producto_controller = LoteProductoController()
-        self.orden_produccion_controller = OrdenProduccionController()
         # -----------------------
 
     def _consolidar_items(self, items_data: list) -> list:
@@ -194,9 +194,12 @@ class PedidoController(BaseController):
 
             # Definir el estado inicial basado en la verificación
             if all_in_stock:
-                # Si todo está en stock, el estado inicial es COMPLETADO
+                # Si todo está en stock, el estado inicial es LISTO_PARA_ENTREGA
                 pedido_data['estado'] = 'LISTO_PARA_ENTREGA'
-                logging.info("Todo el stock disponible. El pedido se creará en estado COMPLETADO.")
+                # Y cada item se marca como ALISTADO, ya que el stock está disponible.
+                for item in items_data:
+                    item['estado'] = 'ALISTADO'
+                logging.info("Todo el stock disponible. El pedido se creará en estado LISTO_PARA_ENTREGA y los items como ALISTADO.")
             elif 'estado' not in pedido_data:
                 # Si falta stock, el estado inicial es PENDIENTE
                 pedido_data['estado'] = 'PENDIENTE'
@@ -287,8 +290,10 @@ class PedidoController(BaseController):
                         'fecha_meta': fecha_requerido_pedido
                         # ---------------------------------
                     }
+                    from app.controllers.orden_produccion_controller import OrdenProduccionController
+                    orden_produccion_controller = OrdenProduccionController()
                     # --- FIX: Manejo defensivo de la respuesta ---
-                    resultado_op_tuple = self.orden_produccion_controller.crear_orden(datos_op, usuario_id)
+                    resultado_op_tuple = orden_produccion_controller.crear_orden(datos_op, usuario_id)
                     resultado_op = resultado_op_tuple[0] if isinstance(resultado_op_tuple, tuple) else resultado_op_tuple
 
                     if resultado_op.get('success'):
@@ -494,6 +499,37 @@ class PedidoController(BaseController):
         except Exception as e:
             return self.error_response(f'Error interno: {str(e)}', 500)
 
+    def cambiar_estado_pedido(self, pedido_id: int, nuevo_estado: str) -> tuple:
+        """
+        Cambia el estado de un pedido a un nuevo estado especificado.
+        Realiza validaciones básicas sobre la transición de estado.
+        """
+        logger.info(f"Intento de cambiar estado del pedido {pedido_id} a '{nuevo_estado}'")
+        try:
+            # Validar que el nuevo estado sea uno de los conocidos (opcional pero recomendado)
+            from app.utils.estados import OV_MAP_STRING_TO_INT
+            if nuevo_estado not in OV_MAP_STRING_TO_INT:
+                return self.error_response(f"Estado '{nuevo_estado}' no es válido.", 400)
+
+            # Verificar que el pedido existe
+            pedido_existente_resp = self.model.find_by_id(pedido_id, 'id')
+            if not pedido_existente_resp.get('success'):
+                return self.error_response(f"Pedido con ID {pedido_id} no encontrado.", 404)
+
+            # Lógica de transición (Aquí se pueden añadir reglas más complejas)
+            # Por ahora, simplemente cambiamos el estado.
+            result = self.model.cambiar_estado(pedido_id, nuevo_estado)
+            if result.get('success'):
+                logger.info(f"Pedido {pedido_id} cambiado a estado '{nuevo_estado}' con éxito.")
+                return self.success_response(message=f"Pedido actualizado al estado '{nuevo_estado}'.")
+            else:
+                logger.error(f"Error al cambiar estado del pedido {pedido_id}: {result.get('error')}")
+                return self.error_response(result.get('error', 'Error al actualizar el estado del pedido.'), 500)
+        except Exception as e:
+            logger.error(f"Error interno en cambiar_estado_pedido: {e}", exc_info=True)
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
+
     # --- MÉTODO CORREGIDO ---
     def preparar_para_entrega(self, pedido_id: int, usuario_id: int) -> tuple:
         """
@@ -509,7 +545,8 @@ class PedidoController(BaseController):
             items_del_pedido = pedido_data.get('items', [])
 
             # 2. *** NUEVA VERIFICACIÓN: Estado de OPs vinculadas ***
-            op_controller = self.orden_produccion_controller # Acceso al controlador de OPs
+            from app.controllers.orden_produccion_controller import OrdenProduccionController
+            op_controller = OrdenProduccionController() # Acceso al controlador de OPs
             for item in items_del_pedido:
                 op_id = item.get('orden_produccion_id')
                 # Solo verificar si el item está vinculado a una OP
@@ -568,9 +605,9 @@ class PedidoController(BaseController):
             estado_actual = pedido_actual_res['data'].get('estado')
             logger.info(f"[Controlador] Estado actual del pedido: '{estado_actual}'")
 
-            # 2. Condición de seguridad: Solo se puede completar si está 'LISTO_PARA_ENTREGA'
-            if estado_actual != 'LISTO_PARA_ENTREGA':
-                error_msg = f"El pedido no se puede marcar como completado porque no está 'LISTO PARA ENTREGAR'. Estado actual: {estado_actual}"
+            # 2. Condición de seguridad: Solo se puede completar si está 'EN_TRANSITO'
+            if estado_actual != 'EN_TRANSITO':
+                error_msg = f"El pedido no se puede marcar como completado porque no está 'EN TRANSITO'. Estado actual: {estado_actual}"
                 logger.warning(f"[Controlador] {error_msg}")
                 return self.error_response(error_msg, 400)
 
@@ -680,6 +717,125 @@ class PedidoController(BaseController):
                 error_msg = result.get('error', 'Error desconocido al obtener los pedidos del cliente.')
                 return self.error_response(error_msg, 500)
         except Exception as e:
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
+    def actualizar_estado_segun_ops(self, pedido_id: int):
+        """
+        Verifica los estados de todas las OPs asociadas a un pedido y actualiza el estado del pedido.
+        """
+        logger.info(f"Verificando estado de OPs para el pedido {pedido_id}")
+        try:
+            pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
+            if not pedido_resp.get('success'):
+                logger.error(f"No se pudo encontrar el pedido {pedido_id} para actualizar estado según OPs.")
+                return
+
+            pedido_data = pedido_resp.get('data')
+            items_con_op = [item for item in pedido_data.get('items', []) if item.get('orden_produccion_id')]
+
+            if not items_con_op:
+                logger.info(f"El pedido {pedido_id} no tiene items con OPs asociadas. No se cambia el estado.")
+                return
+
+            estados_ops = [item.get('op_estado') for item in items_con_op]
+
+            todas_completadas = all(estado == 'COMPLETADA' for estado in estados_ops)
+            todas_en_proceso_o_mas = all(estado in ['EN_PRODUCCION', 'CONTROL_DE_CALIDAD', 'COMPLETADA'] for estado in estados_ops)
+
+            if todas_completadas:
+                self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
+                logger.info(f"Todas las OPs del pedido {pedido_id} están completadas. Pedido actualizado a 'LISTO_PARA_ENTREGA'.")
+            elif todas_en_proceso_o_mas:
+                if pedido_data.get('estado') not in ['EN_PROCESO', 'LISTO_PARA_ENTREGA']:
+                    self.model.cambiar_estado(pedido_id, 'EN_PROCESO')
+                    logger.info(f"Todas las OPs del pedido {pedido_id} han iniciado. Pedido actualizado a 'EN_PROCESO'.")
+            
+        except Exception as e:
+            logger.error(f"Error actualizando el estado del pedido {pedido_id} según OPs: {e}", exc_info=True)
+
+    def planificar_pedido(self, pedido_id: int) -> tuple:
+        """
+        Cambia el estado de un pedido a 'PLANIFICADA'.
+        """
+        logger.info(f"Intento de planificar el pedido {pedido_id}")
+        try:
+            pedido_existente_resp = self.model.find_by_id(pedido_id, 'id')
+            if not pedido_existente_resp.get('success'):
+                return self.error_response(f"Pedido con ID {pedido_id} no encontrado.", 404)
+
+            pedido_actual = pedido_existente_resp.get('data')
+            if pedido_actual.get('estado') != 'PENDIENTE':
+                return self.error_response("Solo se pueden planificar pedidos en estado 'PENDIENTE'.", 400)
+
+            result = self.model.cambiar_estado(pedido_id, 'PLANIFICADA')
+            if result.get('success'):
+                logger.info(f"Pedido {pedido_id} cambiado a estado 'PLANIFICADA' con éxito.")
+                return self.success_response(message="Pedido planificado con éxito.")
+            else:
+                logger.error(f"Error al planificar pedido {pedido_id}: {result.get('error')}")
+                return self.error_response(result.get('error', 'Error al actualizar el estado del pedido.'), 500)
+        except Exception as e:
+            logger.error(f"Error interno en planificar_pedido: {e}", exc_info=True)
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
+    def despachar_pedido(self, pedido_id: int, form_data: Dict) -> tuple:
+        """
+        Cambia el estado de un pedido a 'EN_TRANSITO' y guarda los datos
+        del despacho en la nueva tabla 'despachos'.
+        """
+        logger.info(f"Intento de despachar el pedido {pedido_id}")
+        try:
+            # 1. Validar que el pedido se pueda despachar
+            pedido_existente_resp, _ = self.obtener_pedido_por_id(pedido_id)
+            if not pedido_existente_resp.get('success'):
+                return self.error_response(f"Pedido con ID {pedido_id} no encontrado.", 404)
+            
+            pedido_actual = pedido_existente_resp.get('data')
+            if pedido_actual.get('estado') != 'LISTO_PARA_ENTREGA':
+                return self.error_response("Solo se pueden despachar pedidos en estado 'LISTO_PARA_ENTREGA'.", 400)
+
+            # 2. Recolectar y validar datos del formulario
+            nombre_transportista = form_data.get('conductor_nombre', '').strip()
+            dni_transportista = form_data.get('conductor_dni', '').strip()
+            patente_vehiculo = form_data.get('vehiculo_patente', '').strip()
+            telefono_transportista = form_data.get('conductor_telefono', '').strip()
+            observaciones = form_data.get('observaciones', '').strip()
+            
+            # (Aquí se pueden agregar validaciones más estrictas si es necesario)
+            if not all([nombre_transportista, dni_transportista, patente_vehiculo, telefono_transportista]):
+                 return self.error_response('Todos los campos del transportista y vehículo son requeridos.', 400)
+
+            # 3. Preparar datos para el nuevo modelo de despacho
+            datos_despacho = {
+                'id_pedido': pedido_id,
+                'nombre_transportista': nombre_transportista,
+                'dni_transportista': dni_transportista,
+                'patente_vehiculo': patente_vehiculo,
+                'telefono_transportista': telefono_transportista,
+                'observaciones': observaciones if observaciones else None
+            }
+
+            # 4. Crear el registro de despacho
+            resultado_despacho = self.despacho.create(datos_despacho)
+            if not resultado_despacho.get('success'):
+                error_msg = resultado_despacho.get('error', 'Error desconocido al guardar los datos del despacho.')
+                logger.error(f"Error al crear registro de despacho para pedido {pedido_id}: {error_msg}")
+                return self.error_response(error_msg, 500)
+                
+            # 5. Actualizar el estado del pedido
+            update_data = {'estado': 'EN_TRANSITO'}
+            result = self.model.update(pedido_id, update_data)
+
+            if result.get('success'):
+                logger.info(f"Pedido {pedido_id} cambiado a estado 'EN_TRANSITO' con éxito.")
+                return self.success_response(message="Pedido despachado con éxito.")
+            else:
+                # En un caso real, aquí se debería considerar revertir la creación del despacho (transacción)
+                logger.error(f"Error al despachar pedido {pedido_id} después de guardar despacho: {result.get('error')}")
+                return self.error_response(result.get('error', 'El despacho fue registrado, pero no se pudo actualizar el estado del pedido.'), 500)
+                
+        except Exception as e:
+            logger.error(f"Error interno en despachar_pedido: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
     def obtener_cantidad_pedidos_estado(self, estado: str, fecha: Optional[str] = None) -> Optional[Dict]:

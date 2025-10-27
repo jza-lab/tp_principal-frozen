@@ -19,6 +19,7 @@ from app.controllers.pedido_controller import PedidoController
 from app.utils.decorators import roles_required
 from app.utils.decorators import permission_required
 from datetime import date
+from app.utils.estados import OP_FILTROS_UI, OP_MAP_STRING_TO_INT
 
 orden_produccion_bp = Blueprint("orden_produccion", __name__, url_prefix="/ordenes")
 
@@ -40,7 +41,7 @@ def listar():
     ordenes = []
     if response.get("success"):
         ordenes_data = response.get("data", [])
-        ordenes = sorted(ordenes_data, key=lambda x: x.get("estado") == "CANCELADA")
+        ordenes = sorted(ordenes_data, key=lambda x: OP_MAP_STRING_TO_INT.get(x.get("estado"), 999))
     else:
         flash(
             response.get("error", "Error al cargar las órdenes de producción."), "error"
@@ -55,7 +56,11 @@ def listar():
 
     titulo = f"Órdenes de Producción ({'Todas' if not estado else estado.replace('_', ' ').title()})"
     return render_template(
-        "ordenes_produccion/listar.html", ordenes=ordenes, titulo=titulo, supervisores=supervisores
+        "ordenes_produccion/listar.html", 
+        ordenes=ordenes, 
+        titulo=titulo, 
+        supervisores=supervisores,
+        filtros_ui=OP_FILTROS_UI
     )
 
 

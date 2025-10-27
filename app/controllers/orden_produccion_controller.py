@@ -407,6 +407,16 @@ class OrdenProduccionController(BaseController):
             # 5. Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
             result = self.model.cambiar_estado(orden_id, nuevo_estado)
             if result.get('success'):
+                from app.controllers.pedido_controller import PedidoController
+                pedido_controller = PedidoController()
+                # Después de cambiar el estado de la OP, verificamos si el estado del pedido de venta debe cambiar.
+                items_asociados_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
+                if items_asociados_res.get('success') and items_asociados_res.get('data'):
+                    # Usamos un set para no verificar el mismo pedido varias veces si una OP surte varios items del mismo pedido.
+                    pedido_ids_a_verificar = {item['pedido_id'] for item in items_asociados_res['data']}
+                    for pedido_id in pedido_ids_a_verificar:
+                        pedido_controller.actualizar_estado_segun_ops(pedido_id)
+
                 if nuevo_estado != 'COMPLETADA':
                     message_to_use = f"Estado actualizado a {nuevo_estado.replace('_', ' ')}."
                 return self.success_response(data=result.get('data'), message=message_to_use)

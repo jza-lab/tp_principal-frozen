@@ -3,6 +3,7 @@
 {% block title %}Pedidos de Venta - Sistema Frozen{% endblock %}
 
 {% block content %}
+<input type="hidden" id="csrf_token" value="{{ csrf_form.csrf_token._value() }}">
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">{{ titulo | default('Pedidos de Venta') }}</h1>
@@ -27,40 +28,16 @@
             
             <div class="col-12">
                 {% set current_status = request.args.get('estado') %}
-                <div class="d-flex flex-wrap gap-3 align-items-start">
-                    <!-- Column 1: All and Canceled -->
-                    <div class="d-flex flex-column gap-2">
-                        <a href="{{ url_for('orden_venta.listar', estado='') }}" class="btn btn-sm {% if not current_status %}btn-primary{% else %}btn-secondary{% endif %}">
-                            Todos los pedidos
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <a href="{{ url_for('orden_venta.listar', estado='') }}" class="btn btn-sm {% if not current_status %}btn-dark{% else %}btn-secondary{% endif %}">
+                        Todos
+                    </a>
+                    {% for estado_key, estado_nombre in filtros_ui %}
+                        <a href="{{ url_for('orden_venta.listar', estado=estado_key) }}" 
+                           class="btn btn-sm {% if current_status == estado_key %}btn-dark{% else %}btn-secondary{% endif %}">
+                            {{ estado_nombre }}
                         </a>
-                        <a href="{{ url_for('orden_venta.listar', estado='CANCELADO') }}" class="btn btn-sm {% if current_status == 'CANCELADO' %}btn-danger{% else %}btn-outline-danger{% endif %}">
-                            Cancelados
-                        </a>
-                    </div>
-
-                    <!-- Separator -->
-                    <div class="vr text-white d-none d-md-block mx-2"></div>
-
-                    <!-- Column 2: Main flow -->
-                    <div class="d-flex flex-wrap gap-2 align-items-center">
-                        {% set estados = [
-                            ('PENDIENTE', 'Pendientes'),
-                            ('PLANIFICACION', 'Planificación'),
-                            ('EN_PROCESO', 'En Proceso'),
-                            ('LISTO_PARA_ARMAR', 'Listo para Armar'),
-                            ('LISTO_PARA_ENTREGA', 'Listo para Entrega'),
-                            ('COMPLETADO', 'Completados')
-                        ] %}
-                        
-                        {% for estado, nombre in estados %}
-                            <a href="{{ url_for('orden_venta.listar', estado=estado) }}" class="btn btn-sm {% if current_status == estado %}btn-primary{% else %}btn-secondary{% endif %}">
-                                {{ nombre }}
-                            </a>
-                            {% if not loop.last %}
-                            <i class="bi bi-arrow-right text-white mx-1"></i>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -82,8 +59,7 @@
                     {% set estado_config = {
                     'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
                     'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
-                    'LISTO_PARA_ARMAR': {'class': 'bg-warning-soft text-warning', 'icon': 'tools'},
-                    'LISTO_PARA_ENTREGAR': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
+                    'LISTO_PARA_ENTREGA': {'class': 'bg-info-soft text-info', 'icon': 'box-seam'},
                     'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
                     'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
@@ -136,28 +112,32 @@
                         <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}"
                             class="btn btn-sm btn-outline-primary"
                             title="Editar Pedido"><i class="bi bi-pencil"></i></a>
-                        {% endif %}
-
-                        {% endif %}
-
-                        {% if pedido.estado == 'LISTO_PARA_ARMAR' and 'modificar_orden_de_venta' is has_permission %}
-                        <form method="POST" action="{{ url_for('orden_venta.preparar_entrega', id=pedido.id) }}"
-                            class="confirm-form d-grid" data-title="Preparar para Entrega"
-                            data-message="Esta acción moverá el pedido a 'LISTO PARA ENTREGAR' y descontará el stock de los productos del inventario. ¿Está seguro?"
-                            data-button-type="info">
+                        
+                        {# --- Botón Planificar (ahora un formulario) --- #}
+                        <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}"
+                              class="confirm-form d-inline" data-title="Confirmar Planificación"
+                              data-message="Esta acción creará las Órdenes de Producción necesarias y pondrá el pedido 'En Proceso'. ¿Está seguro?"
+                              data-button-type="success">
                             {{ csrf_form.csrf_token }}
-
-                            <button type="submit" class="btn btn-info"><i class="bi bi-box-seam me-1"></i>Preparar
-                                Entrega</button>
+                            <button type="submit" class="btn btn-sm btn-outline-success" title="Planificar y Crear OPs">
+                                <i class="bi bi-play-fill">Planificar y crear OPs</i>
+                            </button>
                         </form>
                         {% endif %}
+
+                        {% endif %}
+
                         {% if pedido.estado == 'LISTO_PARA_ENTREGA' and 'modificar_orden_de_venta' is has_permission %}
+                        <a href="{{ url_for('orden_venta.despachar', id=pedido.id) }}" class="btn btn-sm btn-info" title="Despachar Pedido">
+                            <i class="bi bi-truck me-1"></i> Despachar
+                        </a>
+                        {% endif %}
+                        {% if pedido.estado == 'EN_TRANSITO' and 'modificar_orden_de_venta' is has_permission %}
                         <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}"
                             class="confirm-form d-inline" data-title="Confirmar Entrega"
-                            data-message="¿Está seguro de marcar este pedido como 'COMPLETADO'? Esta es la acción final."
+                            data-message="¿Confirma que el cliente ha recibido el pedido?"
                             data-button-type="success">
                             {{ csrf_form.csrf_token }}
-
                             <button type="submit" class="btn btn-sm btn-success" title="Marcar como Completado">
                                 <i class="bi bi-check-lg me-1"></i>Completar
                             </button>
@@ -188,7 +168,6 @@
 
 {% block extra_js %}
 <script>
-
 document.addEventListener('DOMContentLoaded', function () {
     const forms = document.querySelectorAll('.confirm-form');
     forms.forEach(form => {

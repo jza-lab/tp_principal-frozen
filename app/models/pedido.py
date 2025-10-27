@@ -80,6 +80,13 @@ class PedidoModel(BaseModel):
 
         pedido_data['todas_ops_completadas'] = todas_completadas # Añadir bandera al pedido
 
+        # 4. Obtener datos de despacho si existen
+        despacho_result = self.db.table('despachos').select('*').eq('id_pedido', pedido_id).execute()
+        if despacho_result.data:
+            pedido_data['despacho'] = despacho_result.data[0]
+        else:
+            pedido_data['despacho'] = None
+
         return {'success': True, 'data': pedido_data}
 
     def contar_pedidos_direccion(self, direccion_id: int, exclude_pedido_id: Optional[int] = None) -> int:
@@ -172,13 +179,17 @@ class PedidoModel(BaseModel):
             return {'success': False, 'error': str(e)}
 
     def get_one_with_items(self, pedido_id: int) -> Dict:
-        """Obtiene un pedido con sus items, especificando la relación."""
+        """
+        Obtiene un pedido con sus items, cliente (incluyendo email) y dirección de entrega.
+        """
         try:
-
+            # Consulta corregida y optimizada
             result = self.db.table(self.get_table_name()).select(
-                '*, cliente:clientes(*), items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre, precio_unitario, unidad_medida)), direccion:usuario_direccion(*)'
+                '*, '
+                'cliente:clientes(email, nombre, cuit), '
+                'items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre, precio_unitario, unidad_medida)), '
+                'direccion:id_direccion_entrega(*)'
             ).eq('id', pedido_id).single().execute()
-
 
             if result.data:
                 return {'success': True, 'data': result.data}
@@ -331,9 +342,9 @@ class PedidoModel(BaseModel):
             # 1. Si al menos un item está 'EN_PRODUCCION', el pedido está 'EN_PROCESO'.
             if 'EN_PRODUCCION' in estados_items:
                 nuevo_estado_pedido = 'EN_PROCESO'
-            # 2. Si TODOS los items están 'ALISTADO', el pedido pasa a 'LISTO PARA ARMAR'.
+            # 2. Si TODOS los items están 'ALISTADO', el pedido pasa a 'LISTO PARA ENTREGAR'.
             elif all(estado == 'ALISTADO' for estado in estados_items):
-                nuevo_estado_pedido = 'LISTO_PARA_ARMAR'
+                nuevo_estado_pedido = 'LISTO_PARA_ENTREGA'
             # 3. Si no hay items en producción y no todos están alistados, pero al menos uno lo está,
             #    se mantiene EN_PROCESO (o el estado que tuviera).
             elif 'ALISTADO' in estados_items and 'EN_PRODUCCION' not in estados_items:

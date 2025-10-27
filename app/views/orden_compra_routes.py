@@ -6,6 +6,7 @@ from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
 from app.utils.decorators import permission_required
 from datetime import datetime
+from app.utils.estados import OC_FILTROS_UI, OC_MAP_STRING_TO_INT
 
 orden_compra_bp = Blueprint("orden_compra", __name__, url_prefix="/compras")
 
@@ -25,11 +26,14 @@ def listar():
     ordenes = []
     if response.get("success"):
         ordenes_data = response.get("data", [])
-        ordenes = sorted(ordenes_data, key=lambda x: x.get("estado") == "RECHAZADA")
+        ordenes = sorted(ordenes_data, key=lambda x: OC_MAP_STRING_TO_INT.get(x.get("estado"), 999))
     else:
         flash(response.get("error", "Error al cargar las órdenes de compra."), "error")
     titulo = f"Órdenes de Compra ({'Todas' if not estado else estado.replace('_', ' ').title()})"
-    return render_template("ordenes_compra/listar.html", ordenes=ordenes, titulo=titulo)
+    return render_template("ordenes_compra/listar.html", 
+                           ordenes=ordenes, 
+                           titulo=titulo, 
+                           filtros_ui=OC_FILTROS_UI)
 
 
 @orden_compra_bp.route("/nueva", methods=["GET", "POST"])

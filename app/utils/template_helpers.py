@@ -41,22 +41,33 @@ def _formato_moneda_filter(value):
 def _has_permission_filter(action: str) -> bool:
     """
     Filtro de Jinja2 que verifica si el usuario actual tiene permiso para una acción.
+    Utiliza el objeto `current_user` cargado en cada petición.
     """
     try:
-        claims = get_jwt()
-        user_role = claims.get('rol')
-
-        if not user_role:
+        # `current_user` es un proxy gestionado por Flask-JWT-Extended.
+        # Si no hay un usuario autenticado, será None.
+        if not current_user:
             return False
-        
-        if user_role == 'DEV':
+
+        # El rol del usuario ahora se obtiene del objeto `current_user`.
+        # Se accede de forma segura al objeto de rol anidado y a su código.
+        user_role_obj = getattr(current_user, 'roles', None)
+        user_role_code = None
+        if isinstance(user_role_obj, dict):
+            user_role_code = user_role_obj.get('codigo')
+        elif hasattr(user_role_obj, 'codigo'):
+            user_role_code = user_role_obj.codigo
+
+        if not user_role_code:
+            return False
+        if user_role_code == 'DEV':
             return True
 
         allowed_roles = CANONICAL_PERMISSION_MAP.get(action, [])
-        return user_role in allowed_roles
-    except Exception:
-        # Si no hay un token JWT en el contexto (ej. página de login),
-        # no hay permisos.
+        return user_role_code in allowed_roles
+    except Exception as e:
+        # Capturamos cualquier error inesperado y evitamos que la aplicación falle.
+        print(f"Error en _has_permission_filter: {e}") # Log para depuración
         return False
 
 def _inject_user_from_jwt():
