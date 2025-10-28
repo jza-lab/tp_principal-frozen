@@ -181,7 +181,7 @@
                                                     <div class="form-floating">
                                                         <input type="text" class="form-control" id="piso_facturacion"
                                                             name="piso_facturacion" placeholder="Piso (Opcional)"
-                                                            value="{{ cliente.direccion.piso if cliente and cliente.direccion else '' }}"
+                                                            value="{{ cliente.direccion.piso if cliente and cliente.direccion and cliente.direccion.piso!='None' else '' }}"
                                                             readonly>
                                                         <label for="piso_facturacion"><i
                                                                 class="bi bi-building me-1"></i>Piso (Opcional)</label>
@@ -503,14 +503,24 @@
                     <div id="step2Content" class="form-section" style="display: none;">
 
                         <div id="facturaProformaCard" class="card">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h4 class="mb-0">Factura Proforma (Previsualización)</h4>
-                                <button type="button" class="btn btn-sm btn-outline-primary" id="downloadProformaBtn">
-                                    <i class="bi bi-download me-1"></i> Descargar/Imprimir
-                                </button>
+                            <div class="card-header">
+                                <div class="row align-items-center g-2">
+                                    <div class="col-7 col-md-8">
+                                        <h4 class="h5 mb-0 text-truncate">Factura Proforma</h4>
+                                        <p class="mb-0 small text-muted d-none d-md-block">(Previsualización)</p>
+                                    </div>
+                                    <div class="col-5 col-md-4 text-end">
+                                        <button type="button" class="btn btn-sm btn-primary w-100"
+                                            id="downloadProformaBtn">
+                                            <i class="bi bi-download me-1"></i>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="card-body">
-                                <div id="proforma-content" class="p-3 text-center text-muted">
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <div id="proforma-content" class="p-3 text-center text-muted">
+                                    </div>
                                 </div>
                             </div>
                         </div>

@@ -37,7 +37,7 @@ class DireccionModel(BaseModel):
         """
         try:
             # Asegurarse de que no haya valores None que puedan causar problemas
-            direccion_data = {k: v for k, v in data.items() if v is not None}
+            direccion_data = {k: v for k, v in data.items() if v is not None and v != 'None'}
 
             response = self.db.table(self.get_table_name()).insert(direccion_data).execute()
             
