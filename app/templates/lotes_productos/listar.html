@@ -32,7 +32,7 @@
                         <tr>
                             <th>Producto</th>
                             <th>N° Lote</th>
-                            <th class="text-end">Cantidad Actual</th>
+                            <th class="text-end">Stock Físico (Reservado)</th>
                             <th>Fecha Creación</th>
                             <th>Fecha Vencimiento</th>
                             <th>Estado</th>
@@ -46,7 +46,12 @@
                                 <div class="fw-bold">{{ lote.producto_nombre or 'N/A' }}</div>
                             </td>
                             <td>{{ lote.numero_lote or 'N/A' }}</td>
-                            <td class="text-end fw-bold">{{ lote.cantidad_actual | round(2) }} unidades</td>
+                            <td class="text-end fw-bold">
+                                {{ lote.cantidad_actual | round(2) }} unidades
+                                {% if lote.cantidad_reservada > 0 %}
+                                    <br><small class="text-muted">({{ lote.cantidad_reservada | round(2) }} reservadas)</small>
+                                {% endif %}
+                            </td>
                             <td>{{ lote.created_at.strftime('%Y-%m-%d') if lote.created_at else 'N/A' }}</td>
                             <td>
                                 {% if lote.fecha_vencimiento %}

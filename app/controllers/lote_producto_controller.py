@@ -164,8 +164,12 @@ class LoteProductoController(BaseController):
         Stock Real = Stock Físico Total ('DISPONIBLE') - Stock Reservado ('RESERVADO')
         """
         try:
-            # 1. Calcular Stock Físico Total (lotes en estado 'DISPONIBLE')
-            filtros_lotes = {'producto_id': producto_id, 'estado': 'DISPONIBLE'}
+            # 1. Calcular Stock Físico Total (lotes en estado 'DISPONIBLE' y con stock > 0)
+            filtros_lotes = {
+                'producto_id': producto_id,
+                'estado': 'DISPONIBLE',
+                'cantidad_actual': ('gt', 0)
+            }
             lotes_result = self.model.find_all(filtros_lotes)
 
             if not lotes_result.get('success'):
@@ -174,15 +178,20 @@ class LoteProductoController(BaseController):
             lotes_disponibles = lotes_result.get('data', [])
             stock_fisico_total = sum(lote.get('cantidad_actual', 0) for lote in lotes_disponibles)
 
-            # 2. Obtener IDs de todos los lotes para este producto para buscar sus reservas
-            lote_ids = [lote['id_lote'] for lote in lotes_disponibles]
+            # 2. Obtener IDs de TODOS los lotes para este producto (no solo los disponibles) para buscar sus reservas.
+            # Esto es más robusto por si una reserva quedó en un lote que ahora está 'AGOTADO'.
+            todos_lotes_producto_res = self.model.find_by_producto_id(producto_id)
+            if not todos_lotes_producto_res.get('success'):
+                return self.error_response(todos_lotes_producto_res.get('error'), 500)
+
+            lote_ids = [lote['id_lote'] for lote in todos_lotes_producto_res.get('data', [])]
 
             if not lote_ids:
                 stock_reservado = 0
             else:
                 # 3. Calcular Stock Reservado (reservas en estado 'RESERVADO' para esos lotes)
                 filtros_reservas = {
-                    'lote_producto_id': ('in', lote_ids),
+                    'lote_producto_id': ('in', tuple(lote_ids)),  # Usar tupla es más seguro para el operador 'in'
                     'estado': 'RESERVADO'
                 }
                 reservas_result = self.reserva_model.find_all(filtros_reservas)
@@ -194,6 +203,7 @@ class LoteProductoController(BaseController):
 
             # 4. Calcular Stock Real Disponible
             stock_disponible_real = stock_fisico_total - stock_reservado
+            if stock_disponible_real < 0: stock_disponible_real = 0 # Asegurar que no sea negativo
 
             return self.success_response(data={'stock_disponible_real': stock_disponible_real, 'stock_fisico': stock_fisico_total, 'stock_reservado': stock_reservado})
 

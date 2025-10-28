@@ -83,27 +83,53 @@ class LoteProductoModel(BaseModel):
     # --- MÉTODO NUEVO A AÑADIR ---
     def get_all_lotes_for_view(self):
         """
-        Obtiene todos los lotes de productos con datos enriquecidos (nombre del producto)
+        Obtiene todos los lotes de productos con datos enriquecidos (nombre del producto y cantidad reservada)
         para ser mostrados en la vista de listado.
         """
         try:
-            result = self.db.table(self.get_table_name()).select(
+            # 1. Obtener todos los lotes con el nombre del producto
+            lotes_result = self.db.table(self.get_table_name()).select(
                 '*, producto:productos(nombre)'
             ).order('created_at', desc=True).execute()
 
-            # Aplanar los resultados para un uso más fácil en la plantilla
-            flat_data = []
-            for item in result.data:
-                if item.get('producto'):
-                    item['producto_nombre'] = item['producto']['nombre']
-                else:
-                    item['producto_nombre'] = 'Producto no encontrado'
-                del item['producto']
-                flat_data.append(item)
+            if not hasattr(lotes_result, 'data'):
+                 raise Exception("La consulta de lotes no devolvió datos.")
+            
+            lotes_data = lotes_result.data
 
-            return {'success': True, 'data': flat_data}
+            # 2. Obtener todas las reservas activas
+            reservas_result = self.db.table('reservas_productos').select(
+                'lote_producto_id, cantidad_reservada'
+            ).eq('estado', 'RESERVADO').execute()
+
+            if not hasattr(reservas_result, 'data'):
+                 raise Exception("La consulta de reservas no devolvió datos.")
+
+            # 3. Mapear las reservas a cada lote
+            reservas_map = {}
+            for reserva in reservas_result.data:
+                lote_id = reserva['lote_producto_id']
+                cantidad = reserva.get('cantidad_reservada', 0)
+                reservas_map[lote_id] = reservas_map.get(lote_id, 0) + cantidad
+
+            # 4. Enriquecer los datos de los lotes
+            enriched_data = []
+            for lote in lotes_data:
+                # Aplanar nombre del producto
+                if lote.get('producto'):
+                    lote['producto_nombre'] = lote['producto']['nombre']
+                else:
+                    lote['producto_nombre'] = 'Producto no encontrado'
+                del lote['producto']
+                
+                # Añadir cantidad reservada
+                lote['cantidad_reservada'] = reservas_map.get(lote.get('id_lote'), 0)
+                
+                enriched_data.append(lote)
+
+            return {'success': True, 'data': enriched_data}
         except Exception as e:
-            logger.error(f"Error obteniendo lotes de productos para la vista: {e}")
+            logger.error(f"Error obteniendo lotes de productos para la vista: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def get_lote_detail_for_view(self, id_lote: int):
