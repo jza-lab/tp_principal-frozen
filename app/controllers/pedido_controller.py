@@ -151,12 +151,12 @@ class PedidoController(BaseController):
                 stock_min = float(producto_data.get('stock_min_produccion', 0))
                 cantidad_max = float (producto_data.get('cantidad_maxima_x_pedido',0))
 
-                stock_response, _ = self.lote_producto_controller.obtener_stock_producto(producto_id)
+                stock_response, _ = self.lote_producto_controller.obtener_stock_disponible_real(producto_id)
                 if not stock_response.get('success'):
-                    logger.error(f"Fallo al verificar stock para '{nombre_producto}'. Asumiendo insuficiente.")
+                    logger.error(f"Fallo al verificar stock real para '{nombre_producto}'. Asumiendo insuficiente.")
                     all_in_stock = False; produccion_requerida = True; continue
 
-                stock_disponible = stock_response['data']['stock_total']
+                stock_disponible = stock_response['data']['stock_disponible_real']
 
                 if stock_disponible < cantidad_solicitada:
                     all_in_stock = False; produccion_requerida = True
@@ -201,7 +201,26 @@ class PedidoController(BaseController):
             mensaje_final = f"Pedido {pedido_id_creado} creado en estado '{estado_inicial}'."
 
             # --- EJECUTAR ACCIÓN POST-CREACIÓN ---
-            if accion_post_creacion == 'DESPACHAR_Y_COMPLETAR':
+            if estado_inicial == 'LISTO_PARA_ENTREGA':
+                logger.info(f"Intentando reservar stock para el pedido {pedido_id_creado}...")
+                # El resultado de 'create_with_items' ya tiene los items con sus IDs de BD.
+                items_del_pedido_con_id = nuevo_pedido.get('items', [])
+                reserva_result = self.lote_producto_controller.reservar_stock_para_pedido(
+                    pedido_id=pedido_id_creado,
+                    items=items_del_pedido_con_id,
+                    usuario_id=usuario_id
+                )
+                if not reserva_result.get('success'):
+                    # Si la reserva falla, es un estado inconsistente. Se debe notificar y cambiar estado a pendiente.
+                    logger.error(f"Fallo la reserva de stock para el pedido {pedido_id_creado}. Revirtiendo a PENDIENTE. Error: {reserva_result.get('error')}")
+                    self.model.cambiar_estado(pedido_id_creado, 'PENDIENTE')
+                    nuevo_pedido['estado'] = 'PENDIENTE'
+                    mensaje_final = f"Pedido {pedido_id_creado} creado, pero falló la reserva de stock. Queda PENDIENTE."
+                else:
+                    logger.info(f"Stock para el pedido {pedido_id_creado} reservado con éxito.")
+                    mensaje_final = f"Pedido {pedido_id_creado} creado y stock reservado. Estado: LISTO PARA ENTREGAR."
+
+            elif accion_post_creacion == 'DESPACHAR_Y_COMPLETAR':
                 logger.info(f"Intentando despachar y completar pedido {pedido_id_creado}...")
                 pedido_con_items_resp = self.model.get_one_with_items(pedido_id_creado)
                 if pedido_con_items_resp.get('success'):

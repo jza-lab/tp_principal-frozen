@@ -158,6 +158,49 @@ class LoteProductoController(BaseController):
             logger.error(f"Error calculando stock para producto {producto_id}: {e}", exc_info=True)
             return self.error_response('Error interno al calcular stock', 500)
 
+    def obtener_stock_disponible_real(self, producto_id: int):
+        """
+        Calcula el stock real disponible para un producto, restando las reservas activas.
+        Stock Real = Stock Físico Total ('DISPONIBLE') - Stock Reservado ('RESERVADO')
+        """
+        try:
+            # 1. Calcular Stock Físico Total (lotes en estado 'DISPONIBLE')
+            filtros_lotes = {'producto_id': producto_id, 'estado': 'DISPONIBLE'}
+            lotes_result = self.model.find_all(filtros_lotes)
+
+            if not lotes_result.get('success'):
+                return self.error_response(lotes_result.get('error'), 500)
+
+            lotes_disponibles = lotes_result.get('data', [])
+            stock_fisico_total = sum(lote.get('cantidad_actual', 0) for lote in lotes_disponibles)
+
+            # 2. Obtener IDs de todos los lotes para este producto para buscar sus reservas
+            lote_ids = [lote['id_lote'] for lote in lotes_disponibles]
+
+            if not lote_ids:
+                stock_reservado = 0
+            else:
+                # 3. Calcular Stock Reservado (reservas en estado 'RESERVADO' para esos lotes)
+                filtros_reservas = {
+                    'lote_producto_id': ('in', lote_ids),
+                    'estado': 'RESERVADO'
+                }
+                reservas_result = self.reserva_model.find_all(filtros_reservas)
+
+                if not reservas_result.get('success'):
+                    return self.error_response(reservas_result.get('error'), 500)
+
+                stock_reservado = sum(reserva.get('cantidad_reservada', 0) for reserva in reservas_result.get('data', []))
+
+            # 4. Calcular Stock Real Disponible
+            stock_disponible_real = stock_fisico_total - stock_reservado
+
+            return self.success_response(data={'stock_disponible_real': stock_disponible_real, 'stock_fisico': stock_fisico_total, 'stock_reservado': stock_reservado})
+
+        except Exception as e:
+            logger.error(f"Error calculando stock real para producto {producto_id}: {e}", exc_info=True)
+            return self.error_response('Error interno al calcular stock real', 500)
+
 
     # === NUEVA FUNCIÓN AÑADIDA PARA SOPORTE DE LA LÓGICA DE COMPLETAR PEDIDO ===
     def obtener_lotes_producto_disponibles(self, producto_id: int) -> dict:
@@ -261,13 +304,7 @@ class LoteProductoController(BaseController):
     def crear_lote_desde_formulario(self, form_data: dict, usuario_id: int) -> tuple:
             """Crea un nuevo lote de producto desde un formulario web."""
             try:
-                if hasattr(form_data, 'to_dict'):
-                    # Si es un objeto FormData (ej. de un formulario web)
-                    data = form_data.to_dict()
-                else:
-                    # Si ya es un diccionario (como el enviado por OrdenProduccionController)
-                    data = form_data.copy() # Usar .copy() es una buena práctica
-
+                data = form_data.to_dict()
                 data.pop('csrf_token', None)
 
                 # Asignar cantidad_actual si existe cantidad_inicial
@@ -505,6 +542,77 @@ class LoteProductoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error crítico al despachar stock reservado del pedido {pedido_id}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def reservar_stock_para_pedido(self, pedido_id: int, items: list, usuario_id: int) -> dict:
+        """
+        Crea registros de reserva para un pedido completo sin descontar el stock físico.
+        Utiliza una estrategia FIFO sobre los lotes disponibles y asume que la
+        verificación de stock disponible ya se realizó.
+        """
+        try:
+            reservas_creadas = []
+            for item in items:
+                producto_id = item['producto_id']
+                cantidad_necesaria = float(item['cantidad'])
+                cantidad_restante_a_reservar = cantidad_necesaria
+
+                # 1. Obtener lotes disponibles (FIFO por fecha de vencimiento)
+                filtros_lotes = {
+                    'producto_id': producto_id,
+                    'estado': 'DISPONIBLE',
+                    'cantidad_actual': ('gt', 0)
+                }
+                lotes_disponibles_res = self.model.find_all(filters=filtros_lotes, order_by='fecha_vencimiento.asc.nullslast')
+
+                if not lotes_disponibles_res.get('success'):
+                    raise Exception(f"No se pudieron obtener los lotes para el producto ID {producto_id}.")
+
+                lotes_disponibles = lotes_disponibles_res.get('data', [])
+
+                # 2. Iterar sobre los lotes y crear las reservas
+                for lote in lotes_disponibles:
+                    if cantidad_restante_a_reservar <= 0:
+                        break
+
+                    # Calcular cuánto se puede reservar de este lote
+                    reservas_en_lote_res = self.reserva_model.find_all({'lote_producto_id': lote['id_lote'], 'estado': 'RESERVADO'})
+                    if not reservas_en_lote_res.get('success'):
+                        raise Exception(f"No se pudieron obtener las reservas para el lote ID {lote['id_lote']}.")
+                    
+                    cantidad_ya_reservada = sum(r.get('cantidad_reservada', 0) for r in reservas_en_lote_res.get('data', []))
+                    stock_disponible_en_lote = lote.get('cantidad_actual', 0) - cantidad_ya_reservada
+                    
+                    if stock_disponible_en_lote <= 0:
+                        continue
+
+                    cantidad_a_reservar_de_este_lote = min(stock_disponible_en_lote, cantidad_restante_a_reservar)
+                    
+                    if cantidad_a_reservar_de_este_lote <= 0:
+                        continue
+
+                    # Crear el registro de reserva
+                    datos_reserva = {
+                        'lote_producto_id': lote['id_lote'],
+                        'pedido_id': pedido_id,
+                        'pedido_item_id': item.get('id'),
+                        'cantidad_reservada': cantidad_a_reservar_de_este_lote,
+                        'usuario_reserva_id': usuario_id
+                    }
+                    resultado_creacion = self.reserva_model.create(self.reserva_schema.load(datos_reserva))
+                    if not resultado_creacion.get('success'):
+                        raise Exception(f"No se pudo crear el registro de reserva para el lote {lote['id_lote']}. Error: {resultado_creacion.get('error')}")
+
+                    reservas_creadas.append(resultado_creacion.get('data'))
+                    cantidad_restante_a_reservar -= cantidad_a_reservar_de_este_lote
+                
+                if cantidad_restante_a_reservar > 0.01:
+                    raise Exception(f"Inconsistencia de stock al intentar reservar. Faltaron {cantidad_restante_a_reservar} unidades para el producto ID {producto_id}.")
+
+            return {'success': True, 'data': reservas_creadas}
+
+        except Exception as e:
+            logger.error(f"Error crítico al reservar stock para el pedido {pedido_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def obtener_conteo_vencimientos(self) -> int:
