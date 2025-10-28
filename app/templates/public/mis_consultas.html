@@ -20,7 +20,7 @@
             <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ loop.index }}" data-bs-parent="#consultasAccordion">
                 <div class="accordion-body">
                     <p><strong>Tu pregunta:</strong></p>
-                    <p>{{ consulta.mensaje }}</p>
+                    <p>{{ consulta.consulta }}</p> 
                     <hr>
                     {% if consulta.respuesta %}
                         <p><strong>Nuestra respuesta:</strong></p>
@@ -36,6 +36,10 @@
             No has realizado ninguna consulta todavía. Si tienes alguna duda, puedes <a href="{{ url_for('public.enviar_consulta') }}">contactarnos aquí</a>.
         </div>
         {% endfor %}
+        
+    </div> {% if consultas %}
+    <div class="alert alert-info mt-4"> Si tienes alguna otra duda, puedes <a href="{{ url_for('public.enviar_consulta') }}">contactarnos aquí</a>.
     </div>
-</div>
+    {% endif %}
+    </div>
 {% endblock %}

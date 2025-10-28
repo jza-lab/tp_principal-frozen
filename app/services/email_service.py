@@ -1,3 +1,4 @@
+# app/services/email_service.py
 import smtplib
 from email.mime.text import MIMEText
 from flask import current_app
@@ -6,14 +7,17 @@ def send_email(to_email, subject, body):
     config = current_app.config
     
     if not config.get('MAIL_SERVER'):
-        print("---- SIMULANDO ENVÍO DE EMAIL ----")
+        print("---- SIMULANDO ENVÍO DE EMAIL (HTML) ----")
         print(f"A: {to_email}")
         print(f"Asunto: {subject}")
-        print(f"Cuerpo: {body}")
+        # print(f"Cuerpo: {body}") # Comentamos esto para no llenar la consola
         print("-----------------------------------")
         return True, "Email simulado. Configura las variables de entorno para envíos reales."
 
-    msg = MIMEText(body)
+    # --- MODIFICACIÓN AQUÍ ---
+    # Le decimos a MIMEText que el contenido es 'html'
+    msg = MIMEText(body, 'html')
+    
     msg['Subject'] = subject
     msg['From'] = config['MAIL_USERNAME']
     msg['To'] = to_email
