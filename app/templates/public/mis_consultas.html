@@ -41,5 +41,8 @@
     <div class="alert alert-info mt-4"> Si tienes alguna otra duda, puedes <a href="{{ url_for('public.enviar_consulta') }}">contactarnos aquí</a>.
     </div>
     {% endif %}
+    <a href="{{ url_for('cliente.perfil') }}" class="btn btn-secondary">
+    <i class="bi bi-backspace me-2"></i> Volver
+    </a>
     </div>
 {% endblock %}
