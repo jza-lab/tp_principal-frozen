@@ -80,16 +80,15 @@ class TotemSesionModel(BaseModel):
         """
         try:
             today_str = get_now_in_argentina().date().isoformat()
-
-            start_of_day_utc = datetime.fromisoformat(f"{today_str}T00:00:00-03:00")
-            end_of_day_utc = datetime.fromisoformat(f"{today_str}T23:59:59.999999-03:00")
+            start_of_day_iso = f"{today_str}T00:00:00-03:00"
+            end_of_day_iso = f"{today_str}T23:59:59.999999-03:00"
 
             response = self.db.table(self.get_table_name()) \
                 .select('id', count='exact') \
                 .eq('usuario_id', usuario_id) \
                 .eq('activa', True) \
-                .gte('fecha_inicio', start_of_day_utc.isoformat()) \
-                .lte('fecha_inicio', end_of_day_utc.isoformat()) \
+                .gte('fecha_inicio', start_of_day_iso) \
+                .lte('fecha_inicio', end_of_day_iso) \
                 .execute()
 
             return response.count > 0
