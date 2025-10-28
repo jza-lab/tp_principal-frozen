@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const pisoFacturacion = document.getElementById('piso_facturacion');
     const deptoFacturacion = document.getElementById('depto_facturacion');
     const cpFacturacion = document.getElementById('codigo_postal_facturacion');
+    const condicionVenta = document.getElementById('condicion_venta');
 
 
     // Función para limpiar campos
@@ -32,6 +33,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (localidadFacturacion) localidadFacturacion.value = '';
         if (pisoFacturacion) pisoFacturacion.value = '';
         if (deptoFacturacion) deptoFacturacion.value = '';
+        if (condicionVenta) condicionVenta.value = '';
         if (cpFacturacion) cpFacturacion.value = '';
     }
 
@@ -71,7 +73,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         nombreCliente.value = cliente.nombre || '';
                         telefono.value = cliente.telefono || '';
                         email.value = cliente.email || '';
-
+                        
                         const dir = cliente.direccion || {};
                         if (calleFacturacion) calleFacturacion.value = dir.calle || '';
                         if (alturaFacturacion) alturaFacturacion.value = dir.altura || '';
@@ -79,6 +81,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (pisoFacturacion) pisoFacturacion.value = dir.piso || '';
                         if (deptoFacturacion) deptoFacturacion.value = dir.depto || '';
                         if (cpFacturacion) cpFacturacion.value = dir.codigo_postal || '';
+                        if (condicionVenta) condicionVenta.value = cliente.condicion_venta || '';
                         if (provinciaFacturacion) {
                             const valorProvincia = dir.provincia || '';
 

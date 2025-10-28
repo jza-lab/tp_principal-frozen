@@ -79,6 +79,17 @@
 
                         <div class="col-md-6">
                             <div class="form-floating">
+                                <input type="condicion_venta" class="form-control" name="condicion_venta" id="condicion_venta" 
+                                    placeholder="condicion_venta"
+                                    value="{{ cliente.condicion_venta if cliente else '' }}" {% if is_edit %}readonly{% endif %}>
+                                <label for="condicion_venta">
+                                    <i class="bi bi-person-circle me-1"></i>Condicion <span class="text-danger">*</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-floating">
                                 <input type="text" class="form-control" id="nombre_cliente" name="nombre_cliente"
                                     placeholder="Nombre del Cliente"
                                     value="{{ pedido.nombre_cliente if pedido else '' }}" {% if is_edit %}readonly{% endif %}>
