@@ -42,8 +42,7 @@ if (ctxProducto && datosGraficoProductos.length > 0) {
                 subtitle: {
                     display: true,
                     text: ['Este gráfico ciruclar representa la composición',
-                        ' del stock actual del inventario de productos',
-                        'es decir, los productos en el almacén.'],
+                        ' del stock actual del inventario de productos'],
                     color: '#666',
                     font: {
                         size: 12

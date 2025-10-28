@@ -148,7 +148,8 @@ class PedidoController(BaseController):
 
                 producto_data = producto_info_res['data']
                 nombre_producto = producto_data.get('nombre', f"ID {producto_id}")
-                stock_min = float(producto_data.get('stock_min_produccion', 0)) # Usar atributo de producto.py
+                stock_min = float(producto_data.get('stock_min_produccion', 0)) 
+                cantidad_max = float (producto_data.get('cantidad_maxima_x_pedido',0))
 
                 stock_response, _ = self.lote_producto_controller.obtener_stock_producto(producto_id)
                 if not stock_response.get('success'):
@@ -164,11 +165,12 @@ class PedidoController(BaseController):
                     produccion_requerida = True
                     logger.warning(f"STOCK BAJARÍA DEL MÍNIMO ({stock_min}) para '{nombre_producto}'. Producción requerida.")
 
-                if cantidad_solicitada > stock_min and stock_min > 0:
+                if cantidad_solicitada > cantidad_max and cantidad_max > 0:
                     auto_aprobar_produccion = False
-                    logger.info(f"Cantidad ({cantidad_solicitada}) para '{nombre_producto}' supera stock_min ({stock_min}). Requiere aprobación manual.")
-            # --- FIN VERIFICACIÓN ---
-
+                    logger.info(f"Cantidad ({cantidad_solicitada}) para '{nombre_producto}' supera el máximo por pedido ({cantidad_max}). Requiere aprobación manual.")
+                else:
+                    auto_aprobar_produccion = True
+                    logger.info(f"Cantidad ({cantidad_solicitada}) para '{nombre_producto}' NO supera el máximo por pedido ({cantidad_max}).")
             # --- DECIDIR ESTADO INICIAL Y ACCIÓN ---
             estado_inicial = 'PENDIENTE'
             accion_post_creacion = None
@@ -220,7 +222,7 @@ class PedidoController(BaseController):
             elif accion_post_creacion == 'INICIAR_PROCESO_AUTO':
                 logger.info(f"Intentando iniciar proceso automáticamente para pedido {pedido_id_creado}...")
                 # --- USAR usuario_id RECIBIDO ---
-                if not usuario_id:
+                if usuario_id is None or int(usuario_id) < 0:
                      logger.error(f"No se pudo iniciar proceso auto para pedido {pedido_id_creado}: Usuario ID no válido proporcionado.")
                      mensaje_final += " (No se pudo iniciar proceso automáticamente por falta de usuario)."
                 else:
