@@ -656,34 +656,44 @@ class PlanificacionController(BaseController):
 
             # 5. Construir el diccionario final para la plantilla
             ops_visibles_por_dia = defaultdict(list)
-            # Crear entradas para todos los días de la semana objetivo
             for i in range(7):
                 dia_semana_actual = start_of_week + timedelta(days=i)
                 ops_visibles_por_dia[dia_semana_actual.isoformat()] = []
-
-            # Llenar con las OPs correspondientes
             for op in ops_con_dias_ocupados:
                 for fecha_ocupada_iso in op.get('dias_ocupados_calculados', []):
-                    # Solo añadir si la fecha ocupada está DENTRO de la semana que estamos mostrando
                     if start_of_week.isoformat() <= fecha_ocupada_iso <= end_of_week.isoformat():
-                        # Evitar duplicados si una OP ya fue añadida a ese día
                         if op not in ops_visibles_por_dia[fecha_ocupada_iso]:
                              ops_visibles_por_dia[fecha_ocupada_iso].append(op)
 
+            # --- CORRECCIÓN: MAPEO MANUAL DE DÍAS ---
+            # 6. Formatear claves con nombre del día (Usando mapeo manual)
 
-            # 6. Formatear claves con nombre del día (sin cambios)
+            # Diccionario para traducir abreviaturas de días (inglés -> español)
+            dias_abbr_es = {
+                'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mié',
+                'Thu': 'Jue', 'Fri': 'Vie', 'Sat': 'Sáb', 'Sun': 'Dom'
+            }
+
             formatted_grouped_by_day = {}
-            # Ordenar por fecha antes de formatear
             ordered_ops_visibles = dict(sorted(ops_visibles_por_dia.items()))
             for dia_iso, ops_dia in ordered_ops_visibles.items():
                 try:
                     dia_dt = date.fromisoformat(dia_iso)
-                    key_display = dia_dt.strftime("%a %d/%m").capitalize()
-                except ValueError: key_display = dia_iso
+                    # Obtener abreviatura en INGLÉS (%a)
+                    abbr_en = dia_dt.strftime("%a")
+                    # Traducir usando el diccionario (default a inglés si falla)
+                    abbr_es = dias_abbr_es.get(abbr_en, abbr_en)
+                    # Formatear fecha (DD/MM)
+                    fecha_num = dia_dt.strftime("%d/%m")
+                    # Crear clave final
+                    key_display = f"{abbr_es} {fecha_num}"
+                except ValueError:
+                    key_display = dia_iso # Fallback
                 formatted_grouped_by_day[key_display] = ops_dia
+            # --- FIN CORRECCIÓN ---
 
             resultado = {
-                'ops_visibles_por_dia': formatted_grouped_by_day, # <-- Nuevo nombre de variable
+                'ops_visibles_por_dia': formatted_grouped_by_day, # Usar el diccionario formateado
                 'inicio_semana': start_of_week.isoformat(),
                 'fin_semana': end_of_week.isoformat(),
                 'semana_actual_str': week_str
