@@ -320,29 +320,34 @@ class OrdenCompraController:
             logger.error(f"Error rechazando orden {orden_id}: {e}")
             return {'success': False, 'error': str(e)}
 
-    def _marcar_cadena_como_recibida(self, orden_id):
+    def _marcar_cadena_como_completa(self, orden_id):
         """
-        Marca una orden y sus predecesoras como 'RECIBIDA' recursivamente.
+        Marca una orden y todas sus predecesoras en la cadena de complemento
+        como 'RECEPCION_COMPLETA' de forma recursiva.
         """
         try:
             current_id = orden_id
             while current_id:
                 orden_res = self.model.find_by_id(current_id)
                 if not orden_res.get('success'):
+                    logger.warning(f"No se encontró la orden con ID {current_id} en la cadena de completado.")
                     break
 
                 orden_actual = orden_res['data']
 
-                # Update the current order status
+                # Actualizar el estado de la orden actual a 'RECEPCION_COMPLETA'
                 self.model.update(current_id, {
-                    'estado': 'RECIBIDA',
+                    'estado': 'RECEPCION_COMPLETA',
                     'fecha_real_entrega': date.today().isoformat()
                 })
 
+                logger.info(f"Orden {current_id} marcada como RECEPCION_COMPLETA.")
+                
+                # Moverse a la orden que esta complementa
                 current_id = orden_actual.get('complementa_a_orden_id')
 
         except Exception as e:
-            logger.error(f"Error en la cadena de recepción para la orden {orden_id}: {e}")
+            logger.error(f"Error en la cadena de completado para la orden {orden_id}: {e}", exc_info=True)
 
     def _manejar_transicion_op_asociada(self, orden_data, usuario_id, orden_produccion_controller: "OrdenProduccionController"):
         """
@@ -472,13 +477,13 @@ class OrdenCompraController:
                         return {'success': False, 'error': f"Recepción parcial procesada, pero falló la creación de la orden complementaria: {nueva_orden_result.get('error')}"}
 
                     self.model.update(orden_id, {
-                        'estado': 'EN ESPERA DE INSUMO',
+                        'estado': 'RECEPCION_INCOMPLETA',
                         'observaciones': f"{observaciones}\nRecepción parcial. Pendiente completado en OC: {nueva_orden_result['data']['codigo_oc']}"
                     })
 
                     return {'success': True, 'message': f'Recepción parcial registrada. Se creó la orden {nueva_orden_result["data"]["codigo_oc"]} para los insumos restantes.'}
                 else:
-                    self._marcar_cadena_como_recibida(orden_id)
+                    self._marcar_cadena_como_completa(orden_id)
 
                     final_message = f'Recepción completada. {lotes_creados} lotes creados.'
                     if lotes_error > 0: final_message += f' ({lotes_error} con error).'
