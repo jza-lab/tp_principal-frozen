@@ -566,23 +566,24 @@ h1.h2 {
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow-y: auto !important; 
 }
 
 .login-card {
     background: white;
     border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    /* Sombra de login más fuerte */
-    border: 1px solid var(--frozen-border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border: 1px solid #dee2e6;
     overflow: hidden;
-    max-width: 400px;
+    max-width: 440px; /* <--- Reducido de 500px */
     width: 100%;
+    animation: slideUp 0.5s ease-out;
 }
 
 .login-header {
     background-color: var(--app-primary);
     color: white;
-    padding: 2rem;
+    padding: 1rem;
     text-align: center;
 }
 

@@ -14,7 +14,7 @@ html, body {
     align-items: center;
     justify-content: center;
     font-family: 'Inter', 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
-    padding: 2rem;
+    padding: 1rem;
 }
 
 .totem-login-card {
@@ -43,7 +43,7 @@ html, body {
 .totem-login-header {
     background-color: #343a40;
     color: white;
-    padding: 2rem;
+    padding: 1rem;
     text-align: center;
 }
 
