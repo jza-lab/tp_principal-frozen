@@ -382,7 +382,7 @@ def generar_factura_html(id):
             pedido_data['created_at'] = datetime.fromisoformat(pedido_data['created_at'])
         except ValueError:
             pass
-    if pedido_data['estado'] == 'PENDIENTE':
+    if pedido_data['estado'] == 'PENDIENTE' or pedido_data['estado'] == 'EN_PROCESO':
         rendered_html = render_template('orden_venta/factura_proforma_pedido.html', pedido=pedido_data, cliente=cliente)
     else:
         if cliente['condicion_iva'] == '1':

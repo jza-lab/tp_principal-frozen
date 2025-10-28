@@ -81,7 +81,8 @@ def crear_pedido_api():
     if not json_data:
         return jsonify({"success": False, "error": "Datos no válidos"}), 400
     pedido_controller = PedidoController()
-    response, status_code = pedido_controller.crear_pedido_con_items(json_data)
+    usuario_id=0
+    response, status_code = pedido_controller.crear_pedido_con_items(json_data,usuario_id)
     nuevo_pedido = response.get('data', {})
     if status_code < 300:
         return jsonify({
