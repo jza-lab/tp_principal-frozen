@@ -36,8 +36,13 @@ body {
     color: var(--frozen-text-primary);
     line-height: 1.6;
     padding-top: 70px;
-    margin-left: 40px;
-    margin-right: 40px;
+    
+    /* FIX: Cambiamos márgenes fijos por padding responsive */
+    padding-left: 15px;
+    padding-right: 15px;
+    margin-left: 0; /* Reseteamos márgenes */
+    margin-right: 0; /* Reseteamos márgenes */
+
     transition: background-color 0.3s ease, opacity 0.4s ease-in-out;
     opacity: 1;
 }
@@ -613,6 +618,15 @@ h1.h2 {
     animation: card-entry 0.6s ease-out backwards;
 }
 
+.stat-card-item {
+    /* FIX: Mobile-first. Ocupa el 90% del ancho y tiene un max-width */
+    flex: 0 0 90%; 
+    min-width: 90%;
+    max-width: 400px; 
+    cursor: default; 
+    transition: transform 0.3s ease;
+}
+
 .stat-card:nth-child(1) {
     animation-delay: 0.1s;
 }
@@ -1039,6 +1053,13 @@ h1.h2 {
     }
 }
 
+@media (min-width: 576px) {
+    .stat-card-item {
+        flex: 0 0 400px; 
+        min-width: 400px;
+    }
+}
+
 /* Funciona en navegadores modernos (Chrome, Edge, Opera, y soporte creciente) */
 @view-transition {
     navigation: auto;
@@ -1269,6 +1290,10 @@ h1.h2 {
 }
 
 @media (max-width: 991px) {
+    body {
+        padding-left: 40px;
+        padding-right: 40px;
+    }
     .fixed-side-panel {
         /* Fuerza la posición normal para que se apile correctamente */
         position: relative !important;

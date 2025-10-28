@@ -3,7 +3,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const scrollActivationPoint = 110; 
     const panels = document.querySelectorAll('.fixed-side-panel');
 
-    if (panels.length === 0 || window.innerWidth < 992) {
+    // Si no hay paneles, no hacer nada
+    if (panels.length === 0) {
         return;
     }
     
@@ -17,14 +18,36 @@ document.addEventListener('DOMContentLoaded', function () {
         const referenceElement = contentCol.querySelector('.card, .d-flex, h1');
         if (!referenceElement) return;
 
+        let initialOffsetTop = 0;
+
         function setInitialAbsolutePosition() {
-            sidePanel.style.position = 'absolute';
-            sidePanel.style.top = referenceElement.offsetTop + 'px';
+            // Asegurarnos de que el CSS se renderice primero
+            setTimeout(() => {
+                // Solo calculamos si estamos en modo no-fijo (absolute)
+                // Usamos getComputedStyle para leer el estilo que aplicó el CSS
+                if (window.getComputedStyle(sidePanel).position === 'absolute') {
+                    initialOffsetTop = referenceElement.offsetTop;
+                    sidePanel.style.top = initialOffsetTop + 'px';
+                }
+            }, 100); // Dar tiempo al renderizado
         }
 
-        setInitialAbsolutePosition();
+        // Solo calcular la posición inicial si estamos en desktop
+        if (window.innerWidth >= 992) {
+            setInitialAbsolutePosition();
+        }
 
         function handleScroll() {
+            // FIX: No ejecutar la lógica de scroll si la ventana es pequeña
+            // La media query de CSS en styles.css (max-width: 991px) se encargará de esto
+            if (window.innerWidth < 992) {
+                // Asegurarse de limpiar estilos fijos si la ventana se achica
+                sidePanel.style.position = ''; // Dejar que CSS controle
+                sidePanel.style.top = ''; // Dejar que CSS controle
+                return; 
+            }
+
+            // Si estamos en pantalla grande, aplicar lógica de scroll
             sidePanel.style.transition = 'none'; 
 
             if (window.scrollY > scrollActivationPoint) {
@@ -32,28 +55,29 @@ document.addEventListener('DOMContentLoaded', function () {
                 sidePanel.style.top = fixedTopValue;
             } else {
                 sidePanel.style.position = 'absolute';
-                sidePanel.style.top = referenceElement.offsetTop + 'px';
+                // Usamos el offset inicial calculado
+                sidePanel.style.top = (initialOffsetTop > 0 ? initialOffsetTop : referenceElement.offsetTop) + 'px';
             }
+            
             setTimeout(() => {
                 sidePanel.style.transition = ''; 
             }, 50);
         }
-        window.addEventListener('scroll', handleScroll);
+        
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        
+        // FIX: Recalcular al cambiar tamaño
+        window.addEventListener('resize', () => {
+             if (window.innerWidth >= 992) {
+                // Si volvemos a desktop, recalcular posición
+                setInitialAbsolutePosition();
+             } else {
+                // Limpiar estilos en resize a móvil
+                sidePanel.style.position = '';
+                sidePanel.style.top = '';
+             }
+        });
     }
     
-    function checkSizeAndApplyFix() {
-        if (window.innerWidth < 992) {
-            panels.forEach(p => {
-                p.style.position = 'relative'; 
-                p.style.top = 'auto';
-                window.removeEventListener('scroll', initializeFixedPanel(p)); 
-            });
-            return;
-        }
-        panels.forEach(p => initializeFixedPanel(p));
-    }
-
     panels.forEach(initializeFixedPanel);
-    window.addEventListener('resize', checkSizeAndApplyFix);
-
 });

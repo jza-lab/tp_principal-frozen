@@ -168,6 +168,7 @@
 /* ================================================= */
 
 .alert-carousel-wrapper {
+    padding-top: 10px;
     position: relative;
     padding-left: 2rem;
     padding-right: 2rem;
@@ -192,9 +193,10 @@
 }
 
 .stat-card-item {
-    /* Mantiene el ancho grande (400px) */
-    flex: 0 0 400px; 
-    min-width: 400px;
+    /* FIX: Mobile-first. Ocupa el 100% del ancho y tiene un max-width */
+    flex: 0 0 100%; 
+    min-width: 100%;
+    max-width: 400px; 
     cursor: default; 
     transition: transform 0.3s ease;
 }
@@ -234,4 +236,12 @@
 
 .next-btn {
     right: 0; 
+}
+
+/* FIX: En pantallas más grandes (sm y superior), usamos el ancho fijo de 400px */
+@media (min-width: 576px) {
+    .stat-card-item {
+        flex: 0 0 400px; 
+        min-width: 400px;
+    }
 }
