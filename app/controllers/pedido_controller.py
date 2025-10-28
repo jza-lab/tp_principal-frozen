@@ -111,7 +111,7 @@ class PedidoController(BaseController):
             logger.error(f"Error interno obteniendo detalle de pedido {pedido_id}: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
-    def crear_pedido_con_items(self, form_data: Dict, usuario_id: Optional[int]=None) -> tuple: # <-- Aceptar usuario_id
+    def crear_pedido_con_items(self, form_data: Dict, usuario_id: int) -> tuple: # <-- Aceptar usuario_id
         """
         Valida y crea pedido. Verifica stock/mínimo y puede iniciar proceso auto.
         Recibe usuario_id como parámetro.
@@ -217,7 +217,7 @@ class PedidoController(BaseController):
                 else:
                     logger.error(f"No se pudieron obtener items para despachar pedido {pedido_id_creado}. Dejado en LISTO_PARA_ENTREGA.")
 
-            elif accion_post_creacion == 'INICIAR_PROCESO_AUTO' and usuario_id:
+            elif accion_post_creacion == 'INICIAR_PROCESO_AUTO':
                 logger.info(f"Intentando iniciar proceso automáticamente para pedido {pedido_id_creado}...")
                 # --- USAR usuario_id RECIBIDO ---
                 if not usuario_id:
@@ -235,6 +235,8 @@ class PedidoController(BaseController):
                          logger.error(f"Fallo al iniciar proceso auto para pedido {pedido_id_creado}: {inicio_resp.get('error')}")
                          mensaje_final += f" (Fallo al iniciar proceso automáticamente: {inicio_resp.get('error')})"
                 # --- FIN USO usuario_id ---
+
+            # --- FIN EJECUCIÓN ACCIÓN ---
 
             # Actualizar condición de venta del cliente
             id_cliente = nuevo_pedido.get('id_cliente')
@@ -826,6 +828,22 @@ class PedidoController(BaseController):
             pedido_actual = pedido_existente_resp.get('data')
             if pedido_actual.get('estado') != 'LISTO_PARA_ENTREGA':
                 return self.error_response("Solo se pueden despachar pedidos en estado 'LISTO_PARA_ENTREGA'.", 400)
+
+            # --- NUEVO: Descontar stock de productos ANTES de despachar ---
+            items_del_pedido = pedido_actual.get('items', [])
+            if not items_del_pedido:
+                return self.error_response("El pedido no tiene items para despachar.", 400)
+
+            despacho_stock_result = self.lote_producto_controller.despachar_stock_directo_por_pedido(
+                pedido_id=pedido_id,
+                items_del_pedido=items_del_pedido
+            )
+
+            if not despacho_stock_result.get('success'):
+                error_msg = despacho_stock_result.get('error', 'Error desconocido al descontar el stock.')
+                logger.error(f"Fallo al descontar stock para el despacho del pedido {pedido_id}: {error_msg}")
+                return self.error_response(f"No se pudo despachar: {error_msg}", 409) # 409 Conflict - e.g. stock insufficient
+            # --- FIN DESCUENTO DE STOCK ---
 
             # 2. Recolectar y validar datos del formulario
             nombre_transportista = form_data.get('conductor_nombre', '').strip()

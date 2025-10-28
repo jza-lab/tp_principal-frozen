@@ -390,13 +390,13 @@ class LoteProductoController(BaseController):
                 cantidad_necesaria = float(item['cantidad'])
                 cantidad_restante_a_consumir = cantidad_necesaria
 
-                # 2. Obtener lotes disponibles (FIFO)
+                # 2. Obtener lotes disponibles (FIFO por fecha de vencimiento)
                 filtros = {
                     'producto_id': producto_id,
                     'estado': 'DISPONIBLE', # Solo lotes disponibles
                     'cantidad_actual': ('gt', 0)
                 }
-                lotes_disponibles_res = self.model.find_all(filters=filtros, order_by='created_at.asc')
+                lotes_disponibles_res = self.model.find_all(filters=filtros, order_by='fecha_vencimiento.asc')
 
                 if not lotes_disponibles_res.get('success'):
                     logger.error(f"Fallo al obtener lotes para producto {producto_id} del pedido {pedido_id}.")
@@ -433,7 +433,7 @@ class LoteProductoController(BaseController):
                 if cantidad_restante_a_consumir > 0:
                     # Si al final no se pudo consumir todo el stock necesario, el despacho falla
                     # y el PedidoController no podrá completar la orden.
-                    raise Exception(f"Stock insuficiente para el producto {producto_id}. Faltaron {cantidad_restante_a_consumir} unidades.")
+                    raise Exception(f"Stock insuficiente para el producto con ID {producto_id}. Faltaron {cantidad_restante_a_consumir} unidades.")
 
             # Si todos los ítems se procesaron sin levantar la excepción, es éxito.
             return {'success': True}
