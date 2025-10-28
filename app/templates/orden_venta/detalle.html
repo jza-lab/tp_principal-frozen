@@ -210,11 +210,11 @@
                         </form>
                     {% endif %}
 
-                    {# 3. Botón "Despachar" (si está LISTO_PARA_ENTREGA) - Reemplaza 'Marcar como Completado' #}
-                    {% if pedido.estado == 'LISTO_PARA_ENTREGA' and 'modificar_orden_de_venta' is has_permission %}
-                        <button type="button" id="btn-despachar" class="btn btn-warning w-100">
+                    {# 3. Botón "Despachar" (si está LISTO_PARA_ENTREGA) #}
+                    {% if pedido.estado == 'LISTO_PARA_ENTREGA' and 'modificar_ordenes_venta' is has_permission %}
+                        <a href="{{ url_for('orden_venta.despachar', id=pedido.id) }}" class="btn btn-info w-100" title="Despachar Pedido">
                             <i class="bi bi-truck me-1"></i> Despachar Pedido
-                        </button>
+                        </a>
                     {% endif %}
 
                     {# 4. Botón "Confirmar Entrega" (si está DESPACHADO) #}
@@ -322,9 +322,7 @@ document.addEventListener('DOMContentLoaded', function () {
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const pedidoId = {{ pedido.id }};
-    const btnDespachar = document.getElementById('btn-despachar');
     const btnConfirmarEntrega = document.getElementById('btn-confirmar-entrega');
-    const seccionTransporte = document.getElementById('seccion-transporte');
 
     // Función reutilizable para cambiar el estado del pedido
     async function cambiarEstadoPedido(nuevoEstado, button) {
@@ -359,18 +357,6 @@ document.addEventListener('DOMContentLoaded', function () {
             button.disabled = false;
             button.innerHTML = originalHtml;
         }
-    }
-
-    // Event listener para el botón de despachar
-    if (btnDespachar) {
-        btnDespachar.addEventListener('click', () => {
-            showConfirmationModal(
-                'Confirmar Despacho',
-                '¿Está seguro de que desea marcar este pedido como despachado? Se mostrará la información del transporte.',
-                'warning',
-                () => { cambiarEstadoPedido('DESPACHADO', btnDespachar); }
-            );
-        });
     }
 
     // Event listener para el botón de confirmar entrega
