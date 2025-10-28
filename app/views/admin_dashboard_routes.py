@@ -7,6 +7,7 @@ from app.controllers.pedido_controller import PedidoController
 from app.controllers.notificación_controller import NotificacionController
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.lote_producto_controller import LoteProductoController
+from app.controllers.cliente_controller import ClienteController # (NUEVO)
 from app.utils.decorators import permission_required
 from app.models.reclamo import ReclamoModel
 
@@ -20,6 +21,7 @@ orden_venta_controller = PedidoController()
 notificacion_controller = NotificacionController()
 inventario_controller = InventarioController()
 lote_producto_controller = LoteProductoController()
+cliente_controller = ClienteController() # (NUEVO)
 alertas_stock_count = inventario_controller.obtener_conteo_alertas_stock()
 
 @admin_dashboard_bp.route('/')
@@ -83,6 +85,12 @@ def index():
 
     lotes_producto_vencimiento_count = lote_producto_controller.obtener_conteo_vencimientos() 
 
+    # Conteo de clientes pendientes de aprobación
+    pending_client_count = 0
+    respuesta_clientes_pendientes, _ = cliente_controller.obtener_conteo_clientes_pendientes()
+    if respuesta_clientes_pendientes.get('success'):
+        pending_client_count = respuesta_clientes_pendientes.get('data', {}).get('count', 0)
+    
     reclamo_stats = ReclamoModel().get_count_by_estado('pendiente')
     conteo_reclamos = 0
     if reclamo_stats.get('success'):
@@ -106,4 +114,5 @@ def index():
                            ordenesproduccion_proceso_list=ordenesproduccion_proceso_list,
                            lotes_vencimiento_count=lotes_vencimiento_count,
                            conteo_reclamos_pendientes=conteo_reclamos,
-                           lotes_producto_vencimiento_count=lotes_producto_vencimiento_count)
+                           lotes_producto_vencimiento_count=lotes_producto_vencimiento_count,
+                           pending_client_count=pending_client_count) 
