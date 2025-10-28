@@ -148,7 +148,7 @@ class PedidoController(BaseController):
 
                 producto_data = producto_info_res['data']
                 nombre_producto = producto_data.get('nombre', f"ID {producto_id}")
-                stock_min = float(producto_data.get('stock_min_produccion', 0)) 
+                stock_min = float(producto_data.get('stock_min_produccion', 0))
                 cantidad_max = float (producto_data.get('cantidad_maxima_x_pedido',0))
 
                 stock_response, _ = self.lote_producto_controller.obtener_stock_producto(producto_id)
@@ -177,7 +177,8 @@ class PedidoController(BaseController):
 
             if not produccion_requerida and all_in_stock:
                 estado_inicial = 'LISTO_PARA_ENTREGA'
-                accion_post_creacion = 'DESPACHAR_Y_COMPLETAR'
+                # El pedido quedará listo para despacho manual, no se autocompleta.
+                accion_post_creacion = None
                 for item in items_data: item['estado'] = 'ALISTADO'
                 logger.info("Stock OK. Estado inicial: LISTO_PARA_ENTREGA.")
             elif produccion_requerida and auto_aprobar_produccion:
