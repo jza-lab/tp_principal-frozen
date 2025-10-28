@@ -47,6 +47,14 @@ body {
     opacity: 1;
 }
 
+body.no-header {
+    padding-top: 0;
+}
+
+body.no-scroll {
+    overflow: hidden;
+}
+
 body.fade-out {
     opacity: 0 !important;
 }

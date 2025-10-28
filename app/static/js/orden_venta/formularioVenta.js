@@ -413,6 +413,18 @@ function buildPayload() {
         }
     }
 
+    const totalElement = document.getElementById('total-final');
+    let totalValue = '';
+    
+    if (totalElement) {
+        if (totalElement.tagName === 'INPUT') {
+            totalValue = totalElement.value;
+        } 
+        else {
+            totalValue = totalElement.textContent;
+        }
+    }
+
     const payload = {
         id_cliente: parseInt(document.getElementById('id_cliente').value),
         nombre_cliente: document.getElementById('nombre_cliente').value,
@@ -420,7 +432,7 @@ function buildPayload() {
         fecha_requerido: document.getElementById('fecha_requerido').value,
         estado: document.getElementById('estado')?.value || 'PENDIENTE',
         condicion_venta: document.getElementById('condicion_venta')?.value,
-        precio_orden: cleanCurrency(document.getElementById('total-final').textContent),
+        precio_orden: cleanCurrency(totalValue),
         comentarios_adicionales: document.getElementById('comentarios_adicionales')?.value,
         items: []
     };

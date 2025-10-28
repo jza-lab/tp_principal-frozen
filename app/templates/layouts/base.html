@@ -22,17 +22,17 @@
     </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body>
-    
+<body class="{% if not current_user or request.endpoint.startswith('facial.') %}no-header{% endif %} {% if request.endpoint == 'auth.login' %}no-scroll{% endif %}">
+
+{% if current_user and not request.endpoint.startswith('facial.') %}
 <header>
     <nav class="navbar navbar-expand-lg navbar-custom fixed-top">
         <div class="container-fluid">
 
-            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('admin_dashboard.index') if current_user else '#' }}">
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('admin_dashboard.index') }}">
                 <i class="bi bi-snow2 me-2 fs-4"></i>
                 FrozenProd
             </a>
-        {% if current_user %}
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
                     style="border-color: rgba(255,255,255,0.3);">
                 <span class="navbar-toggler-icon" style="filter: invert(1);"></span>
@@ -228,11 +228,8 @@
             </div>
         </nav>
         <br>
-    {% else %}
-        <div class="container-fluid p-0">
-    {% endif %}
 </header>
-
+{% endif %}
 <div id="flash-messages-container" style="display: none;">
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -244,11 +241,6 @@
 </div>
 
 {% block content %}{% endblock %}
-
-            </div>
-        </div>
-        </nav>
-        <br>
         
     <div class="modal fade" id="confirmationModal" tabindex="-1" aria-labelledby="modalTitle" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">

@@ -829,6 +829,22 @@ class PedidoController(BaseController):
             if pedido_actual.get('estado') != 'LISTO_PARA_ENTREGA':
                 return self.error_response("Solo se pueden despachar pedidos en estado 'LISTO_PARA_ENTREGA'.", 400)
 
+            # --- Descontar stock de productos ANTES de despachar ---
+            items_del_pedido = pedido_actual.get('items', [])
+            if not items_del_pedido:
+                return self.error_response("El pedido no tiene items para despachar.", 400)
+
+            despacho_stock_result = self.lote_producto_controller.despachar_stock_directo_por_pedido(
+                pedido_id=pedido_id,
+                items_del_pedido=items_del_pedido
+            )
+
+            if not despacho_stock_result.get('success'):
+                error_msg = despacho_stock_result.get('error', 'Error desconocido al descontar el stock.')
+                logger.error(f"Fallo al descontar stock para el despacho del pedido {pedido_id}: {error_msg}")
+                return self.error_response(f"No se pudo despachar: {error_msg}", 409)
+            # --- FIN DESCUENTO DE STOCK ---
+
             # 2. Recolectar y validar datos del formulario
             nombre_transportista = form_data.get('conductor_nombre', '').strip()
             dni_transportista = form_data.get('conductor_dni', '').strip()

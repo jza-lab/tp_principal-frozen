@@ -38,33 +38,6 @@
                             {{ estado_nombre }}
                         </a>
                     {% endfor %}
-                    <a href="{{ url_for('orden_compra.listar', estado='RECHAZADA') }}" class="btn btn-sm {% if current_status == 'RECHAZADA' %}btn-danger{% else %}btn-outline-danger{% endif %}">
-                        Rechazadas
-                    </a>
-                </div>
-
-                    <!-- Separator -->
-                    <div class="vr text-white d-none d-md-block mx-2"></div>
-
-                    <!-- Column 2: Main flow -->
-                    <div class="d-flex flex-wrap gap-2 align-items-center">
-                        {% set estados = [
-                            ('PENDIENTE', 'Pendientes'),
-                            ('APROBADA', 'Aprobadas'),
-                            ('EN ESPERA DE INSUMO', 'En Espera'),
-                            ('EN_TRANSITO', 'En Tránsito'),
-                            ('RECIBIDA', 'Recibidas')
-                        ] %}
-                        
-                        {% for estado, nombre in estados %}
-                            <a href="{{ url_for('orden_compra.listar', estado=estado) }}" class="btn btn-sm {% if current_status == estado %}btn-primary{% else %}btn-secondary{% endif %}">
-                                {{ nombre }}
-                            </a>
-                            {% if not loop.last %}
-                            <i class="bi bi-arrow-right text-white mx-1"></i>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
                 </div>
             </div>
         </div>

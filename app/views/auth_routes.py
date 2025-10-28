@@ -14,14 +14,27 @@ totem_sesion_model = TotemSesionModel()
 autorizacion_model = AutorizacionIngresoModel()
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@jwt_required(optional=True)
 def login():
     """Gestiona el inicio de sesión de los usuarios."""
-    totem_sesion_model.cerrar_sesiones_expiradas()
-    
+
+    # --- 2. VERIFICACIÓN DE SESIÓN ACTIVA ---
+    # Con @jwt_required(optional=True), get_jwt() devuelve el payload
+    # si existe, o None si no hay token (sin lanzar error).
+    jwt_payload = get_jwt()
+
+    if jwt_payload:
+        # Si hay un payload, el usuario ya está logueado.
+        rol_codigo = jwt_payload.get('rol')
+        redirect_url = get_redirect_url_by_role(rol_codigo)
+
+        # Redirigir a su dashboard correspondiente
+        return redirect(redirect_url)
+
     if request.method == 'POST':
         legajo = request.form['legajo']
         password = request.form['password']
-        
+
         respuesta = usuario_controller.autenticar_usuario_web(legajo, password)
 
         if respuesta.get('success'):
@@ -37,16 +50,16 @@ def login():
                     'user_level': usuario_data.get('roles', {}).get('nivel', 0)
                 }
             )
-            
+
             rol_codigo = usuario_data.get('roles', {}).get('codigo')
             redirect_url = get_redirect_url_by_role(rol_codigo)
-            
+
             # Creamos la respuesta de redirección
             response = redirect(redirect_url)
-            
+
             # Establecemos el token JWT en una cookie HttpOnly
             set_access_cookies(response, access_token)
-            
+
             flash(f"Bienvenido {usuario_data['nombre']}", 'success')
             return response
         else:
@@ -79,19 +92,19 @@ def identificar_rostro():
                 'user_level': usuario_data.get('roles', {}).get('nivel', 0)
             }
         )
-        
+
         rol_codigo = usuario_data.get('roles', {}).get('codigo')
         redirect_url = get_redirect_url_by_role(rol_codigo)
-        
+
         response = jsonify({
             'success': True,
             'message': 'Rostro identificado correctamente.',
             'redirect': redirect_url
         })
-        
+
         # Establecemos la cookie en la respuesta JSON
         set_access_cookies(response, access_token)
-        
+
         return response, 200
     else:
         error_message = respuesta.get('error', 'Rostro no reconocido o usuario inactivo.')
@@ -108,15 +121,15 @@ def logout():
         jwt_payload = get_jwt()
         jti = jwt_payload['jti']
         exp = jwt_payload['exp']
-        
+
         TokenBlacklistModel.add_to_blacklist(jti, exp)
-        
+
         response = redirect(url_for('auth.login'))
         unset_jwt_cookies(response)
-        
+
         flash("Sesión cerrada correctamente.", "info")
         return response
-        
+
     except Exception as e:
         # Loggear el error sería ideal en producción
         flash("Ocurrió un error al cerrar la sesión.", "error")
@@ -132,10 +145,10 @@ def perfil():
     usuario = usuario_controller.obtener_usuario_por_id(usuario_id)
     if not usuario:
         flash('Usuario no encontrado.', 'error')
-        
+
         # Preparamos una respuesta de logout para limpiar la cookie en caso de inconsistencia
         response = redirect(url_for('auth.login'))
         unset_jwt_cookies(response)
         return response
-        
+
     return render_template('usuarios/perfil.html', usuario=usuario)
