@@ -141,28 +141,19 @@ class LoteProductoController(BaseController):
 
     def obtener_stock_producto(self, producto_id: int):
         """
-        Calcula el stock disponible (real) para un producto, restando las reservas.
+        Calcula el stock disponible para un producto.
         """
         try:
-            # 1. Sumar la cantidad actual de todos los lotes disponibles
-            filtros_lotes = {'producto_id': producto_id, 'estado': 'DISPONIBLE'}
-            lotes_result = self.model.find_all(filtros_lotes)
+            filtros = {'producto_id': producto_id, 'estado': 'DISPONIBLE'}
+            lotes_result = self.model.find_all(filtros)
+
             if not lotes_result.get('success'):
                 return self.error_response(lotes_result.get('error'), 500)
-            
-            stock_fisico = sum(lote.get('cantidad_actual', 0) for lote in lotes_result.get('data', []))
 
-            # 2. Sumar todas las cantidades reservadas para este producto
-            reservas_result = self.reserva_model.find_all(filters={'producto_id': producto_id, 'estado': 'RESERVADO'})
-            if not reservas_result.get('success'):
-                 return self.error_response(reservas_result.get('error'), 500)
+            lotes_disponibles = lotes_result.get('data', [])
+            stock_total = sum(lote.get('cantidad_actual', 0) for lote in lotes_disponibles)
 
-            total_reservado = sum(reserva.get('cantidad_reservada', 0) for reserva in reservas_result.get('data', []))
-
-            # 3. Calcular stock real disponible
-            stock_disponible = stock_fisico - total_reservado
-
-            return self.success_response(data={'stock_total': stock_disponible})
+            return self.success_response(data={'stock_total': stock_total})
         except Exception as e:
             logger.error(f"Error calculando stock para producto {producto_id}: {e}", exc_info=True)
             return self.error_response('Error interno al calcular stock', 500)
@@ -208,7 +199,7 @@ class LoteProductoController(BaseController):
                 'estado': 'DISPONIBLE',
                 'cantidad_actual': ('gt', 0)
             }
-            lotes_disponibles_res = self.model.find_all(filters=filtros, order_by='created_at.asc')
+            lotes_disponibles_res = self.model.find_all(filters=filtros, order_by='fecha_vencimiento.asc.nullslast')
 
             if not lotes_disponibles_res.get('success'):
                 return {'success': False, 'error': 'No se pudieron obtener los lotes de productos.'}
@@ -399,13 +390,13 @@ class LoteProductoController(BaseController):
                 cantidad_necesaria = float(item['cantidad'])
                 cantidad_restante_a_consumir = cantidad_necesaria
 
-                # 2. Obtener lotes disponibles (FIFO por fecha de vencimiento, nulos al final)
+                # 2. Obtener lotes disponibles (FIFO)
                 filtros = {
                     'producto_id': producto_id,
                     'estado': 'DISPONIBLE', # Solo lotes disponibles
                     'cantidad_actual': ('gt', 0)
                 }
-                lotes_disponibles_res = self.model.find_all(filters=filtros, order_by='fecha_vencimiento.asc.nullslast')
+                lotes_disponibles_res = self.model.find_all(filters=filtros, order_by='created_at.asc')
 
                 if not lotes_disponibles_res.get('success'):
                     logger.error(f"Fallo al obtener lotes para producto {producto_id} del pedido {pedido_id}.")

@@ -197,6 +197,7 @@ class PedidoController(BaseController):
             pedido_id_creado = nuevo_pedido.get('id')
             mensaje_final = f"Pedido {pedido_id_creado} creado en estado '{estado_inicial}'."
 
+            # --- EJECUTAR ACCIÓN POST-CREACIÓN ---
             if accion_post_creacion == 'DESPACHAR_Y_COMPLETAR':
                 logger.info(f"Intentando despachar y completar pedido {pedido_id_creado}...")
                 pedido_con_items_resp = self.model.get_one_with_items(pedido_id_creado)
@@ -215,21 +216,25 @@ class PedidoController(BaseController):
                         return self.error_response(f"Pedido creado, pero falló despacho: {despacho_result.get('error')}", 500)
                 else:
                     logger.error(f"No se pudieron obtener items para despachar pedido {pedido_id_creado}. Dejado en LISTO_PARA_ENTREGA.")
-                
+
             elif accion_post_creacion == 'INICIAR_PROCESO_AUTO':
-                if usuario_id is None or int(usuario_id) < 0: 
+                logger.info(f"Intentando iniciar proceso automáticamente para pedido {pedido_id_creado}...")
+                # --- USAR usuario_id RECIBIDO ---
+                if not usuario_id:
                      logger.error(f"No se pudo iniciar proceso auto para pedido {pedido_id_creado}: Usuario ID no válido proporcionado.")
                      mensaje_final += " (No se pudo iniciar proceso automáticamente por falta de usuario)."
                 else:
-                    logger.info(f"Intentando iniciar proceso automáticamente para pedido {pedido_id_creado}...")
+                    # Llamar a iniciar_proceso_pedido usando el usuario_id del parámetro
                     inicio_resp, inicio_status = self.iniciar_proceso_pedido(pedido_id_creado, usuario_id)
                     if inicio_resp.get('success'):
+                        # Consultar estado final después de iniciar proceso
                         nuevo_estado_despues_inicio = self.model.find_by_id(pedido_id_creado, 'id')['data']['estado']
                         mensaje_final = f"Pedido {pedido_id_creado} creado y proceso iniciado automáticamente (Estado final: {nuevo_estado_despues_inicio}). {inicio_resp.get('message', '')}"
-                        nuevo_pedido['estado'] = nuevo_estado_despues_inicio 
+                        nuevo_pedido['estado'] = nuevo_estado_despues_inicio # Actualizar estado para la respuesta
                     else:
-                        logger.error(f"Fallo al iniciar proceso auto para pedido {pedido_id_creado}: {inicio_resp.get('error')}")
-                        mensaje_final += f" (Fallo al iniciar proceso automáticamente: {inicio_resp.get('error')})"
+                         logger.error(f"Fallo al iniciar proceso auto para pedido {pedido_id_creado}: {inicio_resp.get('error')}")
+                         mensaje_final += f" (Fallo al iniciar proceso automáticamente: {inicio_resp.get('error')})"
+                # --- FIN USO usuario_id ---
 
             # --- FIN EJECUCIÓN ACCIÓN ---
 
@@ -292,6 +297,7 @@ class PedidoController(BaseController):
         Crea las Órdenes de Producción (OPs) necesarias en este paso.
         """
         try:
+            # 1. Validar estado y datos
             pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_resp.get('success'):
                 return self.error_response("Pedido no encontrado.", 404)
@@ -299,10 +305,15 @@ class PedidoController(BaseController):
             pedido_actual = pedido_resp['data']
             if pedido_actual.get('estado') != 'PENDIENTE':
                 return self.error_response("Solo los pedidos en 'PENDIENTE' pueden pasar a 'EN PROCESO'.", 400)
+
+            # Extraer la fecha requerida del pedido
             fecha_requerido_pedido = pedido_actual.get('fecha_requerido')
+
+            # 2. Lógica de creación de OPs
             items_del_pedido = pedido_actual.get('items', [])
             ordenes_creadas = []
             for item in items_del_pedido:
+                # Solo crear OP si el producto tiene receta
                 receta_result = self.receta_model.find_all({'producto_id': item['producto_id'], 'activa': True}, limit=1)
                 if receta_result.get('success') and receta_result.get('data'):
                     datos_op = {
@@ -310,10 +321,13 @@ class PedidoController(BaseController):
                         'cantidad': item['cantidad'],
                         'fecha_planificada': date.today().isoformat(),
                         'prioridad': 'NORMAL',
+                        # --- AÑADIR FECHA META AQUÍ ---
                         'fecha_meta': fecha_requerido_pedido
+                        # ---------------------------------
                     }
                     from app.controllers.orden_produccion_controller import OrdenProduccionController
                     orden_produccion_controller = OrdenProduccionController()
+                    # --- FIX: Manejo defensivo de la respuesta ---
                     resultado_op_tuple = orden_produccion_controller.crear_orden(datos_op, usuario_id)
                     resultado_op = resultado_op_tuple[0] if isinstance(resultado_op_tuple, tuple) else resultado_op_tuple
 
@@ -324,8 +338,11 @@ class PedidoController(BaseController):
                     else:
                         logging.error(f"No se pudo crear la OP para el producto {item['producto_id']}. Error: {resultado_op.get('error')}")
                 else:
+                    # Si no hay receta, el item se considera listo para el siguiente paso.
                     self.model.update_item(item['id'], {'estado': 'ALISTADO'})
-            self.model.actualizar_estado_agregado(pedido_id)
+
+            # 3. Actualizar estado del pedido
+            self.model.actualizar_estado_agregado(pedido_id) # Esto lo pasará a EN_PROCESO si se creó alguna OP
 
             msg = f"Pedido enviado a producción. Se generaron {len(ordenes_creadas)} Órdenes de Producción."
             return self.success_response(data={'ordenes_creadas': ordenes_creadas}, message=msg)
@@ -590,20 +607,15 @@ class PedidoController(BaseController):
                         logger.warning(error_msg)
                         return self.error_response(error_msg, 400) # 400 Bad Request: Acción no permitida aún
 
-            # 3. Si todas las OPs están OK (o no había OPs), proceder con el despacho y cambio de estado
-            logger.info(f"Todas las OPs para el pedido {pedido_id} están completadas. Procediendo a despachar stock.")
-            despacho_result = self.lote_producto_controller.despachar_stock_reservado_por_pedido(pedido_id)
-
-            if not despacho_result.get('success'):
-                logger.error(f"Fallo al despachar stock para pedido {pedido_id}: {despacho_result.get('error')}")
-                return self.error_response(f"No se pudo preparar el pedido: {despacho_result.get('error')}", 400)
+            # 3. Si todas las OPs están OK (o no había OPs), proceder con el cambio de estado
+            logger.info(f"Todas las OPs para el pedido {pedido_id} están completadas. El pedido está listo para ser despachado.")
 
             # Cambiar estado del pedido y sus items
             self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
             self.model.update_items_by_pedido_id(pedido_id, {'estado': 'COMPLETADO'})
-            logger.info(f"Pedido {pedido_id} marcado como LISTO_PARA_ENTREGA y stock despachado.")
+            logger.info(f"Pedido {pedido_id} marcado como LISTO_PARA_ENTREGA.")
 
-            return self.success_response(message="Pedido preparado para entrega. El stock ha sido despachado.")
+            return self.success_response(message="Pedido preparado para entrega.")
 
         except Exception as e:
             logger.error(f"Error preparando para entrega el pedido {pedido_id}: {e}", exc_info=True)
@@ -812,22 +824,6 @@ class PedidoController(BaseController):
             if pedido_actual.get('estado') != 'LISTO_PARA_ENTREGA':
                 return self.error_response("Solo se pueden despachar pedidos en estado 'LISTO_PARA_ENTREGA'.", 400)
 
-            # --- Descontar stock de productos ANTES de despachar ---
-            items_del_pedido = pedido_actual.get('items', [])
-            if not items_del_pedido:
-                return self.error_response("El pedido no tiene items para despachar.", 400)
-
-            despacho_stock_result = self.lote_producto_controller.despachar_stock_directo_por_pedido(
-                pedido_id=pedido_id,
-                items_del_pedido=items_del_pedido
-            )
-
-            if not despacho_stock_result.get('success'):
-                error_msg = despacho_stock_result.get('error', 'Error desconocido al descontar el stock.')
-                logger.error(f"Fallo al descontar stock para el despacho del pedido {pedido_id}: {error_msg}")
-                return self.error_response(f"No se pudo despachar: {error_msg}", 409)
-            # --- FIN DESCUENTO DE STOCK ---
-
             # 2. Recolectar y validar datos del formulario
             nombre_transportista = form_data.get('conductor_nombre', '').strip()
             dni_transportista = form_data.get('conductor_dni', '').strip()
@@ -849,14 +845,27 @@ class PedidoController(BaseController):
                 'observaciones': observaciones if observaciones else None
             }
 
-            # 4. Crear el registro de despacho
+            # 4. *** Consumir el stock reservado ANTES de cualquier otra acción ***
+            logger.info(f"Consumiendo stock reservado para el pedido {pedido_id}...")
+            consumo_result = self.lote_producto_controller.despachar_stock_reservado_por_pedido(pedido_id)
+
+            if not consumo_result.get('success'):
+                error_msg = consumo_result.get('error', 'No se pudo consumir el stock reservado.')
+                logger.error(f"Fallo crítico al despachar pedido {pedido_id}: {error_msg}")
+                # Si el consumo de stock falla, no se debe continuar con el despacho.
+                return self.error_response(f"Error al despachar: {error_msg}", 500)
+
+            logger.info(f"Stock para el pedido {pedido_id} consumido exitosamente.")
+
+            # 5. Crear el registro de despacho
             resultado_despacho = self.despacho.create(datos_despacho)
             if not resultado_despacho.get('success'):
                 error_msg = resultado_despacho.get('error', 'Error desconocido al guardar los datos del despacho.')
                 logger.error(f"Error al crear registro de despacho para pedido {pedido_id}: {error_msg}")
-                return self.error_response(error_msg, 500)
+                # En un escenario real, aquí se debería intentar revertir el consumo de stock.
+                return self.error_response(f"{error_msg} (Advertencia: El stock ya fue consumido)", 500)
 
-            # 5. Actualizar el estado del pedido
+            # 6. Actualizar el estado del pedido
             update_data = {'estado': 'EN_TRANSITO'}
             result = self.model.update(pedido_id, update_data)
 
