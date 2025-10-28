@@ -180,7 +180,7 @@ class PedidoController(BaseController):
                 # El pedido quedará listo para despacho manual, no se autocompleta.
                 accion_post_creacion = None
                 for item in items_data: item['estado'] = 'ALISTADO'
-                logger.info("Stock OK. Estado inicial: LISTO_PARA_ENTREGA.")
+                logger.info("Stock suficiente para abastecer la orden de venta. Estado inicial: LISTO_PARA_ENTREGA.")
             elif produccion_requerida and auto_aprobar_produccion:
                  estado_inicial = 'PENDIENTE' # Inicia PENDIENTE
                  accion_post_creacion = 'INICIAR_PROCESO_AUTO'
