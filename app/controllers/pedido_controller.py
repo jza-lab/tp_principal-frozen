@@ -680,25 +680,35 @@ class PedidoController(BaseController):
 
     def cancelar_pedido(self, pedido_id: int) -> tuple:
         """
-        Cambia el estado de un pedido a 'CANCELADO'.
+        Cambia el estado de un pedido a 'CANCELADO' y libera el stock previamente reservado.
         """
         try:
-            # Verificar que el pedido existe y obtener su estado actual.
-            pedido_existente_resp = self.model.get_one_with_items(pedido_id)
-            if not pedido_existente_resp.get('success'):
+            # 1. Verificar que el pedido existe y no esté ya cancelado
+            pedido_existente_resp = self.model.find_by_id(pedido_id, 'id')
+            if not pedido_existente_resp.get('success') or not pedido_existente_resp.get('data'):
                  return self.error_response(f"Pedido con ID {pedido_id} no encontrado.", 404)
 
             pedido_actual = pedido_existente_resp.get('data')
-            if pedido_actual and pedido_actual.get('estado') == 'CANCELADO':
-                return self.error_response("Este pedido ya ha sido cancelado y no puede ser modificado.", 400)
+            if pedido_actual.get('estado') == 'CANCELADO':
+                return self.error_response("Este pedido ya ha sido cancelado.", 400)
 
+            # 2. Liberar el stock reservado
+            liberacion_result = self.lote_producto_controller.liberar_stock_por_cancelacion_de_pedido(pedido_id)
+            if not liberacion_result.get('success'):
+                error_msg = liberacion_result.get('error', 'Error desconocido al liberar el stock.')
+                logger.error(f"Fallo crítico al cancelar pedido {pedido_id}: No se pudo liberar el stock. Error: {error_msg}")
+                # A pesar del fallo, se continúa para marcar el pedido como cancelado, pero se advierte del problema.
+                return self.error_response(f"No se pudo liberar el stock, pero el pedido se marcará como cancelado. Contacte a soporte. Error: {error_msg}", 500)
+
+            # 3. Cambiar el estado del pedido a 'CANCELADO'
             result = self.model.cambiar_estado(pedido_id, 'CANCELADO')
             if result.get('success'):
-                return self.success_response(message="Pedido cancelado con éxito.")
+                return self.success_response(message="Pedido cancelado con éxito y stock liberado.")
             else:
-                return self.error_response(result.get('error', 'Error al cancelar el pedido.'), 500)
+                return self.error_response(result.get('error', 'El stock fue liberado, pero no se pudo cambiar el estado del pedido.'), 500)
         except Exception as e:
-            return self.error_response(f'Error interno: {str(e)}', 500)
+            logger.error(f"Error interno en cancelar_pedido: {e}", exc_info=True)
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
     def obtener_datos_para_formulario(self) -> tuple:
         """
