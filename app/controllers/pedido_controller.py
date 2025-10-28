@@ -111,7 +111,7 @@ class PedidoController(BaseController):
             logger.error(f"Error interno obteniendo detalle de pedido {pedido_id}: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
-    def crear_pedido_con_items(self, form_data: Dict, usuario_id: int) -> tuple: # <-- Aceptar usuario_id
+    def crear_pedido_con_items(self, form_data: Dict, usuario_id: Optional[int]=None) -> tuple: # <-- Aceptar usuario_id
         """
         Valida y crea pedido. Verifica stock/mínimo y puede iniciar proceso auto.
         Recibe usuario_id como parámetro.
@@ -217,7 +217,7 @@ class PedidoController(BaseController):
                 else:
                     logger.error(f"No se pudieron obtener items para despachar pedido {pedido_id_creado}. Dejado en LISTO_PARA_ENTREGA.")
 
-            elif accion_post_creacion == 'INICIAR_PROCESO_AUTO':
+            elif accion_post_creacion == 'INICIAR_PROCESO_AUTO' and usuario_id:
                 logger.info(f"Intentando iniciar proceso automáticamente para pedido {pedido_id_creado}...")
                 # --- USAR usuario_id RECIBIDO ---
                 if not usuario_id:
@@ -235,8 +235,6 @@ class PedidoController(BaseController):
                          logger.error(f"Fallo al iniciar proceso auto para pedido {pedido_id_creado}: {inicio_resp.get('error')}")
                          mensaje_final += f" (Fallo al iniciar proceso automáticamente: {inicio_resp.get('error')})"
                 # --- FIN USO usuario_id ---
-
-            # --- FIN EJECUCIÓN ACCIÓN ---
 
             # Actualizar condición de venta del cliente
             id_cliente = nuevo_pedido.get('id_cliente')
