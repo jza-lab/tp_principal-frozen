@@ -1050,3 +1050,5 @@ p {
 .state-en_proceso { background-color: #ffc107 !important; color: #343a40 !important; }
 .state-completado { background-color: #198754 !important; color: white !important; }
 .state-cancelado { background-color: #6c757d !important; color: white !important; }
+.state-listo_para_entrega {background-color: #00ffea !important; color: rgb(0, 0, 0) !important; }
+.state-en_transito {background-color: #ff7b00 !important; color: rgb(255, 255, 255) !important; }
