@@ -209,9 +209,6 @@
                                         <small class="text-muted">{{ current_user.roles.nombre }}</small>
                                     </h6>
                                 </li>
-                                {% if 'cliente_id' in session %}
-                                <li><a class="dropdown-item" href="{{ url_for('cliente.ver_consultas') }}"><i class="bi bi-patch-question-fill me-2"></i> Mis Consultas</a></li>
-                                {% endif %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li>
                                     <form action="{{ url_for('auth.logout') }}" method="POST" class="d-inline">

@@ -119,6 +119,21 @@ if (typeof INSUMOS_STOCK_DATA !== 'undefined' && INSUMOS_STOCK_DATA.length > 0) 
                         size: 14
                     }
                 },
+                subtitle: {
+                    display: true,
+                   text: [
+                        'Este gráfico de barras horizontal muestra la cantidad actual',' de stock de cada insumo según su estado (Bajo Mínimo, Sobre Mínimo).', 
+                        'Permitiendo identificar la condición del inventario rápidamente.'
+                    ],
+                    color: '#666',
+                    font: {
+                        size: 12
+                    },
+                    padding: {
+                        top: 5,
+                        bottom: 20
+                    }
+                },
                 tooltip: {
                     callbacks: {
                         label: function (context) {
@@ -138,6 +153,7 @@ if (typeof INSUMOS_STOCK_DATA !== 'undefined' && INSUMOS_STOCK_DATA.length > 0) 
             }
         },
     });
+    
 
 
 }
@@ -186,6 +202,20 @@ if (dataForDonut.length > 0) {
                         display: true,
                         text: 'Distribución de Insumos por Estado de Stock',
                         font: { size: 14, weight: 'bold' }
+                    },
+                    subtitle: {
+                        display: true,
+                        text: ['Este gráfico ciruclar representa la proporción de insumos',
+                            ' clasificados por su estado de stock (Crítico, OK o Sin Stock)',
+                            ' respecto al total de insumos registrados.'],
+                        color: '#666',
+                        font: {
+                            size: 12
+                        },
+                        padding: {
+                            top: 5,
+                            bottom: 20
+                        }
                     },
                     legend: {
                         display: true,
