@@ -32,12 +32,26 @@ if (ctxProducto && datosGraficoProductos.length > 0) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            
+
             plugins: {
                 title: {
                     display: true,
                     text: 'Composición del Inventario de Productos',
                     font: { size: 14, weight: 'bold' }
+                },
+                subtitle: {
+                    display: true,
+                    text: ['Este gráfico ciruclar representa la composición',
+                        ' del stock actual del inventario de productos',
+                        'es decir, los productos en el almacén.'],
+                    color: '#666',
+                    font: {
+                        size: 12
+                    },
+                    padding: {
+                        top: 5,
+                        bottom: 20
+                    }
                 },
                 legend: {
                     display: true,
