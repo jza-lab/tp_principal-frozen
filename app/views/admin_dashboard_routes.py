@@ -8,6 +8,7 @@ from app.controllers.notificación_controller import NotificacionController
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.controllers.cliente_controller import ClienteController # (NUEVO)
+from app.controllers.consulta_controller import ConsultaController
 from app.utils.decorators import permission_required
 from app.models.reclamo import ReclamoModel
 
@@ -95,8 +96,12 @@ def index():
     conteo_reclamos = 0
     if reclamo_stats.get('success'):
         conteo_reclamos = reclamo_stats.get('count', 0)
+
+    consulta_controller = ConsultaController()
+    conteo_consultas = consulta_controller.obtener_conteo_consultas_pendientes()
     
     return render_template('dashboard/index.html', 
+                           conteo_consultas_pendientes=conteo_consultas,
                            asistencia=asistencia,
                            ordenes_pendientes=ordenes_pendientes,
                            ordenes_aprobadas=ordenes_aprobadas,

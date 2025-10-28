@@ -49,7 +49,33 @@
     </div>
     {% endif %}
 
-    {# 2. RECLAMOS PENDIENTES (CRÍTICA/DANGER) #}
+    {# 2. CONSULTAS PENDIENTES (CRÍTICA/DANGER) #}
+    {% set can_gestionar_consultas = current_user.roles.codigo in ['DEV', 'GERENTE', 'VENTAS'] %}
+    {% if can_gestionar_consultas and conteo_consultas_pendientes > 0 %}
+     <div class="stat-card-item">
+        <div class="card stat-card h-100 border-0 shadow-sm glow-on-load">
+            <a href="{{ url_for('consulta_admin.listar_consultas') }}" style="text-decoration: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="stat-label mb-1 text-muted">Atención Requerida</div>
+                            <div class="small text-muted">Consultas de clientes sin responder:</div>
+                            <div class="stat-value text-danger">{{ conteo_consultas_pendientes }}</div>
+                            <div class="small text-danger" style="min-height: 50px;">
+                                <i class="bi bi-arrow-right-short"></i> Ir a Gestionar Consultas
+                            </div>
+                        </div>
+                        <div class="text-danger">
+                            <i class="bi bi-question-circle-fill fs-1"></i>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    {# 3. RECLAMOS PENDIENTES (CRÍTICA/DANGER) #}
     {% if 'gestionar_reclamos' is has_permission and conteo_reclamos_pendientes > 0 %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm glow-on-load">

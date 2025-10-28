@@ -1,0 +1,41 @@
+{% extends 'public/base.html' %}
+{% block title %}Mis Consultas - Frozen{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <h1>Mis Consultas</h1>
+    <p class="lead">Aquí puedes ver el historial de tus consultas y nuestras respuestas.</p>
+
+    <div class="accordion mt-4" id="consultasAccordion">
+        {% for consulta in consultas %}
+        <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-{{ loop.index }}">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}" aria-expanded="false" aria-controls="collapse-{{ loop.index }}">
+                    <strong>Consulta del {{ consulta.fecha_creacion | format_datetime }}</strong>
+                    <span class="ms-auto badge {% if consulta.estado == 'pendiente' %}bg-warning{% else %}bg-success{% endif %}">
+                        {{ consulta.estado | capitalize }}
+                    </span>
+                </button>
+            </h2>
+            <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse" aria-labelledby="heading-{{ loop.index }}" data-bs-parent="#consultasAccordion">
+                <div class="accordion-body">
+                    <p><strong>Tu pregunta:</strong></p>
+                    <p>{{ consulta.mensaje }}</p>
+                    <hr>
+                    {% if consulta.respuesta %}
+                        <p><strong>Nuestra respuesta:</strong></p>
+                        <p>{{ consulta.respuesta }}</p>
+                    {% else %}
+                        <p><strong>Aún no hemos respondido a tu consulta. Te notificaremos por email cuando lo hagamos.</strong></p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            No has realizado ninguna consulta todavía. Si tienes alguna duda, puedes <a href="{{ url_for('public.enviar_consulta') }}">contactarnos aquí</a>.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

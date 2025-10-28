@@ -2,6 +2,7 @@ from flask import Blueprint, flash, redirect, render_template, request, jsonify,
 from datetime import datetime, timedelta
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
+from app.controllers.consulta_controller import ConsultaController
 from flask_wtf import FlaskForm
 
 
@@ -153,3 +154,32 @@ def crear_reclamo_page(pedido_id):
     hoy = datetime.now().strftime('%Y-%m-%d')
     # Aquí podrías añadir lógica para verificar que el pedido pertenece al cliente en sesión si fuera necesario.
     return render_template('public/crear_reclamo.html', pedido_id=pedido_id, today=hoy, csrf_form=csrf_form)
+
+@public_bp.route('/consulta', methods=['GET', 'POST'])
+def enviar_consulta():
+    """
+    Muestra el formulario para enviar una consulta y procesa el envío.
+    """
+    csrf_form = CSRFOnlyForm()
+    if csrf_form.validate_on_submit():
+        datos_consulta = {
+            'nombre': request.form['nombre'],
+            'email': request.form['email'],
+            'mensaje': request.form['mensaje']
+        }
+        
+        # Si el usuario está logueado, adjuntamos su ID
+        if 'cliente_id' in session:
+            datos_consulta['cliente_id'] = session['cliente_id']
+
+        consulta_controller = ConsultaController()
+        _, error = consulta_controller.crear_consulta(datos_consulta)
+
+        if error:
+            flash(error, 'danger')
+            return redirect(url_for('public.enviar_consulta'))
+
+        flash('Tu consulta ha sido enviada con éxito. Te responderemos a la brevedad.', 'success')
+        return redirect(url_for('public.faq'))
+
+    return render_template('public/formulario_consulta.html', csrf_form=csrf_form)

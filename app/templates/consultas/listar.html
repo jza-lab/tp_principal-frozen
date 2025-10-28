@@ -1,0 +1,54 @@
+{% extends 'layouts/base.html' %}
+{% block title %}Gestión de Consultas{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title">Consultas de Clientes</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Nombre</th>
+                            <th>Email</th>
+                            <th>Mensaje</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for consulta in consultas %}
+                        <tr>
+                            <td>{{ consulta.fecha_creacion | format_datetime }}</td>
+                            <td>{{ consulta.nombre }}</td>
+                            <td>{{ consulta.email }}</td>
+                            <td>{{ consulta.mensaje | truncate(100) }}</td>
+                            <td>
+                                {% if consulta.estado == 'pendiente' %}
+                                <span class="badge bg-warning">Pendiente</span>
+                                {% else %}
+                                <span class="badge bg-success">Respondida</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('consulta_admin.responder_consulta', consulta_id=consulta.id) }}" class="btn btn-primary btn-sm">
+                                    {% if consulta.estado == 'pendiente' %}Responder{% else %}Ver Respuesta{% endif %}
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center">No hay consultas.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

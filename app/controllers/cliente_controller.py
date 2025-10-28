@@ -300,6 +300,10 @@ class ClienteController(BaseController):
             cliente_encontrado.pop('contrasena', None)
             
             serialized_data = self.schema.dump(cliente_encontrado)
+            
+            if 'email' not in serialized_data:
+                serialized_data['email'] = email # Usamos el email de la entrada del login, que es el correcto.
+
             return self.success_response(data=serialized_data)
 
         except Exception as e:

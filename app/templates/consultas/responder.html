@@ -1,0 +1,36 @@
+{% extends 'layouts/base.html' %}
+{% block title %}Responder Consulta{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title">Detalle de la Consulta</h5>
+        </div>
+        <div class="card-body">
+            <p><strong>De:</strong> {{ consulta.nombre }} ({{ consulta.email }})</p>
+            <p><strong>Fecha:</strong> {{ consulta.fecha_creacion | format_datetime }}</p>
+            <hr>
+            <p><strong>Consulta:</strong></p>
+            <p>{{ consulta.mensaje }}</p>
+            <hr>
+
+            {% if consulta.estado == 'pendiente' %}
+                <form method="POST" action="{{ url_for('consulta_admin.responder_consulta', consulta_id=consulta.id) }}">
+                    {{ csrf_form.csrf_token }}
+                    <div class="mb-3">
+                        <label for="respuesta" class="form-label">Tu Respuesta:</label>
+                        <textarea class="form-control" id="respuesta" name="respuesta" rows="5" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success">Enviar Respuesta</button>
+                    <a href="{{ url_for('consulta_admin.listar_consultas') }}" class="btn btn-secondary">Cancelar</a>
+                </form>
+            {% else %}
+                <h5>Respuesta Enviada</h5>
+                <p>{{ consulta.respuesta }}</p>
+                <a href="{{ url_for('consulta_admin.listar_consultas') }}" class="btn btn-primary">Volver a la Lista</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

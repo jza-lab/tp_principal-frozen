@@ -2,6 +2,7 @@ from flask import Blueprint, request, render_template, jsonify, session, redirec
 from app.controllers.cliente_controller import ClienteController
 from app.utils.decorators import permission_required, permission_any_of
 from app.controllers.reclamo_controller import ReclamoController
+from app.controllers.consulta_controller import ConsultaController
 
 cliente_bp = Blueprint('cliente', __name__, url_prefix='/cliente')
 cliente_controller = ClienteController()
@@ -40,6 +41,7 @@ def login():
             
             session['cliente_id'] = cliente_data['id']
             session['cliente_nombre'] = cliente_data['nombre']
+            session['cliente_email'] = cliente_data['email']
             session['cliente_aprobado'] = cliente_data.get('estado_aprobacion') == 'aprobado'
             
             flash('Inicio de sesión exitoso.', 'success')
@@ -53,6 +55,7 @@ def logout():
     session.pop('cliente_id', None)
     session.pop('cliente_nombre', None)
     session.pop('cliente_aprobado', None)
+    session.pop('cliente_email', None)
     flash('Has cerrado sesión.', 'info')
     return redirect(url_for('public.index'))
 
@@ -79,3 +82,16 @@ def perfil():
     else:
         flash(response.get('error', 'No se pudo cargar tu perfil.'), 'error')
         return redirect(url_for('public.index'))
+
+@cliente_bp.route('/consultas')
+def ver_consultas():
+    if 'cliente_id' not in session:
+        flash('Por favor, inicia sesión para ver tus consultas.', 'info')
+        return redirect(url_for('cliente.login'))
+
+    cliente_id = session['cliente_id']
+    consulta_controller = ConsultaController()
+    consultas_response = consulta_controller.obtener_consultas_por_cliente(cliente_id)
+    consultas = consultas_response.get('data', [])
+
+    return render_template('public/mis_consultas.html', consultas=consultas)

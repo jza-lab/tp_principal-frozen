@@ -1,0 +1,30 @@
+{% extends 'public/base.html' %}
+{% block title %}Enviar una Consulta - Frozen{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <h1 class="animate-on-load" style="animation-delay: 0.1s;">Envíanos tu Consulta</h1>
+    <p class="lead animate-on-load" style="animation-delay: 0.2s;">
+        Completa el siguiente formulario y nos pondremos en contacto a la brevedad.
+    </p>
+
+    <div class="form-container mt-4 animate-on-load" style="animation-delay: 0.3s;">
+        <form method="POST" action="{{ url_for('public.enviar_consulta') }}">
+            {{ csrf_form.csrf_token }}
+            <div class="mb-3">
+                <label for="nombre" class="form-label">Nombre Completo</label>
+                <input type="text" class="form-control" id="nombre" name="nombre" value="{{ session.get('cliente_nombre', '') }}" required {% if session.get('cliente_id') %}readonly{% endif %}>
+            </div>
+            <div class="mb-3">
+                <label for="email" class="form-label">Correo Electrónico</label>
+                <input type="email" class="form-control" id="email" name="email" value="{{ session.get('cliente_email', '') }}" required {% if session.get('cliente_id') %}readonly{% endif %}>
+            </div>
+            <div class="mb-3">
+                <label for="mensaje" class="form-label">Tu Consulta</label>
+                <textarea class="form-control" id="mensaje" name="mensaje" rows="5" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Enviar Consulta</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

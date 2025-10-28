@@ -101,16 +101,6 @@
             </div>
 
             <div class="nav-mobile-controls d-flex">
-                
-                <!-- ESTA ES LA CAMPANA MÓVIL (COPIA) -->
-                {% if session.cliente_id and conteo_reclamos_respondidos > 0 %}
-                <a class="nav-link notification-bell" 
-                   href="{{ url_for('cliente.perfil') }}" 
-                   title="{{ conteo_reclamos_respondidos }} reclamo(s) respondido(s)">
-                    <i class="fa-solid fa-bell"></i>
-                    <span class="notification-badge">{{ conteo_reclamos_respondidos }}</span>
-                </a>
-                {% endif %}
 
                 <!-- Este es el botón toggle hamburguesa -->
                 <button class="nav-toggle" aria-label="Toggle navigation">
