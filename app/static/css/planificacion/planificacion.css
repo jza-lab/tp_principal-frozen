@@ -180,9 +180,11 @@
     text-align: left;
     background-color: #f8f9fa;
 }
+
 /* Resaltar cabecera fin de semana */
 .crp-tabla thead th.weekend-header {
     background-color: #fff3cd; /* Amarillo pálido */
+    text-align: center; /* <-- AÑADIR ESTA LÍNEA */
 }
 
 /* Celdas de datos */

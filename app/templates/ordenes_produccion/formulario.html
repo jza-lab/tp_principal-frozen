@@ -63,13 +63,14 @@
                         </div>
 
                         <div class="col-md-6">
-                            {# Cambiar label #}
                             <label for="fecha_meta" class="form-label">Fecha Meta <span class="text-danger">*</span></label> 
                             <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-calendar-check-fill text-danger"></i></span> {# Icono ajustado #}
-                                {# Cambiar id y name #}
+                                <span class="input-group-text"><i class="bi bi-calendar-check-fill text-danger"></i></span>
+                                {# --- AÑADIR ATRIBUTO min --- #}
                                 <input type="date" class="form-control" id="fecha_meta" name="fecha_meta" 
-                                    value="{{ orden.fecha_meta if orden else '' }}" required>
+                                    value="{{ orden.fecha_meta if orden else fecha_hoy }}" required
+                                    min="{{ fecha_hoy }}"> {# <-- Añadido aquí #}
+                                {# ------------------------- #}
                             </div>
                         </div>
 

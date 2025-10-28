@@ -261,7 +261,7 @@ class LoteProductoController(BaseController):
     def crear_lote_desde_formulario(self, form_data: dict, usuario_id: int) -> tuple:
             """Crea un nuevo lote de producto desde un formulario web."""
             try:
-                data = form_data.to_dict()
+                data = form_data
                 data.pop('csrf_token', None)
 
                 # Asignar cantidad_actual si existe cantidad_inicial
@@ -506,9 +506,9 @@ class LoteProductoController(BaseController):
             try:
                 # Obtener el umbral de días de la configuración
                 dias_alerta = self.config_controller.obtener_dias_vencimiento() # <--- MODIFICADO
-                
+
                 # Llama al método del modelo que busca lotes por vencer en el número de días configurado
-                vencimiento_result = self.model.find_por_vencimiento(dias_alerta) 
+                vencimiento_result = self.model.find_por_vencimiento(dias_alerta)
 
                 if vencimiento_result.get('success'):
                     return len(vencimiento_result.get('data', []))
@@ -516,7 +516,7 @@ class LoteProductoController(BaseController):
             except Exception as e:
                 logger.error(f"Error contando alertas de vencimiento de producto: {str(e)}")
                 return 0
-        
+
     def obtener_datos_grafico_inventario(self) -> dict:
         """
         Prepara los datos del gráfico de composición del inventario de productos.
@@ -524,11 +524,11 @@ class LoteProductoController(BaseController):
         """
         try:
             result = self.model.obtener_composicion_inventario()
-            
+
             if not result.get('success'):
                 # CORRECCIÓN: self.error_response(...) ya devuelve (dict, 500).
                 return self.error_response(result.get('error', 'Error al obtener datos para el gráfico.'), 500)
-            
+
             # CORRECCIÓN: self.success_response(data) ya devuelve (dict, 200).
             return self.success_response(result['data'])
 
@@ -546,18 +546,18 @@ class LoteProductoController(BaseController):
             codigo_producto = row.get('codigo_producto')
             if pd.isna(codigo_producto) or codigo_producto is None:
                 return False, error_msg("La columna 'codigo_producto' no puede estar vacía.")
-            
+
             producto_result = self.producto_model.find_by_codigo(str(codigo_producto))
             if not producto_result.get('success') or not producto_result.get('data'):
                 return False, error_msg(f"Producto con código '{codigo_producto}' no encontrado.")
-            
+
             producto_id = producto_result['data']['id']
 
             # 2. Validar Cantidad
             cantidad_inicial = row.get('cantidad_inicial')
             if pd.isna(cantidad_inicial) or cantidad_inicial is None:
                 return False, error_msg("La columna 'cantidad_inicial' no puede estar vacía.")
-            
+
             try:
                 cantidad_inicial = float(cantidad_inicial)
                 if cantidad_inicial <= 0:
@@ -581,7 +581,7 @@ class LoteProductoController(BaseController):
                 fecha_produccion = pd.to_datetime(fecha_produccion_str).date() if pd.notna(fecha_produccion_str) else date.today()
             except (ValueError, TypeError):
                 return False, error_msg(f"Formato de 'fecha_produccion' inválido: '{fecha_produccion_str}'. Use AAAA-MM-DD.")
-            
+
             fecha_vencimiento_str = row.get('fecha_vencimiento')
             fecha_vencimiento = None
             if pd.notna(fecha_vencimiento_str):
@@ -612,7 +612,7 @@ class LoteProductoController(BaseController):
         """Procesa un archivo Excel para crear lotes de productos masivamente con validación completa previa."""
         try:
             df = pd.read_excel(archivo)
-            
+
             lotes_a_crear = []
             errores = []
 
@@ -623,7 +623,7 @@ class LoteProductoController(BaseController):
                     lotes_a_crear.append(data_o_error)
                 else:
                     errores.append(data_o_error)
-            
+
             # 2. Fase de Creación (Todo o Nada)
             if errores:
                 resultados = {'creados': 0, 'errores': len(errores), 'detalles': errores, 'estado_general': 'ERROR'}
@@ -668,7 +668,7 @@ class LoteProductoController(BaseController):
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df.to_excel(writer, sheet_name='Lotes', index=False)
-            
+
             output.seek(0)
             return output
 

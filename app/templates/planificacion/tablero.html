@@ -276,6 +276,9 @@
                     {% set fecha_fin = date.fromisoformat(fin_semana_crp) %}
                     {% set num_dias = (fecha_fin - fecha_inicio).days + 1 %}
                     
+                    {# --- CORRECCIÓN DE LOCALE: Mapa numérico (infalible) --- #}
+                    {% set dias_lista = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] %}
+
                     {# Resumen semanal #}
                     <div class="row mb-3">
                         <div class="col-12">
@@ -335,12 +338,15 @@
                                 <tr>
                                     <th class="text-start" style="width: 12%;">Centro / Métrica</th> {# Título ajustado #}
                                     {% for i in range(num_dias) %}
-                                        {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
-                                        {# Marcar fines de semana con clase #}
-                                        <th class="{% if fecha_dia.weekday() >= 5 %}weekend-header{% endif %}">
-                                            {{ fecha_dia.strftime('%a') | capitalize }}<br>
-                                            <small class="text-muted">{{ fecha_dia.strftime('%d/%m') }}</small>
-                                        </th>
+                                    {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
+
+                                    {% set dia_num = fecha_dia.weekday() %}
+
+                                    <th class="{% if fecha_dia.weekday() >= 5 %}weekend-header text-center{% endif %}">
+                                        {# Usar la lista numérica para obtener la abreviatura #}
+                                        {{ dias_lista[dia_num] }}<br>
+                                        <small class="text-muted">{{ fecha_dia.strftime('%d/%m') }}</small>
+                                    </th>
                                     {% endfor %}
                                 </tr>
                             </thead>
@@ -370,11 +376,12 @@
                                         {% for i in range(num_dias) %}
                                             {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
                                             {% set fecha_iso = fecha_dia.isoformat() %}
+                                            {# Obtener el dato de la carga #}
                                             {% set carga = carga_crp.get(centro_id, {}).get(fecha_iso, 0) %}
+                                            
+                                            {# Esta es la celda de DATOS correcta (td) #}
                                             <td class="{% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %}">
-                                                <span class="fw-bold {% if carga > 0 %}text-dark{% else %}text-muted{% endif %}">
-                                                    {{ carga | round(0) }}
-                                                </span>
+                                                <span class="fw-bold text-danger">{{ carga | round(0) }}</span>
                                                 <small class="text-muted d-block">min</small>
                                             </td>
                                         {% endfor %}
@@ -523,7 +530,31 @@
                             {% endfor %}
                         </div>
                         {% endif %}
-                        {# ----------------------------------- #}</div><div class="mb-2"><label class="form-label form-label-sm fw-bold">Fecha Inicio <span class="text-danger">*</span></label><input type="date" class="form-control form-control-sm mb-1 modal-input-fecha-inicio" value="{{ fecha_inicio_sugerida }}" title="Fecha Inicio"></div><div class="mb-2"><label class="form-label form-label-sm">Supervisor (Opc)</label><select class="form-select form-select-sm mb-1 modal-select-supervisor" title="Supervisor"><option value="">Seleccionar...</option> {% for sup in supervisores %}<option value="{{ sup.id }}">{{ sup.nombre }}</option>{% endfor %}</select></div><div class="mb-2"><label class="form-label form-label-sm">Operario (Opc)</label><select class="form-select form-select-sm mb-1 modal-select-operario" title="Operario"><option value="">Seleccionar...</option> {% for op_user in operarios %}<option value="{{ op_user.id }}">{{ op_user.nombre }}</option>{% endfor %}</select></div></div></div></div></div>
+                        {# ----------------------------------- #}</div>
+                        <div class="mb-2">
+                            <label class="form-label form-label-sm fw-bold">Fecha de Inicio Planificada <span class="text-danger">*</span></label>
+                            {# --- AÑADIR ATRIBUTO min --- #}
+                            <input type="date" 
+                                   class="form-control form-control-sm mb-1 modal-input-fecha-inicio" 
+                                   value="{{ fecha_inicio_sugerida }}" 
+                                   title="Fecha Inicio"
+                                   min="{{ now.date().isoformat() }}"> {# <-- Añadido aquí #}
+                            {# ------------------------- #}
+                        </div>
+                        <div class="mb-2"><label class="form-label form-label-sm">Supervisor (Opc)</label><select
+                                class="form-select form-select-sm mb-1 modal-select-supervisor" title="Supervisor">
+                                <option value="">Seleccionar...</option> {% for sup in supervisores %}<option value="{{ sup.id }}">{{ sup.nombre
+                                    }}</option>{% endfor %}
+                            </select></div>
+                        <div class="mb-2"><label class="form-label form-label-sm">Operario (Opc)</label><select
+                                class="form-select form-select-sm mb-1 modal-select-operario" title="Operario">
+                                <option value="">Seleccionar...</option> {% for op_user in operarios %}<option value="{{ op_user.id }}">{{
+                                    op_user.nombre }}</option>{% endfor %}
+                            </select></div>
+                        </div>
+                        </div>
+                        </div>
+                        </div>
           <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-success btn-lg btn-consolidar-y-aprobar"><i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote</button></div></div></div></div>
     {% endfor %}
 {% endif %}
