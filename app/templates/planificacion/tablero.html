@@ -72,7 +72,7 @@
                         </td>
                         <td class="text-center">
 
-                            {% if 'crear_orden_de_produccion' is has_permission %}
+                            {% if 'crear_orden_de_produccion' is has_permission and not is_operario %}
                             <button class="btn btn-sm btn-primary">
                                 <i class="bi bi-calendar-check me-1"></i> Planificar Lote
                             </button>
@@ -537,7 +537,6 @@
     {% endfor %}
     </div>
 </div>
-{% endif %} {# Fin del if has_permission('produccion_gestion_completa') #}
 
 {# --- MODALES DE PLANIFICACIÓN (SIN CAMBIOS) --- #}
 {% if mps_items %}
@@ -635,6 +634,7 @@
     <script>
         const listaSupervisores = {{ supervisores | tojson }};
         const listaOperarios = {{ operarios | tojson }};
+        const IS_OPERARIO = {{ is_operario | tojson | safe }};
     </script>
     <script src="{{ url_for('static', filename='js/planificacion/planificacion.js') }}"></script>
     <script src="{{ url_for('static', filename='js/planificacion/planificacion.js') }}"></script>

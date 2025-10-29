@@ -51,7 +51,7 @@ CANONICAL_PERMISSION_MAP = {
     'produccion_gestion_completa': ['SUPERVISOR'],
     'produccion_ejecucion': ['OPERARIO', 'SUPERVISOR'],
     'produccion_consulta': [ 'OPERARIO', 'SUPERVISOR', 'GERENTE'],
-    'consultar_plan_de_produccion': ['OPERARIO', 'VENDEDOR', 'SUPERVISOR', 'GERENTE'],
+    'consultar_plan_de_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE'],
 
 
     # Módulo: Almacén e Inventario

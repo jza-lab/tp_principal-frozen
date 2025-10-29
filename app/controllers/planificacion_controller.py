@@ -365,32 +365,32 @@ class PlanificacionController(BaseController):
             logger.error(f"Error recomendando línea para OP {op_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
-    def mover_orden(self, op_id: int, nuevo_estado: str) -> tuple:
+    def mover_orden(self, op_id: int, nuevo_estado: str, user_role: str) -> tuple:
         """
-        Orquesta el cambio de estado de una OP.
-        Es inteligente: si el estado es 'COMPLETADA', llama al método complejo.
-        Si no, llama al método simple.
+        Orquesta el cambio de estado de una OP, validando permisos según el rol.
         """
         if not nuevo_estado:
             return self.error_response("El 'nuevo_estado' es requerido.", 400)
 
+        # Validar permisos para OPERARIO
+        if user_role == 'OPERARIO':
+            allowed_transitions = [
+                'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO'
+            ]
+            if nuevo_estado not in allowed_transitions:
+                return self.error_response("Movimiento no permitido para este rol.", 403)
+
         try:
             resultado = {}
-            # --- LÓGICA DE DECISIÓN ---
-            # Si la tarjeta se mueve a una columna que implica una lógica de negocio compleja...
             if nuevo_estado == 'COMPLETADA':
-                # Llamamos al método que sabe cómo crear lotes y reservas.
-                # NOTA: Este método devuelve una tupla (response, status), la manejamos diferente.
                 response_dict, _ = self.orden_produccion_controller.cambiar_estado_orden(op_id, nuevo_estado)
                 resultado = response_dict
             else:
-                # Para cualquier otro movimiento en el Kanban, usamos el método simple.
                 resultado = self.orden_produccion_controller.cambiar_estado_orden_simple(op_id, nuevo_estado)
 
             if resultado.get('success'):
                 return self.success_response(data=resultado.get('data'))
             else:
-                # Usamos 500 para errores de negocio complejos que pueden ocurrir.
                 return self.error_response(resultado.get('error'), 500)
 
         except Exception as e:

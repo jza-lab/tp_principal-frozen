@@ -136,15 +136,23 @@ document.addEventListener('DOMContentLoaded', function () {
                         const toState = evt.to.closest('.kanban-column').dataset.estado;
                         // ... (resto de la lógica onMove SIN CAMBIOS) ...
                         // --- REGLAS DE TRANSICIÓN DEFINIDAS ---
-                        const allowedTransitions = {
-                            'EN ESPERA': [], // No se puede mover manualmente DESDE aquí
-                            'LISTA PARA PRODUCIR': ['EN_LINEA_1', 'EN_LINEA_2'], // Puede ir a L1 o L2 (si la línea asignada coincide)
-                            'EN_LINEA_1': ['EN_EMPAQUETADO'],                   // L1 solo puede ir a Empaquetado
-                            'EN_LINEA_2': ['EN_EMPAQUETADO'],                   // L2 solo puede ir a Empaquetado
-                            'EN_EMPAQUETADO': ['CONTROL_DE_CALIDAD'],         // Empaquetado solo a Control de Calidad
-                            'CONTROL_DE_CALIDAD': ['COMPLETADA'],             // Control de Calidad solo a Completada
-                            'COMPLETADA': []                                  // No se puede mover DESDE Completada
+                        const operarioTransitions = {
+                            'LISTA PARA PRODUCIR': ['EN_LINEA_1', 'EN_LINEA_2'],
+                            'EN_LINEA_1': ['EN_EMPAQUETADO'],
+                            'EN_LINEA_2': ['EN_EMPAQUETADO'],
                         };
+
+                        const supervisorTransitions = {
+                            'EN ESPERA': [],
+                            'LISTA PARA PRODUCIR': ['EN_LINEA_1', 'EN_LINEA_2'],
+                            'EN_LINEA_1': ['EN_EMPAQUETADO'],
+                            'EN_LINEA_2': ['EN_EMPAQUETADO'],
+                            'EN_EMPAQUETADO': ['CONTROL_DE_CALIDAD'],
+                            'CONTROL_DE_CALIDAD': ['COMPLETADA'],
+                            'COMPLETADA': []
+                        };
+
+                        const allowedTransitions = IS_OPERARIO ? operarioTransitions : supervisorTransitions;
                     // ------------------------------------
                         if (!allowedTransitions[fromState] || !allowedTransitions[fromState].includes(toState)) { 
                             console.warn(`Movimiento NO PERMITIDO...`); return false; 

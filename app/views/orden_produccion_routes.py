@@ -178,18 +178,27 @@ def detalle(id):
         return redirect(url_for("orden_produccion.listar"))
     orden = respuesta.get("data")
 
-    # Verificación de permisos para OPERARIO
-    current_user = get_jwt_identity()
-    user_roles = current_user.get('roles', [])
+    # --- BLOQUE CORREGIDO ---
+    # 1. Obtenemos el ID del usuario (esto sí es un string o int)
+    current_user_id = get_jwt_identity()
+    
+    # 2. Obtenemos TODOS los claims (esto es el diccionario que contiene los roles)
+    claims = get_jwt() 
+    user_roles = claims.get('roles', [])
+    # --- FIN CORRECCIÓN ---
+
     if isinstance(user_roles, dict):
         user_roles = [user_roles.get('codigo')]
     elif not isinstance(user_roles, list):
         user_roles = [user_roles]
 
     if 'OPERARIO' in user_roles and 'SUPERVISOR' not in user_roles:
-        if orden.get('operario_asignado_id') != current_user.get('id'):
+        # 3. Comparamos usando el ID que obtuvimos correctamente
+        if orden.get('operario_asignado_id') != current_user_id: 
             flash("No tiene permiso para ver esta orden de producción.", "error")
             return redirect(url_for("orden_produccion.listar"))
+    # --- FIN BLOQUE CORREGIDO ---
+            
     desglose_response = controller.obtener_desglose_origen(id)
     desglose_origen = desglose_response.get("data", [])
     ingredientes_response = (

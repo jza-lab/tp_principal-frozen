@@ -179,7 +179,7 @@
     {% endif %}
 
     {# 5. ALERTAS DE STOCK INSUMOS (CRÍTICA/WARNING) #}
-    {% if can_ver_almacen %}
+    {% if can_ver_almacen and not is_operario %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if alertas_stock_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" style="text-decoration: none;">
@@ -225,7 +225,7 @@
     {% endif %}
 
     {# 6. RIESGO PROD. VENCIMIENTO (WARNING) #}
-    {% if can_ver_produccion %}
+    {% if can_ver_produccion and not is_operario %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if lotes_producto_vencimiento_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
@@ -254,7 +254,7 @@
     {% endif %}
     
     {# 7. RIESGO DE VENCIMIENTO INSUMOS (WARNING) #}
-    {% if can_ver_almacen %}
+    {% if can_ver_almacen and not is_operario %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if lotes_vencimiento_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('inventario_view.listar_lotes') }}" style="text-decoration: none;">
