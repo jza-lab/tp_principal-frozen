@@ -1,4 +1,4 @@
-{% extends 'layouts/base.html' %}
+{% extends 'layouts/app_layout.html' %}
 
 {% block title %}Detalle Reclamo #{{ reclamo.id }}{% endblock %}
 
@@ -13,7 +13,7 @@
 </style>
 {% endblock %}
 
-{% block content %}
+{% block app_content %}
 {% set estado_config = {
     'pendiente': {'class': 'bg-danger-soft text-danger', 'text': 'Pendiente (Admin)'},
     'respondida': {'class': 'bg-warning-soft text-warning', 'text': 'Respondido (Cliente)'},

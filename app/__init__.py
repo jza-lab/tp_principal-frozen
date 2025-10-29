@@ -1,16 +1,16 @@
 from flask import Flask, redirect, url_for, flash, session
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, unset_jwt_cookies, jwt_required
+from flask_jwt_extended import JWTManager, unset_jwt_cookies, get_current_user
+from flask_jwt_extended import JWTManager, unset_jwt_cookies, get_current_user, verify_jwt_in_request
 from flask_wtf.csrf import CSRFProtect
 from flask_wtf import FlaskForm
 from app.config import Config
 import logging
 from .json_encoder import CustomJSONEncoder
-from datetime import timedelta
+from datetime import timedelta, datetime
 
-from app.utils.template_helpers import _format_datetime_filter, _formato_moneda_filter, _has_permission_filter, _inject_permission_map, _inject_user_from_jwt
 from app.models.token_blacklist_model import TokenBlacklistModel
-from app.controllers.usuario_controller import UsuarioController
+from app.models.rol import RoleModel
 from app.controllers.cliente_controller import ClienteController
 from app.models.reclamo import ReclamoModel
 from types import SimpleNamespace
@@ -28,20 +28,28 @@ def check_if_token_in_blocklist(jwt_header, jwt_payload):
 def user_lookup_callback(_jwt_header, jwt_data):
     """
     Esta función se llama cada vez que se protege una ruta con jwt_required.
-    Devuelve el objeto de usuario basado en el 'sub' del token JWT.
-    El rol y los permisos se cargan desde la base de datos, no desde el token.
+    Ahora es 'stateless'. Devuelve un objeto de usuario construido a partir
+    de las 'claims' del propio token JWT, evitando una consulta a la base de datos.
     """
     identity = jwt_data["sub"]
-    user_id = int(identity)
+    rol_codigo = jwt_data.get('rol')
 
-    user_controller = UsuarioController()
-    user_result = user_controller.model.find_by_id(user_id)
-
-    if user_result.get('success'):
-        user_data = user_result['data']
-        user_data['nombre_completo'] = f"{user_data.get('nombre', '')} {user_data.get('apellido', '')}".strip()
-        return SimpleNamespace(**user_data)
-    return None
+    rol_obj = None
+    if rol_codigo:
+        rol_result = RoleModel().find_by_codigo(rol_codigo) # Asume que tienes un método find_by_codigo en RoleModel
+        if rol_result.get('success'):
+            rol_obj = rol_result['data']
+    # Se reconstruye un objeto de usuario mínimo para ser compatible con el resto de la app
+    # sin necesidad de consultar la base de datos.
+    user_data = {
+        'id': int(identity),
+        'nombre': jwt_data.get('nombre'),
+        'apellido': jwt_data.get('apellido'),
+        'rol': rol_codigo,
+        'nombre_completo': f"{jwt_data.get('nombre', '')} {jwt_data.get('apellido', '')}".strip(),
+        'roles': rol_obj or {'codigo': rol_codigo, 'nombre': rol_codigo} # Fallback por si no se encuentra el rol
+    }
+    return SimpleNamespace(**user_data)
 
 
 @jwt.expired_token_loader
@@ -85,7 +93,6 @@ def _register_blueprints(app: Flask):
     from app.views.admin_reclamo_routes import admin_reclamo_bp # <-- IMPORTACIÓN DE ADMIN RECLAMO
     from app.views.admin_consulta_routes import consulta_bp
     from app.views.receta_routes import receta_bp
-    
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
@@ -130,6 +137,51 @@ def _register_error_handlers(app: Flask):
     def internal_error(error):
         return {'success': False, 'error': 'Error interno del servidor'}, 500
 
+def _format_datetime_filter(value, format='%d/%m/%Y %H:%M'):
+    """Filtro Jinja para formatear fechas y horas."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except ValueError:
+            return value
+    if isinstance(value, datetime):
+        return value.strftime(format)
+    return value
+
+def _formato_moneda_filter(value):
+    """Filtro Jinja para formatear un número como moneda."""
+    if value is None:
+        return "$ 0.00"
+    try:
+        # Formatea con separador de miles y dos decimales
+        return f"$ {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except (ValueError, TypeError):
+        return value
+
+def _has_permission_filter(accion: str) -> bool:
+    """
+    Verifica si el rol del usuario actual (almacenado en la sesión de Flask)
+    tiene el permiso para realizar una acción específica.
+    """
+    try:
+        # Usamos get_current_user(), que devuelve el usuario si está logueado, o None si no lo está.
+        # Esto funciona gracias a nuestro user_lookup_loader.
+        user = get_current_user()
+        if not user:
+            return False
+        
+        # El user_lookup_loader ya nos da un objeto con el rol.
+        rol_usuario = getattr(user, 'rol', None)
+        if not rol_usuario:
+            return False
+        
+        return RoleModel.check_permission(rol_usuario, accion)
+    except RuntimeError: # Capturamos específicamente el error de "fuera de contexto"
+        # En caso de cualquier error (ej: fuera de un contexto de request), denegar permiso.
+        return False
+
 def create_app() -> Flask:
     """
     Factory para crear y configurar la aplicación Flask.
@@ -145,9 +197,6 @@ def create_app() -> Flask:
     CORS(app, resources={r"/api/*": {"origins": "*"}})
     csrf.init_app(app)
     jwt.init_app(app)
-
-    # --- INICIO DE LA CORRECCIÓN ---
-    # Todos los context processors y filtros se definen aquí centralizadamente.
 
     @app.context_processor
     def inject_globals():
@@ -187,35 +236,41 @@ def create_app() -> Flask:
                 conteo = 0
         return dict(conteo_reclamos_respondidos=conteo)
 
-    # --- Lógica movida desde template_helpers.py ---
+    @app.context_processor
+    def _inject_permission_map():
+        """Inyecta el mapa de permisos en el contexto de la plantilla."""
+        return dict(permission_map=RoleModel.get_permission_map())
+
+    @app.context_processor
+    def _inject_user_from_jwt():
+        """
+        Inyecta los datos del usuario desde el token JWT en el contexto de la plantilla,
+        si el usuario está autenticado.
+        """
+        from flask_jwt_extended import get_current_user
+        try:
+            return dict(current_user=get_current_user())
+        except RuntimeError:
+            # Esto ocurre si no hay un contexto de petición JWT activo (ej. en páginas públicas).
+            return dict(current_user=None)
     
-    # Registrar filtros
+    # Registrar filtros directamente en el entorno de Jinja
     app.jinja_env.filters['format_datetime'] = _format_datetime_filter
     app.jinja_env.filters['formato_moneda'] = _formato_moneda_filter
     app.jinja_env.globals['has_permission'] = _has_permission_filter
     app.jinja_env.tests['has_permission'] = _has_permission_filter
     
-    # Registrar context processors que estaban en template_helpers
-    app.context_processor(_inject_permission_map)
-    app.context_processor(_inject_user_from_jwt)
-    
-    # --- FIN DE LA CORRECCIÓN ---
-
     _register_blueprints(app)
     _register_error_handlers(app)
     
-    # Eliminamos la llamada conflictiva
-    # register_template_extensions(app)
-
     @app.before_request
-    @jwt_required(optional=True)
     def before_request_loader():
         """
-        Asegura que el `current_user` se cargue desde el token JWT
-        en cada solicitud, si el token está presente.
-        Esto resuelve problemas de caché donde `current_user` no está disponible
-        en la primera carga para las plantillas.
+        Se ejecuta antes de cada petición.
+        Intenta verificar si hay un token JWT en la petición (de forma opcional).
+        Esto asegura que `get_current_user()` y la variable `current_user` en Jinja
+        funcionen en todas las plantillas, incluso en vistas no protegidas.
         """
-        pass
+        verify_jwt_in_request(optional=True)
 
     return app

@@ -1,4 +1,4 @@
-{% extends "layouts/base.html" %}
+{% extends "layouts/app_layout.html" %}
 
 {% block title %}Perfil de Empleado - {{ usuario.nombre }} {{ usuario.apellido }}{% endblock %}
 
@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/crearUsuario.css') }}">
 {% endblock %}
 
-{% block content %}
+{% block app_content %}
 <div class="profile-container">
     <!-- Toast Container -->
     <div id="toast-container-profile" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1055">

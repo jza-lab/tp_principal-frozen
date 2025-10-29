@@ -35,7 +35,7 @@ body {
     background-image: white;
     color: var(--frozen-text-primary);
     line-height: 1.6;
-    padding-top: 70px;
+    padding-top: 15px;
     
     /* FIX: Cambiamos márgenes fijos por padding responsive */
     padding-left: 15px;

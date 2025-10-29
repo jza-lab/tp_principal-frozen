@@ -1,5 +1,6 @@
 class TotemLogin {
     constructor() {
+        // Elementos de la cámara y login
         this.video = document.getElementById('video');
         this.captureBtn = document.getElementById('captureBtn');
         this.retryBtn = document.getElementById('retryBtn');
@@ -10,9 +11,25 @@ class TotemLogin {
         this.loginManual = document.getElementById('loginManual');
         this.manualLoginForm = document.getElementById('manualLoginForm');
         this.manualResultDiv = document.getElementById('manualResult');
+
+        // Elementos del Modal 2FA
+        this.modal2FA = new bootstrap.Modal(document.getElementById('modal2FA'));
+        this.verifyTokenBtn = document.getElementById('verifyTokenBtn');
+        this.resendTokenBtn = document.getElementById('resendTokenBtn');
+        this.result2FADiv = document.getElementById('result2FA');
+        this.timer2FAElement = document.getElementById('timer2FA');
+        this.resendTimerElement = document.getElementById('resendTimer');
+        this.token2FAInput = document.getElementById('token2FA');
+        this.cancel2FABtn = document.getElementById('cancel2FABtn');
+
+        // Estado y Timers
         this.stream = null;
         this.failedAttempts = 0;
         this.maxAttempts = 3;
+        this.mainTimerInterval = null;
+        this.resendTimerInterval = null;
+        this.resendCount = 0;
+        this.maxResends = 3;
         
         this.init();
     }
@@ -86,7 +103,7 @@ class TotemLogin {
 
         try {
             const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-            const response = await fetch('/totem/manual_access', { // Este será el nuevo endpoint
+            const response = await fetch('/totem/manual_access', {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json', 
@@ -97,7 +114,11 @@ class TotemLogin {
             });
             const result = await response.json();
             if (response.ok && result.success) {
-                this.handleSuccess(result);
+                if (result.requires_2fa) {
+                    this.show2FAModal();
+                } else {
+                    this.handleSuccess(result);
+                }
             } else {
                 this.showResult(result.message || 'Credenciales incorrectas.', 'error', this.manualResultDiv);
             }
@@ -160,6 +181,160 @@ class TotemLogin {
     setLoading(button, isLoading, text) {
         button.disabled = isLoading;
         button.innerHTML = isLoading ? `<i class="bi bi-hourglass-split me-2"></i>${text}` : text;
+    }
+
+    // --- Métodos para 2FA ---
+    show2FAModal() {
+        this.resendCount = 0;
+        this.token2FAInput.value = '';
+        this.result2FADiv.innerHTML = '';
+        this.verifyTokenBtn.disabled = false;
+        
+        this.modal2FA.show();
+        this.startMainTimer(300); // 5 minutos
+        this.startResendTimer(30);
+        
+        // Limpiar listeners previos para evitar duplicados
+        this.verifyTokenBtn.removeEventListener('click', this.verifyTokenHandler);
+        this.resendTokenBtn.removeEventListener('click', this.resendTokenHandler);
+        this.cancel2FABtn.removeEventListener('click', this.cancel2FAHandler);
+
+        // Crear handlers bindeados para mantener el contexto de 'this'
+        this.verifyTokenHandler = this.handleVerifyToken.bind(this);
+        this.resendTokenHandler = this.handleResendToken.bind(this);
+        this.cancel2FAHandler = this.close2FAModalAndReset.bind(this, true);
+
+        this.verifyTokenBtn.addEventListener('click', this.verifyTokenHandler);
+        this.resendTokenBtn.addEventListener('click', this.resendTokenHandler);
+        this.cancel2FABtn.addEventListener('click', this.cancel2FAHandler);
+    }
+
+    close2FAModalAndReset(showToast = false) {
+        this.modal2FA.hide();
+        clearInterval(this.mainTimerInterval);
+        clearInterval(this.resendTimerInterval);
+        this.manualLoginForm.reset();
+        if (showToast) {
+            // Esta es una función global que asumimos que existe para mostrar notificaciones
+            // Si no existe, habría que implementarla o cambiarla por un alert.
+            // window.showGlobalToast('Proceso de fichaje cancelado.', 'info');
+            console.log("Proceso de fichaje cancelado.");
+        }
+    }
+
+    async handleVerifyToken() {
+        const token = this.token2FAInput.value;
+        const legajo = document.getElementById('legajo').value;
+        if (token.length !== 6 || !/^\d{6}$/.test(token)) {
+            this.showResult('Por favor, ingresa un código de 6 dígitos.', 'error', this.result2FADiv);
+            return;
+        }
+
+        this.setLoading(this.verifyTokenBtn, true, 'Verificando...');
+
+        try {
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            const response = await fetch('/totem/verify_2fa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ legajo, token })
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                this.handleSuccess(result);
+            } else {
+                const errorMessage = result.error || result.message || 'Error de verificación.';
+                this.showResult(errorMessage, 'error', this.result2FADiv);
+                if (errorMessage.includes('agotado tus intentos')) {
+                    this.close2FAModalAndReset();
+                }
+            }
+        } catch (error) {
+            this.showResult('Error de conexión con el servidor.', 'error', this.result2FADiv);
+        } finally {
+            this.setLoading(this.verifyTokenBtn, false, 'Verificar y Fichar');
+        }
+    }
+
+    async handleResendToken() {
+        this.resendCount++;
+        if (this.resendCount > this.maxResends) {
+            this.showResult('Has alcanzado el límite de reenvíos.', 'error', this.result2FADiv);
+            setTimeout(() => this.close2FAModalAndReset(), 2000);
+            return;
+        }
+
+        const legajo = document.getElementById('legajo').value;
+        this.setLoading(this.resendTokenBtn, true, 'Enviando...');
+        
+        try {
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            const response = await fetch('/totem/resend_2fa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ legajo })
+            });
+            const result = await response.json();
+            const message = result.message || 'Error desconocido.';
+            this.showResult(message, result.success ? 'success' : 'error', this.result2FADiv);
+            
+            if (result.success) {
+                this.startResendTimer(30);
+            } else if (message.includes('límite de reenvíos')) {
+                setTimeout(() => this.close2FAModalAndReset(), 2000);
+            }
+        } catch (error) {
+            this.showResult('Error de conexión al reenviar.', 'error', this.result2FADiv);
+        } finally {
+             this.setLoading(this.resendTokenBtn, false, 'Reenviar Código');
+        }
+    }
+
+    startMainTimer(duration) {
+        clearInterval(this.mainTimerInterval);
+        let timer = duration;
+        this.mainTimerInterval = setInterval(() => {
+            const minutes = String(Math.floor(timer / 60)).padStart(2, '0');
+            const seconds = String(timer % 60).padStart(2, '0');
+            this.timer2FAElement.textContent = `${minutes}:${seconds}`;
+
+            if (--timer < 0) {
+                clearInterval(this.mainTimerInterval);
+                this.showResult('El código ha expirado. El proceso se ha cancelado.', 'error', this.result2FADiv);
+                this.verifyTokenBtn.disabled = true;
+                setTimeout(() => this.close2FAModalAndReset(), 2000);
+            }
+        }, 1000);
+    }
+
+    startResendTimer(duration) {
+        this.resendTokenBtn.disabled = true;
+        let timer = duration;
+        
+        // Ocultar el span del contador estático
+        if (this.resendTimerElement) {
+            this.resendTimerElement.style.display = 'none';
+        }
+
+        const originalText = this.resendTokenBtn.innerHTML;
+        
+        const updateButtonText = () => {
+            if (timer > 0) {
+                this.resendTokenBtn.innerHTML = `<i class="bi bi-hourglass-split me-2"></i>Reenviar en (${timer}s)`;
+            } else {
+                this.resendTokenBtn.innerHTML = originalText;
+                this.resendTokenBtn.disabled = false;
+                clearInterval(this.resendTimerInterval);
+            }
+        };
+
+        updateButtonText(); // Llamada inicial
+
+        clearInterval(this.resendTimerInterval);
+        this.resendTimerInterval = setInterval(() => {
+            timer--;
+            updateButtonText();
+        }, 1000);
     }
 }
 

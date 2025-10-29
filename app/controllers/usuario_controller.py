@@ -667,16 +667,20 @@ class UsuarioController(BaseController):
 
     def obtener_porcentaje_asistencia(self) -> float:
         """Calcula el porcentaje de asistencia actual basado en sesiones de tótem activas."""
-        todos_activos = self.model.find_all({'activo': True})
-        if not todos_activos.get('success') or not todos_activos.get('data'):
-            return 0.0
+        # Primero, obtenemos el número total de usuarios activos.
+        todos_activos_result = self.model.db.table(self.model.get_table_name()) \
+            .select('id', count='exact') \
+            .eq('activo', True) \
+            .execute()
+        
+        total_usuarios_activos = todos_activos_result.count if todos_activos_result.count is not None else 0
 
-        usuarios_activos = todos_activos['data']
-        total_usuarios_activos = len(usuarios_activos)
         if total_usuarios_activos == 0:
             return 0.0
 
-        cant_en_empresa = sum(1 for usuario in usuarios_activos if self.totem_sesion.verificar_sesion_activa_hoy(usuario['id']))
+        # Segundo, obtenemos el conteo de sesiones activas con una única query optimizada.
+        cant_en_empresa = self.totem_sesion.obtener_conteo_sesiones_activas_hoy()
+
         return round((cant_en_empresa / total_usuarios_activos) * 100, 0)
 
     # endregion

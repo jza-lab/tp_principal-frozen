@@ -2,7 +2,7 @@ from app.models.base_model import BaseModel
 import logging
 from datetime import datetime
 from typing import Dict
-from app.utils.date_utils import get_now_in_argentina
+from app.utils.date_utils import get_now_in_argentina, get_today_utc3_range
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +160,26 @@ class TotemSesionModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo todas las sesiones activas: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def obtener_conteo_sesiones_activas_hoy(self) -> int:
+        """
+        Cuenta de forma optimizada el número de usuarios únicos con una sesión de tótem
+        activa para el día de hoy.
+        """
+        try:
+            start_of_day, end_of_day = get_today_utc3_range()
+            
+            response = self.db.table(self.table_name) \
+                .select('usuario_id', count='exact') \
+                .eq('activa', True) \
+                .gte('fecha_inicio', start_of_day.isoformat()) \
+                .lte('fecha_inicio', end_of_day.isoformat()) \
+                .execute()
+
+            return response.count if response.count is not None else 0
+        except Exception as e:
+            logger.error(f"Error al contar sesiones activas de hoy: {e}", exc_info=True)
+            return 0
 
     def cerrar_sesiones_expiradas(self) -> Dict:
         """

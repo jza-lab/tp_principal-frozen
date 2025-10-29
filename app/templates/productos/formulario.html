@@ -1,4 +1,4 @@
-{% extends 'layouts/base.html' %}
+{% extends 'layouts/app_layout.html' %}
 
 {% set form_title = 'Editar producto' if is_edit else 'Agregar Nuevo producto' %}
 
@@ -18,7 +18,7 @@ Agregar nuevo producto al catálogo
 </a>
 {% endblock %}
 
-{% block content %}
+{% block app_content %}
 <div class="row">
     <div class="col-lg-8 col-xl-9">
         <div class="card">

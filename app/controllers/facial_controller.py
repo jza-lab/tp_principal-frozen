@@ -6,11 +6,14 @@ import re
 import json
 import logging
 from typing import Dict, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
+from flask import render_template
 from app.database import Database
 from app.models.totem_sesion import TotemSesionModel
 from app.controllers.usuario_controller import UsuarioController
 from app.utils.date_utils import get_now_in_argentina
+from app.models.totem_2fa_token import Totem2FATokenModel
+from app.services.email_service import send_email
 
 try:
     import face_recognition
@@ -33,6 +36,7 @@ class FacialController:
         self.db = Database().client
         self.totem_sesion_model = TotemSesionModel()
         self.usuario_controller = UsuarioController()
+        self.token_2fa_model = Totem2FATokenModel()
         
         # Inicialización del caché para perfiles faciales
         self._cached_encodings = []
@@ -75,11 +79,95 @@ class FacialController:
             if not usuario:
                 return {'success': False, 'message': 'No se pudieron obtener los datos del usuario.'}
 
-            return self._manejar_logica_acceso(usuario, "CREDENCIAL")
+            # 1. Verificar horario ANTES de enviar el correo
+            validacion_turno = self.usuario_controller.verificar_acceso_por_horario(usuario)
+            if not validacion_turno.get('success'):
+                return {'success': False, 'message': validacion_turno.get('error')}
+
+            # 2. Verificar que el usuario tenga un email
+            if not usuario.get('email'):
+                logger.error(f"Usuario {legajo} no tiene un email registrado para 2FA.")
+                return {'success': False, 'message': 'No tienes un correo electrónico registrado. Contacta a un administrador.'}
+
+            # 3. Si todo es correcto, generar y enviar token 2FA
+            resultado_token = self.token_2fa_model.create_token(usuario['id'])
+            if not resultado_token.get('success'):
+                return {'success': False, 'message': resultado_token.get('error', 'No se pudo generar el código de verificación.')}
+            
+            token = resultado_token.get('token')
+            subject = "Tu Código de Verificación para Fichar"
+            body = render_template('totem/token_2fa.html', nombre_usuario=usuario.get('nombre', ''), token=token)
+            
+            sent, message = send_email(usuario['email'], subject, body, config_prefix='TOKEN_MAIL')
+            if not sent:
+                logger.error(f"Fallo al enviar el email 2FA a {usuario['email']}: {message}")
+                return {'success': False, 'message': 'No se pudo enviar el correo de verificación. Inténtalo de nuevo más tarde.'}
+
+            return {'success': True, 'requires_2fa': True, 'message': 'Se ha enviado un código a tu correo.'}
 
         except Exception as e:
             logger.error(f"Error en procesar_acceso_manual_totem: {str(e)}", exc_info=True)
             return {'success': False, 'message': f'Error interno del servidor: {str(e)}'}
+
+    def verificar_token_2fa(self, legajo: str, token: str) -> Dict:
+        """Verifica el token 2FA y completa el fichaje si es válido."""
+        try:
+            user_result = self.usuario_controller.model.find_by_legajo(legajo)
+            if not user_result.get('success'):
+                return {'success': False, 'message': 'Usuario no encontrado.'}
+            
+            usuario = user_result['data']
+            verification_result = self.token_2fa_model.verify_token(usuario['id'], token)
+
+            if verification_result.get('success'):
+                return self._manejar_logica_acceso(usuario, "CREDENCIAL")
+            
+            return verification_result
+
+        except Exception as e:
+            logger.error(f"Error en verificar_token_2fa: {e}", exc_info=True)
+            return {'success': False, 'message': f'Error interno: {str(e)}'}
+
+    def reenviar_token_2fa(self, legajo: str) -> Dict:
+        """Reenvía un nuevo token 2FA al correo del usuario."""
+        try:
+            user_result = self.usuario_controller.model.find_by_legajo(legajo)
+            if not user_result.get('success'):
+                return {'success': False, 'message': 'Usuario no encontrado.'}
+            
+            usuario = user_result['data']
+
+            # Límite de reenvíos
+            recent_tokens_count = self.token_2fa_model.count_recent_tokens(usuario['id'])
+            if recent_tokens_count >= 3:
+                return {'success': False, 'message': 'Has alcanzado el límite de reenvíos. Por favor, intenta de nuevo más tarde.'}
+
+            # Cooldown para reenviar token (mantenido por si acaso)
+            active_token = self.token_2fa_model.find_active_token(usuario['id'])
+            if active_token:
+                created_at = datetime.fromisoformat(active_token['created_at'])
+                now = get_now_in_argentina()
+                if now - created_at < timedelta(seconds=30):
+                    return {'success': False, 'message': 'Debes esperar 30 segundos para reenviar el código.'}
+
+            # Reutilizar la misma lógica de creación y envío
+            resultado_token = self.token_2fa_model.create_token(usuario['id'])
+            if not resultado_token.get('success'):
+                return {'success': False, 'message': resultado_token.get('error')}
+            
+            token = resultado_token.get('token')
+            subject = "Tu Nuevo Código de Verificación para Fichar"
+            body = render_template('totem/token_2fa.html', nombre_usuario=usuario.get('nombre', ''), token=token)
+            
+            sent, message = send_email(usuario['email'], subject, body, config_prefix='TOKEN_MAIL')
+            if not sent:
+                return {'success': False, 'message': 'No se pudo enviar el correo. Intenta de nuevo.'}
+
+            return {'success': True, 'message': 'Se ha enviado un nuevo código a tu correo.'}
+
+        except Exception as e:
+            logger.error(f"Error en reenviar_token_2fa: {e}", exc_info=True)
+            return {'success': False, 'message': f'Error interno: {str(e)}'}
 
     def registrar_rostro(self, user_id: int, image_data_url: str) -> Dict:
         """

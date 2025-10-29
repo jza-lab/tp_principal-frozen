@@ -1,5 +1,6 @@
 from app.models.base_model import BaseModel
 from typing import Dict
+from app.utils.permission_map import CANONICAL_PERMISSION_MAP
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,3 +28,41 @@ class RoleModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo todos los roles: {str(e)}")
             return {'success': False, 'error': str(e), 'data': []}
+
+    def find_by_codigo(self, codigo: str) -> Dict:
+        """
+        Busca un rol por su código.
+        """
+        try:
+            result = self.db.table(self.get_table_name()).select('*').eq('codigo', codigo).maybe_single().execute()
+            if result.data:
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': False, 'error': 'Rol no encontrado'}
+        except Exception as e:
+            logger.error(f"Error buscando rol por código '{codigo}': {e}")
+            return {'success': False, 'error': str(e)}
+
+    @classmethod
+    def get_permission_map(cls) -> Dict:
+        """
+        Devuelve el mapa canónico de permisos para todos los roles.
+        """
+        return CANONICAL_PERMISSION_MAP
+
+    @classmethod
+    def check_permission(cls, rol_codigo: str, accion: str) -> bool:
+        """
+        Verifica si un rol específico tiene permiso para una acción.
+        """
+        if not rol_codigo:
+            return False
+            
+        # El rol 'DEV' siempre tiene permiso para todo.
+        if rol_codigo == 'DEV':
+            return True
+            
+        permission_map = cls.get_permission_map()
+        permissions_for_role = permission_map.get(rol_codigo, [])
+        
+        return accion in permissions_for_role

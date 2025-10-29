@@ -1,14 +1,13 @@
-{% extends 'layouts/base.html' %}
+{% extends 'layouts/app_layout.html' %}
 
 {% block title %}Órdenes de Compra - Sistema Frozen{% endblock %}
 
-{% block content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
-        <div>
-            <h1 class="h2 mb-1">{{ titulo | default('Órdenes de Compra') }}</h1>
-            <p class="text-muted mb-0">Gestión y seguimiento de órdenes de compra a proveedores</p>
-        </div>
+{% block app_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">{{ titulo | default('Órdenes de Compra') }}</h1>
+        <p class="text-muted mb-0">Gestión y seguimiento de órdenes de compra a proveedores</p>
+    </div>
     <div class="btn-toolbar">
         {% if has_permission('crear_orden_de_compra') %}
         <a href="{{ url_for('orden_compra.nueva') }}" class="btn btn-primary">
