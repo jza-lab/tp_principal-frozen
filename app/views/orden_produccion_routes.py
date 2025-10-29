@@ -8,7 +8,7 @@ from flask import (
     url_for,
     flash,
 )
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from marshmallow import ValidationError
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.producto_controller import ProductoController
@@ -32,11 +32,26 @@ pedido_controller = PedidoController()
 
 
 @orden_produccion_bp.route("/")
-@permission_any_of('produccion_gestion_completa', 'produccion_consulta')
+@permission_required(accion='produccion_consulta')
 def listar():
-    """Muestra la lista de órdenes de producción."""
+    """
+    Muestra la lista de órdenes de producción.
+    Si el usuario es un OPERARIO, filtra para mostrar solo sus órdenes asignadas.
+    """
     estado = request.args.get("estado")
     filtros = {"estado": estado} if estado else {}
+
+    # Lógica de filtrado por rol
+    claims = get_jwt()
+    user_roles = claims.get('roles', [])
+    if isinstance(user_roles, dict):
+        user_roles = [user_roles.get('codigo')]
+    elif not isinstance(user_roles, list):
+        user_roles = [user_roles]
+
+    if 'OPERARIO' in user_roles and 'SUPERVISOR' not in user_roles:
+        filtros['operario_asignado_id'] = claims.get('sub') # 'sub' es el estandar para el ID de usuario en JWT
+
     response, status_code = controller.obtener_ordenes(filtros)
     ordenes = []
     if response.get("success"):
@@ -150,14 +165,31 @@ def modificar(id):
 
 
 @orden_produccion_bp.route("/<int:id>/detalle")
+@jwt_required()
 @permission_any_of('produccion_gestion_completa', 'produccion_consulta')
 def detalle(id):
-    """Muestra el detalle de una orden de producción."""
+    """
+    Muestra el detalle de una orden de producción.
+    Si el usuario es OPERARIO, valida que la orden le esté asignada.
+    """
     respuesta = controller.obtener_orden_por_id(id)
     if not respuesta.get("success"):
         flash("Orden no encontrada.", "error")
         return redirect(url_for("orden_produccion.listar"))
     orden = respuesta.get("data")
+
+    # Verificación de permisos para OPERARIO
+    current_user = get_jwt_identity()
+    user_roles = current_user.get('roles', [])
+    if isinstance(user_roles, dict):
+        user_roles = [user_roles.get('codigo')]
+    elif not isinstance(user_roles, list):
+        user_roles = [user_roles]
+
+    if 'OPERARIO' in user_roles and 'SUPERVISOR' not in user_roles:
+        if orden.get('operario_asignado_id') != current_user.get('id'):
+            flash("No tiene permiso para ver esta orden de producción.", "error")
+            return redirect(url_for("orden_produccion.listar"))
     desglose_response = controller.obtener_desglose_origen(id)
     desglose_origen = desglose_response.get("data", [])
     ingredientes_response = (

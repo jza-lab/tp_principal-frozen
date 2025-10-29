@@ -42,6 +42,7 @@
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
                         {% set is_dev = current_user.roles and current_user.roles.codigo == 'DEV' %}
+                        {% set is_operario = current_user.roles and current_user.roles.codigo == 'OPERARIO' %}
                         {% set can_ver_insumos = is_dev or 'almacen_consulta_stock' is has_permission %}
                         {% set can_ver_compras = is_dev or 'logistica_gestion_oc_ov' is has_permission %}
                         {% set can_ver_inventario = is_dev or 'almacen_consulta_stock' is has_permission %}
@@ -49,7 +50,7 @@
                         {% set can_actualizar_precios = is_dev or 'finanzas_ver_precios_costos' is has_permission %}
                         {% set can_access_logistica_dropdown = is_dev or can_ver_insumos or can_ver_compras or can_ver_inventario or can_ver_reservas or can_actualizar_precios %}
                         
-                        {% if can_access_logistica_dropdown %}
+                        {% if can_access_logistica_dropdown and not is_operario %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('insumos_api') or request.endpoint.startswith('orden_compra') or request.endpoint.startswith('inventario_view') or request.endpoint.startswith('reservas') or request.endpoint.startswith('precios') %}active{% endif %}"
                                 href="#" id="navbarDropdownLogistica" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -85,7 +86,7 @@
                         {% set can_ver_inventario_prod = is_dev or 'calidad_control_completo' is has_permission %}
                         {% set can_access_comercial_dropdown = is_dev or can_ver_productos or can_ver_ventas or can_ver_inventario_prod %}
 
-                        {% if can_access_comercial_dropdown %}
+                        {% if can_access_comercial_dropdown and not is_operario %}
                         <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('productos') or request.endpoint.startswith('orden_venta') or request.endpoint.startswith('lote_producto') %}active{% endif %}"
                                     href="#" id="navbarDropdownComercial" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -108,7 +109,7 @@
                         {% endif %}
 
                         {% set can_ver_produccion = is_dev or 'produccion_ejecucion' is has_permission %}
-                        {% set can_ver_planificacion = is_dev or 'produccion_gestion_completa' is has_permission %}
+                        {% set can_ver_planificacion = is_dev or 'produccion_gestion_completa' is has_permission or 'consultar_plan_de_produccion' is has_permission %}
                         {% if is_dev or can_ver_produccion or can_ver_planificacion %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('planificacion') or request.endpoint.startswith('orden_produccion') %}active{% endif %}"
@@ -129,7 +130,7 @@
                         </li>
                         {% endif %}
 
-                        {% if is_dev or 'admin_supervision' is has_permission %}
+                        {% if (is_dev or 'admin_supervision' is has_permission) and not is_operario %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('alertas') %}active{% endif %}"
                                     href="#" id="navbarDropdownAlertas" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -152,7 +153,7 @@
                         {% set can_gestionar_consultas = is_dev or 'logistica_gestion_oc_ov' is has_permission %}
                         {% set can_access_admin_dropdown = is_dev or can_gestionar_empleados or can_gestionar_clientes or can_gestionar_proveedores or can_gestionar_reclamos or can_gestionar_consultas %}
 
-                        {% if can_access_admin_dropdown %}
+                        {% if can_access_admin_dropdown and not is_operario %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if is_admin_section or request.endpoint.startswith('admin_reclamo') %}active{% endif %}"
                             href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">

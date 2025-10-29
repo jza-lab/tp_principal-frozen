@@ -50,20 +50,19 @@ CANONICAL_PERMISSION_MAP = {
     # Módulo: Producción
     'produccion_gestion_completa': ['SUPERVISOR'],
     'produccion_ejecucion': ['OPERARIO', 'SUPERVISOR'],
-    'produccion_consulta': [ 'SUPERVISOR', 'GERENTE'],
-    'consultar_plan_de_produccion': ['VENDEDOR', 'SUPERVISOR', 'GERENTE'],
+    'produccion_consulta': [ 'OPERARIO', 'SUPERVISOR', 'GERENTE'],
+    'consultar_plan_de_produccion': ['OPERARIO', 'VENDEDOR', 'SUPERVISOR', 'GERENTE'],
 
 
     # Módulo: Almacén e Inventario
     'almacen_gestion_completa': ['SUPERVISOR'],
     'almacen_consulta_stock': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'GERENTE'], # Vendedor consulta stock
     'registrar_ingreso_de_materia_prima': ['ADMIN'],
-    'almacen_ver_registrar': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR'],
+    'almacen_ver_registrar': ['VENDEDOR', 'SUPERVISOR'],
 
     # Módulo: Calidad
     'calidad_gestion_completa': ['SUPERVISOR_CALIDAD'],
     'calidad_control_completo': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'],
-    'calidad_registro_basico': ['OPERARIO'],
     'produccion_control_proceso': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE'],
     'almacen_ver_insumos': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE', 'VENDEDOR'], # Vendedor consulta insumos
 

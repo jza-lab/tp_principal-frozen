@@ -452,6 +452,7 @@
 </div>
 
 {# --- TABLERO KANBAN --- #}
+{% if has_permission('produccion_gestion_completa') %}
 <h3 class="h4 mb-3">Tablero Kanban (Producción en Curso)</h3>
 <div class="row">
     {% for estado_key, titulo_columna in columnas.items() %}
@@ -494,6 +495,7 @@
     </div>
     {% endfor %}
 </div>
+{% endif %} {# Fin del if has_permission('produccion_gestion_completa') #}
 
 {# --- MODALES DE PLANIFICACIÓN (SIN CAMBIOS) --- #}
 {% if mps_items %}
