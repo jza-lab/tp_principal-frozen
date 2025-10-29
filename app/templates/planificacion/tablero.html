@@ -452,48 +452,90 @@
 </div>
 
 {# --- TABLERO KANBAN --- #}
-{% if has_permission('produccion_gestion_completa') %}
-<h3 class="h4 mb-3">Tablero Kanban (Producción en Curso)</h3>
-<div class="row">
-    {% for estado_key, titulo_columna in columnas.items() %}
-    <div class="col-12 col-sm-6 col-md-4 col-lg-3 col-xl-2 mb-4 kanban-column-wrapper">
-        <div class="kanban-column h-100" data-estado="{{ estado_key }}">
-             <div class="column-header">
-                 <span>{{ titulo_columna }}</span>
-                 <span class="badge bg-secondary rounded-pill">{{ ordenes_por_estado.get(estado_key, [])|length }}</span>
-             </div>
-             <div class="kanban-cards">
-                 {% for orden in ordenes_por_estado.get(estado_key, []) %}
-                 <div class="card insumo-card kanban-card mb-2" data-op-id="{{ orden.id }}" data-producto-id="{{ orden.producto_id }}" data-linea-asignada="{{ orden.linea_asignada or '' }}"> {# Añadido mb-2 #}
-                     <div class="card-body py-2 px-3"> {# Padding reducido #}
-                          <h6 class="card-title mb-1 fw-bold">{{ orden.producto_nombre or 'N/A' }}</h6> {# Título h6 y bold #}
-                          <div class="card-secondary-details small mb-1"> {# Texto más pequeño #}
-                              <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
-                              <span class="ms-2"><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b></span>
-                              <span class="ms-2"><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
-                              {% if orden.fecha_inicio_planificada %}
-                              <br><span class="text-primary small"><i class="bi bi-play-circle-fill"></i> Inicia: {{ orden.fecha_inicio_planificada }}</span>
-                              {% endif %}
-                          </div>
-                          {% if orden.supervisor_nombre or orden.linea_asignada or orden.operario_nombre %}
-                          <hr class="my-1">
-                          <div class="card-assignment-details small"> {# Texto más pequeño #}
-                              {% if orden.linea_asignada %}<span class="me-2"><i class="bi bi-diagram-3-fill text-primary"></i> L{{ orden.linea_asignada }}</span>{% endif %}
-                              {% if orden.supervisor_nombre %}<span class="me-2"><i class="bi bi-person-badge-fill text-info"></i> S:{{ orden.supervisor_nombre }}</span>{% endif %}
-                              {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary"></i> O:{{ orden.operario_nombre }}</span>{% endif %}
-                          </div>
-                          {% endif %}
-                     </div>
-                 </div>
-                 {% else %} {# Mensaje si no hay órdenes en la columna #}
-                    {% if loop.first and estado_key != 'LISTA PARA PRODUCIR' %} {# Solo mostrar si no es la columna de consolidar #}
-                    <p class="text-center text-muted small fst-italic mt-3">Vacío</p>
-                    {% endif %}
-                 {% endfor %}
-             </div>
-        </div>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="h4 mb-0">Tablero Kanban (Producción en Curso)</h3>
+    
+    {# --- NUEVO BOTÓN PARA OCULTAR COLUMNAS --- #}
+    <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary" type="button" id="dropdownMenuColumnas" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
+            <i class="bi bi-eye-slash me-1"></i> Ver Columnas
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end p-2" aria-labelledby="dropdownMenuColumnas" id="kanbanColumnToggleList">
+            {% for estado_key, titulo_columna in columnas.items() %}
+            <li>
+                <div class="form-check">
+                    <input class="form-check-input kanban-column-toggle" type="checkbox" value="{{ estado_key }}" id="toggle-{{ estado_key }}" checked>
+                    <label class="form-check-label small" for="toggle-{{ estado_key }}">
+                        {{ titulo_columna }}
+                    </label>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
     </div>
+</div>
+<div class="table-responsive">
+    <div class="row flex-nowrap g-3">
+        {% for estado_key, titulo_columna in columnas.items() %}
+        <div class="col mb-4 kanban-column-wrapper" data-estado="{{ estado_key }}" style="min-width: 250px;">
+            <div class="kanban-column h-100" data-estado="{{ estado_key }}">
+                <div class="column-header">
+                    
+                    <span class="kanban-title-text" 
+                        data-bs-toggle="collapse" 
+                        data-bs-target="#kanban-cards-{{ estado_key }}" 
+                        aria-expanded="true" 
+                        aria-controls="kanban-cards-{{ estado_key }}"
+                        style="cursor: pointer; flex-grow: 1;"
+                        title="Clic para expandir/comprimir tarjetas">
+                        {{ titulo_columna }}
+                    </span>
+
+                    <div class="column-header-controls d-flex align-items-center ms-2">
+                        <span class="badge bg-secondary rounded-pill me-2">{{ ordenes_por_estado.get(estado_key, [])|length }}</span>
+                        
+                        <button class="btn btn-sm btn-light p-0 kanban-compress-toggle" 
+                                type="button" 
+                                title="Comprimir columna"
+                                data-estado-key="{{ estado_key }}">
+                            <i class="bi bi-chevron-bar-left"></i>
+                            <i class="bi bi-chevron-bar-right" style="display: none;"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="kanban-cards collapse show" id="kanban-cards-{{ estado_key }}">
+                    {% for orden in ordenes_por_estado.get(estado_key, []) %}
+                    <div class="card insumo-card kanban-card mb-2" data-op-id="{{ orden.id }}" data-producto-id="{{ orden.producto_id }}" data-linea-asignada="{{ orden.linea_asignada or '' }}"> {# Añadido mb-2 #}
+                        <div class="card-body py-2 px-3"> {# Padding reducido #}
+                            <h6 class="card-title mb-1 fw-bold">{{ orden.producto_nombre or 'N/A' }}</h6> {# Título h6 y bold #}
+                            <div class="card-secondary-details small mb-1"> {# Texto más pequeño #}
+                                <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
+                                <span class="ms-2"><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b></span>
+                                <span class="ms-2"><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
+                                {% if orden.fecha_inicio_planificada %}
+                                <br><span class="text-primary small"><i class="bi bi-play-circle-fill"></i> Inicia: {{ orden.fecha_inicio_planificada }}</span>
+                                {% endif %}
+                            </div>
+                            {% if orden.supervisor_nombre or orden.linea_asignada or orden.operario_nombre %}
+                            <hr class="my-1">
+                            <div class="card-assignment-details small"> {# Texto más pequeño #}
+                                {% if orden.linea_asignada %}<span class="me-2"><i class="bi bi-diagram-3-fill text-primary"></i> L{{ orden.linea_asignada }}</span>{% endif %}
+                                {% if orden.supervisor_nombre %}<span class="me-2"><i class="bi bi-person-badge-fill text-info"></i> S:{{ orden.supervisor_nombre }}</span>{% endif %}
+                                {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary"></i> O:{{ orden.operario_nombre }}</span>{% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% else %} {# Mensaje si no hay órdenes en la columna #}
+                        {% if loop.first and estado_key != 'LISTA PARA PRODUCIR' %} {# Solo mostrar si no es la columna de consolidar #}
+                        <p class="text-center text-muted small fst-italic mt-3">Vacío</p>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
     {% endfor %}
+    </div>
 </div>
 {% endif %} {# Fin del if has_permission('produccion_gestion_completa') #}
 
@@ -595,4 +637,59 @@
         const listaOperarios = {{ operarios | tojson }};
     </script>
     <script src="{{ url_for('static', filename='js/planificacion/planificacion.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/planificacion/planificacion.js') }}"></script>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        
+        // --- LÓGICA PARA COMPRIMIR COLUMNAS (NUEVO) ---
+        document.querySelectorAll('.kanban-compress-toggle').forEach(button => {
+            button.addEventListener('click', function (e) {
+                // Evita que el clic en el botón dispare el colapso vertical del título
+                e.stopPropagation(); 
+                
+                const estado = this.dataset.estadoKey;
+                const columnWrapper = document.querySelector(`.kanban-column-wrapper[data-estado="${estado}"]`);
+                
+                if (columnWrapper) {
+                    // Alterna el estado comprimido
+                    columnWrapper.classList.toggle('kanban-column-compressed');
+                    
+                    // Alterna el título del botón (para accesibilidad)
+                    const isCompressed = columnWrapper.classList.contains('kanban-column-compressed');
+                    this.title = isCompressed ? 'Expandir columna' : 'Comprimir columna';
+                }
+            });
+        });
+
+        // --- LÓGICA PARA OCULTAR COLUMNAS (DEL MENÚ SUPERIOR) ---
+        const columnToggles = document.querySelectorAll('.kanban-column-toggle');
+        
+        // Evitar que el menú se cierre al hacer clic en un checkbox
+        const columnToggleList = document.getElementById('kanbanColumnToggleList');
+        if (columnToggleList) {
+            columnToggleList.addEventListener('click', function (e) {
+                e.stopPropagation();
+            });
+        }
+
+        // Lógica para ocultar/mostrar (display: none) columnas
+        columnToggles.forEach(checkbox => {
+            checkbox.addEventListener('change', function () {
+                const estado = this.value;
+                const columnWrapper = document.querySelector(`.kanban-column-wrapper[data-estado="${estado}"]`);
+                
+                if (columnWrapper) {
+                    if (this.checked) {
+                        columnWrapper.style.display = ''; // Mostrar
+                    } else {
+                        columnWrapper.style.display = 'none'; // Ocultar
+                    }
+                }
+            });
+        });
+
+    });
+    </script>
+    {# --- FIN DEL NUEVO SCRIPT --- #}
 {% endblock %}
