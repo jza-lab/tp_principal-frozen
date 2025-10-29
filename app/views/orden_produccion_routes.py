@@ -80,7 +80,7 @@ def listar():
 
 
 @orden_produccion_bp.route("/nueva", methods=["GET", "POST", "PUT"])
-@permission_required(accion='produccion_gestion_completa')
+@permission_required(accion='crear_orden_de_produccion')
 def nueva():
     """Muestra la página para crear una nueva orden de producción."""
     productos_tupla = producto_controller.obtener_todos_los_productos()
@@ -102,7 +102,7 @@ def nueva():
 
 @orden_produccion_bp.route("/nueva/crear", methods=["POST"])
 @jwt_required()
-@permission_required(accion='produccion_gestion_completa')
+@permission_required(accion='crear_orden_de_produccion')
 def crear():
     try:
         datos_json = request.get_json()
@@ -124,7 +124,7 @@ def crear():
 
 
 @orden_produccion_bp.route("/modificar/<int:id>", methods=["GET", "POST", "PUT"])
-@permission_required(accion='produccion_gestion_completa')
+@permission_required(accion='gestionar_orden_de_produccion')
 def modificar(id):
     """Gestiona la modificación de una orden de producción."""
     try:
@@ -166,7 +166,7 @@ def modificar(id):
 
 @orden_produccion_bp.route("/<int:id>/detalle")
 @jwt_required()
-@permission_any_of('produccion_gestion_completa', 'produccion_consulta')
+@permission_any_of('gestionar_orden_de_produccion', 'produccion_consulta')
 def detalle(id):
     """
     Muestra el detalle de una orden de producción.
@@ -224,7 +224,7 @@ def detalle(id):
 
 
 @orden_produccion_bp.route("/<int:id>/iniciar", methods=["POST"])
-@permission_required(accion='produccion_gestion_completa')
+@permission_required(accion='gestionar_orden_de_produccion')
 def iniciar(id):
     """Inicia una orden de producción, previa validación de stock."""
     try:
@@ -263,7 +263,7 @@ def completar(id):
 
 
 @orden_produccion_bp.route("/pendientes")
-@permission_any_of('produccion_gestion_completa', 'produccion_consulta')
+@permission_any_of('gestionar_orden_de_produccion', 'produccion_consulta')
 def listar_pendientes():
     """Muestra las órdenes pendientes de aprobación."""
     response, _ = controller.obtener_ordenes({"estado": "PENDIENTE"})
@@ -277,7 +277,7 @@ def listar_pendientes():
 
 @orden_produccion_bp.route("/<int:id>/aprobar", methods=["POST"])
 @jwt_required()
-@permission_required(accion='produccion_gestion_completa')
+@permission_required(accion='aprobar_orden_de_produccion')
 def aprobar(id):
     """Aprueba una orden de producción. Devuelve JSON si es una llamada AJAX."""
     try:
@@ -314,7 +314,7 @@ def aprobar(id):
 
 @orden_produccion_bp.route("/<int:orden_id>/crear_oc_op", methods=["POST"])
 @jwt_required()
-@permission_required(accion='produccion_gestion_completa')
+@permission_any_of('crear_orden_de_compra', 'aprobar_orden_de_produccion')
 def crear_oc_op(orden_id):
     """
     Crea la OC y aprueba la OP después de la confirmación manual del usuario.
@@ -363,7 +363,7 @@ def crear_oc_op(orden_id):
 
 
 @orden_produccion_bp.route("/<int:id>/rechazar", methods=["POST"])
-@permission_required(accion='produccion_gestion_completa')
+@permission_required(accion='gestionar_orden_de_produccion')
 def rechazar(id):
     """Rechaza una orden de producción."""
     motivo = request.form.get("motivo", "No especificado")
@@ -376,7 +376,7 @@ def rechazar(id):
 
 
 @orden_produccion_bp.route("/<int:id>/asignar_supervisor", methods=["POST"])
-@permission_required(accion='produccion_gestion_completa')
+@permission_required(accion='gestionar_orden_de_produccion')
 def asignar_supervisor(id):
     """Asigna un supervisor a una orden de producción."""
     supervisor_id = request.form.get("supervisor_id")

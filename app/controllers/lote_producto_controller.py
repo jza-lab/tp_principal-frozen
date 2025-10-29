@@ -361,7 +361,11 @@ class LoteProductoController(BaseController):
     def crear_lote_desde_formulario(self, form_data: dict, usuario_id: int) -> tuple:
             """Crea un nuevo lote de producto desde un formulario web."""
             try:
-                data = form_data.to_dict()
+                if hasattr(form_data, 'to_dict'):
+                    data = form_data.to_dict()
+                else:
+                    data = form_data.copy()
+                
                 data.pop('csrf_token', None)
 
                 # Asignar cantidad_actual si existe cantidad_inicial

@@ -47,7 +47,7 @@ def _parse_form_data(form_dict):
     return parsed_data
 
 @orden_venta_bp.route('/')
-@permission_required(accion='logistica_gestion_oc_ov') # ANTES: 'consultar_ordenes_de_venta'
+@permission_required(accion='logistica_gestion_ov') # ANTES: 'consultar_ordenes_de_venta'
 def listar():
     """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
     estado = request.args.get('estado')
@@ -72,7 +72,7 @@ def listar():
 
 @orden_venta_bp.route('/nueva', methods=['GET', 'POST'])
 @jwt_required()
-@permission_required(accion='logistica_gestion_oc_ov') # ANTES: 'crear_orden_de_venta'
+@permission_required(accion='logistica_gestion_ov') # ANTES: 'crear_orden_de_venta'
 def nueva():
     """Gestiona la creación de un nuevo pedido de venta."""
     hoy = datetime.now().strftime('%Y-%m-%d')
@@ -99,7 +99,7 @@ def nueva():
     return render_template('orden_venta/formulario.html', productos=productos, pedido=None, is_edit=False, today=hoy)
 
 @orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST', 'PUT'])
-@permission_required(accion='logistica_gestion_oc_ov') # ANTES: 'modificar_orden_de_venta'
+@permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
 def editar(id):
     """Gestiona la edición de un pedido. Solo permitido en PENDIENTE y PLANIFICACION."""
     pedido_resp, _ = controller.obtener_pedido_por_id(id)
@@ -138,7 +138,7 @@ def editar(id):
     return render_template('orden_venta/formulario.html', pedido=pedido, productos=productos, is_edit=True, today=hoy, cliente = cliente)
 
 @orden_venta_bp.route('/<int:id>/detalle')
-@permission_required(accion='logistica_gestion_oc_ov') # ANTES: 'consultar_ordenes_de_venta'
+@permission_required(accion='logistica_gestion_ov') # ANTES: 'consultar_ordenes_de_venta'
 def detalle(id):
     """Muestra la página de detalle de un pedido de venta."""
     response, _ = controller.obtener_pedido_por_id(id)
@@ -155,7 +155,7 @@ def detalle(id):
         return redirect(url_for('orden_venta.listar'))
 
 @orden_venta_bp.route('/<int:id>/cancelar', methods=['POST'])
-@permission_required(accion='logistica_gestion_oc_ov') # ANTES: 'modificar_orden_de_venta'
+@permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
 def cancelar(id):
     """Endpoint para cambiar el estado de un pedido a 'CANCELADO'."""
     response, _ = controller.cancelar_pedido(id)
@@ -167,7 +167,7 @@ def cancelar(id):
 
 @orden_venta_bp.route('/<int:id>/despachar', methods=['GET', 'POST'])
 @jwt_required()
-@permission_required(accion='logistica_gestion_oc_ov') # ANTES: 'modificar_orden_de_venta'
+@permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
 def despachar(id):
     """
     Gestiona el despacho de un pedido.
@@ -202,7 +202,7 @@ def despachar(id):
     return render_template('orden_venta/despacho.html', pedido=pedido, hora_partida=hora_partida)
 
 @orden_venta_bp.route('/<int:id>/planificar', methods=['POST'])
-@permission_required(accion='logistica_gestion_oc_ov') # ANTES: 'aprobar_orden_de_venta'
+@permission_required(accion='logistica_gestion_ov') # ANTES: 'aprobar_orden_de_venta'
 def planificar(id):
     """Pasa el pedido a estado de PLANIFICACION, guardando la fecha estimada."""
     fecha_estimativa = request.form.get('fecha_estimativa_proceso')
@@ -219,7 +219,7 @@ def planificar(id):
 
 @orden_venta_bp.route('/<int:id>/iniciar_proceso', methods=['POST'])
 @jwt_required()
-@permission_required(accion='produccion_gestion_completa') # ANTES: 'aprobar_orden_de_venta'
+@permission_required(accion='gestionar_orden_de_produccion') # ANTES: 'aprobar_orden_de_venta'
 def iniciar_proceso(id):
     """Pasa el pedido a EN PROCESO y crea las OPs."""
     usuario_id = get_jwt_identity()
@@ -245,7 +245,7 @@ def preparar_entrega(id):
 
 @orden_venta_bp.route('/<int:id>/completar', methods=['POST'])
 @jwt_required()
-@permission_required(accion='logistica_gestion_oc_ov') # ANTES: 'modificar_orden_de_venta'
+@permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
 def completar(id):
     """Endpoint para marcar un pedido como COMPLETADO."""
     usuario_id = get_jwt_identity()
@@ -261,7 +261,7 @@ def completar(id):
 
 @orden_venta_bp.route('/api/pedidos/<int:id>/despachar', methods=['POST'])
 @jwt_required()
-@permission_required(accion='logistica_gestion_oc_ov') # ANTES: 'modificar_orden_de_venta'
+@permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
 def api_despachar_pedido(id):
     """API endpoint para despachar un pedido."""
     json_data = request.get_json()
@@ -273,7 +273,7 @@ def api_despachar_pedido(id):
 
 @orden_venta_bp.route('/api/pedidos/<int:id>/planificar', methods=['POST'])
 @jwt_required()
-@permission_required(accion='logistica_gestion_oc_ov') # ANTES: 'modificar_orden_de_venta'
+@permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
 def api_planificar_pedido(id):
     """API endpoint para cambiar el estado de un pedido a 'PLANIFICADA'."""
     response, status_code = controller.planificar_pedido(id)
@@ -299,7 +299,7 @@ def cambiar_estado(id):
 
 @orden_venta_bp.route('/api/generar-proforma', methods=['POST'])
 @jwt_required() # AÑADIDO: Faltaba protección JWT
-@permission_required(accion='logistica_gestion_oc_ov') # AÑADIDO: Faltaba permiso
+@permission_required(accion='logistica_gestion_ov') # AÑADIDO: Faltaba permiso
 def generar_proforma_api():
     """
     API endpoint to generate a proforma invoice HTML from JSON data
@@ -358,7 +358,7 @@ def generar_proforma_api():
     return jsonify({'success': True, 'html': rendered_html})
 
 @orden_venta_bp.route('/api/<int:id>/generar_factura_html', methods=['GET'])
-@permission_required(accion='logistica_gestion_oc_ov') # ANTES: 'consultar_ordenes_de_venta'
+@permission_required(accion='logistica_gestion_ov') # ANTES: 'consultar_ordenes_de_venta'
 def generar_factura_html(id):
 
     """

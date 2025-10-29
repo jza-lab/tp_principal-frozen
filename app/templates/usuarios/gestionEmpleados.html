@@ -30,7 +30,7 @@
             </button>
         </li>
         {% endif %}
-        {% if has_permission('admin_gestion_sistema') %}
+        {% if has_permission('gestionar_autorizaciones') %}
         <li class="nav-item" role="presentation">
             <button class="nav-link-custom" id="authorizations-tab" data-bs-toggle="tab" data-bs-target="#authorizations-panel" type="button" role="tab">
                 <i class="bi bi-patch-check me-2"></i>
@@ -58,7 +58,7 @@
         {% endif %}
         
         <!-- Panel de Autorizaciones -->
-        {% if has_permission('admin_gestion_sistema') %}
+        {% if has_permission('gestionar_autorizaciones') %}
         <div class="tab-pane fade" id="authorizations-panel" role="tabpanel">
             {% include 'usuarios/panel_autorizaciones.html' %}
         </div>
@@ -89,7 +89,7 @@
 <script>
     const URL_TOTEM_ACTIVITY = "{{ url_for('api.obtener_actividad_totem') }}";
     const URL_WEB_ACTIVITY = "{{ url_for('api.obtener_actividad_web') }}";
-    const CAN_MANAGE_AUTHORIZATIONS = {{ has_permission('admin_gestion_sistema') | tojson }};
+    const CAN_MANAGE_AUTHORIZATIONS = {{ has_permission('gestionar_autorizaciones') | tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/usuarios/gestionEmpleados.js') }}"></script>
 <script src="{{ url_for('static', filename='js/usuarios/panelActividad.js') }}"></script>

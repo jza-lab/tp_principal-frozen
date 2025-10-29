@@ -15,7 +15,7 @@
             Configurar Umbral de Vencimiento
         </div>
         <div class="card-body">
-            {% if 'modificar_parametros_del_sistema' is has_permission %}
+            {% if 'configurar_alertas' is has_permission %}
             <form action="{{ url_for('alertas.configurar_alertas_lotes') }}" method="POST">
                 {{ csrf_form.csrf_token }}
                 <div class="mb-3">

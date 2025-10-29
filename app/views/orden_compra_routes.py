@@ -17,7 +17,7 @@ insumo_controller = InsumoController()
 
 
 @orden_compra_bp.route("/")
-@permission_required(accion='logistica_gestion_oc_ov')
+@permission_required(accion='consultar_ordenes_de_compra')
 def listar():
     """Muestra la lista de órdenes de compra."""
     estado = request.args.get("estado")
@@ -38,7 +38,7 @@ def listar():
 
 @orden_compra_bp.route("/nueva", methods=["GET", "POST"])
 @jwt_required()
-@permission_required(accion='logistica_gestion_oc_ov')
+@permission_required(accion='crear_orden_de_compra')
 def nueva():
     if request.method == "POST":
         usuario_id = get_jwt_identity()
@@ -66,7 +66,7 @@ def nueva():
 
 
 @orden_compra_bp.route("/detalle/<int:id>")
-@permission_required(accion='logistica_gestion_oc_ov')
+@permission_required(accion='consultar_ordenes_de_compra')
 def detalle(id):
     response_data, status_code = controller.get_orden(id)
     if response_data.get("success"):
@@ -79,7 +79,7 @@ def detalle(id):
 
 @orden_compra_bp.route("/<int:id>/aprobar", methods=["POST"])
 @jwt_required()
-@permission_required(accion='logistica_gestion_oc_ov')
+@permission_required(accion='aprobar_orden_de_compra')
 def aprobar(id):
     usuario_id = get_jwt_identity()
     resultado = controller.aprobar_orden(id, usuario_id)
@@ -102,7 +102,7 @@ def aprobar(id):
 
 
 @orden_compra_bp.route("/<int:id>/editar", methods=["GET", "POST"])
-@permission_required(accion='logistica_gestion_oc_ov')
+@permission_required(accion='editar_orden_de_compra')
 def editar(id):
     if request.method == "POST":
         resultado = controller.actualizar_orden(id, request.form)
@@ -134,7 +134,7 @@ def editar(id):
 
 
 @orden_compra_bp.route("/<int:id>/rechazar", methods=["POST"])
-@permission_required(accion='logistica_gestion_oc_ov')
+@permission_required(accion='editar_orden_de_compra')
 def rechazar(id):
     motivo = request.form.get("motivo", "No especificado")
     resultado = controller.rechazar_orden(id, motivo)

@@ -28,7 +28,7 @@ ROLE_MAP = {
     9: 'DEV',
 }
 
-# Version 2.1 de Permisos - Correcciones para VENDEDOR y Consultas
+# Version 2.2 de Permisos - Ajustes para SUPERVISOR
 CANONICAL_PERMISSION_MAP = {
     # Módulo: Acceso General
     'dashboard_acceder': ['ADMIN', 'VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'RRHH', 'GERENTE', 'IT'],
@@ -36,48 +36,56 @@ CANONICAL_PERMISSION_MAP = {
     # Módulo: Administración y Configuración
     'admin_gestion_sistema': ['ADMIN', 'IT'],
     'admin_gestion_personal': ['RRHH', 'ADMIN', 'IT'],
+    'consultar_empleados': ['RRHH', 'ADMIN', 'IT', 'SUPERVISOR', 'GERENTE'],
     'admin_configuracion_sistema': ['IT', 'GERENTE'],
-    'gestionar_proveedores': ['ADMIN'], # Vendedor solo consulta
-    'gestionar_autorizaciones': ['ADMIN'],
+    'gestionar_proveedores': ['ADMIN'],
+    'gestionar_autorizaciones': ['ADMIN', 'SUPERVISOR'],
     'admin_acceder_consultas': ['GERENTE', 'VENDEDOR'],
     'admin_actualizar_precios_excel': ['ADMIN', 'VENDEDOR'],
 
     # Módulo: Comercial (Ventas y Clientes)
-    'logistica_gestion_oc_ov': ['VENDEDOR', 'SUPERVISOR'],
-    'gestionar_clientes': ['VENDEDOR'], # Vendedor gestiona clientes
+    'logistica_gestion_ov': ['VENDEDOR'], # Permiso para que Vendedor gestione Órdenes de Venta
+    'gestionar_clientes': ['VENDEDOR'],
     'finanzas_ver_precios_costos': ['VENDEDOR', 'SUPERVISOR', 'GERENTE'],
 
     # Módulo: Producción
-    'produccion_gestion_completa': ['SUPERVISOR'],
-    'produccion_ejecucion': ['OPERARIO', 'SUPERVISOR'],
-    'produccion_consulta': [ 'OPERARIO', 'SUPERVISOR', 'GERENTE'],
+    'crear_orden_de_produccion': ['SUPERVISOR'],
+    'aprobar_orden_de_produccion': ['SUPERVISOR'],
+    'gestionar_orden_de_produccion': ['SUPERVISOR'], # Editar, cambiar estado, etc.
+    'produccion_ejecucion': ['OPERARIO', 'SUPERVISOR'], # Asignar operarios, mover en kanban
+    'produccion_consulta': ['OPERARIO', 'SUPERVISOR', 'GERENTE'],
     'consultar_plan_de_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE'],
 
-
     # Módulo: Almacén e Inventario
-    'almacen_gestion_completa': ['SUPERVISOR'],
-    'almacen_consulta_stock': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'GERENTE'], # Vendedor consulta stock
+    'gestionar_catalogo_insumos': ['SUPERVISOR', 'ADMIN'], # Crear, editar, inhabilitar insumos
+    'gestionar_inventario': ['SUPERVISOR'], # Registrar ingresos y egresos de stock
+    'gestionar_lotes': ['SUPERVISOR'], # Crear y gestionar lotes de productos
+    'almacen_consulta_stock': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'GERENTE'],
     'registrar_ingreso_de_materia_prima': ['ADMIN'],
     'almacen_ver_registrar': ['VENDEDOR', 'SUPERVISOR'],
+    'almacen_ver_insumos': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE', 'VENDEDOR'],
 
     # Módulo: Calidad
-    'calidad_gestion_completa': ['SUPERVISOR_CALIDAD'],
-    'calidad_control_completo': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'],
+    'controlar_calidad_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Realizar controles de calidad
+    'aprobar_lotes_calidad': ['SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'], # Aprobación final de calidad
     'produccion_control_proceso': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE'],
-    'almacen_ver_insumos': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE', 'VENDEDOR'], # Vendedor consulta insumos
 
-    # Módulo: Logística
+    # Módulo: Órdenes de Compra (OC) y Logística
+    'crear_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
+    'consultar_ordenes_de_compra': ['SUPERVISOR', 'ADMIN', 'GERENTE', 'VENDEDOR'],
+    'editar_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
+    'aprobar_orden_de_compra': ['GERENTE'], # <- NO TOCAR: Solo GERENTE aprueba
     'logistica_recepcion_oc': ['ADMIN', 'SUPERVISOR', 'GERENTE'],
     'logistica_supervision': ['SUPERVISOR', 'GERENTE'],
 
     # Módulo: Gerencia y Supervisión General
-    'aprobar_orden_de_compra': ['GERENTE'],
     'aprobar_orden_de_venta': ['GERENTE'],
     'inactivar_entidad': ['GERENTE'],
     'consultar_logs_o_auditoria': ['IT', 'GERENTE'],
     'consultar_trazabilidad_completa': ['GERENTE', 'SUPERVISOR_CALIDAD'],
 
     # Módulo: Alertas y Reclamos
+    'ver_alertas': ['SUPERVISOR', 'IT', 'GERENTE'],
     'configurar_alertas': ['SUPERVISOR', 'IT'],
     'gestionar_reclamos': ['ADMIN', 'VENDEDOR', 'GERENTE'],
 }

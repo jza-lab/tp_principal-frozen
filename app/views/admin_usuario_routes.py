@@ -14,7 +14,7 @@ facial_controller = FacialController()
 
 
 @admin_usuario_bp.route('/')
-@permission_any_of('admin_gestion_personal', 'admin_configuracion_sistema')
+@permission_any_of('admin_gestion_personal', 'admin_configuracion_sistema', 'consultar_empleados')
 def listar_usuarios():
     """Muestra la lista de todos los usuarios del sistema."""
     usuarios = usuario_controller.obtener_todos_los_usuarios()
@@ -24,7 +24,7 @@ def listar_usuarios():
     return render_template('usuarios/gestionEmpleados.html', usuarios=usuarios, turnos=turnos, sectores=sectores)
 
 @admin_usuario_bp.route('/<int:id>')
-@permission_any_of('admin_gestion_personal', 'admin_configuracion_sistema')
+@permission_any_of('admin_gestion_personal', 'admin_configuracion_sistema', 'consultar_empleados')
 def ver_perfil(id):
     """Muestra el perfil de un usuario específico, delegando la carga de datos al controlador."""
     resultado = usuario_controller.obtener_datos_para_vista_perfil(id)

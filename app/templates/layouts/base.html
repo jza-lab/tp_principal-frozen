@@ -44,7 +44,7 @@
                         {% set is_dev = current_user.roles and current_user.roles.codigo == 'DEV' %}
                         {% set is_operario = current_user.roles and current_user.roles.codigo == 'OPERARIO' %}
                         {% set can_ver_insumos = is_dev or 'almacen_consulta_stock' is has_permission %}
-                        {% set can_ver_compras = is_dev or 'logistica_gestion_oc_ov' is has_permission %}
+                        {% set can_ver_compras = is_dev or 'consultar_ordenes_de_compra' is has_permission %}
                         {% set can_ver_inventario = is_dev or 'almacen_consulta_stock' is has_permission %}
                         {% set can_ver_reservas = is_dev or 'produccion_control_proceso' is has_permission %}
                         {% set can_actualizar_precios = is_dev or 'finanzas_ver_precios_costos' is has_permission %}
@@ -82,8 +82,8 @@
 
                         
                         {% set can_ver_productos = is_dev or 'almacen_consulta_stock' is has_permission %}
-                        {% set can_ver_ventas = is_dev or 'logistica_gestion_oc_ov' is has_permission %}
-                        {% set can_ver_inventario_prod = is_dev or 'calidad_control_completo' is has_permission %}
+                        {% set can_ver_ventas = is_dev or 'logistica_gestion_ov' is has_permission %}
+                        {% set can_ver_inventario_prod = is_dev or 'gestionar_lotes' is has_permission %}
                         {% set can_access_comercial_dropdown = is_dev or can_ver_productos or can_ver_ventas or can_ver_inventario_prod %}
 
                         {% if can_access_comercial_dropdown and not is_operario %}
@@ -130,7 +130,7 @@
                         </li>
                         {% endif %}
 
-                        {% if (is_dev or 'admin_supervision' is has_permission) and not is_operario %}
+                        {% if (is_dev or 'configurar_alertas' is has_permission) and not is_operario %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('alertas') %}active{% endif %}"
                                     href="#" id="navbarDropdownAlertas" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -146,12 +146,12 @@
                         </li>
                         {% endif %}
                         
-                        {% set can_gestionar_empleados = is_dev or 'admin_gestion_personal' is has_permission or 'admin_gestion_sistema' is has_permission %}
-                        {% set can_gestionar_clientes = is_dev or 'logistica_gestion_oc_ov' is has_permission %}
-                        {% set can_gestionar_proveedores = is_dev or 'logistica_gestion_oc_ov' is has_permission %}
+                        {% set can_gestionar_empleados = is_dev or 'admin_gestion_personal' is has_permission or 'admin_gestion_sistema' is has_permission or 'consultar_empleados' is has_permission %}
+                        {% set can_gestionar_clientes = is_dev or 'gestionar_clientes' is has_permission %}
+                        {% set can_gestionar_proveedores = is_dev or 'gestionar_proveedores' is has_permission %}
                         {% set can_gestionar_reclamos = is_dev or 'calidad_gestion_completa' is has_permission %}
-                        {% set can_gestionar_consultas = is_dev or 'logistica_gestion_oc_ov' is has_permission %}
-                        {% set can_access_admin_dropdown = is_dev or can_gestionar_empleados or can_gestionar_clientes or can_gestionar_proveedores or can_gestionar_reclamos or can_gestionar_consultas %}
+                        {% set can_gestionar_consultas = is_dev or 'admin_acceder_consultas' is has_permission %}
+                        {% set can_access_admin_dropdown = is_dev or can_gestionar_empleados or can_gestionar_clientes or can_gestionar_proveedores or can_gestionar_reclamos or can_gestionar_consultas or 'consultar_empleados' is has_permission %}
 
                         {% if can_access_admin_dropdown and not is_operario %}
                         <li class="nav-item dropdown">

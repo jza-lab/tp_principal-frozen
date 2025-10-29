@@ -14,9 +14,9 @@
 <div class="alert-carousel-wrapper">
     <div class="alert-carousel-container mb-4" id="alertCarouselContainer">
         
-{% set can_ver_produccion = (has_permission('produccion_consulta') or has_permission('produccion_gestion_completa')) and current_user.rol != 'VENDEDOR' %}
-{% set can_ver_ventas = has_permission('logistica_gestion_oc_ov') %}
-{% set can_ver_almacen = has_permission('almacen_consulta_stock') or has_permission('almacen_gestion_completa') %}
+{% set can_ver_produccion = (has_permission('produccion_consulta') or has_permission('gestionar_orden_de_produccion')) and current_user.rol != 'VENDEDOR' %}
+{% set can_ver_ventas = has_permission('logistica_gestion_ov') %}
+{% set can_ver_almacen = has_permission('almacen_consulta_stock') or has_permission('gestionar_inventario') %}
 {% set can_ver_admin = has_permission('admin_gestion_personal') or has_permission('admin_configuracion_sistema') %}
 {% set can_gestionar_clientes = has_permission('gestionar_clientes') %}
 
