@@ -21,6 +21,7 @@ def index():
     current_user = get_jwt()
     user_roles = current_user.get('roles', [])
     is_operario = 'OPERARIO' in user_roles
+    is_supervisor_calidad = 'SUPERVISOR_CALIDAD' in user_roles
     # ... (obtener semana, horizonte, mps_data - sin cambios) ...
     week_str = request.args.get('semana')
     if not week_str:
@@ -148,7 +149,8 @@ def index():
         now=datetime.utcnow(),
         timedelta=timedelta,
         date=date,
-        is_operario=is_operario
+        is_operario=is_operario,
+        is_supervisor_calidad=is_supervisor_calidad
     )
 
 # --- NUEVA RUTA PARA CONFIRMACIÓN MULTI-DÍA ---

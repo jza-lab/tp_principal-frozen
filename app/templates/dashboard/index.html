@@ -14,14 +14,8 @@
 <div class="alert-carousel-wrapper">
     <div class="alert-carousel-container mb-4" id="alertCarouselContainer">
         
-{% set can_ver_produccion = (has_permission('produccion_consulta') or has_permission('gestionar_orden_de_produccion')) and current_user.rol != 'VENDEDOR' %}
-{% set can_ver_ventas = has_permission('logistica_gestion_ov') %}
-{% set can_ver_almacen = has_permission('almacen_consulta_stock') or has_permission('gestionar_inventario') %}
-{% set can_ver_admin = has_permission('admin_gestion_personal') or has_permission('admin_configuracion_sistema') %}
-{% set can_gestionar_clientes = has_permission('gestionar_clientes') %}
-
     {# 1. CLIENTES PENDIENTES (CRÍTICA/DANGER) #}
-    {% if can_gestionar_clientes %}
+    {% if 'gestionar_clientes' is has_permission %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if pending_client_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('clientes_proveedores.listar_solicitudes_clientes') }}" style="text-decoration: none;">
@@ -100,7 +94,7 @@
     {% endif %}
 
     {# 3. PRODUCTOS SIN STOCK (CRÍTICA/DANGER) #}
-    {% if can_ver_produccion %}
+    {% if 'produccion_consulta' is has_permission %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if productos_sin_lotes_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
@@ -144,7 +138,7 @@
     {% endif %}
 
     {# 4. ÓRDENES DE VENTA PENDIENTES (CRÍTICA/DANGER) #}
-    {% if can_ver_ventas %}
+    {% if 'logistica_gestion_ov' is has_permission %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if ordenesventa_pendientes > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') }}" style="text-decoration: none;">
@@ -179,7 +173,7 @@
     {% endif %}
 
     {# 5. ALERTAS DE STOCK INSUMOS (CRÍTICA/WARNING) #}
-    {% if can_ver_almacen and not is_operario %}
+    {% if ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) and not is_operario %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if alertas_stock_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" style="text-decoration: none;">
@@ -225,7 +219,7 @@
     {% endif %}
 
     {# 6. RIESGO PROD. VENCIMIENTO (WARNING) #}
-    {% if can_ver_produccion and not is_operario %}
+    {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and not is_operario %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if lotes_producto_vencimiento_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
@@ -254,7 +248,7 @@
     {% endif %}
     
     {# 7. RIESGO DE VENCIMIENTO INSUMOS (WARNING) #}
-    {% if can_ver_almacen and not is_operario %}
+    {% if ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) and not is_operario %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if lotes_vencimiento_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('inventario_view.listar_lotes') }}" style="text-decoration: none;">
@@ -283,7 +277,7 @@
     {% endif %}
 
     {# 8. ÓRDENES DE PRODUCCIÓN EN PROCESO (INFORMATIVA) #}
-    {% if can_ver_produccion and current_user.rol != 'VENDEDOR' %}
+    {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.rol != 'VENDEDOR' %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm">
             <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" style="text-decoration: none;">
@@ -318,7 +312,7 @@
     {% endif %}
 
     {# 9. ÓRDENES DE VENTA RECHAZADAS (INFORMATIVA) #}
-    {% if can_ver_ventas %}
+    {% if 'logistica_gestion_ov' is has_permission %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm">
             <a href="{{ url_for('orden_venta.listar', estado='CANCELADO') }}" style="text-decoration: none;">
@@ -362,7 +356,7 @@
     </button>
 </div>
 <div class="row">
-    {% if can_ver_produccion %}
+    {% if 'produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission %}
     <div class="col-lg-7 mb-4"> 
         <div class="card h-100 shadow-sm">
             <div class="card-header bg-white border-bottom pb-2 d-flex justify-content-between align-items-center">
@@ -421,9 +415,9 @@
     </div>
     {% endif %}
 
-    {% if can_ver_admin %}
+    {% if 'admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission %}
     <div class="col-lg-5 mb-4">
-        {% if can_ver_admin %}
+        {% if 'admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission %}
         <div class="card stat-card mb-4 border-0 shadow-sm">
             <div class="card-body py-3">
                 <div class="d-flex justify-content-between align-items-center">
@@ -442,7 +436,7 @@
         </div>
         {% endif %}
         
-        {% if can_ver_admin %}
+        {% if 'admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission %}
         <div class="card mb-4 border-0 shadow-sm"> 
             <div class="card-header bg-white border-bottom pb-2 d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0 text-dark">
@@ -476,7 +470,7 @@
         </div>
         {% endif %}
 
-        {% if can_ver_admin %}
+        {% if 'admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission %}
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white border-bottom pb-2">
                 <h5 class="mb-0 text-dark">
@@ -487,21 +481,21 @@
             <div class="card-body d-flex flex-column justify-content-around py-3 px-3">
                 <div class="list-group list-group-flush small">
                     
-                    <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') if can_ver_almacen else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center border-0 {% if not can_ver_almacen %}disabled{% endif %}" aria-disabled="{{ 'true' if not can_ver_almacen else 'false' }}">
+                    <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') if ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center border-0 {% if not ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) %}disabled{% endif %}" aria-disabled="{{ 'true' if not ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) else 'false' }}">
                         <span class="text-muted">Insumos Críticos con Stock Bajo:</span>
                         <span class="badge bg-{{ 'danger' if alertas_stock_count > 0 else 'success' }} rounded-pill fs-6">
                             {{ alertas_stock_count }}
                         </span>
                     </a>
                     
-                    <a href="{{ url_for('lote_producto.listar_lotes') if can_ver_produccion else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center border-0 {% if not can_ver_produccion %}disabled{% endif %}" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
+                    <a href="{{ url_for('lote_producto.listar_lotes') if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center border-0 {% if not ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) %}disabled{% endif %}" aria-disabled="{{ 'true' if not ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) else 'false' }}">
                         <span class="text-muted">Productos sin Lotes (Producción Requerida):</span>
                         <span class="badge bg-{{ 'danger' if productos_sin_lotes_count > 0 else 'success' }} rounded-pill fs-6">
                             {{ productos_sin_lotes_count }}
                         </span>
                     </a>
 
-                    <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') if can_ver_produccion else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center border-0 {% if not can_ver_produccion %}disabled{% endif %}" aria-disabled="{{ 'true' if not can_ver_produccion else 'false' }}">
+                    <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center border-0 {% if not ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) %}disabled{% endif %}" aria-disabled="{{ 'true' if not ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) else 'false' }}">
                         <span class="text-muted">Órdenes de Venta Pendientes:</span>
                         <span class="badge bg-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }} rounded-pill fs-6">
                             {{ ordenesventa_pendientes }}

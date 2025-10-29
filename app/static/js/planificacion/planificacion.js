@@ -135,11 +135,16 @@ document.addEventListener('DOMContentLoaded', function () {
                         const fromState = evt.from.closest('.kanban-column').dataset.estado;
                         const toState = evt.to.closest('.kanban-column').dataset.estado;
                         // ... (resto de la lógica onMove SIN CAMBIOS) ...
-                        // --- REGLAS DE TRANSICIÓN DEFINIDAS ---
+                        // --- REGLAS DE TRANSICIÓN DEFINIDAS POR ROL ---
                         const operarioTransitions = {
                             'LISTA PARA PRODUCIR': ['EN_LINEA_1', 'EN_LINEA_2'],
                             'EN_LINEA_1': ['EN_EMPAQUETADO'],
                             'EN_LINEA_2': ['EN_EMPAQUETADO'],
+                        };
+                        
+                        const supervisorCalidadTransitions = {
+                            'EN_EMPAQUETADO': ['CONTROL_DE_CALIDAD'],
+                            'CONTROL_DE_CALIDAD': ['COMPLETADA']
                         };
 
                         const supervisorTransitions = {
@@ -151,11 +156,23 @@ document.addEventListener('DOMContentLoaded', function () {
                             'CONTROL_DE_CALIDAD': ['COMPLETADA'],
                             'COMPLETADA': []
                         };
-
-                        const allowedTransitions = IS_OPERARIO ? operarioTransitions : supervisorTransitions;
-                    // ------------------------------------
+                        
+                        // Determinar qué conjunto de reglas usar. 
+                        // Estas variables (IS_OPERARIO, IS_SUPERVISOR_CALIDAD) deben ser inyectadas desde la plantilla Jinja2.
+                        let allowedTransitions;
+                        if (typeof IS_OPERARIO !== 'undefined' && IS_OPERARIO) {
+                            allowedTransitions = operarioTransitions;
+                        } else if (typeof IS_SUPERVISOR_CALIDAD !== 'undefined' && IS_SUPERVISOR_CALIDAD) {
+                            allowedTransitions = supervisorCalidadTransitions;
+                        } else {
+                            // Por defecto, se asumen los permisos de Supervisor general.
+                            allowedTransitions = supervisorTransitions;
+                        }
+                        
+                        // La clave es el estado de ORIGEN. Si no está en el mapa, no se puede mover DESDE él.
                         if (!allowedTransitions[fromState] || !allowedTransitions[fromState].includes(toState)) { 
-                            console.warn(`Movimiento NO PERMITIDO...`); return false; 
+                            console.warn(`Movimiento de ${fromState} a ${toState} NO PERMITIDO para este rol.`); 
+                            return false; 
                         }
                         if (fromState === 'LISTA PARA PRODUCIR' /*...*/) {
                              // ... (validación línea asignada SIN CAMBIOS) ...

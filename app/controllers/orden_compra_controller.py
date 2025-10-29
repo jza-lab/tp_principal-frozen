@@ -4,6 +4,7 @@ from app.models.orden_compra_model import OrdenCompraItemModel, OrdenCompraModel
 from app.models.orden_compra_model import OrdenCompra
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.insumo_controller import InsumoController
+from app.controllers.usuario_controller import UsuarioController
 from datetime import datetime, date
 import logging
 
@@ -20,6 +21,7 @@ class OrdenCompraController:
         self.model = OrdenCompraModel()
         self.inventario_controller = InventarioController()
         self.insumo_controller = InsumoController()
+        self.usuario_controller = UsuarioController()
 
 
     def _parse_form_data(self, form_data):
@@ -429,6 +431,12 @@ class OrdenCompraController:
                 if not orden_result.get('success'):
                     return {'success': False, 'error': 'No se pudo encontrar la orden de compra.'}
                 orden_data = orden_result['data']
+                
+                # Validacion de transicion de estado para SUPERVISOR_CALIDAD
+                usuario = self.usuario_controller.obtener_usuario_por_id(usuario_id)
+                if usuario and usuario.get('roles', {}).get('codigo') == 'SUPERVISOR_CALIDAD':
+                    if orden_data.get('estado') != 'EN_TRANSITO':
+                        return {'success': False, 'error': 'Solo puede recibir órdenes que estén EN TRANSITO.'}
 
                 item_ids = form_data.getlist('item_id[]')
                 cantidades_recibidas_str = form_data.getlist('cantidad_recibida[]')

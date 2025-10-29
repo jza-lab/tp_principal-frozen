@@ -52,15 +52,15 @@ CANONICAL_PERMISSION_MAP = {
     'crear_orden_de_produccion': ['SUPERVISOR'],
     'aprobar_orden_de_produccion': ['SUPERVISOR'],
     'gestionar_orden_de_produccion': ['SUPERVISOR'], # Editar, cambiar estado, etc.
-    'produccion_ejecucion': ['OPERARIO', 'SUPERVISOR'], # Asignar operarios, mover en kanban
-    'produccion_consulta': ['OPERARIO', 'SUPERVISOR', 'GERENTE'],
-    'consultar_plan_de_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE'],
+    'produccion_ejecucion': ['OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Asignar operarios, mover en kanban
+    'produccion_consulta': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
+    'consultar_plan_de_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
 
     # Módulo: Almacén e Inventario
     'gestionar_catalogo_insumos': ['SUPERVISOR', 'ADMIN'], # Crear, editar, inhabilitar insumos
     'gestionar_inventario': ['SUPERVISOR'], # Registrar ingresos y egresos de stock
-    'gestionar_lotes': ['SUPERVISOR'], # Crear y gestionar lotes de productos
-    'almacen_consulta_stock': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'GERENTE'],
+    'gestionar_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Crear y gestionar lotes de productos
+    'almacen_consulta_stock': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'registrar_ingreso_de_materia_prima': ['ADMIN'],
     'almacen_ver_registrar': ['VENDEDOR', 'SUPERVISOR'],
     'almacen_ver_insumos': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE', 'VENDEDOR'],
@@ -72,10 +72,10 @@ CANONICAL_PERMISSION_MAP = {
 
     # Módulo: Órdenes de Compra (OC) y Logística
     'crear_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
-    'consultar_ordenes_de_compra': ['SUPERVISOR', 'ADMIN', 'GERENTE', 'VENDEDOR'],
+    'consultar_ordenes_de_compra': ['SUPERVISOR', 'ADMIN', 'GERENTE', 'VENDEDOR','SUPERVISOR_CALIDAD'],
     'editar_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
-    'aprobar_orden_de_compra': ['GERENTE'], # <- NO TOCAR: Solo GERENTE aprueba
-    'logistica_recepcion_oc': ['ADMIN', 'SUPERVISOR', 'GERENTE'],
+    'aprobar_orden_de_compra': ['GERENTE', 'SUPERVISOR_CALIDAD'], 
+    'logistica_recepcion_oc': ['ADMIN', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'logistica_supervision': ['SUPERVISOR', 'GERENTE'],
 
     # Módulo: Gerencia y Supervisión General
@@ -85,7 +85,7 @@ CANONICAL_PERMISSION_MAP = {
     'consultar_trazabilidad_completa': ['GERENTE', 'SUPERVISOR_CALIDAD'],
 
     # Módulo: Alertas y Reclamos
-    'ver_alertas': ['SUPERVISOR', 'IT', 'GERENTE'],
+    'ver_alertas': ['SUPERVISOR', 'IT', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'configurar_alertas': ['SUPERVISOR', 'IT'],
     'gestionar_reclamos': ['ADMIN', 'VENDEDOR', 'GERENTE'],
 }
