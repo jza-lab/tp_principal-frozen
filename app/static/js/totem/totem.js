@@ -28,6 +28,8 @@ class TotemLogin {
         this.maxAttempts = 3;
         this.mainTimerInterval = null;
         this.resendTimerInterval = null;
+        this.resendCount = 0;
+        this.maxResends = 3;
         
         this.init();
     }
@@ -183,6 +185,11 @@ class TotemLogin {
 
     // --- Métodos para 2FA ---
     show2FAModal() {
+        this.resendCount = 0;
+        this.token2FAInput.value = '';
+        this.result2FADiv.innerHTML = '';
+        this.verifyTokenBtn.disabled = false;
+        
         this.modal2FA.show();
         this.startMainTimer(300); // 5 minutos
         this.startResendTimer(30);
@@ -195,19 +202,24 @@ class TotemLogin {
         // Crear handlers bindeados para mantener el contexto de 'this'
         this.verifyTokenHandler = this.handleVerifyToken.bind(this);
         this.resendTokenHandler = this.handleResendToken.bind(this);
-        this.cancel2FAHandler = this.handleCancel2FA.bind(this);
+        this.cancel2FAHandler = this.close2FAModalAndReset.bind(this, true);
 
         this.verifyTokenBtn.addEventListener('click', this.verifyTokenHandler);
         this.resendTokenBtn.addEventListener('click', this.resendTokenHandler);
         this.cancel2FABtn.addEventListener('click', this.cancel2FAHandler);
     }
 
-    handleCancel2FA() {
+    close2FAModalAndReset(showToast = false) {
+        this.modal2FA.hide();
         clearInterval(this.mainTimerInterval);
         clearInterval(this.resendTimerInterval);
-        this.token2FAInput.value = '';
-        this.result2FADiv.innerHTML = '';
         this.manualLoginForm.reset();
+        if (showToast) {
+            // Esta es una función global que asumimos que existe para mostrar notificaciones
+            // Si no existe, habría que implementarla o cambiarla por un alert.
+            // window.showGlobalToast('Proceso de fichaje cancelado.', 'info');
+            console.log("Proceso de fichaje cancelado.");
+        }
     }
 
     async handleVerifyToken() {
@@ -231,7 +243,11 @@ class TotemLogin {
             if (response.ok && result.success) {
                 this.handleSuccess(result);
             } else {
-                this.showResult(result.error || result.message || 'Error de verificación.', 'error', this.result2FADiv);
+                const errorMessage = result.error || result.message || 'Error de verificación.';
+                this.showResult(errorMessage, 'error', this.result2FADiv);
+                if (errorMessage.includes('agotado tus intentos')) {
+                    this.close2FAModalAndReset();
+                }
             }
         } catch (error) {
             this.showResult('Error de conexión con el servidor.', 'error', this.result2FADiv);
@@ -241,6 +257,13 @@ class TotemLogin {
     }
 
     async handleResendToken() {
+        this.resendCount++;
+        if (this.resendCount > this.maxResends) {
+            this.showResult('Has alcanzado el límite de reenvíos.', 'error', this.result2FADiv);
+            setTimeout(() => this.close2FAModalAndReset(), 2000);
+            return;
+        }
+
         const legajo = document.getElementById('legajo').value;
         this.setLoading(this.resendTokenBtn, true, 'Enviando...');
         
@@ -252,9 +275,13 @@ class TotemLogin {
                 body: JSON.stringify({ legajo })
             });
             const result = await response.json();
-            this.showResult(result.message, result.success ? 'success' : 'error', this.result2FADiv);
+            const message = result.message || 'Error desconocido.';
+            this.showResult(message, result.success ? 'success' : 'error', this.result2FADiv);
+            
             if (result.success) {
                 this.startResendTimer(30);
+            } else if (message.includes('límite de reenvíos')) {
+                setTimeout(() => this.close2FAModalAndReset(), 2000);
             }
         } catch (error) {
             this.showResult('Error de conexión al reenviar.', 'error', this.result2FADiv);
@@ -273,8 +300,9 @@ class TotemLogin {
 
             if (--timer < 0) {
                 clearInterval(this.mainTimerInterval);
-                this.showResult('El código ha expirado. Por favor, solicita uno nuevo.', 'error', this.result2FADiv);
+                this.showResult('El código ha expirado. El proceso se ha cancelado.', 'error', this.result2FADiv);
                 this.verifyTokenBtn.disabled = true;
+                setTimeout(() => this.close2FAModalAndReset(), 2000);
             }
         }, 1000);
     }

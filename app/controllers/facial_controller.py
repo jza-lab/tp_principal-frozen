@@ -120,7 +120,7 @@ class FacialController:
             verification_result = self.token_2fa_model.verify_token(usuario['id'], token)
 
             if verification_result.get('success'):
-                return self._manejar_logica_acceso(usuario, "CREDENCIAL_2FA")
+                return self._manejar_logica_acceso(usuario, "CREDENCIAL")
             
             return verification_result
 
@@ -137,7 +137,12 @@ class FacialController:
             
             usuario = user_result['data']
 
-            # Cooldown para reenviar token
+            # Límite de reenvíos
+            recent_tokens_count = self.token_2fa_model.count_recent_tokens(usuario['id'])
+            if recent_tokens_count >= 3:
+                return {'success': False, 'message': 'Has alcanzado el límite de reenvíos. Por favor, intenta de nuevo más tarde.'}
+
+            # Cooldown para reenviar token (mantenido por si acaso)
             active_token = self.token_2fa_model.find_active_token(usuario['id'])
             if active_token:
                 created_at = datetime.fromisoformat(active_token['created_at'])

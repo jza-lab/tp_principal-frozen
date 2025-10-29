@@ -148,3 +148,17 @@ class Totem2FATokenModel(BaseModel):
         except Exception as e:
             logger.error(f"No se pudieron invalidar tokens para el usuario {user_id}: {e}", exc_info=True)
 
+    def count_recent_tokens(self, user_id: int, minutes: int = 10) -> int:
+        """Cuenta cuántos tokens se han creado para un usuario en los últimos X minutos."""
+        try:
+            time_threshold = get_now_in_argentina() - timedelta(minutes=minutes)
+            response = self.db.table(self.table_name).select("id", count='exact') \
+                .eq('user_id', user_id) \
+                .gte('created_at', time_threshold.isoformat()) \
+                .execute()
+            
+            return response.count if response.count is not None else 0
+        except Exception as e:
+            logger.error(f"Error al contar tokens recientes para el usuario {user_id}: {e}", exc_info=True)
+            return 0
+

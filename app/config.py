@@ -33,3 +33,10 @@ class Config:
     MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'true').lower() in ['true', '1', 't']
     MAIL_USERNAME = os.getenv('MAIL_USERNAME')
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
+
+    # Email Configuration for 2FA Tokens
+    TOKEN_MAIL_SERVER = os.getenv('TOKEN_MAIL_SERVER')
+    TOKEN_MAIL_PORT = int(os.getenv('TOKEN_MAIL_PORT', 587))
+    TOKEN_MAIL_USE_TLS = os.getenv('TOKEN_MAIL_USE_TLS', 'true').lower() in ['true', '1', 't']
+    TOKEN_MAIL_USERNAME = os.getenv('TOKEN_MAIL_USERNAME')
+    TOKEN_MAIL_PASSWORD = os.getenv('TOKEN_MAIL_PASSWORD')
