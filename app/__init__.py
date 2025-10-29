@@ -1,4 +1,4 @@
-from flask import Flask, redirect, url_for, flash, session
+from flask import Flask, redirect, url_for, flash, session, request 
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, unset_jwt_cookies, get_current_user
 from flask_jwt_extended import JWTManager, unset_jwt_cookies, get_current_user, verify_jwt_in_request
@@ -34,11 +34,9 @@ def user_lookup_callback(_jwt_header, jwt_data):
     identity = jwt_data["sub"]
     rol_codigo = jwt_data.get('rol')
 
-    rol_obj = None
-    if rol_codigo:
-        rol_result = RoleModel().find_by_codigo(rol_codigo) # Asume que tienes un método find_by_codigo en RoleModel
-        if rol_result.get('success'):
-            rol_obj = rol_result['data']
+    # Imprimir en consola para depuración
+    print(f"--- JWT User Lookup --- ID: {identity}, Rol: {rol_codigo} ---")
+
     # Se reconstruye un objeto de usuario mínimo para ser compatible con el resto de la app
     # sin necesidad de consultar la base de datos.
     user_data = {
@@ -47,7 +45,8 @@ def user_lookup_callback(_jwt_header, jwt_data):
         'apellido': jwt_data.get('apellido'),
         'rol': rol_codigo,
         'nombre_completo': f"{jwt_data.get('nombre', '')} {jwt_data.get('apellido', '')}".strip(),
-        'roles': rol_obj or {'codigo': rol_codigo, 'nombre': rol_codigo} # Fallback por si no se encuentra el rol
+        # Reconstruimos el objeto 'roles' directamente desde el token
+        'roles': {'codigo': rol_codigo, 'nombre': jwt_data.get('rol_nombre', rol_codigo)}
     }
     return SimpleNamespace(**user_data)
 
@@ -271,6 +270,10 @@ def create_app() -> Flask:
         Esto asegura que `get_current_user()` y la variable `current_user` en Jinja
         funcionen en todas las plantillas, incluso en vistas no protegidas.
         """
+        # Evitar la verificación de JWT para las rutas de archivos estáticos,
+        # ya que es innecesario y causa consultas a la BD por cada CSS, JS, etc.
+        if request.endpoint and request.endpoint.startswith('static'):
+            return
         verify_jwt_in_request(optional=True)
 
     return app

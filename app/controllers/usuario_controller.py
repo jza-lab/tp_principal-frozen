@@ -17,6 +17,7 @@ from app.utils.date_utils import get_now_in_argentina
 from app.controllers.direccion_controller import GeorefController
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.direccion import DireccionModel
+from flask import current_app
 from app.models.permisos import PermisosModel
 from app.utils.permission_map import CANONICAL_PERMISSION_MAP
 from app.models.sector import SectorModel
@@ -252,8 +253,8 @@ class UsuarioController(BaseController):
         rol_codigo = user_data.get('roles', {}).get('codigo')
         logger.info(f"Credentials OK for user_id: {user_id}")
       
-        # El rol DEV no necesita una sesión de tótem activa para acceder a la web
-        if rol_codigo == 'DEV':
+        # El rol DEV o la variable de entorno BYPASS_LOGIN_CHECKS omiten la verificación del tótem.
+        if rol_codigo == 'DEV' or current_app.config.get('BYPASS_LOGIN_CHECKS'):
             totem_check = True
         else:
             totem_check = self.totem_sesion.verificar_sesion_activa_hoy(user_id)

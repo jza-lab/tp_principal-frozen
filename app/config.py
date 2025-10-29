@@ -12,6 +12,7 @@ class Config:
 
     # Flask Configuration
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+    BYPASS_LOGIN_CHECKS = os.getenv('BYPASS_LOGIN_CHECKS', 'False').lower() in ('true', '1', 't')
 
     # Configuraciones para desarrollo con PyScripter
     DEBUG = True
