@@ -51,7 +51,7 @@
                         {% set can_actualizar_precios = 'finanzas_ver_precios_costos' is has_permission %}
                         {% set can_access_logistica_dropdown = can_ver_insumos or can_ver_compras or can_ver_inventario or can_ver_reservas or can_actualizar_precios %}
 
-                        {% if can_access_logistica_dropdown and not is_operario %}
+                        {% if can_access_logistica_dropdown and not is_operario and current_user.roles.codigo != 'RRHH' %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('insumos_api') or request.endpoint.startswith('orden_compra') or request.endpoint.startswith('inventario_view') or request.endpoint.startswith('reservas') or request.endpoint.startswith('precios') %}active{% endif %}"
                                 href="#" id="navbarDropdownLogistica" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -87,7 +87,7 @@
                         {% set can_ver_inventario_prod = 'gestionar_lotes' is has_permission %}
                         {% set can_access_comercial_dropdown = can_ver_productos or can_ver_ventas or can_ver_inventario_prod %}
 
-                        {% if can_access_comercial_dropdown and not is_operario %}
+                        {% if can_access_comercial_dropdown and not is_operario and current_user.roles.codigo != 'RRHH' %}
                         <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('productos') or request.endpoint.startswith('orden_venta') or request.endpoint.startswith('lote_producto') %}active{% endif %}"
                                     href="#" id="navbarDropdownComercial" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -112,7 +112,7 @@
                         {# Lógica de permisos para el menú de Producción #}
                         {% set can_access_produccion_dropdown = 'produccion_ejecucion' is has_permission or 'consultar_plan_de_produccion' is has_permission %}
 
-                        {% if can_access_produccion_dropdown %}
+                        {% if can_access_produccion_dropdown and current_user.roles.codigo != 'RRHH' %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('planificacion') or request.endpoint.startswith('orden_produccion') %}active{% endif %}"
                                 href="#" id="navbarDropdownProduccion" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -132,7 +132,7 @@
                         </li>
                         {% endif %}
 
-                        {% if 'configurar_alertas' is has_permission and not is_operario %}
+                        {% if 'configurar_alertas' is has_permission and not is_operario and current_user.roles.codigo != 'RRHH' %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('alertas') %}active{% endif %}"
                                     href="#" id="navbarDropdownAlertas" role="button" data-bs-toggle="dropdown" aria-expanded="false">

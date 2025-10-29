@@ -470,7 +470,7 @@
         </div>
         {% endif %}
 
-        {% if 'admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission %}
+        {% if ('admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission) and current_user.roles.codigo != 'RRHH' %}
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white border-bottom pb-2">
                 <h5 class="mb-0 text-dark">

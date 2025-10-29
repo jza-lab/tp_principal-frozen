@@ -37,9 +37,9 @@ CANONICAL_PERMISSION_MAP = {
     'admin_gestion_sistema': ['ADMIN', 'IT'],
     'admin_gestion_personal': ['RRHH', 'ADMIN', 'IT'],
     'consultar_empleados': ['RRHH', 'ADMIN', 'IT', 'SUPERVISOR', 'GERENTE'],
-    'admin_configuracion_sistema': ['IT', 'GERENTE'],
+    'admin_configuracion_sistema': ['IT', 'GERENTE', 'RRHH'],
     'gestionar_proveedores': ['ADMIN'],
-    'gestionar_autorizaciones': ['ADMIN', 'SUPERVISOR'],
+    'gestionar_autorizaciones': ['ADMIN', 'SUPERVISOR', 'RRHH'],
     'admin_acceder_consultas': ['GERENTE', 'VENDEDOR'],
     'admin_actualizar_precios_excel': ['ADMIN', 'VENDEDOR'],
 
@@ -82,7 +82,7 @@ CANONICAL_PERMISSION_MAP = {
     # Módulo: Gerencia y Supervisión General
     'aprobar_orden_de_venta': ['GERENTE'],
     'inactivar_entidad': ['GERENTE'],
-    'consultar_logs_o_auditoria': ['IT', 'GERENTE'],
+    'consultar_logs_o_auditoria': ['IT', 'GERENTE', 'RRHH'],
     'consultar_trazabilidad_completa': ['GERENTE', 'SUPERVISOR_CALIDAD'],
 
     # Módulo: Alertas y Reclamos
