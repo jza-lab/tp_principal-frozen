@@ -101,7 +101,7 @@
                         </a>
                         
                         <!-- Lógica para Supervisor de Calidad -->
-                        {% if has_permission('gestionar_recepcion_orden_compra') %}
+                        <!-- {% if has_permission('gestionar_recepcion_orden_compra') %}
                             {% if orden.estado == 'EN_TRANSITO' %}
                                 <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-info" title="Recibir Mercadería">
                                     <i class="bi bi-box-arrow-in-down"></i> Recibir
@@ -110,12 +110,13 @@
                                         data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}">
                                     <i class="bi bi-x-lg"></i> Rechazar
                                 </button>
-                            {% endif %}
+                            {% endif %} -->
                         
                         <!-- Lógica para otros roles -->
-                        {% else %}
+
+                        
                             {% if orden.estado == 'PENDIENTE' %}
-                                {% if has_permission('aprobar_orden_de_compra') %}
+                                {% if has_permission('aprobar_orden_de_compra') and current_user.roles.codigo != 'SUPERVISOR_CALIDAD' %}
                                 <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
                                       data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de compra?" data-button-type="success">
                                       {{ csrf_form.csrf_token }}
@@ -124,7 +125,7 @@
                                     </button>
                                 </form>
                                 {% endif %}
-                                {% if has_permission('editar_orden_de_compra') %}
+                                {% if has_permission('editar_orden_de_compra') and current_user.roles.codigo != 'SUPERVISOR_CALIDAD' %}
                                 <button type="button" class="btn btn-sm btn-outline-danger" title="Rechazar Orden"
                                         data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}">
                                     <i class="bi bi-x-lg"></i> Rechazar
@@ -132,7 +133,7 @@
                                 {% endif %}
                             
                             {% elif orden.estado == 'APROBADA' %}
-                                {% if has_permission('logistica_recepcion_oc') %}
+                                {% if has_permission('logistica_recepcion_oc') and current_user.roles.codigo != 'SUPERVISOR_CALIDAD' %}
                                 <form method="POST" action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
                                       data-title="Marcar como 'En Tránsito'" data-message="¿Está seguro de que desea marcar esta orden como 'En Tránsito'?" data-button-type="primary">
                                       {{ csrf_form.csrf_token }}
@@ -143,7 +144,7 @@
                                 {% endif %}
                             
                             {% elif orden.estado == 'EN_TRANSITO' %}
-                                {% if has_permission('logistica_recepcion_oc') %}
+                                {% if has_permission('logistica_recepcion_oc') or has_permission('gestionar_recepcion_orden_compra') %}
                                 <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-info" title="Recibir Mercadería">
                                     <i class="bi bi-box-arrow-in-down"></i> Recibir
                                 </a>
