@@ -67,22 +67,36 @@ def manual_access():
             {"success": False, "message": "Legajo y contraseña son requeridos"}
         )
     resultado = facial_controller.procesar_acceso_manual_totem(legajo, password)
+    return jsonify(resultado)
+
+@facial_bp.route("/verify_2fa", methods=["POST"])
+def verify_2fa():
+    """Verifica el token 2FA para el acceso manual."""
+    facial_controller = FacialController()
+    data = request.get_json()
+    legajo = data.get("legajo")
+    token = data.get("token")
+    if not legajo or not token:
+        return jsonify({"success": False, "message": "Legajo y token son requeridos"})
+    
+    resultado = facial_controller.verificar_token_2fa(legajo, token)
     if resultado.get("success"):
-        return jsonify(
-            {
-                "success": True,
-                "message": resultado.get("message"),
-                "tipo_acceso": resultado.get("tipo_acceso"),
-                "redirect_url": url_for("facial.panel_totem"),
-            }
-        )
-    else:
-        return jsonify(
-            {
-                "success": False,
-                "message": resultado.get("message", "Error desconocido."),
-            }
-        )
+        # Añadir redirect_url en caso de éxito para el frontend
+        resultado["redirect_url"] = url_for("facial.panel_totem")
+        
+    return jsonify(resultado)
+
+@facial_bp.route("/resend_2fa", methods=["POST"])
+def resend_2fa():
+    """Reenvía el token 2FA para el acceso manual."""
+    facial_controller = FacialController()
+    data = request.get_json()
+    legajo = data.get("legajo")
+    if not legajo:
+        return jsonify({"success": False, "message": "Legajo es requerido"})
+    
+    resultado = facial_controller.reenviar_token_2fa(legajo)
+    return jsonify(resultado)
 
 
 @facial_bp.route("/panel_totem")

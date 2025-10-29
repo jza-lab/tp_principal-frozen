@@ -6,6 +6,39 @@
 
 {% block content %}
 <div class="totem-login-container">
+    <!-- Modal para 2FA -->
+    <div class="modal fade" id="modal2FA" tabindex="-1" aria-labelledby="modal2FALabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modal2FALabel">Verificación de Dos Pasos</h5>
+                </div>
+                <div class="modal-body">
+                    <p id="modal2FAMessage" class="text-center mb-3">Hemos enviado un código de 6 dígitos a tu correo. Por favor, ingrésalo a continuación.</p>
+                    
+                    <form id="form2FA">
+                        <div class="form-floating mb-3">
+                            <input type="text" class="form-control" id="token2FA" name="token" placeholder="Código de 6 dígitos" required maxlength="6" pattern="\d{6}">
+                            <label for="token2FA">Código de 6 dígitos</label>
+                        </div>
+                        <div id="result2FA" class="result-area"></div>
+                    </form>
+
+                    <div class="text-center my-2">
+                        <span id="timer2FA" class="fw-bold">05:00</span>
+                    </div>
+                </div>
+                <div class="modal-footer d-flex justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="cancel2FABtn">Cancelar</button>
+                    <div>
+                        <button type="button" id="resendTokenBtn" class="btn btn-secondary" disabled>Reenviar (<span id="resendTimer">30</span>s)</button>
+                        <button type="button" id="verifyTokenBtn" class="btn btn-primary">Verificar y Fichar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="totem-login-card">
         <div class="totem-login-header bg-dark">
             <i class="bi bi-person-bounding-box fs-1 mb-3 d-block"></i>
