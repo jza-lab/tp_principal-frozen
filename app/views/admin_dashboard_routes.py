@@ -27,7 +27,7 @@ alertas_stock_count = inventario_controller.obtener_conteo_alertas_stock()
 
 @admin_dashboard_bp.route('/')
 @jwt_required()
-@permission_required(accion='acceder_al_panel_principal')
+@permission_required(accion='dashboard_acceder')
 def index():
     """Página principal del panel de administración."""
     hoy = date.today()

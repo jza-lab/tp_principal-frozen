@@ -14,12 +14,12 @@
 <div class="alert-carousel-wrapper">
     <div class="alert-carousel-container mb-4" id="alertCarouselContainer">
         
-{% set can_ver_produccion = 'consultar_ordenes_de_produccion' is has_permission %}
-{% set can_ver_ventas = 'consultar_ordenes_de_venta' is has_permission %}
-{% set can_ver_almacen = 'consultar_stock' is has_permission %}
-{% set can_ver_admin = 'consultar_empleados' is has_permission %}
+{% set can_ver_produccion = has_permission('produccion_consulta') or has_permission('produccion_gestion_completa') %}
+{% set can_ver_ventas = has_permission('logistica_gestion_oc_ov') %}
+{% set can_ver_almacen = has_permission('almacen_consulta_stock') or has_permission('almacen_gestion_completa') %}
+{% set can_ver_admin = has_permission('admin_gestion_personal') or has_permission('admin_configuracion_sistema') %}
+{% set can_gestionar_clientes = has_permission('admin_gestion_sistema') %}
 
-    {% set can_gestionar_clientes = 'gestionar_clientes' is has_permission %}
     {# 1. CLIENTES PENDIENTES (CRÍTICA/DANGER) #}
     {% if can_gestionar_clientes %}
     <div class="stat-card-item">
@@ -50,8 +50,7 @@
     {% endif %}
 
     {# 2. CONSULTAS PENDIENTES (CRÍTICA/DANGER) #}
-    {% set can_gestionar_consultas = current_user.roles.codigo in ['DEV', 'GERENTE', 'VENTAS'] %}
-    {% if can_gestionar_consultas and conteo_consultas_pendientes > 0 %}
+    {% if has_permission('admin_gestion_sistema') %}
      <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm glow-on-load">
             <a href="{{ url_for('consulta_admin.listar_consultas') }}" style="text-decoration: none;">
@@ -76,7 +75,7 @@
     {% endif %}
 
     {# 3. RECLAMOS PENDIENTES (CRÍTICA/DANGER) #}
-    {% if 'gestionar_reclamos' is has_permission and conteo_reclamos_pendientes > 0 %}
+    {% if has_permission('admin_gestion_sistema') and conteo_reclamos_pendientes > 0 %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm glow-on-load">
             <a href="{{ url_for('admin_reclamo.listar_reclamos', estado='pendiente') }}" style="text-decoration: none;">
@@ -402,8 +401,6 @@
                                 data-message="¿Está seguro de que desea iniciar esta orden de producción?"
                                 data-button-type="success">
                                 {{ csrf_form.csrf_token }}
-
-
                                 <button type="submit" class="btn btn-sm btn-success shadow-sm" title="Iniciar Orden" style="min-width: 80px;">
                                     <i class="bi bi-play-fill"></i> Iniciar
                                 </button>
@@ -424,8 +421,7 @@
     </div>
     {% endif %}
 
-    {% set can_ver_notificaciones = 'ver_panel_notificaciones' is has_permission %}
-    {% if can_ver_admin or can_ver_notificaciones %}
+    {% if can_ver_admin %}
     <div class="col-lg-5 mb-4">
         {% if can_ver_admin %}
         <div class="card stat-card mb-4 border-0 shadow-sm">
@@ -446,7 +442,7 @@
         </div>
         {% endif %}
         
-        {% if can_ver_admin or can_ver_notificaciones %}
+        {% if can_ver_admin %}
         <div class="card mb-4 border-0 shadow-sm"> 
             <div class="card-header bg-white border-bottom pb-2 d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0 text-dark">

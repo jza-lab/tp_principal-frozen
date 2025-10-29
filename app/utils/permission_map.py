@@ -29,92 +29,56 @@ ROLE_MAP = {
 }
 
 CANONICAL_PERMISSION_MAP = {
-    # Rol: ADMIN
-    'acceder_al_panel_principal': ['ADMIN', 'DEV', 'IT', 'GERENTE', 'RRHH', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'VENDEDOR', 'OPERARIO'],
-    'consultar_reportes_generales': ['ADMIN', 'DEV'],
-    'emitir_facturas': ['ADMIN', 'DEV'],
-    'emitir_notas_de_credito': ['ADMIN', 'DEV'],
-    'consultar_historial_de_pagos': ['ADMIN', 'DEV'],
-    'consultar_stock_de_productos': ['ADMIN', 'VENDEDOR', 'DEV'],
-    'gestionar_reclamos': ['ADMIN', 'VENDEDOR', 'GERENTE', 'DEV'],
-    'registrar_ingreso_de_materia_prima': ['ADMIN', 'DEV'],
-    'consultar_ordenes_de_produccion': ['ADMIN', 'SUPERVISOR_CALIDAD', 'GERENTE', 'DEV'],
-    'consultar_reportes_de_control': ['ADMIN', 'DEV'],
-    'consultar_empleados': ['ADMIN', 'RRHH', 'IT''DEV'],
+    # Módulo de Finanzas
+    'finanzas_ver_precios_costos': ['VENDEDOR', 'SUPERVISOR', 'GERENTE', 'DEV'],
 
-    # Rol: VENDEDOR
-    'crear_orden_de_venta': ['VENDEDOR', 'DEV'],
-    'modificar_orden_de_venta': ['VENDEDOR', 'DEV'],
-    'consultar_historial_de_clientes': ['VENDEDOR', 'DEV', 'ADMIN'],
-    'emitir_factura_de_venta': ['VENDEDOR', 'DEV'],
-    'consultar_historial_crediticio_de_clientes': ['VENDEDOR', 'ADMIN', 'DEV'],
-    'consultar_estado_de_produccion_asociada': ['VENDEDOR', 'DEV'],
-    'consultar_disponibilidad_de_productos': ['VENDEDOR', 'DEV'],
+    # Módulo de Administración
+    'admin_gestion_sistema': ['ADMIN', 'GERENTE', 'DEV'],
+    'admin_supervision': ['SUPERVISOR', 'ADMIN', 'GERENTE', 'DEV'],
+    'admin_gestion_personal': ['RRHH', 'GERENTE', 'DEV'],
+    'admin_configuracion_sistema': ['IT', 'GERENTE', 'DEV'],
 
-    # Rol: OPERARIO
-    'consultar_ordenes_asignadas': ['OPERARIO', 'DEV'],
-    'registrar_etapa_de_produccion': ['OPERARIO', 'DEV'],
-    'consultar_resultados_de_control': ['OPERARIO', 'DEV'],
-    'consultar_stock_de_insumos': ['OPERARIO', 'DEV'],
-    'notificar_de_baja_cantidad_de_insumos': ['OPERARIO', 'DEV'],
+    # Módulo de Almacenamiento
+    'almacen_gestion_completa': ['SUPERVISOR', 'GERENTE', 'DEV'],
+    'almacen_ver_registrar': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'DEV'],
+    'almacen_consulta_stock': ['VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'GERENTE', 'DEV'],
+    'almacen_ver_insumos': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE', 'DEV'],
 
-    # Rol: SUPERVISOR
-    'crear_orden_de_produccion': ['SUPERVISOR', 'DEV'],
-    'supervisar_avance_de_etapas': ['SUPERVISOR', 'DEV'],
-    'reasignar_OPERARIOs_a_una_orden': ['SUPERVISOR', 'DEV'],
-    'cerrar_orden_de_produccion': ['SUPERVISOR', 'DEV'],
-    'consultar_stock': ['SUPERVISOR', 'DEV'],
-    'solicitar_reposicion_de_insumos': ['SUPERVISOR', 'DEV'],
-    'crear_orden_de_compra': ['SUPERVISOR', 'DEV'],
-    'aprobar_orden_de_compra': ['SUPERVISOR', 'DEV', 'ADMIN'],
-    'consultar_control_de_calidad': ['SUPERVISOR', 'VENDEDOR', 'DEV'],
+    # Módulo de Producción
+    'produccion_gestion_completa': ['SUPERVISOR', 'GERENTE', 'DEV'],
+    'produccion_ejecucion': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'DEV'],
+    'produccion_consulta': ['VENDEDOR', 'SUPERVISOR', 'GERENTE', 'DEV'],
+    'produccion_control_proceso': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE', 'DEV'],
 
-    # Rol: SUPERVISOR_CALIDAD
-    'crear_control_de_calidad_por_lote': ['SUPERVISOR_CALIDAD', 'DEV'],
-    'registrar_resultados_de_control': ['SUPERVISOR_CALIDAD', 'DEV'],
-    'registrar_desperdicios': ['SUPERVISOR_CALIDAD', 'DEV'],
-    'consultar_reportes_historicos': ['SUPERVISOR_CALIDAD', 'DEV'],
-    'ver_trazabilidad_de_materias_primas': ['SUPERVISOR_CALIDAD', 'DEV'],
-    'consultar_stock_de_lotes': ['SUPERVISOR_CALIDAD', 'DEV'],
+    # Módulo de Logística
+    'logistica_supervision': ['SUPERVISOR', 'GERENTE', 'DEV'],
+    'logistica_recepcion_oc': ['ADMIN', 'SUPERVISOR', 'GERENTE', 'DEV'],
+    'logistica_gestion_oc_ov': ['VENDEDOR', 'SUPERVISOR', 'GERENTE', 'DEV'],
 
-    # Rol: Gerente General
-    'consultar_reportes_de_produccion': ['GERENTE', 'DEV'],
-    'consultar_reportes_financieros': ['GERENTE', 'DEV'],
-    'consultar_metricas_de_stock': ['GERENTE', 'DEV'],
-    'consultar_ordenes_de_venta': ['GERENTE', 'VENDEDOR', 'DEV'],
-    'ver_alertas_topbar': ['GERENTE', 'SUPERVISOR', 'DEV'],
-    'consultar_ordenes_de_compra': ['GERENTE', 'DEV'],
-    'consultar_trazabilidad_completa': ['GERENTE', 'DEV'],
-    'consultar_indicadores_de_calidad': ['GERENTE', 'DEV'],
-
-    # Rol: Recursos Humanos
-    'crear_empleado': ['RRHH', 'DEV'],
-    'modificar_empleado': ['RRHH', 'IT','DEV'],
-    'eliminar_empleado': ['RRHH', 'DEV'],
-    'consultar_OPERARIOs': ['RRHH', 'IT', 'DEV'],
-
-    # Rol: IT / Soporte
-    'configurar_usuarios_y_roles': ['IT', 'DEV'],
-    'modificar_parametros_del_sistema': ['IT', 'DEV'],
-    'realizar_mantenimiento_y_backups': ['IT', 'DEV'],
-    'consultar_logs_o_auditoria': ['IT', 'GERENTE', 'SUPERVISOR', 'ADMIN', 'DEV'],
-
-    # Permisos nuevos para asignación de roles
-    'gestionar_catalogo_de_productos': ['SUPERVISOR', 'GERENTE', 'DEV'],
-    'consultar_catalogo_de_insumos': ['OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE', 'DEV'],
-    'aprobar_orden_de_venta': ['SUPERVISOR', 'GERENTE', 'VENDEDOR', 'DEV'], 
-    'gestionar_clientes': ['VENDEDOR', 'ADMIN', 'GERENTE', 'DEV'], 
-    'gestionar_proveedores': ['ADMIN', 'DEV'], 
-    'gestionar_catalogo_de_insumos': ['SUPERVISOR', 'GERENTE', 'DEV'], 
-    'rechazar_orden_de_compra': ['SUPERVISOR', 'GERENTE', 'DEV'],
-    'ver_panel_notificaciones': ['IT', 'DEV', 'ADMIN'],
-    'gestionar_autorizaciones': ['ADMIN','DEV'],
-    'registrar_lote_de_producto': ['SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE', 'ADMIN', 'DEV'],
-
+    # Módulo de Calidad
+    'calidad_gestion_completa': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE', 'DEV'],
+    'calidad_control_completo': ['SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE', 'DEV'],
+    'calidad_registro_recepcion': ['ADMIN', 'SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE', 'DEV'],
+    'calidad_registro_basico': ['OPERARIO', 'ADMIN', 'SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE', 'DEV'],
+    
+    # Permiso General - Acceso Total por Módulo (para el rol de Gerente)
+    'dashboard_acceder': ['ADMIN', 'VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'RRHH', 'GERENTE', 'IT', 'DEV'],
+    'finanzas_acceso_total': ['GERENTE', 'DEV'],
+    'admin_acceso_total': ['GERENTE', 'DEV'],
+    'almacen_acceso_total': ['GERENTE', 'DEV'],
+    'produccion_acceso_total': ['GERENTE', 'DEV'],
+    'logistica_acceso_total': ['GERENTE', 'DEV'],
+    'calidad_acceso_total': ['GERENTE', 'DEV'],
 }
 
 def get_allowed_roles_for_action(action_name: str) -> list:
     """
     Devuelve la lista de códigos de rol permitidos para una acción específica.
     """
+    # El rol de Gerente tiene acceso a todo
+    if 'GERENTE' not in CANONICAL_PERMISSION_MAP.get(action_name, []):
+         if action_name.startswith(('finanzas_', 'admin_', 'almacen_', 'produccion_', 'logistica_', 'calidad_')):
+             return CANONICAL_PERMISSION_MAP.get(action_name, []) + ['GERENTE']
+
     return CANONICAL_PERMISSION_MAP.get(action_name, [])
+    

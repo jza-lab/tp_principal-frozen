@@ -9,7 +9,7 @@
         <p class="text-muted mb-0">Gestión y seguimiento de órdenes de compra a proveedores</p>
     </div>
     <div class="btn-toolbar">
-        {% if 'crear_orden_de_compra' is has_permission %}
+        {% if has_permission('logistica_gestion_oc_ov') %}
         <a href="{{ url_for('orden_compra.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
         </a>
@@ -101,17 +101,14 @@
                         </a>
                         
                         {% if orden.estado == 'PENDIENTE' %}
-                            {% if 'aprobar_orden_de_compra' is has_permission %}
+                            {% if has_permission('logistica_gestion_oc_ov') %}
                             <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
                                   data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de compra?" data-button-type="success">
-                                {{ csrf_form.csrf_token }}
+                                  {{ csrf_form.csrf_token }}
                                 <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
                                     <i class="bi bi-check-lg"></i> Aprobar
                                 </button>
                             </form>
-                            {% endif %}
-
-                            {% if 'rechazar_orden_de_compra' is has_permission %}
                             <button type="button" class="btn btn-sm btn-outline-danger" title="Rechazar Orden"
                                     data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}">
                                 <i class="bi bi-x-lg"></i> Rechazar
@@ -119,17 +116,19 @@
                             {% endif %}
                         
                         {% elif orden.estado == 'APROBADA' %}
-                                <form method="POST" action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
-                                      data-title="Marcar como 'En Tránsito'" data-message="¿Está seguro de que desea marcar esta orden como 'En Tránsito'?" data-button-type="primary">
-                                    {{ csrf_form.csrf_token }}
-                                    <button type="submit" class="btn btn-sm btn-primary" title="Marcar como En Tránsito">
-                                        <i class="bi bi-truck"></i> En Tránsito
-                                    </button>
-                                </form>
+                            {% if has_permission('logistica_recepcion_oc') %}
+                            <form method="POST" action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
+                                  data-title="Marcar como 'En Tránsito'" data-message="¿Está seguro de que desea marcar esta orden como 'En Tránsito'?" data-button-type="primary">
+                                  {{ csrf_form.csrf_token }}
+                                <button type="submit" class="btn btn-sm btn-primary" title="Marcar como En Tránsito">
+                                    <i class="bi bi-truck"></i> En Tránsito
+                                </button>
+                            </form>
                             {% endif %}
+                        {% endif %}
 
                         {% if orden.estado == 'EN_TRANSITO' %}
-                            {% if 'registrar_ingreso_de_materia_prima' is has_permission %}
+                            {% if has_permission('logistica_recepcion_oc') %}
                             <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-info" title="Recibir Mercadería">
                                 <i class="bi bi-box-arrow-in-down"></i> Recibir
                             </a>
