@@ -9,10 +9,11 @@
         <p class="text-muted mb-0">Listado general y seguimiento de órdenes</p>
     </div>
     <div class="btn-toolbar">
-        {% set can_create = has_permission('crear_ordenes_produccion')|trim == 'True' %}
-        <a href="{{ url_for('orden_produccion.nueva') if can_create else '#' }}" class="btn btn-primary {% if not can_create %}disabled{% endif %}">
+        {% if has_permission('produccion_gestion_completa') %}
+        <a href="{{ url_for('orden_produccion.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
         </a>
+        {% endif %}
     </div>
 </div>
 

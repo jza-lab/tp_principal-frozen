@@ -41,98 +41,101 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
-                        {% set is_dev = current_user.roles and current_user.roles.codigo == 'DEV' %}
-                        {% set can_ver_insumos = is_dev or 'consultar_stock_de_insumos' is has_permission %}
-                        {% set can_ver_compras = is_dev or 'consultar_ordenes_de_compra' is has_permission %}
-                        {% set can_ver_inventario = is_dev or 'consultar_stock' is has_permission %}
-                        {% set can_ver_reservas = is_dev or 'consultar_trazabilidad_completa' is has_permission %}
-                        {% set can_actualizar_precios = is_dev or 'consultar_historial_de_pagos' is has_permission %}
-                        {% set can_access_logistica_dropdown = is_dev or can_ver_insumos or can_ver_compras or can_ver_inventario or can_ver_reservas or can_actualizar_precios %}
-                        
-                        {% if can_access_logistica_dropdown %}
+                        {% set is_operario = current_user.roles and current_user.roles.codigo == 'OPERARIO' %}
+
+                        {# Lógica de permisos para el menú de Logística #}
+                        {% set can_ver_insumos = 'almacen_ver_insumos' is has_permission %}
+                        {% set can_ver_compras = 'consultar_ordenes_de_compra' is has_permission %}
+                        {% set can_ver_inventario = 'almacen_consulta_stock' is has_permission %}
+                        {% set can_ver_reservas = 'consultar_trazabilidad_completa' is has_permission %}
+                        {% set can_actualizar_precios = 'finanzas_ver_precios_costos' is has_permission %}
+                        {% set can_access_logistica_dropdown = can_ver_insumos or can_ver_compras or can_ver_inventario or can_ver_reservas or can_actualizar_precios %}
+
+                        {% if can_access_logistica_dropdown and not is_operario and current_user.roles.codigo != 'RRHH' %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('insumos_api') or request.endpoint.startswith('orden_compra') or request.endpoint.startswith('inventario_view') or request.endpoint.startswith('reservas') or request.endpoint.startswith('precios') %}active{% endif %}"
-                               href="#" id="navbarDropdownLogistica" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                href="#" id="navbarDropdownLogistica" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-box-seam me-1"></i> Logística
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownLogistica">
-                                {% if can_ver_insumos %}
+                                {% if 'almacen_ver_insumos' is has_permission %}
                                 <li><a class="dropdown-item {% if request.endpoint.startswith('insumos_api') %}active{% endif %}" href="{{ url_for('insumos_api.obtener_insumos') }}"><i class="fas fa-cubes me-2"></i> Insumos</a></li>
-                                <li><hr class="dropdown-divider"></li>
                                 {% endif %}
-                                {% if can_ver_compras %}
+                                {% if 'consultar_ordenes_de_compra' is has_permission %}
+                                <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if request.endpoint.startswith('orden_compra') %}active{% endif %}" href="{{ url_for('orden_compra.listar') }}"><i class="bi bi-truck me-2"></i> Compras (Ordenes)</a></li>
-                                <li><hr class="dropdown-divider"></li>
                                 {% endif %}
-                                {% if can_ver_inventario %}
+                                {% if 'almacen_consulta_stock' is has_permission %}
+                                <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if request.endpoint.startswith('inventario_view') %}active{% endif %}" href="{{ url_for('inventario_view.listar_lotes') }}"><i class="bi bi-boxes me-2"></i> Inventario (Insumos)</a></li>
-                                <li><hr class="dropdown-divider"></li>
                                 {% endif %}
-                                {% if can_ver_reservas %}
+                                {% if 'consultar_trazabilidad_completa' is has_permission %}
+                                <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if request.endpoint.startswith('reservas') %}active{% endif %}" href="{{ url_for('reservas.listar') }}"><i class="bi bi-signpost-split-fill me-2"></i> Trazabilidad de Reservas</a></li>
-                                <li><hr class="dropdown-divider"></li>
                                 {% endif %}
-                                {% if can_actualizar_precios %}
+                                {% if 'finanzas_ver_precios_costos' is has_permission %}
+                                <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if request.endpoint.startswith('precios') %}active{% endif %}" href="{{ url_for('precios.index') }}"><i class="bi bi-tag-fill me-2"></i> Actualizar Precios</a></li>
                                 {% endif %}
                             </ul>
                         </li>
                         {% endif %}
 
-                        
-                        {% set can_ver_productos = is_dev or 'consultar_stock_de_productos' is has_permission %}
-                        {% set can_ver_ventas = is_dev or 'consultar_ordenes_de_venta' is has_permission %}
-                        {% set can_ver_inventario_prod = is_dev or 'consultar_control_de_calidad' is has_permission %}
-                        {% set can_access_comercial_dropdown = is_dev or can_ver_productos or can_ver_ventas or can_ver_inventario_prod %}
+                        {# Lógica de permisos para el menú Comercial #}
+                        {% set can_ver_productos = 'almacen_consulta_stock' is has_permission %}
+                        {% set can_ver_ventas = 'logistica_gestion_ov' is has_permission %}
+                        {% set can_ver_inventario_prod = 'gestionar_lotes' is has_permission %}
+                        {% set can_access_comercial_dropdown = can_ver_productos or can_ver_ventas or can_ver_inventario_prod %}
 
-                        {% if can_access_comercial_dropdown %}
+                        {% if can_access_comercial_dropdown and not is_operario and current_user.roles.codigo != 'RRHH' %}
                         <li class="nav-item dropdown">
-                             <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('productos') or request.endpoint.startswith('orden_venta') or request.endpoint.startswith('lote_producto') %}active{% endif %}"
-                               href="#" id="navbarDropdownComercial" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="bi bi-cart-fill me-1"></i> Comercial
-                            </a>
+                                <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('productos') or request.endpoint.startswith('orden_venta') or request.endpoint.startswith('lote_producto') %}active{% endif %}"
+                                    href="#" id="navbarDropdownComercial" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-cart-fill me-1"></i> Comercial
+                                </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownComercial">
-                                {% if can_ver_productos %}
+                                {% if 'almacen_consulta_stock' is has_permission %}
                                 <li><a class="dropdown-item {% if request.endpoint.startswith('productos') %}active{% endif %}" href="{{ url_for('productos.obtener_productos') }}"><i class="bi bi-bag-fill me-2"></i> Productos</a></li>
-                                <li><hr class="dropdown-divider"></li>
                                 {% endif %}
-                                {% if can_ver_ventas %}
+                                {% if 'logistica_gestion_ov' is has_permission %}
+                                <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if request.endpoint.startswith('orden_venta') %}active{% endif %}" href="{{ url_for('orden_venta.listar') }}"><i class="bi bi-currency-dollar me-2"></i> Ventas (Ordenes)</a></li>
-                                <li><hr class="dropdown-divider"></li>
                                 {% endif %}
-                                {% if can_ver_inventario_prod %}
+                                {% if 'gestionar_lotes' is has_permission %}
+                                <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item {% if request.endpoint.startswith('lote_producto') %}active{% endif %}" href="{{ url_for('lote_producto.listar_lotes') }}"><i class="bi bi-box-seam me-2"></i> Inventario (Productos)</a></li>
                                 {% endif %}
                             </ul>
                         </li>
                         {% endif %}
 
-                        {% set can_ver_produccion = is_dev or 'consultar_ordenes_de_produccion' is has_permission %}
-                        {% set can_ver_planificacion = is_dev or 'consultar_reportes_de_produccion' is has_permission %}
-                        {% if is_dev or can_ver_produccion or can_ver_planificacion %}
+                        {# Lógica de permisos para el menú de Producción #}
+                        {% set can_access_produccion_dropdown = 'produccion_ejecucion' is has_permission or 'consultar_plan_de_produccion' is has_permission %}
+
+                        {% if can_access_produccion_dropdown and current_user.roles.codigo != 'RRHH' %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('planificacion') or request.endpoint.startswith('orden_produccion') %}active{% endif %}"
-                               href="#" id="navbarDropdownProduccion" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                href="#" id="navbarDropdownProduccion" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fas fa-industry me-1"></i> Producción
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownProduccion">
-                                {% if can_ver_planificacion %}
+                                {% if 'consultar_plan_de_produccion' is has_permission %}
                                 <li><a class="dropdown-item {% if request.endpoint.startswith('planificacion') %}active{% endif %}" href="{{ url_for('planificacion.index') }}"><i class="bi bi-calendar-check me-2"></i> Planificación</a></li>
                                 {% endif %}
-                                {% if can_ver_produccion and can_ver_planificacion %}
-        			            <li><hr class="dropdown-divider"></li>
+                                {% if 'produccion_ejecucion' is has_permission and 'consultar_plan_de_produccion' is has_permission %}
+                                <li><hr class="dropdown-divider"></li>
                                 {% endif %}
-                                {% if can_ver_produccion %}
+                                {% if 'produccion_ejecucion' is has_permission %}
                                 <li><a class="dropdown-item {% if request.endpoint.startswith('orden_produccion') %}active{% endif %}" href="{{ url_for('orden_produccion.listar') }}"><i class="fas fa-clipboard-list me-2"></i> Ordenes de Producción</a></li>
                                 {% endif %}
                             </ul>
                         </li>
                         {% endif %}
 
-                        {% if is_dev or 'ver_alertas_topbar' is has_permission %}
+                        {% if 'configurar_alertas' is has_permission and not is_operario and current_user.roles.codigo != 'RRHH' %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('alertas') %}active{% endif %}"
-                                 href="#" id="navbarDropdownAlertas" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    href="#" id="navbarDropdownAlertas" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="bi bi-bell-fill me-1"></i> Alertas
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="navbarDropdownAlertas">
@@ -145,14 +148,14 @@
                         </li>
                         {% endif %}
                         
-                        {% set can_gestionar_empleados = is_dev or 'consultar_empleados' is has_permission or 'modificar_empleado' is has_permission or 'crear_empleado' is has_permission or 'configurar_usuarios_y_roles' is has_permission %}
+                        {% set can_gestionar_empleados = is_dev or 'admin_gestion_personal' is has_permission or 'admin_gestion_sistema' is has_permission or 'consultar_empleados' is has_permission %}
                         {% set can_gestionar_clientes = is_dev or 'gestionar_clientes' is has_permission %}
                         {% set can_gestionar_proveedores = is_dev or 'gestionar_proveedores' is has_permission %}
-                        {% set can_gestionar_reclamos = is_dev or 'gestionar_reclamos' is has_permission %}
-                        {% set can_gestionar_consultas = is_dev or current_user.roles.codigo in ['GERENTE', 'VENTAS'] %}
-                        {% set can_access_admin_dropdown = is_dev or can_gestionar_empleados or can_gestionar_clientes or can_gestionar_proveedores or can_gestionar_reclamos or can_gestionar_consultas %}
+                        {% set can_gestionar_reclamos = is_dev or 'calidad_gestion_completa' is has_permission %}
+                        {% set can_gestionar_consultas = is_dev or 'admin_acceder_consultas' is has_permission %}
+                        {% set can_access_admin_dropdown = is_dev or can_gestionar_empleados or can_gestionar_clientes or can_gestionar_proveedores or can_gestionar_reclamos or can_gestionar_consultas or 'consultar_empleados' is has_permission %}
 
-                        {% if can_access_admin_dropdown %}
+                        {% if can_access_admin_dropdown and not is_operario %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle {% if is_admin_section or request.endpoint.startswith('admin_reclamo') %}active{% endif %}"
                             href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -199,7 +202,7 @@
                     <ul class="navbar-nav ms-auto">
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="navbarDropdownUser" 
-                               role="button" data-bs-toggle="dropdown">
+                                role="button" data-bs-toggle="dropdown">
                                 <i class="bi bi-person-circle me-2"></i>
                                 {{ current_user.nombre_completo }}
                             </a>
@@ -289,7 +292,7 @@
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body" id="resultadoModalBody">
+      <div classs="modal-body" id="resultadoModalBody">
         </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>

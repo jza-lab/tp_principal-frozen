@@ -9,7 +9,7 @@ cliente_controller = ClienteController()
 reclamo_controller = ReclamoController()
 
 @cliente_bp.route('/register', methods=['GET', 'POST'])
-@permission_required(accion='gestionar_clientes')
+@permission_any_of('admin_gestion_sistema', 'admin_supervision')
 def register():
     try:
         if request.method == 'PUT' or request.method == 'POST':

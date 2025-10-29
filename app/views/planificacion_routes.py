@@ -1,7 +1,7 @@
 # En app/routes/planificacion_routes.py
 import logging
 from flask import Blueprint, render_template, flash, url_for, request, jsonify, session # Añade request y jsonify
-from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
 from app.controllers.planificacion_controller import PlanificacionController
 from app.controllers.usuario_controller import UsuarioController
 from datetime import date, timedelta, datetime # <--- SE AÑADIÓ DATETIME
@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 @planificacion_bp.route('/') # La ruta principal ahora manejará todo
 @permission_required(accion='consultar_plan_de_produccion')
 def index():
+    current_user = get_jwt()
+    user_roles = current_user.get('roles', [])
+    is_operario = 'OPERARIO' in user_roles
+    is_supervisor_calidad = 'SUPERVISOR_CALIDAD' in user_roles
     # ... (obtener semana, horizonte, mps_data - sin cambios) ...
     week_str = request.args.get('semana')
     if not week_str:
@@ -144,7 +148,9 @@ def index():
         fin_semana_crp=fin_semana.isoformat() if fin_semana else None,
         now=datetime.utcnow(),
         timedelta=timedelta,
-        date=date
+        date=date,
+        is_operario=is_operario,
+        is_supervisor_calidad=is_supervisor_calidad
     )
 
 # --- NUEVA RUTA PARA CONFIRMACIÓN MULTI-DÍA ---
@@ -207,16 +213,19 @@ def recomendar_linea_api(op_id):
 
 # Endpoint para la API de mover OPs (Drag-and-Drop y asignación)
 @planificacion_bp.route('/api/mover-op/<int:op_id>', methods=['POST'])
-@permission_required(accion='aprobar_plan_de_produccion')
+@permission_required(accion='produccion_ejecucion') # Permiso más general
 def mover_op_api(op_id):
     """
     API endpoint para cambiar el estado de una OP.
     Usado tanto por el drag-and-drop como por la asignación post-recomendación.
     """
+    current_user = get_jwt()
+    user_role = current_user.get('roles', {}).get('codigo')
+
     data = request.get_json()
     nuevo_estado = data.get('nuevo_estado')
 
-    response, status_code = controller.mover_orden(op_id, nuevo_estado)
+    response, status_code = controller.mover_orden(op_id, nuevo_estado, user_role)
     return jsonify(response), status_code
 
 @planificacion_bp.route('/api/consolidar-y-aprobar', methods=['POST'])

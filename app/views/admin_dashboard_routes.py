@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 from flask import Blueprint, render_template
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.pedido_controller import PedidoController
@@ -27,9 +27,14 @@ alertas_stock_count = inventario_controller.obtener_conteo_alertas_stock()
 
 @admin_dashboard_bp.route('/')
 @jwt_required()
-@permission_required(accion='acceder_al_panel_principal')
+@permission_required(accion='dashboard_acceder')
 def index():
     """Página principal del panel de administración."""
+    current_user = get_jwt()
+    user_roles = current_user.get('roles', [])
+    user_id = current_user.get('id_usuario', None)
+    is_operario = 'OPERARIO' in user_roles
+    
     hoy = date.today()
     dias_restar = hoy.weekday()
     fecha_inicio_semana = hoy - timedelta(days=dias_restar)
@@ -50,6 +55,8 @@ def index():
     ordenes_totales = int(cantidad_aprobadas) + int(cantidad_completadas)
 
     filtros = {'estado': 'LISTA PARA PRODUCIR', 'fecha_planificada_desde': fecha_inicio_iso, 'fecha_planificada_hasta': fecha_fin_iso}
+    if is_operario:
+        filtros['operario_responsable_id'] = user_id
     respuesta_ordenes, _ = orden_produccion_controller.obtener_ordenes(filtros)
     ordenes_aprobadas = respuesta_ordenes.get('data', [])
 
@@ -77,7 +84,10 @@ def index():
     ordenesventa_rechazadas_count = len(ordenesventa_rechazadas_list)
 
     # Órdenes de Producción en Proceso
-    respuesta_op_proceso, _ = orden_produccion_controller.obtener_ordenes({'estado': 'EN_PROCESO'})
+    filtros_proceso = {'estado': 'EN_PROCESO'}
+    if is_operario:
+        filtros_proceso['operario_responsable_id'] = user_id
+    respuesta_op_proceso, _ = orden_produccion_controller.obtener_ordenes(filtros_proceso)
     ordenesproduccion_proceso_list = respuesta_op_proceso.get('data', [])
     ordenesproduccion_proceso_count = len(ordenesproduccion_proceso_list)
 
@@ -120,4 +130,5 @@ def index():
                            lotes_vencimiento_count=lotes_vencimiento_count,
                            conteo_reclamos_pendientes=conteo_reclamos,
                            lotes_producto_vencimiento_count=lotes_producto_vencimiento_count,
-                           pending_client_count=pending_client_count) 
+                           pending_client_count=pending_client_count,
+                           is_operario=is_operario)

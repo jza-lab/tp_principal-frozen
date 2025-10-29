@@ -8,7 +8,7 @@ from flask import (
     url_for,
     flash,
 )
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from marshmallow import ValidationError
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.producto_controller import ProductoController
@@ -16,7 +16,7 @@ from app.controllers.etapa_produccion_controller import EtapaProduccionControlle
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
 from app.controllers.pedido_controller import PedidoController
-from app.utils.decorators import roles_required
+from app.utils.decorators import roles_required, permission_any_of
 from app.utils.decorators import permission_required
 from datetime import date
 from app.utils.estados import OP_FILTROS_UI, OP_MAP_STRING_TO_INT
@@ -32,11 +32,26 @@ pedido_controller = PedidoController()
 
 
 @orden_produccion_bp.route("/")
-@permission_required(accion='consultar_ordenes_de_produccion')
+@permission_required(accion='produccion_consulta')
 def listar():
-    """Muestra la lista de órdenes de producción."""
+    """
+    Muestra la lista de órdenes de producción.
+    Si el usuario es un OPERARIO, filtra para mostrar solo sus órdenes asignadas.
+    """
     estado = request.args.get("estado")
     filtros = {"estado": estado} if estado else {}
+
+    # Lógica de filtrado por rol
+    claims = get_jwt()
+    user_roles = claims.get('roles', [])
+    if isinstance(user_roles, dict):
+        user_roles = [user_roles.get('codigo')]
+    elif not isinstance(user_roles, list):
+        user_roles = [user_roles]
+
+    if 'OPERARIO' in user_roles and 'SUPERVISOR' not in user_roles:
+        filtros['operario_asignado_id'] = claims.get('sub') # 'sub' es el estandar para el ID de usuario en JWT
+
     response, status_code = controller.obtener_ordenes(filtros)
     ordenes = []
     if response.get("success"):
@@ -109,7 +124,7 @@ def crear():
 
 
 @orden_produccion_bp.route("/modificar/<int:id>", methods=["GET", "POST", "PUT"])
-@permission_required(accion='supervisar_avance_de_etapas')
+@permission_required(accion='gestionar_orden_de_produccion')
 def modificar(id):
     """Gestiona la modificación de una orden de producción."""
     try:
@@ -150,14 +165,40 @@ def modificar(id):
 
 
 @orden_produccion_bp.route("/<int:id>/detalle")
-@permission_required(accion='consultar_ordenes_de_produccion')
+@jwt_required()
+@permission_any_of('gestionar_orden_de_produccion', 'produccion_consulta')
 def detalle(id):
-    """Muestra el detalle de una orden de producción."""
+    """
+    Muestra el detalle de una orden de producción.
+    Si el usuario es OPERARIO, valida que la orden le esté asignada.
+    """
     respuesta = controller.obtener_orden_por_id(id)
     if not respuesta.get("success"):
         flash("Orden no encontrada.", "error")
         return redirect(url_for("orden_produccion.listar"))
     orden = respuesta.get("data")
+
+    # --- BLOQUE CORREGIDO ---
+    # 1. Obtenemos el ID del usuario (esto sí es un string o int)
+    current_user_id = get_jwt_identity()
+    
+    # 2. Obtenemos TODOS los claims (esto es el diccionario que contiene los roles)
+    claims = get_jwt() 
+    user_roles = claims.get('roles', [])
+    # --- FIN CORRECCIÓN ---
+
+    if isinstance(user_roles, dict):
+        user_roles = [user_roles.get('codigo')]
+    elif not isinstance(user_roles, list):
+        user_roles = [user_roles]
+
+    if 'OPERARIO' in user_roles and 'SUPERVISOR' not in user_roles:
+        # 3. Comparamos usando el ID que obtuvimos correctamente
+        if orden.get('operario_asignado_id') != current_user_id: 
+            flash("No tiene permiso para ver esta orden de producción.", "error")
+            return redirect(url_for("orden_produccion.listar"))
+    # --- FIN BLOQUE CORREGIDO ---
+            
     desglose_response = controller.obtener_desglose_origen(id)
     desglose_origen = desglose_response.get("data", [])
     ingredientes_response = (
@@ -183,7 +224,7 @@ def detalle(id):
 
 
 @orden_produccion_bp.route("/<int:id>/iniciar", methods=["POST"])
-@permission_required(accion='supervisar_avance_de_etapas')
+@permission_required(accion='gestionar_orden_de_produccion')
 def iniciar(id):
     """Inicia una orden de producción, previa validación de stock."""
     try:
@@ -203,7 +244,7 @@ def iniciar(id):
 
 
 @orden_produccion_bp.route("/<int:id>/completar", methods=["POST"])
-@permission_required(accion='registrar_etapa_de_produccion')
+@permission_required(accion='produccion_ejecucion')
 def completar(id):
     """Completa una orden de producción."""
     try:
@@ -222,7 +263,7 @@ def completar(id):
 
 
 @orden_produccion_bp.route("/pendientes")
-@permission_required(accion='consultar_ordenes_de_produccion')
+@permission_any_of('gestionar_orden_de_produccion', 'produccion_consulta')
 def listar_pendientes():
     """Muestra las órdenes pendientes de aprobación."""
     response, _ = controller.obtener_ordenes({"estado": "PENDIENTE"})
@@ -236,7 +277,7 @@ def listar_pendientes():
 
 @orden_produccion_bp.route("/<int:id>/aprobar", methods=["POST"])
 @jwt_required()
-@permission_required(accion='crear_orden_de_produccion')
+@permission_required(accion='aprobar_orden_de_produccion')
 def aprobar(id):
     """Aprueba una orden de producción. Devuelve JSON si es una llamada AJAX."""
     try:
@@ -273,7 +314,7 @@ def aprobar(id):
 
 @orden_produccion_bp.route("/<int:orden_id>/crear_oc_op", methods=["POST"])
 @jwt_required()
-@permission_required(accion='crear_orden_de_produccion')
+@permission_any_of('crear_orden_de_compra', 'aprobar_orden_de_produccion')
 def crear_oc_op(orden_id):
     """
     Crea la OC y aprueba la OP después de la confirmación manual del usuario.
@@ -322,7 +363,7 @@ def crear_oc_op(orden_id):
 
 
 @orden_produccion_bp.route("/<int:id>/rechazar", methods=["POST"])
-@permission_required(accion='crear_orden_de_produccion')
+@permission_required(accion='gestionar_orden_de_produccion')
 def rechazar(id):
     """Rechaza una orden de producción."""
     motivo = request.form.get("motivo", "No especificado")
@@ -335,7 +376,7 @@ def rechazar(id):
 
 
 @orden_produccion_bp.route("/<int:id>/asignar_supervisor", methods=["POST"])
-@permission_required(accion='reasignar_operarios_a_una_orden')
+@permission_required(accion='gestionar_orden_de_produccion')
 def asignar_supervisor(id):
     """Asigna un supervisor a una orden de producción."""
     supervisor_id = request.form.get("supervisor_id")

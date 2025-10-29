@@ -1,27 +1,40 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.controllers.orden_compra_controller import OrdenCompraController
+from app.controllers.usuario_controller import UsuarioController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
-from app.utils.decorators import permission_required
+from app.utils.decorators import permission_required, permission_any_of
 from datetime import datetime
 from app.utils.estados import OC_FILTROS_UI, OC_MAP_STRING_TO_INT
 
 orden_compra_bp = Blueprint("orden_compra", __name__, url_prefix="/compras")
 
 controller = OrdenCompraController()
+usuario_controller = UsuarioController()
 orden_produccion_controller = OrdenProduccionController()
 proveedor_controller = ProveedorController()
 insumo_controller = InsumoController()
 
 
 @orden_compra_bp.route("/")
+@jwt_required()
 @permission_required(accion='consultar_ordenes_de_compra')
 def listar():
     """Muestra la lista de órdenes de compra."""
     estado = request.args.get("estado")
     filtros = {"estado": estado} if estado else {}
+    
+    # Obtener rol del usuario
+    claims = get_jwt()
+    rol_usuario = claims.get('roles', [])[0] if claims.get('roles') else None
+
+    # Si es SUPERVISOR_CALIDAD y no hay un filtro de estado específico,
+    # mostrar solo los estados relevantes para Calidad.
+    if rol_usuario == 'SUPERVISOR_CALIDAD' and not estado:
+        filtros['estado_in'] = ['EN TRANSITO', 'RECEPCION INCOMPLETA', 'RECEPCION COMPLETA', 'RECHAZADA']
+
     response, status_code = controller.get_all_ordenes(filtros)
     ordenes = []
     if response.get("success"):
@@ -29,7 +42,9 @@ def listar():
         ordenes = sorted(ordenes_data, key=lambda x: OC_MAP_STRING_TO_INT.get(x.get("estado"), 999))
     else:
         flash(response.get("error", "Error al cargar las órdenes de compra."), "error")
+    
     titulo = f"Órdenes de Compra ({'Todas' if not estado else estado.replace('_', ' ').title()})"
+    
     return render_template("ordenes_compra/listar.html", 
                            ordenes=ordenes, 
                            titulo=titulo, 
@@ -102,7 +117,7 @@ def aprobar(id):
 
 
 @orden_compra_bp.route("/<int:id>/editar", methods=["GET", "POST"])
-@permission_required(accion='crear_orden_de_compra')
+@permission_required(accion='editar_orden_de_compra')
 def editar(id):
     if request.method == "POST":
         resultado = controller.actualizar_orden(id, request.form)
@@ -134,7 +149,7 @@ def editar(id):
 
 
 @orden_compra_bp.route("/<int:id>/rechazar", methods=["POST"])
-@permission_required(accion='rechazar_orden_de_compra')
+@permission_any_of('editar_orden_de_compra', 'gestionar_recepcion_orden_compra')
 def rechazar(id):
     motivo = request.form.get("motivo", "No especificado")
     resultado = controller.rechazar_orden(id, motivo)
@@ -153,7 +168,7 @@ def rechazar(id):
 
 
 @orden_compra_bp.route("/<int:id>/marcar-en-transito", methods=["POST"])
-@permission_required(accion='solicitar_reposicion_de_insumos')
+@permission_required(accion='logistica_recepcion_oc')
 def marcar_en_transito(id):
     resultado = controller.marcar_en_transito(id)
     if resultado.get("success"):
@@ -173,7 +188,7 @@ def marcar_en_transito(id):
 
 @orden_compra_bp.route("/recepcion/<int:orden_id>", methods=["POST"])
 @jwt_required()
-@permission_required(accion='registrar_ingreso_de_materia_prima')
+@permission_any_of('logistica_recepcion_oc', 'gestionar_recepcion_orden_compra')
 def procesar_recepcion(orden_id):
     usuario_id = get_jwt_identity()
     resultado = controller.procesar_recepcion(orden_id, request.form, usuario_id, orden_produccion_controller)

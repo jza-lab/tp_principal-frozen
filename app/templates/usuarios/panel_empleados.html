@@ -25,7 +25,7 @@
         </div>
     </div>
     <div class="ms-3">
-        {% if 'crear_empleado' is has_permission %}
+        {% if has_permission('admin_gestion_personal') %}
         <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary">
             <i class="bi bi-person-plus me-1"></i>Crear Empleado
         </a>
@@ -87,7 +87,7 @@
                                 <i class="bi bi-person-gear me-2"></i>Gestionar Empleado
                             </a>
                         {% else %}
-                            {% if 'modificar_empleado' is has_permission %}
+                            {% if has_permission('admin_gestion_personal') %}
                             <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="w-100">
                                 {{ csrf_form.csrf_token }}
                                 <button type="submit" class="btn btn-sm btn-outline-success w-100">
@@ -107,9 +107,11 @@
             <i class="bi bi-people"></i>
             <h4>No hay empleados registrados</h4>
             <p>Comience agregando el primer empleado al sistema</p>
+            {% if has_permission('admin_gestion_personal') %}
             <a href="{{ url_for('admin_usuario.nuevo_usuario') }}" class="btn btn-primary mt-3">
                 <i class="bi bi-person-plus me-1"></i>Crear Primer Empleado
             </a>
+            {% endif %}
         </div>
     </div>
     {% endfor %}

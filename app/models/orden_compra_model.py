@@ -173,8 +173,11 @@ class OrdenCompraModel(BaseModel):
             )
 
             if filters:
-                if 'estado' in filters and filters['estado']:
+                if 'estado_in' in filters and filters['estado_in']:
+                    query = query.in_('estado', filters['estado_in'])
+                elif 'estado' in filters and filters['estado']:
                     query = query.eq('estado', filters['estado'])
+                
                 if 'proveedor_id' in filters and filters['proveedor_id']:
                     query = query.eq('proveedor_id', filters['proveedor_id'])
                 if 'prioridad' in filters and filters['prioridad']:
