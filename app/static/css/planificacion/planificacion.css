@@ -290,3 +290,40 @@
 .accordion-button > .d-flex { 
     background-color: inherit !important; /* Forzar herencia del fondo del botón padre */
 }
+/* --- Estilos para Columnas Kanban Comprimibles --- */
+        .kanban-column-wrapper {
+            /* Transición suave para el ancho mínimo */
+            transition: min-width 0.3s ease-in-out;
+        }
+        .kanban-column-wrapper.kanban-column-compressed {
+            /* Anula el style="min-width: 250px" y lo fija a 50px */
+            min-width: 50px !important;
+            flex-grow: 0 !important; /* Evita que crezca */
+        }
+        .kanban-column-wrapper.kanban-column-compressed .kanban-cards {
+            /* Oculta las tarjetas */
+            display: none;
+        }
+        .kanban-column-wrapper.kanban-column-compressed .kanban-title-text,
+        .kanban-column-wrapper.kanban-column-compressed .badge {
+            /* Oculta el título y el contador */
+            display: none;
+        }
+        .kanban-column-wrapper.kanban-column-compressed .column-header {
+            /* Centra el botón de control */
+            justify-content: center;
+            padding-right: 0.5rem;
+            padding-left: 0.5rem;
+        }
+        .kanban-column-wrapper.kanban-column-compressed .column-header-controls {
+            margin-left: 0 !important; /* Quita márgenes extra */
+        }
+
+        /* Lógica para cambiar el icono del botón */
+        .kanban-column-wrapper.kanban-column-compressed .kanban-compress-toggle .bi-chevron-bar-left {
+            display: none; /* Oculta la flecha "comprimir" */
+        }
+        .kanban-column-wrapper.kanban-column-compressed .kanban-compress-toggle .bi-chevron-bar-right {
+            display: inline-block !important; /* Muestra la flecha "expandir" */
+        }
+        /* -- Fin Estilos Comprimibles -- */
