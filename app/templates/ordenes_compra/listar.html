@@ -102,27 +102,28 @@
                         
                         <!-- Lógica para Supervisor de Calidad -->
                         {% if has_permission('gestionar_recepcion_orden_compra') %}
-                            {% if orden.estado == 'EN_TRANSITO' %}
+                            <!-- {% if orden.estado == 'EN_TRANSITO' %}
                                 <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-info" title="Recibir Mercadería">
                                     <i class="bi bi-box-arrow-in-down"></i> Recibir
                                 </a>
                                 <button type="button" class="btn btn-sm btn-outline-danger" title="Rechazar Orden"
                                         data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}">
                                     <i class="bi bi-x-lg"></i> Rechazar
-                                </button>
+                                </button> -->
                             {% endif %}
                         
                         <!-- Lógica para otros roles -->
-                        {% else %}
                             {% if orden.estado == 'PENDIENTE' %}
                                 {% if has_permission('aprobar_orden_de_compra') %}
-                                <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
-                                      data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de compra?" data-button-type="success">
-                                      {{ csrf_form.csrf_token }}
-                                    <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
-                                        <i class="bi bi-check-lg"></i> Aprobar
-                                    </button>
-                                </form>
+                                <div>
+                                    <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
+                                        data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de compra?" data-button-type="success">
+                                        {{ csrf_form.csrf_token }}
+                                        <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
+                                            <i class="bi bi-check-lg"></i> Aprobar
+                                        </button>
+                                    </form>
+                                </div>
                                 {% endif %}
                                 {% if has_permission('editar_orden_de_compra') %}
                                 <button type="button" class="btn btn-sm btn-outline-danger" title="Rechazar Orden"
@@ -133,13 +134,15 @@
                             
                             {% elif orden.estado == 'APROBADA' %}
                                 {% if has_permission('logistica_recepcion_oc') %}
-                                <form method="POST" action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
-                                      data-title="Marcar como 'En Tránsito'" data-message="¿Está seguro de que desea marcar esta orden como 'En Tránsito'?" data-button-type="primary">
-                                      {{ csrf_form.csrf_token }}
-                                    <button type="submit" class="btn btn-sm btn-primary" title="Marcar como En Tránsito">
-                                        <i class="bi bi-truck"></i> En Tránsito
-                                    </button>
-                                </form>
+                                <div>
+                                    <form method="POST" action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
+                                        data-title="Marcar como 'En Tránsito'" data-message="¿Está seguro de que desea marcar esta orden como 'En Tránsito'?" data-button-type="primary">
+                                        {{ csrf_form.csrf_token }}
+                                        <button type="submit" class="btn btn-sm btn-primary" title="Marcar como En Tránsito">
+                                            <i class="bi bi-truck"></i> En Tránsito
+                                        </button>
+                                    </form>
+                                </div>
                                 {% endif %}
                             
                             {% elif orden.estado == 'EN_TRANSITO' %}
@@ -192,6 +195,7 @@
         </div>
     </div>
     {% endfor %}
+</div>
 </div>
 {% endblock %}
 
