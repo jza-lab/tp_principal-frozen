@@ -1,5 +1,6 @@
 from typing import Dict, TYPE_CHECKING
 from flask import request, jsonify
+from flask_jwt_extended import get_jwt
 from app.models.orden_compra_model import OrdenCompraItemModel, OrdenCompraModel
 from app.models.orden_compra_model import OrdenCompra
 from app.controllers.inventario_controller import InventarioController
@@ -309,7 +310,15 @@ class OrdenCompraController:
             if not orden_actual_result.get('success'):
                 return orden_actual_result
 
-            observaciones_actuales = orden_actual_result['data'].get('observaciones', '')
+            orden_data = orden_actual_result['data']
+            observaciones_actuales = orden_data.get('observaciones', '')
+            
+            # Validacion de transicion de estado para SUPERVISOR_CALIDAD
+            claims = get_jwt()
+            rol_usuario = claims.get('roles', [])[0] if claims.get('roles') else None
+            if rol_usuario == 'SUPERVISOR_CALIDAD':
+                if orden_data.get('estado') != 'EN_TRANSITO':
+                    return {'success': False, 'error': 'Solo puede rechazar órdenes que estén EN TRANSITO.'}
 
             update_data = {
                 'estado': 'RECHAZADA',

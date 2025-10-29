@@ -74,8 +74,9 @@ CANONICAL_PERMISSION_MAP = {
     'crear_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
     'consultar_ordenes_de_compra': ['SUPERVISOR', 'ADMIN', 'GERENTE', 'VENDEDOR','SUPERVISOR_CALIDAD'],
     'editar_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
-    'aprobar_orden_de_compra': ['GERENTE', 'SUPERVISOR_CALIDAD'], 
-    'logistica_recepcion_oc': ['ADMIN', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
+    'aprobar_orden_de_compra': ['GERENTE', 'SUPERVISOR_CALIDAD'],
+    'gestionar_recepcion_orden_compra': ['SUPERVISOR_CALIDAD'],
+    'logistica_recepcion_oc': ['ADMIN', 'SUPERVISOR', 'GERENTE'],
     'logistica_supervision': ['SUPERVISOR', 'GERENTE'],
 
     # Módulo: Gerencia y Supervisión General
