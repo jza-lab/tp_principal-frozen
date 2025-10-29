@@ -63,8 +63,7 @@ class RoleModel(BaseModel):
             return True
             
         permission_map = cls.get_permission_map()
-        # --- LÓGICA CORREGIDA ---
         # Obtener la lista de roles permitidos para la ACCIÓN dada.
-        allowed_roles_for_action = permission_map.get(accion, [])
+        allowed_roles_for_action = permission_map.get(accion, []) # Esto estaba bien
         # Verificar si el ROL del usuario está en esa lista.
         return rol_codigo in allowed_roles_for_action
