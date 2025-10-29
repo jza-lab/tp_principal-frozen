@@ -5,7 +5,7 @@ from app.utils.decorators import permission_required
 consulta_bp = Blueprint('consulta_admin', __name__, url_prefix='/admin/consultas')
 
 @consulta_bp.route('/')
-@permission_required(['GERENTE', 'DEV', 'VENTAS'])
+@permission_required(accion='admin_acceder_consultas')
 def listar_consultas():
     consulta_controller = ConsultaController()
     consultas_response = consulta_controller.obtener_consultas()
@@ -13,7 +13,7 @@ def listar_consultas():
     return render_template('consultas/listar.html', consultas=consultas)
 
 @consulta_bp.route('/<int:consulta_id>/responder', methods=['GET', 'POST'])
-@permission_required(['GERENTE', 'DEV', 'VENTAS'])
+@permission_required(accion='admin_acceder_consultas')
 def responder_consulta(consulta_id):
     consulta_controller = ConsultaController()
     if request.method == 'POST':

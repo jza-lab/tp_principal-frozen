@@ -113,7 +113,7 @@
                                     <i class="bi bi-eye"></i>
                                 </a>
 
-                                {% if can_manage %}
+                                {% if 'inactivar_entidad' is has_permission %}
                                 <a class="btn btn-sm btn-outline-danger" title="Inhabilitar cliente"
                                     onClick="eliminarCliente('{{ cliente.id }}')">
                                     <i class="bi bi-person-x"></i> Desactivar
@@ -121,7 +121,7 @@
                                 {% endif %}
 
                             {% else %}
-                                {% if can_manage %}
+                                {% if 'inactivar_entidad' is has_permission %}
                                 <a class="btn btn-sm btn-outline-success" title="Habilitar cliente"
                                     onClick="habilitarCliente('{{ cliente.id }}')">
                                     <i class="bi bi-person-check"></i> Activar

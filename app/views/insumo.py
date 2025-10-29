@@ -52,7 +52,7 @@ def crear_insumo():
 
 
 @insumos_bp.route("/catalogo", methods=["GET"])
-@permission_required(accion='consultar_catalogo_de_insumos')
+@permission_required(accion='almacen_ver_insumos')
 def obtener_insumos():
     try:
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
@@ -71,7 +71,7 @@ def obtener_insumos():
 
 
 @insumos_bp.route("/catalogo/<string:id_insumo>", methods=["GET"])
-@permission_required(accion='consultar_catalogo_de_insumos')
+@permission_required(accion='almacen_ver_insumos')
 def obtener_insumo_por_id(id_insumo):
     try:
         if not validate_uuid(id_insumo):
@@ -145,7 +145,7 @@ def habilitar_insumo(id_insumo):
 
 
 @insumos_bp.route("/catalogo/lote/nuevo/<string:id_insumo>", methods=["GET", "POST"])
-@permission_required(accion='consultar_stock_de_lotes')
+@permission_required(accion='almacen_consulta_stock')
 def agregar_lote(id_insumo):
     proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
     proveedores = proveedores_resp.get("data", [])
@@ -275,7 +275,7 @@ def eliminar_lote(id_insumo, id_lote):
 
 
 @insumos_bp.route("/stock", methods=["GET"])
-@permission_required(accion='consultar_stock')
+@permission_required(accion='almacen_consulta_stock')
 def obtener_stock_consolidado():
     try:
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}

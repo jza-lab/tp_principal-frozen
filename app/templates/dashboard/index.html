@@ -14,11 +14,11 @@
 <div class="alert-carousel-wrapper">
     <div class="alert-carousel-container mb-4" id="alertCarouselContainer">
         
-{% set can_ver_produccion = has_permission('produccion_consulta') or has_permission('produccion_gestion_completa') %}
+{% set can_ver_produccion = (has_permission('produccion_consulta') or has_permission('produccion_gestion_completa')) and current_user.rol != 'VENDEDOR' %}
 {% set can_ver_ventas = has_permission('logistica_gestion_oc_ov') %}
 {% set can_ver_almacen = has_permission('almacen_consulta_stock') or has_permission('almacen_gestion_completa') %}
 {% set can_ver_admin = has_permission('admin_gestion_personal') or has_permission('admin_configuracion_sistema') %}
-{% set can_gestionar_clientes = has_permission('admin_gestion_sistema') %}
+{% set can_gestionar_clientes = has_permission('gestionar_clientes') %}
 
     {# 1. CLIENTES PENDIENTES (CRÍTICA/DANGER) #}
     {% if can_gestionar_clientes %}
@@ -50,7 +50,7 @@
     {% endif %}
 
     {# 2. CONSULTAS PENDIENTES (CRÍTICA/DANGER) #}
-    {% if has_permission('admin_gestion_sistema') %}
+    {% if has_permission('admin_acceder_consultas') %}
      <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm glow-on-load">
             <a href="{{ url_for('consulta_admin.listar_consultas') }}" style="text-decoration: none;">
@@ -75,7 +75,7 @@
     {% endif %}
 
     {# 3. RECLAMOS PENDIENTES (CRÍTICA/DANGER) #}
-    {% if has_permission('admin_gestion_sistema') and conteo_reclamos_pendientes > 0 %}
+    {% if has_permission('gestionar_reclamos') and conteo_reclamos_pendientes > 0 %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm glow-on-load">
             <a href="{{ url_for('admin_reclamo.listar_reclamos', estado='pendiente') }}" style="text-decoration: none;">
@@ -283,7 +283,7 @@
     {% endif %}
 
     {# 8. ÓRDENES DE PRODUCCIÓN EN PROCESO (INFORMATIVA) #}
-    {% if can_ver_produccion %}
+    {% if can_ver_produccion and current_user.rol != 'VENDEDOR' %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm">
             <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" style="text-decoration: none;">

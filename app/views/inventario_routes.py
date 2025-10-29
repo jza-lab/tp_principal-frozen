@@ -14,7 +14,7 @@ insumo_controller = InsumoController()
 proveedor_controller = ProveedorController()
 
 @inventario_view_bp.route('/')
-@permission_required(accion='consultar_stock')
+@permission_required(accion='almacen_consulta_stock')
 def listar_lotes():
     """
     Muestra la lista de todos los lotes en el inventario.
