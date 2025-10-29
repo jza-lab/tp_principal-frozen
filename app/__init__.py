@@ -272,7 +272,7 @@ def create_app() -> Flask:
         """
         # Evitar la verificación de JWT para las rutas de archivos estáticos,
         # ya que es innecesario y causa consultas a la BD por cada CSS, JS, etc.
-        if request.endpoint and request.endpoint.startswith('static'):
+        if request.endpoint and (request.endpoint.startswith('static') or request.blueprint == 'static'):
             return
         verify_jwt_in_request(optional=True)
 
