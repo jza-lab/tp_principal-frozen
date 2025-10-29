@@ -1,4 +1,4 @@
-{% extends 'layouts/base.html' %}
+{% extends 'layouts/app_layout.html' %}
 
 {% set is_edit = lote and lote.id_lote %}
 {% set form_title = 'Editar Lote' if is_edit else 'Registrar Nuevo Lote' %}
@@ -19,7 +19,7 @@
 </a>
 {% endblock %}
 
-{% block content %}
+{% block app_content %}
 <div class="row">
     <div class="col-lg-8">
         <div class="card">

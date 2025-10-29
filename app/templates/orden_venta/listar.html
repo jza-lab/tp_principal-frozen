@@ -1,8 +1,8 @@
-{% extends 'layouts/base.html' %}
+{% extends 'layouts/app_layout.html' %}
 
 {% block title %}Pedidos de Venta - Sistema Frozen{% endblock %}
 
-{% block content %}
+{% block app_content %}
 <input type="hidden" id="csrf_token" value="{{ csrf_form.csrf_token._value() }}">
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>

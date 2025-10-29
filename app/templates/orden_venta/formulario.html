@@ -1,11 +1,11 @@
-{% extends 'layouts/base.html' %}
+{% extends 'layouts/app_layout.html' %}
 {% set is_edit = pedido and pedido.id %}
 
 {% block title %}
 {% if pedido %}Editar{% else %}Nuevo{% endif %} Pedido de Venta - Sistema Frozen
 {% endblock %}
 
-{% block content %}
+{% block app_content %}
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>

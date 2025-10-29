@@ -1,4 +1,4 @@
-{% extends 'layouts/base.html' %}
+{% extends 'layouts/app_layout.html' %}
 
 {% set is_edit = proveedor and proveedor.id %}
 {% set form_title = 'Editar Proveedor' if is_edit else 'Agregar Nuevo Proveedor' %}
@@ -19,7 +19,7 @@ Agregar nuevo proveedor
 </a>
 {% endblock %}
 
-{% block content %}
+{% block app_content %}
 <div class="row">
     <div class="col-lg-8 col-xl-9">
         <div class="card">

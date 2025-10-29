@@ -1,4 +1,4 @@
-{% extends 'layouts/base.html' %}
+{% extends 'layouts/app_layout.html' %}
 
 {% set is_edit = proveedor is defined %}
 {% set form_title = 'Detalle de proveedor'%}
@@ -10,7 +10,7 @@
 
 {% endblock %}
 
-{% block content %}
+{% block app_content %}
 <div class="btn-toolbar">
     <a href="{{ url_for('clientes_proveedores.listar_proveedores') }}" class="btn btn-outline-secondary me-2">
         <i class="bi bi-arrow-left me-1"></i>Volver a la Lista
