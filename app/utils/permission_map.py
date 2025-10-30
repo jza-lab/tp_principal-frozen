@@ -45,6 +45,7 @@ CANONICAL_PERMISSION_MAP = {
 
     # Módulo: Comercial (Ventas y Clientes)
     'logistica_gestion_ov': ['VENDEDOR'], # Permiso para que Vendedor gestione Órdenes de Venta
+    'planificar_ov': ['VENDEDOR', 'SUPERVISOR', 'GERENTE'],
     'gestionar_clientes': ['VENDEDOR'],
     'finanzas_ver_precios_costos': ['VENDEDOR', 'SUPERVISOR', 'GERENTE'],
 
@@ -52,9 +53,9 @@ CANONICAL_PERMISSION_MAP = {
     'crear_orden_de_produccion': ['SUPERVISOR'],
     'aprobar_orden_de_produccion': ['SUPERVISOR'],
     'gestionar_orden_de_produccion': ['SUPERVISOR'], # Editar, cambiar estado, etc.
-    'produccion_ejecucion': ['OPERARIO','SUPERVISOR'], # Asignar operarios, mover en kanban
+    'produccion_ejecucion': ['SUPERVISOR_CALIDAD','OPERARIO','SUPERVISOR'], # Asignar operarios, mover en kanban
     'produccion_consulta': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
-    'consultar_plan_de_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE'],
+    'consultar_plan_de_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE','SUPERVISOR_CALIDAD'],
 
     # Módulo: Almacén e Inventario
     'gestionar_catalogo_insumos': ['SUPERVISOR', 'ADMIN'], # Crear, editar, inhabilitar insumos
@@ -63,7 +64,7 @@ CANONICAL_PERMISSION_MAP = {
     'almacen_consulta_stock': [ 'VENDEDOR', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'registrar_ingreso_de_materia_prima': ['ADMIN'],
     'almacen_ver_registrar': ['VENDEDOR', 'SUPERVISOR'],
-    'almacen_ver_insumos': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'VENDEDOR'],
+    'almacen_ver_insumos': ['OPERARIO', 'SUPERVISOR', 'GERENTE'],
 
     # Módulo: Calidad
     'controlar_calidad_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Realizar controles de calidad

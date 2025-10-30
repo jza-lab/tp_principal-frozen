@@ -104,7 +104,8 @@ class BaseModel(ABC):
                         operator, filter_value = value
                         op_map = {
                             'eq': query.eq, 'gt': query.gt, 'gte': query.gte,
-                            'lt': query.lt, 'lte': query.lte, 'in': query.in_
+                            'lt': query.lt, 'lte': query.lte, 'in': query.in_,
+                            'ilike': query.ilike
                         }
                         if operator.lower() in op_map:
                             query = op_map[operator.lower()](key, filter_value)

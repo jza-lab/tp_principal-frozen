@@ -11,7 +11,7 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Inventario de Productos</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
-        {% if 'registrar_lote_de_producto' is has_permission %}
+        {% if 'gestionar_lotes' is has_permission %}
         <div class="btn-group me-2">
             <a href="{{ url_for('lote_producto.cargar_lotes_excel') }}" class="btn btn-secondary">
                 <i class="bi bi-file-earmark-arrow-up me-1"></i>
@@ -109,7 +109,7 @@
                                 <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                                     <i class="bi bi-eye"></i>
                                 </a>
-                                {% if (lote.estado == 'DISPONIBLE' or lote.estado == 'CUARENTENA') and lote.cantidad_actual > 0 %}
+                                {% if (lote.estado == 'DISPONIBLE' or lote.estado == 'CUARENTENA') and lote.cantidad_actual > 0 and 'gestionar_lotes' is has_permission %}
                                 <button type="button" class="btn btn-sm btn-outline-warning" title="Poner en Cuarentena"
                                         data-bs-toggle="modal" 
                                         data-bs-target="#modalCuarentena"
@@ -119,12 +119,12 @@
                                     <i class="bi bi-shield-lock"></i>
                                 </button>
                                 {% endif %}
-                                {% if lote.estado not in ['AGOTADO', 'RETIRADO'] %}
+                                {% if lote.estado not in ['AGOTADO', 'RETIRADO'] and 'gestionar_lotes' is has_permission %}
                                 <a href="{{ url_for('lote_producto.editar_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-secondary" title="Editar Lote">
                                     <i class="bi bi-pencil-square"></i>
                                 </a>
                                 {% endif %}
-                                {% if lote.estado == 'CUARENTENA' and lote.cantidad_en_cuarentena > 0 %}
+                                {% if lote.estado == 'CUARENTENA' and lote.cantidad_en_cuarentena > 0 and 'gestionar_lotes' is has_permission %}
                                 <button type="button" class="btn btn-sm btn-outline-success" title="Liberar de Cuarentena"
                                         data-bs-toggle="modal"
                                         data-bs-target="#modalLiberar"

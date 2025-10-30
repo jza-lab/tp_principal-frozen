@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 lote_producto_bp = Blueprint("lote_producto", __name__, url_prefix="/lotes-productos")
 
 @lote_producto_bp.route('/')
-@permission_required(accion='gestionar_lotes')
+@permission_required(accion='almacen_consulta_stock')
 def listar_lotes():
     controller = LoteProductoController()
     response, _ = controller.obtener_lotes_para_vista()
@@ -29,7 +29,7 @@ def listar_lotes():
     return render_template('lotes_productos/listar.html', lotes=lotes, datos_grafico_productos=datos_grafico_productos)
 
 @lote_producto_bp.route('/<int:id_lote>/detalle')
-@permission_required(accion='gestionar_lotes')
+@permission_required(accion='almacen_consulta_stock')
 def detalle_lote(id_lote):
     controller = LoteProductoController()
     response, _ = controller.obtener_lote_por_id_para_vista(id_lote)

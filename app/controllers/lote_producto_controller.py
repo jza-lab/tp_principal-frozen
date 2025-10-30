@@ -863,22 +863,17 @@ class LoteProductoController(BaseController):
         Mueve una cantidad específica de un lote DISPONIBLE al estado CUARENTENA.
         """
         try:
-            # 1. Obtener el lote
             lote_res = self.model.find_by_id(lote_id, 'id_lote')
             if not lote_res.get('success') or not lote_res.get('data'):
                 return self.error_response('Lote no encontrado', 404)
 
             lote = lote_res['data']
+            cantidad_actual_disponible = lote.get('cantidad_actual') or 0
+            cantidad_actual_cuarentena = lote.get('cantidad_en_cuarentena') or 0
 
-            # --- INICIO DE LA CORRECCIÓN ---
-            # Convertir 'None' (NULL de la DB) a 0.0 ANTES de usarlos
-            cantidad_actual_disponible = float(lote.get('cantidad_actual') or 0)
-            cantidad_actual_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
-            # --- FIN DE LA CORRECCIÓN ---
-
-            # 2. Validar estado
+            # Validar estado (ahora puede estar DISPONIBLE o ya en CUARENTENA)
             if lote.get('estado') not in ['DISPONIBLE', 'CUARENTENA']:
-                msg = f"El lote debe estar DISPONIBLE o ya en CUARENTENA. Estado actual: {lote.get('estado')}"
+                msg = f"El lote debe estar DISPONIBLE o en CUARENTENA. Estado actual: {lote.get('estado')}"
                 return self.error_response(msg, 400)
 
             if not motivo:
@@ -891,13 +886,12 @@ class LoteProductoController(BaseController):
                 msg = f"No puede poner en cuarentena {cantidad} unidades. Solo hay {cantidad_actual_disponible} disponibles."
                 return self.error_response(msg, 400)
 
-            # 4. Preparar actualización (Esta es la línea 891 del error)
+            # Lógica de resta y suma
             nueva_cantidad_disponible = cantidad_actual_disponible - cantidad
-            # Ahora esto funcionará (float + float)
             nueva_cantidad_cuarentena = cantidad_actual_cuarentena + cantidad
 
             update_data = {
-                'estado': 'CUARENTENA',
+                'estado': 'CUARENTENA', # Siempre se marca o se mantiene como CUARENTENA
                 'motivo_cuarentena': motivo,
                 'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
                 'cantidad_actual': nueva_cantidad_disponible
@@ -925,11 +919,8 @@ class LoteProductoController(BaseController):
                 return self.error_response('Lote no encontrado', 404)
 
             lote = lote_res['data']
-
-            # --- INICIO DE LA CORRECCIÓN ---
-            cantidad_actual_disponible = float(lote.get('cantidad_actual') or 0)
-            cantidad_actual_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
-            # --- FIN DE LA CORRECCIÓN ---
+            cantidad_actual_disponible = lote.get('cantidad_actual') or 0
+            cantidad_actual_cuarentena = lote.get('cantidad_en_cuarentena') or 0
 
             # Validaciones
             if lote.get('estado') != 'CUARENTENA':

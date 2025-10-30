@@ -756,3 +756,14 @@ class InventarioController(BaseController):
         except Exception as e:
             logger.error(f"Error en liberar_lote_de_cuarentena (insumo): {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
+
+    def obtener_conteo_insumos_en_cuarentena(self) -> int:
+        """Obtiene el conteo de lotes de insumos en estado 'cuarentena'."""
+        try:
+            result = self.inventario_model.find_all(filtros={'estado': ('ilike', 'cuarentena')}, count_only=True)
+            if result.get('success'):
+                return result.get('data', 0)
+            return 0
+        except Exception as e:
+            logger.error(f"Error contando insumos en cuarentena: {str(e)}")
+            return 0

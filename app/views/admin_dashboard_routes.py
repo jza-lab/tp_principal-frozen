@@ -31,6 +31,7 @@ def index():
     user_roles = current_user.get('roles', [])
     user_id = current_user.get('id_usuario', None)
     is_operario = 'OPERARIO' in user_roles
+    is_supervisor_calidad = 'SUPERVISOR_CALIDAD' in user_roles
     
     hoy = date.today()
     dias_restar = hoy.weekday()
@@ -107,13 +108,21 @@ def index():
     consulta_controller = ConsultaController()
     conteo_consultas = consulta_controller.obtener_conteo_consultas_pendientes()
     
-    # Nuevos indicadores para Supervisor de Calidad
+    # Nuevo indicador de insumos en cuarentena
+    insumos_en_cuarentena = inventario_controller.obtener_conteo_insumos_en_cuarentena()
+
+    # Indicadores para Supervisor de Calidad
     lotes_pendientes_control = lote_producto_controller.obtener_conteo_lotes_por_estado('PENDIENTE_CALIDAD')
     productos_rechazados = lote_producto_controller.obtener_conteo_lotes_por_estado('CUARENTENA')
     lotes_sin_trazabilidad = lote_producto_controller.obtener_conteo_lotes_sin_trazabilidad()
     ordenes_reabiertas = orden_produccion_controller.obtener_conteo_ordenes_reabiertas()
 
     return render_template('dashboard/index.html', 
+                           insumos_en_cuarentena=insumos_en_cuarentena,
+                           lotes_pendientes_control=lotes_pendientes_control,
+                           productos_rechazados=productos_rechazados,
+                           lotes_sin_trazabilidad=lotes_sin_trazabilidad,
+                           ordenes_reabiertas=ordenes_reabiertas,
                            conteo_consultas_pendientes=conteo_consultas,
                            asistencia=asistencia,
                            ordenes_pendientes=ordenes_pendientes,
@@ -135,7 +144,4 @@ def index():
                            lotes_producto_vencimiento_count=lotes_producto_vencimiento_count,
                            pending_client_count=pending_client_count,
                            is_operario=is_operario,
-                           lotes_pendientes_control=lotes_pendientes_control,
-                           productos_rechazados=productos_rechazados,
-                           lotes_sin_trazabilidad=lotes_sin_trazabilidad,
-                           ordenes_reabiertas=ordenes_reabiertas)
+                           is_supervisor_calidad=is_supervisor_calidad)
