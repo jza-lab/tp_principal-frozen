@@ -35,7 +35,7 @@ CANONICAL_PERMISSION_MAP = {
 
     # Módulo: Administración y Configuración
     'admin_gestion_sistema': ['ADMIN', 'IT'],
-    'admin_gestion_personal': ['RRHH', 'IT'],
+    'admin_gestion_personal': ['ADMIN','RRHH', 'IT'],
     'consultar_empleados': ['RRHH', 'ADMIN', 'IT', 'SUPERVISOR', 'GERENTE'],
     'admin_configuracion_sistema': ['IT', 'GERENTE', 'RRHH'],
     'gestionar_proveedores': ['ADMIN'],
