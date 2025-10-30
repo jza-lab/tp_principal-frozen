@@ -9,9 +9,6 @@ logger = logging.getLogger(__name__)
 # Blueprint
 inventario_bp = Blueprint("inventario_api", __name__, url_prefix="/api/inventario")
 
-# Controlador
-inventario_controller = InventarioController()
-
 
 @inventario_bp.route("/lotes", methods=["POST"])
 def crear_lote():
@@ -27,6 +24,7 @@ def crear_lote():
         if not request.json:
             return jsonify({"success": False, "error": "Body JSON requerido"}), 400
 
+        inventario_controller = InventarioController()
         # Obtener respuesta del controlador
         response, status = inventario_controller.crear_lote(request.json)
 
@@ -60,6 +58,7 @@ def obtener_lotes_por_insumo(id_insumo):
 
         solo_disponibles = request.args.get("disponibles", "true").lower() == "true"
 
+        inventario_controller = InventarioController()
         response, status = inventario_controller.obtener_lotes_por_insumo(
             id_insumo, solo_disponibles
         )
@@ -95,6 +94,7 @@ def obtener_lotes():
         if "id_insumo" in filtros and not validate_uuid(filtros["id_insumo"]):
             return jsonify({"success": False, "error": "ID de insumo inválido"}), 400
 
+        inventario_controller = InventarioController()
         # Llamar al controlador
         response, status = inventario_controller.obtener_lotes(filtros)
         return jsonify(response), status
@@ -150,6 +150,7 @@ def actualizar_lote_parcial(id_lote):
                 }
             ), 400
 
+        inventario_controller = InventarioController()
         response, status = inventario_controller.actualizar_lote_parcial(
             id_lote, request.json
         )
@@ -182,6 +183,7 @@ def obtener_stock_consolidado():
         # Limpiar filtros vacíos
         filtros = {k: v for k, v in filtros.items() if v is not None and v != ""}
 
+        inventario_controller = InventarioController()
         response, status = inventario_controller.obtener_stock_consolidado(filtros)
         return jsonify(response), status
 
@@ -198,6 +200,7 @@ def obtener_alertas():
     GET /api/inventario/alertas
     """
     try:
+        inventario_controller = InventarioController()
         response, status = inventario_controller.obtener_alertas()
         return jsonify(response), status
 

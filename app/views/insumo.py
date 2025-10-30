@@ -23,17 +23,13 @@ logger = logging.getLogger(__name__)
 
 insumos_bp = Blueprint("insumos_api", __name__, url_prefix="/api/insumos")
 
-insumo_controller = InsumoController()
-proveedor_controller = ProveedorController()
-ordenes_compra_controller = OrdenCompraController()
-inventario_controller = InventarioController()
-usuario_controller = UsuarioController()
-
 
 @insumos_bp.route("/catalogo/nuevo", methods=["GET", "POST"])
 @permission_required(accion='gestionar_catalogo_de_insumos')
 def crear_insumo():
     try:
+        insumo_controller = InsumoController()
+        proveedor_controller = ProveedorController()
         if request.method == "POST":
             datos_json = request.get_json()
             if not datos_json:
@@ -55,6 +51,7 @@ def crear_insumo():
 @permission_required(accion='almacen_ver_insumos')
 def obtener_insumos():
     try:
+        insumo_controller = InsumoController()
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
         response, status = insumo_controller.obtener_insumos(filtros)
         insumos = response.get("data", [])
@@ -74,6 +71,8 @@ def obtener_insumos():
 @permission_required(accion='almacen_ver_insumos')
 def obtener_insumo_por_id(id_insumo):
     try:
+        insumo_controller = InsumoController()
+        inventario_controller = InventarioController()
         if not validate_uuid(id_insumo):
             return jsonify({"success": False, "error": "ID de insumo inválido"}), 400
         response, status = insumo_controller.obtener_insumo_por_id(id_insumo)
@@ -94,6 +93,8 @@ def obtener_insumo_por_id(id_insumo):
 @permission_required(accion='gestionar_catalogo_de_insumos')
 def actualizar_insumo(id_insumo):
     try:
+        insumo_controller = InsumoController()
+        proveedor_controller = ProveedorController()
         if not validate_uuid(id_insumo):
             return jsonify({"success": False, "error": "ID de insumo inválido"}), 400
         if request.method in ["POST", "PUT"]:
@@ -122,6 +123,7 @@ def actualizar_insumo(id_insumo):
 @permission_required(accion='gestionar_catalogo_de_insumos')
 def eliminar_insumo(id_insumo):
     try:
+        insumo_controller = InsumoController()
         if not validate_uuid(id_insumo):
             return jsonify({"success": False, "error": "ID de insumo inválido"}), 400
         response, status = insumo_controller.eliminar_insumo_logico(id_insumo)
@@ -135,6 +137,7 @@ def eliminar_insumo(id_insumo):
 @permission_required(accion='gestionar_catalogo_de_insumos')
 def habilitar_insumo(id_insumo):
     try:
+        insumo_controller = InsumoController()
         if not validate_uuid(id_insumo):
             return jsonify({"success": False, "error": "ID de insumo inválido"}), 400
         response, status = insumo_controller.habilitar_insumo(id_insumo)
@@ -147,6 +150,9 @@ def habilitar_insumo(id_insumo):
 @insumos_bp.route("/catalogo/lote/nuevo/<string:id_insumo>", methods=["GET", "POST"])
 @permission_required(accion='almacen_consulta_stock')
 def agregar_lote(id_insumo):
+    proveedor_controller = ProveedorController()
+    insumo_controller = InsumoController()
+    ordenes_compra_controller = OrdenCompraController()
     proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
     proveedores = proveedores_resp.get("data", [])
     response, _ = insumo_controller.obtener_insumo_por_id(id_insumo)
@@ -173,6 +179,7 @@ def agregar_lote(id_insumo):
 @permission_required(accion='consultar_stock_de_lotes')
 def crear_lote(id_insumo):
     try:
+        inventario_controller = InventarioController()
         datos_json = request.get_json()
         if not datos_json:
             return jsonify(
@@ -200,6 +207,10 @@ def editar_lote(id_insumo, id_lote):
             return date_str
 
     try:
+        proveedor_controller = ProveedorController()
+        ordenes_compra_controller = OrdenCompraController()
+        insumo_controller = InsumoController()
+        inventario_controller = InventarioController()
         if not validate_uuid(id_insumo) or not validate_uuid(id_lote):
             return "ID inválido", 400
         proveedores = proveedor_controller.obtener_proveedores_activos()[0].get(
@@ -234,6 +245,7 @@ def editar_lote(id_insumo, id_lote):
 @permission_required(accion='consultar_stock_de_lotes')
 def actualizar_lote_api(id_insumo, id_lote):
     try:
+        inventario_controller = InventarioController()
         if not validate_uuid(id_lote):
             return jsonify({"success": False, "error": "ID de lote inválido"}), 400
         datos_json = request.get_json()
@@ -254,6 +266,7 @@ def actualizar_lote_api(id_insumo, id_lote):
 @permission_required(accion='consultar_stock_de_lotes')
 def eliminar_lote(id_insumo, id_lote):
     try:
+        inventario_controller = InventarioController()
         if not validate_uuid(id_lote) or not validate_uuid(id_insumo):
             flash("ID de lote o insumo inválido.", "error")
             return redirect(url_for("insumos_api.obtener_insumos"))
@@ -278,6 +291,7 @@ def eliminar_lote(id_insumo, id_lote):
 @permission_required(accion='almacen_consulta_stock')
 def obtener_stock_consolidado():
     try:
+        insumo_controller = InsumoController()
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
         response, status = insumo_controller.obtener_con_stock(filtros)
         return jsonify(response), status
@@ -293,6 +307,7 @@ def actualizar_stock_insumo(id_insumo):
     Endpoint para calcular y actualizar el stock de un insumo.
     """
     try:
+        insumo_controller = InsumoController()
         if not validate_uuid(id_insumo):
             return jsonify({"success": False, "error": "ID de insumo inválido"}), 400
 

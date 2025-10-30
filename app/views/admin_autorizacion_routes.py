@@ -7,10 +7,6 @@ from app.utils.decorators import permission_required
 # Blueprint para la administración de autorizaciones
 admin_autorizacion_bp = Blueprint('admin_autorizacion', __name__, url_prefix='/admin/autorizaciones')
 
-# Instanciar controladores
-usuario_controller = UsuarioController()
-autorizacion_controller = AutorizacionController()
-
 @admin_autorizacion_bp.route('/nueva', methods=['GET', 'POST'])
 @jwt_required()
 @permission_required(accion='gestionar_autorizaciones')
@@ -18,6 +14,8 @@ def nueva_autorizacion():
     """
     Muestra el formulario para crear una nueva autorización de ingreso y la procesa.
     """
+    autorizacion_controller = AutorizacionController()
+    usuario_controller = UsuarioController()
     if request.method == 'POST':
         data = request.form.to_dict()
         data['supervisor_id'] = get_jwt_identity()
@@ -50,6 +48,7 @@ def listar_autorizaciones():
     """
     Obtiene todas las autorizaciones de ingreso en formato JSON.
     """
+    autorizacion_controller = AutorizacionController()
     resultado = autorizacion_controller.obtener_todas_las_autorizaciones()
     if resultado.get('success'):
         grouped_data = resultado.get('data', {})
@@ -73,6 +72,7 @@ def actualizar_estado_autorizacion(id):
     if not nuevo_estado or nuevo_estado not in ['APROBADO', 'RECHAZADO']:
         return jsonify(success=False, error='Estado no válido.'), 400
 
+    autorizacion_controller = AutorizacionController()
     resultado = autorizacion_controller.actualizar_estado_autorizacion(id, nuevo_estado, comentario)
 
     if resultado.get('success'):

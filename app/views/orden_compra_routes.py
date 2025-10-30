@@ -11,18 +11,13 @@ from app.utils.estados import OC_FILTROS_UI, OC_MAP_STRING_TO_INT
 
 orden_compra_bp = Blueprint("orden_compra", __name__, url_prefix="/compras")
 
-controller = OrdenCompraController()
-usuario_controller = UsuarioController()
-orden_produccion_controller = OrdenProduccionController()
-proveedor_controller = ProveedorController()
-insumo_controller = InsumoController()
-
 
 @orden_compra_bp.route("/")
 @jwt_required()
 @permission_required(accion='consultar_ordenes_de_compra')
 def listar():
     """Muestra la lista de órdenes de compra."""
+    controller = OrdenCompraController()
     estado = request.args.get("estado")
     filtros = {"estado": estado} if estado else {}
     
@@ -55,6 +50,9 @@ def listar():
 @jwt_required()
 @permission_required(accion='crear_orden_de_compra')
 def nueva():
+    controller = OrdenCompraController()
+    proveedor_controller = ProveedorController()
+    insumo_controller = InsumoController()
     if request.method == "POST":
         usuario_id = get_jwt_identity()
         resultado = controller.crear_orden_desde_form(request.form, usuario_id)
@@ -83,6 +81,7 @@ def nueva():
 @orden_compra_bp.route("/detalle/<int:id>")
 @permission_required(accion='consultar_ordenes_de_compra')
 def detalle(id):
+    controller = OrdenCompraController()
     response_data, status_code = controller.get_orden(id)
     if response_data.get("success"):
         orden = response_data.get("data")
@@ -96,6 +95,7 @@ def detalle(id):
 @jwt_required()
 @permission_required(accion='aprobar_orden_de_compra')
 def aprobar(id):
+    controller = OrdenCompraController()
     usuario_id = get_jwt_identity()
     resultado = controller.aprobar_orden(id, usuario_id)
     if resultado.get("success"):
@@ -119,6 +119,9 @@ def aprobar(id):
 @orden_compra_bp.route("/<int:id>/editar", methods=["GET", "POST"])
 @permission_required(accion='editar_orden_de_compra')
 def editar(id):
+    controller = OrdenCompraController()
+    proveedor_controller = ProveedorController()
+    insumo_controller = InsumoController()
     if request.method == "POST":
         resultado = controller.actualizar_orden(id, request.form)
         if resultado.get("success"):
@@ -151,6 +154,7 @@ def editar(id):
 @orden_compra_bp.route("/<int:id>/rechazar", methods=["POST"])
 @permission_any_of('editar_orden_de_compra', 'gestionar_recepcion_orden_compra')
 def rechazar(id):
+    controller = OrdenCompraController()
     motivo = request.form.get("motivo", "No especificado")
     resultado = controller.rechazar_orden(id, motivo)
     if resultado.get("success"):
@@ -170,6 +174,7 @@ def rechazar(id):
 @orden_compra_bp.route("/<int:id>/marcar-en-transito", methods=["POST"])
 @permission_required(accion='logistica_recepcion_oc')
 def marcar_en_transito(id):
+    controller = OrdenCompraController()
     resultado = controller.marcar_en_transito(id)
     if resultado.get("success"):
         flash('La orden de compra ha sido marcada como "En Tránsito".', "info")
@@ -190,6 +195,8 @@ def marcar_en_transito(id):
 @jwt_required()
 @permission_any_of('logistica_recepcion_oc', 'gestionar_recepcion_orden_compra')
 def procesar_recepcion(orden_id):
+    controller = OrdenCompraController()
+    orden_produccion_controller = OrdenProduccionController()
     usuario_id = get_jwt_identity()
     resultado = controller.procesar_recepcion(orden_id, request.form, usuario_id, orden_produccion_controller)
     if resultado.get("success"):
