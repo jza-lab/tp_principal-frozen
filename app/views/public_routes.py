@@ -145,6 +145,69 @@ def obtener_condicion_pago_cliente(cliente_id):
     })
 
 
+@public_bp.route('/cliente/generar-proforma', methods=['POST'])
+def generar_proforma_api():
+    """
+    API endpoint to generate a proforma invoice HTML from JSON data
+    without creating a persistent order.
+    """
+    pedido_data = request.get_json()
+
+    if not pedido_data or 'id_cliente' not in pedido_data:
+        return jsonify({'success': False, 'error': 'Datos incompletos.'}), 400
+    
+    cliente_controller = ClienteController()
+    controller = PedidoController()
+    # Get client data
+    cliente_resp, _ = cliente_controller.obtener_cliente(pedido_data['id_cliente'])
+    if not cliente_resp.get('success'):
+        return jsonify({'success': False, 'error': 'Cliente no encontrado.'}), 404
+    cliente = cliente_resp.get('data')
+
+    # Get all products to embed their names in the items
+    productos_resp, _ = controller.obtener_datos_para_formulario()
+    todos_los_productos = {p['id']: p for p in productos_resp.get('data', {}).get('productos', [])}
+
+    # Enrich items with product details
+    subtotal_neto = 0
+    for item in pedido_data.get('items', []):
+        producto = todos_los_productos.get(item.get('producto_id'))
+
+        if producto:
+            nombre_producto=producto['nombre']
+            item['producto_nombre'] = producto
+
+    # Calculate IVA and Total
+    iva = subtotal_neto * 0.21 if cliente.get('condicion_iva') == '1' else 0
+    total = subtotal_neto + iva
+
+
+    pedido_data['subtotal_neto'] = subtotal_neto
+    pedido_data['iva'] = iva
+    pedido_data['total'] = total
+    pedido_data['cliente'] = cliente
+
+    if(pedido_data.get('usar_direccion_alternativa')):
+        direccion_a_usar = pedido_data.get('direccion_entrega')
+    else:
+        direccion_a_usar = cliente.get('direccion')
+
+    pedido_data['direccion'] = direccion_a_usar
+
+    # Add fake emitter data for proforma
+    pedido_data['emisor'] = {
+        'ingresos_brutos': '20-12345678-3',
+        'inicio_actividades': '2020-01-01',}
+    # Render the proforma template
+    rendered_html = render_template(
+        'orden_venta/factura_proforma_pedido.html',
+        pedido=pedido_data,
+        cliente=cliente
+    )
+    return jsonify({'success': True, 'html': rendered_html})
+
+
+
 @public_bp.route('/crear-reclamo/<int:pedido_id>')
 def crear_reclamo_page(pedido_id):
     """

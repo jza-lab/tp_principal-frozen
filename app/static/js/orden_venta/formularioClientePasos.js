@@ -105,6 +105,7 @@ document.addEventListener('DOMContentLoaded', function () {
             tipoFacturaInput.value = ivaData.factura;
 
             nextStep1Btn.disabled = false;
+            goToStep(1);
         } else {
             nextStep1Btn.disabled = true;
             showNotificationModal('Error', 'No se pudo cargar la información del cliente. Por favor, inicie sesión nuevamente.', 'error');
