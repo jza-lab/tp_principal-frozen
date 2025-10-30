@@ -192,6 +192,7 @@ def descargar_plantilla_lotes():
 # @jwt_required()
 # @permission_required(accion='gestionar_cuarentena_lotes')
 def poner_en_cuarentena(id_lote):
+    controller = LoteProductoController()
     motivo = request.form.get('motivo_cuarentena')
 
     # --- INICIO CAMBIO ---
@@ -217,6 +218,7 @@ def poner_en_cuarentena(id_lote):
 # @jwt_required()
 # @permission_required(accion='gestionar_cuarentena_lotes')
 def liberar_cuarentena(id_lote):
+    controller = LoteProductoController()
 
     # --- INICIO CAMBIO ---
     try:
@@ -241,6 +243,7 @@ def liberar_cuarentena(id_lote):
 # @jwt_required()
 # @permission_required(accion='editar_lote_de_producto')
 def editar_lote(id_lote):
+    controller = LoteProductoController()
 
     if request.method == 'POST':
         form_data = request.form
