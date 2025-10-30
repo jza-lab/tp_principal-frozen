@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request, redirect, url_for, flash, render_template
+from flask import Blueprint, jsonify, request, redirect, url_for, flash, render_template, session
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt, unset_jwt_cookies, set_access_cookies, get_jwt_identity
 from app.controllers.usuario_controller import UsuarioController
 from app.utils.roles import get_redirect_url_by_role
@@ -126,6 +126,9 @@ def logout():
         exp = jwt_payload['exp']
 
         TokenBlacklistModel.add_to_blacklist(jti, exp)
+
+        # Limpiamos la sesión de Flask como medida de seguridad adicional
+        session.clear()
 
         response = redirect(url_for('auth.login'))
         unset_jwt_cookies(response)

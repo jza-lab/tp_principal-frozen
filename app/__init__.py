@@ -208,8 +208,8 @@ def create_app() -> Flask:
     @app.context_processor
     def inject_pending_client_count():
         conteo = 0
-        # (Lógica para obtener conteo)
-        if 'rol' in session and session['rol'] in ['DEV', 'GERENTE']:
+        current_user = get_current_user()
+        if current_user and hasattr(current_user, 'rol') and current_user.rol in ['DEV', 'GERENTE']:
             cliente_controller = ClienteController()
             _, status = cliente_controller.obtener_conteo_clientes_pendientes()
             if status == 200:
@@ -223,9 +223,11 @@ def create_app() -> Flask:
         en todas las plantillas.
         """
         conteo = 0
-        if 'cliente_id' in session:
+        current_user = get_current_user()
+        # Asumiendo que un 'cliente' tiene un rol específico, por ejemplo 'CLIENTE'
+        if current_user and hasattr(current_user, 'rol') and current_user.rol == 'CLIENTE':
             try:
-                cliente_id = session['cliente_id']
+                cliente_id = current_user.id
                 reclamo_model = ReclamoModel()
                 resultado = reclamo_model.get_count_by_cliente_and_estado(cliente_id, 'respondida')
                 if resultado.get('success'):

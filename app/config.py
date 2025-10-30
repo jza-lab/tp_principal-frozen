@@ -27,6 +27,7 @@ class Config:
 
     # JWT Configuration
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=8)
+    JWT_COOKIE_PATH = '/'
 
     # Email Configuration for SMTP
     MAIL_SERVER = os.getenv('MAIL_SERVER')
