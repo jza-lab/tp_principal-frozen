@@ -61,45 +61,6 @@ async function enviarDatos(csrfToken) {
         }
     };
 
-    async function verifyAddress(csrfToken) {
-        if (!form.checkValidity()) {
-            form.classList.add('was-validated');
-            return;
-        }
-
-        try {
-            const response = await fetch('/api/validar/direccion', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify({
-                    calle: calleInput.value,
-                    altura: alturaInput.value,
-                    localidad: localidadInput.value,
-                    provincia: provinciaSelect.value
-                })
-            });
-
-            const verificationResult = await response.json();
-
-            if (response.ok && verificationResult.success) {
-                await enviarDatos(csrfToken);
-            } else {
-                let errorMessage = 'Dirección no válida o error de verificación.';
-                if (verificationResult && verificationResult.error) {
-                    errorMessage = verificationResult.error;
-                }
-                showNotificationModal(errorMessage, 'Error al verificar la dirección');
-                
-            }
-        } catch (error) {
-            console.error('Error de red al verificar la direccion:', error);
-            showNotificationModal('No se pudo conectar con el servidor de verificación.', 'error');
-        }
-    }
-
     form.addEventListener('submit', async function (event) {
         event.preventDefault();
         event.stopPropagation();
@@ -110,7 +71,7 @@ async function enviarDatos(csrfToken) {
         }
         
         const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-        await verifyAddress(csrfToken);
+        await enviarDatos(csrfToken);
     });
 
 });

@@ -253,44 +253,6 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 
-    async function verifyAddress() {
-        if (!validateNonAddressFields()) {
-            return;
-        }
-        try {
-            const response = await fetch('/api/validar/direccion', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify({
-                    calle: calleInput.value,
-                    altura: alturaInput.value,
-                    localidad: localidadInput.value,
-                    provincia: provinciaSelect.value
-                })
-            });
-
-            const verificationResult = await response.json();
-
-            if (response.ok && verificationResult.success) {
-                setAddressValidationState(true);
-                await enviarDatos();
-            } else {
-                let errorMessage = 'Dirección no válida o error de verificación.';
-                if (verificationResult && verificationResult.error) {
-                    errorMessage = verificationResult.error;
-                }
-                showNotificationModal(errorMessage, 'Error al verificar la dirección');
-                setAddressValidationState(false);
-            }
-        } catch (error) {
-            console.error('Error de red al verificar la direccion:', error);
-            showNotificationModal('No se pudo conectar con el servidor de verificación.', 'error');
-        }
-    }
-
     form.addEventListener('submit', async function (event) {
         event.preventDefault();
         event.stopPropagation();
@@ -304,7 +266,7 @@ document.addEventListener('DOMContentLoaded', function () {
             razonSocialInput.classList.remove('is-invalid');
         }
 
-        await verifyAddress();
+        await enviarDatos();
     });
     if (ID_cliente && isEditBoolean) { // Se usa ID_cliente para ser más explícito en Flask
         // Ejecutamos el evento 'input' de cualquiera de las partes para forzar la validación

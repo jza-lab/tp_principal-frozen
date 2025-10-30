@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash
+from flask import Blueprint, request, jsonify, render_template, redirect, url_for, flash, session
 from app.controllers.reclamo_controller import ReclamoController
 from flask_jwt_extended import jwt_required, get_current_user
 from flask_wtf import FlaskForm
@@ -6,18 +6,20 @@ from flask_wtf import FlaskForm
 reclamo_bp = Blueprint('reclamo', __name__, url_prefix='/api/reclamos')
 
 @reclamo_bp.route('/', methods=['POST'])
-@jwt_required()
 def crear_reclamo():
     """
     Endpoint para crear un nuevo reclamo.
     Espera un JSON con los datos del reclamo.
     """
+    # La creación de reclamos es una acción del cliente, usa la sesión de Flask.
+    if 'cliente_id' not in session:
+        return jsonify({"success": False, "error": "Acceso no autorizado. Debes iniciar sesión."}), 401
+
     datos_json = request.get_json()
     if not datos_json:
         return jsonify({"success": False, "error": "No se recibieron datos JSON."}), 400
 
-    current_user = get_current_user()
-    cliente_id = current_user.id
+    cliente_id = session['cliente_id']
 
     controller = ReclamoController()
     respuesta, status_code = controller.crear_reclamo(datos_json, cliente_id)
@@ -41,13 +43,16 @@ def obtener_reclamos():
 # --- NUEVAS RUTAS PÚBLICAS ---
 
 @reclamo_bp.route('/<int:reclamo_id>', methods=['GET'])
-@jwt_required()
 def obtener_detalle_reclamo(reclamo_id):
     """
     Muestra la página de detalle (chat) de un reclamo para el cliente.
     """
-    current_user = get_current_user()
-    cliente_id = current_user.id
+    # Esta ruta es para clientes, por lo que usa la sesión de Flask, no JWT.
+    if 'cliente_id' not in session:
+        flash('Debes iniciar sesión para ver los detalles del reclamo.', 'warning')
+        return redirect(url_for('cliente.login'))
+
+    cliente_id = session['cliente_id']
 
     controller = ReclamoController()
     respuesta, status_code = controller.obtener_detalle_reclamo(reclamo_id)

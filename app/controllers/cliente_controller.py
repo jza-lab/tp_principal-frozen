@@ -1,4 +1,3 @@
-
 from app.controllers.base_controller import BaseController
 from app.models.cliente import ClienteModel
 from app.schemas.cliente_schema import ClienteSchema
@@ -200,6 +199,7 @@ class ClienteController(BaseController):
 
             direccion_data = data.pop('direccion', None)
             data.pop('contrasena', None)
+            data.pop('email_empresarial', None)
             validated_data = self.schema.load(data, partial=True)
 
             if validated_data.get('email') and validated_data['email'] != existing['data'].get('email'):
