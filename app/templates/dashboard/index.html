@@ -94,7 +94,7 @@
     {% endif %}
 
     {# 3. PRODUCTOS SIN STOCK (CRÍTICA/DANGER) #}
-    {% if 'produccion_consulta' is has_permission and current_user.rol != 'OPERARIO' %}
+    {% if 'produccion_consulta' is has_permission and current_user.rol and current_user.rol != 'OPERARIO' %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if productos_sin_lotes_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
@@ -173,7 +173,7 @@
     {% endif %}
 
     {# 5. ALERTAS DE STOCK INSUMOS (CRÍTICA/WARNING) #}
-    {% if ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) and not is_operario %}
+    {% if ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if alertas_stock_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" style="text-decoration: none;">

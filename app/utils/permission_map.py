@@ -60,10 +60,10 @@ CANONICAL_PERMISSION_MAP = {
     'gestionar_catalogo_insumos': ['SUPERVISOR', 'ADMIN'], # Crear, editar, inhabilitar insumos
     'gestionar_inventario': ['SUPERVISOR'], # Registrar ingresos y egresos de stock
     'gestionar_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Crear y gestionar lotes de productos
-    'almacen_consulta_stock': ['VENDEDOR', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
+    'almacen_consulta_stock': [ 'VENDEDOR', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'registrar_ingreso_de_materia_prima': ['ADMIN'],
     'almacen_ver_registrar': ['VENDEDOR', 'SUPERVISOR'],
-    'almacen_ver_insumos': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE', 'VENDEDOR'],
+    'almacen_ver_insumos': ['OPERARIO', 'SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE', 'VENDEDOR'],
 
     # Módulo: Calidad
     'controlar_calidad_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Realizar controles de calidad
