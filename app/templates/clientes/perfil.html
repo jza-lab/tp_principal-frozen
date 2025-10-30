@@ -13,8 +13,12 @@
 {% block app_content %}
 <div class="btn-toolbar">
     <a href="{{ url_for('clientes_proveedores.listar_clientes') }}" class="btn btn-outline-secondary me-2">
-        <i class="bi bi-arrow-left me-1"></i>Volver a la Lista
+        <i class="bi bi-arrow-left me-1"></i>Lista de Clientes
     </a>
+    <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2" title="Volver a la página anterior">
+        <i class="bi bi-arrow-left"></i> Volver
+    </a>
+
 </div><br>
 <div class="row">
     <div class="col-lg-8 col-xl-9">

@@ -2,13 +2,19 @@
 {% block title %}Detalle del Lote - {{ lote.numero_lote or 'N/A' }}{% endblock %}
 
 {% block app_content %}
+<div class="btn-toolbar mb-2">
+    <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2" title="Volver a la página anterior">
+        <i class="bi bi-arrow-left"></i> Volver
+    </a>
+</div>
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">Detalle del Lote de Producto</h1>
         <p class="text-muted mb-0">Lote N°: <code class="text-muted">{{ lote.numero_lote or 'N/A' }}</code></p>
     </div>
+    
     <a href="{{ url_for('lote_producto.listar_lotes') }}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left me-1"></i>Volver al Inventario
+        <i class="bi bi-arrow-left me-1"></i>Ir al Inventario
     </a>
 </div>
 

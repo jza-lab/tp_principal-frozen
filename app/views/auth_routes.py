@@ -9,7 +9,6 @@ from app.models.token_blacklist_model import TokenBlacklistModel
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
-usuario_controller = UsuarioController()
 totem_sesion_model = TotemSesionModel()
 autorizacion_model = AutorizacionIngresoModel()
 
@@ -34,6 +33,7 @@ def login():
         pass
 
     if request.method == 'POST':
+        usuario_controller = UsuarioController()
         legajo = request.form['legajo']
         password = request.form['password']
 
@@ -88,6 +88,7 @@ def identificar_rostro():
     if not data or "image" not in data:
         return jsonify({"success": False, "message": "No se proporcionó imagen."}), 400
 
+    usuario_controller = UsuarioController()
     image_data_url = data.get("image")
     respuesta = usuario_controller.autenticar_usuario_facial_web(image_data_url)
 
@@ -152,6 +153,7 @@ def logout():
 @jwt_required()
 def perfil():
     """Muestra la página de perfil del usuario que ha iniciado sesión."""
+    usuario_controller = UsuarioController()
     usuario_id = get_jwt_identity()
     usuario = usuario_controller.obtener_usuario_por_id(usuario_id)
     if not usuario:

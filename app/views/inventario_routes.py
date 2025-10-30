@@ -9,9 +9,6 @@ from datetime import date
 
 
 inventario_view_bp = Blueprint('inventario_view', __name__, url_prefix='/inventario')
-controller = InventarioController()
-insumo_controller = InsumoController()
-proveedor_controller = ProveedorController()
 
 @inventario_view_bp.route('/')
 @permission_required(accion='almacen_consulta_stock')
@@ -20,8 +17,10 @@ def listar_lotes():
     Muestra la lista de todos los lotes en el inventario, ahora agrupados por insumo.
     """
     # Llama al nuevo método para obtener los datos agrupados
+    controller = InventarioController()
     response_agrupado, status_code = controller.obtener_lotes_agrupados_para_vista()
-
+    filtros = request.args.to_dict()
+    response, status_code = controller.obtener_lotes_para_vista(filtros)
     insumos_agrupados = []
     if response_agrupado.get('success'):
         insumos_agrupados = response_agrupado.get('data', [])
@@ -56,6 +55,9 @@ def nuevo_lote():
     """
     Gestiona la creación de un nuevo lote en el inventario.
     """
+    controller = InventarioController()
+    insumo_controller = InsumoController()
+    proveedor_controller = ProveedorController()
     if request.method == 'POST':
         try:
             usuario_id = get_jwt_identity()
@@ -92,6 +94,7 @@ def detalle_lote(id_lote):
     """
     Muestra la página de detalle para un lote específico.
     """
+    controller = InventarioController()
     response, status_code = controller.obtener_lote_por_id(id_lote)
 
     if response.get('success'):

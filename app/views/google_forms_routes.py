@@ -8,9 +8,6 @@ import json
 google_forms_bp = Blueprint('google_forms', __name__)
 logger = logging.getLogger(__name__)
 
-# Instancia del controlador existente
-pedido_controller = PedidoController()
-
 @google_forms_bp.route('/api/google-forms/pedido', methods=['POST'])
 def recibir_pedido_google_forms():
     """
@@ -49,8 +46,9 @@ def recibir_pedido_google_forms():
         logger.info(f"Form data: {form_data}")
         logger.info(f"Items count: {len(form_data.get('items', []))}")
 
+        pedido_controller = PedidoController()
         # 🔍 DEBUG: Verificar el schema ANTES de llamar al controlador
-        debug_schema_validation(form_data)
+        debug_schema_validation(form_data, pedido_controller)
 
         # Usar el controlador existente para crear el pedido
         resultado = pedido_controller.crear_pedido_con_items(form_data)
@@ -136,7 +134,7 @@ def transformar_datos_para_controlador(google_data):
     logger.info(f"📋 Campos finales: {list(form_data.keys())}")
     return form_data
 
-def debug_schema_validation(form_data):
+def debug_schema_validation(form_data, pedido_controller):
     """
     Función para debug del schema de validación
     """

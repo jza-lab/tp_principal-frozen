@@ -13,7 +13,11 @@
     </div>
     <div class="btn-toolbar">
         <a href="{{ url_for('orden_venta.listar') }}" class="btn btn-outline-secondary me-2">
-            <i class="bi bi-arrow-left me-1"></i>Volver a la Lista
+            <i class="bi bi-arrow-left me-1"></i>Lista de Órdenes de Venta
+        </a>
+        <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2"
+            title="Volver a la página anterior">
+            <i class="bi bi-arrow-left"></i> Volver
         </a>
     </div>
 </div>
@@ -31,100 +35,130 @@
                 'COMPLETADO': {'class': 'bg-success-soft text-success', 'icon': 'check-circle'},
                 'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                 } %}
-                {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon':
+                'question-circle'}) %}
                 <span class="badge {{ config.class }} fs-6">
                     <i class="bi bi-{{ config.icon }} me-1"></i>{{ pedido.estado.replace('_', ' ') }}
                 </span>
             </div>
             <div class="card-body">
                 <div class="col-md-12">
-                     <label class="form-label-sm fw-bold mb-4"><i class="bi bi-info-circle me-1"></i>Información General</label>
-                     <div class="row g-2">
-                         <div class="row">
-                             <div class="col-md-6">
-                                 <label class="form-label-sm fw-bold"><i class="bi bi-person-circle me-1"></i>Cliente:</label>
-                                 <p class="form-control-plaintext mb-0">{{ pedido.nombre_cliente | default('N/A', true) }}</p>
-                             </div>
-                             <div class="col-md-6">
-                                 <label class="form-label-sm fw-bold"><i class="bi bi-person-circle me-1"></i>Cuil:</label>
-                                 <p class="form-control-plaintext mb-0">{{ pedido.cliente.cuit | default('N/A', true) }}</p>
-                             </div>
-                         </div>
-                         <div class="row">
-                             <div class="col-md-6">
-                                 <label class="form-label-sm fw-bold"><i class="bi bi-calendar-event me-1"></i>Fecha de Solicitud:</label>
-                                 <p class="form-control-plaintext mb-0">{{ pedido.fecha_solicitud | default('N/A', true) }}</p>
-                             </div>
-                             <div class="col-md-6">
-                                 <label class="form-label-sm fw-bold"><i class="bi bi-calendar-event me-1"></i>Fecha de Entrega Requerida:</label>
-                                 <p class="form-control-plaintext mb-0">{{ pedido.fecha_requerido | default('N/A', true) }}</p>
-                             </div>
-                         </div>
-                         <div class="col-md-6">
-                             <label class="form-label-sm fw-bold"><i class="bi bi-calendar-plus me-1"></i>Fecha de Creación:</label>
-                             <p class="form-control-plaintext mb-0">{{ pedido.created_at.strftime('%Y-%m-%d %H:%M') if pedido.created_at else 'N/A' }}</p>
-                         </div>
-                         <div class="col-md-6">
-                             <label class="form-label-sm fw-bold"><i class="bi bi-clock-history me-1"></i>Última Actualización:</label>
-                             <p class="form-control-plaintext mb-0">{{ pedido.updated_at.strftime('%Y-%m-%d %H:%M') if pedido.updated_at else 'N/A' }}</p>
-                         </div>
-                     </div>
-                 </div>
-                 <hr>
-                 <div class="col-md-12">
-                     <div class="mb-3">
-                         <label class="form-label-sm fw-bold mb-3"><i class="bi bi-house me-1"></i>Dirección de Entrega</label>
-                         <div class="row g-2">
+                    <label class="form-label-sm fw-bold mb-4"><i class="bi bi-info-circle me-1"></i>Información
+                        General</label>
+                    <div class="row g-2">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label-sm fw-bold"><i
+                                        class="bi bi-person-circle me-1"></i>Cliente:</label>
+                                <p class="form-control-plaintext mb-0">{{ pedido.nombre_cliente | default('N/A', true)
+                                    }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label-sm fw-bold"><i
+                                        class="bi bi-person-circle me-1"></i>Cuil:</label>
+                                <p class="form-control-plaintext mb-0">{{ pedido.cliente.cuit | default('N/A', true) }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label-sm fw-bold"><i class="bi bi-calendar-event me-1"></i>Fecha de
+                                    Solicitud:</label>
+                                <p class="form-control-plaintext mb-0">{{ pedido.fecha_solicitud | default('N/A', true)
+                                    }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label-sm fw-bold"><i class="bi bi-calendar-event me-1"></i>Fecha de
+                                    Entrega Requerida:</label>
+                                <p class="form-control-plaintext mb-0">{{ pedido.fecha_requerido | default('N/A', true)
+                                    }}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-sm fw-bold"><i class="bi bi-calendar-plus me-1"></i>Fecha de
+                                Creación:</label>
+                            <p class="form-control-plaintext mb-0">{{ pedido.created_at.strftime('%Y-%m-%d %H:%M') if
+                                pedido.created_at else 'N/A' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-sm fw-bold"><i class="bi bi-clock-history me-1"></i>Última
+                                Actualización:</label>
+                            <p class="form-control-plaintext mb-0">{{ pedido.updated_at.strftime('%Y-%m-%d %H:%M') if
+                                pedido.updated_at else 'N/A' }}</p>
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <div class="col-md-12">
+                    <div class="mb-3">
+                        <label class="form-label-sm fw-bold mb-3"><i class="bi bi-house me-1"></i>Dirección de
+                            Entrega</label>
+                        <div class="row g-2">
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-signpost me-1"></i>Calle y Altura:</label>
-                                <p class="form-control-plaintext">{{ pedido.direccion.calle | default('N/A', true) }} {{ pedido.direccion.altura | default('N/A', true) }}</p>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-signpost me-1"></i>Calle y
+                                    Altura:</label>
+                                <p class="form-control-plaintext">{{ pedido.direccion.calle | default('N/A', true) }} {{
+                                    pedido.direccion.altura | default('N/A', true) }}</p>
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-geo-alt me-1"></i>Localidad y Provincia:</label>
-                                <p class="form-control-plaintext">{{ pedido.direccion.localidad | default('N/A', true) }}, {{ pedido.direccion.provincia | default('N/A', true) }}</p>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-geo-alt me-1"></i>Localidad y
+                                    Provincia:</label>
+                                <p class="form-control-plaintext">{{ pedido.direccion.localidad | default('N/A', true)
+                                    }}, {{ pedido.direccion.provincia | default('N/A', true) }}</p>
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-building me-1"></i>Piso / Dto (Opcional):</label>
-                                <p class="form-control-plaintext">Piso: {{ pedido.direccion.piso | default('N/A', true) }} | Dto: {{ pedido.direccion.depto | default('N/A', true) }}</p>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-building me-1"></i>Piso / Dto
+                                    (Opcional):</label>
+                                <p class="form-control-plaintext">Piso: {{ pedido.direccion.piso | default('N/A', true)
+                                    }} | Dto: {{ pedido.direccion.depto | default('N/A', true) }}</p>
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-mailbox2 me-1"></i>Código Postal:</label>
-                                <p class="form-control-plaintext">{{ pedido.direccion.codigo_postal | default('N/A', true) }}</p>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-mailbox2 me-1"></i>Código
+                                    Postal:</label>
+                                <p class="form-control-plaintext">{{ pedido.direccion.codigo_postal | default('N/A',
+                                    true) }}</p>
                             </div>
-                         </div>
-                     </div>
-                 </div>
-                 <hr>
-                 {% if pedido.despacho and pedido.estado in ['EN_TRANSITO', 'COMPLETADO'] %}
-                 <hr>
-                 <div class="col-md-12">
-                     <div class="mb-3">
-                         <label class="form-label-sm fw-bold mb-3"><i class="bi bi-truck me-1"></i>Información de Despacho</label>
-                         <div class="row g-2">
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                {% if pedido.despacho and pedido.estado in ['EN_TRANSITO', 'COMPLETADO'] %}
+                <hr>
+                <div class="col-md-12">
+                    <div class="mb-3">
+                        <label class="form-label-sm fw-bold mb-3"><i class="bi bi-truck me-1"></i>Información de
+                            Despacho</label>
+                        <div class="row g-2">
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-person-badge me-1"></i>Nombre Transportista:</label>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-person-badge me-1"></i>Nombre
+                                    Transportista:</label>
                                 <p class="form-control-plaintext">{{ pedido.despacho.nombre_transportista }}</p>
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-person-vcard me-1"></i>DNI Transportista:</label>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-person-vcard me-1"></i>DNI
+                                    Transportista:</label>
                                 <p class="form-control-plaintext">{{ pedido.despacho.dni_transportista }}</p>
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-truck-front me-1"></i>Patente Vehículo:</label>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-truck-front me-1"></i>Patente
+                                    Vehículo:</label>
                                 <p class="form-control-plaintext">{{ pedido.despacho.patente_vehiculo }}</p>
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-telephone me-1"></i>Teléfono Transportista:</label>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-telephone me-1"></i>Teléfono
+                                    Transportista:</label>
                                 <p class="form-control-plaintext">{{ pedido.despacho.telefono_transportista }}</p>
                             </div>
                             <div class="col-sm-12">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-chat-left-text me-1"></i>Observaciones:</label>
-                                <p class="form-control-plaintext">{{ pedido.despacho.observaciones | default('Sin observaciones', true) }}</p>
+                                <label class="form-label-sm fw-bold"><i
+                                        class="bi bi-chat-left-text me-1"></i>Observaciones:</label>
+                                <p class="form-control-plaintext">{{ pedido.despacho.observaciones | default('Sin
+                                    observaciones', true) }}</p>
                             </div>
-                         </div>
-                     </div>
-                 </div>
-                 {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -145,7 +179,9 @@
                     <tbody>
                         {% for item in pedido['items'] %}
                         <tr>
-                            <td><div class="fw-bold">{{ item.producto_nombre.nombre or 'N/A' }}</div></td>
+                            <td>
+                                <div class="fw-bold">{{ item.producto_nombre.nombre or 'N/A' }}</div>
+                            </td>
                             <td>{{ item.cantidad }} {{ item.producto_nombre.unidad_medida or 'u.' }}</td>
                             <td>
                                 {# Badges de estado para items #}
@@ -156,7 +192,8 @@
                                 'COMPLETADO': {'class': 'text-success', 'icon': 'check-circle'},
                                 'CANCELADO': {'class': 'text-danger', 'icon': 'x-circle'}
                                 } %}
-                                {% set item_config = item_estado_config.get(item.estado, {'class': 'text-dark', 'icon': 'question-circle'}) %}
+                                {% set item_config = item_estado_config.get(item.estado, {'class': 'text-dark', 'icon':
+                                'question-circle'}) %}
                                 <span class="{{ item_config.class }}">
                                     <i class="bi bi-{{ item_config.icon }} me-1"></i>{{ item.estado.replace('_', ' ') }}
                                 </span>
@@ -168,19 +205,22 @@
                                 </a>
                                 {# Mostrar estado de la OP si está disponible #}
                                 {% if item.op_estado %}
-                                    <span class="badge bg-light text-dark ms-1">{{ item.op_estado.replace('_',' ') }}</span>
+                                <span class="badge bg-light text-dark ms-1">{{ item.op_estado.replace('_',' ') }}</span>
                                 {% endif %}
-                                {% else %} 
-                                    <span class="text-muted">N/A (Stock Directo)</span> 
+                                {% else %}
+                                <span class="text-muted">N/A (Stock Directo)</span>
                                 {% endif %}
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="4" class="text-center text-muted py-4">No hay productos.</td></tr>
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">No hay productos.</td>
+                        </tr>
                         {% endfor %}
-                         <tr>
+                        <tr>
                             <td colspan="3" class="text-end fw-bold">Total del pedido:</td>
-                            <td class="text-end fw-bold">{{( pedido.precio_orden | formato_moneda ) if pedido.precio_orden else '$ 0,00'}}</td>
+                            <td class="text-end fw-bold">{{( pedido.precio_orden | formato_moneda ) if
+                                pedido.precio_orden else '$ 0,00'}}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -190,56 +230,64 @@
 
     <div class="col-lg-4">
         <div class="card">
-            <div class="card-header"><h5 class="mb-0">Acciones</h5></div>
+            <div class="card-header">
+                <h5 class="mb-0">Acciones</h5>
+            </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
                     {# Botón Editar (Solo si PENDIENTE) #}
                     {% if pedido.estado == 'PENDIENTE' and 'modificar_ordenes_venta' is has_permission %}
-                        <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}" class="btn btn-outline-primary"><i class="bi bi-pencil me-1"></i>Editar Pedido</a>
+                    <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}" class="btn btn-outline-primary"><i
+                            class="bi bi-pencil me-1"></i>Editar Pedido</a>
                     {% endif %}
 
                     {# 1. Botón "Planificar" (antes Iniciar Proceso) #}
                     {% if pedido.estado == 'PENDIENTE' and 'aprobar_ordenes_venta' is has_permission %}
-                        <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}"
-                              class="confirm-form d-grid" data-title="Confirmar Planificación"
-                              data-message="Esta acción creará las Órdenes de Producción necesarias y pondrá el pedido 'En Proceso'. ¿Está seguro?"
-                              data-button-type="success">
-                              {{ csrf_form.csrf_token }}
+                    <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}"
+                        class="confirm-form d-grid" data-title="Confirmar Planificación"
+                        data-message="Esta acción creará las Órdenes de Producción necesarias y pondrá el pedido 'En Proceso'. ¿Está seguro?"
+                        data-button-type="success">
+                        {{ csrf_form.csrf_token }}
 
-                            <button type="submit" class="btn btn-success"><i class="bi bi-play-fill me-1"></i>Planificar y Crear OPs</button>
-                        </form>
+                        <button type="submit" class="btn btn-success"><i class="bi bi-play-fill me-1"></i>Planificar y
+                            Crear OPs</button>
+                    </form>
                     {% endif %}
 
                     {# 3. Botón "Despachar" (si está LISTO_PARA_ENTREGA) #}
                     {% if pedido.estado == 'LISTO_PARA_ENTREGA' and 'modificar_ordenes_venta' is has_permission %}
-                        <a href="{{ url_for('orden_venta.despachar', id=pedido.id) }}" class="btn btn-info w-100" title="Despachar Pedido">
-                            <i class="bi bi-truck me-1"></i> Despachar Pedido
-                        </a>
+                    <a href="{{ url_for('orden_venta.despachar', id=pedido.id) }}" class="btn btn-info w-100"
+                        title="Despachar Pedido">
+                        <i class="bi bi-truck me-1"></i> Despachar Pedido
+                    </a>
                     {% endif %}
 
                     {# 4. Botón "Confirmar Entrega" (si está DESPACHADO) #}
                     {% if pedido.estado == 'DESPACHADO' and 'modificar_orden_de_venta' is has_permission %}
-                        <button type="button" id="btn-confirmar-entrega" class="btn btn-success w-100">
-                            <i class="bi bi-check2-all me-1"></i> Confirmar Entrega (Recepción OK)
-                        </button>
+                    <button type="button" id="btn-confirmar-entrega" class="btn btn-success w-100">
+                        <i class="bi bi-check2-all me-1"></i> Confirmar Entrega (Recepción OK)
+                    </button>
                     {% endif %}
                     {# --- FIN NUEVO FLUJO DE ENTREGA --- #}
 
                     <hr>
                     {# Botón Imprimir Factura #}
                     <button type="button" id="btn-imprimir-factura" class="btn btn-info"> {# Cambiado a btn-info #}
-                        <i class="bi bi-printer me-1"></i> {{ 'Imprimir Factura Final' if pedido.estado in ['LISTO_PARA_ENTREGA', 'COMPLETADO'] else 'Imprimir Factura Proforma' }}
+                        <i class="bi bi-printer me-1"></i> {{ 'Imprimir Factura Final' if pedido.estado in
+                        ['LISTO_PARA_ENTREGA', 'COMPLETADO'] else 'Imprimir Factura Proforma' }}
                     </button>
 
                     {# Botón Cancelar (si no está Completado o Cancelado) #}
-                    {% if pedido.estado not in ['COMPLETADO', 'CANCELADO'] and 'cancelar_ordenes_venta' is has_permission %}
-                        <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
-                              class="confirm-form d-grid" data-title="Confirmar Cancelación"
-                              data-message="¿Está seguro? Esta acción no se puede deshacer." data-button-type="danger">
-                                {{ csrf_form.csrf_token }}
+                    {% if pedido.estado not in ['COMPLETADO', 'CANCELADO'] and 'cancelar_ordenes_venta' is
+                    has_permission %}
+                    <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
+                        class="confirm-form d-grid" data-title="Confirmar Cancelación"
+                        data-message="¿Está seguro? Esta acción no se puede deshacer." data-button-type="danger">
+                        {{ csrf_form.csrf_token }}
 
-                            <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Cancelar Pedido</button>
-                        </form>
+                        <button type="submit" class="btn btn-outline-danger"><i class="bi bi-x-circle me-1"></i>Cancelar
+                            Pedido</button>
+                    </form>
                     {% endif %}
                 </div>
             </div>
@@ -256,16 +304,16 @@
     // Función para imprimir el contenido HTML generado por el backend
     function printHtmlContent(htmlContent) {
         const iframe = document.createElement('iframe');
-        iframe.style.display = 'none'; 
+        iframe.style.display = 'none';
         iframe.id = 'factura-print-frame';
         document.body.appendChild(iframe);
         const iframeDocument = iframe.contentWindow.document;
         iframeDocument.open();
-        iframeDocument.write(htmlContent); 
+        iframeDocument.write(htmlContent);
         iframeDocument.close();
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
-        setTimeout(() => { document.body.removeChild(iframe); }, 500); 
+        setTimeout(() => { document.body.removeChild(iframe); }, 500);
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -297,31 +345,31 @@
     });
 </script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    // Bloquear doble clic en TODOS los formularios de acción
-    const forms = document.querySelectorAll('form');
-    forms.forEach(form => {
-        form.addEventListener('submit', function (e) {
-            const submitButton = form.querySelector('button[type="submit"]');
-            if (submitButton) {
-                submitButton.disabled = true;
-                // Mostrar spinner de carga
-                const originalHtml = submitButton.innerHTML;
-                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando...';
-                // Evitar reenviar el formulario si el usuario hace back o recarga
-                form.addEventListener('ajax:complete', () => {
-                    submitButton.disabled = false;
-                    submitButton.innerHTML = originalHtml;
-                });
-            }
+    document.addEventListener('DOMContentLoaded', function () {
+        // Bloquear doble clic en TODOS los formularios de acción
+        const forms = document.querySelectorAll('form');
+        forms.forEach(form => {
+            form.addEventListener('submit', function (e) {
+                const submitButton = form.querySelector('button[type="submit"]');
+                if (submitButton) {
+                    submitButton.disabled = true;
+                    // Mostrar spinner de carga
+                    const originalHtml = submitButton.innerHTML;
+                    submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando...';
+                    // Evitar reenviar el formulario si el usuario hace back o recarga
+                    form.addEventListener('ajax:complete', () => {
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalHtml;
+                    });
+                }
+            });
         });
     });
-});
 </script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const pedidoId = {{ pedido.id }};
+    document.addEventListener('DOMContentLoaded', function () {
+        const pedidoId = {{ pedido.id }};
     const btnConfirmarEntrega = document.getElementById('btn-confirmar-entrega');
 
     // Función reutilizable para cambiar el estado del pedido

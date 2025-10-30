@@ -13,15 +13,11 @@ from app.utils.decorators import permission_required, permission_any_of
 cliente_proveedor = Blueprint('clientes_proveedores', __name__, url_prefix='/administrar')
 
 # Instanciar controladores
-proveedor_controller = ProveedorController()
-pedido_controller = PedidoController()
-insumo_controller = InsumoController()
-usuario_controller = UsuarioController()
-cliente_controller = ClienteController()
 
 @cliente_proveedor.route('/solicitudes/clientes/')
 @permission_required(accion='gestionar_clientes')
 def listar_solicitudes_clientes():
+    cliente_controller = ClienteController()
     clientes_result, status = cliente_controller.obtener_clientes(filtros={'estado_aprobacion': 'pendiente'})
     
     clientes = clientes_result.get('data', []) if clientes_result.get('success') else []
@@ -31,6 +27,7 @@ def listar_solicitudes_clientes():
 @cliente_proveedor.route('/clientes/')
 @permission_required(accion='gestionar_clientes')
 def listar_clientes():
+    cliente_controller = ClienteController()
     # Extraer todos los filtros de la solicitud (incluye 'busqueda')
     filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
     clientes_result, status = cliente_controller.obtener_clientes(filtros=filtros)
@@ -46,6 +43,8 @@ def listar_clientes():
 @permission_required(accion='gestionar_clientes')
 def ver_perfil_cliente(id):
     """Muestra el perfil de un cliente específico."""
+    cliente_controller = ClienteController()
+    pedido_controller = PedidoController()
     cliente_result, status = cliente_controller.obtener_cliente(id)
     cliente= cliente_result.get('data') if cliente_result.get('success') else None
     pedidos_resp, status = pedido_controller.get_ordenes_by_cliente(id)
@@ -63,7 +62,7 @@ def nuevo_cliente():
     """
     try:
         if request.method == 'PUT' or request.method == 'POST':
-
+            cliente_controller = ClienteController()
             datos_json = request.get_json()
             if not datos_json:
                 return jsonify(
@@ -84,6 +83,7 @@ def buscar_por_cuil(cliente_cuil):
     """
     Endpoint HTTP que llama a la función obtener_cliente_cuil
     """
+    cliente_controller = ClienteController()
     cliente_respuesta, estado = cliente_controller.obtener_cliente_cuil(cliente_cuil) 
     if(cliente_respuesta['success']):
         cliente=cliente_respuesta['data'][0]
@@ -97,6 +97,7 @@ def buscar_por_cuil(cliente_cuil):
 @permission_required(accion='gestionar_clientes')
 def editar_cliente(id):
     """Gestiona la edición de un cliente existente"""
+    cliente_controller = ClienteController()
     cliente_result, status = cliente_controller.obtener_cliente(id)
     cliente= cliente_result.get('data') if cliente_result.get('success') else None
     if not cliente:
@@ -121,6 +122,7 @@ def editar_cliente(id):
 def eliminar_cliente(id):
     """Desactiva un cliente."""
     try:
+        cliente_controller = ClienteController()
         resultado, status = cliente_controller.eliminar_cliente(id)
         return jsonify(resultado), status
     except Exception as e:
@@ -134,6 +136,7 @@ def eliminar_cliente(id):
 def habilitar_cliente(id):
     """Reactiva un cliente."""
     try:
+        cliente_controller = ClienteController()
         resultado, status = cliente_controller.habilitar_cliente(id)
         return jsonify(resultado), status
     except Exception as e:
@@ -153,6 +156,7 @@ def actualizar_estado_cliente(id):
             return redirect(url_for('clientes_proveedores.listar_solicitudes_clientes'))
         return redirect(url_for('clientes_proveedores.ver_perfil_cliente', id=id))
 
+    cliente_controller = ClienteController()
     resultado, status = cliente_controller.actualizar_estado_cliente(id, nuevo_estado)
     
     if resultado.get('success'):
@@ -169,6 +173,7 @@ def actualizar_estado_cliente(id):
 @cliente_proveedor.route('/proveedores/')
 @permission_required(accion='consultar_ordenes_de_compra')
 def listar_proveedores():
+    proveedor_controller = ProveedorController()
     # Extraer todos los filtros de la solicitud (incluye 'busqueda')
     filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
     proveedores_result, status = proveedor_controller.obtener_proveedores(filtros=filtros)
@@ -183,6 +188,8 @@ def listar_proveedores():
 @cliente_proveedor.route('/proveedores/<int:id>')
 @permission_required(accion='consultar_ordenes_de_compra')
 def ver_perfil_proveedor(id):
+    proveedor_controller = ProveedorController()
+    insumo_controller = InsumoController()
     proveedor_result, status = proveedor_controller.obtener_proveedor(id)
     proveedor= proveedor_result.get('data') if proveedor_result.get('success') else None
     if not proveedor:
@@ -200,6 +207,7 @@ def nuevo_proveedor():
     """
     try:
         if request.method == 'PUT' or request.method == 'POST':
+            proveedor_controller = ProveedorController()
             datos_json = request.get_json()
             if not datos_json:
                 return jsonify(
@@ -219,6 +227,7 @@ def nuevo_proveedor():
 @permission_required(accion='gestionar_proveedores')
 def editar_proveedor(id):
     """Gestiona la edición de un proveedor existente"""
+    proveedor_controller = ProveedorController()
     proveedor_result, status = proveedor_controller.obtener_proveedor(id)
     proveedor= proveedor_result.get('data') if proveedor_result.get('success') else None
 
@@ -244,6 +253,7 @@ def editar_proveedor(id):
 def eliminar_proveedor(id):
     """Desactiva un proveedor."""
     try:
+        proveedor_controller = ProveedorController()
         resultado, status = proveedor_controller.eliminar_proveedor(id)
         return jsonify(resultado), status
     except Exception as e:
@@ -256,6 +266,7 @@ def eliminar_proveedor(id):
 def habilitar_proveedor(id):
     """Reactiva un proveedor."""
     try:
+        proveedor_controller = ProveedorController()
         resultado, status = proveedor_controller.habilitar_proveedor(id)
         return jsonify(resultado), status
     except Exception as e:
@@ -277,6 +288,7 @@ def buscar_cliente_por_cuil_y_email_api():
         return jsonify({"success": False, "error": "CUIL/CUIT y Email son requeridos."}), 400
     
     try:
+        cliente_controller = ClienteController()
         # Llama al nuevo método dentro de ClienteController
         resultado_busqueda, status_code = cliente_controller.buscar_cliente_por_cuit_y_email(cuil, email)
         print(resultado_busqueda)

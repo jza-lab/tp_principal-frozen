@@ -8,15 +8,12 @@ from app.utils.decorators import permission_required, permission_any_of
 # Blueprint para la administración de usuarios
 admin_usuario_bp = Blueprint('admin_usuario', __name__, url_prefix='/admin/usuarios')
 
-# Instanciar controladores
-usuario_controller = UsuarioController()
-facial_controller = FacialController()
-
 
 @admin_usuario_bp.route('/')
 @permission_any_of('admin_gestion_personal', 'admin_configuracion_sistema', 'consultar_empleados')
 def listar_usuarios():
     """Muestra la lista de todos los usuarios del sistema."""
+    usuario_controller = UsuarioController()
     usuarios = usuario_controller.obtener_todos_los_usuarios()
     # Datos para modales o filtros en la vista
     turnos = usuario_controller.obtener_todos_los_turnos()
@@ -27,6 +24,7 @@ def listar_usuarios():
 @permission_any_of('admin_gestion_personal', 'admin_configuracion_sistema', 'consultar_empleados')
 def ver_perfil(id):
     """Muestra el perfil de un usuario específico, delegando la carga de datos al controlador."""
+    usuario_controller = UsuarioController()
     resultado = usuario_controller.obtener_datos_para_vista_perfil(id)
 
     if not resultado.get('success'):
@@ -39,6 +37,8 @@ def ver_perfil(id):
 @permission_required(accion='admin_gestion_personal')
 def nuevo_usuario():
     """Gestiona la creación de un nuevo usuario."""
+    usuario_controller = UsuarioController()
+    facial_controller = FacialController()
     if request.method == 'POST':
         resultado = usuario_controller.gestionar_creacion_usuario_form(request.form, facial_controller)
 
@@ -75,6 +75,7 @@ def nuevo_usuario():
 @permission_any_of('admin_gestion_personal', 'admin_configuracion_sistema')
 def editar_usuario(id):
     """Gestiona la edición de un usuario."""
+    usuario_controller = UsuarioController()
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     if request.method == 'POST':
@@ -136,6 +137,7 @@ def eliminar_usuario(id):
         flash(msg, 'error')
         return redirect(url_for('admin_usuario.listar_usuarios'))
 
+    usuario_controller = UsuarioController()
     resultado = usuario_controller.eliminar_usuario(id)
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         return jsonify(resultado)
@@ -150,6 +152,7 @@ def eliminar_usuario(id):
 @permission_required(accion='admin_gestion_personal')
 def habilitar_usuario(id):
     """Reactiva un usuario lógicamente eliminado."""
+    usuario_controller = UsuarioController()
     resultado = usuario_controller.habilitar_usuario(id)
     if resultado.get('success'):
         flash('Usuario activado exitosamente.', 'success')

@@ -23,13 +23,6 @@ from app.utils.estados import OP_FILTROS_UI, OP_MAP_STRING_TO_INT
 
 orden_produccion_bp = Blueprint("orden_produccion", __name__, url_prefix="/ordenes")
 
-controller = OrdenProduccionController()
-producto_controller = ProductoController()
-etapa_controller = EtapaProduccionController()
-usuario_controller = UsuarioController()
-receta_controller = RecetaController()
-pedido_controller = PedidoController()
-
 
 @orden_produccion_bp.route("/")
 @permission_required(accion='produccion_consulta')
@@ -38,6 +31,8 @@ def listar():
     Muestra la lista de órdenes de producción.
     Si el usuario es un OPERARIO, filtra para mostrar solo sus órdenes asignadas.
     """
+    controller = OrdenProduccionController()
+    usuario_controller = UsuarioController()
     estado = request.args.get("estado")
     filtros = {"estado": estado} if estado else {}
 
@@ -83,6 +78,8 @@ def listar():
 @permission_required(accion='crear_orden_de_produccion')
 def nueva():
     """Muestra la página para crear una nueva orden de producción."""
+    producto_controller = ProductoController()
+    usuario_controller = UsuarioController()
     productos_tupla = producto_controller.obtener_todos_los_productos()
     productos_resp = productos_tupla[0] if productos_tupla else {}
     productos = productos_resp.get('data', [])
@@ -105,6 +102,7 @@ def nueva():
 @permission_required(accion='crear_orden_de_produccion')
 def crear():
     try:
+        controller = OrdenProduccionController()
         datos_json = request.get_json()
         if not datos_json:
             return jsonify({"success": False, "error": "No se recibieron datos JSON válidos."}), 400
@@ -128,6 +126,9 @@ def crear():
 def modificar(id):
     """Gestiona la modificación de una orden de producción."""
     try:
+        controller = OrdenProduccionController()
+        producto_controller = ProductoController()
+        usuario_controller = UsuarioController()
         if request.method in ["POST", "PUT"]:
             datos_json = request.get_json()
             if not datos_json:
@@ -172,6 +173,9 @@ def detalle(id):
     Muestra el detalle de una orden de producción.
     Si el usuario es OPERARIO, valida que la orden le esté asignada.
     """
+    controller = OrdenProduccionController()
+    receta_controller = RecetaController()
+    pedido_controller = PedidoController()
     respuesta = controller.obtener_orden_por_id(id)
     if not respuesta.get("success"):
         flash("Orden no encontrada.", "error")
@@ -228,6 +232,7 @@ def detalle(id):
 def iniciar(id):
     """Inicia una orden de producción, previa validación de stock."""
     try:
+        controller = OrdenProduccionController()
         resultado_dict, status_code = controller.cambiar_estado_orden(id, "EN_PROCESO")
 
         if resultado_dict.get("success"):
@@ -248,6 +253,7 @@ def iniciar(id):
 def completar(id):
     """Completa una orden de producción."""
     try:
+        controller = OrdenProduccionController()
         resultado_dict, status_code = controller.cambiar_estado_orden(id, "COMPLETADA")
 
         if resultado_dict.get("success"):
@@ -266,6 +272,7 @@ def completar(id):
 @permission_any_of('gestionar_orden_de_produccion', 'produccion_consulta')
 def listar_pendientes():
     """Muestra las órdenes pendientes de aprobación."""
+    controller = OrdenProduccionController()
     response, _ = controller.obtener_ordenes({"estado": "PENDIENTE"})
     ordenes = response.get("data", [])
     return render_template(
@@ -281,6 +288,7 @@ def listar_pendientes():
 def aprobar(id):
     """Aprueba una orden de producción. Devuelve JSON si es una llamada AJAX."""
     try:
+        controller = OrdenProduccionController()
         usuario_id = get_jwt_identity()
         # El controller devuelve (response_dict, status_code)
         response = controller.aprobar_orden(id, usuario_id)
@@ -320,6 +328,7 @@ def crear_oc_op(orden_id):
     Crea la OC y aprueba la OP después de la confirmación manual del usuario.
     """
     try:
+        controller = OrdenProduccionController()
         usuario_id = get_jwt_identity()
         datos_json = request.get_json()
         insumos_faltantes = datos_json.get('insumos_faltantes')
@@ -366,6 +375,7 @@ def crear_oc_op(orden_id):
 @permission_required(accion='gestionar_orden_de_produccion')
 def rechazar(id):
     """Rechaza una orden de producción."""
+    controller = OrdenProduccionController()
     motivo = request.form.get("motivo", "No especificado")
     resultado = controller.rechazar_orden(id, motivo)
     flash(
@@ -384,6 +394,7 @@ def asignar_supervisor(id):
         flash("Debe seleccionar un supervisor.", "error")
         return redirect(url_for("orden_produccion.listar"))
 
+    controller = OrdenProduccionController()
     response, status_code = controller.asignar_supervisor(id, int(supervisor_id))
 
     if status_code == 200:
@@ -400,6 +411,7 @@ def api_sugerir_fecha_inicio(orden_id):
     """
     API para calcular y sugerir la fecha de inicio óptima para una OP.
     """
+    controller = OrdenProduccionController()
     usuario_id = get_jwt_identity()
     response, status_code = controller.sugerir_fecha_inicio(orden_id, usuario_id)
     return jsonify(response), status_code
@@ -408,6 +420,7 @@ def api_sugerir_fecha_inicio(orden_id):
 @orden_produccion_bp.route('/<int:orden_id>/pre-asignar', methods=['POST'])
 @jwt_required()
 def api_pre_asignar(orden_id):
+    controller = OrdenProduccionController()
     data = request.get_json()
     usuario_id = get_jwt_identity()
     response, status_code = controller.pre_asignar_recursos(orden_id, data, usuario_id)
@@ -417,6 +430,7 @@ def api_pre_asignar(orden_id):
 @orden_produccion_bp.route('/<int:orden_id>/confirmar-inicio', methods=['POST'])
 @jwt_required()
 def api_confirmar_inicio(orden_id):
+    controller = OrdenProduccionController()
     data = request.get_json()
     usuario_id = get_jwt_identity()
     response, status_code = controller.confirmar_inicio_y_aprobar(orden_id, data, usuario_id)

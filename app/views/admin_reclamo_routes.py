@@ -4,7 +4,6 @@ from app.controllers.reclamo_controller import ReclamoController
 from app.utils.decorators import permission_required
 
 admin_reclamo_bp = Blueprint('admin_reclamo', __name__, url_prefix='/admin/reclamos')
-controller = ReclamoController()
 
 @admin_reclamo_bp.route('/')
 @jwt_required()
@@ -13,6 +12,7 @@ def listar_reclamos():
     """
     Muestra el panel de administración con todos los reclamos.
     """
+    controller = ReclamoController()
     response, _ = controller.obtener_reclamos_admin()
     reclamos = response.get('data', [])
     
@@ -30,6 +30,7 @@ def detalle_reclamo(reclamo_id):
     """
     Muestra la vista de "chat" para que un admin responda un reclamo.
     """
+    controller = ReclamoController()
     response, _ = controller.obtener_detalle_reclamo(reclamo_id)
     if not response.get('success'):
         flash(response.get('error', 'Reclamo no encontrado.'), 'error')
@@ -53,6 +54,7 @@ def responder_reclamo(reclamo_id):
         flash('La respuesta no puede estar vacía.', 'error')
         return redirect(url_for('admin_reclamo.detalle_reclamo', reclamo_id=reclamo_id))
 
+    controller = ReclamoController()
     response, status_code = controller.responder_reclamo_admin(reclamo_id, admin_usuario_id, mensaje)
     
     if status_code == 201:
@@ -69,6 +71,7 @@ def cancelar_reclamo(reclamo_id):
     """
     Endpoint para que el admin cancele un reclamo.
     """
+    controller = ReclamoController()
     response, status_code = controller.cancelar_reclamo_admin(reclamo_id)
     
     if status_code == 200:

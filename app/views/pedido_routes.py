@@ -12,9 +12,6 @@ import base64
 
 orden_venta_bp = Blueprint('orden_venta', __name__, url_prefix='/orden-venta')
 
-controller = PedidoController()
-cliente_controller = ClienteController()
-
 def _parse_form_data(form_dict):
     """
     Convierte los datos planos del formulario en una estructura anidada para el schema.
@@ -50,6 +47,7 @@ def _parse_form_data(form_dict):
 @permission_required(accion='logistica_gestion_ov') # ANTES: 'consultar_ordenes_de_venta'
 def listar():
     """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
+    controller = PedidoController()
     estado = request.args.get('estado')
     filtros = {'estado': estado} if estado else {}
 
@@ -75,6 +73,7 @@ def listar():
 @permission_required(accion='logistica_gestion_ov') # ANTES: 'crear_orden_de_venta'
 def nueva():
     """Gestiona la creación de un nuevo pedido de venta."""
+    controller = PedidoController()
     hoy = datetime.now().strftime('%Y-%m-%d')
 
     if request.method == 'POST':
@@ -102,6 +101,8 @@ def nueva():
 @permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
 def editar(id):
     """Gestiona la edición de un pedido. Solo permitido en PENDIENTE y PLANIFICACION."""
+    controller = PedidoController()
+    cliente_controller = ClienteController()
     pedido_resp, _ = controller.obtener_pedido_por_id(id)
     if not pedido_resp.get('success'):
         flash('Pedido no encontrado.', 'error')
@@ -141,6 +142,7 @@ def editar(id):
 @permission_required(accion='logistica_gestion_ov') # ANTES: 'consultar_ordenes_de_venta'
 def detalle(id):
     """Muestra la página de detalle de un pedido de venta."""
+    controller = PedidoController()
     response, _ = controller.obtener_pedido_por_id(id)
     if response.get('success'):
         pedido_data = response.get('data')
@@ -158,6 +160,7 @@ def detalle(id):
 @permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
 def cancelar(id):
     """Endpoint para cambiar el estado de un pedido a 'CANCELADO'."""
+    controller = PedidoController()
     response, _ = controller.cancelar_pedido(id)
     if response.get('success'):
         flash(response.get('message'), 'success')
@@ -174,6 +177,7 @@ def despachar(id):
     GET: Muestra la página de despacho con detalles del pedido y formulario.
     POST: Procesa el formulario y cambia el estado del pedido a EN_TRANSITO.
     """
+    controller = PedidoController()
     pedido_resp, _ = controller.obtener_pedido_por_id(id)
     if not pedido_resp.get('success'):
         flash('Pedido no encontrado.', 'error')
@@ -210,6 +214,7 @@ def planificar(id):
         flash("Debe seleccionar una fecha estimada de proceso.", "error")
         return redirect(url_for('orden_venta.detalle', id=id))
 
+    controller = PedidoController()
     response, _ = controller.planificar_pedido(id, fecha_estimativa)
     if response.get('success'):
         flash(response.get('message'), 'success')
@@ -222,6 +227,7 @@ def planificar(id):
 @permission_required(accion='gestionar_orden_de_produccion') # ANTES: 'aprobar_orden_de_venta'
 def iniciar_proceso(id):
     """Pasa el pedido a EN PROCESO y crea las OPs."""
+    controller = PedidoController()
     usuario_id = get_jwt_identity()
     response, _ = controller.iniciar_proceso_pedido(id, usuario_id)
     if response.get('success'):
@@ -235,6 +241,7 @@ def iniciar_proceso(id):
 @permission_required(accion='almacen_ver_registrar') # ANTES: 'modificar_orden_de_venta'
 def preparar_entrega(id):
     """Pasa el pedido a LISTO PARA ENTREGAR y descuenta stock."""
+    controller = PedidoController()
     usuario_id = get_jwt_identity()
     response, _ = controller.preparar_para_entrega(id, usuario_id)
     if response.get('success'):
@@ -248,6 +255,7 @@ def preparar_entrega(id):
 @permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
 def completar(id):
     """Endpoint para marcar un pedido como COMPLETADO."""
+    controller = PedidoController()
     usuario_id = get_jwt_identity()
     # Llama al NUEVO y correcto método del controlador
     response, _ = controller.marcar_como_completado(id, usuario_id)
@@ -268,6 +276,7 @@ def api_despachar_pedido(id):
     if not json_data:
         return jsonify({"success": False, "error": "Datos no válidos"}), 400
 
+    controller = PedidoController()
     response, status_code = controller.despachar_pedido(id, json_data)
     return jsonify(response), status_code
 
@@ -276,6 +285,7 @@ def api_despachar_pedido(id):
 @permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
 def api_planificar_pedido(id):
     """API endpoint para cambiar el estado de un pedido a 'PLANIFICADA'."""
+    controller = PedidoController()
     response, status_code = controller.planificar_pedido(id)
     return jsonify(response), status_code
 
@@ -293,6 +303,7 @@ def cambiar_estado(id):
     if not nuevo_estado:
         return jsonify({'success': False, 'error': "El campo 'estado' es requerido."}), 400
 
+    controller = PedidoController()
     response, status_code = controller.cambiar_estado_pedido(id, nuevo_estado)
 
     return jsonify(response), status_code
@@ -309,6 +320,9 @@ def generar_proforma_api():
 
     if not pedido_data or 'id_cliente' not in pedido_data:
         return jsonify({'success': False, 'error': 'Datos incompletos.'}), 400
+    
+    cliente_controller = ClienteController()
+    controller = PedidoController()
     # Get client data
     cliente_resp, _ = cliente_controller.obtener_cliente(pedido_data['id_cliente'])
     if not cliente_resp.get('success'):
@@ -364,6 +378,8 @@ def generar_factura_html(id):
     """
     Ruta API para obtener el contenido HTML PÚRO de la factura.
     """
+    controller = PedidoController()
+    cliente_controller = ClienteController()
     response, status_code = controller.obtener_pedido_por_id(id)
 
     if status_code != 200:
@@ -410,9 +426,11 @@ def nueva_cliente_pasos():
     cliente_id = session.get('cliente_id')
     es_cliente_nuevo = True
     if cliente_id:
+        cliente_controller = ClienteController()
         es_cliente_nuevo = not cliente_controller.cliente_tiene_pedidos_previos(cliente_id)
 
 
+    controller = PedidoController()
     response, _ = controller.obtener_datos_para_formulario()
     productos = response.get('data', {}).get('productos', [])
 
