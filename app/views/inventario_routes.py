@@ -14,35 +14,40 @@ inventario_view_bp = Blueprint('inventario_view', __name__, url_prefix='/inventa
 @permission_required(accion='almacen_consulta_stock')
 def listar_lotes():
     """
-    Muestra la lista de todos los lotes en el inventario.
+    Muestra la lista de todos los lotes en el inventario, ahora agrupados por insumo.
     """
+    # Llama al nuevo método para obtener los datos agrupados
     controller = InventarioController()
+    response_agrupado, status_code = controller.obtener_lotes_agrupados_para_vista()
     filtros = request.args.to_dict()
     response, status_code = controller.obtener_lotes_para_vista(filtros)
     
-    lotes = []
-    if response.get('success'):
-        lotes = response.get('data', [])
+    insumos_agrupados = []
+    if response_agrupado.get('success'):
+        insumos_agrupados = response_agrupado.get('data', [])
     else:
-        flash(response.get('error', 'Error al cargar los lotes del inventario.'), 'error')
-    
+        flash(response_agrupado.get('error', 'Error al cargar los lotes del inventario.'), 'error')
+
+    # Mantener la lógica existente para los gráficos por ahora
     stock_resp, _ = controller.obtener_stock_consolidado()
     insumos_stock = []
+    insumos_full_data = []
     if stock_resp.get('success'):
-
         insumos_data = stock_resp.get('data', [])
         insumos_stock = [
             i for i in insumos_data
             if float(i.get('stock_actual') or 0.0) > 0.0 
         ]
-
         insumos_stock.sort(key=lambda x: (
             1 if x.get('estado_stock') == 'OK' else 0, 
             float(x.get('stock_actual') or 0.0) * -1
         ))
         insumos_full_data = insumos_data
         
-    return render_template('inventario/listar.html', lotes=lotes, insumos_stock=insumos_stock, insumos_full_data=insumos_full_data)
+    return render_template('inventario/listar.html', 
+                           insumos=insumos_agrupados, 
+                           insumos_stock=insumos_stock, 
+                           insumos_full_data=insumos_full_data)
 
 @inventario_view_bp.route('/lote/nuevo', methods=['GET', 'POST'])
 @jwt_required()
