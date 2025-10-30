@@ -215,13 +215,7 @@ def poner_en_cuarentena(id_lote):
 # @jwt_required()
 # @permission_required(accion='gestionar_cuarentena_lotes')
 def liberar_cuarentena(id_lote):
-<<<<<<< HEAD
     controller = LoteProductoController() # <-- AÑADIDO AQUÍ
-=======
-    controller = LoteProductoController()
-
-    # --- INICIO CAMBIO ---
->>>>>>> dev-frontend
     try:
         cantidad = float(request.form.get('cantidad_a_liberar'))
     except (TypeError, ValueError):
@@ -242,11 +236,7 @@ def liberar_cuarentena(id_lote):
 # @jwt_required()
 # @permission_required(accion='editar_lote_de_producto')
 def editar_lote(id_lote):
-<<<<<<< HEAD
     controller = LoteProductoController() # <-- AÑADIDO AQUÍ
-=======
-    controller = LoteProductoController()
->>>>>>> dev-frontend
 
     if request.method == 'POST':
         form_data = request.form
