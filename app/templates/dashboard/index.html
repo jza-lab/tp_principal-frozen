@@ -277,7 +277,7 @@
     {% endif %}
 
     {# 8. ÓRDENES DE PRODUCCIÓN EN PROCESO (INFORMATIVA) #}
-    {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.rol != 'VENDEDOR' %}
+    {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.rol != 'VENDEDOR' and not is_supervisor_calidad %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm">
             <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" style="text-decoration: none;">
@@ -345,7 +345,6 @@
         </div>
     </div>
     {% endif %}
-
     {# START: Supervisor de Calidad Indicators #}
     {% if has_permission('controlar_calidad_lotes') or has_permission('produccion_control_proceso') %}
         {# Lotes pendientes de control #}
@@ -364,14 +363,30 @@
                 </a>
             </div>
         </div>
-        {# Productos Rechazados #}
+        {# Insumos en Cuarentena #}
+        <div class="stat-card-item">
+            <div class="card stat-card h-100 border-0 shadow-sm">
+                <a href="{{ url_for('inventario_view.listar_lotes', estado='cuarentena') }}" style="text-decoration: none;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="stat-label mb-1 text-muted">Insumos en Cuarentena</div>
+                                <div class="stat-value text-warning">{{ insumos_en_cuarentena }}</div>
+                            </div>
+                            <div class="text-warning"><i class="bi bi-shield-slash fs-1"></i></div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+        {# Lotes Rechazados / Cuarentena #}
         <div class="stat-card-item">
             <div class="card stat-card h-100 border-0 shadow-sm">
                 <a href="{{ url_for('lote_producto.listar_lotes', estado='CUARENTENA') }}" style="text-decoration: none;">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <div class="stat-label mb-1 text-muted">Productos Rechazados</div>
+                                <div class="stat-label mb-1 text-muted">Lotes Rechazados / Cuarentena</div>
                                 <div class="stat-value text-danger">{{ productos_rechazados }}</div>
                             </div>
                             <div class="text-danger"><i class="bi bi-x-circle fs-1"></i></div>
@@ -397,6 +412,7 @@
             </div>
         </div>
         {# Órdenes reabiertas #}
+        {% if not is_supervisor_calidad %}
         <div class="stat-card-item">
             <div class="card stat-card h-100 border-0 shadow-sm">
                 <a href="{{ url_for('orden_produccion.listar', estado='REPROCESO') }}" style="text-decoration: none;">
@@ -412,6 +428,7 @@
                 </a>
             </div>
         </div>
+        {% endif %}
     {% endif %}
     {# END: Supervisor de Calidad Indicators #}
     </div>
@@ -424,7 +441,7 @@
     </button>
 </div>
 <div class="row">
-    {% if 'produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission %}
+    {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.roles.codigo != 'SUPERVISOR_CALIDAD' %}
     <div class="col-lg-7 mb-4"> 
         <div class="card h-100 shadow-sm">
             <div class="card-header bg-white border-bottom pb-2 d-flex justify-content-between align-items-center">
@@ -711,3 +728,4 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 {% endblock %}
+

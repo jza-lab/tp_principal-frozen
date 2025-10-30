@@ -15,7 +15,7 @@
         <p class="text-muted mb-0">Gestión y seguimiento de pedidos de clientes</p>
     </div>
     <div class="btn-toolbar">
-        {% if has_permission('logistica_gestion_oc_ov') %}
+        {% if has_permission('logistica_gestion_ov') %}
         <a href="{{ url_for('orden_venta.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nuevo Pedido
         </a>
@@ -113,11 +113,12 @@
                             class="btn btn-sm btn-outline-primary" title="Ver Detalle"><i class="bi bi-eye"></i></a>
 
                         {% if pedido.estado == 'PENDIENTE' %}
-                        {% if 'modificar_orden_de_venta' is has_permission %}
+                        {% if 'logistica_gestion_ov' is has_permission %}
                         <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}"
                             class="btn btn-sm btn-outline-primary"
                             title="Editar Pedido"><i class="bi bi-pencil"></i></a>
-                        
+                        {% endif %}
+                        {% if 'planificar_ov' is has_permission %}
                         {# --- Botón Planificar (ahora un formulario) --- #}
                         <form method="POST" action="{{ url_for('orden_venta.iniciar_proceso', id=pedido.id) }}"
                               class="confirm-form d-inline" data-title="Confirmar Planificación"
@@ -128,16 +129,16 @@
                                 <i class="bi bi-play-fill">Planificar y crear OPs</i>
                             </button>
                         </form>
-                        {% endif %}
+                        {% endif %} 
 
                         {% endif %}
 
-                        {% if pedido.estado == 'LISTO_PARA_ENTREGA' and 'modificar_orden_de_venta' is has_permission %}
+                        {% if pedido.estado == 'LISTO_PARA_ENTREGA' and 'planificar_ov' is has_permission %}
                         <a href="{{ url_for('orden_venta.despachar', id=pedido.id) }}" class="btn btn-sm btn-info" title="Despachar Pedido">
                             <i class="bi bi-truck me-1"></i> Despachar
                         </a>
                         {% endif %}
-                        {% if pedido.estado == 'EN_TRANSITO' and 'modificar_orden_de_venta' is has_permission %}
+                        {% if pedido.estado == 'EN_TRANSITO' and 'planificar_ov' is has_permission %}
                         <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}"
                             class="confirm-form d-inline" data-title="Confirmar Entrega"
                             data-message="¿Confirma que el cliente ha recibido el pedido?"

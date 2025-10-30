@@ -42,7 +42,7 @@
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item {% if request.endpoint.startswith('orden_compra') %}active{% endif %}" href="{{ url_for('orden_compra.listar') }}"><i class="bi bi-truck me-2"></i> Compras (Ordenes)</a></li>
                                     {% endif %}
-                                    {% if 'almacen_consulta_stock' is has_permission %}
+                                    {% if 'almacen_consulta_stock' is has_permission and current_user.roles.codigo != 'VENDEDOR' %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item {% if request.endpoint.startswith('inventario_view') %}active{% endif %}" href="{{ url_for('inventario_view.listar_lotes') }}"><i class="bi bi-boxes me-2"></i> Inventario (Insumos)</a></li>
                                     {% endif %}
@@ -78,7 +78,7 @@
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item {% if request.endpoint.startswith('orden_venta') %}active{% endif %}" href="{{ url_for('orden_venta.listar') }}"><i class="bi bi-currency-dollar me-2"></i> Ventas (Ordenes)</a></li>
                                     {% endif %}
-                                    {% if 'gestionar_lotes' is has_permission %}
+                                    {% if 'gestionar_lotes' is has_permission or current_user.roles.codigo == 'VENDEDOR' %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item {% if request.endpoint.startswith('lote_producto') %}active{% endif %}" href="{{ url_for('lote_producto.listar_lotes') }}"><i class="bi bi-box-seam me-2"></i> Inventario (Productos)</a></li>
                                     {% endif %}
@@ -128,8 +128,8 @@
                             {% set can_gestionar_empleados = is_dev or 'admin_gestion_personal' is has_permission or 'admin_gestion_sistema' is has_permission or 'consultar_empleados' is has_permission %}
                             {% set can_gestionar_clientes = is_dev or 'gestionar_clientes' is has_permission %}
                             {% set can_gestionar_proveedores = is_dev or 'gestionar_proveedores' is has_permission %}
-                            {% set can_gestionar_reclamos = is_dev or 'calidad_gestion_completa' is has_permission %}
-                            {% set can_gestionar_consultas = is_dev or 'admin_acceder_consultas' is has_permission %}
+                            {% set can_gestionar_reclamos = is_dev or 'calidad_gestion_completa' or 'gestionar_reclamos' is has_permission %}
+                            {% set can_gestionar_consultas = is_dev or 'admin_acceder_consultas' or 'gestionar_consultas' is has_permission %}
                             {% set can_access_admin_dropdown = is_dev or can_gestionar_empleados or can_gestionar_clientes or can_gestionar_proveedores or can_gestionar_reclamos or can_gestionar_consultas or 'consultar_empleados' is has_permission %}
 
                             {% if can_access_admin_dropdown and not is_operario %}
