@@ -191,10 +191,10 @@
                         {{ producto_nombre or 'Producto sin nombre' }}</td>
                     <td
                         style="padding: 5px 3px; text-align: right; border: 1px solid #000; border-top: none; border-left: none; border-bottom: 1px dashed #ddd; border-right: none;">
-                        $ {{ precio_neto_unitario | formato_moneda }}</td>
+                         {{ precio_neto_unitario | formato_moneda }}</td>
                     <td
                         style="padding: 5px 3px; text-align: right; border: 1px solid #000; border-top: none; border-left: none; border-bottom: 1px dashed #ddd;">
-                        $ {{ subtotal_total_item | formato_moneda }}</td>
+                         {{ subtotal_total_item | formato_moneda }}</td>
                 </tr>
                 {% endfor %}
 
@@ -234,7 +234,7 @@
                         BASE IMPONIBLE</td>
                     <td
                         style="padding: 5px 3px; text-align: right; border: 1px solid #000; border-left: none; border-top: 1px solid #000;">
-                        $ {{ ns.base_imponible | formato_moneda }}</td>
+                         {{ ns.base_imponible | formato_moneda }}</td>
                     <td
                         style="padding: 5px 3px; text-align: right; font-weight: bold; background-color: #f0f0f0; border: 1px solid #000; border-left: none; border-top: 1px solid #000;">
                         TOTAL PROFORMA</td>
@@ -251,7 +251,7 @@
                         21,00%</td>
                     <td
                         style="padding: 5px 3px; text-align: right; font-weight: bold; background-color: #f0f0f0; border: 1px solid #000; border-top: none; border-left: none;">
-                        $ {{ ns.total_final | formato_moneda }}</td>
+                         {{ ns.total_final | formato_moneda }}</td>
                 </tr>
                 <tr>
                     <td colspan="3"
@@ -259,7 +259,7 @@
                         IMPORTE I.V.A.</td>
                     <td
                         style="padding: 5px 3px; text-align: right; border: 1px solid #000; border-top: none; border-left: none;">
-                        $ {{ ns.total_iva | formato_moneda }}</td>
+                         {{ ns.total_iva | formato_moneda }}</td>
                     <td style="padding: 5px 3px; border: 1px solid #000; border-top: none; border-left: none;">&nbsp;
                     </td>
                 </tr>

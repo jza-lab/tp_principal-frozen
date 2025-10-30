@@ -3,6 +3,11 @@
 {% block title %}Pedidos de Venta - Sistema Frozen{% endblock %}
 
 {% block app_content %}
+<div class="btn-toolbar mb-2">
+    <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2" title="Volver a la página anterior">
+        <i class="bi bi-arrow-left"></i> Volver
+    </a>
+</div>
 <input type="hidden" id="csrf_token" value="{{ csrf_form.csrf_token._value() }}">
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
@@ -95,7 +100,7 @@
 
                 <div class="mt-auto"> 
                     <div class="text-end mb-2"> 
-                         <span class="fw-bold fs-5">$ {{ pedido.precio_orden | formato_moneda }}</span>
+                         <span class="fw-bold fs-5"> {{ pedido.precio_orden | formato_moneda }}</span>
                     </div>
 
                     <hr class="card-divider my-2">

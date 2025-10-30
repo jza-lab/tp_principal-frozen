@@ -7,6 +7,10 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Catálogo de Insumos</h1>
     <div class="btn-toolbar">
+        <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2" title="Volver a la página anterior">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+
         {% if 'gestionar_catalogo_de_insumos' is has_permission %}
         <a href="{{ url_for('insumos_api.crear_insumo') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Agregar Nuevo Insumo
@@ -30,41 +34,40 @@
                     <select name="categoria" id="categoria" class="form-select">
                         <option value="">Todas las categorías</option>
                         {% for cat in categorias %}
-                        <option value="{{ cat }}" {% if request.args.get('categoria') == cat %}selected{% endif %}>
+                        <option value="{{ cat }}" {% if request.args.get('categoria')==cat %}selected{% endif %}>
                             {{ cat }}
                         </option>
                         {% endfor %}
                     </select>
                 </div>
-            
+
                 <div class="col-md-5 align-self-end">
                     <div class="d-flex gap-4">
-                    <button type="submit" class="btn btn-sm flex-fill btn-light">
-                        <i class="bi bi-search"></i> Buscar
-                    </button>
-                    
+                        <button type="submit" class="btn btn-sm flex-fill btn-light">
+                            <i class="bi bi-search"></i> Buscar
+                        </button>
+
                         {% set is_bajo = request.args.get('stock_status') == 'bajo' %}
                         {% set current_busqueda = request.args.get('busqueda', '') %}
                         {% set current_categoria = request.args.get('categoria', '') %}
-                        
-                        <a href="{{ url_for('insumos_api.obtener_insumos', busqueda=current_busqueda, categoria=current_categoria, stock_status='' if is_bajo else 'bajo') }}" 
-                           class="btn btn-sm flex-fill btn-{{ 'outline-danger' if is_bajo else 'danger' }}">
+
+                        <a href="{{ url_for('insumos_api.obtener_insumos', busqueda=current_busqueda, categoria=current_categoria, stock_status='' if is_bajo else 'bajo') }}"
+                            class="btn btn-sm flex-fill btn-{{ 'outline-danger' if is_bajo else 'danger' }}">
                             <i class="bi bi-exclamation-triangle me-1"></i> Stock Bajo
                         </a>
 
-                        <a href="{{ url_for('insumos_api.obtener_insumos') }}" 
-                           class="btn btn-sm flex-fill btn-light">
+                        <a href="{{ url_for('insumos_api.obtener_insumos') }}" class="btn btn-sm flex-fill btn-light">
                             <i class="bi bi-x-circle me-1"></i> Limpiar Filtros
                         </a>
                     </div>
                 </div>
                 <div class="text-muted small">
-                        <p>{{ insumos|length }} insumos encontrados</p>
-                </div>
+                    <p>{{ insumos|length }} insumos encontrados</p>
                 </div>
             </div>
-        </form>
     </div>
+    </form>
+</div>
 </div>
 
 
@@ -80,9 +83,9 @@
                         {% if not insumo.activo %}<span class="badge bg-secondary">Inactivo</span>{% endif %}
                     </span>
                     {% if insumo['es_critico'] %}
-                        <span class="badge bg-danger-soft text-danger" title="Insumo Delicado">
-                            <i class="bi bi-exclamation-triangle me-1"></i>Delicado
-                        </span>
+                    <span class="badge bg-danger-soft text-danger" title="Insumo Delicado">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Delicado
+                    </span>
                     {% endif %}
                 </h5>
                 <div class="card-secondary-details mb-3">
@@ -106,8 +109,7 @@
                                     badge text-bg-success fw-normal py-1 fs-6
                                 {% else %}
                                     text-muted
-                                {% endif %}" 
-                                id="stock-value-{{ insumo.id_insumo }}">
+                                {% endif %}" id="stock-value-{{ insumo.id_insumo }}">
                                 {{ insumo.stock_actual if insumo.stock_actual is not none else '0.0' }}
                             </span>
                             <span class="stock-min text-muted">/ Min: {{ insumo.stock_min }}</span>
@@ -123,21 +125,21 @@
                             <i class="bi bi-eye"></i>
                         </a>
                         {% if 'gestionar_catalogo_de_insumos' is has_permission %}
-                            {% if insumo.activo %}
-                                <a href="{{ url_for('insumos_api.actualizar_insumo', id_insumo=insumo.id_insumo) }}"
-                                   class="btn btn-sm btn-outline-primary" title="Modificar insumo">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                <a class="btn btn-sm btn-outline-danger" title="Inhabilitar insumo"
-                                   onClick="eliminarInsumo('{{ insumo.id_insumo }}')">
-                                    <i class="bi bi-slash-circle"></i> Inhabilitar
-                                </a>
-                            {% else %}
-                                <a class="btn btn-sm btn-outline-success" title="Habilitar insumo"
-                                   onClick="habilitarInsumo('{{ insumo.id_insumo }}')">
-                                    <i class="bi bi-check-circle"></i> Habilitar
-                                </a>
-                            {% endif %}
+                        {% if insumo.activo %}
+                        <a href="{{ url_for('insumos_api.actualizar_insumo', id_insumo=insumo.id_insumo) }}"
+                            class="btn btn-sm btn-outline-primary" title="Modificar insumo">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <a class="btn btn-sm btn-outline-danger" title="Inhabilitar insumo"
+                            onClick="eliminarInsumo('{{ insumo.id_insumo }}')">
+                            <i class="bi bi-slash-circle"></i> Inhabilitar
+                        </a>
+                        {% else %}
+                        <a class="btn btn-sm btn-outline-success" title="Habilitar insumo"
+                            onClick="habilitarInsumo('{{ insumo.id_insumo }}')">
+                            <i class="bi bi-check-circle"></i> Habilitar
+                        </a>
+                        {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -159,15 +161,15 @@
 <script src="{{ url_for('static', filename='js/insumos/insumo_stock.js') }}"></script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const filterForm = document.getElementById('filter-form');
-    const categoriaSelect = document.getElementById('categoria');
+    document.addEventListener('DOMContentLoaded', function () {
+        const filterForm = document.getElementById('filter-form');
+        const categoriaSelect = document.getElementById('categoria');
 
-    if (categoriaSelect) {
-        categoriaSelect.addEventListener('change', function() {
-            filterForm.submit();
-        });
-    }
-});
+        if (categoriaSelect) {
+            categoriaSelect.addEventListener('change', function () {
+                filterForm.submit();
+            });
+        }
+    });
 </script>
 {% endblock %}

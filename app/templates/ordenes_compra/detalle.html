@@ -11,7 +11,7 @@
         <p class="text-muted mb-0">Proveedor: {{ orden.proveedor_nombre or 'No definido' }}</p>
     </div>
     <div class="btn-toolbar">
-        <a href="{{ url_for('orden_compra.listar') }}" class="btn btn-outline-secondary me-2">
+        <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2">
             <i class="bi bi-arrow-left me-1"></i>Volver
         </a>
         {% if orden.estado == 'PENDIENTE' and 'modificar_ordenes_compra' is has_permission %}

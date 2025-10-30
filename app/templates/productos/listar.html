@@ -7,6 +7,12 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Catálogo de Productos</h1>
     <div class="btn-toolbar">
+
+        <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2"
+            title="Volver a la página anterior">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+
         {% if 'gestionar_catalogo_de_productos' is has_permission %}
         <a href="{{ url_for('productos.crear_producto') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Agregar Nuevo Producto
@@ -30,13 +36,13 @@
                     <select name="categoria" id="categoria" class="form-select">
                         <option value="">Todas las categorías</option>
                         {% for cat in categorias %}
-                        <option value="{{ cat }}" {% if request.args.get('categoria') == cat %}selected{% endif %}>
+                        <option value="{{ cat }}" {% if request.args.get('categoria')==cat %}selected{% endif %}>
                             {{ cat }}
                         </option>
                         {% endfor %}
                     </select>
                 </div>
-                     <div class="col-md-2 align-self-end">
+                <div class="col-md-2 align-self-end">
                     <button type="submit" class="btn btn-outline-secondary w-100">
                         <i class="bi bi-search"></i> Buscar
                     </button>
@@ -57,7 +63,8 @@
     <div class="col-lg-4 col-md-6 mb-4">
         <div class="card h-100 producto-card {% if not producto.activo %}insumo-inactivo{% endif %}">
             <div class="card-body d-flex flex-column">
-                <h5 class="card-title"> {{producto.nombre }} {% if not producto.activo %}<span class="badge bg-secondary">Inactivo</span>{% endif %}</h5>
+                <h5 class="card-title"> {{producto.nombre }} {% if not producto.activo %}<span
+                        class="badge bg-secondary">Inactivo</span>{% endif %}</h5>
                 <div class="card-secondary-details mb-3">
                     <span><i class="bi bi-tag-fill"></i> {{ producto.categoria }}</span>
                     <span><i class="bi bi-upc-scan"></i> <code>{{ producto.codigo }}</code></span>
@@ -66,13 +73,13 @@
                 </div>
 
                 <div class="mt-auto">
-                    <hr class="card-divider"></hr>
+                    <hr class="card-divider">
+                    </hr>
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
                         {% if producto.activo %}
                         {% if 'gestionar_catalogo_de_productos' is has_permission %}
-                        <a 
-                            onClick = "recargarPrecioProducto('{{ producto.id }}')"
-                            class="btn btn-sm btn-outline-primary" title="Actualizar precio">
+                        <a onClick="recargarPrecioProducto('{{ producto.id }}')" class="btn btn-sm btn-outline-primary"
+                            title="Actualizar precio">
                             <i class="bi bi-arrow-repeat"></i>
                         </a>
                         {% endif %}
@@ -124,15 +131,15 @@
 <script src="{{ url_for('static', filename='js/productos/recargarPrecioProducto.js') }}"></script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const filterForm = document.getElementById('filter-form');
-    const categoriaSelect = document.getElementById('categoria');
+    document.addEventListener('DOMContentLoaded', function () {
+        const filterForm = document.getElementById('filter-form');
+        const categoriaSelect = document.getElementById('categoria');
 
-    if (categoriaSelect) {
-        categoriaSelect.addEventListener('change', function() {
-            filterForm.submit();
-        });
-    }
-});
+        if (categoriaSelect) {
+            categoriaSelect.addEventListener('change', function () {
+                filterForm.submit();
+            });
+        }
+    });
 </script>
 {% endblock %}

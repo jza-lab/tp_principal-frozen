@@ -3,6 +3,7 @@
 {% block title %}Detalle del Lote - {{ lote.numero_lote_proveedor or 'N/A' }}{% endblock %}
 
 {% block app_content %}
+
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">
@@ -11,11 +12,16 @@
         <p class="text-muted mb-0">Insumo: <strong>{{ lote.insumo_nombre or 'N/A' }}</strong></p>
     </div>
     <div class="btn-toolbar">
+        <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2"
+            title="Volver a la página anterior">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
         <a href="{{ url_for('inventario_view.listar_lotes') }}" class="btn btn-outline-secondary me-2">
-            <i class="bi bi-arrow-left me-1"></i>Volver al Inventario
+            <i class="bi bi-arrow-left me-1"></i>Ir al Inventario
         </a>
         {% set can_edit = 'modificar_materias_primas' is has_permission %}
-        <a href="{{ url_for('insumos_api.editar_lote', id_insumo=lote.id_insumo, id_lote=lote.id_lote) if can_edit else '#' }}" class="btn btn-primary {% if not can_edit %}disabled{% endif %}">
+        <a href="{{ url_for('insumos_api.editar_lote', id_insumo=lote.id_insumo, id_lote=lote.id_lote) if can_edit else '#' }}"
+            class="btn btn-primary {% if not can_edit %}disabled{% endif %}">
             <i class="bi bi-pencil-square me-1"></i>Editar Lote
         </a>
     </div>
@@ -25,12 +31,13 @@
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Información del Lote <code class="text-muted ms-2">{{ lote.numero_lote_proveedor or 'N/A' }}</code></h5>
+                <h5 class="mb-0">Información del Lote <code
+                        class="text-muted ms-2">{{ lote.numero_lote_proveedor or 'N/A' }}</code></h5>
                 <span class="badge bg-success fs-6">{{ lote.estado | title }}</span>
             </div>
             <div class="card-body">
                 <div class="row g-4">
-                    
+
                     <div class="col-md-6">
                         <h6 class="text-muted mb-3"><i class="bi bi-box-seam me-1"></i>Detalles del Insumo</h6>
                         <div class="d-grid gap-3">
@@ -38,7 +45,8 @@
                                 <i class="bi bi-tag-fill text-muted me-2 fs-4"></i>
                                 <div>
                                     <div class="small text-muted">Insumo</div>
-                                    <div class="fw-bold">{{ lote.insumo_nombre or 'No disponible' }} ({{ lote.insumo_unidad_medida }})</div>
+                                    <div class="fw-bold">{{ lote.insumo_nombre or 'No disponible' }} ({{
+                                        lote.insumo_unidad_medida }})</div>
                                 </div>
                             </div>
                             <div class="d-flex align-items-center border-start border-3 border-secondary ps-3">
@@ -64,29 +72,31 @@
                             <div class="col-6">
                                 <label class="small text-muted">Cantidad Inicial</label>
                                 <div class="fw-bold h5">{{ lote.cantidad_inicial | round(2) }}
-                                <small class="text-muted">{{ lote.insumo_unidad_medida }}</small>
+                                    <small class="text-muted">{{ lote.insumo_unidad_medida }}</small>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <label class="small text-muted">Cantidad Actual</label>
                                 <div class="fw-bold h5 text-primary">{{ lote.cantidad_actual | round(2) }}
-                                <small class="text-muted">{{ lote.insumo_unidad_medida }}</small>
+                                    <small class="text-muted">{{ lote.insumo_unidad_medida }}</small>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <label class="small text-muted">Precio Unitario</label>
-                                <div class="fw-bold">$ {{ lote.precio_unitario | formato_moneda if lote.precio_unitario else 'N/A' }}</div>
+                                <div class="fw-bold"> {{ lote.precio_unitario | formato_moneda if lote.precio_unitario
+                                    else 'N/A' }}</div>
                             </div>
                             <div class="col-6">
                                 <label class="small text-muted">Costo Total Ingreso</label>
-                                <div class="fw-bold">$ {{ lote.costo_total | formato_moneda if lote.costo_total else 'N/A' }}</div>
+                                <div class="fw-bold"> {{ lote.costo_total | formato_moneda if lote.costo_total else
+                                    'N/A' }}</div>
                             </div>
                         </div>
                     </div>
 
                     <div class="col-md-6">
                         <h6 class="text-muted mb-3"><i class="bi bi-geo-alt me-1"></i>Fechas y Ubicación</h6>
-                         <div class="d-grid gap-3">
+                        <div class="d-grid gap-3">
                             <div class="d-flex align-items-center">
                                 <i class="bi bi-calendar-plus text-success me-2 fs-4"></i>
                                 <div>

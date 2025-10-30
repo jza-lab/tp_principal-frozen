@@ -178,9 +178,9 @@
                 <td style="padding: 5px 3px;">{{ producto_nombre or 'Producto sin nombre' }}</td>
                 <td style="padding: 5px 3px; text-align: center;">{{ "%.2f"|format(item_cantidad) | replace('.', ',') }}</td>
                 <td style="padding: 5px 3px; text-align: center;">{{ unidad_medida }}</td>
-                <td style="padding: 5px 3px; text-align: right;">$ {{ precio_unitario_neto | formato_moneda }} </td>
+                <td style="padding: 5px 3px; text-align: right;"> {{ precio_unitario_neto | formato_moneda }} </td>
                 <td style="padding: 5px 3px; text-align: center;">{{ "%.0f"|format(porcentaje_iva * 100) }}%</td>
-                <td style="padding: 5px 3px; text-align: right;">$ {{  subtotal_neto | formato_moneda  }}</td>
+                <td style="padding: 5px 3px; text-align: right;"> {{  subtotal_neto | formato_moneda  }}</td>
             </tr>
             {% endfor %}
 
@@ -231,19 +231,19 @@
                 <table style="width: 100%; border-collapse: collapse;">
                     <tr>
                         <td style="padding: 2px 5px; text-align: right;">Subtotal Neto Gravado:</td>
-                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ ns.base_imponible | formato_moneda }} </td>
+                        <td style="width: 50%; padding: 2px 5px; text-align: right;"> {{ ns.base_imponible | formato_moneda }} </td>
                     </tr>
                     <tr>
                         <td style="padding: 2px 5px; text-align: right;">Total IVA (21%):</td>
-                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ ns.total_iva | formato_moneda }} </td>
+                        <td style="width: 50%; padding: 2px 5px; text-align: right;"> {{ ns.total_iva | formato_moneda }} </td>
                     </tr>
                     <tr>
                         <td style="padding: 2px 5px; text-align: right;">Dto/Recargo:</td>
-                        <td style="width: 50%; padding: 2px 5px; text-align: right;">$ {{ 0 | formato_moneda }}</td>
+                        <td style="width: 50%; padding: 2px 5px; text-align: right;"> {{ 0 | formato_moneda }}</td>
                     </tr>
                     <tr style="border-top: 1px solid #000; background-color: #f0f0f0;">
                         <td style="padding: 5px; text-align: right; font-weight: bold;">Total Final:</td>
-                        <td style="padding: 5px; text-align: right; font-weight: bold;">$ {{ ns.total_final | formato_moneda }} </td>
+                        <td style="padding: 5px; text-align: right; font-weight: bold;"> {{ ns.total_final | formato_moneda }} </td>
                     </tr>
                 </table>
             </td>

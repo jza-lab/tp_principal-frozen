@@ -9,6 +9,11 @@
         <p class="text-muted mb-0">Gestión y seguimiento de órdenes de compra a proveedores</p>
     </div>
     <div class="btn-toolbar">
+        <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2"
+            title="Volver a la página anterior">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+
         {% if has_permission('crear_orden_de_compra') %}
         <a href="{{ url_for('orden_compra.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
@@ -17,7 +22,6 @@
     </div>
 </div>
 
-<!-- Filtros por estado -->
 <div class="card mb-4">
     <div class="card-body card-filter">
         <div class="row g-3 align-items-end">
@@ -25,18 +29,19 @@
                 <h5 class="form-label mb-1 text-white">Filtrar por Estado</h5>
                 <p class="text-white small mb-0">{{ ordenes|length }} órdenes encontradas</p>
             </div>
-            
+
             <div class="col-12">
                 {% set current_status = request.args.get('estado') %}
                 <div class="d-flex flex-wrap gap-2 align-items-center">
-                    <a href="{{ url_for('orden_compra.listar', estado='') }}" class="btn btn-sm {% if not current_status %}btn-dark{% else %}btn-secondary{% endif %}">
+                    <a href="{{ url_for('orden_compra.listar', estado='') }}"
+                        class="btn btn-sm {% if not current_status %}btn-dark{% else %}btn-secondary{% endif %}">
                         Todas
                     </a>
                     {% for estado_key, estado_nombre in filtros_ui %}
-                        <a href="{{ url_for('orden_compra.listar', estado=estado_key) }}" 
-                           class="btn btn-sm {% if current_status == estado_key %}btn-dark{% else %}btn-secondary{% endif %}">
-                            {{ estado_nombre }}
-                        </a>
+                    <a href="{{ url_for('orden_compra.listar', estado=estado_key) }}"
+                        class="btn btn-sm {% if current_status == estado_key %}btn-dark{% else %}btn-secondary{% endif %}">
+                        {{ estado_nombre }}
+                    </a>
                     {% endfor %}
                 </div>
             </div>
@@ -53,13 +58,13 @@
                 <div class="d-flex justify-content-between">
                     <h5 class="card-title">{{ orden.proveedor_nombre or 'Proveedor no definido' }}</h5>
                     {% set estado_config = {
-                        'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
-                        'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
-                        'EN ESPERA DE INSUMO': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
-                        'EN_TRANSITO': {'class': 'bg-primary-soft text-primary', 'icon': 'truck'},
-                        'RECEPCION_COMPLETA': {'class': 'bg-success-soft text-success', 'icon': 'box-seam'},
-                        'RECEPCION_INCOMPLETA': {'class': 'bg-danger-soft text-danger', 'icon': 'box-seam'},
-                        'RECHAZADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
+                    'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
+                    'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
+                    'EN ESPERA DE INSUMO': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
+                    'EN_TRANSITO': {'class': 'bg-primary-soft text-primary', 'icon': 'truck'},
+                    'RECEPCION_COMPLETA': {'class': 'bg-success-soft text-success', 'icon': 'box-seam'},
+                    'RECEPCION_INCOMPLETA': {'class': 'bg-danger-soft text-danger', 'icon': 'box-seam'},
+                    'RECHAZADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
                     {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':
                     'question-circle'}) %}
@@ -83,26 +88,28 @@
                         </div>
                         <div>
                             {% if orden.prioridad and orden.prioridad != 'NORMAL' %}
-                                {% set prioridad_config = {
-                                    'BAJA': {'class': 'bg-light text-dark', 'icon': 'arrow-down'},
-                                    'ALTA': {'class': 'bg-warning-soft text-warning', 'icon': 'arrow-up'},
-                                    'URGENTE': {'class': 'bg-danger-soft text-danger', 'icon': 'exclamation-triangle'}
-                                } %}
-                                {% set pconfig = prioridad_config.get(orden.prioridad, {'class': 'bg-secondary', 'icon': 'dash'}) %}
-                                <span class="badge {{ pconfig.class }}">
-                                    <i class="bi bi-{{ pconfig.icon }} me-1"></i>{{ orden.prioridad }}
-                                </span>
+                            {% set prioridad_config = {
+                            'BAJA': {'class': 'bg-light text-dark', 'icon': 'arrow-down'},
+                            'ALTA': {'class': 'bg-warning-soft text-warning', 'icon': 'arrow-up'},
+                            'URGENTE': {'class': 'bg-danger-soft text-danger', 'icon': 'exclamation-triangle'}
+                            } %}
+                            {% set pconfig = prioridad_config.get(orden.prioridad, {'class': 'bg-secondary', 'icon':
+                            'dash'}) %}
+                            <span class="badge {{ pconfig.class }}">
+                                <i class="bi bi-{{ pconfig.icon }} me-1"></i>{{ orden.prioridad }}
+                            </span>
                             {% endif %}
                         </div>
                     </div>
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
-                        <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-outline-primary" title="Ver Detalle">
+                        <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}"
+                            class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                             <i class="bi bi-eye"></i>
                         </a>
-                        
+
                         <!-- Lógica para Supervisor de Calidad -->
                         {% if has_permission('gestionar_recepcion_orden_compra') %}
-                            <!-- {% if orden.estado == 'EN_TRANSITO' %}
+                        <!-- {% if orden.estado == 'EN_TRANSITO' %}
                                 <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-info" title="Recibir Mercadería">
                                     <i class="bi bi-box-arrow-in-down"></i> Recibir
                                 </a>
@@ -110,79 +117,89 @@
                                         data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}">
                                     <i class="bi bi-x-lg"></i> Rechazar
                                 </button> -->
-                            {% endif %}
-                        
+                        {% endif %}
+
                         <!-- Lógica para otros roles -->
-                            {% if orden.estado == 'PENDIENTE' %}
-                                {% if has_permission('aprobar_orden_de_compra') %}
-                                <div>
-                                    <form method="POST" action="{{ url_for('orden_compra.aprobar', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
-                                        data-title="Confirmar Aprobación" data-message="¿Está seguro de que desea aprobar esta orden de compra?" data-button-type="success">
-                                        {{ csrf_form.csrf_token }}
-                                        <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
-                                            <i class="bi bi-check-lg"></i> Aprobar
-                                        </button>
-                                    </form>
-                                </div>
-                                {% endif %}
-                                {% if has_permission('editar_orden_de_compra') %}
-                                <button type="button" class="btn btn-sm btn-outline-danger" title="Rechazar Orden"
-                                        data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}">
-                                    <i class="bi bi-x-lg"></i> Rechazar
+                        {% if orden.estado == 'PENDIENTE' %}
+                        {% if has_permission('aprobar_orden_de_compra') %}
+                        <div>
+                            <form method="POST"
+                                action="{{ url_for('orden_compra.aprobar', id=orden.id, estado=request.args.get('estado', '')) }}"
+                                class="confirm-form d-inline" data-title="Confirmar Aprobación"
+                                data-message="¿Está seguro de que desea aprobar esta orden de compra?"
+                                data-button-type="success">
+                                {{ csrf_form.csrf_token }}
+                                <button type="submit" class="btn btn-sm btn-outline-success" title="Aprobar Orden">
+                                    <i class="bi bi-check-lg"></i> Aprobar
                                 </button>
-                                {% endif %}
-                            
-                            {% elif orden.estado == 'APROBADA' %}
-                                {% if has_permission('logistica_recepcion_oc') %}
-                                <div>
-                                    <form method="POST" action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id, estado=request.args.get('estado', '')) }}" class="confirm-form d-inline"
-                                        data-title="Marcar como 'En Tránsito'" data-message="¿Está seguro de que desea marcar esta orden como 'En Tránsito'?" data-button-type="primary">
-                                        {{ csrf_form.csrf_token }}
-                                        <button type="submit" class="btn btn-sm btn-primary" title="Marcar como En Tránsito">
-                                            <i class="bi bi-truck"></i> En Tránsito
-                                        </button>
-                                    </form>
-                                </div>
-                                {% endif %}
-                            
-                            {% elif orden.estado == 'EN_TRANSITO' %}
-                                {% if has_permission('logistica_recepcion_oc') %}
-                                <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-info" title="Recibir Mercadería">
-                                    <i class="bi bi-box-arrow-in-down"></i> Recibir
-                                </a>
-                                {% endif %}
-                            {% endif %}
+                            </form>
+                        </div>
+                        {% endif %}
+                        {% if has_permission('editar_orden_de_compra') %}
+                        <button type="button" class="btn btn-sm btn-outline-danger" title="Rechazar Orden"
+                            data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}">
+                            <i class="bi bi-x-lg"></i> Rechazar
+                        </button>
+                        {% endif %}
+
+                        {% elif orden.estado == 'APROBADA' %}
+                        {% if has_permission('logistica_recepcion_oc') %}
+                        <div>
+                            <form method="POST"
+                                action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id, estado=request.args.get('estado', '')) }}"
+                                class="confirm-form d-inline" data-title="Marcar como 'En Tránsito'"
+                                data-message="¿Está seguro de que desea marcar esta orden como 'En Tránsito'?"
+                                data-button-type="primary">
+                                {{ csrf_form.csrf_token }}
+                                <button type="submit" class="btn btn-sm btn-primary" title="Marcar como En Tránsito">
+                                    <i class="bi bi-truck"></i> En Tránsito
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
+
+                        {% elif orden.estado == 'EN_TRANSITO' %}
+                        {% if has_permission('logistica_recepcion_oc') %}
+                        <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-info"
+                            title="Recibir Mercadería">
+                            <i class="bi bi-box-arrow-in-down"></i> Recibir
+                        </a>
+                        {% endif %}
+                        {% endif %}
                         {% endif %}
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <!-- Modal de Rechazo -->
-    <div class="modal fade" id="rechazarModal-{{ orden.id }}" tabindex="-1" aria-labelledby="rechazarModalLabel-{{ orden.id }}" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="rechazarModalLabel-{{ orden.id }}">Rechazar Orden de Compra</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <form method="POST" action="{{ url_for('orden_compra.rechazar', id=orden.id, estado=request.args.get('estado', '')) }}">
-              {{ csrf_form.csrf_token }}
-              <div class="modal-body">
-                <p>¿Está seguro de que desea rechazar la orden de compra <strong>{{ orden.codigo_oc }}</strong>?</p>
-                <div class="mb-3">
-                  <label for="motivo-{{ orden.id }}" class="form-label">Motivo del rechazo (opcional)</label>
-                  <textarea class="form-control" id="motivo-{{ orden.id }}" name="motivo" rows="3"></textarea>
+    <div class="modal fade" id="rechazarModal-{{ orden.id }}" tabindex="-1"
+        aria-labelledby="rechazarModalLabel-{{ orden.id }}" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="rechazarModalLabel-{{ orden.id }}">Rechazar Orden de Compra</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-              </div>
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-danger">Rechazar Orden</button>
-              </div>
-          </form>
+                <form method="POST"
+                    action="{{ url_for('orden_compra.rechazar', id=orden.id, estado=request.args.get('estado', '')) }}">
+                    {{ csrf_form.csrf_token }}
+                    <div class="modal-body">
+                        <p>¿Está seguro de que desea rechazar la orden de compra <strong>{{ orden.codigo_oc }}</strong>?
+                        </p>
+                        <div class="mb-3">
+                            <label for="motivo-{{ orden.id }}" class="form-label">Motivo del rechazo (opcional)</label>
+                            <textarea class="form-control" id="motivo-{{ orden.id }}" name="motivo" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-danger">Rechazar Orden</button>
+                    </div>
+                </form>
+            </div>
         </div>
-      </div>
     </div>
     {% else %}
     <div class="col-12">
@@ -201,26 +218,26 @@
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const forms = document.querySelectorAll('.confirm-form');
-    forms.forEach(form => {
-        form.addEventListener('submit', function (e) {
-            e.preventDefault();
-            
-            const title = form.dataset.title || 'Confirmar Acción';
-            const message = form.dataset.message || '¿Está seguro de que desea realizar esta acción?';
-            const buttonType = form.dataset.buttonType || 'primary';
+    document.addEventListener('DOMContentLoaded', function () {
+        const forms = document.querySelectorAll('.confirm-form');
+        forms.forEach(form => {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
 
-            showConfirmationModal(
-                title,
-                message,
-                () => { // Callback de confirmación
-                    form.submit();
-                },
-                buttonType
-            );
+                const title = form.dataset.title || 'Confirmar Acción';
+                const message = form.dataset.message || '¿Está seguro de que desea realizar esta acción?';
+                const buttonType = form.dataset.buttonType || 'primary';
+
+                showConfirmationModal(
+                    title,
+                    message,
+                    () => { // Callback de confirmación
+                        form.submit();
+                    },
+                    buttonType
+                );
+            });
         });
     });
-});
 </script>
 {% endblock %}
