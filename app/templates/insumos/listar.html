@@ -11,7 +11,7 @@
             <i class="bi bi-arrow-left"></i> Volver
         </a>
 
-        {% if 'gestionar_catalogo_de_insumos' is has_permission %}
+        {% if 'gestionar_catalogo_insumos' is has_permission %}
         <a href="{{ url_for('insumos_api.crear_insumo') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Agregar Nuevo Insumo
         </a>
@@ -124,7 +124,7 @@
                             class="btn btn-sm btn-outline-primary" title="Detalle">
                             <i class="bi bi-eye"></i>
                         </a>
-                        {% if 'gestionar_catalogo_de_insumos' is has_permission %}
+                        {% if 'gestionar_catalogo_insumos' is has_permission %}
                         {% if insumo.activo %}
                         <a href="{{ url_for('insumos_api.actualizar_insumo', id_insumo=insumo.id_insumo) }}"
                             class="btn btn-sm btn-outline-primary" title="Modificar insumo">

@@ -13,7 +13,7 @@
             title="Volver a la página anterior">
             <i class="bi bi-arrow-left"></i> Volver
         </a>
-        {% if has_permission('produccion_gestion_completa') %}
+        {% if has_permission('gestionar_orden_de_produccion') %}
         <a href="{{ url_for('orden_produccion.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
         </a>
