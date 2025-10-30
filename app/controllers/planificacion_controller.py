@@ -401,7 +401,8 @@ class PlanificacionController(BaseController):
                 allowed_transitions = {
                     'LISTA PARA PRODUCIR': ['EN_LINEA_1', 'EN_LINEA_2'],
                     'EN_LINEA_1': ['EN_EMPAQUETADO'],
-                    'EN_LINEA_2': ['EN_EMPAQUETADO']
+                    'EN_LINEA_2': ['EN_EMPAQUETADO'],
+                    'EN_EMPAQUETADO': ['CONTROL_DE_CALIDAD']
                 }
                 if estado_actual not in allowed_transitions or nuevo_estado not in allowed_transitions[estado_actual]:
                     return self.error_response(

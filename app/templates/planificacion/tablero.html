@@ -34,6 +34,7 @@
 </div>
 
 {# --- PLAN MAESTRO --- #}
+{% if current_user.rol != 'OPERARIO'  %}
 <div id="planificador-pendientes">
     <div class="planificador-header d-flex justify-content-between align-items-center">
         <span>Plan Maestro (Próximos {{ mps_data.dias_horizonte }} días: {{ mps_data.inicio_horizonte }} al {{ mps_data.fin_horizonte }})</span>
@@ -93,6 +94,7 @@
         {% endif %}
     </div>
 </div>
+{% endif %}
 
 {# --- NAVEGACIÓN SEMANAL MEJORADA --- #}
 <div class="navegacion-semanal-separada mt-4">

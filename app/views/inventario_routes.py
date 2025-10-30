@@ -136,7 +136,11 @@ def poner_en_cuarentena(id_lote):
 ##@jwt_required()
 ##@permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
 def liberar_cuarentena(id_lote):
+<<<<<<< HEAD
     controller = InventarioController() # <-- AÑADIDO AQUÍ
+=======
+    controller = InventarioController()
+>>>>>>> dev-frontend
     try:
         cantidad = float(request.form.get('cantidad_a_liberar'))
     except (TypeError, ValueError):
@@ -157,10 +161,15 @@ def liberar_cuarentena(id_lote):
 ##@jwt_required()
 ##@permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
 def editar_lote(id_lote):
+    
     """
     Gestiona la edición de un lote de inventario existente.
     """
+<<<<<<< HEAD
     controller = InventarioController() # <-- AÑADIDO AQUÍ
+=======
+    controller = InventarioController()
+>>>>>>> dev-frontend
     if request.method == 'POST':
         try:
             form_data = request.form.to_dict()

@@ -233,7 +233,7 @@ def create_app() -> Flask:
         # Esto es para clientes, debe usar la sesión de Flask. Se mantiene como está.
         if 'cliente_id' in session:
             try:
-                cliente_id = session['cliente_id']
+                cliente_id = current_user.id
                 reclamo_model = ReclamoModel()
                 resultado = reclamo_model.get_count_by_cliente_and_estado(cliente_id, 'respondida')
                 if resultado.get('success'):

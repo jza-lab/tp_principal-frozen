@@ -4,6 +4,28 @@ document.addEventListener('DOMContentLoaded', function () {
     const confirm_contrasenaInput = document.getElementById('confirm_contrasena');
 
     if (!form) return;
+    
+    const emailEmpresarialCheckbox = document.getElementById('email_empresarial');
+    const razonSocialInput = document.getElementById('razon_social');
+    const razonSocialRequiredSpan = document.querySelector('.required-by-email-empresarial');
+
+    function toggleRazonSocialRequirement() {
+        const isEmpresarial = emailEmpresarialCheckbox.checked;
+
+        if (isEmpresarial) {
+            razonSocialInput.required = true;
+            if (razonSocialRequiredSpan) razonSocialRequiredSpan.style.display = 'inline';
+        } else {
+            razonSocialInput.required = false;
+            if (razonSocialRequiredSpan) razonSocialRequiredSpan.style.display = 'none';
+        }
+    }
+
+    if (emailEmpresarialCheckbox) {
+        emailEmpresarialCheckbox.addEventListener('change', toggleRazonSocialRequirement);
+    }
+
+    toggleRazonSocialRequirement();
 
     function restrictToLetters(event) {
         if (event.ctrlKey || event.metaKey ||
@@ -239,6 +261,7 @@ document.addEventListener('DOMContentLoaded', function () {
             nombre: formData.get('nombre'),
             cuit: cuit,
             email: formData.get('email'),
+            email_empresarial: document.getElementById('email_empresarial').checked,
             telefono: formData.get('telefono'),
             condicion_iva: formData.get('condicion_iva'),
             razon_social: formData.get('razon_social') || '',
@@ -290,6 +313,16 @@ document.addEventListener('DOMContentLoaded', function () {
     form.addEventListener('submit', function (event) {
         event.preventDefault();
         event.stopPropagation();
+        if (emailEmpresarialCheckbox.checked && !razonSocialInput.value.trim()) {
+            razonSocialInput.setCustomValidity('La Razón Social es obligatoria para emails empresariales.');
+            razonSocialInput.classList.add('is-invalid');
+            showNotificationModal('Error de Formulario', 'Debe ingresar la Razón Social de su empresa (mail empresarial).', 'Por favor, ingrese la Razón Social de la empresa asociada.');
+            return
+        } else {
+            razonSocialInput.setCustomValidity('');
+            razonSocialInput.classList.remove('is-invalid');
+        }
+        
         verifyAddress();
     });
 });

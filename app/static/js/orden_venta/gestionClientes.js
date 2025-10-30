@@ -69,11 +69,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (clienteIdOculto) {
                             clienteIdOculto.value = cliente.id || '';
                         }
+                        if (cliente.id) {
+                            verificarCondicionVenta(cliente.id);
+                        }
 
                         nombreCliente.value = cliente.nombre || '';
                         telefono.value = cliente.telefono || '';
                         email.value = cliente.email || '';
-                        
+
                         const dir = cliente.direccion || {};
                         if (calleFacturacion) calleFacturacion.value = dir.calle || '';
                         if (alturaFacturacion) alturaFacturacion.value = dir.altura || '';
@@ -105,9 +108,10 @@ document.addEventListener('DOMContentLoaded', function () {
                                 checkboxDireccion.dispatchEvent(new Event('change'));
                             }
                         }
-                        
+
                     } else {
                         limpiarDatosCliente();
+                        actualizarCondicionVentaUI(false);
                     }
                 })
                 .catch(error => {
@@ -121,6 +125,57 @@ document.addEventListener('DOMContentLoaded', function () {
             limpiarDatosCliente();
         }
     }
+
+    function verificarCondicionVenta(clienteId) {
+        const urlApiCondVenta = `/orden-venta/cliente/cond_venta/${clienteId}`; // Ajusta la URL si es necesario
+
+        fetch(urlApiCondVenta, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status} al verificar condición de venta.`);
+                }
+                return response.json(); // La API devuelve 'es_nuevo' (true/false)
+            })
+            .then(esNuevo => {
+                // Llama a la función que modifica el DOM
+                actualizarCondicionVentaUI(esNuevo);
+            })
+            .catch(error => {
+                console.error('Error al verificar condición de venta:', error.message);
+                // En caso de error, asumimos cliente existente o no limitamos
+                actualizarCondicionVentaUI(false);
+            });
+    }
+    function actualizarCondicionVentaUI(esNuevo) {
+        const condicionVentaSelect = document.getElementById('condicion_venta');
+        if (!condicionVentaSelect) return;
+
+        const credito30Option = condicionVentaSelect.querySelector('option[value="credito_30"]');
+        const credito90Option = condicionVentaSelect.querySelector('option[value="credito_90"]');
+        const contadoOption = condicionVentaSelect.querySelector('option[value="contado"]');
+
+        if (esNuevo) {
+            // Ocultar las opciones de crédito
+            if (credito30Option) credito30Option.style.display = 'none';
+            if (credito90Option) credito90Option.style.display = 'none';
+
+            // Seleccionar 'Al Contado'
+            if (contadoOption) contadoOption.selected = true;
+            condicionVentaSelect.dispatchEvent(new Event('change'));
+
+        } else {
+            // Mostrar las opciones de crédito
+            if (credito30Option) credito30Option.style.display = 'block';
+            if (credito90Option) credito90Option.style.display = 'block';
+        }
+    }
+
+    // Llama a la función al inicio de gestionClientes.js (DOMContentLoaded)
+    // para establecer el estado inicial si no hay un cliente precargado.
+    actualizarCondicionVentaUI(false);
 
     //Para que cuando escribas y termines un campo pase al otro
     function handleCuilInput(e, maxLength, nextField, prevField) {

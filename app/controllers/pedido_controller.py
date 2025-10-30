@@ -491,11 +491,11 @@ class PedidoController(BaseController):
             if estado_original == 'EN_PROCESO':
                 nuevos_items = result.get('data', {}).get('nuevos_items', [])
                 if nuevos_items:
-                    # Necesitamos el ID del usuario para crear la OP
-                    from flask import session
-                    usuario_id = session.get('usuario_id')
-                    if not usuario_id:
+                    from flask_jwt_extended import get_current_user
+                    current_user = get_current_user()
+                    if not current_user:
                         return self.error_response("Sesión de usuario no encontrada para crear OP.", 401)
+                    usuario_id = current_user.id
 
                     for item in nuevos_items:
                         producto_id = item['producto_id']

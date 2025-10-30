@@ -4,10 +4,10 @@ from flask import (
     render_template,
     request,
     jsonify,
-    session,
     url_for,
     flash,
 )
+from flask_jwt_extended import get_current_user
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.proveedor_controller import ProveedorController
@@ -185,8 +185,9 @@ def crear_lote(id_insumo):
             return jsonify(
                 {"success": False, "error": "No se recibieron datos JSON válidos"}
             ), 400
-        id = session["usuario_id"]
-        response, status = inventario_controller.crear_lote(datos_json, id)
+        current_user = get_current_user()
+        usuario_id = current_user.id
+        response, status = inventario_controller.crear_lote(datos_json, usuario_id)
         return jsonify(response), status
     except Exception as e:
         logger.error(f"Error inesperado en crear_lote: {str(e)}")
