@@ -94,7 +94,7 @@
     {% endif %}
 
     {# 3. PRODUCTOS SIN STOCK (CRÍTICA/DANGER) #}
-    {% if 'produccion_consulta' is has_permission %}
+    {% if 'produccion_consulta' is has_permission and current_user.rol != 'OPERARIO' %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if productos_sin_lotes_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
@@ -219,7 +219,7 @@
     {% endif %}
 
     {# 6. RIESGO PROD. VENCIMIENTO (WARNING) #}
-    {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and not is_operario %}
+    {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.rol != 'OPERARIO'  %}
     <div class="stat-card-item">
         <div class="card stat-card h-100 border-0 shadow-sm {% if lotes_producto_vencimiento_count > 0 %}glow-on-load{% endif %}">
             <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
