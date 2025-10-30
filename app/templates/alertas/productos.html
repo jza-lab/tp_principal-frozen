@@ -1,4 +1,4 @@
-{% extends "layouts/base.html" %}
+{% extends "layouts/app_layout.html" %}
 
 {% block title %}Alertas de Stock de Productos{% endblock %}
 
@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/listarUsuarios.css') }}">
 {% endblock %}
 
-{% block content %}
+{% block app_content %}
 <div class="container-fluid px-4">
     <h1 class="mt-4">Umbrales de Productos</h1>
 

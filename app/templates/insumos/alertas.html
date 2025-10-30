@@ -1,4 +1,4 @@
-{% extends 'layouts/base.html' %}
+{% extends 'layouts/app_layout.html' %}
 
 {% block title %}Alertas del Sistema - Sistema Frozen{% endblock %}
 
@@ -13,7 +13,7 @@
     </a>
 {% endblock %}
 
-{% block content %}
+{% block app_content %}
 
 {% if alertas %}
     <div class="alert alert-warning border-warning">

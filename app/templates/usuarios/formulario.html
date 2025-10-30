@@ -1,4 +1,4 @@
-{% extends "layouts/base.html" %}
+{% extends "layouts/app_layout.html" %}
 
 {% block title %}
 {% if is_new %}Nuevo Empleado{% else %}Editar Empleado{% endif %} - Sistema Frozen
@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/crearUsuario.css') }}">
 {% endblock %}
 
-{% block content %}
+{% block app_content %}
 <div class="form-container">
     <div class="form-card">
         <div class="form-header">

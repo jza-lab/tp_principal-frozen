@@ -1,5 +1,5 @@
-from flask import Blueprint, jsonify, request, redirect, url_for, flash, render_template
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt, unset_jwt_cookies, set_access_cookies, get_jwt_identity
+from flask import Blueprint, jsonify, request, redirect, url_for, flash, render_template, make_response
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt, unset_jwt_cookies, set_access_cookies, get_jwt_identity, verify_jwt_in_request
 from app.controllers.usuario_controller import UsuarioController
 from app.utils.roles import get_redirect_url_by_role
 from app.models.totem_sesion import TotemSesionModel
@@ -17,19 +17,21 @@ autorizacion_model = AutorizacionIngresoModel()
 @jwt_required(optional=True)
 def login():
     """Gestiona el inicio de sesión de los usuarios."""
-
-    # --- 2. VERIFICACIÓN DE SESIÓN ACTIVA ---
-    # Con @jwt_required(optional=True), get_jwt() devuelve el payload
-    # si existe, o None si no hay token (sin lanzar error).
-    jwt_payload = get_jwt()
-
-    if jwt_payload:
-        # Si hay un payload, el usuario ya está logueado.
-        rol_codigo = jwt_payload.get('rol')
-        redirect_url = get_redirect_url_by_role(rol_codigo)
-
-        # Redirigir a su dashboard correspondiente
-        return redirect(redirect_url)
+    # Si el usuario ya está logueado y accede a /login, lo redirigimos.
+    # Hacemos una verificación explícita en lugar de confiar solo en el payload
+    # para evitar problemas con tokens en blacklist que aún no han expirado.
+    try:
+        verify_jwt_in_request(optional=True)
+        jwt_payload = get_jwt()
+        if jwt_payload:
+            # Si hay un payload, el usuario ya está logueado.
+            rol_codigo = jwt_payload.get('rol')
+            redirect_url = get_redirect_url_by_role(rol_codigo)
+            # Redirigir a su dashboard correspondiente
+            return redirect(redirect_url)
+    except Exception:
+        # Si el token es inválido o expirado, simplemente continuamos al login.
+        pass
 
     if request.method == 'POST':
         legajo = request.form['legajo']
@@ -47,7 +49,8 @@ def login():
                     'nombre': usuario_data.get('nombre'),
                     'apellido': usuario_data.get('apellido'),
                     'rol': usuario_data.get('roles', {}).get('codigo'),
-                    'user_level': usuario_data.get('roles', {}).get('nivel', 0)
+                    'rol_nombre': usuario_data.get('roles', {}).get('nombre'),
+                    'user_level': usuario_data.get('roles', {}).get('nivel', 0),
                 }
             )
 
@@ -58,6 +61,7 @@ def login():
             response = redirect(redirect_url)
 
             # Establecemos el token JWT en una cookie HttpOnly
+            unset_jwt_cookies(response)
             set_access_cookies(response, access_token)
 
             flash(f"Bienvenido {usuario_data['nombre']}", 'success')
@@ -65,9 +69,15 @@ def login():
         else:
             error_message = respuesta.get('error', 'Credenciales incorrectas o usuario inactivo.')
             flash(error_message, 'error')
-            return redirect(url_for('auth.login'))
+            # Limpiamos cookies también en caso de error de login
+            response = redirect(url_for('auth.login'))
+            unset_jwt_cookies(response)
+            return response
 
-    return render_template('usuarios/login.html')
+    # Para el método GET, limpiamos cookies por si quedaron huérfanas.
+    response = make_response(render_template('usuarios/login.html'))
+    unset_jwt_cookies(response)
+    return response
 
 @auth_bp.route("/identificar_rostro", methods=["POST"])
 def identificar_rostro():
@@ -89,7 +99,8 @@ def identificar_rostro():
                 'nombre': usuario_data.get('nombre'),
                 'apellido': usuario_data.get('apellido'),
                 'rol': usuario_data.get('roles', {}).get('codigo'),
-                'user_level': usuario_data.get('roles', {}).get('nivel', 0)
+                'rol_nombre': usuario_data.get('roles', {}).get('nombre'),
+                'user_level': usuario_data.get('roles', {}).get('nivel', 0),
             }
         )
 
@@ -102,7 +113,7 @@ def identificar_rostro():
             'redirect': redirect_url
         })
 
-        # Establecemos la cookie en la respuesta JSON
+        unset_jwt_cookies(response)
         set_access_cookies(response, access_token)
 
         return response, 200

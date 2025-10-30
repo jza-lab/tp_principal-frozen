@@ -17,6 +17,7 @@ from app.utils.date_utils import get_now_in_argentina
 from app.controllers.direccion_controller import GeorefController
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.direccion import DireccionModel
+from flask import current_app
 from app.models.permisos import PermisosModel
 from app.utils.permission_map import CANONICAL_PERMISSION_MAP
 from app.models.sector import SectorModel
@@ -252,8 +253,8 @@ class UsuarioController(BaseController):
         rol_codigo = user_data.get('roles', {}).get('codigo')
         logger.info(f"Credentials OK for user_id: {user_id}")
       
-        # El rol DEV no necesita una sesión de tótem activa para acceder a la web
-        if rol_codigo == 'DEV':
+        # El rol DEV o la variable de entorno BYPASS_LOGIN_CHECKS omiten la verificación del tótem.
+        if rol_codigo == 'DEV' or current_app.config.get('BYPASS_LOGIN_CHECKS'):
             totem_check = True
         else:
             totem_check = self.totem_sesion.verificar_sesion_activa_hoy(user_id)
@@ -667,16 +668,20 @@ class UsuarioController(BaseController):
 
     def obtener_porcentaje_asistencia(self) -> float:
         """Calcula el porcentaje de asistencia actual basado en sesiones de tótem activas."""
-        todos_activos = self.model.find_all({'activo': True})
-        if not todos_activos.get('success') or not todos_activos.get('data'):
-            return 0.0
+        # Primero, obtenemos el número total de usuarios activos.
+        todos_activos_result = self.model.db.table(self.model.get_table_name()) \
+            .select('id', count='exact') \
+            .eq('activo', True) \
+            .execute()
+        
+        total_usuarios_activos = todos_activos_result.count if todos_activos_result.count is not None else 0
 
-        usuarios_activos = todos_activos['data']
-        total_usuarios_activos = len(usuarios_activos)
         if total_usuarios_activos == 0:
             return 0.0
 
-        cant_en_empresa = sum(1 for usuario in usuarios_activos if self.totem_sesion.verificar_sesion_activa_hoy(usuario['id']))
+        # Segundo, obtenemos el conteo de sesiones activas con una única query optimizada.
+        cant_en_empresa = self.totem_sesion.obtener_conteo_sesiones_activas_hoy()
+
         return round((cant_en_empresa / total_usuarios_activos) * 100, 0)
 
     # endregion
