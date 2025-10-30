@@ -10,14 +10,13 @@ from datetime import date, timedelta
 
 planificacion_bp = Blueprint('planificacion', __name__, url_prefix='/planificacion')
 
-controller = PlanificacionController()
-
 logger = logging.getLogger(__name__)
 
 
 @planificacion_bp.route('/') # La ruta principal ahora manejará todo
 @permission_required(accion='consultar_plan_de_produccion')
 def index():
+    controller = PlanificacionController()
     current_user = get_jwt()
     user_roles = current_user.get('roles', [])
     is_operario = 'OPERARIO' in user_roles
@@ -176,6 +175,7 @@ def confirmar_aprobacion_api():
     if not op_id or not asignaciones:
          return jsonify({'success': False, 'error': 'Faltan datos (op_id o asignaciones).'}), 400
 
+    controller = PlanificacionController()
     # Llama al helper que solo ejecuta la aprobación
     response, status_code = controller._ejecutar_aprobacion_final(
         op_id,
@@ -197,6 +197,7 @@ def consolidar_api():
     op_ids = data.get('op_ids', [])
     usuario_id = get_jwt_identity()
 
+    controller = PlanificacionController()
     response, status_code = controller.consolidar_ops(op_ids, usuario_id)
     return jsonify(response), status_code
 
@@ -207,6 +208,7 @@ def recomendar_linea_api(op_id):
     """
     API endpoint para analizar una OP y recomendar una línea de producción.
     """
+    controller = PlanificacionController()
     response, status_code = controller.recomendar_linea_produccion(op_id)
     return jsonify(response), status_code
 
@@ -225,6 +227,7 @@ def mover_op_api(op_id):
     data = request.get_json()
     nuevo_estado = data.get('nuevo_estado')
 
+    controller = PlanificacionController()
     response, status_code = controller.mover_orden(op_id, nuevo_estado, user_role)
     return jsonify(response), status_code
 
@@ -240,6 +243,7 @@ def consolidar_y_aprobar_api():
     data = request.get_json()
     usuario_id = get_jwt_identity()
 
+    controller = PlanificacionController()
     # Pasamos todos los datos al nuevo método del controlador
     response, status_code = controller.consolidar_y_aprobar_lote(
         op_ids=data.get('op_ids', []),

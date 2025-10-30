@@ -5,15 +5,12 @@ from app.controllers.insumo_controller import InsumoController
 from app.utils.decorators import permission_required
 
 receta_bp = Blueprint('receta', __name__, url_prefix='/recetas')
-controller = RecetaController()
-
-producto_controller = ProductoController()
-insumo_controller = InsumoController()
 
 @receta_bp.route('/')
 @permission_required(accion='consultar_ordenes_de_produccion')
 def listar():
     """Muestra una lista de todas las recetas."""
+    controller = RecetaController()
     recetas = controller.obtener_recetas()
     return render_template('recetas/listar.html', recetas=recetas)
 
@@ -21,6 +18,7 @@ def listar():
 @permission_required(accion='consultar_ordenes_de_produccion')
 def detalle(id):
     """Muestra el detalle de una receta, incluyendo sus ingredientes."""
+    controller = RecetaController()
     receta = controller.obtener_receta_con_ingredientes(id)
     if not receta:
         flash('Receta no encontrada.', 'error')
@@ -31,6 +29,9 @@ def detalle(id):
 @permission_required(accion='crear_orden_de_produccion')
 def nueva():
     """Gestiona la creación de una nueva receta con sus ingredientes."""
+    controller = RecetaController()
+    producto_controller = ProductoController()
+    insumo_controller = InsumoController()
     if request.method == 'POST':
         datos_receta = {
             'nombre': request.form.get('nombre'),

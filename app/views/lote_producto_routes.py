@@ -15,12 +15,10 @@ logger = logging.getLogger(__name__)
 # lote_producto_bp = Blueprint("lote_producto", __name__)
 lote_producto_bp = Blueprint("lote_producto", __name__, url_prefix="/lotes-productos")
 
-controller = LoteProductoController()
-producto_controller = ProductoController() # Para obtener la lista de productos
-
 @lote_producto_bp.route('/')
 @permission_required(accion='gestionar_lotes')
 def listar_lotes():
+    controller = LoteProductoController()
     response, _ = controller.obtener_lotes_para_vista()
     lotes = response.get('data', [])
 
@@ -33,6 +31,7 @@ def listar_lotes():
 @lote_producto_bp.route('/<int:id_lote>/detalle')
 @permission_required(accion='gestionar_lotes')
 def detalle_lote(id_lote):
+    controller = LoteProductoController()
     response, _ = controller.obtener_lote_por_id_para_vista(id_lote)
     if not response.get('success'):
         flash(response.get('error'), 'error')
@@ -45,6 +44,8 @@ def detalle_lote(id_lote):
 @jwt_required()
 @permission_required(accion='crear_control_de_calidad_por_lote')
 def nuevo_lote():
+    controller = LoteProductoController()
+    producto_controller = ProductoController()
     if request.method == 'POST':
         usuario_id = get_jwt_identity()
         response, status_code = controller.crear_lote_desde_formulario(request.form, usuario_id)
@@ -66,6 +67,7 @@ def nuevo_lote():
 def obtener_lotes():
     """Obtiene todos los lotes."""
     try:
+        controller = LoteProductoController()
         filtros = {}
         for key, value in request.args.items():
             if value and value != "":
@@ -83,6 +85,7 @@ def obtener_lotes():
 def obtener_lote_por_id(lote_id):
     """Obtiene un lote por su ID."""
     try:
+        controller = LoteProductoController()
         response, status = controller.obtener_lote_por_id(lote_id)
         return jsonify(response), status
 
@@ -102,6 +105,7 @@ def actualizar_lote(lote_id):
         if not data:
             return jsonify({"success": False, "error": "No se recibieron datos JSON"}), 400
 
+        controller = LoteProductoController()
         response, status = controller.actualizar_lote(lote_id, data)
         return jsonify(response), status
 
@@ -114,6 +118,7 @@ def actualizar_lote(lote_id):
 def eliminar_lote(lote_id):
     """Eliminación lógica de un lote."""
     try:
+        controller = LoteProductoController()
         response, status = controller.eliminar_lote_logico(lote_id)
         return jsonify(response), status
 
@@ -126,6 +131,7 @@ def eliminar_lote(lote_id):
 def obtener_lotes_disponibles():
     """Obtiene lotes disponibles."""
     try:
+        controller = LoteProductoController()
         response, status = controller.obtener_lotes({'estado': 'DISPONIBLE'})
         return jsonify(response), status
 
@@ -153,6 +159,7 @@ def cargar_lotes_excel():
             return redirect(request.url)
 
         if archivo and (archivo.filename.endswith('.xlsx') or archivo.filename.endswith('.xls')):
+            controller = LoteProductoController()
             response, status_code = controller.procesar_archivo_lotes(archivo)
             resultados = response.get('data') if response.get('success') else None
             error = response.get('error') if not response.get('success') else None
@@ -168,6 +175,7 @@ def cargar_lotes_excel():
 @permission_required(accion='crear_control_de_calidad_por_lote')
 def descargar_plantilla_lotes():
     """Descarga la plantilla de Excel para la carga masiva de lotes."""
+    controller = LoteProductoController()
     output = controller.generar_plantilla_lotes()
     if output:
         return send_file(

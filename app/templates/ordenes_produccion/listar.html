@@ -9,6 +9,10 @@
         <p class="text-muted mb-0">Listado general y seguimiento de órdenes</p>
     </div>
     <div class="btn-toolbar">
+        <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2"
+            title="Volver a la página anterior">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
         {% if has_permission('produccion_gestion_completa') %}
         <a href="{{ url_for('orden_produccion.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
@@ -28,30 +32,43 @@
                 <div class="col-12 d-flex">
                     {% set current_status = request.args.get('estado') %}
                     <div class="d-flex flex-wrap gap-2 align-items-center" role="group" aria-label="Filtro de Órdenes">
-                        <a href="{{ url_for('orden_produccion.listar', estado='') }}" class="btn btn-sm {% if not current_status %}btn-primary{% else %}btn-secondary{% endif %}">Todas</a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='') }}"
+                            class="btn btn-sm {% if not current_status %}btn-primary{% else %}btn-secondary{% endif %}">Todas</a>
                         <span class="text-white fw-bold mx-1">|</span>
-                        <a href="{{ url_for('orden_produccion.listar', estado='PENDIENTE') }}" class="btn btn-sm {% if current_status == 'PENDIENTE' %}btn-primary{% else %}btn-secondary{% endif %}">Pendientes</a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='PENDIENTE') }}"
+                            class="btn btn-sm {% if current_status == 'PENDIENTE' %}btn-primary{% else %}btn-secondary{% endif %}">Pendientes</a>
                         <i class="bi bi-arrow-right text-white mx-1"></i> {# Flecha #}
-                        <a href="{{ url_for('orden_produccion.listar', estado='EN ESPERA') }}" class="btn btn-sm {% if current_status == 'EN ESPERA' %}btn-primary{% else %}btn-secondary{% endif %}">En Espera</a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='EN ESPERA') }}"
+                            class="btn btn-sm {% if current_status == 'EN ESPERA' %}btn-primary{% else %}btn-secondary{% endif %}">En
+                            Espera</a>
                         <i class="bi bi-arrow-right text-white mx-1"></i> {# Flecha #}
-                        <a href="{{ url_for('orden_produccion.listar', estado='LISTA PARA PRODUCIR') }}" class="btn btn-sm {% if current_status == 'LISTA PARA PRODUCIR' %}btn-primary{% else %}btn-secondary{% endif %}">Listas Prod.</a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='LISTA PARA PRODUCIR') }}"
+                            class="btn btn-sm {% if current_status == 'LISTA PARA PRODUCIR' %}btn-primary{% else %}btn-secondary{% endif %}">Listas
+                            Prod.</a>
                         <i class="bi bi-arrow-right text-white mx-1"></i> {# Flecha #}
-                        <a href="{{ url_for('orden_produccion.listar', estado='EN_LINEA_1') }}" class="btn btn-sm {% if current_status == 'EN_LINEA_1' %}btn-primary{% else %}btn-secondary{% endif %}">L1</a>
-                        <a href="{{ url_for('orden_produccion.listar', estado='EN_LINEA_2') }}" class="btn btn-sm {% if current_status == 'EN_LINEA_2' %}btn-primary{% else %}btn-secondary{% endif %}">L2</a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='EN_LINEA_1') }}"
+                            class="btn btn-sm {% if current_status == 'EN_LINEA_1' %}btn-primary{% else %}btn-secondary{% endif %}">L1</a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='EN_LINEA_2') }}"
+                            class="btn btn-sm {% if current_status == 'EN_LINEA_2' %}btn-primary{% else %}btn-secondary{% endif %}">L2</a>
                         <i class="bi bi-arrow-right text-white mx-1"></i> {# Flecha #}
-                        <a href="{{ url_for('orden_produccion.listar', estado='EN_EMPAQUETADO') }}" class="btn btn-sm {% if current_status == 'EN_EMPAQUETADO' %}btn-primary{% else %}btn-secondary{% endif %}">Empaq.</a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='EN_EMPAQUETADO') }}"
+                            class="btn btn-sm {% if current_status == 'EN_EMPAQUETADO' %}btn-primary{% else %}btn-secondary{% endif %}">Empaq.</a>
                         <i class="bi bi-arrow-right text-white mx-1"></i> {# Flecha #}
-                        <a href="{{ url_for('orden_produccion.listar', estado='CONTROL_DE_CALIDAD') }}" class="btn btn-sm {% if current_status == 'CONTROL_DE_CALIDAD' %}btn-primary{% else %}btn-secondary{% endif %}">Calidad</a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='CONTROL_DE_CALIDAD') }}"
+                            class="btn btn-sm {% if current_status == 'CONTROL_DE_CALIDAD' %}btn-primary{% else %}btn-secondary{% endif %}">Calidad</a>
                         <i class="bi bi-arrow-right text-white mx-1"></i> {# Flecha #}
-                        <a href="{{ url_for('orden_produccion.listar', estado='COMPLETADA') }}" class="btn btn-sm {% if current_status == 'COMPLETADA' %}btn-primary{% else %}btn-secondary{% endif %}">Completadas</a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='COMPLETADA') }}"
+                            class="btn btn-sm {% if current_status == 'COMPLETADA' %}btn-primary{% else %}btn-secondary{% endif %}">Completadas</a>
                         <span class="text-white fw-bold mx-1">|</span>
-                        <a href="{{ url_for('orden_produccion.listar', estado='CONSOLIDADA') }}" class="btn btn-sm {% if current_status == 'CONSOLIDADA' %}btn-primary{% else %}btn-secondary{% endif %}">Consolidadas</a>
-                        <a href="{{ url_for('orden_produccion.listar', estado='CANCELADA') }}" class="btn btn-sm {% if current_status == 'CANCELADA' %}btn-primary{% else %}btn-secondary{% endif %}">Canceladas</a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='CONSOLIDADA') }}"
+                            class="btn btn-sm {% if current_status == 'CONSOLIDADA' %}btn-primary{% else %}btn-secondary{% endif %}">Consolidadas</a>
+                        <a href="{{ url_for('orden_produccion.listar', estado='CANCELADA') }}"
+                            class="btn btn-sm {% if current_status == 'CANCELADA' %}btn-primary{% else %}btn-secondary{% endif %}">Canceladas</a>
                     </div>
                 </div>
             </div>
-        </div>
     </div>
+</div>
 </div>
 
 <div class="row">
@@ -66,28 +83,29 @@
                             {{ orden.producto_nombre or 'Producto no definido' }}
                             {# Mostrar unidad de medida entre paréntesis si existe #}
                             {% if orden.producto_unidad_medida %}
-                                <span class="text-muted fw-normal ms-1">({{ orden.producto_unidad_medida }})</span>
+                            <span class="text-muted fw-normal ms-1">({{ orden.producto_unidad_medida }})</span>
                             {% endif %}
                         </h4>
                         {# Ya no mostramos la unidad de medida aquí abajo #}
                         {# {% if orden.producto_unidad_medida %}
-                            <small class="text-muted d-block mb-2">{{ orden.producto_unidad_medida }}</small>
+                        <small class="text-muted d-block mb-2">{{ orden.producto_unidad_medida }}</small>
                         {% endif %} #}
                     </div>
                     {# Badge de estado (sin cambios) #}
                     {% set estado_config = {
-                        'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
-                        'EN ESPERA': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
-                        'LISTA PARA PRODUCIR': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
-                        'EN_LINEA_1': {'class': 'bg-primary-soft text-primary', 'icon': 'diagram-3'},
-                        'EN_LINEA_2': {'class': 'bg-primary-soft text-primary', 'icon': 'diagram-3-fill'},
-                        'EN_EMPAQUETADO': {'class': 'bg-purple-soft text-purple', 'icon': 'box-seam'},
-                        'CONTROL_DE_CALIDAD': {'class': 'bg-cyan-soft text-cyan', 'icon': 'clipboard-check'},
-                        'CONSOLIDADA': {'class': 'bg-light text-muted', 'icon': 'link-45deg'},
-                        'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle-fill'},
-                        'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
+                    'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
+                    'EN ESPERA': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
+                    'LISTA PARA PRODUCIR': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
+                    'EN_LINEA_1': {'class': 'bg-primary-soft text-primary', 'icon': 'diagram-3'},
+                    'EN_LINEA_2': {'class': 'bg-primary-soft text-primary', 'icon': 'diagram-3-fill'},
+                    'EN_EMPAQUETADO': {'class': 'bg-purple-soft text-purple', 'icon': 'box-seam'},
+                    'CONTROL_DE_CALIDAD': {'class': 'bg-cyan-soft text-cyan', 'icon': 'clipboard-check'},
+                    'CONSOLIDADA': {'class': 'bg-light text-muted', 'icon': 'link-45deg'},
+                    'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle-fill'},
+                    'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
-                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':'question-circle'}) %}
+                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark',
+                    'icon':'question-circle'}) %}
                     <span class="badge {{ config.class }} flex-shrink-0 ms-2">
                         <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado.replace('_', ' ') }}
                     </span>
@@ -100,22 +118,29 @@
                     <span class="ms-3"><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b></span>
                     {# Fechas #}
                     {% if orden.fecha_inicio_planificada %}
-                    <span class="text-primary"><i class="bi bi-play-circle-fill"></i> Inicia: {{ orden.fecha_inicio_planificada }}</span>
+                    <span class="text-primary"><i class="bi bi-play-circle-fill"></i> Inicia: {{
+                        orden.fecha_inicio_planificada }}</span>
                     {% endif %}
                     {% if orden.fecha_meta %}
-                    <span class="text-danger fw-bold ms-3"><i class="bi bi-calendar-check-fill"></i> Meta: {{ orden.fecha_meta }}</span>
+                    <span class="text-danger fw-bold ms-3"><i class="bi bi-calendar-check-fill"></i> Meta: {{
+                        orden.fecha_meta }}</span>
                     {% endif %}
                 </div>
 
                 {# Origen (Pedido/Stock) #}
                 <div class="mb-2">
-                     <span class="fw-bold"><i class="bi bi-link-45deg me-1"></i>Origen:</span>
-                     {% if orden.pedidos_asociados %}
-                        {% set primer_pedido = orden.pedidos_asociados[0] %}
-                        <a href="{{ url_for('orden_venta.detalle', id=primer_pedido.id) }}" class="badge bg-light text-dark me-1" title="Pedido: {{ primer_pedido.nombre_cliente or 'N/A' }} | Solicitado: {{ primer_pedido.fecha_solicitud or 'N/A' }}"> PED-{{ primer_pedido.id }} </a>
-                        {% if orden.pedidos_asociados|length > 1 %}<span class="badge bg-light text-dark" title="Consolidada desde {{ orden.pedidos_asociados|length }} pedidos">+{{ orden.pedidos_asociados|length - 1 }}</span>{% endif %}
-                     {% elif orden.super_op_id %}<span class="badge bg-light text-dark">Consolidada (Super OP)</span>
-                     {% else %}<span class="badge bg-light text-dark">Stock General</span>{% endif %}
+                    <span class="fw-bold"><i class="bi bi-link-45deg me-1"></i>Origen:</span>
+                    {% if orden.pedidos_asociados %}
+                    {% set primer_pedido = orden.pedidos_asociados[0] %}
+                    <a href="{{ url_for('orden_venta.detalle', id=primer_pedido.id) }}"
+                        class="badge bg-light text-dark me-1"
+                        title="Pedido: {{ primer_pedido.nombre_cliente or 'N/A' }} | Solicitado: {{ primer_pedido.fecha_solicitud or 'N/A' }}">
+                        PED-{{ primer_pedido.id }} </a>
+                    {% if orden.pedidos_asociados|length > 1 %}<span class="badge bg-light text-dark"
+                        title="Consolidada desde {{ orden.pedidos_asociados|length }} pedidos">+{{
+                        orden.pedidos_asociados|length - 1 }}</span>{% endif %}
+                    {% elif orden.super_op_id %}<span class="badge bg-light text-dark">Consolidada (Super OP)</span>
+                    {% else %}<span class="badge bg-light text-dark">Stock General</span>{% endif %}
                 </div>
 
                 {# Contenedor mt-auto #}
@@ -123,38 +148,44 @@
                     {# Asignaciones #}
                     <div class="card-assignment-details mb-2">
                         {% if orden.linea_asignada or orden.supervisor_nombre or orden.operario_nombre %}
-                            <hr class="card-divider my-1">
-                            {% if orden.linea_asignada %}<span class="me-2" title="Línea Asignada"><i class="bi bi-diagram-3-fill text-primary"></i> <b>Línea:</b> {{ orden.linea_asignada }}</span>{% endif %}
-                            {% if orden.supervisor_nombre %}<span class="me-2" title="Supervisor Asignado"><i class="bi bi-person-badge-fill text-info"></i> <b>Sup:</b> {{ orden.supervisor_nombre or 'N/A' }}</span>{% endif %}
-                            {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary" title="Operario Asignado"></i> <b>Op:</b> {{ orden.operario_nombre or 'N/A' }}</span>{% endif %}
+                        <hr class="card-divider my-1">
+                        {% if orden.linea_asignada %}<span class="me-2" title="Línea Asignada"><i
+                                class="bi bi-diagram-3-fill text-primary"></i> <b>Línea:</b> {{ orden.linea_asignada
+                            }}</span>{% endif %}
+                        {% if orden.supervisor_nombre %}<span class="me-2" title="Supervisor Asignado"><i
+                                class="bi bi-person-badge-fill text-info"></i> <b>Sup:</b> {{ orden.supervisor_nombre or
+                            'N/A' }}</span>{% endif %}
+                        {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary"
+                                title="Operario Asignado"></i> <b>Op:</b> {{ orden.operario_nombre or 'N/A' }}</span>{%
+                        endif %}
                         {% else %}
-                             <hr class="card-divider my-1" style="border-top-style: dashed; opacity: 0.3;">
-                             <span class="text-muted fst-italic small">Sin asignaciones</span>
+                        <hr class="card-divider my-1" style="border-top-style: dashed; opacity: 0.3;">
+                        <span class="text-muted fst-italic small">Sin asignaciones</span>
                         {% endif %}
                     </div>
 
                     {# Acciones (SOLO DETALLE) #}
                     <div class="d-flex justify-content-end align-items-center action-buttons pt-2">
                         <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}"
-                           class="btn btn-sm btn-outline-primary" title="Ver Detalle">
+                            class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                             <i class="bi bi-eye"></i> Detalle
                         </a>
                     </div>
-                 </div> {# Fin mt-auto #}
+                </div> {# Fin mt-auto #}
             </div> {# Fin card-body #}
         </div> {# Fin card #}
     </div> {# Fin col #}
     {% else %}
-        {# Mensaje si no hay órdenes #}
-        <div class="col-12">
-            <div class="card bg-light border-0">
-                <div class="card-body text-center py-5">
-                    <i class="bi bi-info-circle fs-1 opacity-25 mb-3"></i>
-                    <h4 class="card-title">No se encontraron órdenes de producción</h4>
-                    <p class="text-muted mb-0">No hay órdenes que coincidan con los filtros seleccionados.</p>
-                </div>
+    {# Mensaje si no hay órdenes #}
+    <div class="col-12">
+        <div class="card bg-light border-0">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-info-circle fs-1 opacity-25 mb-3"></i>
+                <h4 class="card-title">No se encontraron órdenes de producción</h4>
+                <p class="text-muted mb-0">No hay órdenes que coincidan con los filtros seleccionados.</p>
             </div>
         </div>
+    </div>
     {% endfor %}
 </div>
 

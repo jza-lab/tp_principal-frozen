@@ -6,9 +6,6 @@ from app.controllers.producto_controller import ProductoController
 
 
 alertas_bp = Blueprint('alertas', __name__, url_prefix='/alertas')
-insumo_controller = InsumoController()
-config_controller = ConfiguracionController()
-producto_controller = ProductoController()
 
 @alertas_bp.route('/insumos', methods=['GET'])
 @permission_required(accion='ver_alertas')
@@ -20,6 +17,7 @@ def listar_insumos_alertas():
     # si esa página también tiene pestañas)
     active_tab = request.args.get('tab', 'default') # Ejemplo por si lo necesitás
     
+    insumo_controller = InsumoController()
     response, _ = insumo_controller.obtener_insumos()
     if not response.get('success'):
         flash('Error al cargar los insumos.', 'error')
@@ -54,6 +52,7 @@ def actualizar_stock_min_max():
             flash('No se proporcionaron datos para actualizar.', 'warning')
             return redirect(url_for('alertas.listar_insumos_alertas'))
             
+        insumo_controller = InsumoController()
         response, status_code = insumo_controller.actualizar_insumo(insumo_id, update_data)
 
         if status_code == 200:
@@ -75,6 +74,7 @@ def configurar_alertas_lotes():
     """
     Permite configurar el umbral de días para alertas de vencimiento de lotes.
     """
+    config_controller = ConfiguracionController()
     if request.method == 'POST':
         dias_vencimiento = request.form.get('dias_vencimiento')
         try:
@@ -105,6 +105,7 @@ def listar_productos_alertas():
     # Si no se proporciona, 'stock-min' es el valor por defecto.
     active_tab = request.args.get('tab', 'stock-min')
     
+    producto_controller = ProductoController()
     response, _ = producto_controller.obtener_todos_los_productos()
     if not response.get('success'):
         flash('Error al cargar los productos.', 'error')
@@ -131,6 +132,7 @@ def actualizar_stock_min_producto():
 
         stock_min = int(stock_min_str)
         
+        producto_controller = ProductoController()
         response, status_code = producto_controller.actualizar_stock_min_produccion(int(producto_id), stock_min)
 
         if status_code == 200:
@@ -163,6 +165,7 @@ def actualizar_cantidad_maxima_x_pedido():
 
         cantidad_maxima = int(cantidad_maxima_str)
         
+        producto_controller = ProductoController()
         response, status_code = producto_controller.actualizar_cantidad_maxima_x_pedido(int(producto_id), cantidad_maxima)
 
         if status_code == 200:

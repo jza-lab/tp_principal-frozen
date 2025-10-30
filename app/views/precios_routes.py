@@ -14,12 +14,6 @@ from app.utils.decorators import permission_required
 precios_bp = Blueprint('precios', __name__)
 logger = logging.getLogger(__name__)
 
-# Instancias de controllers
-proveedor_controller = ProveedorController()
-insumo_controller = InsumoController()
-historial_controller = HistorialPreciosController()
-producto_controller = ProductoController()
-
 @precios_bp.route('/actualizar-precios')
 @permission_required(accion='admin_actualizar_precios_excel')
 def index():
@@ -45,8 +39,12 @@ def cargar_archivo_precios_proveedor():
         if not archivo.filename.lower().endswith(('.xlsx', '.xls')):
             return jsonify({'success': False, 'error': 'Solo se aceptan archivos Excel'}), 400
 
+        proveedor_controller = ProveedorController()
+        insumo_controller = InsumoController()
+        historial_controller = HistorialPreciosController()
+        producto_controller = ProductoController()
         # Procesar archivo (ya devuelve formato frontend)
-        resultados = procesar_archivo_proveedor(archivo, usuario)
+        resultados = procesar_archivo_proveedor(archivo, usuario, proveedor_controller, insumo_controller, historial_controller, producto_controller)
 
         # Generar reporte
         reporte = generar_reporte_consolidado(resultados)
@@ -118,7 +116,7 @@ def generar_reporte_consolidado(detalles):
         'fecha_procesamiento': datetime.now().isoformat()
     }
 
-def procesar_archivo_proveedor(archivo, usuario):
+def procesar_archivo_proveedor(archivo, usuario, proveedor_controller, insumo_controller, historial_controller, producto_controller):
     """
     Procesa el archivo Excel usando los controllers.
     """
@@ -161,7 +159,7 @@ def procesar_archivo_proveedor(archivo, usuario):
             # --- INICIO DE LA CORRECCIÓN ---
 
             # 1. Obtenemos el resultado PARCIAL del procesamiento del precio.
-            resultado_parcial = procesar_actualizacion_precio(insumo, proveedor, fila, usuario)
+            resultado_parcial = procesar_actualizacion_precio(insumo, proveedor, fila, usuario, insumo_controller, historial_controller)
 
             # 2. Creamos el diccionario COMPLETO que el frontend espera.
             resultado_completo = {
@@ -196,7 +194,7 @@ def procesar_archivo_proveedor(archivo, usuario):
             'mensaje': f'Error crítico procesando el archivo: {str(e)}'
         }]
 
-def procesar_actualizacion_precio(insumo, proveedor, fila, usuario):
+def procesar_actualizacion_precio(insumo, proveedor, fila, usuario, insumo_controller, historial_controller):
     """
     Procesa la actualización de precio usando controllers - VERSIÓN CON FORMATO FRONTEND
     """
@@ -285,6 +283,7 @@ def generar_reporte_consolidado(resultados):
 @permission_required(accion='admin_actualizar_precios_excel')
 def descargar_plantilla():
     """Descarga plantilla para carga de precios"""
+    insumo_controller = InsumoController()
     # Obtener catálogo usando controller
     catalogo = insumo_controller.obtener_catalogo_activo()
 

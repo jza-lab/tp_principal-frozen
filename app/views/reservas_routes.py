@@ -3,12 +3,12 @@ from app.controllers.reservas_controller import ReservasController
 from app.utils.decorators import permission_required
 
 reservas_bp = Blueprint('reservas', __name__, url_prefix='/reservas')
-controller = ReservasController()
 
 @reservas_bp.route('/')
 @permission_required(accion='consultar_trazabilidad_completa')
 def listar():
     """Muestra la vista unificada de trazabilidad de reservas."""
+    controller = ReservasController()
     response, status_code = controller.obtener_trazabilidad_reservas()
 
     reservas = []

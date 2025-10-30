@@ -4,7 +4,7 @@
 {% if orden %}Editar Orden de Compra {{ orden.codigo_oc }}{% else %}Nueva Orden de Compra{% endif %}
 {% endblock %}
 
-{% block app_content %}t %}
+{% block app_content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">
@@ -19,7 +19,7 @@
         </p>
     </div>
     <div class="btn-toolbar">
-        <a href="{{ url_for('orden_compra.listar') }}" class="btn btn-outline-secondary">
+        <a href="#" onclick="history.back();" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i>Volver
         </a>
     </div>

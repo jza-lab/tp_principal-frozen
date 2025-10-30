@@ -15,21 +15,18 @@ from app.models.reclamo import ReclamoModel
 # Blueprint para el dashboard de administración
 admin_dashboard_bp = Blueprint('admin_dashboard', __name__, url_prefix='/admin')
 
-# Instanciar controladores
-usuario_controller = UsuarioController()
-orden_produccion_controller = OrdenProduccionController()
-orden_venta_controller = PedidoController()
-notificacion_controller = NotificacionController()
-inventario_controller = InventarioController()
-lote_producto_controller = LoteProductoController()
-cliente_controller = ClienteController() # (NUEVO)
-alertas_stock_count = inventario_controller.obtener_conteo_alertas_stock()
-
 @admin_dashboard_bp.route('/')
 @jwt_required()
 @permission_required(accion='dashboard_acceder')
 def index():
     """Página principal del panel de administración."""
+    usuario_controller = UsuarioController()
+    orden_produccion_controller = OrdenProduccionController()
+    orden_venta_controller = PedidoController()
+    notificacion_controller = NotificacionController()
+    inventario_controller = InventarioController()
+    lote_producto_controller = LoteProductoController()
+    cliente_controller = ClienteController()
     current_user = get_jwt()
     user_roles = current_user.get('roles', [])
     user_id = current_user.get('id_usuario', None)

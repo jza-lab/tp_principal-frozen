@@ -5,7 +5,6 @@ from flask_wtf import FlaskForm
 
 
 reclamo_bp = Blueprint('reclamo', __name__, url_prefix='/api/reclamos')
-controller = ReclamoController()
 
 @reclamo_bp.route('/', methods=['POST'])
 def crear_reclamo():
@@ -22,6 +21,7 @@ def crear_reclamo():
     if not cliente_id:
         return jsonify({"success": False, "error": "Sesión no válida."}), 401
     
+    controller = ReclamoController()
     respuesta, status_code = controller.crear_reclamo(datos_json, cliente_id)
     
     return jsonify(respuesta), status_code
@@ -35,6 +35,7 @@ def obtener_reclamos():
     if not cliente_id:
         return jsonify({"success": False, "error": "Sesión no válida."}), 401
         
+    controller = ReclamoController()
     respuesta, status_code = controller.obtener_reclamos_por_cliente(cliente_id)
     
     return jsonify(respuesta), status_code
@@ -51,6 +52,7 @@ def obtener_detalle_reclamo(reclamo_id):
         flash('Por favor, inicia sesión para ver tus reclamos.', 'info')
         return redirect(url_for('cliente.login'))
         
+    controller = ReclamoController()
     respuesta, status_code = controller.obtener_detalle_reclamo(reclamo_id)
     
     if not respuesta.get('success'):
@@ -81,6 +83,7 @@ def responder_reclamo_cliente(reclamo_id):
         flash('La respuesta no puede estar vacía.', 'error')
         return redirect(url_for('reclamo.obtener_detalle_reclamo', reclamo_id=reclamo_id))
 
+    controller = ReclamoController()
     # Verificar que el reclamo pertenece al cliente
     reclamo_resp, _ = controller.obtener_detalle_reclamo(reclamo_id)
     if not reclamo_resp.get('success') or reclamo_resp['data'].get('cliente_id') != cliente_id:
@@ -106,6 +109,7 @@ def resolver_reclamo_cliente(reclamo_id):
         flash('Sesión expirada.', 'error')
         return redirect(url_for('cliente.login'))
 
+    controller = ReclamoController()
     # Verificar que el reclamo pertenece al cliente
     reclamo_resp, _ = controller.obtener_detalle_reclamo(reclamo_id)
     if not reclamo_resp.get('success') or reclamo_resp['data'].get('cliente_id') != cliente_id:

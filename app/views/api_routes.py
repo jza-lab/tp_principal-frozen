@@ -6,10 +6,6 @@ from app.utils.decorators import permission_any_of, permission_required
 # Blueprint para endpoints de API interna
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
-# Instanciar controladores
-usuario_controller = UsuarioController()
-facial_controller = FacialController()
-
 @api_bp.route('/usuarios/actividad_totem', methods=['GET'])
 @permission_required(accion='consultar_logs_o_auditoria')
 def obtener_actividad_totem():
@@ -19,6 +15,7 @@ def obtener_actividad_totem():
         'fecha_desde': request.args.get('fecha_desde'),
         'fecha_hasta': request.args.get('fecha_hasta')
     }
+    usuario_controller = UsuarioController()
     resultado = usuario_controller.obtener_actividad_totem(filtros)
     if resultado.get('success'):
         return jsonify(success=True, data=resultado.get('data', []))
@@ -33,6 +30,7 @@ def obtener_actividad_web():
         'fecha_desde': request.args.get('fecha_desde'),
         'fecha_hasta': request.args.get('fecha_hasta')
     }
+    usuario_controller = UsuarioController()
     resultado = usuario_controller.obtener_actividad_web(filtros)
     if resultado.get('success'):
         return jsonify(success=True, data=resultado.get('data', []))
@@ -50,6 +48,7 @@ def validar_campo_usuario():
     if not field or not value:
         return jsonify({'valid': False, 'error': 'Campo o valor no proporcionado.'}), 400
 
+    usuario_controller = UsuarioController()
     resultado = usuario_controller.validar_campo_unico(field, value, user_id)
     return jsonify(resultado)
 
@@ -63,6 +62,7 @@ def validar_rostro():
     if not image_data:
         return jsonify({'valid': False, 'message': 'No se proporcionó imagen.'}), 400
     
+    facial_controller = FacialController()
     resultado = facial_controller.validar_y_codificar_rostro(image_data)
     if resultado.get('success'):
         return jsonify({'valid': True, 'message': 'Rostro válido y disponible.'})
@@ -81,6 +81,7 @@ def validar_direccion():
     if not all([calle, altura, localidad, provincia]):
         return jsonify(success=False, message='Todos los campos son requeridos.'), 400
 
+    usuario_controller = UsuarioController()
     georef_controller = usuario_controller.usuario_direccion_controller
     full_street = f"{calle} {altura}"
     
@@ -101,6 +102,7 @@ def get_turnos_para_autorizacion():
     if not tipo_autorizacion:
         return jsonify({'success': False, 'error': 'El parámetro "tipo" es requerido.'}), 400
 
+    usuario_controller = UsuarioController()
     resultado = usuario_controller.obtener_turnos_para_autorizacion(tipo_autorizacion)
     
     if resultado.get('success'):
@@ -119,6 +121,7 @@ def buscar_usuario_por_legajo():
     if not legajo:
         return jsonify({'success': False, 'error': 'El parámetro "legajo" es requerido.'}), 400
 
+    usuario_controller = UsuarioController()
     resultado = usuario_controller.buscar_por_legajo_para_api(legajo)
     
     if resultado.get('success'):

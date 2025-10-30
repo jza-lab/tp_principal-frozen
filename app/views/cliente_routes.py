@@ -5,14 +5,13 @@ from app.controllers.reclamo_controller import ReclamoController
 from app.controllers.consulta_controller import ConsultaController
 
 cliente_bp = Blueprint('cliente', __name__, url_prefix='/cliente')
-cliente_controller = ClienteController()
-reclamo_controller = ReclamoController()
 
 @cliente_bp.route('/register', methods=['GET', 'POST'])
 @permission_any_of('admin_gestion_sistema', 'admin_supervision')
 def register():
     try:
         if request.method == 'PUT' or request.method == 'POST':
+            cliente_controller = ClienteController()
             datos_json = request.get_json(force=True) 
             if not datos_json:
                 return jsonify(
@@ -29,6 +28,7 @@ def register():
 @cliente_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
+        cliente_controller = ClienteController()
         email = request.form.get('email')
         password = request.form.get('password')
         response, status_code = cliente_controller.autenticar_cliente(email, password)
@@ -65,6 +65,8 @@ def perfil():
         flash('Por favor, inicia sesión para ver tu perfil.', 'info')
         return redirect(url_for('cliente.login'))
 
+    cliente_controller = ClienteController()
+    reclamo_controller = ReclamoController()
     cliente_id = session['cliente_id']
     response, status_code = cliente_controller.obtener_perfil_cliente(cliente_id)
 
