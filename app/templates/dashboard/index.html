@@ -346,6 +346,74 @@
     </div>
     {% endif %}
 
+    {# START: Supervisor de Calidad Indicators #}
+    {% if has_permission('controlar_calidad_lotes') or has_permission('produccion_control_proceso') %}
+        {# Lotes pendientes de control #}
+        <div class="stat-card-item">
+            <div class="card stat-card h-100 border-0 shadow-sm">
+                <a href="{{ url_for('lote_producto.listar_lotes', estado='PENDIENTE_CALIDAD') }}" style="text-decoration: none;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="stat-label mb-1 text-muted">Lotes Pendientes de Control</div>
+                                <div class="stat-value text-warning">{{ lotes_pendientes_control }}</div>
+                            </div>
+                            <div class="text-warning"><i class="bi bi-clipboard-data fs-1"></i></div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+        {# Productos Rechazados #}
+        <div class="stat-card-item">
+            <div class="card stat-card h-100 border-0 shadow-sm">
+                <a href="{{ url_for('lote_producto.listar_lotes', estado='CUARENTENA') }}" style="text-decoration: none;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="stat-label mb-1 text-muted">Productos Rechazados</div>
+                                <div class="stat-value text-danger">{{ productos_rechazados }}</div>
+                            </div>
+                            <div class="text-danger"><i class="bi bi-x-circle fs-1"></i></div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+        {# Lotes sin trazabilidad #}
+        <div class="stat-card-item">
+            <div class="card stat-card h-100 border-0 shadow-sm">
+                <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="stat-label mb-1 text-muted">Lotes sin Trazabilidad</div>
+                                <div class="stat-value text-info">{{ lotes_sin_trazabilidad }}</div>
+                            </div>
+                            <div class="text-info"><i class="bi bi-diagram-3 fs-1"></i></div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+        {# Órdenes reabiertas #}
+        <div class="stat-card-item">
+            <div class="card stat-card h-100 border-0 shadow-sm">
+                <a href="{{ url_for('orden_produccion.listar', estado='REPROCESO') }}" style="text-decoration: none;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="stat-label mb-1 text-muted">Órdenes Reabiertas</div>
+                                <div class="stat-value text-primary">{{ ordenes_reabiertas }}</div>
+                            </div>
+                            <div class="text-primary"><i class="bi bi-arrow-counterclockwise fs-1"></i></div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    {% endif %}
+    {# END: Supervisor de Calidad Indicators #}
     </div>
 
     <button id="prevAlertBtn" class="carousel-nav-btn prev-btn" aria-label="Anterior">

@@ -34,7 +34,8 @@
 </div>
 
 {# --- PLAN MAESTRO --- #}
-{% if current_user.rol != 'OPERARIO' and current_user.rol != 'SUPERVISOR_CALDIAD'  %}
+{# CORRECTO #}
+{% if current_user.rol != 'OPERARIO' and current_user.rol != 'SUPERVISOR_CALIDAD'  %}
 <div id="planificador-pendientes">
     <div class="planificador-header d-flex justify-content-between align-items-center">
         <span>Plan Maestro (Próximos {{ mps_data.dias_horizonte }} días: {{ mps_data.inicio_horizonte }} al {{ mps_data.fin_horizonte }})</span>

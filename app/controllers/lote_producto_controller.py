@@ -1031,3 +1031,25 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error en actualizar_lote_desde_formulario: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
+
+    def obtener_conteo_lotes_por_estado(self, estado: str) -> int:
+        """Obtiene el conteo de lotes en un estado específico."""
+        try:
+            result = self.model.find_all(filtros={'estado': estado}, count_only=True)
+            if result.get('success'):
+                return result.get('data', 0)
+            return 0
+        except Exception as e:
+            logger.error(f"Error contando lotes por estado '{estado}': {str(e)}")
+            return 0
+
+    def obtener_conteo_lotes_sin_trazabilidad(self) -> int:
+        """Obtiene el conteo de lotes sin una orden de producción asociada."""
+        try:
+            result = self.model.find_all(filtros={'orden_produccion_id': ('is', None)}, count_only=True)
+            if result.get('success'):
+                return result.get('data', 0)
+            return 0
+        except Exception as e:
+            logger.error(f"Error contando lotes sin trazabilidad: {str(e)}")
+            return 0

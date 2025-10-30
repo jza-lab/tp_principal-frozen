@@ -839,3 +839,14 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico en confirmar_inicio_y_aprobar para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
+
+    def obtener_conteo_ordenes_reabiertas(self) -> int:
+        """Obtiene el conteo de órdenes en estado de reproceso."""
+        try:
+            result = self.model.find_all(filtros={'estado': 'REPROCESO'}, count_only=True)
+            if result.get('success'):
+                return result.get('data', 0)
+            return 0
+        except Exception as e:
+            logger.error(f"Error contando órdenes en reproceso: {str(e)}")
+            return 0

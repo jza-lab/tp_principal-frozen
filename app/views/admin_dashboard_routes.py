@@ -107,6 +107,12 @@ def index():
     consulta_controller = ConsultaController()
     conteo_consultas = consulta_controller.obtener_conteo_consultas_pendientes()
     
+    # Nuevos indicadores para Supervisor de Calidad
+    lotes_pendientes_control = lote_producto_controller.obtener_conteo_lotes_por_estado('PENDIENTE_CALIDAD')
+    productos_rechazados = lote_producto_controller.obtener_conteo_lotes_por_estado('CUARENTENA')
+    lotes_sin_trazabilidad = lote_producto_controller.obtener_conteo_lotes_sin_trazabilidad()
+    ordenes_reabiertas = orden_produccion_controller.obtener_conteo_ordenes_reabiertas()
+
     return render_template('dashboard/index.html', 
                            conteo_consultas_pendientes=conteo_consultas,
                            asistencia=asistencia,
@@ -128,4 +134,8 @@ def index():
                            conteo_reclamos_pendientes=conteo_reclamos,
                            lotes_producto_vencimiento_count=lotes_producto_vencimiento_count,
                            pending_client_count=pending_client_count,
-                           is_operario=is_operario)
+                           is_operario=is_operario,
+                           lotes_pendientes_control=lotes_pendientes_control,
+                           productos_rechazados=productos_rechazados,
+                           lotes_sin_trazabilidad=lotes_sin_trazabilidad,
+                           ordenes_reabiertas=ordenes_reabiertas)

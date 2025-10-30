@@ -28,7 +28,7 @@ ROLE_MAP = {
     9: 'DEV',
 }
 
-# Version 2.2 de Permisos - Ajustes para SUPERVISOR
+# Version 2.3 de Permisos - Ajustes para SUPERVISOR_CALIDAD
 CANONICAL_PERMISSION_MAP = {
     # Módulo: Acceso General
     'dashboard_acceder': ['ADMIN', 'VENDEDOR', 'OPERARIO', 'SUPERVISOR', 'SUPERVISOR_CALIDAD', 'RRHH', 'GERENTE', 'IT'],
@@ -52,9 +52,9 @@ CANONICAL_PERMISSION_MAP = {
     'crear_orden_de_produccion': ['SUPERVISOR'],
     'aprobar_orden_de_produccion': ['SUPERVISOR'],
     'gestionar_orden_de_produccion': ['SUPERVISOR'], # Editar, cambiar estado, etc.
-    'produccion_ejecucion': ['OPERARIO','SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Asignar operarios, mover en kanban
+    'produccion_ejecucion': ['OPERARIO','SUPERVISOR'], # Asignar operarios, mover en kanban
     'produccion_consulta': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
-    'consultar_plan_de_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
+    'consultar_plan_de_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE'],
 
     # Módulo: Almacén e Inventario
     'gestionar_catalogo_insumos': ['SUPERVISOR', 'ADMIN'], # Crear, editar, inhabilitar insumos
@@ -63,19 +63,21 @@ CANONICAL_PERMISSION_MAP = {
     'almacen_consulta_stock': [ 'VENDEDOR', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'registrar_ingreso_de_materia_prima': ['ADMIN'],
     'almacen_ver_registrar': ['VENDEDOR', 'SUPERVISOR'],
-    'almacen_ver_insumos': ['OPERARIO', 'SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE', 'VENDEDOR'],
+    'almacen_ver_insumos': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'VENDEDOR'],
 
     # Módulo: Calidad
     'controlar_calidad_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Realizar controles de calidad
     'aprobar_lotes_calidad': ['SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'], # Aprobación final de calidad
     'produccion_control_proceso': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE'],
+    'registrar_desperdicios': ['SUPERVISOR_CALIDAD'],
+    'consultar_reportes_calidad': ['SUPERVISOR_CALIDAD'],
 
     # Módulo: Órdenes de Compra (OC) y Logística
     'crear_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
-    'consultar_ordenes_de_compra': ['SUPERVISOR', 'ADMIN', 'GERENTE', 'VENDEDOR','SUPERVISOR_CALIDAD'],
+    'consultar_ordenes_de_compra': ['SUPERVISOR', 'ADMIN', 'GERENTE', 'VENDEDOR'],
     'editar_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
-    'aprobar_orden_de_compra': ['GERENTE', 'SUPERVISOR_CALIDAD'],
-    'gestionar_recepcion_orden_compra': ['SUPERVISOR_CALIDAD'],
+    'aprobar_orden_de_compra': ['GERENTE'],
+    'gestionar_recepcion_orden_compra': [],
     'logistica_recepcion_oc': ['ADMIN', 'SUPERVISOR', 'GERENTE'],
     'logistica_supervision': ['SUPERVISOR', 'GERENTE'],
 
