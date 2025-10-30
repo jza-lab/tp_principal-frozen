@@ -25,7 +25,7 @@ insumos_bp = Blueprint("insumos_api", __name__, url_prefix="/api/insumos")
 
 
 @insumos_bp.route("/catalogo/nuevo", methods=["GET", "POST"])
-@permission_required(accion='gestionar_catalogo_de_insumos')
+@permission_required(accion='gestionar_catalogo_insumos')
 def crear_insumo():
     try:
         insumo_controller = InsumoController()
@@ -90,7 +90,7 @@ def obtener_insumo_por_id(id_insumo):
 @insumos_bp.route(
     "/catalogo/actualizar/<string:id_insumo>", methods=["GET", "POST", "PUT"]
 )
-@permission_required(accion='gestionar_catalogo_de_insumos')
+@permission_required(accion='gestionar_catalogo_insumos')
 def actualizar_insumo(id_insumo):
     try:
         insumo_controller = InsumoController()
@@ -120,7 +120,7 @@ def actualizar_insumo(id_insumo):
 
 
 @insumos_bp.route("/catalogo/eliminar/<string:id_insumo>", methods=["DELETE"])
-@permission_required(accion='gestionar_catalogo_de_insumos')
+@permission_required(accion='gestionar_catalogo_insumos')
 def eliminar_insumo(id_insumo):
     try:
         insumo_controller = InsumoController()
@@ -134,7 +134,7 @@ def eliminar_insumo(id_insumo):
 
 
 @insumos_bp.route("/catalogo/habilitar/<string:id_insumo>", methods=["POST"])
-@permission_required(accion='gestionar_catalogo_de_insumos')
+@permission_required(accion='gestionar_catalogo_insumos')
 def habilitar_insumo(id_insumo):
     try:
         insumo_controller = InsumoController()
