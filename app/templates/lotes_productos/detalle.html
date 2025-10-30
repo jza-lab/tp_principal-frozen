@@ -15,8 +15,17 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Información del Lote</h5>
-        <span class="badge bg-success fs-6">{{ lote.estado | title }}</span>
-    </div>
+        
+        {% set estado_color = 'success' %}
+        {% if lote.estado == 'CUARENTENA' %}
+            {% set estado_color = 'warning text-dark' %}
+        {% elif lote.estado == 'AGOTADO' or lote.estado == 'VENCIDO' %}
+            {% set estado_color = 'danger' %}
+        {% elif lote.estado == 'RETIRADO' %}
+            {% set estado_color = 'secondary' %}
+        {% endif %}
+        <span class="badge bg-{{ estado_color }} fs-6">{{ lote.estado | title }}</span>
+        </div>
     <div class="card-body">
         <div class="row g-4">
             
@@ -44,12 +53,11 @@
                 <div class="d-flex align-items-center border-start border-3 border-success ps-3">
                     <i class="bi bi-arrow-clockwise fs-4 text-success me-3"></i>
                     <div>
-                        <div class="small text-muted">Cantidad Actual</div>
+                        <div class="small text-muted">Cantidad Disponible (Actual)</div>
                         <div class="fw-bold h5 mb-0">{{ lote.cantidad_actual | round(2) }} unidades</div>
                     </div>
                 </div>
             </div>
-            
             <div class="col-md-4">
                 <div class="d-flex align-items-center">
                     <i class="bi bi-calendar-event fs-4 text-muted me-3"></i>
@@ -69,8 +77,26 @@
                     </div>
                 </div>
             </div>
-            
+
+            {% if lote.cantidad_en_cuarentena and lote.cantidad_en_cuarentena > 0 %}
+            <div class="col-md-4">
+                <div class="d-flex align-items-center border-start border-3 border-warning ps-3">
+                    <i class="bi bi-shield-lock-fill fs-4 text-warning me-3"></i>
+                    <div>
+                        <div class="small text-muted">Cantidad en Cuarentena</div>
+                        <div class="fw-bold h5 mb-0">{{ lote.cantidad_en_cuarentena | round(2) }} unidades</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            </div> {% if lote.estado == 'CUARENTENA' and lote.motivo_cuarentena %}
+        <hr class="my-4">
+        <div class="row">
+            <div class="col-12">
+                <h5><i class="bi bi-info-circle-fill text-warning me-2"></i>Motivo de la Cuarentena</h5>
+                <p class="card-text bg-light p-3 rounded" style="white-space: pre-wrap;">{{ lote.motivo_cuarentena }}</p>
+            </div>
         </div>
-    </div>
-</div>
+        {% endif %}
+        </div> </div>
 {% endblock %}

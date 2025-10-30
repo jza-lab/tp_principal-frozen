@@ -1,0 +1,165 @@
+{% extends 'layouts/base.html' %}
+{% block title %}Editar Lote - {{ lote.numero_lote }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">Editar Lote de Producto</h1>
+        <p class="text-muted mb-0">Lote N°: <code class="text-muted">{{ lote.numero_lote or 'N/A' }}</code></p>
+    </div>
+    <a href="{{ url_for('lote_producto.listar_lotes') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Volver al Inventario
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 offset-lg-2">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Datos del Lote</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('lote_producto.editar_lote', id_lote=lote.id_lote) }}">
+                    
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                    
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Producto</label>
+                            <input type="text" class="form-control" value="{{ lote.producto_nombre }}" disabled readonly>
+                            <div class="form-text">El producto de un lote no se puede cambiar.</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="numero_lote" class="form-label">Número de Lote</label>
+                            <input type="text" class="form-control" id="numero_lote" name="numero_lote" value="{{ lote.numero_lote }}" required>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="fecha_vencimiento" class="form-label">Fecha de Vencimiento</label>
+                            <input type="date" class="form-control" id="fecha_vencimiento" name="fecha_vencimiento"
+                                   value="{{ lote.fecha_vencimiento.strftime('%Y-%m-%d') if lote.fecha_vencimiento else '' }}">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Cantidad Inicial</label>
+                            <input type="number" class="form-control" value="{{ lote.cantidad_inicial | round(2) }}" disabled readonly>
+                            <div class="form-text">No editable. Gestionada por producción.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Cantidad Actual (Disponible)</label>
+                            <input type="number" class="form-control" value="{{ lote.cantidad_actual | round(2) }}" disabled readonly>
+                            <div class="form-text">No editable. Gestionada por despachos y cuarentena.</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="ubicacion_fisica" class="form-label">Ubicación Física</label>
+                            <input type="text" class="form-control" id="ubicacion_fisica" name="ubicacion_fisica" value="{{ lote.ubicacion_fisica or '' }}">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label for="costo_produccion_unitario" class="form-label">Costo Producción Unitario</label>
+                            <input type="number" step="0.01" class="form-control" id="costo_produccion_unitario" name="costo_produccion_unitario" value="{{ lote.costo_produccion_unitario or '' }}">
+                        </div>
+
+                        <div class="col-12">
+                            <label for="observaciones" class="form-label">Observaciones</label>
+                            <textarea class="form-control" id="observaciones" name="observaciones" rows="3">{{ lote.observaciones or '' }}</textarea>
+                        </div>
+
+                        <div class="col-12 text-end">
+                            <a href="{{ url_for('lote_producto.listar_lotes') }}" class="btn btn-secondary">Cancelar</a>
+                            <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 offset-lg-2">
+        <div class="card">
+            </div>
+    </div>
+</div>
+
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="feedbackModalLabel">
+            <i class="bi bi-info-circle me-2" id="feedbackModalIcon"></i>
+            <span id="feedbackModalTitle">Título</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body" id="feedbackModalBody">
+        Mensaje del modal.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="feedbackModalCancelBtn">Cerrar</button>
+        <button type="button" class="btn btn-primary" id="feedbackModalConfirmBtn" style="display: none;">Confirmar</button> 
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/planificacion/planificacion.js') }}"></script>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <script id="flash-messages-data" data-messages="{{ messages | tojson | safe }}"></script>
+    {% endif %}
+{% endwith %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    
+    // Buscamos el script con los datos
+    const messagesDataElement = document.getElementById('flash-messages-data');
+    
+    if (messagesDataElement && messagesDataElement.dataset.messages) {
+        
+        // Leemos y parseamos los mensajes JSON
+        const messages = JSON.parse(messagesDataElement.dataset.messages);
+        
+        // messages ahora es un array, ej: [ ['danger', 'Error de fecha...'] ]
+        messages.forEach(function(messagePair) {
+            const category = messagePair[0];
+            const message = messagePair[1];
+
+            // Convertimos la categoría a un tipo de modal
+            var modalType = 'info';
+            if (category === 'success') {
+                modalType = 'success';
+            } else if (category === 'danger' || category === 'error') {
+                modalType = 'error';
+            } else if (category === 'warning') {
+                modalType = 'warning';
+            }
+        
+            var modalTitle = 'Información';
+            if (modalType === 'success') {
+                modalTitle = 'Éxito';
+            } else if (modalType === 'error') {
+                modalTitle = 'Error de Validación';
+            }
+
+            // Mostramos el modal (usando setTimeout para asegurar que todo esté cargado)
+            setTimeout(function() {
+                if (typeof showFeedbackModal === 'function') {
+                    showFeedbackModal(modalTitle, message, modalType);
+                } else {
+                    console.warn('showFeedbackModal() no encontrada. Usando alert().');
+                    alert(message);
+                }
+            }, 100);
+        });
+    }
+});
+</script>
+{% endblock %}

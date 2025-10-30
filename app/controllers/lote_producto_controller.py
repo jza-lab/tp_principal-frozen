@@ -330,9 +330,9 @@ class LoteProductoController(BaseController):
                 lote_actual_res = self.model.find_by_id(lote_id, 'id_lote')
                 if not lote_actual_res.get('success') or not lote_actual_res.get('data'):
                     raise Exception(f"No se pudo encontrar el lote ID {lote_id} para devolver el stock.")
-                
+
                 lote_actual = lote_actual_res['data']
-                
+
                 # b. Sumar la cantidad de vuelta al lote
                 nueva_cantidad_lote = lote_actual.get('cantidad_actual', 0) + cantidad_a_devolver
                 datos_actualizacion_lote = {'cantidad_actual': nueva_cantidad_lote}
@@ -365,7 +365,7 @@ class LoteProductoController(BaseController):
                     data = form_data.to_dict()
                 else:
                     data = form_data.copy()
-                
+
                 data.pop('csrf_token', None)
 
                 # Asignar cantidad_actual si existe cantidad_inicial
@@ -638,12 +638,12 @@ class LoteProductoController(BaseController):
 
                     # Se usa directamente la cantidad actual del lote, ya que se va a descontar
                     stock_disponible_en_lote = lote.get('cantidad_actual', 0)
-                    
+
                     if stock_disponible_en_lote <= 0:
                         continue
 
                     cantidad_a_reservar_de_este_lote = min(stock_disponible_en_lote, cantidad_restante_a_reservar)
-                    
+
                     if cantidad_a_reservar_de_este_lote <= 0:
                         continue
 
@@ -673,7 +673,7 @@ class LoteProductoController(BaseController):
 
                     reservas_creadas.append(resultado_creacion.get('data'))
                     cantidad_restante_a_reservar -= cantidad_a_reservar_de_este_lote
-                
+
                 if cantidad_restante_a_reservar > 0.01: # Usar una pequeña tolerancia para errores de punto flotante
                     raise Exception(f"Inconsistencia de stock al intentar reservar. Faltaron {cantidad_restante_a_reservar} unidades para el producto ID {producto_id}.")
 
@@ -857,3 +857,177 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error al generar la plantilla de lotes: {str(e)}", exc_info=True)
             return None
+
+    def poner_lote_en_cuarentena(self, lote_id: int, motivo: str, cantidad: float) -> tuple:
+        """
+        Mueve una cantidad específica de un lote DISPONIBLE al estado CUARENTENA.
+        """
+        try:
+            lote_res = self.model.find_by_id(lote_id, 'id_lote')
+            if not lote_res.get('success') or not lote_res.get('data'):
+                return self.error_response('Lote no encontrado', 404)
+
+            lote = lote_res['data']
+            cantidad_actual_disponible = lote.get('cantidad_actual', 0)
+            cantidad_actual_cuarentena = lote.get('cantidad_en_cuarentena', 0)
+
+            # Validar estado (ahora puede estar DISPONIBLE o ya en CUARENTENA)
+            if lote.get('estado') not in ['DISPONIBLE', 'CUARENTENA']:
+                msg = f"El lote debe estar DISPONIBLE o en CUARENTENA. Estado actual: {lote.get('estado')}"
+                return self.error_response(msg, 400)
+
+            if not motivo:
+                return self.error_response("Se requiere un motivo para la cuarentena.", 400)
+
+            if cantidad <= 0:
+                 return self.error_response("La cantidad debe ser un número positivo.", 400)
+
+            if cantidad > cantidad_actual_disponible:
+                msg = f"No puede poner en cuarentena {cantidad} unidades. Solo hay {cantidad_actual_disponible} disponibles."
+                return self.error_response(msg, 400)
+
+            # Lógica de resta y suma
+            nueva_cantidad_disponible = cantidad_actual_disponible - cantidad
+            nueva_cantidad_cuarentena = cantidad_actual_cuarentena + cantidad
+
+            update_data = {
+                'estado': 'CUARENTENA', # Siempre se marca o se mantiene como CUARENTENA
+                'motivo_cuarentena': motivo,
+                'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
+                'cantidad_actual': nueva_cantidad_disponible
+            }
+
+            result = self.model.update(lote_id, update_data, 'id_lote')
+            if not result.get('success'):
+                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+
+            return self.success_response(message="Cantidad puesta en cuarentena con éxito.")
+
+        except Exception as e:
+            logger.error(f"Error en poner_lote_en_cuarentena: {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
+
+    # --- MÉTODO MODIFICADO PARA ACEPTAR CANTIDAD ---
+    def liberar_lote_de_cuarentena(self, lote_id: int, cantidad_a_liberar: float) -> tuple:
+        """
+        Mueve una cantidad específica de CUARENTENA de vuelta a DISPONIBLE.
+        Si la cantidad en cuarentena llega a 0, el estado vuelve a DISPONIBLE.
+        """
+        try:
+            lote_res = self.model.find_by_id(lote_id, 'id_lote')
+            if not lote_res.get('success') or not lote_res.get('data'):
+                return self.error_response('Lote no encontrado', 404)
+
+            lote = lote_res['data']
+            cantidad_actual_disponible = lote.get('cantidad_actual', 0)
+            cantidad_actual_cuarentena = lote.get('cantidad_en_cuarentena', 0)
+
+            # Validaciones
+            if lote.get('estado') != 'CUARENTENA':
+                return self.error_response(f"El lote no está en cuarentena.", 400)
+
+            if cantidad_a_liberar <= 0:
+                 return self.error_response("La cantidad a liberar debe ser un número positivo.", 400)
+
+            if cantidad_a_liberar > cantidad_actual_cuarentena:
+                msg = f"No puede liberar {cantidad_a_liberar} unidades. Solo hay {cantidad_actual_cuarentena} en cuarentena."
+                return self.error_response(msg, 400)
+
+            # Lógica de resta y suma
+            nueva_cantidad_cuarentena = cantidad_actual_cuarentena - cantidad_a_liberar
+            nueva_cantidad_disponible = cantidad_actual_disponible + cantidad_a_liberar
+
+            # Decidir el nuevo estado
+            nuevo_estado = 'CUARENTENA'
+            nuevo_motivo = lote.get('motivo_cuarentena')
+
+            if nueva_cantidad_cuarentena == 0:
+                nuevo_estado = 'DISPONIBLE'
+                nuevo_motivo = None # Limpiar motivo
+
+            update_data = {
+                'estado': nuevo_estado,
+                'motivo_cuarentena': nuevo_motivo,
+                'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
+                'cantidad_actual': nueva_cantidad_disponible
+            }
+
+            result = self.model.update(lote_id, update_data, 'id_lote')
+            if not result.get('success'):
+                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+
+            return self.success_response(message="Cantidad liberada de cuarentena con éxito.")
+
+        except Exception as e:
+            logger.error(f"Error en liberar_lote_de_cuarentena: {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
+
+
+    def actualizar_lote_desde_formulario(self, lote_id: int, form_data) -> tuple:
+        """Actualiza un lote existente desde un formulario web."""
+        try:
+            # 1. Verificar que el lote existe
+            lote_existente = self.model.find_by_id(lote_id, 'id_lote')
+            if not lote_existente.get('success') or not lote_existente.get('data'):
+                return self.error_response('Lote no encontrado', 404)
+
+            lote_actual = lote_existente['data'] # <-- Necesitamos esto
+
+            # 2. Convertir form a dict y limpiar
+            if hasattr(form_data, 'to_dict'):
+                data = form_data.to_dict()
+            else:
+                data = form_data.copy()
+
+            data.pop('csrf_token', None)
+            data.pop('producto_id', None)
+            data.pop('cantidad_inicial', None)
+            data.pop('cantidad_actual', None)
+            data.pop('cantidad_en_cuarentena', None)
+
+            # --- INICIO DE LA VALIDACIÓN LÓGICA MANUAL ---
+            if 'fecha_vencimiento' in data and data['fecha_vencimiento']:
+                # 1. Obtener fecha de producción (del lote existente)
+                fecha_produccion_str = lote_actual['fecha_produccion']
+                if isinstance(fecha_produccion_str, (date, datetime)):
+                    fecha_produccion_actual = fecha_produccion_str.date()
+                else:
+                    fecha_produccion_actual = date.fromisoformat(fecha_produccion_str.split(' ')[0]) # Maneja 'YYYY-MM-DD HH:MM:SS'
+
+                # 2. Obtener nueva fecha de vencimiento (del form)
+                fecha_vencimiento_nueva = date.fromisoformat(data['fecha_vencimiento'])
+
+                # 3. Comparar
+                if fecha_vencimiento_nueva < fecha_produccion_actual:
+                    msg = f"La fecha de vencimiento ({fecha_vencimiento_nueva}) no puede ser anterior a la de producción ({fecha_produccion_actual})."
+                    # Lanzamos un ValidationError para que sea capturado abajo
+                    raise ValidationError(msg)
+            # --- FIN DE LA VALIDACIÓN LÓGICA MANUAL ---
+
+            # 3. Validar los datos restantes con el schema
+            if 'fecha_vencimiento' in data and not data['fecha_vencimiento']:
+                data['fecha_vencimiento'] = None
+            if 'costo_produccion_unitario' in data and not data['costo_produccion_unitario']:
+                data['costo_produccion_unitario'] = None
+
+            validated_data = self.schema.load(data, partial=True)
+
+            # 4. Actualizar el lote
+            result = self.model.update(lote_id, validated_data, 'id_lote')
+            if not result.get('success'):
+                # Si aun así falla (por si acaso), lo capturamos
+                if 'check_fechas_logicas' in result.get('error', ''):
+                     raise ValidationError("Error de lógica de fechas. Verifique las fechas.")
+                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+
+            return self.success_response(result['data'], "Lote actualizado con éxito")
+
+        except ValidationError as e:
+            # Ahora esto captura AMBOS errores: el del schema y el que lanzamos manualmente
+            msg = e.messages if isinstance(e.messages, str) else str(e.messages)
+            logger.warning(f"Error de validación al actualizar lote {lote_id}: {msg}")
+            # Devolvemos un error limpio
+            return self.error_response(f"Error de validación: {msg}", 422)
+        except Exception as e:
+            logger.error(f"Error en actualizar_lote_desde_formulario: {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
