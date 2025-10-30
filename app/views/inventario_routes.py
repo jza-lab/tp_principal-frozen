@@ -21,7 +21,7 @@ def listar_lotes():
     """
     # Llama al nuevo método para obtener los datos agrupados
     response_agrupado, status_code = controller.obtener_lotes_agrupados_para_vista()
-    
+
     insumos_agrupados = []
     if response_agrupado.get('success'):
         insumos_agrupados = response_agrupado.get('data', [])
@@ -36,17 +36,17 @@ def listar_lotes():
         insumos_data = stock_resp.get('data', [])
         insumos_stock = [
             i for i in insumos_data
-            if float(i.get('stock_actual') or 0.0) > 0.0 
+            if float(i.get('stock_actual') or 0.0) > 0.0
         ]
         insumos_stock.sort(key=lambda x: (
-            1 if x.get('estado_stock') == 'OK' else 0, 
+            1 if x.get('estado_stock') == 'OK' else 0,
             float(x.get('stock_actual') or 0.0) * -1
         ))
         insumos_full_data = insumos_data
-        
-    return render_template('inventario/listar.html', 
-                           insumos=insumos_agrupados, 
-                           insumos_stock=insumos_stock, 
+
+    return render_template('inventario/listar.html',
+                           insumos=insumos_agrupados,
+                           insumos_stock=insumos_stock,
                            insumos_full_data=insumos_full_data)
 
 @inventario_view_bp.route('/lote/nuevo', methods=['GET', 'POST'])
@@ -81,9 +81,9 @@ def nuevo_lote():
     proveedores = proveedores_resp.get('data', [])
     today = date.today().isoformat()
 
-    return render_template('inventario/formulario.html', 
-                           insumos=insumos, 
-                           proveedores=proveedores, 
+    return render_template('inventario/formulario.html',
+                           insumos=insumos,
+                           proveedores=proveedores,
                            today=today)
 
 @inventario_view_bp.route('/lote/<id_lote>')
@@ -93,15 +93,58 @@ def detalle_lote(id_lote):
     Muestra la página de detalle para un lote específico.
     """
     response, status_code = controller.obtener_lote_por_id(id_lote)
-    
+
     if response.get('success'):
         lote = response.get('data')
         insumo_resp = controller.insumo_model.find_by_id(lote.get('id_insumo'), 'id_insumo')
         if insumo_resp.get('success'):
             lote['insumo_nombre'] = insumo_resp['data'].get('nombre')
             lote['insumo_unidad_medida'] = insumo_resp['data'].get('unidad_medida')
-        
+
         return render_template('inventario/detalle.html', lote=lote)
     else:
         flash(response.get('error', 'Lote no encontrado.'), 'error')
         return redirect(url_for('inventario_view.listar_lotes'))
+
+
+# --- AÑADIR NUEVAS RUTAS ---
+@inventario_view_bp.route('/lote/<id_lote>/cuarentena', methods=['POST'])
+##@jwt_required()
+##@permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
+def poner_en_cuarentena(id_lote):
+    try:
+        motivo = request.form.get('motivo_cuarentena')
+        cantidad = float(request.form.get('cantidad_cuarentena'))
+    except (TypeError, ValueError):
+        flash('La cantidad debe ser un número válido.', 'danger')
+        return redirect(url_for('inventario_view.listar_lotes'))
+
+    response, status_code = controller.poner_lote_en_cuarentena(id_lote, motivo, cantidad)
+
+    if response.get('success'):
+        flash(response.get('message', 'Lote en cuarentena.'), 'success')
+    else:
+        flash(response.get('error', 'Error al procesar la solicitud.'), 'danger')
+
+    return redirect(url_for('inventario_view.listar_lotes'))
+
+
+@inventario_view_bp.route('/lote/<id_lote>/liberar', methods=['POST'])
+##@jwt_required()
+##@permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
+def liberar_cuarentena(id_lote):
+    try:
+        cantidad = float(request.form.get('cantidad_a_liberar'))
+    except (TypeError, ValueError):
+        flash('La cantidad a liberar debe ser un número válido.', 'danger')
+        return redirect(url_for('inventario_view.listar_lotes'))
+
+    response, status_code = controller.liberar_lote_de_cuarentena(id_lote, cantidad)
+
+    if response.get('success'):
+        flash(response.get('message', 'Lote liberado.'), 'success')
+    else:
+        flash(response.get('error', 'Error al procesar la solicitud.'), 'danger')
+
+    return redirect(url_for('inventario_view.listar_lotes'))
+# --- FIN NUEVAS RUTAS ---

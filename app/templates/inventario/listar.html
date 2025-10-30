@@ -68,11 +68,12 @@
                     <div class="collapse" id="lotes-{{ insumo.id_insumo }}">
                         <div class="p-3 bg-light">
                             <h6 class="mb-3">Detalle de Lotes para {{ insumo.insumo_nombre }}</h6>
+                            
                             <table class="table table-sm table-bordered bg-white mb-0">
                                 <thead>
                                     <tr>
                                         <th>N° Lote</th>
-                                        <th class="text-end">Cantidad Actual</th>
+                                        <th class="text-end">Cantidad</th>
                                         <th>Proveedor</th>
                                         <th>Fecha Ingreso</th>
                                         <th>Fecha Vencimiento</th>
@@ -84,7 +85,18 @@
                                     {% for lote in insumo.lotes %}
                                     <tr class="align-middle">
                                         <td>{{ lote.numero_lote_proveedor or 'N/A' }}</td>
-                                        <td class="text-end fw-bold">{{ lote.cantidad_actual | round(2) }} {{ lote.insumo_unidad_medida or '' }}</td>
+                                        
+                                        <td class="text-end fw-bold">
+                                            {% if lote.estado == 'cuarentena' %}
+                                                <div class="d-flex flex-column text-end" style="font-size: 0.9em; line-height: 1.4;">
+                                                    <span>{{ lote.cantidad_actual | round(2) }} <small class="text-success">(Disp)</small></span>
+                                                    <span>{{ lote.cantidad_en_cuarentena | round(2) }} <small class="text-warning">(Cuar)</small></span>
+                                                </div>
+                                            {% else %}
+                                                {{ lote.cantidad_actual | round(2) }} <small class="text-muted" style="font-size: 0.8em;">{{ lote.insumo_unidad_medida or '' }}</small>
+                                            {% endif %}
+                                        </td>
+                                        
                                         <td>{{ lote.proveedor_nombre or 'No especificado' }}</td>
                                         <td>{{ lote.f_ingreso }}</td>
                                         <td>
@@ -94,17 +106,46 @@
                                             <span class="text-muted">No aplica</span>
                                             {% endif %}
                                         </td>
+
                                         <td>
                                             {% if lote.estado == 'disponible' %}
                                             <span class="badge bg-success">{{ lote.estado }}</span>
+                                            {% elif lote.estado == 'cuarentena' %}
+                                            <span class="badge bg-warning text-dark"
+                                                  title="Motivo: {{ lote.motivo_cuarentena or 'Sin motivo' }}"
+                                                  data-bs-toggle="tooltip"> <i class="bi bi-shield-lock me-1"></i>{{ lote.estado }}
+                                            </span>
                                             {% else %}
                                             <span class="badge bg-danger">{{ lote.estado }}</span>
                                             {% endif %}
                                         </td>
+
                                         <td>
-                                            <a href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-primary">
+                                            <a href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                                                 <i class="bi bi-eye"></i>
                                             </a>
+                                            {% if (lote.estado == 'disponible' or lote.estado == 'cuarentena') and lote.cantidad_actual > 0 %}
+                                            <button type="button" class="btn btn-sm btn-outline-warning" 
+                                                    title="Poner en Cuarentena"
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#modalCuarentena"
+                                                    data-lote-id="{{ lote.id_lote }}"
+                                                    data-lote-numero="{{ lote.numero_lote_proveedor }}"
+                                                    data-lote-cantidad="{{ lote.cantidad_actual }}">
+                                                <i class="bi bi-shield-lock"></i>
+                                            </button>
+                                            {% endif %}
+                                            {% if lote.estado == 'cuarentena' and lote.cantidad_en_cuarentena > 0 %}
+                                            <button type="button" class="btn btn-sm btn-outline-success" 
+                                                    title="Liberar de Cuarentena"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#modalLiberar"
+                                                    data-lote-id="{{ lote.id_lote }}"
+                                                    data-lote-numero="{{ lote.numero_lote_proveedor }}"
+                                                    data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
+                                                <i class="bi bi-shield-check"></i>
+                                            </button>
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% else %}
@@ -130,9 +171,9 @@
 </div>
         </div>
     </div>
+
     <div class="col-lg-4 col-xl-3">
-        </h6>
-        <div class="card">
+        </h6> <div class="card">
             <div class="card-header">
                 <h6 class="mb-0">
                     <i class="bi bi-info-circle me-1"></i>
@@ -151,6 +192,74 @@
     </div>
 </div>
 
+<div class="modal fade" id="modalCuarentena" tabindex="-1" aria-labelledby="modalCuarentenaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning-subtle">
+                <h5 class="modal-title" id="modalCuarentenaLabel"><i class="bi bi-shield-lock me-2"></i>Poner Lote de Insumo en Cuarentena</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form id="formCuarentena" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                    <p>Lote: <strong id="loteNumeroCuarentena"></strong></p>
+                    
+                    <div class="mb-3">
+                        <label for="cantidad_cuarentena" class="form-label">Cantidad a poner en cuarentena:</label>
+                        <input type="number" class="form-control" 
+                               id="cantidad_cuarentena" 
+                               name="cantidad_cuarentena"
+                               step="0.01" min="0.01" max="1" required>
+                        <div class="form-text">
+                            Disponible: <span id="loteCantidadDisponibleCuarentena">0</span> unidades.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="motivo_cuarentena" class="form-label">Motivo (Requerido):</label>
+                        <textarea class="form-control" id="motivo_cuarentena" name="motivo_cuarentena" rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning">Confirmar Cuarentena</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalLiberar" tabindex="-1" aria-labelledby="modalLiberarLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success-subtle">
+                <h5 class="modal-title" id="modalLiberarLabel"><i class="bi bi-shield-check me-2"></i>Liberar Lote de Cuarentena</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <form id="formLiberar" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                    <p>Lote: <strong id="loteNumeroLiberar"></strong></p>
+                    
+                    <div class="mb-3">
+                        <label for="cantidad_a_liberar" class="form-label">Cantidad a liberar:</label>
+                        <input type="number" class="form-control" 
+                               id="cantidad_a_liberar" 
+                               name="cantidad_a_liberar"
+                               step="0.01" min="0.01" max="1" required>
+                        <div class="form-text">
+                            En cuarentena: <span id="loteCantidadEnCuarentena">0</span> unidades.
+                        </div>
+                    </div>
+                    <p class="text-muted small">Al liberar esta cantidad, volverá al stock DISPONIBLE.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success">Confirmar Liberación</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 {% if insumos_stock%}
 <script>
@@ -162,4 +271,85 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ url_for('static', filename='js/inventario/graficosInventario.js') }}"></script>
 <script src="{{ url_for('static', filename='js/inventario/inventario.js') }}"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Inicializar tooltips (para ver el motivo en el badge)
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+
+    // --- Manejador para el modal PONER EN CUARENTENA ---
+    var modalCuarentena = document.getElementById('modalCuarentena');
+    if (modalCuarentena) {
+        modalCuarentena.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var loteId = button.getAttribute('data-lote-id');
+            var loteNumero = button.getAttribute('data-lote-numero');
+            var loteCantidad = button.getAttribute('data-lote-cantidad'); // Cantidad DISPONIBLE
+            
+            var form = modalCuarentena.querySelector('#formCuarentena');
+            // Construir la URL de la acción
+            var actionUrl = `{{ url_for('inventario_view.listar_lotes') }}lote/${loteId}/cuarentena`;
+            form.setAttribute('action', actionUrl);
+            
+            modalCuarentena.querySelector('#loteNumeroCuarentena').textContent = loteNumero;
+
+            var inputCantidad = modalCuarentena.querySelector('#cantidad_cuarentena');
+            var spanCantidad = modalCuarentena.querySelector('#loteCantidadDisponibleCuarentena');
+            
+            inputCantidad.setAttribute('max', loteCantidad);
+            inputCantidad.setAttribute('placeholder', `Máx: ${loteCantidad}`);
+            inputCantidad.value = loteCantidad;
+            spanCantidad.textContent = loteCantidad;
+        });
+    }
+
+    // --- Manejador para el modal LIBERAR DE CUARENTENA ---
+    var modalLiberar = document.getElementById('modalLiberar');
+    if (modalLiberar) {
+        modalLiberar.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget;
+            var loteId = button.getAttribute('data-lote-id');
+            var loteNumero = button.getAttribute('data-lote-numero');
+            var loteCantidadCuarentena = button.getAttribute('data-lote-cantidad-cuarentena'); // Cantidad EN CUARENTENA
+            
+            var form = modalLiberar.querySelector('#formLiberar');
+            // Construir la URL de la acción
+            var actionUrl = `{{ url_for('inventario_view.listar_lotes') }}lote/${loteId}/liberar`;
+            form.setAttribute('action', actionUrl);
+            
+            modalLiberar.querySelector('#loteNumeroLiberar').textContent = loteNumero;
+
+            var inputCantidad = modalLiberar.querySelector('#cantidad_a_liberar');
+            var spanCantidad = modalLiberar.querySelector('#loteCantidadEnCuarentena');
+            
+            inputCantidad.setAttribute('max', loteCantidadCuarentena);
+            inputCantidad.setAttribute('placeholder', `Máx: ${loteCantidadCuarentena}`);
+            inputCantidad.value = loteCantidadCuarentena;
+            spanCantidad.textContent = loteCantidadCuarentena;
+        });
+    }
+    
+    // --- Lógica para el botón de expandir/colapsar ---
+    // (Esto ya debería estar en inventario.js, pero lo dejamos por seguridad)
+    document.querySelectorAll('.btn-expand').forEach(button => {
+        button.addEventListener('click', function() {
+            const icon = this.querySelector('i');
+            const isExpanded = this.getAttribute('aria-expanded') === 'true';
+            
+            // Invertimos la lógica porque el evento 'click' se dispara ANTES de que BS actualice el 'aria-expanded'
+            if (isExpanded) {
+                icon.classList.remove('bi-chevron-down');
+                icon.classList.add('bi-chevron-right');
+            } else {
+                icon.classList.remove('bi-chevron-right');
+                icon.classList.add('bi-chevron-down');
+            }
+        });
+    });
+
+});
+</script>
 {% endblock %}

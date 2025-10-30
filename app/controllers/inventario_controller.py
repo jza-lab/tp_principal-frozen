@@ -520,14 +520,31 @@ class InventarioController(BaseController):
                         'insumo_nombre': lote.get('insumo_nombre', 'N/A'),
                         'insumo_categoria': lote.get('insumo_categoria', 'Sin categoría'),
                         'insumo_unidad_medida': lote.get('insumo_unidad_medida', ''),
-                        'cantidad_total': 0,
+                        'cantidad_total': 0.0, # <-- Inicializar como float
                         'lotes': []
                     }
-                
-                cantidad_actual = float(lote.get('cantidad_actual', 0))
-                if lote.get('estado') == 'disponible':
-                    insumos_agrupados[insumo_id]['cantidad_total'] += cantidad_actual
-                
+
+                # --- INICIO DE LA CORRECCIÓN ---
+                # Convertir cantidades a float al leerlas.
+                # Usamos 'or 0' para manejar valores None o NULOS.
+                cantidad_actual = float(lote.get('cantidad_actual') or 0)
+                cantidad_en_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
+
+                # Asignar los floats de vuelta al objeto 'lote'
+                lote['cantidad_actual'] = cantidad_actual
+                lote['cantidad_en_cuarentena'] = cantidad_en_cuarentena
+                # --- FIN DE LA CORRECCIÓN ---
+
+                # --- INICIO DE LA CORRECCIÓN ---
+                #
+                # El 'if' que estaba aquí era el error.
+                # Ahora sumamos la 'cantidad_actual' (la parte disponible)
+                # sin importar si el estado del lote es 'disponible' o 'cuarentena'.
+                #
+                insumos_agrupados[insumo_id]['cantidad_total'] += cantidad_actual
+                #
+                # --- FIN DE LA CORRECCIÓN ---
+
                 insumos_agrupados[insumo_id]['lotes'].append(lote)
 
             # Calcular estado general y preparar la lista final
@@ -541,7 +558,7 @@ class InventarioController(BaseController):
 
             # Ordenar por nombre de insumo
             resultado_final.sort(key=lambda x: x['insumo_nombre'])
-            
+
             return self.success_response(data=resultado_final)
 
         except Exception as e:
@@ -619,3 +636,123 @@ class InventarioController(BaseController):
             logger.error(f"Error contando alertas de vencimiento: {str(e)}")
             return 0
 
+
+    def poner_lote_en_cuarentena(self, lote_id: str, motivo: str, cantidad: float) -> tuple:
+        """
+        Mueve una cantidad específica de un lote de insumo al estado CUARENTENA.
+        Usa estados en minúscula.
+        """
+        try:
+            lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
+            if not lote_res.get('success') or not lote_res.get('data'):
+                return self.error_response('Lote no encontrado', 404)
+
+            lote = lote_res['data']
+
+            # --- INICIO DE LA CORRECCIÓN ---
+            # Usamos 'or 0' para convertir 'None' en 0 ANTES de llamar a float()
+            cantidad_actual_disponible = float(lote.get('cantidad_actual') or 0)
+            cantidad_actual_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
+            # --- FIN DE LA CORRECCIÓN ---
+
+            # Validar estado (minúsculas)
+            if lote.get('estado') not in ['disponible', 'cuarentena']:
+                msg = f"El lote debe estar 'disponible' o en 'cuarentena'. Estado actual: {lote.get('estado')}"
+                return self.error_response(msg, 400)
+
+            if not motivo:
+                return self.error_response("Se requiere un motivo para la cuarentena.", 400)
+
+            if cantidad <= 0:
+                 return self.error_response("La cantidad debe ser un número positivo.", 400)
+
+            if cantidad > cantidad_actual_disponible:
+                msg = f"No puede poner en cuarentena {cantidad} unidades. Solo hay {cantidad_actual_disponible} disponibles."
+                return self.error_response(msg, 400)
+
+            # Lógica de resta y suma
+            nueva_cantidad_disponible = cantidad_actual_disponible - cantidad
+            nueva_cantidad_cuarentena = cantidad_actual_cuarentena + cantidad
+
+            update_data = {
+                'estado': 'cuarentena', # Marcar como 'cuarentena' (minúscula)
+                'motivo_cuarentena': motivo,
+                'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
+                'cantidad_actual': nueva_cantidad_disponible
+            }
+
+            result = self.inventario_model.update(lote_id, update_data, 'id_lote')
+            if not result.get('success'):
+                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+
+            # Actualizar el stock consolidado del insumo
+            self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
+
+            return self.success_response(message="Cantidad puesta en cuarentena con éxito.")
+
+        except Exception as e:
+            logger.error(f"Error en poner_lote_en_cuarentena (insumo): {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
+
+    def liberar_lote_de_cuarentena(self, lote_id: str, cantidad_a_liberar: float) -> tuple:
+        """
+        Mueve una cantidad específica de CUARENTENA de vuelta a DISPONIBLE (insumos).
+        Usa estados en minúscula.
+        """
+        try:
+            lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
+            if not lote_res.get('success') or not lote_res.get('data'):
+                return self.error_response('Lote no encontrado', 404)
+
+            lote = lote_res['data']
+
+            # --- INICIO DE LA CORRECCIÓN ---
+            # Usamos 'or 0' para convertir 'None' en 0 ANTES de llamar a float()
+            cantidad_actual_disponible = float(lote.get('cantidad_actual') or 0)
+            cantidad_actual_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
+            # --- FIN DE LA CORRECCIÓN ---
+
+            if lote.get('estado') != 'cuarentena':
+                return self.error_response(f"El lote no está en 'cuarentena'.", 400)
+
+            if cantidad_a_liberar <= 0:
+                 return self.error_response("La cantidad a liberar debe ser un número positivo.", 400)
+
+            if cantidad_a_liberar > cantidad_actual_cuarentena:
+                msg = f"No puede liberar {cantidad_a_liberar} unidades. Solo hay {cantidad_actual_cuarentena} en cuarentena."
+                return self.error_response(msg, 400)
+
+            # Lógica de resta y suma
+            nueva_cantidad_cuarentena = cantidad_actual_cuarentena - cantidad_a_liberar
+            nueva_cantidad_disponible = cantidad_actual_disponible + cantidad_a_liberar
+
+            # Decidir el nuevo estado
+            nuevo_estado = 'cuarentena'
+            nuevo_motivo = lote.get('motivo_cuarentena')
+
+            if nueva_cantidad_cuarentena == 0 and nueva_cantidad_disponible > 0:
+                nuevo_estado = 'disponible'
+                nuevo_motivo = None # Limpiar motivo
+            elif nueva_cantidad_cuarentena == 0 and nueva_cantidad_disponible == 0:
+                nuevo_estado = 'agotado' # Si todo estaba en cuarentena y se libera (¿improbable?)
+                nuevo_motivo = None
+
+            update_data = {
+                'estado': nuevo_estado,
+                'motivo_cuarentena': nuevo_motivo,
+                'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
+                'cantidad_actual': nueva_cantidad_disponible
+            }
+
+            result = self.inventario_model.update(lote_id, update_data, 'id_lote')
+            if not result.get('success'):
+                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+
+            # Actualizar el stock consolidado del insumo
+            self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
+
+            return self.success_response(message="Cantidad liberada de cuarentena con éxito.")
+
+        except Exception as e:
+            logger.error(f"Error en liberar_lote_de_cuarentena (insumo): {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)

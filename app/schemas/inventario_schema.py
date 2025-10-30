@@ -51,10 +51,13 @@ class InsumosInventarioSchema(Schema):
     )
     observaciones = fields.Str(allow_none=True)
 
-    estado = fields.Str(
-        validate=validate.OneOf(['disponible', 'reservado', 'agotado', 'vencido']),
-        load_default='disponible'
-    )
+    estado = fields.Str(validate=validate.OneOf([
+        'disponible', 'agotado', 'reservado', 'vencido', 'retirado', 'cuarentena'
+    ]), dump_default='disponible')
+
+    # 2. Añadir los nuevos campos
+    motivo_cuarentena = fields.Str(allow_none=True)
+    cantidad_en_cuarentena = fields.Float(allow_none=True, dump_default=0)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
 
