@@ -124,6 +124,14 @@
                                             <a href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                                                 <i class="bi bi-eye"></i>
                                             </a>
+
+                                            {% if lote.estado not in ['agotado', 'retirado'] %}
+                                            <a href="{{ url_for('inventario_view.editar_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-secondary"
+                                                title="Editar Lote">
+                                                <i class="bi bi-pencil-square"></i>
+                                            </a>
+                                            {% endif %}
+
                                             {% if (lote.estado == 'disponible' or lote.estado == 'cuarentena') and lote.cantidad_actual > 0 %}
                                             <button type="button" class="btn btn-sm btn-outline-warning" 
                                                     title="Poner en Cuarentena"

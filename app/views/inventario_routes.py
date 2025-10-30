@@ -148,3 +148,44 @@ def liberar_cuarentena(id_lote):
 
     return redirect(url_for('inventario_view.listar_lotes'))
 # --- FIN NUEVAS RUTAS ---
+
+@inventario_view_bp.route('/lote/<id_lote>/editar', methods=['GET', 'POST'])
+##@jwt_required()
+##@permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
+def editar_lote(id_lote):
+    """
+    Gestiona la edición de un lote de inventario existente.
+    """
+    if request.method == 'POST':
+        try:
+            # Llama al método del controlador que ya existía
+            response, status_code = controller.actualizar_lote_parcial(id_lote, request.form.to_dict())
+
+            if response.get('success'):
+                flash(response.get('message', 'Lote actualizado con éxito.'), 'success')
+                return redirect(url_for('inventario_view.listar_lotes'))
+            else:
+                flash(response.get('error', 'Error al actualizar.'), 'danger')
+
+        except ValidationError as e: # Captura errores de validación del schema
+            for field, errors in e.messages.items():
+                flash(f"Error en el campo '{field}': {', '.join(errors)}", 'danger')
+        except Exception as e:
+            flash(f"Ocurrió un error inesperado: {e}", 'danger')
+
+        # Si el POST falla (error o validación), se recarga la página
+        # y los mensajes flash se mostrarán en el modal.
+
+    # Lógica GET (o si falla el POST): Obtener datos y mostrar formulario
+    response, status_code = controller.obtener_lote_por_id(id_lote)
+
+    if not response.get('success'):
+        flash(response.get('error', 'Lote no encontrado.'), 'danger')
+        return redirect(url_for('inventario_view.listar_lotes'))
+
+    lote = response.get('data')
+
+    # Renderizar la *nueva* plantilla que crearemos en el Paso 3
+    return render_template('inventario/editar_lote.html', lote=lote)
+
+# --- FIN DE LA NUEVA RUTA ---
