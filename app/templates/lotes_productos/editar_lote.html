@@ -1,7 +1,7 @@
-{% extends 'layouts/base.html' %}
+{% extends 'layouts/app_layout.html' %}
 {% block title %}Editar Lote - {{ lote.numero_lote }}{% endblock %}
 
-{% block content %}
+{% block app_content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">Editar Lote de Producto</h1>
@@ -40,18 +40,16 @@
                             <input type="date" class="form-control" id="fecha_vencimiento" name="fecha_vencimiento"
                                    value="{{ lote.fecha_vencimiento.strftime('%Y-%m-%d') if lote.fecha_vencimiento else '' }}">
                         </div>
-
                         <div class="col-md-6">
                             <label class="form-label">Cantidad Inicial</label>
-                            <input type="number" class="form-control" value="{{ lote.cantidad_inicial | round(2) }}" disabled readonly>
+                            <input type="number" class="form-control" value="{{ lote.cantidad_inicial | float | round(2) }}" disabled readonly>
                             <div class="form-text">No editable. Gestionada por producción.</div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Cantidad Actual (Disponible)</label>
-                            <input type="number" class="form-control" value="{{ lote.cantidad_actual | round(2) }}" disabled readonly>
+                            <input type="number" class="form-control" value="{{ lote.cantidad_actual | float | round(2) }}" disabled readonly>
                             <div class="form-text">No editable. Gestionada por despachos y cuarentena.</div>
                         </div>
-
                         <div class="col-md-6">
                             <label for="ubicacion_fisica" class="form-label">Ubicación Física</label>
                             <input type="text" class="form-control" id="ubicacion_fisica" name="ubicacion_fisica" value="{{ lote.ubicacion_fisica or '' }}">
@@ -75,13 +73,6 @@
                 </form>
             </div>
         </div>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-lg-8 offset-lg-2">
-        <div class="card">
-            </div>
     </div>
 </div>
 

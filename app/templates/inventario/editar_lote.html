@@ -20,53 +20,60 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('inventario_view.editar_lote', id_lote=lote.id_lote) }}">
-                    {{ csrf_form.csrf_token }}
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
-                    
+                    <!-- Campo CSRF generado manualmente -->
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
                     <div class="row g-3">
                         <div class="col-md-12">
                             <label class="form-label">Insumo</label>
                             <input type="text" class="form-control" value="{{ lote.insumo_nombre }}" disabled readonly>
                             <div class="form-text">El insumo de un lote no se puede cambiar.</div>
                         </div>
-
+            
                         <div class="col-md-6">
                             <label for="numero_lote_proveedor" class="form-label">Número de Lote (Proveedor)</label>
-                            <input type="text" class="form-control" id="numero_lote_proveedor" name="numero_lote_proveedor" value="{{ lote.numero_lote_proveedor or '' }}" required>
+                            <input type="text" class="form-control" id="numero_lote_proveedor" name="numero_lote_proveedor"
+                                value="{{ lote.numero_lote_proveedor or '' }}" required>
                         </div>
-
+            
                         <div class="col-md-6">
                             <label for="f_vencimiento" class="form-label">Fecha de Vencimiento</label>
                             <input type="date" class="form-control" id="f_vencimiento" name="f_vencimiento"
-                                   value="{{ lote.f_vencimiento.split('T')[0] if lote.f_vencimiento else '' }}">
+                                value="{{ lote.f_vencimiento.split('T')[0] if lote.f_vencimiento else '' }}">
                         </div>
-
+            
                         <div class="col-md-6">
                             <label class="form-label">Cantidad Inicial</label>
-                            <input type="number" class="form-control" value="{{ lote.cantidad_inicial | round(2) }}" disabled readonly>
+                            <input type="number" class="form-control" value="{{ lote.cantidad_inicial | round(2) }}" disabled
+                                readonly>
                             <div class="form-text">No editable. Gestionada por ingresos.</div>
                         </div>
+            
                         <div class="col-md-6">
                             <label class="form-label">Cantidad Actual (Disponible)</label>
-                            <input type="number" class="form-control" value="{{ lote.cantidad_actual | round(2) }}" disabled readonly>
+                            <input type="number" class="form-control" value="{{ lote.cantidad_actual | round(2) }}" disabled
+                                readonly>
                             <div class="form-text">No editable. Gestionada por cuarentena o reservas.</div>
                         </div>
-
+            
                         <div class="col-md-6">
                             <label for="ubicacion_fisica" class="form-label">Ubicación Física</label>
-                            <input type="text" class="form-control" id="ubicacion_fisica" name="ubicacion_fisica" value="{{ lote.ubicacion_fisica or '' }}">
+                            <input type="text" class="form-control" id="ubicacion_fisica" name="ubicacion_fisica"
+                                value="{{ lote.ubicacion_fisica or '' }}">
                         </div>
-
+            
                         <div class="col-md-6">
                             <label for="precio_unitario" class="form-label">Precio Unitario (Ingreso)</label>
-                            <input type="number" step="0.01" class="form-control" id="precio_unitario" name="precio_unitario" value="{{ lote.precio_unitario or '' }}">
+                            <input type="number" step="0.01" class="form-control" id="precio_unitario" name="precio_unitario"
+                                value="{{ lote.precio_unitario or '' }}">
                         </div>
-
+            
                         <div class="col-12">
                             <label for="observaciones" class="form-label">Observaciones</label>
-                            <textarea class="form-control" id="observaciones" name="observaciones" rows="3">{{ lote.observaciones or '' }}</textarea>
+                            <textarea class="form-control" id="observaciones" name="observaciones"
+                                rows="3">{{ lote.observaciones or '' }}</textarea>
                         </div>
-
+            
                         <div class="col-12 text-end">
                             <a href="{{ url_for('inventario_view.listar_lotes') }}" class="btn btn-secondary">Cancelar</a>
                             <button type="submit" class="btn btn-primary">Guardar Cambios</button>

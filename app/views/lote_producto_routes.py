@@ -192,10 +192,9 @@ def descargar_plantilla_lotes():
 # @jwt_required()
 # @permission_required(accion='gestionar_cuarentena_lotes')
 def poner_en_cuarentena(id_lote):
+    controller = LoteProductoController() # <-- AÑADIDO AQUÍ
     motivo = request.form.get('motivo_cuarentena')
 
-    # --- INICIO CAMBIO ---
-    # Leer la cantidad del formulario
     try:
         cantidad = float(request.form.get('cantidad_cuarentena'))
     except (TypeError, ValueError):
@@ -203,7 +202,6 @@ def poner_en_cuarentena(id_lote):
         return redirect(url_for('lote_producto.listar_lotes'))
 
     response, status_code = controller.poner_lote_en_cuarentena(id_lote, motivo, cantidad)
-    # --- FIN CAMBIO ---
 
     if response.get('success'):
         flash(response.get('message', 'Lote en cuarentena.'), 'success')
@@ -217,17 +215,14 @@ def poner_en_cuarentena(id_lote):
 # @jwt_required()
 # @permission_required(accion='gestionar_cuarentena_lotes')
 def liberar_cuarentena(id_lote):
-
-    # --- INICIO CAMBIO ---
+    controller = LoteProductoController() # <-- AÑADIDO AQUÍ
     try:
-        # Leer la cantidad del nuevo modal
         cantidad = float(request.form.get('cantidad_a_liberar'))
     except (TypeError, ValueError):
         flash('La cantidad a liberar debe ser un número válido.', 'danger')
         return redirect(url_for('lote_producto.listar_lotes'))
 
     response, status_code = controller.liberar_lote_de_cuarentena(id_lote, cantidad)
-    # --- FIN CAMBIO ---
 
     if response.get('success'):
         flash(response.get('message', 'Lote liberado.'), 'success')
@@ -236,11 +231,12 @@ def liberar_cuarentena(id_lote):
 
     return redirect(url_for('lote_producto.listar_lotes'))
 
-# --- AÑADIR ESTA NUEVA RUTA ---
+
 @lote_producto_bp.route('/<int:id_lote>/editar', methods=['GET', 'POST'])
 # @jwt_required()
 # @permission_required(accion='editar_lote_de_producto')
 def editar_lote(id_lote):
+    controller = LoteProductoController() # <-- AÑADIDO AQUÍ
 
     if request.method == 'POST':
         form_data = request.form
@@ -250,14 +246,8 @@ def editar_lote(id_lote):
             flash(response.get('message', 'Lote actualizado con éxito.'), 'success')
             return redirect(url_for('lote_producto.listar_lotes'))
         else:
-            # --- MODIFICACIÓN ---
-            # Si falla, flasheamos el error y dejamos que la función
-            # continúe para re-renderizar la página de edición.
             flash(response.get('error', 'Error al actualizar el lote.'), 'danger')
-            # NO hay 'return' aquí
-            # --- FIN MODIFICACIÓN ---
 
-    # 2. Mostrar el formulario (GET) o RE-RENDERIZAR (después de POST fallido)
     response, status_code = controller.obtener_lote_por_id_para_vista(id_lote)
 
     if not response.get('success'):
