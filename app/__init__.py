@@ -155,7 +155,7 @@ def _formato_moneda_filter(value):
         return "$ 0.00"
     try:
         # Formatea con separador de miles y dos decimales
-        return f"$ {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f" {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except (ValueError, TypeError):
         return value
 
