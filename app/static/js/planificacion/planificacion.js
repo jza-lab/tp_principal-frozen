@@ -134,8 +134,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         
                         const fromState = evt.from.closest('.kanban-column').dataset.estado;
                         const toState = evt.to.closest('.kanban-column').dataset.estado;
-                        // ... (resto de la lógica onMove SIN CAMBIOS) ...
-                        // --- REGLAS DE TRANSICIÓN DEFINIDAS POR ROL ---
+                        
+                        // --- OBTENER TÍTULOS PARA MODALES (NUEVO) ---
+                        // Es más amigable mostrar el título de la columna que el "estado_key"
+                        const fromTitle = evt.from.closest('.kanban-column').querySelector('.kanban-title-text').textContent.trim();
+                        const toTitle = evt.to.closest('.kanban-column').querySelector('.kanban-title-text').textContent.trim();
+                        // --- FIN TÍTULOS ---
+
+                        // ... (definición de operarioTransitions, supervisorCalidadTransitions, supervisorTransitions) ...
                         const operarioTransitions = {
                             'LISTA PARA PRODUCIR': ['EN_LINEA_1', 'EN_LINEA_2'],
                             'EN_LINEA_1': ['EN_EMPAQUETADO'],
@@ -158,29 +164,61 @@ document.addEventListener('DOMContentLoaded', function () {
                         };
                         
                         // Determinar qué conjunto de reglas usar. 
-                        // Estas variables (IS_OPERARIO, IS_SUPERVISOR_CALIDAD) deben ser inyectadas desde la plantilla Jinja2.
                         let allowedTransitions;
                         if (typeof IS_OPERARIO !== 'undefined' && IS_OPERARIO) {
                             allowedTransitions = operarioTransitions;
                         } else if (typeof IS_SUPERVISOR_CALIDAD !== 'undefined' && IS_SUPERVISOR_CALIDAD) {
                             allowedTransitions = supervisorCalidadTransitions;
                         } else {
-                            // Por defecto, se asumen los permisos de Supervisor general.
                             allowedTransitions = supervisorTransitions;
                         }
                         
-                        // La clave es el estado de ORIGEN. Si no está en el mapa, no se puede mover DESDE él.
+                        // --- MODIFICACIÓN 1: VALIDACIÓN DE ROL ---
                         if (!allowedTransitions[fromState] || !allowedTransitions[fromState].includes(toState)) { 
                             console.warn(`Movimiento de ${fromState} a ${toState} NO PERMITIDO para este rol.`); 
-                            return false; 
+                            
+                            // Mostrar modal en lugar de fallo silencioso
+                            showFeedbackModal(
+                                'Movimiento No Permitido',
+                                `Su rol no le permite mover órdenes desde <strong>"${fromTitle}"</strong> hacia <strong>"${toTitle}"</strong>.`,
+                                'warning'
+                            );
+                            
+                            return false; // Detener el movimiento
                         }
-                        if (fromState === 'LISTA PARA PRODUCIR' /*...*/) {
-                             // ... (validación línea asignada SIN CAMBIOS) ...
+                        
+                        // --- MODIFICACIÓN 2 y 3: VALIDACIÓN DE LÍNEA ---
+                        if (fromState === 'LISTA PARA PRODUCIR' && (toState === 'EN_LINEA_1' || toState === 'EN_LINEA_2')) {
                              const lineaAsignada = evt.dragged.dataset.lineaAsignada;
                              const lineaDestino = toState === 'EN_LINEA_1' ? '1' : '2';
-                             if (!lineaAsignada) { console.error(`VALIDACIÓN FALLIDA: Sin data-linea-asignada...`); return false;}
-                             if (lineaAsignada !== lineaDestino) { console.error(`VALIDACIÓN FALLIDA: Línea incorrecta...`); return false; }
+                             
+                             if (!lineaAsignada) { 
+                                 console.error(`VALIDACIÓN FALLIDA: Sin data-linea-asignada...`); 
+                                 
+                                 // Mostrar modal
+                                 showFeedbackModal(
+                                    'Línea No Asignada',
+                                    'Esta OP no puede moverse a una línea de producción porque <strong>aún no tiene una línea asignada</strong>.\nPlanifíquela primero desde el "Plan Maestro".',
+                                    'error'
+                                 );
+                                 
+                                 return false; // Detener
+                             }
+                             
+                             if (lineaAsignada !== lineaDestino) { 
+                                 console.error(`VALIDACIÓN FALLIDA: Línea incorrecta...`); 
+                                 
+                                 // Mostrar modal
+                                 showFeedbackModal(
+                                    'Línea Incorrecta',
+                                    `Esta OP está asignada a la <strong>Línea ${lineaAsignada}</strong> y no puede moverse a <strong>${toTitle}</strong>.`,
+                                    'warning'
+                                 );
+                                 
+                                 return false; // Detener
+                             }
                         }
+                        
                         console.log("Movimiento PERMITIDO visualmente.");
                         return true; 
                     },
@@ -203,6 +241,16 @@ document.addEventListener('DOMContentLoaded', function () {
              console.warn(`Kanban: No se encontró '.kanban-cards' dentro de la columna ${index+1}. SortableJS no se inicializará para esta columna.`); // Advertir si falta el contenedor
         }
     }); // Fin columns.forEach
+
+    // --- INICIALIZAR POPOVERS DE LA PLANIFICACIÓN SEMANAL ---
+    // (Este bloque se deja vacío a propósito, ya que se eliminó la funcionalidad de popover)
+    const popoverTriggerList = document.querySelectorAll('[data-bs-toggle="popover"]');
+    const popoverList = [...popoverTriggerList].map(popoverTriggerEl => {
+        return new bootstrap.Popover(popoverTriggerEl, {
+             sanitize: false // Permite HTML en el contenido
+        });
+    });
+    // ---------------------------------------------------
 
     // =======================================================
     // --- LISTENER GLOBAL PARA BOTONES (INCLUYE MODALES) ---

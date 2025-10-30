@@ -4,6 +4,8 @@
 
 {% block extra_css %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/planificacion/planificacion.css') }}">
+    
+    {# --- ESTILOS MOVIDOS DE VUELTA AQUÍ --- #}
     <style>
         /* Estilos generales (navegación, cards, etc.) */
         .navegacion-semanal-separada { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0; padding: 0.5rem 1rem; background-color: #f8f9fa; border: 1px solid #dee2e6; border-bottom: none; border-top-left-radius: 0.75rem; border-top-right-radius: 0.75rem; }
@@ -106,6 +108,21 @@
     </div>
 </div>
 
+{# --- [NUEVO] DEFINICIÓN DE LA SEMANA (para Planificación y CRP) --- #}
+{# CORRECCIÓN DE LOCALE: Mapa numérico (infalible) #}
+{% set dias_lista = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] %}
+{% set semana_definida = False %}
+{# Usamos las variables que vienen del backend (inicio_semana y fin_semana) #}
+{% if inicio_semana and fin_semana %}
+    {# date.fromisoformat y timedelta son pasados desde el backend #}
+    {% set fecha_inicio = date.fromisoformat(inicio_semana) %}
+    {% set fecha_fin = date.fromisoformat(fin_semana) %}
+    {% set num_dias = (fecha_fin - fecha_inicio).days + 1 %}
+    {% set semana_definida = True %}
+{% endif %}
+{# --- FIN NUEVO BLOQUE --- #}
+
+
 {# --- ACORDEÓN: PLANIFICACIÓN SEMANAL MEJORADA --- #}
 <div class="accordion mb-4" id="accordionSemanal">
     <div class="accordion-item">
@@ -131,7 +148,7 @@
                         <div class="col">
                             <small class="text-muted">
                                 <i class="bi bi-lightbulb me-1"></i>
-                                Haga clic en cualquier OP para ver detalles completos
+                                Haga clic en cualquier OP para ver detalles
                             </small>
                         </div>
                         <div class="col-auto">
@@ -146,7 +163,8 @@
                 </div>
                 
                 <div class="row g-2 m-2">
-                    {% if not ordenes_por_dia %}
+                    {# --- BUCLE MODIFICADO --- #}
+                    {% if not semana_definida or not ordenes_por_dia %}
                     <div class="col-12">
                         <div class="text-center py-5">
                             <i class="bi bi-inbox display-4 text-muted"></i>
@@ -154,68 +172,140 @@
                             <p class="text-muted">Las órdenes de producción aparecerán aquí cuando sean planificadas.</p>
                         </div>
                     </div>
-                    {% endif %}
+                    {% else %}
+                        {# --- NUEVO BUCLE (COMO CRP) --- #}
+                        {% for i in range(num_dias) %}
+                            {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
+                            {% set fecha_iso = fecha_dia.isoformat() %}
+                            {% set dia_num = fecha_dia.weekday() %}
+                            
+                            {# 1. Definir las listas de claves (del debug) y display (visual) #}
+                            {% set dias_lista_display = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] %}
+                            {% set dias_lista_key = ['lu.', 'ma.', 'mi.', 'ju.', 'vi.', 'sÃ¡.', 'do.'] %}
+                            
+                            {# 2. Generar el string de display (para mostrar en la UI) #}
+                            {% set dia_display = dias_lista_display[dia_num] + " " + fecha_dia.strftime('%d/%m') %}
+
+                            {# 3. Generar el string de KEY (para buscar en el dict) #}
+                            {# Nota: El 'sÃ¡.' del debug es 'sá.' (con tilde) #}
+                            {% set dia_key = dias_lista_key[dia_num] + " " + fecha_dia.strftime('%d/%m') %}
+                            
+                            {# 4. Usar 'dia_key' para obtener las OPs #}
+                            {% set ops_del_dia = ordenes_por_dia.get(dia_key, []) %}
                     
-                    {% for dia_display, ops_del_dia in ordenes_por_dia.items() %}
-                    <div class="col-lg col-md-4 col-sm-6 mb-3">
-                        <div class="day-column h-100 shadow-sm">
-                            <div class="day-header d-flex justify-content-between align-items-center">
-                                <span class="fw-bold">{{ dia_display }}</span>
-                                <span class="badge {% if ops_del_dia %}bg-primary{% else %}bg-secondary{% endif %} rounded-pill">
-                                    {{ ops_del_dia | length }} OP{% if ops_del_dia | length != 1 %}s{% endif %}
-                                </span>
-                            </div>
-                            <div class="day-content">
-                                {% if not ops_del_dia %}
-                                <div class="text-center text-muted py-4">
-                                    <i class="bi bi-calendar-x display-6"></i>
-                                    <p class="small mt-2 mb-0">Sin órdenes programadas</p>
-                                </div>
-                                {% endif %}
-                                
-                                {% for op in ops_del_dia %}
-                                <a href="{{ url_for('orden_produccion.detalle', id=op.id) }}" 
-                                   class="text-decoration-none text-dark d-block mb-2"
-                                   title="Ver detalle OP {{ op.codigo }} - {{ op.producto_nombre }}">
-                                    <div class="op-card-mini position-relative {% if op.linea_asignada %}border-start border-3 border-primary{% endif %}">
-                                        {% if op.linea_asignada %}
-                                        <span class="position-absolute top-0 start-0 translate-middle badge bg-primary rounded-pill">
-                                            L{{ op.linea_asignada }}
+                            <div class="col-lg col-md-4 col-sm-6 mb-3">
+                                <div class="day-column h-100 shadow-sm">
+                                    <div class="day-header d-flex justify-content-between align-items-center">
+                                        <span class="fw-bold">{{ dia_display }}</span> {# <-- ¡Cambiado! #}
+                                        <span class="badge {% if ops_del_dia %}bg-primary{% else %}bg-secondary{% endif %} rounded-pill">
+                                            {{ ops_del_dia | length }} OP{% if ops_del_dia | length != 1 %}s{% endif %}
                                         </span>
-                                        {% endif %}
-                                        
-                                        <div class="d-flex justify-content-between align-items-start mb-1">
-                                            <strong class="flex-grow-1 me-2">{{ op.producto_nombre or 'N/A' }}</strong>
-                                            <small class="text-muted text-nowrap">{{ op.cantidad_planificada }} und</small>
-                                        </div>
-                                        
-                                        <div class="op-details small">
-                                            <div class="mb-1">
-                                                <i class="bi bi-upc-scan text-secondary"></i>
-                                                <code class="small">{{ op.codigo }}</code>
-                                            </div>
-                                            {% if op.operario_nombre %}
-                                            <div>
-                                                <i class="bi bi-person-fill text-success"></i>
-                                                <small>{{ op.operario_nombre.split()[0] }}</small>
-                                            </div>
-                                            {% endif %}
-                                        </div>
-                                        
-                                        {% if op.fecha_inicio_planificada %}
-                                        <div class="mt-1 pt-1 border-top">
-                                            <small class="text-primary">
-                                                <i class="bi bi-clock"></i> Inicia: {{ op.fecha_inicio_planificada }}
-                                            </small>
-                                        </div>
-                                        {% endif %}
                                     </div>
-                                </a>
-                                {% endfor %}
+                                    <div class="day-content">
+                                        {% if not ops_del_dia %}
+                                        <div class="text-center text-muted py-4">
+                                            <i class="bi bi-calendar-x display-6"></i>
+                                            <p class="small mt-2 mb-0">Sin órdenes programadas</p>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        {% for op in ops_del_dia %}
+                                        
+                                        {# --- DEFINIR CONTENIDO DEL POPOVER --- #}
+                                        {% set popover_content %}
+                                            <dl class='row mb-0' style='font-size: 0.85rem; min-width: 300px;'>
+                                                <dt class='col-5'><i class='bi bi-box-seam me-1'></i>Producto:</dt>
+                                                <dd class='col-7'>{{ op.producto_nombre or 'N/A' }}</dd>
+                                                
+                                                <dt class='col-5'><i class='bi bi-hash me-1'></i>Cantidad:</dt>
+                                                <dd class='col-7'>{{ op.cantidad_planificada }}</dd>
+                                                
+                                                <dt class='col-5'><i class='bi bi-diagram-3-fill me-1 text-primary'></i>Línea:</dt>
+                                                <dd class='col-7'>{% if op.linea_asignada %}Línea {{ op.linea_asignada }}{% else %} <span class="text-muted">N/A</span> {% endif %}</dd>
+                                                
+                                                <dt class='col-5'><i class='bi bi-calendar-check-fill me-1 text-danger'></i>F. Meta:</dt>
+                                                <dd class='col-7'>{% if op.fecha_meta %}{{ op.fecha_meta }}{% else %} <span class="text-muted">N/D</span> {% endif %}</dd>
+                                                
+                                                <dt class='col-12 border-top pt-2 mt-2'><i class='bi bi-people-fill me-1'></i>Asignaciones</dt>
+                                                <dt class='col-5'><i class='bi bi-person-badge-fill me-1 text-info'></i>Sup:</dt>
+                                                <dd class='col-7'>{{ op.supervisor_nombre or 'No asignado' }}</dd>
+                                                
+                                                <dt class='col-5'><i class='bi bi-person-fill me-1 text-secondary'></i>Op:</dt>
+                                                <dd class='col-7'>{{ op.operario_nombre or 'No asignado' }}</dd>
+                                                
+                                                <dt class='col-12 border-top pt-2 mt-2'><i class='bi bi-clock-history me-1'></i>Inicio Plan.:</dt>
+                                                <dd class='col-12'>{{ op.fecha_inicio_planificada or 'N/P' }}</dd>
+                                            </dl>
+                                        {% endset %}
+        
+                                        {# --- INICIO CAMBIO: Wrapper ahora activa POPOVER --- #}
+                                        <div class="op-card-mini-wrapper d-block mb-2" 
+                                             tabindex="0" 
+                                             data-bs-toggle="popover" 
+                                             data-bs-trigger="focus" 
+                                             data-bs-html="true" 
+                                             title="<i class='bi bi-info-circle me-2'></i>Detalle Rápido: {{ op.codigo }}"
+                                             data-bs-content="{{ popover_content | e }}"
+                                             style="cursor: pointer;"
+                                        >
+                                        
+                                            {# --- CONTENIDO VISUAL DE LA TARJETA (SIN CAMBIOS) --- #}
+                                            <div class="op-card-mini position-relative {% if op.linea_asignada %}border-start border-3 border-primary{% else %}border-start border-3 border-secondary{% endif %}"
+                                                style="padding-left: 0.75rem;">
+                                        
+                                                {# Badge de Línea Asignada #}
+                                                {% if op.linea_asignada %}
+                                                <span class="position-absolute top-0 start-0 translate-middle badge bg-primary rounded-pill"
+                                                    style="font-size: 0.6em; margin-left: 10px;">
+                                                    L{{ op.linea_asignada }}
+                                                </span>
+                                                {% endif %}
+                                        
+                                                {# Título (Producto) y Cantidad #}
+                                                <div class="d-flex justify-content-between align-items-start pt-2">
+                                                    <strong class="flex-grow-1 me-2" style="font-size: 0.9rem;">{{ op.producto_nombre or 'N/A' }}</strong>
+                                                    <small class="text-muted text-nowrap fw-bold">{{ op.cantidad_planificada | round(1) }} {{
+                                                        op.producto_unidad_medida or 'und' }}</small>
+                                                </div>
+                                        
+                                                {# Detalles (Código y Operario/Supervisor) #}
+                                                <div class="op-details small mt-1">
+                                                    <div class="mb-1">
+                                                        <i class="bi bi-upc-scan text-secondary me-1"></i>
+                                                        <code class="small">{{ op.codigo }}</code>
+                                                    </div>
+                                                    {% if op.operario_nombre %}
+                                                    <div class="text-success">
+                                                        <i class="bi bi-person-fill me-1"></i>
+                                                        <small>{{ op.operario_nombre.split()[0] }}</small>
+                                                    </div>
+                                                    {% elif op.supervisor_nombre %}
+                                                    <div class="text-info">
+                                                        <i class="bi bi-person-badge-fill me-1"></i>
+                                                        <small>{{ op.supervisor_nombre.split()[0] }}</small>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                        
+                                                {# Fecha de Inicio #}
+                                                {% if op.fecha_inicio_planificada %}
+                                                <div class="mt-2 pt-1 border-top">
+                                                    <small class="text-primary fw-bold">
+                                                        <i class="bi bi-clock-history"></i> Inicia: {{ op.fecha_inicio_planificada }}
+                                                    </small>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            {# --- FIN: CONTENIDO VISUAL --- #}
+                                        </div>
+                                        {# --- FIN CAMBIO --- #}
+                                        {% endfor %}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                    {% endfor %}
+                        {% endfor %}
+                        {# --- FIN NUEVO BUCLE --- #}
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -630,16 +720,22 @@
 {% endblock %}
 
 {% block extra_js %}
+    
+    {# --- SCRIPT DE KANBAN (SORTABLE) --- #}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    
+    {# --- DATOS JINJA PARA JS --- #}
     <script>
         const listaSupervisores = {{ supervisores | tojson }};
         const listaOperarios = {{ operarios | tojson }};
         const IS_OPERARIO = {{ is_operario | tojson | safe }};
         const IS_SUPERVISOR_CALIDAD = {{ is_supervisor_calidad | tojson | safe }};
     </script>
-    <script src="{{ url_for('static', filename='js/planificacion/planificacion.js') }}"></script>
+    
+    {# --- SCRIPT DE PLANIFICACIÓN (AHORA CONTIENE EL INICIALIZADOR DE POPOVER) --- #}
     <script src="{{ url_for('static', filename='js/planificacion/planificacion.js') }}"></script>
 
+    {# --- SCRIPT PARA KANBAN (COLUMNAS COMPRIMIBLES / OCULTAR) --- #}
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         
@@ -689,8 +785,8 @@
                 }
             });
         });
-
     });
     </script>
     {# --- FIN DEL NUEVO SCRIPT --- #}
+
 {% endblock %}
