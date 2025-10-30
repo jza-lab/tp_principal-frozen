@@ -53,8 +53,8 @@ def index():
     ops_visibles_por_dia_formato = {} # <--- Usar nuevo nombre
     if response_semanal.get('success'):
         data_semanal = response_semanal.get('data', {})
-        ops_visibles_por_dia_formato = data_semanal.get('ops_visibles_por_dia', {}) # <--- Usar nuevo nombre
-        ordenes_por_dia = data_semanal.get('ordenes_por_dia', {})
+        ordenes_por_dia = data_semanal.get('ops_visibles_por_dia', {}) # <--- Usar nuevo nombre
+        ops_visibles_por_dia_formato = ordenes_por_dia
         inicio_semana_str = data_semanal.get('inicio_semana')
         fin_semana_str = data_semanal.get('fin_semana')
         if inicio_semana_str: inicio_semana = date.fromisoformat(inicio_semana_str) # Asignar si existe
@@ -142,7 +142,7 @@ def index():
         operarios=operarios,
         carga_crp=carga_calculada,
         capacidad_crp=capacidad_disponible,
-        ordenes_por_dia=ops_visibles_por_dia_formato,
+        ordenes_por_dia=ordenes_por_dia,
         inicio_semana_crp=inicio_semana.isoformat() if inicio_semana else None, # Usar las mismas fechas
         fin_semana_crp=fin_semana.isoformat() if fin_semana else None,
         now=datetime.utcnow(),
