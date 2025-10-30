@@ -136,11 +136,7 @@ def poner_en_cuarentena(id_lote):
 ##@jwt_required()
 ##@permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
 def liberar_cuarentena(id_lote):
-<<<<<<< HEAD
-    controller = InventarioController() # <-- AÑADIDO AQUÍ
-=======
     controller = InventarioController()
->>>>>>> dev-frontend
     try:
         cantidad = float(request.form.get('cantidad_a_liberar'))
     except (TypeError, ValueError):
@@ -165,17 +161,13 @@ def editar_lote(id_lote):
     """
     Gestiona la edición de un lote de inventario existente.
     """
-<<<<<<< HEAD
-    controller = InventarioController() # <-- AÑADIDO AQUÍ
-=======
     controller = InventarioController()
->>>>>>> dev-frontend
     if request.method == 'POST':
         try:
-            form_data = request.form.to_dict()
-            form_data.pop('csrf_token', None)  # 👈 Evita el error
+            datos_formulario = request.form.to_dict()
+            datos_formulario.pop('csrf_token', None)  # Se elimina el token antes de validar
             # Llama al método del controlador que ya existía
-            response, status_code = controller.actualizar_lote_parcial(id_lote, request.form.to_dict())
+            response, status_code = controller.actualizar_lote_parcial(id_lote, datos_formulario)
 
             if response.get('success'):
                 flash(response.get('message', 'Lote actualizado con éxito.'), 'success')
