@@ -327,3 +327,27 @@
             display: inline-block !important; /* Muestra la flecha "expandir" */
         }
         /* -- Fin Estilos Comprimibles -- */
+
+/* Asegurar que los modales se muestren correctamente */
+.modal.fade .modal-dialog {
+    transform: none !important;
+}
+
+.op-card-mini-wrapper {
+    user-select: none; /* Prevenir selección de texto */
+}
+
+.op-card-mini-wrapper:active {
+    transform: scale(0.98); /* Feedback visual al hacer clic */
+}
+
+/* --- [NUEVO] ESTILOS MOVIDOS DESDE tablero.html --- */
+.navegacion-semanal-separada { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0; padding: 0.5rem 1rem; background-color: #f8f9fa; border: 1px solid #dee2e6; border-bottom: none; border-top-left-radius: 0.75rem; border-top-right-radius: 0.75rem; }
+#accordionSemanal .accordion-item:first-of-type .accordion-button,
+#accordionCRP .accordion-item:first-of-type .accordion-button { border-top-left-radius: 0; border-top-right-radius: 0; }
+#accordionSemanal .accordion-header,
+#accordionCRP .accordion-header { margin-top: 0; }
+.card-assignment-details { font-size: 0.8rem; }
+.card-assignment-details span { display: inline-block; margin-right: 0.5rem; }
+.celda-sugerencia-agregada { white-space: normal; line-height: 1.4; }
+.tabla-detalle-op-revision { font-size: 0.9em; background-color: #fdfdfd; }

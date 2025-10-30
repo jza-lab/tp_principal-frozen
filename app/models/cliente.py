@@ -111,3 +111,22 @@ class ClienteModel(BaseModel):
         except Exception as e:
             logger.error(f"Error buscando cliente por CUIT {cuit}: {e}")
             return {'success': False, 'error': 'Ocurrió un error inesperado al buscar el cliente.'}
+
+    def buscar_por_dominio_email(self, dominio: str) -> Dict:
+        """Busca si existe al menos un cliente con un email de un dominio específico."""
+        try:
+            # Usamos `ilike` para una búsqueda insensible a mayúsculas/minúsculas
+            # y el patrón `%@dominio` para buscar al final del string de email.
+            pattern = f"%@{dominio}"
+            response = self.db.table(self.get_table_name()) \
+                .select('id') \
+                .ilike('email', pattern) \
+                .execute()
+
+            if response.data:
+                return {'success': True, 'data': response.data}
+            return {'success': False, 'error': 'No se encontraron clientes con ese dominio de email.'}
+
+        except Exception as e:
+            logger.error(f"Error buscando cliente por dominio de email {dominio}: {e}")
+            return {'success': False, 'error': 'Ocurrió un error inesperado al buscar por dominio.'}

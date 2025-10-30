@@ -134,8 +134,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         
                         const fromState = evt.from.closest('.kanban-column').dataset.estado;
                         const toState = evt.to.closest('.kanban-column').dataset.estado;
-                        // ... (resto de la lógica onMove SIN CAMBIOS) ...
-                        // --- REGLAS DE TRANSICIÓN DEFINIDAS POR ROL ---
+                        
+                        // --- OBTENER TÍTULOS PARA MODALES (NUEVO) ---
+                        // Es más amigable mostrar el título de la columna que el "estado_key"
+                        const fromTitle = evt.from.closest('.kanban-column').querySelector('.kanban-title-text').textContent.trim();
+                        const toTitle = evt.to.closest('.kanban-column').querySelector('.kanban-title-text').textContent.trim();
+                        // --- FIN TÍTULOS ---
+
+                        // ... (definición de operarioTransitions, supervisorCalidadTransitions, supervisorTransitions) ...
                         const operarioTransitions = {
                             'LISTA PARA PRODUCIR': ['EN_LINEA_1', 'EN_LINEA_2'],
                             'EN_LINEA_1': ['EN_EMPAQUETADO'],
@@ -158,29 +164,61 @@ document.addEventListener('DOMContentLoaded', function () {
                         };
                         
                         // Determinar qué conjunto de reglas usar. 
-                        // Estas variables (IS_OPERARIO, IS_SUPERVISOR_CALIDAD) deben ser inyectadas desde la plantilla Jinja2.
                         let allowedTransitions;
                         if (typeof IS_OPERARIO !== 'undefined' && IS_OPERARIO) {
                             allowedTransitions = operarioTransitions;
                         } else if (typeof IS_SUPERVISOR_CALIDAD !== 'undefined' && IS_SUPERVISOR_CALIDAD) {
                             allowedTransitions = supervisorCalidadTransitions;
                         } else {
-                            // Por defecto, se asumen los permisos de Supervisor general.
                             allowedTransitions = supervisorTransitions;
                         }
                         
-                        // La clave es el estado de ORIGEN. Si no está en el mapa, no se puede mover DESDE él.
+                        // --- MODIFICACIÓN 1: VALIDACIÓN DE ROL ---
                         if (!allowedTransitions[fromState] || !allowedTransitions[fromState].includes(toState)) { 
                             console.warn(`Movimiento de ${fromState} a ${toState} NO PERMITIDO para este rol.`); 
-                            return false; 
+                            
+                            // Mostrar modal en lugar de fallo silencioso
+                            showFeedbackModal(
+                                'Movimiento No Permitido',
+                                `Su rol no le permite mover órdenes desde <strong>"${fromTitle}"</strong> hacia <strong>"${toTitle}"</strong>.`,
+                                'warning'
+                            );
+                            
+                            return false; // Detener el movimiento
                         }
-                        if (fromState === 'LISTA PARA PRODUCIR' /*...*/) {
-                             // ... (validación línea asignada SIN CAMBIOS) ...
+                        
+                        // --- MODIFICACIÓN 2 y 3: VALIDACIÓN DE LÍNEA ---
+                        if (fromState === 'LISTA PARA PRODUCIR' && (toState === 'EN_LINEA_1' || toState === 'EN_LINEA_2')) {
                              const lineaAsignada = evt.dragged.dataset.lineaAsignada;
                              const lineaDestino = toState === 'EN_LINEA_1' ? '1' : '2';
-                             if (!lineaAsignada) { console.error(`VALIDACIÓN FALLIDA: Sin data-linea-asignada...`); return false;}
-                             if (lineaAsignada !== lineaDestino) { console.error(`VALIDACIÓN FALLIDA: Línea incorrecta...`); return false; }
+                             
+                             if (!lineaAsignada) { 
+                                 console.error(`VALIDACIÓN FALLIDA: Sin data-linea-asignada...`); 
+                                 
+                                 // Mostrar modal
+                                 showFeedbackModal(
+                                    'Línea No Asignada',
+                                    'Esta OP no puede moverse a una línea de producción porque <strong>aún no tiene una línea asignada</strong>.\nPlanifíquela primero desde el "Plan Maestro".',
+                                    'error'
+                                 );
+                                 
+                                 return false; // Detener
+                             }
+                             
+                             if (lineaAsignada !== lineaDestino) { 
+                                 console.error(`VALIDACIÓN FALLIDA: Línea incorrecta...`); 
+                                 
+                                 // Mostrar modal
+                                 showFeedbackModal(
+                                    'Línea Incorrecta',
+                                    `Esta OP está asignada a la <strong>Línea ${lineaAsignada}</strong> y no puede moverse a <strong>${toTitle}</strong>.`,
+                                    'warning'
+                                 );
+                                 
+                                 return false; // Detener
+                             }
                         }
+                        
                         console.log("Movimiento PERMITIDO visualmente.");
                         return true; 
                     },
@@ -204,6 +242,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }); // Fin columns.forEach
 
+    // --- INICIALIZAR POPOVERS DE LA PLANIFICACIÓN SEMANAL ---
+    // (Este bloque se deja vacío a propósito, ya que se eliminó la funcionalidad de popover)
+    const popoverTriggerList = document.querySelectorAll('[data-bs-toggle="popover"]');
+    const popoverList = [...popoverTriggerList].map(popoverTriggerEl => {
+        return new bootstrap.Popover(popoverTriggerEl, {
+             sanitize: false // Permite HTML en el contenido
+        });
+    });
+    // ---------------------------------------------------
+
     // =======================================================
     // --- LISTENER GLOBAL PARA BOTONES (INCLUYE MODALES) ---
     // =======================================================
@@ -214,6 +262,13 @@ document.addEventListener('DOMContentLoaded', function () {
         if (botonConsolidarAprobar) {
             const modal = botonConsolidarAprobar.closest('.modal');
             if (!modal) { console.error("Modal no encontrada."); return; }
+
+            // --- INICIO DE LA MODIFICACIÓN ---
+            // 1. Capturamos todos los controles del modal
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            const closeButton = modal.querySelector('.btn-close');
+            const cancelButton = modal.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
+            // --- FIN DE LA MODIFICACIÓN ---
 
             let opIds = [];
             try { opIds = JSON.parse(modal.dataset.opIds || '[]'); } 
@@ -237,8 +292,45 @@ document.addEventListener('DOMContentLoaded', function () {
                 operario_id: operarioSelect.value ? parseInt(operarioSelect.value) : null
             };
 
-            botonConsolidarAprobar.disabled = true;
-            botonConsolidarAprobar.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Verificando Capacidad...`;
+            // --- INICIO DE LA MODIFICACIÓN ---
+            // 2. Creamos una función para Habilitar/Deshabilitar todo el modal
+            const toggleModalLock = (lock) => {
+                if (lock) {
+                    // DESHABILITAR
+                    botonConsolidarAprobar.disabled = true;
+                    botonConsolidarAprobar.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Verificando Capacidad...`;
+                    if (closeButton) closeButton.disabled = true;
+                    if (cancelButton) cancelButton.disabled = true;
+                    if (modalInstance) {
+                        
+                        // --- INICIO DE LA CORRECCIÓN ---
+                        // Usamos '_config' (con guion bajo)
+                        modalInstance._config.backdrop = 'static'; // Evita clic fuera
+                        modalInstance._config.keyboard = false;   // Evita tecla Escape
+                        // --- FIN DE LA CORRECCIÓN ---
+
+                    }
+                } else {
+                    // HABILITAR
+                    botonConsolidarAprobar.disabled = false;
+                    botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
+                    if (closeButton) closeButton.disabled = false;
+                    if (cancelButton) cancelButton.disabled = false;
+                    if (modalInstance) {
+                        
+                        // --- INICIO DE LA CORRECCIÓN ---
+                        modalInstance._config.backdrop = true; // Restaura default
+                        modalInstance._config.keyboard = true; // Restaura default
+                        // --- FIN DE LA CORRECCIÓN ---
+                        
+                    }
+                }
+            };
+            // --- FIN DE LA MODIFICACIÓN ---
+
+
+            // 3. DESHABILITAMOS el modal antes de la llamada
+            toggleModalLock(true);
 
             try {
                 // Primera llamada: Verificar capacidad y obtener posible confirmación
@@ -251,21 +343,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 if (result.success) { // Aprobación directa
                     showFeedbackModal('Éxito', result.message || "Lote planificado con éxito.", 'success');
-                    setTimeout(() => window.location.reload(), 1500); // Dar tiempo a ver el modal
+                    // No es necesario habilitar, la página recargará
+                    setTimeout(() => window.location.reload(), 1500);
                 }
                 else if (result.error === 'SOBRECARGA_CAPACIDAD') { // Sobrecarga
                     showFeedbackModal('Sobrecarga Detectada', result.message + "\n\nElija otra fecha o línea.", 'warning');
-                    botonConsolidarAprobar.disabled = false;
-                    botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
+                    toggleModalLock(false); // HABILITAMOS
                 }
                 else if (result.error === 'MULTI_DIA_CONFIRM') { // Requiere confirmación
-                    // Usar showFeedbackModal tipo 'confirm'
+                    
+                    // HABILITAMOS el modal principal ANTES de mostrar el modal de confirmación
+                    toggleModalLock(false); 
+                    
                     showFeedbackModal(
                         'Confirmación Requerida',
                         result.message,
                         'confirm',
                         async () => { // Función callback si el usuario confirma
-                            botonConsolidarAprobar.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Confirmando...`;
+                            // ... (lógica del segundo fetch sin cambios) ...
+                            // Esta lógica ya maneja sus propios estados de carga/error
+                            // en el *segundo* modal (feedbackModal)
                             const opIdConfirmar = result.op_id_confirmar;
                             const asignacionesConfirmar = result.asignaciones_confirmar;
                             try {
@@ -280,39 +377,25 @@ document.addEventListener('DOMContentLoaded', function () {
                                     setTimeout(() => window.location.reload(), 1500);
                                 } else {
                                     showFeedbackModal('Error al Confirmar', confirmResult.error || confirmResult.message, 'error');
-                                    botonConsolidarAprobar.disabled = false;
-                                    botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
                                 }
                             } catch (confirmError) {
                                 console.error("Error red al confirmar:", confirmError);
                                 showFeedbackModal('Error de Conexión', 'No se pudo confirmar la planificación.', 'error');
-                                botonConsolidarAprobar.disabled = false;
-                                botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
                             }
                         } // Fin callback
                     ); // Fin showFeedbackModal confirm
 
-                    // Re-habilitar botón si se cierra el modal de confirmación sin confirmar
-                    const modalElement = document.getElementById('feedbackModal');
-                    const enableButtonOnCancelOrClose = () => {
-                         if (botonConsolidarAprobar.disabled && botonConsolidarAprobar.textContent.includes('Verificando')) { // Solo si estaba esperando confirmación
-                             botonConsolidarAprobar.disabled = false;
-                             botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
-                         }
-                    };
-                    // Escuchar evento 'hidden.bs.modal' para detectar cierre
-                    modalElement.addEventListener('hidden.bs.modal', enableButtonOnCancelOrClose, { once: true });
-
+                    // ELIMINAMOS el listener 'hidden.bs.modal'
+                    // Ya no es necesario porque llamamos a toggleModalLock(false) arriba.
+                    
                 } else { // Otros errores
                     showFeedbackModal('Error', result.error || result.message || 'Error desconocido.', 'error');
-                    botonConsolidarAprobar.disabled = false;
-                    botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
+                    toggleModalLock(false); // HABILITAMOS
                 }
             } catch (error) { // Error de red en la primera llamada
                 console.error("Error de red:", error);
                 showFeedbackModal('Error de Conexión', 'No se pudo contactar al servidor.', 'error');
-                botonConsolidarAprobar.disabled = false;
-                botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
+                toggleModalLock(false); // HABILITAMOS
             }
         } // Fin if (botonConsolidarAprobar)
 

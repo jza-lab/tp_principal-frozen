@@ -1,10 +1,10 @@
-from flask import Flask, redirect, url_for, flash, session, request 
+from flask import Flask, redirect, url_for, flash, request, session
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, unset_jwt_cookies, get_current_user
 from flask_jwt_extended import JWTManager, unset_jwt_cookies, get_current_user, verify_jwt_in_request
 from flask_wtf.csrf import CSRFProtect
 from flask_wtf import FlaskForm
-from app.config import Config
+from app.config import Config # <-- 1. Importar contextfunction desde su ubicación directa
+from jinja2 import pass_context # <-- 1. Importar pass_context
 import logging
 from .json_encoder import CustomJSONEncoder
 from datetime import timedelta, datetime
@@ -159,24 +159,26 @@ def _formato_moneda_filter(value):
     except (ValueError, TypeError):
         return value
 
-def _has_permission_filter(accion: str) -> bool:
+@pass_context # <-- 2. Usar el decorador pass_context
+def _has_permission_filter(context, accion: str) -> bool: # <-- 3. Recibir 'context' como primer argumento
     """
     Verifica si el rol del usuario actual (almacenado en la sesión de Flask)
     tiene el permiso para realizar una acción específica.
     """
     try:
-        # Usamos get_current_user(), que devuelve el usuario si está logueado, o None si no lo está.
-        # Esto funciona gracias a nuestro user_lookup_loader.
+        # Usamos get_current_user(), que devuelve el usuario si está logueado,
+        # o None si no lo está. Esto funciona gracias a nuestro user_lookup_loader.
         user = get_current_user()
         if not user:
             return False
-        
+
         # El user_lookup_loader ya nos da un objeto con el rol.
         rol_usuario = getattr(user, 'rol', None)
         if not rol_usuario:
             return False
-        
+
         return RoleModel.check_permission(rol_usuario, accion)
+
     except RuntimeError: # Capturamos específicamente el error de "fuera de contexto"
         # En caso de cualquier error (ej: fuera de un contexto de request), denegar permiso.
         return False
@@ -208,12 +210,17 @@ def create_app() -> Flask:
     @app.context_processor
     def inject_pending_client_count():
         conteo = 0
-        current_user = get_current_user()
-        if current_user and hasattr(current_user, 'rol') and current_user.rol in ['DEV', 'GERENTE']:
-            cliente_controller = ClienteController()
-            _, status = cliente_controller.obtener_conteo_clientes_pendientes()
-            if status == 200:
-                conteo = _.get('data', {}).get('count', 0)
+        try:
+            # Esto es para empleados, debe usar JWT.
+            current_user = get_current_user()
+            if current_user and getattr(current_user, 'rol', None) in ['DEV', 'GERENTE']:
+                cliente_controller = ClienteController()
+                response, status = cliente_controller.obtener_conteo_clientes_pendientes()
+                if status == 200:
+                    conteo = response.get('data', {}).get('count', 0)
+        except RuntimeError:
+            # Fuera de un contexto de request, no hay usuario.
+            pass
         return dict(pending_client_count=conteo)
 
     @app.context_processor
@@ -223,9 +230,8 @@ def create_app() -> Flask:
         en todas las plantillas.
         """
         conteo = 0
-        current_user = get_current_user()
-        # Asumiendo que un 'cliente' tiene un rol específico, por ejemplo 'CLIENTE'
-        if current_user and hasattr(current_user, 'rol') and current_user.rol == 'CLIENTE':
+        # Esto es para clientes, debe usar la sesión de Flask. Se mantiene como está.
+        if 'cliente_id' in session:
             try:
                 cliente_id = current_user.id
                 reclamo_model = ReclamoModel()
@@ -243,23 +249,20 @@ def create_app() -> Flask:
         return dict(permission_map=RoleModel.get_permission_map())
 
     @app.context_processor
-    def _inject_user_from_jwt():
+    def inject_current_user():
         """
-        Inyecta los datos del usuario desde el token JWT en el contexto de la plantilla,
-        si el usuario está autenticado.
+        Inyecta el objeto 'current_user' (obtenido del token JWT) en el contexto
+        de todas las plantillas Jinja2.
         """
-        from flask_jwt_extended import get_current_user
-        try:
-            return dict(current_user=get_current_user())
-        except RuntimeError:
-            # Esto ocurre si no hay un contexto de petición JWT activo (ej. en páginas públicas).
-            return dict(current_user=None)
-    
+        return dict(current_user=get_current_user())
+
     # Registrar filtros directamente en el entorno de Jinja
     app.jinja_env.filters['format_datetime'] = _format_datetime_filter
     app.jinja_env.filters['formato_moneda'] = _formato_moneda_filter
-    app.jinja_env.globals['has_permission'] = _has_permission_filter
-    app.jinja_env.tests['has_permission'] = _has_permission_filter
+
+    # 3. Registrar la función decorada. No es necesario cambiar esta parte.
+    app.jinja_env.globals['has_permission'] = _has_permission_filter # Se registra como global
+    app.jinja_env.tests['has_permission'] = _has_permission_filter # Y como test
     
     _register_blueprints(app)
     _register_error_handlers(app)
@@ -276,6 +279,7 @@ def create_app() -> Flask:
         # ya que es innecesario y causa consultas a la BD por cada CSS, JS, etc.
         if request.endpoint and (request.endpoint.startswith('static') or request.blueprint == 'static'):
             return
+        
         verify_jwt_in_request(optional=True)
 
     return app

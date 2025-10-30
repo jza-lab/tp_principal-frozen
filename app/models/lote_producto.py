@@ -67,10 +67,10 @@ class LoteProductoModel(BaseModel):
                 producto_id = lote['producto_id']
                 nombre = lote.get('producto', {}).get('nombre', 'Producto Desconocido')
                 cantidad = float(lote.get('cantidad_actual', 0) or 0)
-                
+
                 if nombre not in composicion:
                     composicion[nombre] = 0
-                
+
                 composicion[nombre] += cantidad
 
             final_data = [{'nombre': k, 'cantidad': v} for k, v in composicion.items()]
@@ -80,7 +80,6 @@ class LoteProductoModel(BaseModel):
             logger.error(f"Error obteniendo composición de inventario de productos: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    # --- MÉTODO NUEVO A AÑADIR ---
     def get_all_lotes_for_view(self):
         """
         Obtiene todos los lotes de productos con datos enriquecidos (nombre del producto y cantidad reservada)
@@ -94,7 +93,7 @@ class LoteProductoModel(BaseModel):
 
             if not hasattr(lotes_result, 'data'):
                  raise Exception("La consulta de lotes no devolvió datos.")
-            
+
             lotes_data = lotes_result.data
 
             # 2. Obtener todas las reservas activas
@@ -121,10 +120,10 @@ class LoteProductoModel(BaseModel):
                 else:
                     lote['producto_nombre'] = 'Producto no encontrado'
                 del lote['producto']
-                
+
                 # Añadir cantidad reservada
                 lote['cantidad_reservada'] = reservas_map.get(lote.get('id_lote'), 0)
-                
+
                 enriched_data.append(lote)
 
             return {'success': True, 'data': enriched_data}
@@ -134,35 +133,48 @@ class LoteProductoModel(BaseModel):
 
     def get_lote_detail_for_view(self, id_lote: int):
         """
-        Obtiene el detalle de un lote de producto con datos enriquecidos.
+        Obtiene UN lote para la página 'detalle.html',
+        incluyendo las reservas asociadas.
         """
         try:
-            # --- LÍNEA CORREGIDA ---
-            # Cambiamos 'id' por 'id_lote' para que coincida con la columna de la base de datos.
+            # --- PASO 1: Obtener el lote (Sin cambios) ---
             result = self.db.table(self.get_table_name()).select(
                 '*, producto:productos(nombre, codigo)'
             ).eq('id_lote', id_lote).single().execute()
-            # ------------------------
 
-            if result.data:
-                item = result.data
-                if item.get('producto'):
-                    item['producto_nombre'] = item['producto']['nombre']
-                    item['producto_codigo'] = item['producto']['codigo']
-                else:
-                    item['producto_nombre'] = 'Producto no encontrado'
-                    item['producto_codigo'] = 'N/A'
-                del item['producto']
-                return {'success': True, 'data': item}
-            else:
+            # ... (Manejo de 'item' y 'producto' sin cambios) ...
+            if not result.data:
                 return {'success': False, 'error': 'Lote no encontrado'}
+            item = result.data
+            if item.get('producto'):
+                item['producto_nombre'] = item['producto']['nombre']
+                item['producto_codigo'] = item['producto']['codigo']
+            else:
+                item['producto_nombre'] = 'Producto no encontrado'
+                item['producto_codigo'] = 'N/A'
+            del item['producto']
+
+            # --- INICIO DE LA CORRECCIÓN ---
+            # --- PASO 2: Obtener las reservas (cambiando 'codigo' por 'id') ---
+            reservas_result = self.db.table('reservas_productos').select(
+                '*, pedido:pedidos(id)' # <-- CAMBIO AQUÍ
+            ).eq('lote_producto_id', id_lote).eq('estado', 'RESERVADO').execute()
+            # --- FIN DE LA CORRECCIÓN ---
+
+            if reservas_result.data:
+                item['reservas'] = reservas_result.data
+            else:
+                item['reservas'] = []
+
+            return {'success': True, 'data': item}
+
         except Exception as e:
-            logger.error(f"Error obteniendo detalle de lote de producto {id_lote}: {e}")
+            logger.error(f"Error obteniendo detalle de lote de producto {id_lote}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
-        
+
     def update_lote_cantidad_por_despacho(self, lote_id: int, cantidad_despachada: float) -> dict:
         """
-        Reduce la cantidad_actual y la cantidad_reservada de un lote 
+        Reduce la cantidad_actual y la cantidad_reservada de un lote
         al completar un pedido.
         """
         try:
@@ -170,13 +182,13 @@ class LoteProductoModel(BaseModel):
             lote_result = self.find_by_id(lote_id)
             if not lote_result.get('data'):
                 return {'success': False, 'error': f"Lote de producto ID {lote_id} no encontrado."}
-            
+
             lote = lote_result['data']
-            
+
             # 2. Calcular nuevas cantidades (deben ser >= 0)
             cantidad_actual_nueva = lote.get('cantidad_actual', 0.0) - cantidad_despachada
             cantidad_reservada_nueva = lote.get('cantidad_reservada', 0.0) - cantidad_despachada
-            
+
             if cantidad_actual_nueva < 0 or cantidad_reservada_nueva < 0:
                 # Esto no debería ocurrir si el sistema de reservas funciona bien, pero es una protección
                 return {'success': False, 'error': 'Intento de despachar más cantidad de la reservada o disponible en el lote.'}
@@ -187,11 +199,11 @@ class LoteProductoModel(BaseModel):
                 'cantidad_reservada': cantidad_reservada_nueva,
                 'fecha_actualizacion': datetime.now().isoformat()
             }
-            
+
             # 4. Actualizar en la base de datos
             # Asumo que self.update() es el método de la clase base para actualizar el registro en la DB
-            update_result = self.update(lote_id, update_data, 'id') 
-            
+            update_result = self.update(lote_id, update_data, 'id')
+
             if update_result.get('success'):
                 return {'success': True, 'data': update_result['data']}
             else:
@@ -200,7 +212,7 @@ class LoteProductoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error al despachar lote {lote_id}: {str(e)}")
             return {'success': False, 'error': f"Error interno en la BD al actualizar lote: {str(e)}"}
-        
+
     def find_por_vencimiento(self, dias_adelante: int = 7) -> Dict:
         """Obtener lotes de productos que vencen en X días"""
         try:

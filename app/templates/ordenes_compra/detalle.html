@@ -38,24 +38,25 @@
                 <h5 class="mb-0">Información General</h5>
                 <div>
                     {% set estado_config = {
-                        'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
-                        'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
-                        'EN ESPERA DE INSUMO': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
-                        'EN_TRANSITO': {'class': 'bg-primary-soft text-primary', 'icon': 'truck'},
-                        'RECEPCION_COMPLETA': {'class': 'bg-success-soft text-success', 'icon': 'box-seam'},
-                        'RECEPCION_INCOMPLETA': {'class': 'bg-danger-soft text-danger', 'icon': 'box-seam'},
-                        'RECHAZADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
+                    'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
+                    'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
+                    'EN ESPERA DE INSUMO': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
+                    'EN_TRANSITO': {'class': 'bg-primary-soft text-primary', 'icon': 'truck'},
+                    'RECEPCION_COMPLETA': {'class': 'bg-success-soft text-success', 'icon': 'box-seam'},
+                    'RECEPCION_INCOMPLETA': {'class': 'bg-danger-soft text-danger', 'icon': 'box-seam'},
+                    'RECHAZADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
-                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                    {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':
+                    'question-circle'}) %}
                     <span class="badge {{ config.class }} fs-6 me-2">
                         <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado.replace('_', ' ') }}
                     </span>
-                    
+
                     {% if orden.prioridad and orden.prioridad != 'NORMAL' %}
                     {% set prioridad_config = {
-                        'BAJA': {'class': 'bg-light text-dark', 'icon': 'arrow-down'},
-                        'ALTA': {'class': 'bg-warning text-dark', 'icon': 'arrow-up'},
-                        'URGENTE': {'class': 'bg-danger', 'icon': 'exclamation-triangle'}
+                    'BAJA': {'class': 'bg-light text-dark', 'icon': 'arrow-down'},
+                    'ALTA': {'class': 'bg-warning text-dark', 'icon': 'arrow-up'},
+                    'URGENTE': {'class': 'bg-danger', 'icon': 'exclamation-triangle'}
                     } %}
                     {% set pconfig = prioridad_config.get(orden.prioridad, {'class': 'bg-secondary', 'icon': 'dash'}) %}
                     <span class="badge {{ pconfig.class }} fs-6">
@@ -89,7 +90,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="col-md-6">
                         <h6 class="text-muted mb-3">Fechas y Personal</h6>
                         <div class="row g-3">
@@ -109,7 +110,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="col-12">
                         <h6 class="text-muted mb-3">Timeline de Entrega</h6>
                         <div class="row g-3">
@@ -124,7 +125,8 @@
                             </div>
                             <div class="col-md-4">
                                 <div class="d-flex align-items-center">
-                                    <i class="bi bi-check-circle text-{{ 'success' if orden.fecha_real_entrega else 'muted' }} me-2"></i>
+                                    <i
+                                        class="bi bi-check-circle text-{{ 'success' if orden.fecha_real_entrega else 'muted' }} me-2"></i>
                                     <div>
                                         <div class="small text-muted">Entrega Real</div>
                                         <div class="fw-bold">{{ orden.fecha_real_entrega or 'No recibido' }}</div>
@@ -133,37 +135,44 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     {% if orden.observaciones %}
                     {% if orden.orden_produccion_id %}
                     <div class="col-12 mt-3"> {# O ajusta el layout según prefieras #}
                         <h6 class="text-muted mb-2">Orden de Producción Vinculada</h6>
                         <div class="border-start border-3 border-info ps-3">
-                            <a href="{{ url_for('orden_produccion.detalle', id=orden.orden_produccion_id) }}" class="fw-bold">
-                                Ver OP-{{ orden.orden_produccion_id }} <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+                            <a href="{{ url_for('orden_produccion.detalle', id=orden.orden_produccion_id) }}"
+                                class="fw-bold">
+                                Ver OP-{{ orden.orden_produccion_id }} <i
+                                    class="bi bi-box-arrow-up-right ms-1 small"></i>
                             </a>
-                            <p class="small text-muted mb-0">Esta orden de compra fue generada para abastecer la OP indicada.</p>
+                            <p class="small text-muted mb-0">Esta orden de compra fue generada para abastecer la OP
+                                indicada.</p>
                         </div>
                     </div>
                     {% endif %}
                     {% endif %}
-                    
+
                     {% if orden.complementa_a_orden or orden.continuada_por_orden %}
                     <div class="col-12 mt-3">
                         <h6 class="text-muted mb-2">Órdenes Vinculadas</h6>
                         {% if orden.complementa_a_orden %}
                         <div class="border-start border-3 border-secondary ps-3 mb-2">
                             <span class="small text-muted">Esta orden complementa a</span>
-                            <a href="{{ url_for('orden_compra.detalle', id=orden.complementa_a_orden.id) }}" class="fw-bold d-block">
-                                {{ orden.complementa_a_orden.codigo_oc }} <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+                            <a href="{{ url_for('orden_compra.detalle', id=orden.complementa_a_orden.id) }}"
+                                class="fw-bold d-block">
+                                {{ orden.complementa_a_orden.codigo_oc }} <i
+                                    class="bi bi-box-arrow-up-right ms-1 small"></i>
                             </a>
                         </div>
                         {% endif %}
                         {% if orden.continuada_por_orden %}
                         <div class="border-start border-3 border-secondary ps-3">
                             <span class="small text-muted">Esta orden es continuada por</span>
-                            <a href="{{ url_for('orden_compra.detalle', id=orden.continuada_por_orden.id) }}" class="fw-bold d-block">
-                                {{ orden.continuada_por_orden.codigo_oc }} <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+                            <a href="{{ url_for('orden_compra.detalle', id=orden.continuada_por_orden.id) }}"
+                                class="fw-bold d-block">
+                                {{ orden.continuada_por_orden.codigo_oc }} <i
+                                    class="bi bi-box-arrow-up-right ms-1 small"></i>
                             </a>
                         </div>
                         {% endif %}
@@ -173,7 +182,9 @@
             </div>
         </div>
 
-        <form id="recepcionForm" action="{{ url_for('orden_compra.procesar_recepcion', orden_id=orden.id) if orden.estado == 'EN_TRANSITO' else '' }}" method="POST">
+        <form id="recepcionForm"
+            action="{{ url_for('orden_compra.procesar_recepcion', orden_id=orden.id) if orden.estado == 'EN_TRANSITO' else '' }}"
+            method="POST">
             {{ csrf_form.csrf_token }}
 
             <div class="card mt-4">
@@ -206,15 +217,20 @@
                                     <td class="text-end">{{ item.cantidad_solicitada }}</td>
                                     {% if orden.estado == 'EN_TRANSITO' %}
                                     <td class="text-center" style="max-width: 150px;">
-                                        <input type="number" name="cantidad_recibida[]" class="form-control form-control-sm text-center cantidad-recibida" value="{{ item.cantidad_solicitada }}" min="0" step="any" required>
+                                        <input type="number" name="cantidad_recibida[]"
+                                            class="form-control form-control-sm text-center cantidad-recibida"
+                                            value="{{ item.cantidad_solicitada }}" min="0" step="any" required>
                                     </td>
                                     <td class="text-end" style="max-width: 150px;">
-                                        <input type="number" name="precio_unitario[]" class="form-control form-control-sm text-end precio-unitario" value="{{ "%.2f"|format(item.precio_unitario|float) }}" min="0" step="any" required>
+                                        <input type="number" name="precio_unitario[]"
+                                            class="form-control form-control-sm text-end precio-unitario" value="{{ "
+                                            %.2f"|format(item.precio_unitario|float) }}" min="0" step="any" required>
                                     </td>
                                     {% else %}
                                     <td class="text-end">$ {{ item.precio_unitario | formato_moneda }}</td>
                                     {% endif %}
-                                    <td class="text-end fw-bold subtotal-item">$ {{ item.subtotal | formato_moneda }}</td>
+                                    <td class="text-end fw-bold subtotal-item">$ {{ item.subtotal | formato_moneda }}
+                                    </td>
                                 </tr>
                                 {% else %}
                                 <tr>
@@ -235,14 +251,18 @@
                 <div class="card-body">
                     <div class="mb-3">
                         <label for="observaciones_recepcion" class="form-label">Observaciones de Recepción</label>
-                        <textarea class="form-control" id="observaciones_recepcion" name="observaciones" rows="3" placeholder="Ej: La caja del insumo X llegó dañada."></textarea>
+                        <textarea class="form-control" id="observaciones_recepcion" name="observaciones" rows="3"
+                            placeholder="Ej: La caja del insumo X llegó dañada."></textarea>
                     </div>
                     <div class="d-flex justify-content-end gap-2">
-                        {% set can_receive = has_permission('logistica_recepcion_oc') or has_permission('gestionar_recepcion_orden_compra') %}
-                        <button type="submit" name="accion" value="rechazar" class="btn btn-danger {% if not can_receive %}disabled{% endif %}">
+                        {% set can_receive = has_permission('logistica_recepcion_oc') or
+                        has_permission('gestionar_recepcion_orden_compra') %}
+                        <button type="submit" name="accion" value="rechazar"
+                            class="btn btn-danger {% if not can_receive %}disabled{% endif %}">
                             <i class="bi bi-x-circle me-1"></i>Rechazar Pedido
                         </button>
-                        <button type="submit" name="accion" value="aceptar" class="btn btn-success {% if not can_receive %}disabled{% endif %}">
+                        <button type="submit" name="accion" value="aceptar"
+                            class="btn btn-success {% if not can_receive %}disabled{% endif %}">
                             <i class="bi bi-check-circle me-1"></i>Aceptar Recepción
                         </button>
                     </div>
@@ -251,7 +271,7 @@
             {% endif %}
         </form>
     </div>
-    
+
     <div class="col-lg-4">
         <div class="card">
             <div class="card-header">
@@ -263,14 +283,18 @@
             <div class="card-body">
                 <div class="d-grid gap-2">
                     <button class="btn btn-outline-secondary" disabled>
-                        <i class="bi bi-printer me-2"></i>Imprimir Orden
+                        <i class="bi bi-file-earmark-text me-2"></i>Visualizar factura
+                    </button>
+                    <button class="btn btn-outline-secondary" disabled>
+                        <i class="bi folder-open me-2"></i>Cargar imagen de factura
                     </button>
                 </div>
             </div>
         </div>
     </div>
 </div>
-<div class="modal fade" id="confirmacionRecepcionParcialModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
+<div class="modal fade" id="confirmacionRecepcionParcialModal" tabindex="-1" aria-labelledby="modalLabel"
+    aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -294,113 +318,115 @@
 {# El script ahora está dentro del bloque extra_js, asegurando que se cargue en el orden correcto #}
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const formularioRecepcion = document.getElementById('recepcionForm');
+    document.addEventListener('DOMContentLoaded', function () {
+        const formularioRecepcion = document.getElementById('recepcionForm');
 
-    if (formularioRecepcion) {
-        // La lógica de cálculo de totales solo debe ejecutarse en la pantalla de recepción.
-        {% if orden.estado == 'EN_TRANSITO' %}
-            const ivaOriginal = {{ orden.iva|float|tojson }};
-
-            function formatearMoneda(valor) {
-                const numero = parseFloat(valor) || 0;
-                return `$ ${numero.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            }
-
-            function actualizarTotales() {
-                let granSubtotal = 0;
-                document.querySelectorAll('.item-row').forEach(fila => {
-                    const campoCantidad = fila.querySelector('.cantidad-recibida');
-                    const campoPrecio = fila.querySelector('.precio-unitario');
-                    const celdaSubtotal = fila.querySelector('.subtotal-item');
-
-                    if (campoCantidad && campoPrecio && celdaSubtotal) {
-                        const cantidad = parseFloat(campoCantidad.value) || 0;
-                        const precio = parseFloat(campoPrecio.value) || 0;
-                        const subtotalItem = cantidad * precio;
-                        
-                        celdaSubtotal.textContent = formatearMoneda(subtotalItem);
-                        granSubtotal += subtotalItem;
-                    }
-                });
-
-                const elementoSubtotal = document.querySelector('#orden-subtotal');
-                const elementoIva = document.querySelector('#orden-iva');
-                const elementoTotal = document.querySelector('#orden-total');
-                
-                if (elementoSubtotal && elementoIva && elementoTotal) {
-                    let iva = 0;
-                    if (ivaOriginal > 0) {
-                        iva = granSubtotal * 0.21;
-                    }
-                    const total = granSubtotal + iva;
-
-                    elementoSubtotal.textContent = formatearMoneda(granSubtotal);
-                    elementoIva.textContent = formatearMoneda(iva);
-                    elementoTotal.textContent = formatearMoneda(total);
-                }
-            }
-
-            formularioRecepcion.addEventListener('input', function(e) {
-                if (e.target.classList.contains('cantidad-recibida') || e.target.classList.contains('precio-unitario')) {
-                    actualizarTotales();
-                }
-            });
-
-            // Cálculo inicial al cargar la página
-            actualizarTotales();
-        {% endif %}
-
-        // El manejador del submit es necesario siempre que el formulario exista.
-        const recepcionModal = new bootstrap.Modal(document.getElementById('confirmacionRecepcionParcialModal'));
-
-        formularioRecepcion.addEventListener('submit', function (e) {
-            e.preventDefault();
-            const submitter = e.submitter;
-            if (!submitter || submitter.value !== 'aceptar') {
-                this.submit();
-                return;
-            }
-
-            let esRecepcionParcial = false;
-            document.querySelectorAll('.item-row').forEach(fila => {
-                const cantidadSolicitada = parseFloat(fila.querySelector('td:nth-child(2)').textContent);
-                const cantidadRecibida = parseFloat(fila.querySelector('.cantidad-recibida').value);
-                if (cantidadRecibida < cantidadSolicitada) {
-                    esRecepcionParcial = true;
-                }
-            });
-
-            if (esRecepcionParcial) {
-                recepcionModal.show();
-            } else {
-                submitFormulario(submitter);
-            }
-        });
-
-        document.getElementById('confirmarRecepcionBtn').addEventListener('click', function() {
-            const submitter = document.querySelector('button[name="accion"][value="aceptar"]');
-            submitFormulario(submitter);
-        });
-
-        function submitFormulario(submitter) {
-            if (!submitter) return;
-            
-            const hiddenInput = document.createElement('input');
-            hiddenInput.type = 'hidden';
-            hiddenInput.name = 'accion';
-            hiddenInput.value = submitter.value;
-            formularioRecepcion.appendChild(hiddenInput);
-
-            const overlay = document.getElementById('loadingOverlay');
-            if (overlay) {
-                overlay.style.display = 'flex';
-            }
-            
-            setTimeout(() => {
-                formularioRecepcion.submit(); 
-            }, 50);
+        if (formularioRecepcion) {
+            // La lógica de cálculo de totales solo debe ejecutarse en la pantalla de recepción.
+            {% if orden.estado == 'EN_TRANSITO' %}
+            const ivaOriginal = {{ orden.iva| float | tojson}}
         }
+    };
+
+    function formatearMoneda(valor) {
+        const numero = parseFloat(valor) || 0;
+        return `$ ${numero.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    function actualizarTotales() {
+        let granSubtotal = 0;
+        document.querySelectorAll('.item-row').forEach(fila => {
+            const campoCantidad = fila.querySelector('.cantidad-recibida');
+            const campoPrecio = fila.querySelector('.precio-unitario');
+            const celdaSubtotal = fila.querySelector('.subtotal-item');
+
+            if (campoCantidad && campoPrecio && celdaSubtotal) {
+                const cantidad = parseFloat(campoCantidad.value) || 0;
+                const precio = parseFloat(campoPrecio.value) || 0;
+                const subtotalItem = cantidad * precio;
+
+                celdaSubtotal.textContent = formatearMoneda(subtotalItem);
+                granSubtotal += subtotalItem;
+            }
+        });
+
+        const elementoSubtotal = document.querySelector('#orden-subtotal');
+        const elementoIva = document.querySelector('#orden-iva');
+        const elementoTotal = document.querySelector('#orden-total');
+
+        if (elementoSubtotal && elementoIva && elementoTotal) {
+            let iva = 0;
+            if (ivaOriginal > 0) {
+                iva = granSubtotal * 0.21;
+            }
+            const total = granSubtotal + iva;
+
+            elementoSubtotal.textContent = formatearMoneda(granSubtotal);
+            elementoIva.textContent = formatearMoneda(iva);
+            elementoTotal.textContent = formatearMoneda(total);
+        }
+    }
+
+    formularioRecepcion.addEventListener('input', function (e) {
+        if (e.target.classList.contains('cantidad-recibida') || e.target.classList.contains('precio-unitario')) {
+            actualizarTotales();
+        }
+    });
+
+    // Cálculo inicial al cargar la página
+    actualizarTotales();
+    {% endif %}
+
+    // El manejador del submit es necesario siempre que el formulario exista.
+    const recepcionModal = new bootstrap.Modal(document.getElementById('confirmacionRecepcionParcialModal'));
+
+    formularioRecepcion.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const submitter = e.submitter;
+        if (!submitter || submitter.value !== 'aceptar') {
+            this.submit();
+            return;
+        }
+
+        let esRecepcionParcial = false;
+        document.querySelectorAll('.item-row').forEach(fila => {
+            const cantidadSolicitada = parseFloat(fila.querySelector('td:nth-child(2)').textContent);
+            const cantidadRecibida = parseFloat(fila.querySelector('.cantidad-recibida').value);
+            if (cantidadRecibida < cantidadSolicitada) {
+                esRecepcionParcial = true;
+            }
+        });
+
+        if (esRecepcionParcial) {
+            recepcionModal.show();
+        } else {
+            submitFormulario(submitter);
+        }
+    });
+
+    document.getElementById('confirmarRecepcionBtn').addEventListener('click', function () {
+        const submitter = document.querySelector('button[name="accion"][value="aceptar"]');
+        submitFormulario(submitter);
+    });
+
+    function submitFormulario(submitter) {
+        if (!submitter) return;
+
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'accion';
+        hiddenInput.value = submitter.value;
+        formularioRecepcion.appendChild(hiddenInput);
+
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+            overlay.style.display = 'flex';
+        }
+
+        setTimeout(() => {
+            formularioRecepcion.submit();
+        }, 50);
+    }
     }
 });
 </script>
