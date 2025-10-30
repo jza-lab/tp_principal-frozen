@@ -6,6 +6,28 @@ document.addEventListener('DOMContentLoaded', function () {
     const provinciaSelect = document.getElementById('provincia');
     const localidadInput = document.getElementById('localidad');
 
+    const emailEmpresarialCheckbox = document.getElementById('email_empresarial');
+    const razonSocialInput = document.getElementById('razon_social');
+    const razonSocialRequiredSpan = document.querySelector('.required-by-email-empresarial');
+
+    function toggleRazonSocialRequirement() {
+        const isEmpresarial = emailEmpresarialCheckbox.checked;
+
+        if (isEmpresarial) {
+            razonSocialInput.required = true;
+            if (razonSocialRequiredSpan) razonSocialRequiredSpan.style.display = 'inline';
+        } else {
+            razonSocialInput.required = false;
+            if (razonSocialRequiredSpan) razonSocialRequiredSpan.style.display = 'none';
+        }
+    }
+
+    if (emailEmpresarialCheckbox) {
+        emailEmpresarialCheckbox.addEventListener('change', toggleRazonSocialRequirement);
+    }
+
+    toggleRazonSocialRequirement();
+
     function restrictToLetters(event) {
         if (event.ctrlKey || event.metaKey ||
             [8, 9, 13, 27, 46].includes(event.keyCode) ||
@@ -162,16 +184,16 @@ document.addEventListener('DOMContentLoaded', function () {
         const confirm_contrasena = document.getElementById('confirm_contrasena')
 
 
-       if (!isEditBoolean) {
+        if (!isEditBoolean) {
             const contrasenaInput = document.getElementById('contrasena');
             const confirm_contrasenaInput = document.getElementById('confirm_contrasena');
-            
+
             if (contrasenaInput.value !== confirm_contrasenaInput.value) {
                 showNotificationModal('Las contraseñas no coinciden', 'Por favor, revise que las contraseñas coincidan.');
                 contrasenaInput.classList.add('is-invalid');
                 confirm_contrasenaInput.classList.add('is-invalid');
                 contrasenaInput.focus();
-                return; 
+                return;
             }
             contrasenaInput.classList.add('is-valid');
             confirm_contrasenaInput.classList.add('is-valid');
@@ -272,6 +294,16 @@ document.addEventListener('DOMContentLoaded', function () {
     form.addEventListener('submit', async function (event) {
         event.preventDefault();
         event.stopPropagation();
+        if (emailEmpresarialCheckbox.checked && !razonSocialInput.value.trim()) {
+            razonSocialInput.setCustomValidity('La Razón Social es obligatoria para emails empresariales.');
+            razonSocialInput.classList.add('is-invalid');
+            showNotificationModal('Error de Formulario', 'Debe ingresar la Razón Social de su empresa (mail empresarial).', 'Por favor, ingrese la Razón Social de la empresa asociada.');
+            return
+        } else {
+            razonSocialInput.setCustomValidity('');
+            razonSocialInput.classList.remove('is-invalid');
+        }
+
         await verifyAddress();
     });
     if (ID_cliente && isEditBoolean) { // Se usa ID_cliente para ser más explícito en Flask
@@ -279,7 +311,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const parte1Input = document.getElementById('cuit_parte1');
         if (parte1Input) {
             // Disparamos el evento manualmente para que se ejecute la lógica de validación
-            parte1Input.dispatchEvent(new Event('input')); 
+            parte1Input.dispatchEvent(new Event('input'));
         }
     }
 });

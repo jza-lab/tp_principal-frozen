@@ -144,6 +144,8 @@ class ClienteController(BaseController):
                 respuesta= self.model.buscar_por_cuit(data['cuit'])
                 
                 if respuesta.get('success'):
+                    if es_email_empresarial and not data.get('razon_social'):
+                        return self.error_response('La Razón Social es obligatoria al registrar un email empresarial con un CUIT ya existente.', 400)
                     if not es_email_empresarial:
                         return self.error_response('El CUIT/CUIL ya está registrado para otro cliente.', 400)
                     email = data.get('email')
