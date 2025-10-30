@@ -97,6 +97,12 @@ def nueva():
     productos = response.get('data', {}).get('productos', [])
     return render_template('orden_venta/formulario.html', productos=productos, pedido=None, is_edit=False, today=hoy)
 
+@orden_venta_bp.route('/cliente/cond_venta/<int:id>', methods=['GET'])
+def verificar_cond_venta(id):
+    cliente_controller = ClienteController()
+    es_nuevo=not cliente_controller.cliente_tiene_pedidos_previos(id)
+    return jsonify(es_nuevo), 200
+
 @orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST', 'PUT'])
 @permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
 def editar(id):

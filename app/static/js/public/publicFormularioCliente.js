@@ -239,6 +239,7 @@ document.addEventListener('DOMContentLoaded', function () {
             nombre: formData.get('nombre'),
             cuit: cuit,
             email: formData.get('email'),
+            email_empresarial: document.getElementById('email_empresarial').checked,
             telefono: formData.get('telefono'),
             condicion_iva: formData.get('condicion_iva'),
             razon_social: formData.get('razon_social') || '',

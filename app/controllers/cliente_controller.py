@@ -127,7 +127,7 @@ class ClienteController(BaseController):
             data.pop('csrf_token', None)
             direccion_data = data.pop('direccion', None)
             data['codigo'] = self.generar_codigo_unico()
-
+            es_email_empresarial = data.pop('email_empresarial', False)
             contrasena = data.get('contrasena')
             if contrasena:
                 data['contrasena'] = generate_password_hash(contrasena)
@@ -139,16 +139,45 @@ class ClienteController(BaseController):
                 
                 if respuesta.get('success'):
                     return self.error_response('El email ya está registrado para otro cliente', 400)
-            
+
             if data.get('cuit'):
                 respuesta= self.model.buscar_por_cuit(data['cuit'])
                 
                 if respuesta.get('success'):
-                    return self.error_response('El CUIT/CUIL ya está registrado para otro cliente', 400)
+                    if not es_email_empresarial:
+                        return self.error_response('El CUIT/CUIL ya está registrado para otro cliente.', 400)
+                    email = data.get('email')
+                    if not email or '@' not in email:
+                        return self.error_response('Email inválido para la validación de email empresarial.', 400)
+                    
+                    nuevo_dominio = email.split('@')[1]
+                    clientes_existentes = respuesta.get('data', [])
+                    primer_cliente_email = clientes_existentes[0].get('email')
+
+                    if not primer_cliente_email or '@' not in primer_cliente_email:
+                        return self.error_response('El cliente existente con este CUIT no tiene un email válido para comparar.', 400)
+
+                    dominio_existente = primer_cliente_email.split('@')[1]
+
+                    # Verificamos que todos los clientes existentes con ese CUIT usen el mismo dominio.
+                    for cliente in clientes_existentes:
+                        email_actual = cliente.get('email')
+                        if not email_actual or '@' not in email_actual or email_actual.split('@')[1] != dominio_existente:
+                            return self.error_response(f"Inconsistencia de datos: Múltiples dominios de email para el CUIT {data['cuit']}. Contacte a soporte.", 409)
+
+                    # Comparamos el dominio del nuevo email con el dominio ya registrado para ese CUIT.
+                    if nuevo_dominio.lower() != dominio_existente.lower():
+                        return self.error_response(
+                            f'El dominio del email ({nuevo_dominio}) no coincide con el dominio empresarial ya registrado para este CUIT.',
+                            400
+                        )
             data['estado_aprobacion'] = 'pendiente'
             direccion_id = self._get_or_create_direccion(direccion_data)
             if direccion_id:
                 data['direccion_id'] = direccion_id
+            
+            if 'email_empresarial' in data:
+                del data['email_empresarial']
 
             result = self.model.create(data)
 
