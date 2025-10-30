@@ -58,6 +58,7 @@ CANONICAL_PERMISSION_MAP = {
     'consultar_plan_de_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE','SUPERVISOR_CALIDAD'],
 
     # Módulo: Almacén e Inventario
+    'gestionar_catalogo_de_productos': ['SUPERVISOR', 'ADMIN', 'GERENTE'],
     'gestionar_catalogo_insumos': ['SUPERVISOR', 'ADMIN'], # Crear, editar, inhabilitar insumos
     'gestionar_inventario': ['SUPERVISOR'], # Registrar ingresos y egresos de stock
     'gestionar_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Crear y gestionar lotes de productos
@@ -90,7 +91,7 @@ CANONICAL_PERMISSION_MAP = {
 
     # Módulo: Alertas y Reclamos
     'ver_alertas': ['SUPERVISOR', 'IT', 'GERENTE', 'SUPERVISOR_CALIDAD'],
-    'configurar_alertas': ['SUPERVISOR', 'IT'],
+    'configurar_alertas': ['SUPERVISOR', 'IT', 'GERENTE'],
     'gestionar_reclamos': ['ADMIN', 'VENDEDOR', 'GERENTE'],
 }
 
