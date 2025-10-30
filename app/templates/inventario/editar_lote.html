@@ -20,7 +20,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('inventario_view.editar_lote', id_lote=lote.id_lote) }}">
-                    
+                    {{ csrf_form.csrf_token }}
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
                     
                     <div class="row g-3">
