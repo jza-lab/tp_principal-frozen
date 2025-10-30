@@ -263,6 +263,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const modal = botonConsolidarAprobar.closest('.modal');
             if (!modal) { console.error("Modal no encontrada."); return; }
 
+            // --- INICIO DE LA MODIFICACIÓN ---
+            // 1. Capturamos todos los controles del modal
+            const modalInstance = bootstrap.Modal.getInstance(modal);
+            const closeButton = modal.querySelector('.btn-close');
+            const cancelButton = modal.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
+            // --- FIN DE LA MODIFICACIÓN ---
+
             let opIds = [];
             try { opIds = JSON.parse(modal.dataset.opIds || '[]'); } 
             catch (err) { console.error("Error parseando op-ids:", err); opIds = []; }
@@ -285,8 +292,45 @@ document.addEventListener('DOMContentLoaded', function () {
                 operario_id: operarioSelect.value ? parseInt(operarioSelect.value) : null
             };
 
-            botonConsolidarAprobar.disabled = true;
-            botonConsolidarAprobar.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Verificando Capacidad...`;
+            // --- INICIO DE LA MODIFICACIÓN ---
+            // 2. Creamos una función para Habilitar/Deshabilitar todo el modal
+            const toggleModalLock = (lock) => {
+                if (lock) {
+                    // DESHABILITAR
+                    botonConsolidarAprobar.disabled = true;
+                    botonConsolidarAprobar.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Verificando Capacidad...`;
+                    if (closeButton) closeButton.disabled = true;
+                    if (cancelButton) cancelButton.disabled = true;
+                    if (modalInstance) {
+                        
+                        // --- INICIO DE LA CORRECCIÓN ---
+                        // Usamos '_config' (con guion bajo)
+                        modalInstance._config.backdrop = 'static'; // Evita clic fuera
+                        modalInstance._config.keyboard = false;   // Evita tecla Escape
+                        // --- FIN DE LA CORRECCIÓN ---
+
+                    }
+                } else {
+                    // HABILITAR
+                    botonConsolidarAprobar.disabled = false;
+                    botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
+                    if (closeButton) closeButton.disabled = false;
+                    if (cancelButton) cancelButton.disabled = false;
+                    if (modalInstance) {
+                        
+                        // --- INICIO DE LA CORRECCIÓN ---
+                        modalInstance._config.backdrop = true; // Restaura default
+                        modalInstance._config.keyboard = true; // Restaura default
+                        // --- FIN DE LA CORRECCIÓN ---
+                        
+                    }
+                }
+            };
+            // --- FIN DE LA MODIFICACIÓN ---
+
+
+            // 3. DESHABILITAMOS el modal antes de la llamada
+            toggleModalLock(true);
 
             try {
                 // Primera llamada: Verificar capacidad y obtener posible confirmación
@@ -299,21 +343,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 if (result.success) { // Aprobación directa
                     showFeedbackModal('Éxito', result.message || "Lote planificado con éxito.", 'success');
-                    setTimeout(() => window.location.reload(), 1500); // Dar tiempo a ver el modal
+                    // No es necesario habilitar, la página recargará
+                    setTimeout(() => window.location.reload(), 1500);
                 }
                 else if (result.error === 'SOBRECARGA_CAPACIDAD') { // Sobrecarga
                     showFeedbackModal('Sobrecarga Detectada', result.message + "\n\nElija otra fecha o línea.", 'warning');
-                    botonConsolidarAprobar.disabled = false;
-                    botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
+                    toggleModalLock(false); // HABILITAMOS
                 }
                 else if (result.error === 'MULTI_DIA_CONFIRM') { // Requiere confirmación
-                    // Usar showFeedbackModal tipo 'confirm'
+                    
+                    // HABILITAMOS el modal principal ANTES de mostrar el modal de confirmación
+                    toggleModalLock(false); 
+                    
                     showFeedbackModal(
                         'Confirmación Requerida',
                         result.message,
                         'confirm',
                         async () => { // Función callback si el usuario confirma
-                            botonConsolidarAprobar.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Confirmando...`;
+                            // ... (lógica del segundo fetch sin cambios) ...
+                            // Esta lógica ya maneja sus propios estados de carga/error
+                            // en el *segundo* modal (feedbackModal)
                             const opIdConfirmar = result.op_id_confirmar;
                             const asignacionesConfirmar = result.asignaciones_confirmar;
                             try {
@@ -328,39 +377,25 @@ document.addEventListener('DOMContentLoaded', function () {
                                     setTimeout(() => window.location.reload(), 1500);
                                 } else {
                                     showFeedbackModal('Error al Confirmar', confirmResult.error || confirmResult.message, 'error');
-                                    botonConsolidarAprobar.disabled = false;
-                                    botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
                                 }
                             } catch (confirmError) {
                                 console.error("Error red al confirmar:", confirmError);
                                 showFeedbackModal('Error de Conexión', 'No se pudo confirmar la planificación.', 'error');
-                                botonConsolidarAprobar.disabled = false;
-                                botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
                             }
                         } // Fin callback
                     ); // Fin showFeedbackModal confirm
 
-                    // Re-habilitar botón si se cierra el modal de confirmación sin confirmar
-                    const modalElement = document.getElementById('feedbackModal');
-                    const enableButtonOnCancelOrClose = () => {
-                         if (botonConsolidarAprobar.disabled && botonConsolidarAprobar.textContent.includes('Verificando')) { // Solo si estaba esperando confirmación
-                             botonConsolidarAprobar.disabled = false;
-                             botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
-                         }
-                    };
-                    // Escuchar evento 'hidden.bs.modal' para detectar cierre
-                    modalElement.addEventListener('hidden.bs.modal', enableButtonOnCancelOrClose, { once: true });
-
+                    // ELIMINAMOS el listener 'hidden.bs.modal'
+                    // Ya no es necesario porque llamamos a toggleModalLock(false) arriba.
+                    
                 } else { // Otros errores
                     showFeedbackModal('Error', result.error || result.message || 'Error desconocido.', 'error');
-                    botonConsolidarAprobar.disabled = false;
-                    botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
+                    toggleModalLock(false); // HABILITAMOS
                 }
             } catch (error) { // Error de red en la primera llamada
                 console.error("Error de red:", error);
                 showFeedbackModal('Error de Conexión', 'No se pudo contactar al servidor.', 'error');
-                botonConsolidarAprobar.disabled = false;
-                botonConsolidarAprobar.innerHTML = '<i class="bi bi-check-lg"></i> Consolidar y Aprobar Lote';
+                toggleModalLock(false); // HABILITAMOS
             }
         } // Fin if (botonConsolidarAprobar)
 
