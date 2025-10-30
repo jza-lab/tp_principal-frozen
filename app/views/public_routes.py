@@ -36,19 +36,14 @@ def faq():
     return render_template('public/faq.html')
 
 @public_bp.route('/hace-tu-pedido')
-@jwt_required()
 def hacer_pedido():
     """
     Muestra el formulario para que un cliente haga un pedido desde la web pública.
     """
-    current_user = get_current_user()
-    if not current_user:
+    # La autenticación de clientes es por sesión, no por JWT.
+    if 'cliente_id' not in session:
         flash('Por favor, inicia sesión para realizar un pedido.', 'info')
         return redirect(url_for('cliente.login'))
-
-    # Asumiendo que el `user_lookup_loader` carga el estado de aprobación.
-    # Si no es así, se necesitaría una consulta a la BD aquí.
-    # Por ahora, se asume que un usuario logueado está aprobado.
     
     csrf_form = CSRFOnlyForm()
     pedido_controller = PedidoController()
@@ -57,9 +52,11 @@ def hacer_pedido():
     response, _ = pedido_controller.obtener_datos_para_formulario()
     productos = response.get('data', {}).get('productos', [])
     cliente_controller = ClienteController()
-    cliente_response, _ = cliente_controller.obtener_cliente(current_user.id)
+    
+    cliente_id = session['cliente_id']
+    cliente_response, _ = cliente_controller.obtener_cliente(cliente_id)
     cliente = cliente_response.get('data', {})
-    es_nuevo = not cliente_controller.cliente_tiene_pedidos_previos(current_user.id)
+    es_nuevo = not cliente_controller.cliente_tiene_pedidos_previos(cliente_id)
 
 
     return render_template(
@@ -216,6 +213,11 @@ def crear_reclamo_page(pedido_id):
     """
     Muestra el formulario para crear un reclamo para un pedido específico.
     """
+    # Verificación de que el cliente ha iniciado sesión (usando la sesión de Flask)
+    if 'cliente_id' not in session:
+        flash('Debes iniciar sesión para poder crear un reclamo.', 'info')
+        return redirect(url_for('cliente.login', next=request.url))
+
     csrf_form = CSRFOnlyForm()
 
     hoy = datetime.now().strftime('%Y-%m-%d')
