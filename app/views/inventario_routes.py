@@ -110,12 +110,11 @@ def detalle_lote(id_lote):
         return redirect(url_for('inventario_view.listar_lotes'))
 
 
-# --- AÑADIR NUEVAS RUTAS ---
 @inventario_view_bp.route('/lote/<id_lote>/cuarentena', methods=['POST'])
 ##@jwt_required()
 ##@permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
 def poner_en_cuarentena(id_lote):
-    controller = InventarioController()
+    controller = InventarioController() # <-- AÑADIDO AQUÍ
     try:
         motivo = request.form.get('motivo_cuarentena')
         cantidad = float(request.form.get('cantidad_cuarentena'))
@@ -152,7 +151,7 @@ def liberar_cuarentena(id_lote):
         flash(response.get('error', 'Error al procesar la solicitud.'), 'danger')
 
     return redirect(url_for('inventario_view.listar_lotes'))
-# --- FIN NUEVAS RUTAS ---
+
 
 @inventario_view_bp.route('/lote/<id_lote>/editar', methods=['GET', 'POST'])
 ##@jwt_required()
@@ -165,8 +164,10 @@ def editar_lote(id_lote):
     controller = InventarioController()
     if request.method == 'POST':
         try:
+            datos_formulario = request.form.to_dict()
+            datos_formulario.pop('csrf_token', None)  # Se elimina el token antes de validar
             # Llama al método del controlador que ya existía
-            response, status_code = controller.actualizar_lote_parcial(id_lote, request.form.to_dict())
+            response, status_code = controller.actualizar_lote_parcial(id_lote, datos_formulario)
 
             if response.get('success'):
                 flash(response.get('message', 'Lote actualizado con éxito.'), 'success')
@@ -180,9 +181,6 @@ def editar_lote(id_lote):
         except Exception as e:
             flash(f"Ocurrió un error inesperado: {e}", 'danger')
 
-        # Si el POST falla (error o validación), se recarga la página
-        # y los mensajes flash se mostrarán en el modal.
-
     # Lógica GET (o si falla el POST): Obtener datos y mostrar formulario
     response, status_code = controller.obtener_lote_por_id(id_lote)
 
@@ -192,7 +190,5 @@ def editar_lote(id_lote):
 
     lote = response.get('data')
 
-    # Renderizar la *nueva* plantilla que crearemos en el Paso 3
     return render_template('inventario/editar_lote.html', lote=lote)
-
-# --- FIN DE LA NUEVA RUTA ---
+# --- FIN DE LA CORRECCIÓN ---

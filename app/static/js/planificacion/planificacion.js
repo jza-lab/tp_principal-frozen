@@ -109,6 +109,13 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- LÓGICA DE DRAG-AND-DROP (KANBAN) ---
     const columns = document.querySelectorAll('.kanban-column');
     
+    const planificador = document.getElementById('planificador-pendientes');
+    if (!planificador) {
+        // console.log("planificacion.js: No se encontró '#planificador-pendientes'. Omitiendo inicialización del tablero.");
+        return; // Detiene la ejecución del script aquí
+    }
+    // --- FIN DE LA CORRECCIÓN ---
+
     // --- DEBUG: Verificar columnas encontradas ---
     console.log(`Kanban: Encontradas ${columns.length} columnas con la clase '.kanban-column'.`);
     // --- FIN DEBUG ---

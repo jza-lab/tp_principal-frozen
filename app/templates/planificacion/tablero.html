@@ -182,24 +182,19 @@
                     </div>
                     {% else %}
                         {# --- NUEVO BUCLE (COMO CRP) --- #}
+                        {# --- BUCLE MODIFICADO (para usar ISO) --- #}
                         {% for i in range(num_dias) %}
                             {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
-                            {% set fecha_iso = fecha_dia.isoformat() %}
                             {% set dia_num = fecha_dia.weekday() %}
                             
-                            {# 1. Definir las listas de claves (del debug) y display (visual) #}
-                            {% set dias_lista_display = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] %}
-                            {% set dias_lista_key = ['lu.', 'ma.', 'mi.', 'ju.', 'vi.', 'sÃ¡.', 'do.'] %}
-                            
-                            {# 2. Generar el string de display (para mostrar en la UI) #}
-                            {% set dia_display = dias_lista_display[dia_num] + " " + fecha_dia.strftime('%d/%m') %}
+                            {# 1. Generar el string de display (para mostrar en la UI) #}
+                            {% set dia_display = dias_lista[dia_num] + " " + fecha_dia.strftime('%d/%m') %}
 
-                            {# 3. Generar el string de KEY (para buscar en el dict) #}
-                            {# Nota: El 'sÃ¡.' del debug es 'sá.' (con tilde) #}
-                            {% set dia_key = dias_lista_key[dia_num] + " " + fecha_dia.strftime('%d/%m') %}
+                            {# 2. Generar la clave ISO (YYYY-MM-DD) #}
+                            {% set fecha_iso_key = fecha_dia.isoformat() %}
                             
-                            {# 4. Usar 'dia_key' para obtener las OPs #}
-                            {% set ops_del_dia = ordenes_por_dia.get(dia_key, []) %}
+                            {# 3. Usar la clave ISO para obtener las OPs #}
+                            {% set ops_del_dia = ordenes_por_dia.get(fecha_iso_key, []) %}
                     
                             <div class="col-lg col-md-4 col-sm-6 mb-3">
                                 <div class="day-column h-100 shadow-sm">
