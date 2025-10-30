@@ -496,6 +496,58 @@ class InventarioController(BaseController):
             logger.error(f"Error contando alertas de vencimiento: {str(e)}")
             return 0
 
+    def obtener_lotes_agrupados_para_vista(self) -> tuple:
+        """
+        Obtiene los lotes, los agrupa por insumo y calcula los totales para la vista.
+        """
+        try:
+            response, _ = self.obtener_lotes_para_vista()
+            if not response.get('success'):
+                return self.error_response(response.get('error', 'No se pudieron obtener los lotes.'))
+
+            lotes = response.get('data', [])
+            insumos_agrupados = {}
+
+            # Agrupar lotes por insumo
+            for lote in lotes:
+                insumo_id = lote.get('id_insumo')
+                if not insumo_id:
+                    continue
+
+                if insumo_id not in insumos_agrupados:
+                    insumos_agrupados[insumo_id] = {
+                        'id_insumo': insumo_id,
+                        'insumo_nombre': lote.get('insumo_nombre', 'N/A'),
+                        'insumo_categoria': lote.get('insumo_categoria', 'Sin categoría'),
+                        'insumo_unidad_medida': lote.get('insumo_unidad_medida', ''),
+                        'cantidad_total': 0,
+                        'lotes': []
+                    }
+                
+                cantidad_actual = float(lote.get('cantidad_actual', 0))
+                if lote.get('estado') == 'disponible':
+                    insumos_agrupados[insumo_id]['cantidad_total'] += cantidad_actual
+                
+                insumos_agrupados[insumo_id]['lotes'].append(lote)
+
+            # Calcular estado general y preparar la lista final
+            resultado_final = []
+            for insumo_id, data in insumos_agrupados.items():
+                if data['cantidad_total'] > 0:
+                    data['estado_general'] = 'Disponible'
+                else:
+                    data['estado_general'] = 'Agotado'
+                resultado_final.append(data)
+
+            # Ordenar por nombre de insumo
+            resultado_final.sort(key=lambda x: x['insumo_nombre'])
+            
+            return self.success_response(data=resultado_final)
+
+        except Exception as e:
+            logger.error(f"Error agrupando lotes para la vista: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
     def eliminar_lote(self, id_lote: str) -> tuple:
         """Eliminar un lote de inventario"""
         try:
