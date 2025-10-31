@@ -197,3 +197,15 @@ class InsumoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error buscando insumo por código proveedor {codigo_proveedor}: {str(e)}")
             return None
+
+    def marcar_en_espera(self, id_insumo: str) -> Dict:
+        """
+        Marca un insumo como 'en espera de reestock'.
+        """
+        return self.update(id_insumo, {'en_espera_de_reestock': True}, 'id_insumo')
+
+    def quitar_en_espera(self, id_insumo: str) -> Dict:
+        """
+        Quita la marca de 'en espera de reestock' de un insumo.
+        """
+        return self.update(id_insumo, {'en_espera_de_reestock': False}, 'id_insumo')

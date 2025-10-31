@@ -6,6 +6,7 @@ from app.models.totem_sesion import TotemSesionModel
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.utils.date_utils import get_now_in_argentina
 from app.models.token_blacklist_model import TokenBlacklistModel
+from app.models.rol import RoleModel  # <--- NUEVO (Importar RoleModel)
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -16,20 +17,15 @@ autorizacion_model = AutorizacionIngresoModel()
 @jwt_required(optional=True)
 def login():
     """Gestiona el inicio de sesión de los usuarios."""
-    # Si el usuario ya está logueado y accede a /login, lo redirigimos.
-    # Hacemos una verificación explícita en lugar de confiar solo en el payload
-    # para evitar problemas con tokens en blacklist que aún no han expirado.
+    # ... (el código de verificación de 'try...except...pass' se mantiene igual)
     try:
         verify_jwt_in_request(optional=True)
         jwt_payload = get_jwt()
         if jwt_payload:
-            # Si hay un payload, el usuario ya está logueado.
             rol_codigo = jwt_payload.get('rol')
             redirect_url = get_redirect_url_by_role(rol_codigo)
-            # Redirigir a su dashboard correspondiente
             return redirect(redirect_url)
     except Exception:
-        # Si el token es inválido o expirado, simplemente continuamos al login.
         pass
 
     if request.method == 'POST':
@@ -41,40 +37,42 @@ def login():
 
         if respuesta.get('success'):
             usuario_data = respuesta['data']
-            # Creamos el token. La 'identity' es el ID del usuario, y pasamos el resto
-            # de los datos (rol, permisos) como 'additional_claims'.
+            rol_codigo = usuario_data.get('roles', {}).get('codigo') # <--- NUEVO
+            
+            # Obtenemos la lista de permisos para este rol
+            lista_permisos = RoleModel.get_permissions_for_role(rol_codigo) # <--- NUEVO
+
+            # Creamos el token.
             access_token = create_access_token(
                 identity=str(usuario_data['id']),
                 additional_claims={
                     'nombre': usuario_data.get('nombre'),
                     'apellido': usuario_data.get('apellido'),
-                    'rol': usuario_data.get('roles', {}).get('codigo'),
+                    'rol': rol_codigo, # <--- MODIFICADO
                     'rol_nombre': usuario_data.get('roles', {}).get('nombre'),
                     'user_level': usuario_data.get('roles', {}).get('nivel', 0),
+                    'permisos': lista_permisos  # <--- NUEVO (¡Aquí está la lista!)
                 }
             )
 
-            rol_codigo = usuario_data.get('roles', {}).get('codigo')
+            # rol_codigo = usuario_data.get('roles', {}).get('codigo') # (Línea movida arriba)
             redirect_url = get_redirect_url_by_role(rol_codigo)
 
-            # Creamos la respuesta de redirección
+            # ... (el resto de la función 'login' se mantiene igual)
             response = redirect(redirect_url)
-
-            # Establecemos el token JWT en una cookie HttpOnly
             unset_jwt_cookies(response)
             set_access_cookies(response, access_token)
-
             flash(f"Bienvenido {usuario_data['nombre']}", 'success')
             return response
         else:
+            # ... (la lógica de 'else' se mantiene igual)
             error_message = respuesta.get('error', 'Credenciales incorrectas o usuario inactivo.')
             flash(error_message, 'error')
-            # Limpiamos cookies también en caso de error de login
             response = redirect(url_for('auth.login'))
             unset_jwt_cookies(response)
             return response
 
-    # Para el método GET, limpiamos cookies por si quedaron huérfanas.
+    # ... (el 'return' final del GET se mantiene igual)
     response = make_response(render_template('usuarios/login.html'))
     unset_jwt_cookies(response)
     return response
@@ -94,18 +92,24 @@ def identificar_rostro():
 
     if respuesta.get('success'):
         usuario_data = respuesta['data']
+        rol_codigo = usuario_data.get('roles', {}).get('codigo') # <--- NUEVO
+        
+        # Obtenemos la lista de permisos para este rol
+        lista_permisos = RoleModel.get_permissions_for_role(rol_codigo) # <--- NUEVO
+        
         access_token = create_access_token(
             identity=str(usuario_data['id']),
             additional_claims={
                 'nombre': usuario_data.get('nombre'),
                 'apellido': usuario_data.get('apellido'),
-                'rol': usuario_data.get('roles', {}).get('codigo'),
+                'rol': rol_codigo, # <--- MODIFICADO
                 'rol_nombre': usuario_data.get('roles', {}).get('nombre'),
                 'user_level': usuario_data.get('roles', {}).get('nivel', 0),
+                'permisos': lista_permisos  # <--- NUEVO (¡Aquí también!)
             }
         )
 
-        rol_codigo = usuario_data.get('roles', {}).get('codigo')
+        # rol_codigo = usuario_data.get('roles', {}).get('codigo') # (Línea movida arriba)
         redirect_url = get_redirect_url_by_role(rol_codigo)
 
         response = jsonify({
@@ -125,25 +129,17 @@ def identificar_rostro():
 @auth_bp.route('/logout', methods=['POST'])
 @jwt_required()
 def logout():
-    """
-    Cierra la sesión del usuario actual invalidando el token JWT.
-    Se cambia a método POST por seguridad (evita CSRF en logout).
-    """
+    # ... (la función 'logout' se mantiene igual)
     try:
         jwt_payload = get_jwt()
         jti = jwt_payload['jti']
         exp = jwt_payload['exp']
-
         TokenBlacklistModel.add_to_blacklist(jti, exp)
-
         response = redirect(url_for('auth.login'))
         unset_jwt_cookies(response)
-
         flash("Sesión cerrada correctamente.", "info")
         return response
-
     except Exception as e:
-        # Loggear el error sería ideal en producción
         flash("Ocurrió un error al cerrar la sesión.", "error")
         response = redirect(url_for('auth.login'))
         unset_jwt_cookies(response)
@@ -152,16 +148,13 @@ def logout():
 @auth_bp.route('/perfil')
 @jwt_required()
 def perfil():
-    """Muestra la página de perfil del usuario que ha iniciado sesión."""
+    # ... (la función 'perfil' se mantiene igual)
     usuario_controller = UsuarioController()
     usuario_id = get_jwt_identity()
     usuario = usuario_controller.obtener_usuario_por_id(usuario_id)
     if not usuario:
         flash('Usuario no encontrado.', 'error')
-
-        # Preparamos una respuesta de logout para limpiar la cookie en caso de inconsistencia
         response = redirect(url_for('auth.login'))
         unset_jwt_cookies(response)
         return response
-
     return render_template('usuarios/perfil.html', usuario=usuario)
