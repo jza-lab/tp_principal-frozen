@@ -66,6 +66,7 @@ class InsumosCatalogoSchema(Schema):
     es_critico = fields.Bool(load_default=None)
     requiere_certificacion = fields.Bool(load_default=None)
     activo = fields.Bool(dump_only=True)
+    en_espera_de_reestock = fields.Bool(dump_only=True)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
     precio_unitario = fields.Float(

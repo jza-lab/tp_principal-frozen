@@ -333,28 +333,34 @@ class OrdenCompraController:
 
     def _marcar_cadena_como_completa(self, orden_id):
         """
-        Marca una orden y todas sus predecesoras en la cadena de complemento
-        como 'RECEPCION_COMPLETA' de forma recursiva.
+        Marca una orden y todas sus predecesoras como 'RECEPCION_COMPLETA'
+        y quita el estado 'en_espera_de_reestock' de sus insumos.
         """
         try:
             current_id = orden_id
             while current_id:
-                orden_res = self.model.find_by_id(current_id)
+                orden_res = self.model.get_one_with_details(current_id)
                 if not orden_res.get('success'):
                     logger.warning(f"No se encontró la orden con ID {current_id} en la cadena de completado.")
                     break
 
                 orden_actual = orden_res['data']
 
-                # Actualizar el estado de la orden actual a 'RECEPCION_COMPLETA'
+                # 1. Quitar estado 'en espera' de los insumos de esta orden
+                for item in orden_actual.get('items', []):
+                    if item.get('insumo_id'):
+                        self.insumo_controller.insumo_model.quitar_en_espera(item['insumo_id'])
+                        logger.info(f"Quitado estado 'en espera' del insumo {item['insumo_id']} de la OC {current_id}.")
+
+                # 2. Actualizar el estado de la orden actual a 'RECEPCION_COMPLETA'
                 self.model.update(current_id, {
                     'estado': 'RECEPCION_COMPLETA',
                     'fecha_real_entrega': date.today().isoformat()
                 })
 
                 logger.info(f"Orden {current_id} marcada como RECEPCION_COMPLETA.")
-                
-                # Moverse a la orden que esta complementa
+
+                # 3. Moverse a la orden que esta complementa
                 current_id = orden_actual.get('complementa_a_orden_id')
 
         except Exception as e:
