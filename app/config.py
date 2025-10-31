@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from datetime import timedelta
 
-load_dotenv(dotenv_path='credenciales.env')
+load_dotenv(dotenv_path='.env')
 
 class Config:
 
