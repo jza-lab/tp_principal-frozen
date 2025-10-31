@@ -3,8 +3,8 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager, unset_jwt_cookies, get_current_user, verify_jwt_in_request
 from flask_wtf.csrf import CSRFProtect
 from flask_wtf import FlaskForm
-from app.config import Config # <-- 1. Importar contextfunction desde su ubicación directa
-from jinja2 import pass_context # <-- 1. Importar pass_context
+from app.config import Config 
+from jinja2 import pass_context 
 import logging
 from .json_encoder import CustomJSONEncoder
 from datetime import timedelta, datetime
@@ -46,7 +46,11 @@ def user_lookup_callback(_jwt_header, jwt_data):
         'rol': rol_codigo,
         'nombre_completo': f"{jwt_data.get('nombre', '')} {jwt_data.get('apellido', '')}".strip(),
         # Reconstruimos el objeto 'roles' directamente desde el token
-        'roles': {'codigo': rol_codigo, 'nombre': jwt_data.get('rol_nombre', rol_codigo)}
+        'roles': {'codigo': rol_codigo, 'nombre': jwt_data.get('rol_nombre', rol_codigo)},
+        
+        # --- NUEVA LÍNEA ---
+        # Cargamos la lista de permisos que guardamos en el token durante el login
+        'permisos': jwt_data.get('permisos', []) 
     }
     return SimpleNamespace(**user_data)
 
@@ -159,11 +163,13 @@ def _formato_moneda_filter(value):
     except (ValueError, TypeError):
         return value
 
-@pass_context # <-- 2. Usar el decorador pass_context
-def _has_permission_filter(context, accion: str) -> bool: # <-- 3. Recibir 'context' como primer argumento
+# --- SECCIÓN MODIFICADA ---
+@pass_context 
+def _has_permission_filter(context, accion: str) -> bool:
     """
-    Verifica si el rol del usuario actual (almacenado en la sesión de Flask)
-    tiene el permiso para realizar una acción específica.
+    --- VERSIÓN OPTIMIZADA ---
+    Verifica si la 'accion' está en la lista de permisos del usuario actual,
+    la cual fue cargada desde el token JWT. No consulta la base de datos.
     """
     try:
         # Usamos get_current_user(), que devuelve el usuario si está logueado,
@@ -172,16 +178,18 @@ def _has_permission_filter(context, accion: str) -> bool: # <-- 3. Recibir 'cont
         if not user:
             return False
 
-        # El user_lookup_loader ya nos da un objeto con el rol.
-        rol_usuario = getattr(user, 'rol', None)
-        if not rol_usuario:
-            return False
-
-        return RoleModel.check_permission(rol_usuario, accion)
+        # --- LÓGICA MODIFICADA ---
+        # 1. Obtenemos la lista de permisos desde el objeto 'user' (cargado desde el token)
+        user_permissions = getattr(user, 'permisos', [])
+        
+        # 2. Verificamos si la 'accion' está en la lista (¡esto es súper rápido!)
+        return accion in user_permissions
+        # --- FIN DE LA LÓGICA MODIFICADA ---
 
     except RuntimeError: # Capturamos específicamente el error de "fuera de contexto"
         # En caso de cualquier error (ej: fuera de un contexto de request), denegar permiso.
         return False
+# --- FIN DE SECCIÓN MODIFICADA ---
 
 def create_app() -> Flask:
     """

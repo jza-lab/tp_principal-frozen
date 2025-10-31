@@ -67,3 +67,29 @@ class RoleModel(BaseModel):
         allowed_roles_for_action = permission_map.get(accion, []) # Esto estaba bien
         # Verificar si el ROL del usuario está en esa lista.
         return rol_codigo in allowed_roles_for_action
+
+    # --- FUNCIÓN NUEVA Y CORREGIDA ---
+    @staticmethod
+    def get_permissions_for_role(rol_codigo: str) -> list:
+        """
+        Devuelve una lista plana de todos los strings de permisos (acciones)
+        que un rol específico puede realizar, basado en el CANONICAL_PERMISSION_MAP.
+        """
+        if not rol_codigo:
+            return []
+
+        permission_map = RoleModel.get_permission_map()
+
+        # El rol 'DEV' siempre tiene permiso para todo.
+        if rol_codigo == 'DEV':
+            return list(permission_map.keys()) # Devuelve todas las acciones posibles
+
+        # Para otros roles, construimos la lista de permisos
+        allowed_permissions = []
+        for accion, allowed_roles in permission_map.items():
+            # Si el rol del usuario está en la lista de roles permitidos para esa acción...
+            if rol_codigo in allowed_roles:
+                # ...agregamos la acción a su lista de permisos.
+                allowed_permissions.append(accion)
+        
+        return allowed_permissions
