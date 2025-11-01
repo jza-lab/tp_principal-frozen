@@ -172,7 +172,15 @@
                                         </a>
                                     </li>
                                     {% endif %}
-                                    </ul>
+                                    {% if 'ADMIN' in current_user.roles.codigo %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <a class="dropdown-item {% if request.endpoint == 'chatbot.gestion_chatbot_page' %}active{% endif %}" href="{{ url_for('chatbot.gestion_chatbot_page') }}">
+                                            <i class="bi bi-robot me-2"></i> Configuración de Chatbot
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                </ul>
                             </li>
                             {% endif %}
                             </ul>
