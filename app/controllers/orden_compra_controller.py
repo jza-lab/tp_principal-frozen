@@ -331,9 +331,9 @@ class OrdenCompraController:
             logger.error(f"Error rechazando orden {orden_id}: {e}")
             return {'success': False, 'error': str(e)}
 
-    def _marcar_cadena_como_completa(self, orden_id):
+    def _marcar_cadena_como_en_control_calidad(self, orden_id):
         """
-        Marca una orden y todas sus predecesoras como 'RECEPCION_COMPLETA'
+        Marca una orden y todas sus predecesoras como 'EN_CONTROL_CALIDAD'
         y quita el estado 'en_espera_de_reestock' de sus insumos.
         """
         try:
@@ -352,13 +352,13 @@ class OrdenCompraController:
                         self.insumo_controller.insumo_model.quitar_en_espera(item['insumo_id'])
                         logger.info(f"Quitado estado 'en espera' del insumo {item['insumo_id']} de la OC {current_id}.")
 
-                # 2. Actualizar el estado de la orden actual a 'RECEPCION_COMPLETA'
+                # 2. Actualizar el estado de la orden actual a 'EN_CONTROL_CALIDAD'
                 self.model.update(current_id, {
-                    'estado': 'RECEPCION_COMPLETA',
+                    'estado': 'EN_CONTROL_CALIDAD',
                     'fecha_real_entrega': date.today().isoformat()
                 })
 
-                logger.info(f"Orden {current_id} marcada como RECEPCION_COMPLETA.")
+                logger.info(f"Orden {current_id} marcada como EN_CONTROL_CALIDAD.")
 
                 # 3. Moverse a la orden que esta complementa
                 current_id = orden_actual.get('complementa_a_orden_id')
@@ -421,19 +421,27 @@ class OrdenCompraController:
                 'id_proveedor': orden_data.get('proveedor_id'),
                 'cantidad_inicial': item_lote['cantidad_recibida'],
                 'precio_unitario': item_data.get('precio_unitario'),
-                'documento_ingreso': f"OC-{orden_data.get('codigo_oc', 'N/A')}",
-                'f_ingreso': date.today().isoformat()
+                'documento_ingreso': orden_data.get('codigo_oc', 'N/A'),
+                'f_ingreso': date.today().isoformat(),
+                'estado': 'EN REVISION'  # <-- NUEVO ESTADO INICIAL
             }
-            try:
-                lote_result = self.inventario_controller.crear_lote(lote_data, usuario_id)
-                if lote_result.get('success'):
-                    lotes_creados_count += 1
-                else:
-                    logger.error(f"Fallo al crear el lote para el insumo {lote_data.get('id_insumo')}: {lote_result.get('error')}")
-                    lotes_error_count += 1
-            except Exception as e_lote:
-                logger.error(f"Excepción creando lote para el insumo {lote_data.get('id_insumo')}: {e_lote}", exc_info=True)
+        try:
+            lote_result = self.inventario_controller.crear_lote(lote_data, usuario_id)
+            
+            # --- INICIO DE CORRECCIÓN ---
+            # Verificamos si la respuesta es un diccionario (éxito) o tupla (error)
+            if isinstance(lote_result, dict) and lote_result.get('success'):
+                lotes_creados_count += 1
+            else:
+                # Extraer el mensaje de error, ya sea de dict o tupla
+                error_msg = lote_result[1] if isinstance(lote_result, tuple) else lote_result.get('error', 'Error desconocido')
+                logger.error(f"Fallo al crear el lote para el insumo {lote_data.get('id_insumo')}: {error_msg}")
                 lotes_error_count += 1
+            # --- FIN DE CORRECCIÓN ---
+            
+        except Exception as e_lote:
+            logger.error(f"Excepción creando lote para el insumo {lote_data.get('id_insumo')}: {e_lote}", exc_info=True)
+            lotes_error_count += 1
         return lotes_creados_count, lotes_error_count
 
     def procesar_recepcion(self, orden_id, form_data, usuario_id, orden_produccion_controller: "OrdenProduccionController"):
@@ -506,16 +514,27 @@ class OrdenCompraController:
 
                     return {'success': True, 'message': f'Recepción parcial registrada. Se creó la orden {nueva_orden_result["data"]["codigo_oc"]} para los insumos restantes.'}
                 else:
-                    self._marcar_cadena_como_completa(orden_id)
+                    # --- INICIO DE LA CORRECCIÓN ---
+                    # 1. Establecer el estado correcto (RECEPCION COMPLETA)
+                    # (OC_RECEPCION_COMPLETA se define en estados.py)
+                    update_data = {
+                        'estado': 'RECEPCION_COMPLETA',
+                        'fecha_real_entrega': date.today().isoformat(),
+                        'observaciones': f"{observaciones}\nRecepción completada. Pendiente de Control de Calidad."
+                    }
+                    self.model.update(orden_id, update_data)
 
+                    # 2. Mensaje de éxito (ya NO se mueve a calidad)
                     final_message = f'Recepción completada. {lotes_creados} lotes creados.'
                     if lotes_error > 0: final_message += f' ({lotes_error} con error).'
 
+                    # 3. Manejar OP asociada (esto se mantiene)
                     op_transition_message = self._manejar_transicion_op_asociada(orden_data, usuario_id, orden_produccion_controller)
                     if op_transition_message:
                         final_message += f" | {op_transition_message}"
 
                     return {'success': True, 'message': final_message}
+                    # --- FIN DE LA CORRECCIÓN ---
 
             elif accion == 'rechazar':
                 return self.rechazar_orden(orden_id, f"Rechazada en recepción: {observaciones}")
@@ -561,3 +580,70 @@ class OrdenCompraController:
 
 
         return self.crear_orden(nueva_orden_data, items_para_nueva_orden, usuario_id)
+
+    def marcar_como_cerrada(self, orden_id: int) -> Dict:
+        """
+        Marca una orden de compra como 'CERRADA' después de que el control de calidad ha finalizado.
+        """
+        try:
+            # Verificar que la orden exista y esté en el estado correcto
+            orden_actual_res = self.model.find_by_id(orden_id)
+            if not orden_actual_res.get('success'):
+                return {'success': False, 'error': 'Orden no encontrada.'}
+            
+            orden_actual = orden_actual_res['data']
+            if orden_actual.get('estado') != 'EN_CONTROL_CALIDAD':
+                logger.warning(f"Intento de cerrar la orden {orden_id} que no está en 'EN_CONTROL_CALIDAD'. Estado actual: {orden_actual.get('estado')}")
+                # Podríamos devolver un error o simplemente no hacer nada. Por ahora, no hacemos nada.
+                return {'success': True, 'message': 'La orden no requiere ser cerrada en este momento.'}
+
+            update_data = {
+                'estado': 'CERRADA',
+                'updated_at': datetime.now().isoformat()
+            }
+            result = self.model.update(orden_id, update_data)
+
+            if result.get('success'):
+                logger.info(f"Orden de compra {orden_id} marcada como CERRADA.")
+            
+            return result
+
+        except Exception as e:
+            logger.error(f"Error marcando la orden {orden_id} como CERRADA: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+        
+    def iniciar_control_de_calidad(self, orden_id, usuario_id):
+            """
+            Pasa una orden de 'RECEPCION_COMPLETA'
+            a 'EN_CONTROL_CALIDAD'.
+            Este método es llamado por la ruta POST /<id>/iniciar-calidad
+        
+            """
+            try:
+                # 1. Validar el estado actual de la orden
+                orden_res, _ = self.get_orden(orden_id)
+                if not orden_res.get('success'):
+                    return orden_res
+                
+                orden_actual = orden_res['data']
+                estado_actual = orden_actual.get('estado')
+
+                # Estados desde los que Calidad puede tomar la orden
+                # (Definidos en estados.py)
+                estados_permitidos = ['RECEPCION_COMPLETA']
+                
+                if estado_actual not in estados_permitidos:
+                    return {'success': False, 'error': f"Solo se puede iniciar Control de Calidad en órdenes recibidas. Estado actual: {estado_actual}."}
+
+                # 2. Usar la función existente para actualizar el estado
+                # Esta función ya actualiza el estado a 'EN_CONTROL_CALIDAD'
+                #
+                self._marcar_cadena_como_en_control_calidad(orden_id)
+                
+                logger.info(f"Usuario {usuario_id} movió la OC {orden_id} a EN_CONTROL_CALIDAD.")
+                
+                return {'success': True, 'message': 'La orden ha sido movida a Control de Calidad.'}
+                
+            except Exception as e:
+                logger.error(f"Error al iniciar control de calidad para OC {orden_id}: {e}", exc_info=True)
+                return {'success': False, 'error': str(e)}

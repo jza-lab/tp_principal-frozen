@@ -210,3 +210,23 @@ def procesar_recepcion(orden_id):
             "error",
         )
     return redirect(url_for("orden_compra.detalle", id=orden_id))
+
+
+@orden_compra_bp.route("/<int:id>/iniciar-calidad", methods=["POST"])
+@jwt_required()
+@permission_required(accion='realizar_control_de_calidad_insumos')
+def iniciar_calidad(id):
+    """
+    Endpoint para que el supervisor de calidad mueva una orden a 'EN CONTROL DE CALIDAD'.
+    """
+    controller = OrdenCompraController()
+    usuario_id = get_jwt_identity()
+    resultado = controller.iniciar_control_de_calidad(id, usuario_id)
+    
+    if resultado.get("success"):
+        flash("La orden se ha movido a Control de Calidad.", "success")
+    else:
+        flash(f"Error: {resultado.get('error', 'No se pudo iniciar el control de calidad.')}", "danger")
+        
+    return redirect(url_for("orden_compra.detalle", id=id))
+

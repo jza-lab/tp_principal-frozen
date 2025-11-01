@@ -52,7 +52,7 @@ class InsumosInventarioSchema(Schema):
     observaciones = fields.Str(allow_none=True)
 
     estado = fields.Str(validate=validate.OneOf([
-        'disponible', 'agotado', 'reservado', 'vencido', 'retirado', 'cuarentena'
+        'disponible', 'agotado', 'reservado', 'vencido', 'retirado', 'cuarentena', 'EN REVISION'
     ]), dump_default='disponible')
 
     # 2. Añadir los nuevos campos
