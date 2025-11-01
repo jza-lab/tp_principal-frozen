@@ -16,6 +16,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/public_styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chatbot.css') }}">
    <style>
     @media print {
         .main-nav,
@@ -298,6 +299,34 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
     <script src="{{ url_for('static', filename='js/modalHandler.js') }}"></script>
     <script src="{{ url_for('static', filename='js/flashModal.js') }}"></script>
+
+    <!-- Chatbot -->
+    <div id="chatbot-container">
+        <div id="chatbot-icon">
+            <i class="fa-solid fa-comment-dots"></i>
+        </div>
+        <div id="chatbot-window">
+            <div id="chatbot-header">
+                <h5>Asistente Virtual</h5>
+                <button id="chatbot-close-btn">&times;</button>
+            </div>
+            <div id="chatbot-body">
+                <div id="chatbot-messages">
+                    <div class="chatbot-message bot">
+                        ¡Hola! Soy tu asistente virtual. ¿En qué puedo ayudarte hoy?
+                    </div>
+                </div>
+            </div>
+            <div id="chatbot-footer">
+                <div id="chatbot-options">
+                    <!-- Los botones de opciones se generarán aquí con JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Fin Chatbot -->
+
+    <script src="{{ url_for('static', filename='js/chatbot.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 
