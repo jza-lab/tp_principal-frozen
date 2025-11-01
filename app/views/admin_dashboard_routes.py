@@ -56,7 +56,7 @@ def index():
     if is_operario:
         filtros['operario_responsable_id'] = user_id
     respuesta_ordenes, _ = orden_produccion_controller.obtener_ordenes(filtros)
-    ordenes_aprobadas = respuesta_ordenes.get('data', [])
+    ordenes_listas_para_producir = respuesta_ordenes.get('data', [])
 
     asistencia = usuario_controller.obtener_porcentaje_asistencia()
     notificaciones = notificacion_controller.obtener_notificaciones_no_leidas()
@@ -92,8 +92,6 @@ def index():
     lotes_vencimiento_count = inventario_controller.obtener_conteo_vencimientos()
     productos_sin_lotes_resp, _ = lote_producto_controller.obtener_conteo_productos_sin_lotes()
 
-    lotes_producto_vencimiento_count = lote_producto_controller.obtener_conteo_vencimientos() 
-
     # Conteo de clientes pendientes de aprobación
     pending_client_count = 0
     respuesta_clientes_pendientes, _ = cliente_controller.obtener_conteo_clientes_pendientes()
@@ -108,25 +106,41 @@ def index():
     consulta_controller = ConsultaController()
     conteo_consultas = consulta_controller.obtener_conteo_consultas_pendientes()
     
-    # Nuevo indicador de insumos en cuarentena
-    insumos_en_cuarentena = inventario_controller.obtener_conteo_insumos_en_cuarentena()
+    # Insumos en cuarentena (ahora obtiene lista y conteo)
+    insumos_cuarentena_result = inventario_controller.obtener_lotes_y_conteo_insumos_en_cuarentena()
+    insumos_en_cuarentena = insumos_cuarentena_result.get('count', 0)
+    insumos_en_cuarentena_lista = insumos_cuarentena_result.get('data', [])
 
     # Indicadores para Supervisor de Calidad
-    lotes_pendientes_control = lote_producto_controller.obtener_conteo_lotes_por_estado('PENDIENTE_CALIDAD')
-    productos_rechazados = lote_producto_controller.obtener_conteo_lotes_por_estado('CUARENTENA')
+    lotes_pendientes_result = lote_producto_controller.obtener_lotes_y_conteo_por_estado('PENDIENTE_CALIDAD')
+    lotes_pendientes_control = lotes_pendientes_result.get('count', 0)
+    lotes_pendientes_control_lista = lotes_pendientes_result.get('data', [])
+
+    productos_rechazados_result = lote_producto_controller.obtener_lotes_y_conteo_por_estado('CUARENTENA')
+    productos_rechazados = productos_rechazados_result.get('count', 0)
+    productos_rechazados_lista = productos_rechazados_result.get('data', [])
+    
+    lotes_vencimiento_result = lote_producto_controller.obtener_lotes_y_conteo_vencimientos()
+    lotes_producto_vencimiento_count = lotes_vencimiento_result.get('count', 0)
+    lotes_producto_vencimiento_lista = lotes_vencimiento_result.get('data', [])
+
     lotes_sin_trazabilidad = lote_producto_controller.obtener_conteo_lotes_sin_trazabilidad()
     ordenes_reabiertas = orden_produccion_controller.obtener_conteo_ordenes_reabiertas()
 
     return render_template('dashboard/index.html', 
                            insumos_en_cuarentena=insumos_en_cuarentena,
+                           insumos_en_cuarentena_lista=insumos_en_cuarentena_lista,
                            lotes_pendientes_control=lotes_pendientes_control,
+                           lotes_pendientes_control_lista=lotes_pendientes_control_lista,
                            productos_rechazados=productos_rechazados,
+                           productos_rechazados_lista=productos_rechazados_lista,
+                           lotes_producto_vencimiento_lista=lotes_producto_vencimiento_lista,
                            lotes_sin_trazabilidad=lotes_sin_trazabilidad,
                            ordenes_reabiertas=ordenes_reabiertas,
                            conteo_consultas_pendientes=conteo_consultas,
                            asistencia=asistencia,
                            ordenes_pendientes=ordenes_pendientes,
-                           ordenes_aprobadas=ordenes_aprobadas,
+                           ordenes_aprobadas=ordenes_listas_para_producir,
                            ordenes_totales=ordenes_totales,
                            notificaciones=notificaciones,
                            alertas_stock_count=alertas_stock_count,

@@ -683,21 +683,21 @@ class LoteProductoController(BaseController):
             logger.error(f"Error crítico al reservar stock para el pedido {pedido_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
-    def obtener_conteo_vencimientos(self) -> int:
-            """Obtiene el conteo de lotes de productos próximos a vencer (crítico)."""
-            try:
-                # Obtener el umbral de días de la configuración
-                dias_alerta = self.config_controller.obtener_dias_vencimiento() # <--- MODIFICADO
+    def obtener_lotes_y_conteo_vencimientos(self) -> dict:
+        """Obtiene los lotes y el conteo de productos próximos a vencer."""
+        try:
+            dias_alerta = self.config_controller.obtener_dias_vencimiento()
+            
+            # Reutilizamos el método del modelo que ya busca por vencimiento
+            vencimiento_result = self.model.find_por_vencimiento(dias_alerta)
 
-                # Llama al método del modelo que busca lotes por vencer en el número de días configurado
-                vencimiento_result = self.model.find_por_vencimiento(dias_alerta)
-
-                if vencimiento_result.get('success'):
-                    return len(vencimiento_result.get('data', []))
-                return 0
-            except Exception as e:
-                logger.error(f"Error contando alertas de vencimiento de producto: {str(e)}")
-                return 0
+            if vencimiento_result.get('success'):
+                lotes = vencimiento_result.get('data', [])
+                return {'count': len(lotes), 'data': lotes}
+            return {'count': 0, 'data': []}
+        except Exception as e:
+            logger.error(f"Error obteniendo lotes próximos a vencer: {str(e)}")
+            return {'count': 0, 'data': []}
 
     def obtener_datos_grafico_inventario(self) -> dict:
         """
@@ -1032,23 +1032,25 @@ class LoteProductoController(BaseController):
             logger.error(f"Error en actualizar_lote_desde_formulario: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
 
-    def obtener_conteo_lotes_por_estado(self, estado: str) -> int:
-        """Obtiene el conteo de lotes en un estado específico."""
+    def obtener_lotes_y_conteo_por_estado(self, estado: str) -> dict:
+        """Obtiene los lotes y el conteo en un estado específico, usando datos enriquecidos."""
         try:
-            result = self.model.find_all(filtros={'estado': estado}, count_only=True)
+            # Usamos el método que ya trae los datos enriquecidos para la vista
+            result = self.model.get_all_lotes_for_view(filtros={'estado': estado})
             if result.get('success'):
-                return result.get('data', 0)
-            return 0
+                lotes = result.get('data', [])
+                return {'count': len(lotes), 'data': lotes}
+            return {'count': 0, 'data': []}
         except Exception as e:
-            logger.error(f"Error contando lotes por estado '{estado}': {str(e)}")
-            return 0
+            logger.error(f"Error obteniendo lotes por estado '{estado}': {str(e)}")
+            return {'count': 0, 'data': []}
 
     def obtener_conteo_lotes_sin_trazabilidad(self) -> int:
         """Obtiene el conteo de lotes sin una orden de producción asociada."""
         try:
-            result = self.model.find_all(filtros={'orden_produccion_id': ('is', None)}, count_only=True)
+            result = self.model.find_all(filters={'orden_produccion_id': ('is', None)})
             if result.get('success'):
-                return result.get('data', 0)
+                return len(result.get('data', []))
             return 0
         except Exception as e:
             logger.error(f"Error contando lotes sin trazabilidad: {str(e)}")
