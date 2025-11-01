@@ -5,6 +5,7 @@ import base64
 import re
 import json
 import logging
+import time  # Importar el módulo time
 from typing import Dict, Optional
 from datetime import datetime, timedelta
 from flask import render_template
@@ -206,12 +207,17 @@ class FacialController:
         if face_recognition is None:
             return {'success': False, 'message': 'Librería de reconocimiento facial no disponible.'}
 
+        t0 = time.time()
         frame = self._get_image_from_data_url(image_data_url)
         if frame is None:
             return {'success': False, 'message': 'Error al procesar la imagen.'}
+        t1 = time.time()
+        logger.info(f"[PERF] Decodificación de imagen: {t1 - t0:.2f} segundos.")
 
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         face_encodings = face_recognition.face_encodings(rgb_frame)
+        t2 = time.time()
+        logger.info(f"[PERF] Detección y codificación de rostros: {t2 - t1:.2f} segundos.")
 
         if not face_encodings:
             return {'success': False, 'message': 'No se detectó un rostro en la imagen.'}
@@ -268,15 +274,31 @@ class FacialController:
     # region Métodos de Soporte (Helpers)
     def _get_image_from_data_url(self, image_data_url: str) -> Optional[np.ndarray]:
         """
-        Decodifica una imagen en formato Data URL a un array de NumPy para OpenCV.
+        Decodifica y redimensiona una imagen en formato Data URL.
         """
         try:
             image_data = re.sub('^data:image/.+;base64,', '', image_data_url)
             image_bytes = base64.b64decode(image_data)
             np_arr = np.frombuffer(image_bytes, np.uint8)
-            return cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+            if frame is None:
+                logger.error("No se pudo decodificar la imagen.")
+                return None
+
+            # --- Optimización: Redimensionar la imagen ---
+            max_width = 640
+            h, w, _ = frame.shape
+            if w > max_width:
+                ratio = max_width / w
+                new_h = int(h * ratio)
+                frame = cv2.resize(frame, (max_width, new_h), interpolation=cv2.INTER_AREA)
+                logger.info(f"Imagen redimensionada de {w}x{h} a {max_width}x{new_h}.")
+            
+            return frame
+
         except Exception as e:
-            logger.error(f"Error decodificando imagen desde Data URL: {e}", exc_info=True)
+            logger.error(f"Error procesando imagen desde Data URL: {e}", exc_info=True)
             return None
 
     def _preparar_perfiles(self, usuarios: list) -> tuple:

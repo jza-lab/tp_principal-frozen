@@ -39,9 +39,6 @@ const AutorizacionesPanel = (function() {
     function createHistoryCard(auth) {
         const statusClass = auth.estado === 'APROBADO' ? 'success' : 'danger';
         const statusIcon = auth.estado === 'APROBADO' ? 'check-circle-fill' : 'x-circle-fill';
-        const formattedDate = new Date(auth.fecha_autorizada).toLocaleDateString('es-AR', {
-            day: '2-digit', month: '2-digit', year: 'numeric'
-        });
 
         return `
             <div class="col-md-4 mb-4">
@@ -56,7 +53,7 @@ const AutorizacionesPanel = (function() {
                         <h5 class="card-title">${auth.usuario.nombre} ${auth.usuario.apellido}</h5>
                         <h6 class="card-subtitle mb-2 text-muted">Legajo: ${auth.usuario.legajo}</h6>
                         <p class="card-text small">
-                            <strong>Fecha:</strong> ${formattedDate}<br>
+                            <strong>Fecha:</strong> ${auth.fecha_autorizada}<br>
                             <strong>Turno:</strong> ${auth.turno.nombre} (${auth.turno.hora_inicio.slice(0, 5)} - ${auth.turno.hora_fin.slice(0, 5)})<br>
                             <strong>Tipo:</strong> ${auth.tipo.replace(/_/g, ' ')}
                         </p>

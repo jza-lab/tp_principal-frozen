@@ -4,10 +4,13 @@ from app.controllers.base_controller import BaseController
 from app.models.insumo import InsumoModel
 from app.models.inventario import InventarioModel
 from app.schemas.insumo_schema import InsumosCatalogoSchema
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import logging
 from app.utils.serializable import safe_serialize
 from marshmallow import ValidationError
+import math
+from app.models.proveedor import ProveedorModel
+from datetime import date
 
 
 logger = logging.getLogger(__name__)
@@ -107,6 +110,50 @@ class InsumoController(BaseController):
             # Primero, actualizamos el stock de todos los insumos
             self.inventario_model.calcular_y_actualizar_stock_general()
             
+            # --- INICIO: Disparador automático de OCs (Refactorizado) ---
+            try:
+                # 1. Obtener el ID del proveedor default (PRV-0001)
+                proveedor_default_id = None
+                default_prov_res = ProveedorModel().get_all(filtros={'codigo': 'PRV-0001'})
+                if default_prov_res.get('success') and default_prov_res.get('data'):
+                    proveedor_default_id = default_prov_res['data'][0]['id']
+                else:
+                    logger.warning("Disparador automático: No se encontró proveedor 'PRV-0001'. Insumos sin proveedor no se repondrán.")
+
+                # 2. Buscar *todos* los insumos activos que no estén ya en espera
+                insumos_a_chequear_result = self.insumo_model.find_all(filters={
+                    'activo': True, 
+                    'en_espera_de_reestock': False
+                })
+
+                if insumos_a_chequear_result.get('success'):
+                    insumos_para_revisar = insumos_a_chequear_result.get('data', [])
+                    proveedores_para_oc = set() # Usamos un 'set' para evitar duplicados
+
+                    # 3. Iterar para encontrar *qué proveedores* necesitan una OC
+                    for insumo in insumos_para_revisar:
+                        stock = float(insumo.get('stock_actual') or 0)
+                        minimo = float(insumo.get('stock_min') or 0)
+                        
+                        if stock < minimo:
+                            proveedor_id = insumo.get('id_proveedor')
+                            if proveedor_id:
+                                proveedores_para_oc.add(proveedor_id)
+                            elif proveedor_default_id:
+                                # Si no tiene proveedor, se asigna al default
+                                proveedores_para_oc.add(proveedor_default_id)
+                    
+                    # 4. Ahora, para cada proveedor, generar *una* OC
+                    if proveedores_para_oc:
+                        logger.info(f"Disparador automático: Se generarán OCs para {len(proveedores_para_oc)} proveedores.")
+                        for prov_id in proveedores_para_oc:
+                            # Llamamos a la función refactorizada, pasando el ID default
+                            self._generar_oc_automatica_por_proveedor(prov_id, proveedor_default_id)
+                    
+            except Exception as e_auto_oc:
+                logger.error(f"Error crítico en el disparador automático de OCs: {e_auto_oc}", exc_info=True)
+            # --- FIN: Disparador automático de OCs ---
+            
             filtros = filtros or {}
 
             stock_status_filter = filtros.pop('stock_status', None)
@@ -183,7 +230,6 @@ class InsumoController(BaseController):
         """Obtener un insumo específico por ID, incluyendo sus lotes en inventario."""
         try:
             # 1. Actualizar el stock y obtener los datos más recientes del insumo en una sola operación.
-            # Esto evita race conditions y asegura que siempre mostramos la data más fresca.
             response_data, status_code = self.actualizar_stock_insumo(id_insumo)
 
             # Si la actualización/obtención falla, propagamos el error.
@@ -194,7 +240,6 @@ class InsumoController(BaseController):
             insumo_data = response_data.get('data', {})
 
             # 2. Obtener los lotes asociados
-            # Usamos el modelo de inventario que ya está instanciado en el controlador
             lotes_result = self.inventario_model.find_by_insumo(id_insumo, solo_disponibles=False)
 
             if lotes_result.get('success'):
@@ -202,8 +247,6 @@ class InsumoController(BaseController):
                 lotes_data = sorted(lotes_result['data'], key=lambda x: x.get('f_ingreso', ''), reverse=True)
                 insumo_data['lotes'] = lotes_data
             else:
-                # Si falla la obtención de lotes, no es un error fatal.
-                # Simplemente se mostrará el insumo sin lotes.
                 insumo_data['lotes'] = []
                 logger.warning(f"No se pudieron obtener los lotes para el insumo {id_insumo}: {lotes_result.get('error')}")
 
@@ -239,8 +282,6 @@ class InsumoController(BaseController):
                 return self.error_response(result['error'])
 
         except ValidationError as e:
-            # Re-lanzar la excepción de validación para que la vista la maneje
-            # y devuelva un JSON con los detalles del error.
             raise e
         except Exception as e:
             logger.error(f"Error actualizando insumo: {str(e)}")
@@ -375,13 +416,6 @@ class InsumoController(BaseController):
     def buscar_por_codigo_proveedor(self, codigo_proveedor: str, proveedor_id: str = None) -> Optional[Dict]:
         """
         Busca insumo por código de proveedor usando el modelo
-
-        Args:
-            codigo_proveedor: Código del proveedor
-            proveedor_id: ID del proveedor (opcional)
-
-        Returns:
-            Dict con datos del insumo o None
         """
         try:
             return self.model.buscar_por_codigo_proveedor(codigo_proveedor, proveedor_id)
@@ -400,11 +434,9 @@ class InsumoController(BaseController):
             lotes_result = self.inventario_model.find_by_insumo(id_insumo, solo_disponibles=True)
 
             if not lotes_result.get('success'):
-                # Si no se pueden obtener los lotes, devolvemos un error claro.
                 return self.error_response(f"No se pudieron obtener los lotes: {lotes_result.get('error')}", 500)
 
-            # 2. Calcular el stock sumando la cantidad actual de cada lote.
-            # Si no hay lotes, la suma de una lista vacía es 0, lo cual es correcto.
+            # 2. Calcular el stock
             total_stock = sum(lote.get('cantidad_actual', 0) for lote in lotes_result.get('data', []))
 
             # 3. Actualizar el campo stock_actual en la tabla de insumos
@@ -412,10 +444,14 @@ class InsumoController(BaseController):
             update_result = self.insumo_model.update(id_insumo, update_data, 'id_insumo')
 
             if not update_result.get('success'):
-                # Si la actualización en la DB falla, devolvemos error.
                 return self.error_response(f"Error al actualizar el stock: {update_result.get('error')}", 500)
 
             logger.info(f"Stock actualizado para el insumo {id_insumo}: {total_stock}")
+
+            # --- INICIO DE LA NUEVA LÓGICA ---
+            # Después de actualizar, verificamos si necesita reposición.
+            self._verificar_y_reponer_stock(update_result['data'])
+            # --- FIN DE LA NUEVA LÓGICA ---
 
             # 4. Devolver el insumo actualizado.
             return self.success_response(
@@ -427,4 +463,199 @@ class InsumoController(BaseController):
             logger.error(f"Error crítico actualizando stock de insumo {id_insumo}: {str(e)}")
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
+    def _verificar_y_reponer_stock(self, insumo_actualizado: Dict):
+        """
+        Wrapper que se llama desde 'actualizar_stock_insumo'.
+        Verifica si el insumo está bajo stock y, de ser así,
+        dispara la lógica de OC para *todo* su proveedor.
+        """
+        try:
+            stock_actual = float(insumo_actualizado.get('stock_actual') or 0)
+            stock_min = float(insumo_actualizado.get('stock_min') or 0)
+            en_espera = insumo_actualizado.get('en_espera_de_reestock', False)
 
+            if not en_espera and stock_actual < stock_min:
+                logger.info(f"Disparador de detalle: Insumo {insumo_actualizado['nombre']} bajo stock. Verificando OC para su proveedor.")
+                
+                proveedor_id = insumo_actualizado.get('id_proveedor')
+                proveedor_default_id = None
+                
+                # 1. Obtener el ID del proveedor default (PRV-0001)
+                default_prov_res = ProveedorModel().get_all(filtros={'codigo': 'PRV-0001'})
+                if default_prov_res.get('success') and default_prov_res.get('data'):
+                    proveedor_default_id = default_prov_res['data'][0]['id']
+                
+                if not proveedor_id:
+                    if proveedor_default_id:
+                        proveedor_id = proveedor_default_id
+                    else:
+                        logger.error(f"Insumo {insumo_actualizado['nombre']} sin proveedor y no se encontró PRV-0001. No se puede generar OC.")
+                        return
+                
+                # Llamamos a la función centralizada, pasando el ID del proveedor y el ID default
+                self._generar_oc_automatica_por_proveedor(proveedor_id, proveedor_default_id)
+        
+        except Exception as e:
+            logger.error(f"Error en _verificar_y_reponer_stock (wrapper) para insumo {insumo_actualizado.get('id_insumo')}: {e}", exc_info=True)
+
+
+    def _generar_oc_automatica_por_proveedor(self, proveedor_id: str, default_prov_id: Optional[str]):
+        """
+        Función central: Genera UNA orden de compra para un proveedor,
+        agrupando TODOS sus insumos con bajo stock.
+        
+        Si proveedor_id == default_prov_id, buscará insumos con ese ID Y también
+        insumos con id_proveedor = NULL.
+        """
+        try:
+            logger.info(f"Generando OC automática para Proveedor ID: {proveedor_id} (Default ID: {default_prov_id})")
+            proveedor_model = ProveedorModel()
+
+            # 1. Obtener datos del proveedor (para el log)
+            prov_data = proveedor_model.find_by_id(proveedor_id)
+            proveedor_nombre_logging = f"ID {proveedor_id}"
+            if prov_data.get('success'):
+                proveedor_nombre_logging = prov_data['data'].get('nombre', proveedor_nombre_logging)
+
+            # 2. Determinar el ID del usuario creador
+            from app.models.usuario import UsuarioModel 
+            usuario_model = UsuarioModel()
+            ID_USUARIO_SISTEMA = 1 
+            usuario_res = usuario_model.find_by_id(ID_USUARIO_SISTEMA)
+            if not (usuario_res and usuario_res.get('success') and usuario_res.get('data')):
+                logger.error(f"FATAL: No se encontró al usuario de sistema con ID {ID_USUARIO_SISTEMA}. Abortando OC para {proveedor_nombre_logging}.")
+                return
+            id_usuario_creador = usuario_res['data']['id']
+            username_log = usuario_res['data'].get('username', f"ID: {id_usuario_creador}")
+
+            # 3. --- LÓGICA DE QUERY CORREGIDA ---
+            # Buscar TODOS los insumos de este proveedor que necesiten reposición
+            # Esta consulta es manual porque find_all() no soporta el 'OR' que necesitamos.
+            
+            query = (self.insumo_model.db.table(self.insumo_model.get_table_name())
+                         .select("*, proveedor:id_proveedor(*)")
+                         .eq('en_espera_de_reestock', False)
+                         .eq('activo', True))
+
+            if str(proveedor_id) == str(default_prov_id) and default_prov_id is not None:
+                # Es el proveedor default, buscar su ID O 'NULL'
+                logger.info(f"Consulta para proveedor DEFAULT: id_proveedor = {proveedor_id} O id_proveedor = NULL")
+                query = query.or_(f'id_proveedor.eq.{proveedor_id},id_proveedor.is.null')
+            else:
+                # Es un proveedor normal, buscar solo su ID
+                logger.info(f"Consulta para proveedor normal: id_proveedor = {proveedor_id}")
+                query = query.eq('id_proveedor', proveedor_id)
+            
+            response = query.execute()
+            
+            if not response.data:
+                logger.info(f"La consulta de insumos para {proveedor_nombre_logging} no devolvió resultados.")
+                insumos_a_reponer_result = {'success': True, 'data': []}
+            else:
+                insumos_a_reponer_result = {'success': True, 'data': response.data}
+                
+            # --- FIN LÓGICA DE QUERY CORREGIDA ---
+
+            if not insumos_a_reponer_result.get('success'):
+                logger.error(f"No se pudieron obtener los insumos del proveedor {proveedor_nombre_logging}.")
+                return
+
+            items_para_oc = []
+            insumos_para_marcar_en_espera = []
+            subtotal_calculado = 0.0
+
+            for insumo in insumos_a_reponer_result.get('data', []):
+                stock = float(insumo.get('stock_actual') or 0)
+                minimo = float(insumo.get('stock_min') or 0)
+
+                # Volvemos a chequear stock < minimo aquí
+                if stock < minimo:
+                    cantidad_a_pedir = math.ceil(minimo - stock)
+                    precio_unitario = float(insumo.get('precio_unitario') or 0)
+                    
+                    items_para_oc.append({
+                        'insumo_id': insumo['id_insumo'],
+                        'cantidad_solicitada': cantidad_a_pedir,
+                        'precio_unitario': precio_unitario,
+                        'cantidad_recibida': 0.0
+                    })
+                    insumos_para_marcar_en_espera.append(insumo['id_insumo'])
+                    
+                    # === SOLUCIÓN PROBLEMA 1: Sumar al subtotal ===
+                    subtotal_calculado += (cantidad_a_pedir * precio_unitario)
+
+            if not items_para_oc:
+                logger.info(f"No se encontraron insumos CON BAJO STOCK (que no estén 'en espera') para el proveedor {proveedor_nombre_logging}.")
+                return
+
+            # 4. Calcular Totales (Asumimos IVA 21%)
+            iva_calculado = subtotal_calculado * 0.21
+            total_calculado = subtotal_calculado + iva_calculado
+
+            # 5. Marcar los insumos como "en espera" ANTES de crear la OC
+            #    para evitar que otro proceso los tome.
+            for insumo_id in insumos_para_marcar_en_espera:
+                self.insumo_model.marcar_en_espera(insumo_id)
+
+            # 6. Crear la Orden de Compra
+            from app.controllers.orden_compra_controller import OrdenCompraController
+            orden_compra_controller = OrdenCompraController()
+            datos_oc = {
+                'proveedor_id': proveedor_id,
+                'estado': 'APROBADA',
+                'fecha_emision': date.today().isoformat(),
+                'prioridad': 'ALTA',
+                'observaciones': f"Orden de compra generada automáticamente por bajo stock. Proveedor: {proveedor_nombre_logging}. Creada por: {username_log}.",
+                # === SOLUCIÓN PROBLEMA 1: Añadir totales al dict ===
+                'subtotal': round(subtotal_calculado, 2),
+                'iva': round(iva_calculado, 2),
+                'total': round(total_calculado, 2)
+            }
+
+            resultado_oc = orden_compra_controller.crear_orden(datos_oc, items_para_oc, id_usuario_creador)
+
+            if resultado_oc.get('success'):
+                oc_data = resultado_oc.get('data', {})
+                oc_codigo = oc_data.get('codigo_oc', 'N/A')
+                oc_id = oc_data.get('id')
+                logger.info(f"Orden de compra {oc_codigo} creada exitosamente para {len(items_para_oc)} insumos del proveedor {proveedor_nombre_logging}.")
+                
+                # 7. Lógica de Notificación (sin cambios)
+                from app.controllers.usuario_controller import UsuarioController
+                from app.models.rol import RoleModel
+                from app.models.notificacion import NotificacionModel
+
+                usuario_controller = UsuarioController()
+                role_model = RoleModel()
+                notificacion_model = NotificacionModel()
+                roles_a_notificar = ['GERENTE', 'SUPERVISOR']
+                usuarios_a_notificar = []
+                
+                for codigo_rol in roles_a_notificar:
+                    rol_result = role_model.find_by_codigo(codigo_rol)
+                    if rol_result.get('success'):
+                        rol_id = rol_result['data']['id']
+                        usuarios = usuario_controller.obtener_todos_los_usuarios(filtros={'role_id': rol_id, 'activo': True})
+                        usuarios_a_notificar.extend(usuarios)
+
+                mensaje = f"OC automática {oc_codigo} creada por bajo stock."
+                url_destino = f"/ordenes_compra/view/{oc_id}"
+
+                for usuario in usuarios_a_notificar:
+                    notificacion_data = {
+                        'usuario_id': usuario['id'],
+                        'mensaje': mensaje,
+                        'tipo': 'ADVERTENCIA',
+                        'url_destino': url_destino
+                    }
+                    notificacion_model.create(notificacion_data)
+                logger.info(f"Notificaciones enviadas a {len(usuarios_a_notificar)} usuarios para la OC {oc_codigo}.")
+
+            else:
+                logger.error(f"Fallo al crear la orden de compra automática para {proveedor_nombre_logging}: {resultado_oc.get('error')}")
+                # Revertir el estado 'en_espera_de_reestock' si la OC falla
+                for insumo_id in insumos_para_marcar_en_espera:
+                    self.insumo_model.quitar_en_espera(insumo_id)
+
+        except Exception as e:
+            logger.error(f"Error crítico en _generar_oc_automatica_por_proveedor para ID {proveedor_id}: {e}", exc_info=True)

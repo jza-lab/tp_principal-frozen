@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from datetime import timedelta
 
-load_dotenv(dotenv_path='credenciales.env')
+load_dotenv(dotenv_path='credenciales.env') | load_dotenv(dotenv_path='.env')
 
 class Config:
 
@@ -15,7 +15,7 @@ class Config:
     BYPASS_LOGIN_CHECKS = os.getenv('BYPASS_LOGIN_CHECKS', 'False').lower() in ('true', '1', 't')
 
     # Configuraciones para desarrollo con PyScripter
-    DEBUG = True
+    DEBUG = os.getenv('FLASK_DEBUG', 'false').lower() in ('true', '1', 't')
     TESTING = False
 
     # Evitar problemas de puertos

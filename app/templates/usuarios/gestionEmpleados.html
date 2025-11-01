@@ -95,13 +95,70 @@
 <script>
     const URL_TOTEM_ACTIVITY = "{{ url_for('api.obtener_actividad_totem') }}";
     const URL_WEB_ACTIVITY = "{{ url_for('api.obtener_actividad_web') }}";
-    const CAN_MANAGE_AUTHORIZATIONS = {{ has_permission('gestionar_autorizaciones') | tojson }};
+    const CAN_MANAGE_AUTHORIZATIONS = "{{ has_permission('gestionar_autorizaciones') | tojson }}";
 </script>
+
 <script src="{{ url_for('static', filename='js/usuarios/gestionEmpleados.js') }}"></script>
 <script src="{{ url_for('static', filename='js/usuarios/panelActividad.js') }}"></script>
 <script src="{{ url_for('static', filename='js/usuarios/panelAutorizaciones.js') }}"></script>
 <script src="{{ url_for('static', filename='js/usuarios/panelEmpleados.js') }}"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/listarUsuarios.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/autorizaciones.css') }}">
+
+<script>
+// Activar pestaña según parámetro URL y cargar datos del panel correspondiente
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    
+    if (tabParam === 'authorizations') {
+        // Desactivar pestaña activa
+        const activeTab = document.querySelector('#userTabs .nav-link-custom.active');
+        const activePanel = document.querySelector('.tab-pane.show.active');
+        if (activeTab) activeTab.classList.remove('active');
+        if (activePanel) {
+            activePanel.classList.remove('show', 'active');
+        }
+        
+        // Activar pestaña de Autorizaciones
+        const authTab = document.getElementById('authorizations-tab');
+        const authPanel = document.getElementById('authorizations-panel');
+        if (authTab && authPanel) {
+            authTab.classList.add('active');
+            authPanel.classList.add('show', 'active');
+        }
+    }
+    
+    // Escuchar eventos de cambio de pestaña para inicializar paneles bajo demanda
+    const tabButtons = document.querySelectorAll('#userTabs button[data-bs-toggle="tab"]');
+    tabButtons.forEach(button => {
+        button.addEventListener('shown.bs.tab', function(event) {
+            const targetId = event.target.getAttribute('data-bs-target');
+            
+            // Cargar datos según la pestaña activada
+            if (targetId === '#activity-panel' && typeof ActividadPanel !== 'undefined') {
+                // Reinicializar el panel de actividad si es necesario
+                if (ActividadPanel.init) {
+                    ActividadPanel.init();
+                }
+            } else if (targetId === '#authorizations-panel' && typeof AutorizacionesPanel !== 'undefined') {
+                // Reinicializar el panel de autorizaciones si es necesario
+                if (AutorizacionesPanel.init) {
+                    AutorizacionesPanel.init();
+                }
+            }
+        });
+    });
+    
+    // Si se activó la pestaña de autorizaciones por URL, forzar la carga
+    if (tabParam === 'authorizations') {
+        setTimeout(function() {
+            if (typeof AutorizacionesPanel !== 'undefined' && AutorizacionesPanel.init) {
+                AutorizacionesPanel.init();
+            }
+        }, 100);
+    }
+});
+</script>
 
 {% endblock %}
