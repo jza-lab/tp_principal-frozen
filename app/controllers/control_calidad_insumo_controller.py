@@ -65,22 +65,39 @@ class ControlCalidadInsumoController(BaseController):
             if not lote_existente_res.get('success') or not lote_existente_res.get('data'):
                 return self.error_response('El lote de insumo no fue encontrado.', 404)
             lote = lote_existente_res['data']
+            insumo_id = lote.get('id_insumo') # Guardamos el ID del insumo para el recálculo
 
             nuevo_estado_lote = {
                 'Aceptar': 'disponible',
-                'Poner en Cuarentena': 'en cuarentena',
+                'Poner en Cuarentena': 'cuarentena',
                 'Rechazar': 'rechazado'
             }.get(decision)
 
             if not nuevo_estado_lote:
                 return self.error_response('La decisión tomada no es válida.', 400)
 
+            # Preparar los datos de actualización del lote
             update_data = {'estado': nuevo_estado_lote, 'updated_at': datetime.now().isoformat()}
-            update_result = self.inventario_model.update(lote_id, update_data, 'id_lote')
 
+            # Si el lote es rechazado, su cantidad se convierte en 0
+            if decision == 'Rechazar':
+                update_data['cantidad_actual'] = 0
+                update_data['cantidad_en_cuarentena'] = 0 # Asegurarse de que también sea 0
+            
+            # Si se pone en cuarentena, toda la cantidad_actual pasa a cantidad_en_cuarentena
+            elif decision == 'Poner en Cuarentena':
+                cantidad_a_mover = lote.get('cantidad_actual', 0)
+                motivo = form_data.get('comentarios', 'Sin motivo especificado.') # Extraemos el motivo del formulario
+                update_data['cantidad_actual'] = 0
+                update_data['cantidad_en_cuarentena'] = cantidad_a_mover
+                update_data['motivo_cuarentena'] = motivo # Añadimos el motivo a la actualización
+
+            # Actualizar el lote en la base de datos
+            update_result = self.inventario_model.update(lote_id, update_data, 'id_lote')
             if not update_result.get('success'):
                 return self.error_response(f"Error al actualizar el estado del lote: {update_result.get('error')}", 500)
 
+            # Registrar el evento de C.C. si es necesario
             if decision in ['Poner en Cuarentena', 'Rechazar']:
                 foto_url = self._subir_foto_y_obtener_url(foto_file, lote_id)
                 orden_compra_id = self._extraer_oc_id_de_lote(lote)
@@ -96,8 +113,15 @@ class ControlCalidadInsumoController(BaseController):
                 }
                 registro_result = self.model.create_registro(registro_data)
                 if not registro_result.get('success'):
-                    logger.error(f"El estado del lote {lote_id} se actualizó, pero falló la creación del registro de C.C.: {registro_result.get('error')}")
+                    logger.error(f"Falló la creación del registro de C.C. para el lote {lote_id}: {registro_result.get('error')}")
 
+            # Recalcular el stock del insumo afectado
+            if insumo_id:
+                recalculo_res = self.inventario_model.recalcular_stock_para_insumo(insumo_id)
+                if not recalculo_res.get('success'):
+                    logger.error(f"El lote {lote_id} se actualizó, pero falló el recálculo de stock para el insumo {insumo_id}: {recalculo_res.get('error')}")
+
+            # Verificar si la orden de compra asociada ya puede ser cerrada
             orden_compra_id_a_verificar = self._extraer_oc_id_de_lote(lote)
             if orden_compra_id_a_verificar:
                 self._verificar_y_cerrar_orden_si_completa(orden_compra_id_a_verificar)
@@ -141,7 +165,8 @@ class ControlCalidadInsumoController(BaseController):
                 return
 
             # 2. Buscar todos los lotes asociados a esa OC por el documento de ingreso
-            lotes_de_oc_res = self.inventario_model.find_all(filters={'documento_ingreso': f"OC-{codigo_oc}"})
+            documento_ingreso = codigo_oc if codigo_oc.startswith('OC-') else f"OC-{codigo_oc}"
+            lotes_de_oc_res = self.inventario_model.get_all_lotes_for_view(filtros={'documento_ingreso': documento_ingreso})
 
             if not lotes_de_oc_res.get('success'):
                 logger.error(f"No se pudieron obtener los lotes para la OC {codigo_oc}.")

@@ -78,17 +78,50 @@ def nueva():
     )
 
 
+from app.controllers.inventario_controller import InventarioController
+from flask_wtf import FlaskForm
+
 @orden_compra_bp.route("/detalle/<int:id>")
 @permission_required(accion='consultar_ordenes_de_compra')
 def detalle(id):
-    controller = OrdenCompraController()
-    response_data, status_code = controller.get_orden(id)
-    if response_data.get("success"):
-        orden = response_data.get("data")
-        return render_template("ordenes_compra/detalle.html", orden=orden)
-    else:
+    orden_controller = OrdenCompraController()
+    inventario_controller = InventarioController()
+    csrf_form = FlaskForm()
+
+    response_data, status_code = orden_controller.get_orden(id)
+    if not response_data.get("success"):
         flash(response_data.get("error", "Orden de compra no encontrada."), "error")
         return redirect(url_for("orden_compra.listar"))
+
+    orden = response_data.get("data")
+    lotes = []
+    
+    # Si la orden está en control de calidad, buscamos sus lotes para inspección
+    if orden and orden.get('estado') == 'EN_CONTROL_CALIDAD':
+        codigo_oc = orden.get('codigo_oc')
+        if not codigo_oc:
+            flash('La orden no tiene un código válido para buscar sus lotes.', 'danger')
+        else:
+            # Usamos el método existente en el controlador de inventario
+            documento_ingreso = codigo_oc if codigo_oc.startswith('OC-') else f"OC-{codigo_oc}"
+            lotes_result, _ = inventario_controller.obtener_lotes_para_vista(
+                filtros={'documento_ingreso': documento_ingreso, 'estado': 'EN REVISION'}
+            )
+            if not lotes_result.get('success'):
+                flash('Error al obtener los lotes de la orden para inspección.', 'danger')
+            else:
+                lotes = lotes_result.get('data', [])
+
+    # Estados estáticos para el desplegable de inspección
+    estados_inspeccion = ["Óptimo", "Paquete dañado", "Paquete roto", "Contaminación visual", "Olor extraño", "Tacto anómalo"]
+
+    return render_template(
+        "ordenes_compra/detalle.html", 
+        orden=orden,
+        lotes=lotes,
+        estados_inspeccion=estados_inspeccion,
+        csrf_form=csrf_form
+    )
 
 
 @orden_compra_bp.route("/<int:id>/aprobar", methods=["POST"])

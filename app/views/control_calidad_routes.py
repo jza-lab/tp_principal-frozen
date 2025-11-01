@@ -25,45 +25,6 @@ def listar_ordenes_para_inspeccion():
         
     return render_template('ordenes_compra/listar.html', ordenes=ordenes)
 
-@control_calidad_bp.route('/orden/<int:orden_id>', methods=['GET'])
-@jwt_required()
-@permission_required('realizar_control_de_calidad_insumos')
-def inspeccionar_orden(orden_id):
-    """
-    Muestra la página de detalle para inspeccionar los insumos de una orden de compra.
-    """
-    orden_controller = OrdenCompraController()
-    inventario_controller = InventarioController()
-    csrf_form = FlaskForm()
-
-    # 1. Obtener los detalles de la Orden de Compra
-    orden_result, _ = orden_controller.get_orden(orden_id)
-    if not orden_result.get('success'):
-        flash('La orden de compra no fue encontrada.', 'danger')
-        return redirect(url_for('control_calidad.listar_ordenes_para_inspeccion'))
-    
-    orden = orden_result['data']
-    codigo_oc = orden.get('codigo_oc')
-
-    # 2. Obtener los lotes de inventario asociados a esta OC que están 'EN REVISION'
-    if not codigo_oc:
-        flash('La orden no tiene un código válido para buscar sus lotes.', 'danger')
-        lotes = []
-    else:
-        lotes_result = inventario_controller.inventario_model.get_all_lotes_for_view(
-            filtros={'documento_ingreso': codigo_oc, 'estado': 'EN REVISION'}
-        )
-        if not lotes_result.get('success'):
-            flash('Error al obtener los lotes de la orden.', 'danger')
-            lotes = []
-        else:
-            lotes = lotes_result.get('data', [])
-
-    # Estados estáticos para el desplegable de inspección
-    estados_inspeccion = ["Óptimo", "Paquete dañado", "Paquete roto", "Contaminación visual", "Olor extraño", "Tacto anómalo"]
-
-    return render_template('ordenes_compra/inspeccionar.html', orden=orden, lotes=lotes, estados_inspeccion=estados_inspeccion, csrf_form=csrf_form)
-
 @control_calidad_bp.route('/lote/<string:lote_id>/procesar', methods=['POST'])
 @jwt_required()
 @permission_required('realizar_control_de_calidad_insumos')
@@ -84,7 +45,7 @@ def procesar_inspeccion(lote_id):
         if lote_res.get('success'):
             orden_id = lote_res['data'].get('orden_compra_id') # Asumiendo que la tenemos aquí
             if orden_id:
-                return redirect(url_for('control_calidad.inspeccionar_orden', orden_id=orden_id))
+                return redirect(url_for('orden_compra.detalle', id=orden_id))
         return redirect(url_for('control_calidad.listar_ordenes_para_inspeccion'))
 
     from app.controllers.control_calidad_insumo_controller import ControlCalidadInsumoController
@@ -110,6 +71,6 @@ def procesar_inspeccion(lote_id):
          # Extraer orden_id del lote para la redirección
         orden_id = cc_controller._extraer_oc_id_de_lote(lote_res.get('data'))
         if orden_id:
-            return redirect(url_for('control_calidad.inspeccionar_orden', orden_id=orden_id))
+            return redirect(url_for('orden_compra.detalle', id=orden_id))
 
     return redirect(url_for('control_calidad.listar_ordenes_para_inspeccion'))

@@ -416,32 +416,32 @@ class OrdenCompraController:
         lotes_error_count = 0
         for item_lote in items_para_lote:
             item_data = item_lote['data']
+            codigo_oc = orden_data.get('codigo_oc', 'N/A')
+            if not codigo_oc.startswith('OC-'):
+                codigo_oc = f"OC-{codigo_oc}"
+
             lote_data = {
                 'id_insumo': item_data['insumo_id'],
                 'id_proveedor': orden_data.get('proveedor_id'),
                 'cantidad_inicial': item_lote['cantidad_recibida'],
                 'precio_unitario': item_data.get('precio_unitario'),
-                'documento_ingreso': orden_data.get('codigo_oc', 'N/A'),
+                'documento_ingreso': codigo_oc,
                 'f_ingreso': date.today().isoformat(),
-                'estado': 'EN REVISION'  # <-- NUEVO ESTADO INICIAL
+                'estado': 'EN REVISION'
             }
-        try:
-            lote_result = self.inventario_controller.crear_lote(lote_data, usuario_id)
-            
-            # --- INICIO DE CORRECCIÓN ---
-            # Verificamos si la respuesta es un diccionario (éxito) o tupla (error)
-            if isinstance(lote_result, dict) and lote_result.get('success'):
-                lotes_creados_count += 1
-            else:
-                # Extraer el mensaje de error, ya sea de dict o tupla
-                error_msg = lote_result[1] if isinstance(lote_result, tuple) else lote_result.get('error', 'Error desconocido')
-                logger.error(f"Fallo al crear el lote para el insumo {lote_data.get('id_insumo')}: {error_msg}")
+            try:
+                lote_result, status_code = self.inventario_controller.crear_lote(lote_data, usuario_id)
+                if lote_result.get('success'):
+                    lotes_creados_count += 1
+                else:
+                    logger.error(f"Fallo al crear el lote para el insumo {lote_data.get('id_insumo')}: {lote_result.get('error')}")
+                    lotes_error_count += 1
+            except ValidationError as e:
+                 logger.error(f"Error de validación creando lote para insumo {lote_data.get('id_insumo')}: {e.messages}")
+                 lotes_error_count += 1
+            except Exception as e_lote:
+                logger.error(f"Excepción creando lote para el insumo {lote_data.get('id_insumo')}: {e_lote}", exc_info=True)
                 lotes_error_count += 1
-            # --- FIN DE CORRECCIÓN ---
-            
-        except Exception as e_lote:
-            logger.error(f"Excepción creando lote para el insumo {lote_data.get('id_insumo')}: {e_lote}", exc_info=True)
-            lotes_error_count += 1
         return lotes_creados_count, lotes_error_count
 
     def procesar_recepcion(self, orden_id, form_data, usuario_id, orden_produccion_controller: "OrdenProduccionController"):

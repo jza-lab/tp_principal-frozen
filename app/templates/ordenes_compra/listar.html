@@ -178,7 +178,7 @@
                 {% elif orden.estado == 'EN_CONTROL_CALIDAD' %}
 
                 {% if has_permission('realizar_control_de_calidad_insumos') %}
-                    <a href="{{ url_for('control_calidad.inspeccionar_orden', orden_id=orden.id) }}" class="btn btn-info d-grid">
+                    <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-info d-grid">
                         <i class="bi bi-clipboard-check me-1"></i>Inspeccionar
                     </a>
                 {% endif %}
