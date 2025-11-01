@@ -230,7 +230,20 @@
                             <div class="small text-muted">Lotes de productos que estan pronto a vencerse:</div>
                             <div class="stat-value text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}">{{ lotes_producto_vencimiento_count }}</div>
                             <div class="small text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}" style="min-height: 20px;">
-                                {% if lotes_producto_vencimiento_count > 0 %}
+                                {% if lotes_producto_vencimiento_lista %}
+                                <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                    {% for lote in lotes_producto_vencimiento_lista[:3] %}
+                                    <li class="text-truncate">
+                                        <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="text-warning text-decoration-underline">
+                                            {{ lote.producto_nombre }} - Vence: {{ lote.fecha_vencimiento.strftime('%Y-%m-%d') }}
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                    {% if lotes_producto_vencimiento_count > 3 %}
+                                    <li class="small">y {{ lotes_producto_vencimiento_count - 3 }} más...</li>
+                                    {% endif %}
+                                </ul>
+                                {% elif lotes_producto_vencimiento_count > 0 %}
                                     <i class="bi bi-box-fill me-1"></i> ¡Priorizar despacho!
                                 {% else %}
                                     Lotes estables.
@@ -356,6 +369,20 @@
                             <div>
                                 <div class="stat-label mb-1 text-muted">Lotes Pendientes de Control</div>
                                 <div class="stat-value text-warning">{{ lotes_pendientes_control }}</div>
+                                {% if lotes_pendientes_control_lista %}
+                                <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                    {% for lote in lotes_pendientes_control_lista[:3] %}
+                                    <li class="text-truncate">
+                                        <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="text-warning text-decoration-underline">
+                                            {{ lote.producto_nombre }} - Lote: {{ lote.numero_lote }}
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                    {% if lotes_pendientes_control > 3 %}
+                                    <li class="small">y {{ lotes_pendientes_control - 3 }} más...</li>
+                                    {% endif %}
+                                </ul>
+                                {% endif %}
                             </div>
                             <div class="text-warning"><i class="bi bi-clipboard-data fs-1"></i></div>
                         </div>
@@ -372,6 +399,20 @@
                             <div>
                                 <div class="stat-label mb-1 text-muted">Insumos en Cuarentena</div>
                                 <div class="stat-value text-warning">{{ insumos_en_cuarentena }}</div>
+                                {% if insumos_en_cuarentena_lista %}
+                                <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                    {% for lote in insumos_en_cuarentena_lista[:3] %}
+                                    <li class="text-truncate">
+                                        <a href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}" class="text-warning text-decoration-underline">
+                                            {{ lote.insumo_nombre }} - Lote: {{ lote.numero_lote_proveedor }}
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                    {% if insumos_en_cuarentena > 3 %}
+                                    <li class="small">y {{ insumos_en_cuarentena - 3 }} más...</li>
+                                    {% endif %}
+                                </ul>
+                                {% endif %}
                             </div>
                             <div class="text-warning"><i class="bi bi-shield-slash fs-1"></i></div>
                         </div>
@@ -388,6 +429,20 @@
                             <div>
                                 <div class="stat-label mb-1 text-muted">Lotes Rechazados / Cuarentena</div>
                                 <div class="stat-value text-danger">{{ productos_rechazados }}</div>
+                                {% if productos_rechazados_lista %}
+                                <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                    {% for lote in productos_rechazados_lista[:3] %}
+                                    <li class="text-truncate">
+                                        <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="text-danger text-decoration-underline">
+                                            {{ lote.producto_nombre }} - Lote: {{ lote.numero_lote }}
+                                        </a>
+                                    </li>
+                                    {% endfor %}
+                                    {% if productos_rechazados > 3 %}
+                                    <li class="small">y {{ productos_rechazados - 3 }} más...</li>
+                                    {% endif %}
+                                </ul>
+                                {% endif %}
                             </div>
                             <div class="text-danger"><i class="bi bi-x-circle fs-1"></i></div>
                         </div>

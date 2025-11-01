@@ -843,9 +843,9 @@ class OrdenProduccionController(BaseController):
     def obtener_conteo_ordenes_reabiertas(self) -> int:
         """Obtiene el conteo de órdenes en estado de reproceso."""
         try:
-            result = self.model.find_all(filtros={'estado': 'REPROCESO'}, count_only=True)
+            result = self.model.find_all(filters={'estado': 'REPROCESO'})
             if result.get('success'):
-                return result.get('data', 0)
+                return len(result.get('data', []))
             return 0
         except Exception as e:
             logger.error(f"Error contando órdenes en reproceso: {str(e)}")
