@@ -105,7 +105,7 @@ def detalle(id):
             # Usamos el método existente en el controlador de inventario
             documento_ingreso = codigo_oc if codigo_oc.startswith('OC-') else f"OC-{codigo_oc}"
             lotes_result, _ = inventario_controller.obtener_lotes_para_vista(
-                filtros={'documento_ingreso': documento_ingreso, 'estado': 'EN REVISION'}
+                filtros={'documento_ingreso': documento_ingreso}
             )
             if not lotes_result.get('success'):
                 flash('Error al obtener los lotes de la orden para inspección.', 'danger')

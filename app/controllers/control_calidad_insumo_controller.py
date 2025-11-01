@@ -70,7 +70,7 @@ class ControlCalidadInsumoController(BaseController):
             nuevo_estado_lote = {
                 'Aceptar': 'disponible',
                 'Poner en Cuarentena': 'cuarentena',
-                'Rechazar': 'rechazado'
+                'Rechazar': 'RECHAZADO'
             }.get(decision)
 
             if not nuevo_estado_lote:
@@ -79,7 +79,7 @@ class ControlCalidadInsumoController(BaseController):
             # Preparar los datos de actualización del lote
             update_data = {'estado': nuevo_estado_lote, 'updated_at': datetime.now().isoformat()}
 
-            # Si el lote es rechazado, su cantidad se convierte en 0
+            # Si el lote es RECHAZADO, su cantidad se convierte en 0
             if decision == 'Rechazar':
                 update_data['cantidad_actual'] = 0
                 update_data['cantidad_en_cuarentena'] = 0 # Asegurarse de que también sea 0
