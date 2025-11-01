@@ -8,7 +8,7 @@
 
 {# --- FILTROS RÁPIDOS --- #}
 <div class="quick-filters">
-    <span class="filter-label">🔍 Filtrar:</span>
+    <span class="filter-label">Filtrar:</span>
     <button class="filter-btn active" data-filter="todas">Todas</button>
     <button class="filter-btn" data-filter="mis-ordenes">Mis Órdenes</button>
     <button class="filter-btn" data-filter="linea-1">Línea 1</button>
@@ -20,24 +20,6 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="h4 mb-0">Tablero Kanban (Producción en Curso)</h3>
     
-    {# --- BOTÓN PARA OCULTAR COLUMNAS --- #}
-    <div class="dropdown">
-        <button class="btn btn-sm btn-outline-secondary" type="button" id="dropdownMenuColumnas" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
-            <i class="bi bi-eye-slash me-1"></i> Ver Columnas
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end p-2" aria-labelledby="dropdownMenuColumnas" id="kanbanColumnToggleList">
-            {% for estado_key, titulo_columna in columnas.items() %}
-            <li>
-                <div class="form-check">
-                    <input class="form-check-input kanban-column-toggle" type="checkbox" value="{{ estado_key }}" id="toggle-{{ estado_key }}" checked>
-                    <label class="form-check-label small" for="toggle-{{ estado_key }}">
-                        {{ titulo_columna }}
-                    </label>
-                </div>
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
 </div>
 
 <div class="table-responsive">
@@ -47,30 +29,21 @@
             <div class="kanban-column h-100" data-estado="{{ estado_key }}">
                 <div class="column-header">
                     <span class="kanban-title-text" 
-                        data-bs-toggle="collapse" 
-                        data-bs-target="#kanban-cards-{{ estado_key }}" 
-                        aria-expanded="true" 
-                        aria-controls="kanban-cards-{{ estado_key }}"
                         style="cursor: pointer; flex-grow: 1;"
-                        title="Clic para expandir/comprimir tarjetas">
+                       >
                         {{ titulo_columna }}
                     </span>
 
                     <div class="column-header-controls d-flex align-items-center ms-2">
                         <span class="badge bg-secondary rounded-pill me-2">{{ ordenes_por_estado.get(estado_key, [])|length }}</span>
                         
-                        <button class="btn btn-sm btn-light p-0 kanban-compress-toggle" 
-                                type="button" 
-                                title="Comprimir columna"
-                                data-estado-key="{{ estado_key }}">
-                            <i class="bi bi-chevron-bar-left"></i>
-                            <i class="bi bi-chevron-bar-right" style="display: none;"></i>
-                        </button>
                     </div>
                 </div>
                 
-                <div class="kanban-cards collapse show" id="kanban-cards-{{ estado_key }}">
-                    {% for orden in ordenes_por_estado.get(estado_key, []) %}
+                <div class="kanban-cards" id="kanban-cards-{{ estado_key }}">
+                    {% set ordenes_en_columna = ordenes_por_estado.get(estado_key, []) %}
+                    {% if ordenes_en_columna %}
+                    {% for orden in ordenes_en_columna %}
                     {% set prioridad = orden.get('prioridad', 'BAJA') %}
                     {% set prioridad_class = 'borde-baja' %}
                     {% if prioridad == 'ALTA' %}
@@ -78,7 +51,6 @@
                     {% elif prioridad == 'MEDIA' %}
                         {% set prioridad_class = 'borde-media' %}
                     {% endif %}
-                    
                     <div class="card kanban-card mb-2 {{ prioridad_class }}" 
                          data-op-id="{{ orden.id }}"
                          data-linea="{{ orden.linea_asignada or '' }}"
@@ -101,7 +73,7 @@
                                     <strong>Cantidad:</strong> {{ orden.cantidad_planificada }} kg
                                 </span>
                                 
-                                {% if estado_key in ['EN ESPERA', 'LISTA PARA PRODUCIR'] %}
+                                {% if estado_key in ['EN_ESPERA', 'LISTA_PARA_PRODUCIR'] %}
                                 <span class="mb-1">
                                     <i class="bi bi-diagram-3 me-2"></i>
                                     <strong>Línea:</strong> 
@@ -117,8 +89,8 @@
                                     <i class="bi bi-calendar-event me-2"></i>
                                     <strong>Inicio:</strong> {{ orden.fecha_inicio_planificada or 'Sin asignar' }}
                                 </span>
-                                
-                                {% if estado_key == 'LISTA PARA PRODUCIR' and orden.sugerencia_t_prod_dias is not none %}
+
+                                {% if estado_key == 'LISTA_PARA_PRODUCIR' and orden.sugerencia_t_prod_dias is not none %}
                                 <span class="mb-1">
                                     <i class="bi bi-clock me-2"></i>
                                     <strong>Tiempo Est.:</strong> {{ orden.sugerencia_t_prod_dias }} días
@@ -152,7 +124,7 @@
                             </div>
                             
                             {# Botones de acción según el estado #}
-                            {% if estado_key == 'LISTA PARA PRODUCIR' %}
+                            {% if estado_key == 'LISTA_PARA_PRODUCIR' %}
                                 <div class="d-grid mt-3">
                                     <button class="btn btn-primary btn-sm btn-iniciar-op" 
                                             data-op-id="{{ orden.id }}" 
@@ -172,13 +144,14 @@
                             {% endif %}
                         </div>
                     </div>
-                    {% else %}
-                        {# Mensaje si no hay órdenes en la columna #}
-                        <p class="text-center text-muted fst-italic mt-3">
-                            <i class="bi bi-inbox" style="font-size: 32px; display: block; margin-bottom: 8px; opacity: 0.5;"></i>
-                            Sin órdenes
-                        </p>
                     {% endfor %}
+                    {% else %}
+                    {# Mensaje si no hay órdenes en la columna #}
+                    <p class="text-center text-muted fst-italic mt-3">
+                        <i class="bi bi-inbox" style="font-size: 32px; display: block; margin-bottom: 8px; opacity: 0.5;"></i>
+                        Sin órdenes
+                    </p>
+                    {% endif %}
                 </div>
             </div>
         </div>

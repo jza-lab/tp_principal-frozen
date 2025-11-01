@@ -858,42 +858,48 @@ class OrdenProduccionController(BaseController):
         from collections import defaultdict
         from datetime import datetime, timedelta
 
-        # 1. Definir las columnas del tablero
-        columnas = {
-            'EN ESPERA': 'En Espera',
-            'LISTA PARA PRODUCIR': 'Lista para producir',
-            'EN_LINEA_1': 'Línea 1',
-            'EN_LINEA_2': 'Línea 2',
-            'EN_EMPAQUETADO': 'Empaquetado',
-            'CONTROL_DE_CALIDAD': 'Control de Calidad',
-            'COMPLETADA': 'Completada'
-        }
+        try:
+            # 1. Definir las columnas del tablero
+            columnas = {
+                'PENDIENTE': 'Pendiente',
+                'EN_ESPERA': 'En Espera',
+                'LISTA_PARA_PRODUCIR': 'Lista para producir',
+                'EN_LINEA_1': 'Línea 1',
+                'EN_LINEA_2': 'Línea 2',
+                'EN_EMPAQUETADO': 'Empaquetado',
+                'CONTROL_DE_CALIDAD': 'Control de Calidad',
+            }
+    
+            # 2. Obtener todas las órdenes de producción relevantes
+            response, status_code = self.obtener_ordenes({'estado.neq': 'CANCELADA'})
+            ordenes = []
+            if status_code == 200 and response.get('success'):
+                ordenes = response.get('data', [])
+    
+            # 3. Agrupar órdenes por estado
+            ordenes_por_estado = defaultdict(list)
 
-        # 2. Obtener todas las órdenes de producción relevantes
-        response, status_code = self.obtener_ordenes({'estado.neq': 'CANCELADA'})
-        ordenes = []
-        if status_code == 200 and response.get('success'):
-            ordenes = response.get('data', [])
-
-        # 3. Agrupar órdenes por estado
-        ordenes_por_estado = defaultdict(list)
-
-        for orden in ordenes:
-            estado = orden.get('estado')
-            if estado in columnas:
-                ordenes_por_estado[estado].append(orden)
-
-        # 4. Obtener datos para los modales (supervisores y operarios)
-        todos_los_usuarios = self.usuario_controller.obtener_todos_los_usuarios()
-        supervisores = [u for u in todos_los_usuarios if u.get('roles', {}).get('codigo') == 'SUPERVISOR']
-        operarios = [u for u in todos_los_usuarios if u.get('roles', {}).get('codigo') == 'OPERARIO']
-
-        return {
-            'columnas': columnas,
-            'ordenes_por_estado': dict(ordenes_por_estado),
-            'supervisores': supervisores,
-            'operarios': operarios,
-            'mps_items': [],
-            'now': datetime.now(),
-            'timedelta': timedelta
-        }
+            for orden in ordenes:
+                estado = orden.get('estado')
+                if estado in columnas:
+                    ordenes_por_estado[estado].append(orden)
+    
+            # 4. Obtener datos para los modales (supervisores y operarios)
+            todos_los_usuarios = self.usuario_controller.obtener_todos_los_usuarios()
+            supervisores = [u for u in todos_los_usuarios if u.get('roles', {}).get('codigo') == 'SUPERVISOR']
+            operarios = [u for u in todos_los_usuarios if u.get('roles', {}).get('codigo') == 'OPERARIO']
+    
+            return {
+                'columnas': columnas,
+                'ordenes_por_estado': dict(ordenes_por_estado),
+                'supervisores': supervisores,
+                'operarios': operarios,
+                'now': datetime.now(),
+                'timedelta': timedelta
+            }
+        except Exception as e:
+            logger.error(f"Error en obtener_datos_para_tablero: {e}", exc_info=True)
+            return {
+                'columnas': {}, 'ordenes_por_estado': {}, 'supervisores': [], 'operarios': [],
+                'now': datetime.now(), 'timedelta': timedelta, 'error': str(e)
+            }
