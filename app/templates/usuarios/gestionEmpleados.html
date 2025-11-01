@@ -106,7 +106,7 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/autorizaciones.css') }}">
 
 <script>
-// Activar pestaña según parámetro URL
+// Activar pestaña según parámetro URL y cargar datos del panel correspondiente
 document.addEventListener('DOMContentLoaded', function() {
     const urlParams = new URLSearchParams(window.location.search);
     const tabParam = urlParams.get('tab');
@@ -126,15 +126,39 @@ document.addEventListener('DOMContentLoaded', function() {
         if (authTab && authPanel) {
             authTab.classList.add('active');
             authPanel.classList.add('show', 'active');
+        }
+    }
+    
+    // Escuchar eventos de cambio de pestaña para inicializar paneles bajo demanda
+    const tabButtons = document.querySelectorAll('#userTabs button[data-bs-toggle="tab"]');
+    tabButtons.forEach(button => {
+        button.addEventListener('shown.bs.tab', function(event) {
+            const targetId = event.target.getAttribute('data-bs-target');
             
-            // IMPORTANTE: Inicializar el panel de autorizaciones después de activar la pestaña
-            setTimeout(function() {
-                if (typeof AutorizacionesPanel !== 'undefined' && AutorizacionesPanel.init) {
+            // Cargar datos según la pestaña activada
+            if (targetId === '#activity-panel' && typeof ActividadPanel !== 'undefined') {
+                // Reinicializar el panel de actividad si es necesario
+                if (ActividadPanel.init) {
+                    ActividadPanel.init();
+                }
+            } else if (targetId === '#authorizations-panel' && typeof AutorizacionesPanel !== 'undefined') {
+                // Reinicializar el panel de autorizaciones si es necesario
+                if (AutorizacionesPanel.init) {
                     AutorizacionesPanel.init();
                 }
-            }, 100);
-        }
+            }
+        });
+    });
+    
+    // Si se activó la pestaña de autorizaciones por URL, forzar la carga
+    if (tabParam === 'authorizations') {
+        setTimeout(function() {
+            if (typeof AutorizacionesPanel !== 'undefined' && AutorizacionesPanel.init) {
+                AutorizacionesPanel.init();
+            }
+        }, 100);
     }
 });
 </script>
+
 {% endblock %}
