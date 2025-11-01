@@ -6,7 +6,7 @@
  */
 async function moverOp(opId, nuevoEstado) {
     try {
-        const response = await fetch(`/planificacion/api/mover-op/${opId}`, {
+        const response = await fetch(`/tabla-produccion/api/mover-op/${opId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ nuevo_estado: nuevoEstado })

@@ -96,6 +96,7 @@ def _register_blueprints(app: Flask):
     from app.views.admin_reclamo_routes import admin_reclamo_bp # <-- IMPORTACIÓN DE ADMIN RECLAMO
     from app.views.admin_consulta_routes import consulta_bp
     from app.views.receta_routes import receta_bp
+    from app.views.op_tabla_routes import op_tabla_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
@@ -125,6 +126,7 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(admin_reclamo_bp) # <-- REGISTRO DE ADMIN RECLAMO
     app.register_blueprint(consulta_bp)
     app.register_blueprint(receta_bp)
+    app.register_blueprint(op_tabla_bp)
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""

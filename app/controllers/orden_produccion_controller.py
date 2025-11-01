@@ -861,7 +861,6 @@ class OrdenProduccionController(BaseController):
         try:
             # 1. Definir las columnas del tablero
             columnas = {
-                'PENDIENTE': 'Pendiente',
                 'EN_ESPERA': 'En Espera',
                 'LISTA_PARA_PRODUCIR': 'Lista para producir',
                 'EN_LINEA_1': 'Línea 1',

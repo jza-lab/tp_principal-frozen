@@ -194,24 +194,6 @@ def recomendar_linea_api(op_id):
     return jsonify(response), status_code
 
 
-# Endpoint para la API de mover OPs (Drag-and-Drop y asignación)
-@planificacion_bp.route('/api/mover-op/<int:op_id>', methods=['POST'])
-@permission_required(accion='produccion_ejecucion') # Permiso más general
-def mover_op_api(op_id):
-    """
-    API endpoint para cambiar el estado de una OP.
-    Usado tanto por el drag-and-drop como por la asignación post-recomendación.
-    """
-    current_user = get_jwt()
-    user_role = current_user.get('roles', {}).get('codigo')
-
-    data = request.get_json()
-    nuevo_estado = data.get('nuevo_estado')
-
-    controller = PlanificacionController()
-    response, status_code = controller.mover_orden(op_id, nuevo_estado, user_role)
-    return jsonify(response), status_code
-
 @planificacion_bp.route('/api/consolidar-y-aprobar', methods=['POST'])
 @jwt_required()
 def consolidar_y_aprobar_api():

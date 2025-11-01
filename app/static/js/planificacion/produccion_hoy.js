@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function () {
         submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Iniciando...';
 
         try {
-            const response = await fetch(`/ordenes/api/${opId}/iniciar-trabajo`, {
+            const response = await fetch(`/tabla-produccion/api/${opId}/iniciar-trabajo`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
