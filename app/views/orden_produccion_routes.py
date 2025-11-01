@@ -437,46 +437,20 @@ def api_confirmar_inicio(orden_id):
     response, status_code = controller.confirmar_inicio_y_aprobar(orden_id, data, usuario_id)
     return jsonify(response), status_code
 
-
-@orden_produccion_bp.route("/hoy")
+@orden_produccion_bp.route('/tablero')
 @permission_required(accion='consultar_plan_de_produccion')
-def produccion_hoy():
-    """Muestra el tablero Kanban de producción del día."""
-    planificacion_controller = PlanificacionController()
-    usuario_controller = UsuarioController()
+def tablero_produccion():
+    """
+    Muestra el tablero Kanban de producción.
+    """
+    ordenp = OrdenProduccionController()
     
-    current_user = get_jwt()
-    user_roles = current_user.get('roles', [])
-    is_operario = 'OPERARIO' in user_roles
-    is_supervisor_calidad = 'SUPERVISOR_CALIDAD' in user_roles
+    # Obtener roles del usuario actual desde el token JWT para pasarlos a la plantilla.
+    claims = get_jwt()
+    user_role_code = claims.get('roles', {}).get('codigo', '')
+    is_operario = user_role_code == 'OPERARIO'
+    is_supervisor_calidad = user_role_code == 'SUPERVISOR_CALIDAD'
 
-    response_kanban, _ = planificacion_controller.obtener_ops_para_tablero()
-    ordenes_kanban_dict = response_kanban.get('data', {}) if response_kanban.get('success') else {}
-
-    supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
-    operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
-    supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []
-    operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
-
-    columnas_kanban = {
-        'EN ESPERA': 'En Espera',
-        'LISTA PARA PRODUCIR':'Lista para producir',
-        'EN_LINEA_1': 'Linea 1',
-        'EN_LINEA_2': 'Linea 2',
-        'EN_EMPAQUETADO': 'Empaquetado',
-        'CONTROL_DE_CALIDAD': 'Control de Calidad',
-        'COMPLETADA': 'Completada'
-    }
-
-    return render_template(
-        'planificacion/produccion_hoy.html',
-        ordenes_por_estado=ordenes_kanban_dict,
-        columnas=columnas_kanban,
-        supervisores=supervisores,
-        operarios=operarios,
-        now=datetime.utcnow(),
-        timedelta=timedelta,
-        date=date,
-        is_operario=is_operario,
-        is_supervisor_calidad=is_supervisor_calidad
-    )
+    datos = ordenp.obtener_datos_para_tablero()
+    # Añadir las nuevas variables al contexto del template
+    return render_template('planificacion/produccion_hoy.html', **datos, is_operario=is_operario, is_supervisor_calidad=is_supervisor_calidad)
