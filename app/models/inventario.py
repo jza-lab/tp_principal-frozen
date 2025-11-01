@@ -182,36 +182,48 @@ class InventarioModel(BaseModel):
     def get_all_lotes_for_view(self, filtros: Optional[Dict] = None) -> Dict:
         """
         Obtiene todos los lotes con detalles del insumo y proveedor para la vista de listado.
+        Solución robusta que consulta la tabla y enriquece los datos manualmente.
         """
         try:
-            query = self.db.table(self.get_table_name()).select(
-                '*, insumo:insumos_catalogo(nombre, categoria, unidad_medida), proveedor:proveedores(nombre)'
-            )
+            # 1. Construir la consulta base sobre la tabla de lotes
+            query = self.db.table(self.get_table_name()).select('*')
 
+            # 2. Aplicar filtros dinámicamente
             if filtros:
                 for key, value in filtros.items():
                     if value:
-                        query = query.eq(key, value)
-
+                        # Usar 'ilike' para búsquedas de texto flexibles y 'eq' para el resto
+                        if key in ['documento_ingreso'] and isinstance(value, str):
+                            query = query.ilike(key, f'%{value}%')
+                        else:
+                            query = query.eq(key, value)
+            
+            # 3. Ejecutar la consulta de lotes
             result = query.order('f_ingreso', desc=True).execute()
+            
+            if not result.data:
+                return {'success': True, 'data': []}
 
-            # Aplanar los datos para la plantilla
-            for lote in result.data:
-                if lote.get('insumo'):
-                    lote['insumo_nombre'] = lote['insumo']['nombre']
-                    lote['insumo_categoria'] = lote['insumo']['categoria']
-                    lote['insumo_unidad_medida'] = lote['insumo']['unidad_medida']
-                else:
-                    lote['insumo_nombre'] = 'Insumo no encontrado'
-                
-                if lote.get('proveedor'):
-                    lote['proveedor_nombre'] = lote['proveedor']['nombre']
-                else:
-                    lote['proveedor_nombre'] = 'N/A'
+            lotes = result.data
 
-            return {'success': True, 'data': result.data}
+            # 4. Obtener los IDs de insumos y proveedores para enriquecer los datos
+            insumo_ids = list(set(lote['id_insumo'] for lote in lotes if lote.get('id_insumo')))
+            
+            # 5. Consultar los nombres de los insumos en una sola llamada
+            insumos_data = {}
+            if insumo_ids:
+                insumos_resp = self.db.table('insumos_catalogo').select('id_insumo, nombre').in_('id_insumo', insumo_ids).execute()
+                if insumos_resp.data:
+                    insumos_data = {insumo['id_insumo']: insumo['nombre'] for insumo in insumos_resp.data}
+
+            # 6. Combinar los datos
+            for lote in lotes:
+                lote['insumo_nombre'] = insumos_data.get(lote.get('id_insumo'), 'Insumo no encontrado')
+            
+            return {'success': True, 'data': lotes}
+
         except Exception as e:
-            logger.error(f"Error obteniendo lotes para la vista: {e}")
+            logger.error(f"Error obteniendo lotes para la vista (robusto): {e}")
             return {'success': False, 'error': str(e)}
 
     def get_lote_detail_for_view(self, id_lote: str) -> Dict:
@@ -301,4 +313,41 @@ class InventarioModel(BaseModel):
 
         except Exception as e:
             logger.error(f"Error al ejecutar el recálculo de stock general: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def recalcular_stock_para_insumo(self, insumo_id: str) -> Dict:
+        """
+        Calcula y actualiza el stock_actual para un único insumo basado en la suma
+        de sus lotes de inventario en estado 'disponible' o 'reservado'.
+        """
+        try:
+            # 1. Obtener todos los lotes relevantes para el insumo
+            lotes_resp = self.db.table(self.get_table_name()).select('cantidad_actual').eq('id_insumo', insumo_id).in_('estado', ['disponible', 'reservado']).execute()
+            
+            if not hasattr(lotes_resp, 'data'):
+                # Si hasattr falla, es probable que lotes_resp no sea un objeto esperado.
+                error_msg = f"Respuesta inesperada de la base de datos al buscar lotes para el insumo {insumo_id}."
+                logger.error(error_msg)
+                return {'success': False, 'error': error_msg}
+
+            # 2. Calcular el nuevo stock sumando las cantidades
+            nuevo_stock = sum(lote.get('cantidad_actual', 0) for lote in lotes_resp.data)
+
+            # 3. Actualizar el stock en la tabla 'insumos_catalogo'
+            update_resp = (self.db.table('insumos_catalogo')
+                           .update({'stock_actual': nuevo_stock})
+                           .eq('id_insumo', insumo_id)
+                           .execute())
+
+            if not hasattr(update_resp, 'data'):
+                 error_msg = f"Respuesta inesperada de la base de datos al actualizar el stock para el insumo {insumo_id}."
+                 logger.error(error_msg)
+                 return {'success': False, 'error': error_msg}
+
+
+            logger.info(f"Stock para el insumo {insumo_id} recalculado y actualizado a: {nuevo_stock}")
+            return {'success': True}
+
+        except Exception as e:
+            logger.error(f"Error al recalcular el stock para el insumo {insumo_id}: {str(e)}")
             return {'success': False, 'error': str(e)}

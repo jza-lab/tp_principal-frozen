@@ -96,9 +96,11 @@ def _register_blueprints(app: Flask):
     from app.views.admin_reclamo_routes import admin_reclamo_bp # <-- IMPORTACIÓN DE ADMIN RECLAMO
     from app.views.admin_consulta_routes import consulta_bp
     from app.views.receta_routes import receta_bp
+    from app.views.control_calidad_routes import control_calidad_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
+    app.register_blueprint(control_calidad_bp)
     app.register_blueprint(insumos_bp)
     app.register_blueprint(inventario_api_bp)
     app.register_blueprint(inventario_view_bp)

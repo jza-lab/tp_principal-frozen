@@ -77,9 +77,10 @@ CANONICAL_PERMISSION_MAP = {
     # Módulo: Órdenes de Compra (OC) y Logística
     'crear_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
     'consultar_ordenes_de_compra': ['SUPERVISOR_CALIDAD','SUPERVISOR', 'ADMIN', 'GERENTE', 'VENDEDOR'],
+    'realizar_control_de_calidad_insumos': ['SUPERVISOR_CALIDAD'],
     'editar_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
     'aprobar_orden_de_compra': ['SUPERVISOR','GERENTE'],
-    'gestionar_recepcion_orden_compra': ['SUPERVISOR_CALIDAD'],
+    'gestionar_recepcion_orden_compra': ['SUPERVISOR_CALIDAD', 'DEV'],
     'logistica_recepcion_oc': ['ADMIN', 'SUPERVISOR', 'GERENTE'],
     'logistica_supervision': ['SUPERVISOR', 'GERENTE'],
 
