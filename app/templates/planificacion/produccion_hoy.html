@@ -1,181 +1,486 @@
 {% extends 'layouts/app_layout.html' %}
 
-{% block title %}Producción de Hoy - Sistema Frozen{% endblock %}
+{% block title %}Tablero Kanban - Operario{% endblock %}
 
 {% block extra_css %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/planificacion/planificacion.css') }}">
+    <link rel="stylesheet" href="/static/css/planificacion/produccion_hoy.css">
 {% endblock %}
 
 {% block app_content %}
-<div class="btn-toolbar mb-2">
-    <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2" title="Volver a la página anterior">
-        <i class="bi bi-arrow-left"></i> Volver
-    </a>
-</div>
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
-    <div>
-        <h1 class="h2 mb-1">Producción de Hoy</h1>
-        <p class="text-muted mb-0">Tablero Kanban con el estado de la producción en curso.</p>
-    </div>
-</div>
-
-{# --- TABLERO KANBAN --- #}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="h4 mb-0">Tablero Kanban (Producción en Curso)</h3>
-    
-    {# --- NUEVO BOTÓN PARA OCULTAR COLUMNAS --- #}
-    <div class="dropdown">
-        <button class="btn btn-sm btn-outline-secondary" type="button" id="dropdownMenuColumnas" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
-            <i class="bi bi-eye-slash me-1"></i> Ver Columnas
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end p-2" aria-labelledby="dropdownMenuColumnas" id="kanbanColumnToggleList">
-            {% for estado_key, titulo_columna in columnas.items() %}
-            <li>
-                <div class="form-check">
-                    <input class="form-check-input kanban-column-toggle" type="checkbox" value="{{ estado_key }}" id="toggle-{{ estado_key }}" checked>
-                    <label class="form-check-label small" for="toggle-{{ estado_key }}">
-                        {{ titulo_columna }}
-                    </label>
+    <div class="container">
+        <!-- Header con info del operario -->
+        <div class="header">
+            <div class="operator-info">
+                <div class="operator-avatar">JM</div>
+                <div class="operator-details">
+                    <h2>Juan Martínez</h2>
+                    <p>Operario - Línea 1 | Turno Mañana</p>
                 </div>
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
-</div>
-<div class="table-responsive">
-    <div class="row flex-nowrap g-3">
-        {% for estado_key, titulo_columna in columnas.items() %}
-        <div class="col mb-4 kanban-column-wrapper" data-estado="{{ estado_key }}" style="min-width: 250px;">
-            <div class="kanban-column h-100" data-estado="{{ estado_key }}">
-                <div class="column-header">
-                    
-                    <span class="kanban-title-text" 
-                        data-bs-toggle="collapse" 
-                        data-bs-target="#kanban-cards-{{ estado_key }}" 
-                        aria-expanded="true" 
-                        aria-controls="kanban-cards-{{ estado_key }}"
-                        style="cursor: pointer; flex-grow: 1;"
-                        title="Clic para expandir/comprimir tarjetas">
-                        {{ titulo_columna }}
-                    </span>
-
-                    <div class="column-header-controls d-flex align-items-center ms-2">
-                        <span class="badge bg-secondary rounded-pill me-2">{{ ordenes_por_estado.get(estado_key, [])|length }}</span>
-                        
-                        <button class="btn btn-sm btn-light p-0 kanban-compress-toggle" 
-                                type="button" 
-                                title="Comprimir columna"
-                                data-estado-key="{{ estado_key }}">
-                            <i class="bi bi-chevron-bar-left"></i>
-                            <i class="bi bi-chevron-bar-right" style="display: none;"></i>
-                        </button>
-                    </div>
+                <div class="shift-badge">🕐 Turno: 08:00 - 16:00</div>
+            </div>
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <div class="stat-value">3</div>
+                    <div class="stat-label">Mis Órdenes</div>
                 </div>
-                <div class="kanban-cards collapse show" id="kanban-cards-{{ estado_key }}">
-                    {% for orden in ordenes_por_estado.get(estado_key, []) %}
-                    <div class="card insumo-card kanban-card mb-2" data-op-id="{{ orden.id }}" data-producto-id="{{ orden.producto_id }}" data-linea-asignada="{{ orden.linea_asignada or '' }}"> {# Añadido mb-2 #}
-                        <div class="card-body py-2 px-3"> {# Padding reducido #}
-                            <h6 class="card-title mb-1 fw-bold">{{ orden.producto_nombre or 'N/A' }}</h6> {# Título h6 y bold #}
-                            <div class="card-secondary-details small mb-1"> {# Texto más pequeño #}
-                                <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
-                                <span class="ms-2"><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b></span>
-                                <span class="ms-2"><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
-                                {% if orden.fecha_inicio_planificada %}
-                                <br><span class="text-primary small"><i class="bi bi-play-circle-fill"></i> Inicia: {{ orden.fecha_inicio_planificada }}</span>
-                                {% endif %}
-                            </div>
-                            {% if orden.supervisor_nombre or orden.linea_asignada or orden.operario_nombre %}
-                            <hr class="my-1">
-                            <div class="card-assignment-details small"> {# Texto más pequeño #}
-                                {% if orden.linea_asignada %}<span class="me-2"><i class="bi bi-diagram-3-fill text-primary"></i> L{{ orden.linea_asignada }}</span>{% endif %}
-                                {% if orden.supervisor_nombre %}<span class="me-2"><i class="bi bi-person-badge-fill text-info"></i> S:{{ orden.supervisor_nombre }}</span>{% endif %}
-                                {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary"></i> O:{{ orden.operario_nombre }}</span>{% endif %}
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                    {% else %} {# Mensaje si no hay órdenes en la columna #}
-                        {% if loop.first and estado_key != 'LISTA PARA PRODUCIR' %} {# Solo mostrar si no es la columna de consolidar #}
-                        <p class="text-center text-muted small fst-italic mt-3">Vacío</p>
-                        {% endif %}
-                    {% endfor %}
+                <div class="stat-item">
+                    <div class="stat-value">1</div>
+                    <div class="stat-label">En Proceso</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">8</div>
+                    <div class="stat-label">Completadas Hoy</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">95%</div>
+                    <div class="stat-label">Eficiencia</div>
                 </div>
             </div>
         </div>
-    {% endfor %}
+
+        <!-- Filtros rápidos -->
+        <div class="quick-filters">
+            <span class="filter-label">🔍 Filtrar:</span>
+            <button class="filter-btn active">Todas</button>
+            <button class="filter-btn">Mis Órdenes</button>
+            <button class="filter-btn">Línea 1</button>
+            <button class="filter-btn">Línea 2</button>
+            <button class="filter-btn">Alta Prioridad</button>
+        </div>
+
+        <!-- Tablero Kanban -->
+        <div class="kanban-board">
+            <!-- Columna: En Espera -->
+            <div class="kanban-column">
+                <div class="column-header">
+                    <div class="column-title">En Espera</div>
+                    <div class="column-count">2</div>
+                </div>
+                <div class="column-body">
+                    <div class="order-card priority-low">
+                        <div class="card-header">
+                            <div class="product-name">Ñoquis de papa congelados</div>
+                            <span class="priority-badge badge-low">Baja</span>
+                        </div>
+                        <div class="order-code">
+                            📦 OP-20251030170630844
+                        </div>
+                        <div class="card-details">
+                            <div class="detail-row">
+                                <span class="detail-icon">📊</span>
+                                <span class="detail-label">Cantidad:</span>
+                                <span class="detail-value">15.0 kg</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">📅</span>
+                                <span class="detail-label">Inicio:</span>
+                                <span class="detail-value">2025-11-01</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">🏭</span>
+                                <span class="detail-label">Línea:</span>
+                                <span class="detail-value">L1 - Sin asignar</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="order-card priority-medium">
+                        <div class="card-header">
+                            <div class="product-name">Empanadas de carne congeladas</div>
+                            <span class="priority-badge badge-medium">Media</span>
+                        </div>
+                        <div class="order-code">
+                            📦 OP-20251031201305996
+                        </div>
+                        <div class="card-details">
+                            <div class="detail-row">
+                                <span class="detail-icon">📊</span>
+                                <span class="detail-label">Cantidad:</span>
+                                <span class="detail-value">5000.0 kg</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">📅</span>
+                                <span class="detail-label">Inicio:</span>
+                                <span class="detail-value">2026-09-11</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">🏭</span>
+                                <span class="detail-label">Línea:</span>
+                                <span class="detail-value">Sin asignar</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna: Lista para producir -->
+            <div class="kanban-column">
+                <div class="column-header">
+                    <div class="column-title">Lista para producir</div>
+                    <div class="column-count">3</div>
+                </div>
+                <div class="column-body">
+                    <div class="order-card priority-high">
+                        <div class="card-header">
+                            <div class="product-name">Hamburguesas de lentejas congeladas</div>
+                            <span class="priority-badge badge-high">Alta</span>
+                        </div>
+                        <div class="order-code">
+                            📦 OP-20251030170141762
+                        </div>
+                        <div class="card-details">
+                            <div class="detail-row">
+                                <span class="detail-icon">📊</span>
+                                <span class="detail-label">Cantidad:</span>
+                                <span class="detail-value">40.0 kg</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">🏭</span>
+                                <span class="detail-label">Línea Sugerida:</span>
+                                <span class="detail-value">Línea 1</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">📅</span>
+                                <span class="detail-label">Inicio:</span>
+                                <span class="detail-value">2025-11-01</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">⏱️</span>
+                                <span class="detail-label">Tiempo Est.:</span>
+                                <span class="detail-value">2h 15min</span>
+                            </div>
+                        </div>
+                        <div class="card-actions">
+                            <button class="btn btn-primary" onclick="startOrder(this)">
+                                ▶️ Iniciar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="order-card priority-medium">
+                        <div class="card-header">
+                            <div class="product-name">Empanadas de carne congeladas</div>
+                            <span class="priority-badge badge-medium">Media</span>
+                        </div>
+                        <div class="order-code">
+                            📦 OP-20251031160916214
+                        </div>
+                        <div class="card-details">
+                            <div class="detail-row">
+                                <span class="detail-icon">📊</span>
+                                <span class="detail-label">Cantidad:</span>
+                                <span class="detail-value">82.0 kg</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">🏭</span>
+                                <span class="detail-label">Línea Sugerida:</span>
+                                <span class="detail-value">Línea 1</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">📅</span>
+                                <span class="detail-label">Inicio:</span>
+                                <span class="detail-value">2025-11-01</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">⏱️</span>
+                                <span class="detail-label">Tiempo Est.:</span>
+                                <span class="detail-value">4h 30min</span>
+                            </div>
+                        </div>
+                        <div class="card-actions">
+                            <button class="btn btn-primary" onclick="startOrder(this)">
+                                ▶️ Iniciar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="order-card priority-medium">
+                        <div class="card-header">
+                            <div class="product-name">Tarta de jamón y queso congelada</div>
+                            <span class="priority-badge badge-medium">Media</span>
+                        </div>
+                        <div class="order-code">
+                            📦 OP-20251030170630547
+                        </div>
+                        <div class="card-details">
+                            <div class="detail-row">
+                                <span class="detail-icon">📊</span>
+                                <span class="detail-label">Cantidad:</span>
+                                <span class="detail-value">20.0 kg</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">🏭</span>
+                                <span class="detail-label">Línea Sugerida:</span>
+                                <span class="detail-value">Línea 2</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">📅</span>
+                                <span class="detail-label">Inicio:</span>
+                                <span class="detail-value">2025-11-01</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">⏱️</span>
+                                <span class="detail-label">Tiempo Est.:</span>
+                                <span class="detail-value">1h 45min</span>
+                            </div>
+                        </div>
+                        <div class="card-actions">
+                            <button class="btn btn-primary" onclick="startOrder(this)">
+                                ▶️ Iniciar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna: Línea 1 -->
+            <div class="kanban-column">
+                <div class="column-header">
+                    <div class="column-title">Línea 1</div>
+                    <div class="column-count">1</div>
+                </div>
+                <div class="column-body">
+                    <div class="order-card priority-high">
+                        <div class="card-header">
+                            <div class="product-name">Milanesas de pollo congeladas</div>
+                            <span class="priority-badge badge-high">En Proceso</span>
+                        </div>
+                        <div class="order-code">
+                            📦 OP-20251030171015817
+                        </div>
+                        <div class="card-details">
+                            <div class="detail-row">
+                                <span class="detail-icon">📊</span>
+                                <span class="detail-label">Progreso:</span>
+                                <span class="detail-value">2.5 / 5.0 kg (50%)</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">👤</span>
+                                <span class="detail-label">Operario:</span>
+                                <span class="detail-value">Juan M. (Tú)</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">📅</span>
+                                <span class="detail-label">Inicio:</span>
+                                <span class="detail-value">2025-10-31</span>
+                            </div>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 50%"></div>
+                        </div>
+                        <div class="active-timer">
+                            <div class="timer-pulse"></div>
+                            <span class="timer-text">⏱️ 01:23:45 trabajando</span>
+                        </div>
+                        <div class="card-actions">
+                            <button class="btn btn-pause" onclick="pauseOrder()">
+                                ⏸️ Pausar
+                            </button>
+                            <button class="btn btn-complete" onclick="reportProgress()">
+                                ✅ Reportar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna: Línea 2 -->
+            <div class="kanban-column">
+                <div class="column-header">
+                    <div class="column-title">Línea 2</div>
+                    <div class="column-count">0</div>
+                </div>
+                <div class="column-body">
+                    <div class="empty-state">
+                        <div class="empty-icon">📭</div>
+                        <div class="empty-text">Sin órdenes en proceso</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna: Empaquetado -->
+            <div class="kanban-column">
+                <div class="column-header">
+                    <div class="column-title">Empaquetado</div>
+                    <div class="column-count">0</div>
+                </div>
+                <div class="column-body">
+                    <div class="empty-state">
+                        <div class="empty-icon">📦</div>
+                        <div class="empty-text">Sin órdenes para empaquetar</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna: Control de Calidad -->
+            <div class="kanban-column">
+                <div class="column-header">
+                    <div class="column-title">Control de Calidad</div>
+                    <div class="column-count">0</div>
+                </div>
+                <div class="column-body">
+                    <div class="empty-state">
+                        <div class="empty-icon">🔍</div>
+                        <div class="empty-text">Sin órdenes en revisión</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Columna: Completada -->
+            <div class="kanban-column">
+                <div class="column-header">
+                    <div class="column-title">Completada</div>
+                    <div class="column-count">2</div>
+                </div>
+                <div class="column-body">
+                    <div class="order-card">
+                        <div class="card-header">
+                            <div class="product-name">Milanesas de pollo congeladas</div>
+                        </div>
+                        <div class="order-code">
+                            📦 OP-20251030171420311
+                        </div>
+                        <div class="card-details">
+                            <div class="detail-row">
+                                <span class="detail-icon">✅</span>
+                                <span class="detail-label">Completado:</span>
+                                <span class="detail-value">14:30</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">📊</span>
+                                <span class="detail-label">Cantidad:</span>
+                                <span class="detail-value">50.0 kg</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-icon">👤</span>
+                                <span class="detail-label">Operario:</span>
+                                <span class="detail-value">Juan M.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-</div>
+
+    <!-- Modal: Reportar Avance -->
+    <div class="modal" id="reportModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">📊 Reportar Avance de Producción</h3>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Cantidad Producida (Buena) *</label>
+                    <input type="number" class="form-input" placeholder="Ej: 40.0" value="2.5">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Cantidad Desperdicio (Mala)</label>
+                    <input type="number" class="form-input" placeholder="Ej: 2.0" value="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Motivo de Desperdicio (si aplica)</label>
+                    <select class="form-select">
+                        <option>Sin desperdicio</option>
+                        <option>Falla de empaque</option>
+                        <option>Materia prima defectuosa</option>
+                        <option>Error de temperatura</option>
+                        <option>Error de proceso</option>
+                        <option>Contaminación cruzada</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Observaciones adicionales</label>
+                    <textarea class="form-input" rows="3"
+                        placeholder="Comentarios opcionales sobre el proceso..."></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                <button class="btn btn-complete" onclick="submitReport()">✅ Confirmar Reporte</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Pausar Orden -->
+    <div class="modal" id="pauseModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">⏸️ Pausar Orden de Producción</h3>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Motivo de la pausa *</label>
+                    <select class="form-select">
+                        <option value="">Seleccionar motivo...</option>
+                        <option>Avería de máquina</option>
+                        <option>Mantenimiento programado</option>
+                        <option>Espera de material/insumo</option>
+                        <option>Espera de supervisor</option>
+                        <option>Break/Almuerzo</option>
+                        <option>Cambio de turno</option>
+                        <option>Problema de calidad</option>
+                        <option>Otro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Detalles adicionales</label>
+                    <textarea class="form-input" rows="3" placeholder="Describe el motivo de la pausa..."></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                <button class="btn btn-pause" onclick="confirmPause()">⏸️ Confirmar Pausa</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Iniciar Orden -->
+    <div class="modal" id="startModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">▶️ Iniciar Orden de Producción</h3>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Confirmar línea de producción *</label>
+                    <select class="form-select">
+                        <option value="1" selected>Línea 1</option>
+                        <option value="2">Línea 2</option>
+                    </select>
+                    <div class="info-text">
+                        ℹ️ La línea sugerida por el sistema es: <strong>Línea 1</strong>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Verificación de materiales</label>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="check1">
+                            <label for="check1">Materias primas disponibles</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="check2">
+                            <label for="check2">Línea limpia y sanitizada</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="check3">
+                            <label for="check3">Equipos funcionando correctamente</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="confirmStart()">▶️ Iniciar Trabajo</button>
+            </div>
+        </div>
+    </div>
 
 {% endblock %}
 
-{% block extra_js %}
-    
-    {# --- SCRIPT DE KANBAN (SORTABLE) --- #}
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-    
-    {# --- DATOS JINJA PARA JS --- #}
-    <script>
-        const listaSupervisores = {{ supervisores | tojson }};
-        const listaOperarios = {{ operarios | tojson }};
-        const IS_OPERARIO = {{ is_operario | tojson | safe }};
-        const IS_SUPERVISOR_CALIDAD = {{ is_supervisor_calidad | tojson | safe }};
-    </script>
-    
-    {# --- SCRIPT DE PLANIFICACIÓN (AHORA CONTIENE EL INICIALIZADOR DE POPOVER) --- #}
-    <script src="{{ url_for('static', filename='js/planificacion/planificacion.js') }}"></script>
-
-    {# --- SCRIPT PARA KANBAN (COLUMNAS COMPRIMIBLES / OCULTAR) --- #}
-    <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        
-        // --- LÓGICA PARA COMPRIMIR COLUMNAS (NUEVO) ---
-        document.querySelectorAll('.kanban-compress-toggle').forEach(button => {
-            button.addEventListener('click', function (e) {
-                // Evita que el clic en el botón dispare el colapso vertical del título
-                e.stopPropagation(); 
-                
-                const estado = this.dataset.estadoKey;
-                const columnWrapper = document.querySelector(`.kanban-column-wrapper[data-estado="${estado}"]`);
-                
-                if (columnWrapper) {
-                    // Alterna el estado comprimido
-                    columnWrapper.classList.toggle('kanban-column-compressed');
-                    
-                    // Alterna el título del botón (para accesibilidad)
-                    const isCompressed = columnWrapper.classList.contains('kanban-column-compressed');
-                    this.title = isCompressed ? 'Expandir columna' : 'Comprimir columna';
-                }
-            });
-        });
-
-        // --- LÓGICA PARA OCULTAR COLUMNAS (DEL MENÚ SUPERIOR) ---
-        const columnToggles = document.querySelectorAll('.kanban-column-toggle');
-        
-        // Evitar que el menú se cierre al hacer clic en un checkbox
-        const columnToggleList = document.getElementById('kanbanColumnToggleList');
-        if (columnToggleList) {
-            columnToggleList.addEventListener('click', function (e) {
-                e.stopPropagation();
-            });
-        }
-
-        // Lógica para ocultar/mostrar (display: none) columnas
-        columnToggles.forEach(checkbox => {
-            checkbox.addEventListener('change', function () {
-                const estado = this.value;
-                const columnWrapper = document.querySelector(`.kanban-column-wrapper[data-estado="${estado}"]`);
-                
-                if (columnWrapper) {
-                    if (this.checked) {
-                        columnWrapper.style.display = ''; // Mostrar
-                    } else {
-                        columnWrapper.style.display = 'none'; // Ocultar
-                    }
-                }
-            });
-        });
-    });
-    </script>
-    {# --- FIN DEL NUEVO SCRIPT --- #}
-
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/planificacion/produccion_hoy.js') }}"></script>
 {% endblock %}
+
+</html>
