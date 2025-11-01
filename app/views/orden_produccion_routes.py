@@ -16,9 +16,10 @@ from app.controllers.etapa_produccion_controller import EtapaProduccionControlle
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
 from app.controllers.pedido_controller import PedidoController
+from app.controllers.planificacion_controller import PlanificacionController
 from app.utils.decorators import roles_required, permission_any_of
 from app.utils.decorators import permission_required
-from datetime import date
+from datetime import date, datetime, timedelta
 from app.utils.estados import OP_FILTROS_UI, OP_MAP_STRING_TO_INT
 
 orden_produccion_bp = Blueprint("orden_produccion", __name__, url_prefix="/ordenes")
@@ -435,3 +436,47 @@ def api_confirmar_inicio(orden_id):
     usuario_id = get_jwt_identity()
     response, status_code = controller.confirmar_inicio_y_aprobar(orden_id, data, usuario_id)
     return jsonify(response), status_code
+
+
+@orden_produccion_bp.route("/hoy")
+@permission_required(accion='consultar_plan_de_produccion')
+def produccion_hoy():
+    """Muestra el tablero Kanban de producción del día."""
+    planificacion_controller = PlanificacionController()
+    usuario_controller = UsuarioController()
+    
+    current_user = get_jwt()
+    user_roles = current_user.get('roles', [])
+    is_operario = 'OPERARIO' in user_roles
+    is_supervisor_calidad = 'SUPERVISOR_CALIDAD' in user_roles
+
+    response_kanban, _ = planificacion_controller.obtener_ops_para_tablero()
+    ordenes_kanban_dict = response_kanban.get('data', {}) if response_kanban.get('success') else {}
+
+    supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
+    operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
+    supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []
+    operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
+
+    columnas_kanban = {
+        'EN ESPERA': 'En Espera',
+        'LISTA PARA PRODUCIR':'Lista para producir',
+        'EN_LINEA_1': 'Linea 1',
+        'EN_LINEA_2': 'Linea 2',
+        'EN_EMPAQUETADO': 'Empaquetado',
+        'CONTROL_DE_CALIDAD': 'Control de Calidad',
+        'COMPLETADA': 'Completada'
+    }
+
+    return render_template(
+        'planificacion/produccion_hoy.html',
+        ordenes_por_estado=ordenes_kanban_dict,
+        columnas=columnas_kanban,
+        supervisores=supervisores,
+        operarios=operarios,
+        now=datetime.utcnow(),
+        timedelta=timedelta,
+        date=date,
+        is_operario=is_operario,
+        is_supervisor_calidad=is_supervisor_calidad
+    )

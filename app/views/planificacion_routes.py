@@ -63,16 +63,11 @@ def index():
         flash(response_semanal.get('error', 'Error cargando planificación semanal.'), 'error')
 
     # --- OBTENER OPS RELEVANTES PARA CRP ---
-    # 1. OPs del Kanban
-    response_kanban, _ = controller.obtener_ops_para_tablero()
-    ordenes_kanban_dict = response_kanban.get('data', {}) if response_kanban.get('success') else {}
-    ops_kanban = [op for estado, lista_ops in ordenes_kanban_dict.items() if estado not in ['COMPLETADA', 'CANCELADA'] for op in lista_ops]
-
-    # 2. OPs de la semana
+    # 1. OPs de la semana
     ops_semana = [op for dia, lista_ops in ordenes_por_dia.items() for op in lista_ops if op.get('estado') not in ['COMPLETADA', 'CANCELADA']]
 
-    # 3. Combinar y eliminar duplicados
-    ops_combinadas_dict = {op['id']: op for op in ops_kanban + ops_semana if op.get('id')}
+    # 2. Combinar y eliminar duplicados
+    ops_combinadas_dict = {op['id']: op for op in ops_semana if op.get('id')}
     ordenes_para_crp = list(ops_combinadas_dict.values()) # Ahora sí, se asigna valor
     # Ahora 'ordenes_combinadas' siempre será una lista (posiblemente vacía)
     ordenes_combinadas = list(ops_combinadas_dict.values())
@@ -110,23 +105,11 @@ def index():
     usuario_controller = UsuarioController()
     supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR']); operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
     supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []; operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
-    columnas_kanban = { 'EN ESPERA': 'En Espera', 'LISTA PARA PRODUCIR':'Listas', 'EN_LINEA_1': 'L1', 'EN_LINEA_2': 'L2', 'EN_EMPAQUETADO': 'Emp.', 'CONTROL_DE_CALIDAD': 'CC', 'COMPLETADA': 'OK' }
-    ordenes_por_estado = ordenes_kanban_dict # Usar el dict obtenido antes
     try:
         year, week_num_str = week_str.split('-W'); week_num = int(week_num_str); current_week_start = date.fromisocalendar(int(year), week_num, 1)
         prev_week_start = current_week_start - timedelta(days=7); next_week_start = current_week_start + timedelta(days=7)
         prev_week_str = prev_week_start.strftime("%Y-W%V"); next_week_str = next_week_start.strftime("%Y-W%V")
     except ValueError: prev_week_str = None; next_week_str = None; logger.warning(f"Error parseando week_str {week_str}")
-
-    columnas_kanban = {
-        'EN ESPERA': 'En Espera',
-        'LISTA PARA PRODUCIR':'Lista para producir', # <-- Cambiado
-        'EN_LINEA_1': 'Linea 1',                     # <-- Cambiado
-        'EN_LINEA_2': 'Linea 2',                     # <-- Cambiado
-        'EN_EMPAQUETADO': 'Empaquetado',             # <-- Cambiado
-        'CONTROL_DE_CALIDAD': 'Control de Calidad',  # <-- Cambiado
-        'COMPLETADA': 'Completada'                   # <-- Cambiado
-    }
 
     return render_template(
         'planificacion/tablero.html',
@@ -136,8 +119,6 @@ def index():
         semana_actual_str=week_str,
         semana_anterior_str=prev_week_str,
         semana_siguiente_str=next_week_str,
-        ordenes_por_estado=ordenes_por_estado,
-        columnas=columnas_kanban,
         supervisores=supervisores,
         operarios=operarios,
         carga_crp=carga_calculada,
