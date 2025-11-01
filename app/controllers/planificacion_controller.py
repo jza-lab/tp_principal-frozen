@@ -37,13 +37,11 @@ class PlanificacionController(BaseController):
             estados_activos = [
                 'EN ESPERA',
                 'LISTA PARA PRODUCIR',
-                'EN PROCESO',
                 'EN_LINEA_1',
                 'EN_LINEA_2',
-                'EN_EMPAQUETADO',      # <-- NUEVO
-                'CONTROL_DE_CALIDAD',  # <-- NUEVO
+                'EN_EMPAQUETADO',
+                'CONTROL_DE_CALIDAD',
                 'COMPLETADA'
-                # Añade aquí otros estados si tienes columnas para ellos, ej: 'EN ESPERA'
             ]
             # ----------------------------
 
@@ -56,9 +54,26 @@ class PlanificacionController(BaseController):
 
             ordenes = response.get('data', [])
 
-            # Agrupamos las órdenes por estado usando un defaultdict
+            # Agrupamos las órdenes por estado y calculamos la prioridad
             ordenes_por_estado = defaultdict(list)
+            today = date.today()
             for orden in ordenes:
+                # --- Lógica de Prioridad ---
+                prioridad = 'BAJA' # Por defecto
+                fecha_meta_str = orden.get('fecha_meta')
+                if fecha_meta_str:
+                    try:
+                        fecha_meta = date.fromisoformat(fecha_meta_str)
+                        dias_diferencia = (fecha_meta - today).days
+                        if dias_diferencia <= 2:
+                            prioridad = 'ALTA'
+                        elif dias_diferencia <= 7:
+                            prioridad = 'MEDIA'
+                    except ValueError:
+                        pass # Si la fecha es inválida, se queda como BAJA
+                orden['prioridad'] = prioridad
+                # --- Fin Lógica de Prioridad ---
+                
                 ordenes_por_estado[orden['estado']].append(orden)
 
             return self.success_response(data=dict(ordenes_por_estado))

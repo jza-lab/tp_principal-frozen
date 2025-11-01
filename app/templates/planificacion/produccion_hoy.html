@@ -1,11 +1,26 @@
 {% extends "layouts/app_layout.html" %}
 
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/planificacion/kanban.css') }}">
+{% endblock %}
+
 {% block app_content %}
+
+{# --- FILTROS RÁPIDOS --- #}
+<div class="quick-filters">
+    <span class="filter-label">🔍 Filtrar:</span>
+    <button class="filter-btn active" data-filter="todas">Todas</button>
+    <button class="filter-btn" data-filter="mis-ordenes">Mis Órdenes</button>
+    <button class="filter-btn" data-filter="linea-1">Línea 1</button>
+    <button class="filter-btn" data-filter="linea-2">Línea 2</button>
+    <button class="filter-btn" data-filter="alta-prioridad">Alta Prioridad</button>
+</div>
+
 {# --- TABLERO KANBAN --- #}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h3 class="h4 mb-0">Tablero Kanban (Producción en Curso)</h3>
     
-    {# --- NUEVO BOTÓN PARA OCULTAR COLUMNAS --- #}
+    {# --- BOTÓN PARA OCULTAR COLUMNAS --- #}
     <div class="dropdown">
         <button class="btn btn-sm btn-outline-secondary" type="button" id="dropdownMenuColumnas" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
             <i class="bi bi-eye-slash me-1"></i> Ver Columnas
@@ -24,13 +39,13 @@
         </ul>
     </div>
 </div>
+
 <div class="table-responsive">
     <div class="row flex-nowrap g-3">
         {% for estado_key, titulo_columna in columnas.items() %}
-        <div class="col mb-4 kanban-column-wrapper" data-estado="{{ estado_key }}" style="min-width: 250px;">
+        <div class="col mb-4 kanban-column-wrapper" data-estado="{{ estado_key }}" style="min-width: 320px;">
             <div class="kanban-column h-100" data-estado="{{ estado_key }}">
                 <div class="column-header">
-                    
                     <span class="kanban-title-text" 
                         data-bs-toggle="collapse" 
                         data-bs-target="#kanban-cards-{{ estado_key }}" 
@@ -53,200 +68,298 @@
                         </button>
                     </div>
                 </div>
+                
                 <div class="kanban-cards collapse show" id="kanban-cards-{{ estado_key }}">
                     {% for orden in ordenes_por_estado.get(estado_key, []) %}
-                    <div class="card insumo-card kanban-card mb-2" data-op-id="{{ orden.id }}" data-producto-id="{{ orden.producto_id }}" data-linea-asignada="{{ orden.linea_asignada or '' }}"> {# Añadido mb-2 #}
-                        <div class="card-body py-2 px-3"> {# Padding reducido #}
-                            <h6 class="card-title mb-1 fw-bold">{{ orden.producto_nombre or 'N/A' }}</h6> {# Título h6 y bold #}
-                            <div class="card-secondary-details small mb-1"> {# Texto más pequeño #}
-                                <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo }}</code></span>
-                                <span class="ms-2"><i class="bi bi-box-seam"></i> <b>{{ orden.cantidad_planificada }}</b></span>
-                                <span class="ms-2"><i class="bi bi-calendar-event"></i> {{ orden.fecha_planificada }}</span>
-                                {% if orden.fecha_inicio_planificada %}
-                                <br><span class="text-primary small"><i class="bi bi-play-circle-fill"></i> Inicia: {{ orden.fecha_inicio_planificada }}</span>
+                    {% set prioridad = orden.get('prioridad', 'BAJA') %}
+                    {% set prioridad_class = 'borde-baja' %}
+                    {% if prioridad == 'ALTA' %}
+                        {% set prioridad_class = 'borde-alta' %}
+                    {% elif prioridad == 'MEDIA' %}
+                        {% set prioridad_class = 'borde-media' %}
+                    {% endif %}
+                    
+                    <div class="card kanban-card mb-2 {{ prioridad_class }}" 
+                         data-op-id="{{ orden.id }}"
+                         data-linea="{{ orden.linea_asignada or '' }}"
+                         data-prioridad="{{ prioridad }}">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title mb-0">{{ orden.producto_nombre or 'N/A' }}</h6>
+                                <span class="badge {{ 'bg-danger' if prioridad == 'ALTA' else ('bg-warning text-dark' if prioridad == 'MEDIA' else 'bg-success') }}">
+                                    {{ prioridad }}
+                                </span>
+                            </div>
+                            
+                            <p class="card-text mb-2">
+                                <i class="bi bi-upc-scan me-1"></i> <code>OP-{{ orden.codigo }}</code>
+                            </p>
+                            
+                            <div class="d-flex flex-column small">
+                                <span class="mb-1">
+                                    <i class="bi bi-box-seam me-2"></i>
+                                    <strong>Cantidad:</strong> {{ orden.cantidad_planificada }} kg
+                                </span>
+                                
+                                {% if estado_key in ['EN ESPERA', 'LISTA PARA PRODUCIR'] %}
+                                <span class="mb-1">
+                                    <i class="bi bi-diagram-3 me-2"></i>
+                                    <strong>Línea:</strong> 
+                                    {% if orden.linea_asignada %}
+                                        Línea {{ orden.linea_asignada }}
+                                    {% else %}
+                                        <span class="text-muted">Sin asignar</span>
+                                    {% endif %}
+                                </span>
+                                {% endif %}
+                                
+                                <span class="mb-1">
+                                    <i class="bi bi-calendar-event me-2"></i>
+                                    <strong>Inicio:</strong> {{ orden.fecha_inicio_planificada or 'Sin asignar' }}
+                                </span>
+                                
+                                {% if estado_key == 'LISTA PARA PRODUCIR' and orden.sugerencia_t_prod_dias is not none %}
+                                <span class="mb-1">
+                                    <i class="bi bi-clock me-2"></i>
+                                    <strong>Tiempo Est.:</strong> {{ orden.sugerencia_t_prod_dias }} días
+                                </span>
+                                {% endif %}
+                                
+                                {# Para órdenes en proceso - Mostrar progreso #}
+                                {% if estado_key.startswith('EN_LINEA') and orden.cantidad_producida is not none %}
+                                <span class="mb-1">
+                                    <i class="bi bi-activity me-2"></i>
+                                    <strong>Progreso:</strong> {{ orden.cantidad_producida }} / {{ orden.cantidad_planificada }} kg
+                                </span>
+                                <div class="progress-bar-kanban">
+                                    <div class="progress-fill-kanban" style="width: {{ (orden.cantidad_producida / orden.cantidad_planificada * 100) | round }}%"></div>
+                                </div>
+                                
+                                {# Timer activo #}
+                                <div class="active-timer">
+                                    <div class="timer-pulse"></div>
+                                    <span class="timer-text">⏱️ En proceso</span>
+                                </div>
+                                {% endif %}
+                                
+                                {# Mostrar operario si está asignado #}
+                                {% if orden.operario_nombre %}
+                                <span class="mb-1">
+                                    <i class="bi bi-person-fill me-2"></i>
+                                    <strong>Operario:</strong> {{ orden.operario_nombre }}
+                                </span>
                                 {% endif %}
                             </div>
-                            {% if orden.supervisor_nombre or orden.linea_asignada or orden.operario_nombre %}
-                            <hr class="my-1">
-                            <div class="card-assignment-details small"> {# Texto más pequeño #}
-                                {% if orden.linea_asignada %}<span class="me-2"><i class="bi bi-diagram-3-fill text-primary"></i> L{{ orden.linea_asignada }}</span>{% endif %}
-                                {% if orden.supervisor_nombre %}<span class="me-2"><i class="bi bi-person-badge-fill text-info"></i> S:{{ orden.supervisor_nombre }}</span>{% endif %}
-                                {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary"></i> O:{{ orden.operario_nombre }}</span>{% endif %}
-                            </div>
+                            
+                            {# Botones de acción según el estado #}
+                            {% if estado_key == 'LISTA PARA PRODUCIR' %}
+                                <div class="d-grid mt-3">
+                                    <button class="btn btn-primary btn-sm btn-iniciar-op" 
+                                            data-op-id="{{ orden.id }}" 
+                                            data-op-sugerencia-linea="{{ orden.linea_asignada or '' }}">
+                                        <i class="bi bi-play-fill me-1"></i> Iniciar Trabajo
+                                    </button>
+                                </div>
+                            {% elif estado_key.startswith('EN_LINEA') %}
+                                <div class="card-actions mt-2">
+                                    <button class="btn btn-pause btn-sm" onclick="pauseOrder({{ orden.id }})">
+                                        ⏸️ Pausar
+                                    </button>
+                                    <button class="btn btn-complete btn-sm" onclick="reportProgress({{ orden.id }})">
+                                        ✅ Reportar
+                                    </button>
+                                </div>
                             {% endif %}
                         </div>
                     </div>
-                    {% else %} {# Mensaje si no hay órdenes en la columna #}
-                        {% if loop.first and estado_key != 'LISTA PARA PRODUCIR' %} {# Solo mostrar si no es la columna de consolidar #}
-                        <p class="text-center text-muted small fst-italic mt-3">Vacío</p>
-                        {% endif %}
+                    {% else %}
+                        {# Mensaje si no hay órdenes en la columna #}
+                        <p class="text-center text-muted fst-italic mt-3">
+                            <i class="bi bi-inbox" style="font-size: 32px; display: block; margin-bottom: 8px; opacity: 0.5;"></i>
+                            Sin órdenes
+                        </p>
                     {% endfor %}
                 </div>
             </div>
         </div>
-    {% endfor %}
+        {% endfor %}
     </div>
 </div>
 
-{# --- MODALES DE PLANIFICACIÓN (SIN CAMBIOS) --- #}
-{% if mps_items %}
-    {% for item_mps in mps_items %}
-    {% set op_ids_list = item_mps.ordenes | map(attribute='id') | list %}
-    <div class="modal fade" id="modal-producto-{{ item_mps.producto_id }}" tabindex="-1" aria-labelledby="modalLabel-{{ item_mps.producto_id }}" aria-hidden="true" data-op-ids="{{ op_ids_list | tojson }}">
-      <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="modalLabel-{{ item_mps.producto_id }}">Planificar Lote Semanal: <strong>{{ item_mps.producto_nombre }}</strong></h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-          </div>
-          <div class="modal-body">
-            <h6>Órdenes Individuales a Consolidar:</h6>
-          {# --- MOSTRAR UNIDAD DE MEDIDA --- #}
-          <p>Total Requerido: <b>{{ item_mps.cantidad_total }} {{ item_mps.unidad_medida or 'unidades' }}</b> | Fecha Meta Próxima: <b>{{ item_mps.fecha_meta_mas_proxima }}</b></p>
-            <table class="table table-sm table-bordered tabla-detalle-op-revision mb-4">
-                <thead class="table-light"><tr><th style="width: 15%;">OP</th><th class="text-center" style="width: 15%;">Cantidad</th><th class="text-center" style="width: 15%;">Fecha Meta</th></thead>
-                <tbody>
-                    {% for op in item_mps.ordenes %}
-                    <tr class="detalle-op-row" data-op-id="{{ op.id }}">
-                        <td><small><code>{{ op.codigo }}</code></small></td><td class="text-center"><small>{{ op.cantidad_planificada }}</small></td><td class="text-center"><small>{{ op.fecha_meta }}</small></td>
-                        {% endfor %}</tbody></table><hr><h5 class="mb-3">Planificar Lote Consolidado</h5>
-            {% set plazo_total_agg = item_mps.sugerencia_t_prod_dias + item_mps.sugerencia_t_proc_dias %}
-            {% set fecha_inicio_sugerida = (now.date() + timedelta(days=plazo_total_agg)).strftime('%Y-%m-%d') if plazo_total_agg > 0 else now.date().strftime('%Y-%m-%d') %}
-            <div class="row g-3"><div class="col-md-6"><div class="resultado-sugerencia sugerencia-calculada {% if item_mps.sugerencia_t_proc_dias > 0 %}alert alert-warning{% else %}alert alert-success{% endif %}" style="display: block; font-size: 0.85rem; padding: 8px;">Línea Sugerida: <b>{{ item_mps.sugerencia_linea or 'N/D' }}</b><hr class="my-1">Plazo Total: <b>{{ plazo_total_agg }} días</b><ul class="mb-0 ps-3 mt-1" style="font-size: 0.8rem;"><li>Producción: {{ item_mps.sugerencia_t_prod_dias }} días</li><li>Compras: {{ item_mps.sugerencia_t_proc_dias }} días {% if item_mps.sugerencia_t_proc_dias > 0 %}(Stock Faltante){% else %}(Stock OK){% endif %}</li></ul></div></div>
-                <div class="col-md-6"><div class="card p-3"><div class="mb-2"><label class="form-label form-label-sm fw-bold">Línea <span class="text-danger">*</span></label><select class="form-select form-select-sm mb-1 modal-select-linea" title="Línea"><option value="1" {% if item_mps.sugerencia_linea == 1 %}selected{% endif %}>L1</option><option value="2" {% if item_mps.sugerencia_linea == 2 %}selected{% endif %}>L2</option></select>{# --- MOSTRAR LÍNEAS COMPATIBLES --- #}
-                        {% if item_mps.linea_compatible %}
-                        <div class="form-text small text-info mt-0">
-                            <i class="bi bi-info-circle me-1"></i>Producto compatible solo con: 
-                            {% set lineas = item_mps.linea_compatible.split(',') %}
-                            {% for linea in lineas %}
-                                <strong>Línea {{ linea.strip() }}</strong>{% if not loop.last %}, {% endif %}
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {# ----------------------------------- #}</div>
-                        <div class="mb-2">
-                            <label class="form-label form-label-sm fw-bold">Fecha de Inicio Planificada <span class="text-danger">*</span></label>
-                            {# --- AÑADIR ATRIBUTO min --- #}
-                            <input type="date" 
-                                   class="form-control form-control-sm mb-1 modal-input-fecha-inicio" 
-                                   value="{{ fecha_inicio_sugerida }}" 
-                                   title="Fecha Inicio"
-                                   min="{{ now.date().isoformat() }}"> {# <-- Añadido aquí #}
-                            {# ------------------------- #}
-                        </div>
-                        <div class="mb-2"><label class="form-label form-label-sm">Supervisor (Opc)</label><select
-                                class="form-select form-select-sm mb-1 modal-select-supervisor" title="Supervisor">
-                                <option value="">Seleccionar...</option> {% for sup in supervisores %}<option value="{{ sup.id }}">{{ sup.nombre
-                                    }}</option>{% endfor %}
-                            </select></div>
-                        <div class="mb-2"><label class="form-label form-label-sm">Operario (Opc)</label><select
-                                class="form-select form-select-sm mb-1 modal-select-operario" title="Operario">
-                                <option value="">Seleccionar...</option> {% for op_user in operarios %}<option value="{{ op_user.id }}">{{
-                                    op_user.nombre }}</option>{% endfor %}
-                            </select></div>
-                        </div>
-                        </div>
-                        </div>
-                        </div>
-          <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-success btn-lg btn-consolidar-y-aprobar"><i class="bi bi-check-lg"></i> Planificar ordenes consolidadas</button></div></div></div></div>
-    {% endfor %}
-{% endif %}
-
-{# --- REUSABLE FEEDBACK MODAL --- #}
-<div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered"> {# Centered vertically #}
+{# --- MODAL: INICIAR ORDEN DE PRODUCCIÓN --- #}
+<div class="modal fade" id="modalIniciarOp" tabindex="-1" aria-labelledby="modalIniciarOpLabel" aria-hidden="true">
+  <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="feedbackModalLabel">
-            <i class="bi bi-info-circle me-2" id="feedbackModalIcon"></i> {# Icon changes based on type #}
-            <span id="feedbackModalTitle">Título</span> {# Dynamic title #}
+        <h5 class="modal-title" id="modalIniciarOpLabel">
+            <i class="bi bi-play-circle-fill me-2"></i>Iniciar Orden de Producción
         </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body" id="feedbackModalBody">
-        Mensaje del modal. {# Dynamic message #}
+      <div class="modal-body">
+        <p>Está a punto de iniciar la OP <strong id="modal-op-codigo"></strong>.</p>
+        <form id="formIniciarOp">
+          <input type="hidden" id="modal-op-id" name="op_id">
+          
+          <div class="mb-3">
+            <label for="modal-linea-produccion" class="form-label">
+                Confirmar línea de producción <span class="text-danger">*</span>
+            </label>
+            <select class="form-select" id="modal-linea-produccion" name="linea_produccion" required>
+              <option value="1">Línea 1</option>
+              <option value="2">Línea 2</option>
+            </select>
+            <div class="form-text" id="modal-linea-sugerida-text"></div>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">Verificación de operario</label>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="check-materiales" required>
+              <label class="form-check-label" for="check-materiales">
+                Materias primas disponibles
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="check-limpieza" required>
+              <label class="form-check-label" for="check-limpieza">
+                Línea limpia y sanitizada
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="check-equipos" required>
+              <label class="form-check-label" for="check-equipos">
+                Equipos funcionando correctamente
+              </label>
+            </div>
+          </div>
+        </form>
       </div>
       <div class="modal-footer">
-        {# Button for simple alerts or Cancel #}
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="feedbackModalCancelBtn">Cerrar</button> 
-        {# Button for confirmations #}
-        <button type="button" class="btn btn-primary" id="feedbackModalConfirmBtn">Confirmar</button> 
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary" form="formIniciarOp">
+            <i class="bi bi-play-fill me-1"></i>Iniciar Trabajo
+        </button>
       </div>
     </div>
   </div>
 </div>
-{# --- END FEEDBACK MODAL --- #}
+
+{# --- MODAL: REPORTAR AVANCE --- #}
+<div class="modal fade" id="modalReportarAvance" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+            <i class="bi bi-clipboard-data me-2"></i>Reportar Avance de Producción
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formReportarAvance">
+          <input type="hidden" id="modal-report-op-id">
+          
+          <div class="mb-3">
+            <label for="cantidad-producida" class="form-label">
+                Cantidad Producida (Buena) <span class="text-danger">*</span>
+            </label>
+            <input type="number" class="form-control" id="cantidad-producida" 
+                   placeholder="Ej: 40.0" step="0.1" required>
+          </div>
+          
+          <div class="mb-3">
+            <label for="cantidad-desperdicio" class="form-label">
+                Cantidad Desperdicio (Mala)
+            </label>
+            <input type="number" class="form-control" id="cantidad-desperdicio" 
+                   placeholder="Ej: 2.0" step="0.1" value="0">
+          </div>
+          
+          <div class="mb-3">
+            <label for="motivo-desperdicio" class="form-label">
+                Motivo de Desperdicio (si aplica)
+            </label>
+            <select class="form-select" id="motivo-desperdicio">
+              <option value="">Sin desperdicio</option>
+              <option value="falla_empaque">Falla de empaque</option>
+              <option value="materia_prima">Materia prima defectuosa</option>
+              <option value="temperatura">Error de temperatura</option>
+              <option value="proceso">Error de proceso</option>
+              <option value="contaminacion">Contaminación cruzada</option>
+            </select>
+          </div>
+          
+          <div class="mb-3">
+            <label for="observaciones" class="form-label">Observaciones adicionales</label>
+            <textarea class="form-control" id="observaciones" rows="3" 
+                      placeholder="Comentarios opcionales sobre el proceso..."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-success" form="formReportarAvance">
+            <i class="bi bi-check-lg me-1"></i>Confirmar Reporte
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# --- MODAL: PAUSAR ORDEN --- #}
+<div class="modal fade" id="modalPausarOrden" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+            <i class="bi bi-pause-circle-fill me-2"></i>Pausar Orden de Producción
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formPausarOrden">
+          <input type="hidden" id="modal-pause-op-id">
+          
+          <div class="mb-3">
+            <label for="motivo-pausa" class="form-label">
+                Motivo de la pausa <span class="text-danger">*</span>
+            </label>
+            <select class="form-select" id="motivo-pausa" required>
+              <option value="">Seleccionar motivo...</option>
+              <option value="averia">Avería de máquina</option>
+              <option value="mantenimiento">Mantenimiento programado</option>
+              <option value="espera_material">Espera de material/insumo</option>
+              <option value="espera_supervisor">Espera de supervisor</option>
+              <option value="break">Break/Almuerzo</option>
+              <option value="cambio_turno">Cambio de turno</option>
+              <option value="calidad">Problema de calidad</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          
+          <div class="mb-3">
+            <label for="detalles-pausa" class="form-label">Detalles adicionales</label>
+            <textarea class="form-control" id="detalles-pausa" rows="3" 
+                      placeholder="Describe el motivo de la pausa..."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-warning" form="formPausarOrden">
+            <i class="bi bi-pause-fill me-1"></i>Confirmar Pausa
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
 {% endblock %}
 
 {% block extra_js %}
-    
     {# --- SCRIPT DE KANBAN (SORTABLE) --- #}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     
-    {# --- DATOS JINJA PARA JS --- #}
-    <script>
-        const listaSupervisores = {{ supervisores | tojson }};
-        const listaOperarios = {{ operarios | tojson }};
-        const IS_OPERARIO = {{ is_operario | tojson | safe }};
-        const IS_SUPERVISOR_CALIDAD = {{ is_supervisor_calidad | tojson | safe }};
-    </script>
-    
-    {# --- SCRIPT DE PLANIFICACIÓN (AHORA CONTIENE EL INICIALIZADOR DE POPOVER) --- #}
-    <script src="{{ url_for('static', filename='js/planificacion/planificacion.js') }}"></script>
-
-    {# --- SCRIPT PARA KANBAN (COLUMNAS COMPRIMIBLES / OCULTAR) --- #}
-    <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        
-        // --- LÓGICA PARA COMPRIMIR COLUMNAS (NUEVO) ---
-        document.querySelectorAll('.kanban-compress-toggle').forEach(button => {
-            button.addEventListener('click', function (e) {
-                // Evita que el clic en el botón dispare el colapso vertical del título
-                e.stopPropagation(); 
-                
-                const estado = this.dataset.estadoKey;
-                const columnWrapper = document.querySelector(`.kanban-column-wrapper[data-estado="${estado}"]`);
-                
-                if (columnWrapper) {
-                    // Alterna el estado comprimido
-                    columnWrapper.classList.toggle('kanban-column-compressed');
-                    
-                    // Alterna el título del botón (para accesibilidad)
-                    const isCompressed = columnWrapper.classList.contains('kanban-column-compressed');
-                    this.title = isCompressed ? 'Expandir columna' : 'Comprimir columna';
-                }
-            });
-        });
-
-        // --- LÓGICA PARA OCULTAR COLUMNAS (DEL MENÚ SUPERIOR) ---
-        const columnToggles = document.querySelectorAll('.kanban-column-toggle');
-        
-        // Evitar que el menú se cierre al hacer clic en un checkbox
-        const columnToggleList = document.getElementById('kanbanColumnToggleList');
-        if (columnToggleList) {
-            columnToggleList.addEventListener('click', function (e) {
-                e.stopPropagation();
-            });
-        }
-
-        // Lógica para ocultar/mostrar (display: none) columnas
-        columnToggles.forEach(checkbox => {
-            checkbox.addEventListener('change', function () {
-                const estado = this.value;
-                const columnWrapper = document.querySelector(`.kanban-column-wrapper[data-estado="${estado}"]`);
-                
-                if (columnWrapper) {
-                    if (this.checked) {
-                        columnWrapper.style.display = ''; // Mostrar
-                    } else {
-                        columnWrapper.style.display = 'none'; // Ocultar
-                    }
-                }
-            });
-        });
-    });
-    </script>
-    {# --- FIN DEL NUEVO SCRIPT --- #}
-
+    {# --- SCRIPT PRINCIPAL DE PRODUCCIÓN HOY --- #}
+    <script src="{{ url_for('static', filename='js/planificacion/produccion_hoy.js') }}"></script>
 {% endblock %}

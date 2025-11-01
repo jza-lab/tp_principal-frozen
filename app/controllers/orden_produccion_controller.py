@@ -860,10 +860,13 @@ class OrdenProduccionController(BaseController):
 
         # 1. Definir las columnas del tablero
         columnas = {
-            'PENDIENTE': 'Pendientes de Aprobación',
-            'APROBADA': 'Listas para Producir',
-            'EN_PROCESO': 'En Proceso',
-            'COMPLETADA': 'Completadas'
+            'EN ESPERA': 'En Espera',
+            'LISTA PARA PRODUCIR': 'Lista para producir',
+            'EN_LINEA_1': 'Línea 1',
+            'EN_LINEA_2': 'Línea 2',
+            'EN_EMPAQUETADO': 'Empaquetado',
+            'CONTROL_DE_CALIDAD': 'Control de Calidad',
+            'COMPLETADA': 'Completada'
         }
 
         # 2. Obtener todas las órdenes de producción relevantes

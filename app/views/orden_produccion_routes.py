@@ -437,6 +437,27 @@ def api_confirmar_inicio(orden_id):
     response, status_code = controller.confirmar_inicio_y_aprobar(orden_id, data, usuario_id)
     return jsonify(response), status_code
 
+@orden_produccion_bp.route('/api/<int:op_id>/iniciar-trabajo', methods=['POST'])
+@jwt_required()
+@permission_required(accion='produccion_ejecucion')
+def api_iniciar_trabajo(op_id):
+    """
+    API endpoint para mover una OP de 'LISTA PARA PRODUCIR' a 'EN_LINEA_X'.
+    """
+    data = request.get_json()
+    linea = data.get('linea')
+    if not linea or linea not in [1, 2]:
+        return jsonify({'success': False, 'error': 'Línea de producción inválida.'}), 400
+
+    nuevo_estado = f'EN_LINEA_{linea}'
+    
+    controller = OrdenProduccionController()
+    response = controller.cambiar_estado_orden_simple(op_id, nuevo_estado)
+    
+    status_code = 200 if response.get('success') else 500
+    return jsonify(response), status_code
+
+
 @orden_produccion_bp.route('/tablero')
 @permission_required(accion='consultar_plan_de_produccion')
 def tablero_produccion():
