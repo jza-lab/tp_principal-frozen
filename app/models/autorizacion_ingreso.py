@@ -1,5 +1,5 @@
 from .base_model import BaseModel
-from datetime import date
+from datetime import date, datetime
 from collections import defaultdict
 import logging
 import pytz
@@ -75,7 +75,24 @@ class AutorizacionIngresoModel(BaseModel):
 
             grouped_data = defaultdict(list)
             if response.data:
+                art_tz = pytz.timezone('America/Argentina/Buenos_Aires')
                 for item in response.data:
+                    fecha_str = item.get('fecha_autorizada')
+                    if fecha_str:
+                        try:
+                            # Supabase devuelve un timestamp en formato ISO 8601 (ej. '2023-10-31T00:00:00+00:00')
+                            # Lo parseamos a un objeto datetime con conciencia de zona horaria (UTC)
+                            utc_dt = datetime.fromisoformat(fecha_str)
+                            
+                            # Lo convertimos a la zona horaria de Argentina
+                            art_dt = utc_dt.astimezone(art_tz)
+                            
+                            # Formateamos la fecha de vuelta a un string 'YYYY-MM-DD'
+                            # Esto evita que JavaScript la reinterprete incorrectamente
+                            item['fecha_autorizada'] = art_dt.strftime('%Y-%m-%d')
+                        except (ValueError, TypeError):
+                            logger.warning(f"No se pudo parsear la fecha '{fecha_str}'. Se dejará el valor original.")
+
                     grouped_data[item['estado']].append(item)
             
             return {'success': True, 'data': grouped_data}

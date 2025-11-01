@@ -24,7 +24,7 @@ def nueva_autorizacion():
 
         if resultado.get('success'):
             flash('Autorización creada exitosamente.', 'success')
-            return redirect(url_for('admin_usuario.listar_usuarios')) # TODO: Redirigir a una vista de autorizaciones
+            return redirect(url_for('admin_usuario.listar_usuarios'))
         else:
             flash(f"Error al crear la autorización: {resultado.get('error')}", 'error')
             usuarios = usuario_controller.obtener_todos_los_usuarios({'activo': True})
