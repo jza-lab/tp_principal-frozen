@@ -47,4 +47,5 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "main:app"]
+# Reemplaza tu CMD original por este:
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "--worker-class=gthread", "--workers=1", "--threads=8", "main:app"]
