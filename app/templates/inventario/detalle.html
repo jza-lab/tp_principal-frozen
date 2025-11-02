@@ -4,6 +4,11 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/listarUsuarios.css') }}">
+<style>
+    #sankey_trazabilidad svg g {
+        cursor: pointer;
+    }
+</style>
 {% endblock %}
 
 
@@ -41,8 +46,8 @@
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link-custom" id="trazabilidad-tab" data-bs-toggle="tab"
-            data-bs-target="#trazabilidad-content" type="button" role="tab"
-            aria-controls="trazabilidad-content" aria-selected="false">
+            data-bs-target="#trazabilidad-content" type="button" role="tab" aria-controls="trazabilidad-content"
+            aria-selected="false">
             <i class="bi bi-diagram-3 me-1"></i>Trazabilidad
         </button>
     </li>
@@ -176,8 +181,7 @@
                 <div style="width: 100%; overflow-x: auto;">
                     <div id="sankey_trazabilidad" style="min-height: 400px; min-width: 600px;">
                         <div class="d-flex justify-content-center align-items-center h-100">
-                            <div class="spinner-border text-primary" role="status"
-                                style="width: 3rem; height: 3rem;">
+                            <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
                                 <span class="visually-hidden">Cargando gráfico...</span>
                             </div>
                         </div>
@@ -270,15 +274,18 @@
                                 labelPadding: 10,
                                 nodePadding: 50,
                                 width: 25,
-                                interactivity: true
+                                interactivity: true,
+                                // --- NUEVO: Color de Nodos (cuadrados) basado en valor ---
+                                colorMode: 'gradient',
+                                colors: ['#353463', '#1c1a73', '#050342'] // Paleta de Grises (claro a oscuro)
                             },
                             link: {
                                 colorMode: 'gradient',
-                                colors: ['#a6cee3', '#1f78b4', '#b2df8a']
+                                // --- AJUSTADO: Color de Links (flujos) de claro a oscuro ---
+                                colors: ['#a6cee3', '#1f78b4', '#b2df8a'] // Paleta de Azules (claro a oscuro)
                             }
                         }
                     };
-
                     container.innerHTML = '';
                     chart = new google.visualization.Sankey(container);
 

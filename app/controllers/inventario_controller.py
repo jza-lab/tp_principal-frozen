@@ -1,4 +1,6 @@
 from uuid import UUID
+
+from flask import url_for
 from app.controllers.base_controller import BaseController
 from app.models.inventario import InventarioModel
 from app.models.insumo import InsumoModel
@@ -793,6 +795,7 @@ class InventarioController(BaseController):
         """
         try:
             links = [] # Lista final de enlaces para Sankey
+            node_map = {} # <-- Mapa para las URLs
 
             # --- 1. NODO INICIAL: LOTE INSUMO ---
             lote_insumo_resp = self.inventario_model.find_by_id(id_lote, 'id_lote')
@@ -801,20 +804,22 @@ class InventarioController(BaseController):
             
             lote_insumo = lote_insumo_resp.get('data')
             lote_insumo_node = f"Lote Insumo: {lote_insumo.get('numero_lote_proveedor') or id_lote[:8]}"
+            
+            # --- AÑADIR URL DEL NODO INICIAL ---
+            node_map[lote_insumo_node] = url_for('inventario_view.detalle_lote', id_lote=id_lote)
 
             # --- 2. ENLACE 1: LOTE INSUMO -> OP ---
             
-            # Buscar OPs que usaron este lote (vía reservas_insumos)
             reservas_insumo_resp = self.reserva_insumo_model.find_all(
                 filters={'lote_inventario_id': str(id_lote)}
             )
             
             if not reservas_insumo_resp.get('success') or not reservas_insumo_resp.get('data'):
                 logger.info(f"Lote {id_lote} no tiene reservas de insumos.")
-                return self.success_response({"links": []})
+                # --- DEVOLVER node_map INCLUSO SI ESTÁ VACÍO ---
+                return self.success_response({"links": [], "node_map": node_map})
 
-            # op_consumo guarda la cantidad trazada original que va a cada OP
-            op_consumo = {} # { id_op: cantidad_trazada }
+            op_consumo = {} 
             op_ids = set()
             for reserva in reservas_insumo_resp.get('data', []):
                 id_op = reserva.get('orden_produccion_id')
@@ -825,11 +830,11 @@ class InventarioController(BaseController):
 
             if not op_ids:
                 logger.info(f"El lote {id_lote} no ha sido utilizado en ninguna OP.")
-                return self.success_response({"links": []})
+                # --- DEVOLVER node_map ---
+                return self.success_response({"links": [], "node_map": node_map})
 
-            # Obtener detalles de OPs y crear Nodos/Enlaces
             ops_resp = self.op_model.find_all(filters={'id': ('in', list(op_ids))})
-            op_nodes = {} # { id_op: 'Nombre Nodo OP' }
+            op_nodes = {} 
             
             if not ops_resp.get('success'):
                  return self.error_response(f"Error al buscar OPs: {ops_resp.get('error')}")
@@ -838,6 +843,9 @@ class InventarioController(BaseController):
                 op_id = op.get('id')
                 op_node_name = f"OP: {op.get('codigo') or op_id}"
                 op_nodes[op_id] = op_node_name
+                
+                # --- AÑADIR URL DE LA OP ---
+                node_map[op_node_name] = url_for('orden_produccion.detalle', id=op_id)
                 
                 cantidad_trazada_op = op_consumo.get(op_id, 0.0)
                 if cantidad_trazada_op > 0:
@@ -855,20 +863,19 @@ class InventarioController(BaseController):
 
             if not lotes_prod_resp.get('success') or not lotes_prod_resp.get('data'):
                 logger.info(f"Las OPs {op_ids} no generaron lotes de producto.")
-                return self.success_response({"links": links})
+                # --- DEVOLVER node_map ---
+                return self.success_response({"links": links, "node_map": node_map})
 
-            # Pre-calcular la producción total de cada OP para el prorrateo
-            op_total_producido = {} # { op_id: total_producido }
+            op_total_producido = {} 
             for lote_prod in lotes_prod_resp.get('data', []):
                 op_id = lote_prod.get('orden_produccion_id')
                 cantidad_lote = float(lote_prod.get('cantidad_inicial', 0) or 0)
                 op_total_producido[op_id] = op_total_producido.get(op_id, 0.0) + cantidad_lote
 
-            lote_prod_nodos = {} # { id_lote_prod: 'Nombre Nodo' }
-            lote_prod_cantidad_trazada = {} # { id_lote_prod: cantidad_trazada_prorrateada }
+            lote_prod_nodos = {} 
+            lote_prod_cantidad_trazada = {} 
             lote_prod_ids = set()
 
-            # Calcular enlaces OP -> Lote Prod
             for lote_prod in lotes_prod_resp.get('data', []):
                 lote_prod_id = lote_prod.get('id_lote')
                 lote_prod_ids.add(lote_prod_id)
@@ -876,6 +883,9 @@ class InventarioController(BaseController):
                 
                 lote_prod_node = f"Lote Prod: {lote_prod.get('numero_lote') or lote_prod_id}"
                 lote_prod_nodos[lote_prod_id] = lote_prod_node
+                
+                # --- AÑADIR URL DEL LOTE DE PRODUCTO ---
+                node_map[lote_prod_node] = url_for('lote_producto.detalle_lote', id_lote=lote_prod_id)
                 
                 cantidad_trazada_op = op_consumo.get(op_id, 0.0)
                 total_producido = op_total_producido.get(op_id, 0.0)
@@ -903,11 +913,11 @@ class InventarioController(BaseController):
             
             if not reservas_prod_resp.get('success') or not reservas_prod_resp.get('data'):
                 logger.info(f"Los lotes de producto {lote_prod_ids} no están en ningún pedido.")
-                return self.success_response({"links": links})
+                # --- DEVOLVER node_map ---
+                return self.success_response({"links": links, "node_map": node_map})
 
-            # Pre-calcular el total reservado de cada lote de producto
-            lote_prod_total_reservado = {} # { lote_prod_id: total_reservado }
-            pedido_reservas_agregadas = {} # { (lote_prod_id, pedido_id): cantidad_total_reservada }
+            lote_prod_total_reservado = {} 
+            pedido_reservas_agregadas = {} 
             pedido_ids = set()
 
             for res_prod in reservas_prod_resp.get('data', []):
@@ -929,9 +939,9 @@ class InventarioController(BaseController):
 
             if not pedido_ids:
                  logger.info(f"Lotes {lote_prod_ids} reservados pero sin ID de pedido.")
-                 return self.success_response({"links": links})
+                 # --- DEVOLVER node_map ---
+                 return self.success_response({"links": links, "node_map": node_map})
 
-            # Obtener detalles de Pedidos
             pedidos_resp = self.pedido_model.find_all(
                 filters={'id': ('in', list(pedido_ids))}
             )
@@ -939,14 +949,16 @@ class InventarioController(BaseController):
             if not pedidos_resp.get('success'):
                  return self.error_response("Error al buscar Pedidos")
 
-            pedido_nodes = {} # { id_pedido: 'Nombre Nodo Pedido' }
+            pedido_nodes = {} 
             for pedido in pedidos_resp.get('data', []):
                 pedido_id = pedido.get('id')
                 cliente_nombre = pedido.get('nombre_cliente') or f"Cliente s/n" 
                 pedido_node_name = f"Pedido: #{pedido_id} ({cliente_nombre})"
                 pedido_nodes[pedido_id] = pedido_node_name
+                
+                # --- AÑADIR URL DEL PEDIDO ---
+                node_map[pedido_node_name] = url_for('orden_venta.detalle', id=pedido_id)
 
-            # Calcular enlaces Lote Prod -> Pedido
             for (lote_prod_id, pedido_id), cantidad_reservada_agg in pedido_reservas_agregadas.items():
                 
                 cantidad_trazada_lote = lote_prod_cantidad_trazada.get(lote_prod_id, 0.0)
@@ -958,7 +970,6 @@ class InventarioController(BaseController):
                     cantidad_trazada_pedido = cantidad_trazada_lote * proporcion
 
                 if cantidad_trazada_pedido > 0:
-                    # Asegurarse de que ambos nodos existen antes de crear el enlace
                     if lote_prod_id in lote_prod_nodos and pedido_id in pedido_nodes:
                         links.append({
                             "source_name": lote_prod_nodos[lote_prod_id],
@@ -966,7 +977,8 @@ class InventarioController(BaseController):
                             "value": cantidad_trazada_pedido
                         })
 
-            return self.success_response({"links": links})
+            # --- DEVOLVER TODO AL FINAL ---
+            return self.success_response({"links": links, "node_map": node_map})
 
         except Exception as e:
             logger.error(f"Error en obtener_trazabilidad_lote (manual) para {id_lote}: {e}", exc_info=True)
