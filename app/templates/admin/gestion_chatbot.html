@@ -52,6 +52,13 @@
                         <label for="respuesta" class="form-label">Respuesta</label>
                         <textarea class="form-control" id="respuesta" name="respuesta" rows="4" required></textarea>
                     </div>
+                    <div class="mb-3">
+                        <label for="parentId" class="form-label">Pregunta Padre (Opcional)</label>
+                        <select class="form-select" id="parentId" name="parent_id">
+                            <option value="">-- Ninguna (Pregunta Principal) --</option>
+                            <!-- Opciones se cargarán dinámicamente -->
+                        </select>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -151,10 +158,17 @@
                 }
                 
                 result.data.forEach((qa, index) => {
+                    // Encontrar el nombre de la pregunta padre
+                    const parent = qa.parent_id ? result.data.find(p => p.id === qa.parent_id) : null;
+                    const parentName = parent ? parent.pregunta : '';
+
                     const row = `
                         <tr>
                             <td>${index + 1}</td>
-                            <td>${escapeHTML(qa.pregunta)}</td>
+                            <td>
+                                ${escapeHTML(qa.pregunta)}
+                                ${parentName ? `<br><small class="text-muted">↳ Sub-pregunta de: ${escapeHTML(parentName)}</small>` : ''}
+                            </td>
                             <td>${escapeHTML(qa.respuesta)}</td>
                             <td>
                                 <span class="badge ${qa.activo ? 'bg-success' : 'bg-danger'}">
@@ -203,11 +217,40 @@
         modal.show();
     }
 
-    function prepareCreateForm() {
+    async function populateParentSelect(selectedParentId = null) {
+        const parentSelect = document.getElementById('parentId');
+        parentSelect.innerHTML = '<option value="">-- Ninguna (Pregunta Principal) --</option>'; // Reset
+        
+        try {
+            const response = await fetch('/admin/chatbot/qas');
+            const result = await response.json();
+
+            if (result.success && Array.isArray(result.data)) {
+                result.data.forEach(qa => {
+                    // Evitar que una pregunta sea su propio padre
+                    const currentId = document.getElementById('qaId').value;
+                    if (qa.id.toString() !== currentId) {
+                        const option = document.createElement('option');
+                        option.value = qa.id;
+                        option.textContent = qa.pregunta;
+                        if (qa.id === selectedParentId) {
+                            option.selected = true;
+                        }
+                        parentSelect.appendChild(option);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error al poblar el select de preguntas padre:', error);
+        }
+    }
+
+    async function prepareCreateForm() {
         console.log('Preparando formulario de creación');
         document.getElementById('chatbotQAForm').reset();
         document.getElementById('qaId').value = '';
         document.getElementById('chatbotQAModalLabel').textContent = 'Añadir Nueva Pregunta y Respuesta';
+        await populateParentSelect();
     }
 
     async function prepareEditForm(id) {
@@ -224,6 +267,9 @@
                 document.getElementById('pregunta').value = qa.pregunta;
                 document.getElementById('respuesta').value = qa.respuesta;
                 document.getElementById('chatbotQAModalLabel').textContent = 'Editar Pregunta y Respuesta';
+                
+                await populateParentSelect(qa.parent_id);
+
                 new bootstrap.Modal(document.getElementById('chatbotQAModal')).show();
             } else {
                 showNotificationModal('Registro no encontrado.', true);
@@ -270,6 +316,8 @@
         formData.append('csrf_token', csrfToken);
         formData.append('pregunta', preguntaValue);
         formData.append('respuesta', respuestaValue);
+        formData.append('parent_id', document.getElementById('parentId').value);
+
         // Cuando se crea, por defecto activo = 'on'
         if (!id) {
             formData.append('activo', 'on');

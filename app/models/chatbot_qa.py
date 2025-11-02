@@ -22,7 +22,8 @@ class ChatbotQA(BaseModel):
             pregunta TEXT NOT NULL,
             respuesta TEXT NOT NULL,
             activo BOOLEAN DEFAULT TRUE,
-            creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            creado_en TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            parent_id INTEGER REFERENCES chatbot_qa(id) ON DELETE SET NULL
         );
         """
         try:
@@ -30,7 +31,23 @@ class ChatbotQA(BaseModel):
             with self.db.connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(query)
-            return {'success': True, 'message': 'Tabla chatbot_qa verificada/creada.'}
+                    
+                    # --- LÓGICA DE MIGRACIÓN ---
+                    # Verificar y añadir la columna parent_id si no existe
+                    cur.execute("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns 
+                                WHERE table_name='chatbot_qa' AND column_name='parent_id'
+                            ) THEN
+                                ALTER TABLE chatbot_qa 
+                                ADD COLUMN parent_id INTEGER REFERENCES chatbot_qa(id) ON DELETE SET NULL;
+                            END IF;
+                        END $$;
+                    """)
+                    
+            return {'success': True, 'message': 'Tabla chatbot_qa verificada/creada y actualizada.'}
         except Exception as e:
             return {'success': False, 'error': str(e)}
 

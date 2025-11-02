@@ -8,8 +8,13 @@ chatbot_controller = ChatbotController()
 # --- Rutas Públicas ---
 @chatbot_bp.route('/api/chatbot/qas', methods=['GET'], endpoint='get_active_qas')
 def get_active_qas():
-    """Endpoint público para que el chatbot obtenga las Q&As activas."""
+    """Endpoint público para que el chatbot obtenga las Q&As activas de nivel superior."""
     return chatbot_controller.get_all_active_qas()
+
+@chatbot_bp.route('/api/chatbot/qas/<int:parent_id>/children', methods=['GET'], endpoint='get_children_qas')
+def get_children_qas(parent_id):
+    """Endpoint público para obtener las Q&As hijas."""
+    return chatbot_controller.get_children_qas(parent_id)
 
 # --- Rutas de Administración ---
 @chatbot_bp.route('/admin/chatbot/qas', methods=['GET'], endpoint='get_all_qas_admin')

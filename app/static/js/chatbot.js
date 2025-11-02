@@ -47,14 +47,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function showInitialOptions() {
         chatbotMessages.innerHTML = '<div class="chatbot-message bot">¡Hola! Soy tu asistente virtual. Selecciona una opción para ayudarte:</div>';
-        chatbotOptions.innerHTML = '';
-
+        
         if (knowledgeBase.length === 0) {
             addMessage('No hay preguntas frecuentes disponibles en este momento.', 'bot');
+            chatbotOptions.innerHTML = '';
             return;
         }
 
-        knowledgeBase.forEach(qa => {
+        showOptions(knowledgeBase);
+    }
+
+    function showOptions(options) {
+        chatbotOptions.innerHTML = '';
+        options.forEach(qa => {
             const button = document.createElement('button');
             button.classList.add('chatbot-option-btn');
             button.textContent = qa.pregunta;
@@ -63,33 +68,46 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    function handleOptionClick(qa) {
+    async function handleOptionClick(qa) {
         addMessage(qa.pregunta, 'user');
+        chatbotOptions.innerHTML = ''; // Limpiar opciones inmediatamente
 
         // Lógica de redirección
         if (qa.type === 'redirect' && qa.url) {
             setTimeout(() => {
                 addMessage(qa.respuesta, 'bot');
-                // Esperar un momento antes de redirigir para que el usuario lea el mensaje
-                setTimeout(() => {
-                    window.location.href = qa.url;
-                }, 1000);
+                setTimeout(() => window.location.href = qa.url, 1000);
             }, 500);
-        } else {
-            // Lógica de respuesta normal
-            setTimeout(() => {
-                addMessage(qa.respuesta, 'bot');
-                showReturnMenuOption();
-            }, 500);
+            return;
         }
 
-        chatbotOptions.innerHTML = '';
+        // Mostrar respuesta y buscar sub-preguntas
+        setTimeout(async () => {
+            addMessage(qa.respuesta, 'bot');
+            
+            try {
+                const response = await fetch(`/api/chatbot/qas/${qa.id}/children`);
+                const result = await response.json();
+
+                if (result.success && result.data.length > 0) {
+                    showOptions(result.data);
+                }
+                // Siempre añadir la opción de volver al menú principal
+                showReturnMenuOption(true);
+
+            } catch (error) {
+                console.error('Error al cargar sub-preguntas:', error);
+                showReturnMenuOption();
+            }
+        }, 500);
     }
 
-    function showReturnMenuOption() {
-        chatbotOptions.innerHTML = '';
+    function showReturnMenuOption(append = false) {
+        if (!append) {
+            chatbotOptions.innerHTML = '';
+        }
         const returnButton = document.createElement('button');
-        returnButton.classList.add('chatbot-option-btn');
+        returnButton.classList.add('chatbot-option-btn', 'return-btn');
         returnButton.textContent = 'Volver al menú principal';
         returnButton.addEventListener('click', showInitialOptions);
         chatbotOptions.appendChild(returnButton);

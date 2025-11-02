@@ -7,9 +7,10 @@ class ChatbotController:
         self.model = ChatbotQA()
     
     def get_all_active_qas(self):
-        """Obtiene todas las Q&As activas y añade una opción de fallback."""
+        """Obtiene todas las Q&As activas de nivel superior y añade una opción de fallback."""
         try:
-            result = self.model.db.table('chatbot_qa').select('*').eq('activo', True).execute()
+            # Filtrar por parent_id IS NULL para obtener solo las preguntas principales
+            result = self.model.db.table('chatbot_qa').select('*').eq('activo', True).is_('parent_id', None).execute()
             
             # Añadir la opción estática al final
             qas = result.data
@@ -24,6 +25,22 @@ class ChatbotController:
             return jsonify({
                 'success': True,
                 'data': qas
+            }), 200
+            
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
+    def get_children_qas(self, parent_id):
+        """Obtiene las Q&As hijas de una pregunta padre."""
+        try:
+            result = self.model.db.table('chatbot_qa').select('*').eq('activo', True).eq('parent_id', parent_id).execute()
+            
+            return jsonify({
+                'success': True,
+                'data': result.data
             }), 200
             
         except Exception as e:
@@ -54,7 +71,8 @@ class ChatbotController:
             pregunta = data.get('pregunta')
             respuesta = data.get('respuesta')
             activo_value = data.get('activo', 'on')
-            
+            parent_id = data.get('parent_id')
+
             if not pregunta or not respuesta:
                 return jsonify({
                     'success': False,
@@ -64,7 +82,8 @@ class ChatbotController:
             nuevo_registro = {
                 'pregunta': pregunta.strip(),
                 'respuesta': respuesta.strip(),
-                'activo': (activo_value == 'on')
+                'activo': (activo_value == 'on'),
+                'parent_id': int(parent_id) if parent_id and parent_id.isdigit() else None
             }
             
             result = self.model.db.table('chatbot_qa').insert(nuevo_registro).execute()
@@ -82,11 +101,12 @@ class ChatbotController:
             }), 500
     
     def update_qa(self, qa_id, data):
-        """Actualiza una Q&A (solo pregunta y respuesta, NO el estado activo)"""
+        """Actualiza una Q&A (pregunta, respuesta y parent_id)"""
         try:
             pregunta = data.get('pregunta')
             respuesta = data.get('respuesta')
-            
+            parent_id = data.get('parent_id')
+
             if not pregunta or not respuesta:
                 return jsonify({
                     'success': False,
@@ -95,7 +115,8 @@ class ChatbotController:
             
             actualizacion = {
                 'pregunta': pregunta.strip(),
-                'respuesta': respuesta.strip()
+                'respuesta': respuesta.strip(),
+                'parent_id': int(parent_id) if parent_id and parent_id.isdigit() else None
             }
             
             result = self.model.db.table('chatbot_qa').update(actualizacion).eq('id', qa_id).execute()
