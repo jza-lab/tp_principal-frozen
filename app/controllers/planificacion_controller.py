@@ -390,7 +390,7 @@ class PlanificacionController(BaseController):
                 # Verificar si la transición solicitada es válida
                 if estado_actual not in allowed_transitions or nuevo_estado not in allowed_transitions[estado_actual]:
                     return self.error_response(
-                        f"Movimiento de '{estado_actual}' a '{nuevo_estado}' no permitido para Supervisor de Calidad.", 
+                        f"Movimiento de '{estado_actual}' a '{nuevo_estado}' no permitido para Supervisor de Calidad.",
                         403
                     )
 
@@ -405,7 +405,7 @@ class PlanificacionController(BaseController):
                 }
                 if estado_actual not in allowed_transitions or nuevo_estado not in allowed_transitions[estado_actual]:
                     return self.error_response(
-                        f"Movimiento de '{estado_actual}' a '{nuevo_estado}' no permitido para Operario.", 
+                        f"Movimiento de '{estado_actual}' a '{nuevo_estado}' no permitido para Operario.",
                         403
                     )
 
@@ -701,32 +701,32 @@ class PlanificacionController(BaseController):
             # --- CORRECCIÓN: MAPEO MANUAL DE DÍAS ---
             # 6. Formatear claves con nombre del día (Usando mapeo manual)
 
-            # Diccionario para traducir abreviaturas de días (inglés -> español)
-            dias_abbr_es = {
-                'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mié',
-                'Thu': 'Jue', 'Fri': 'Vie', 'Sat': 'Sáb', 'Sun': 'Dom'
-            }
-
-            formatted_grouped_by_day = {}
-            ordered_ops_visibles = dict(sorted(ops_visibles_por_dia.items()))
-            for dia_iso, ops_dia in ordered_ops_visibles.items():
-                try:
-                    dia_dt = date.fromisoformat(dia_iso)
-                    # Obtener abreviatura en INGLÉS (%a)
-                    abbr_en = dia_dt.strftime("%a")
-                    # Traducir usando el diccionario (default a inglés si falla)
-                    abbr_es = dias_abbr_es.get(abbr_en, abbr_en)
-                    # Formatear fecha (DD/MM)
-                    fecha_num = dia_dt.strftime("%d/%m")
-                    # Crear clave final
-                    key_display = f"{abbr_es} {fecha_num}"
-                except ValueError:
-                    key_display = dia_iso # Fallback
-                formatted_grouped_by_day[key_display] = ops_dia
-            # --- FIN CORRECCIÓN ---
+##            # Diccionario para traducir abreviaturas de días (inglés -> español)
+##            dias_abbr_es = {
+##                'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mié',
+##                'Thu': 'Jue', 'Fri': 'Vie', 'Sat': 'Sáb', 'Sun': 'Dom'
+##            }
+##
+##            formatted_grouped_by_day = {}
+##            ordered_ops_visibles = dict(sorted(ops_visibles_por_dia.items()))
+##            for dia_iso, ops_dia in ordered_ops_visibles.items():
+##                try:
+##                    dia_dt = date.fromisoformat(dia_iso)
+##                    # Obtener abreviatura en INGLÉS (%a)
+##                    abbr_en = dia_dt.strftime("%a")
+##                    # Traducir usando el diccionario (default a inglés si falla)
+##                    abbr_es = dias_abbr_es.get(abbr_en, abbr_en)
+##                    # Formatear fecha (DD/MM)
+##                    fecha_num = dia_dt.strftime("%d/%m")
+##                    # Crear clave final
+##                    key_display = f"{abbr_es} {fecha_num}"
+##                except ValueError:
+##                    key_display = dia_iso # Fallback
+##                formatted_grouped_by_day[key_display] = ops_dia
+##            # --- FIN CORRECCIÓN ---
 
             resultado = {
-                'ops_visibles_por_dia': formatted_grouped_by_day, # Usar el diccionario formateado
+                'ops_visibles_por_dia': ops_visibles_por_dia, # Usar el diccionario formateado
                 'inicio_semana': start_of_week.isoformat(),
                 'fin_semana': end_of_week.isoformat(),
                 'semana_actual_str': week_str
