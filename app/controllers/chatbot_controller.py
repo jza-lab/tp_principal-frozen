@@ -7,13 +7,23 @@ class ChatbotController:
         self.model = ChatbotQA()
     
     def get_all_active_qas(self):
-        """Obtiene todas las Q&As activas (endpoint público para el chatbot)"""
+        """Obtiene todas las Q&As activas y añade una opción de fallback."""
         try:
             result = self.model.db.table('chatbot_qa').select('*').eq('activo', True).execute()
             
+            # Añadir la opción estática al final
+            qas = result.data
+            qas.append({
+                'id': -1,
+                'pregunta': 'No encuentro mi respuesta',
+                'respuesta': 'Serás redirigido a la página de consultas.',
+                'type': 'redirect',
+                'url': '/public/consulta'
+            })
+            
             return jsonify({
                 'success': True,
-                'data': result.data
+                'data': qas
             }), 200
             
         except Exception as e:
