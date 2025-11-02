@@ -120,6 +120,36 @@ class PlanificacionController(BaseController):
             return error_dict, 500
         # ----------------------
 
+    def _ejecutar_replanificacion_simple(self, op_id: int, asignaciones: dict, usuario_id: int) -> tuple:
+        """
+        SOLO actualiza los campos de planificación de una OP que YA ESTÁ planificada
+        (Ej: 'EN ESPERA' o 'LISTA PARA PRODUCIR').
+        NO cambia el estado ni vuelve a verificar el stock.
+        """
+        logger.info(f"[RePlan] Ejecutando re-planificación simple para OP {op_id}...")
+        try:
+            # Preparamos los datos a actualizar
+            update_data = {
+                'fecha_inicio_planificada': asignaciones.get('fecha_inicio'),
+                'linea_asignada': asignaciones.get('linea_asignada'),
+                'supervisor_responsable_id': asignaciones.get('supervisor_id'),
+                'operario_asignado_id': asignaciones.get('operario_id')
+            }
+            # Limpiar Nones por si el usuario no seleccionó supervisor/operario
+            update_data = {k: v for k, v in update_data.items() if v is not None}
+
+            # Usar el controlador de OP para hacer el update directo en el modelo
+            update_result = self.orden_produccion_controller.model.update(op_id, update_data, 'id')
+
+            if update_result.get('success'):
+                return self.success_response(data=update_result.get('data'), message="OP re-planificada exitosamente.")
+            else:
+                return self.error_response(f"Error al actualizar la OP: {update_result.get('error')}", 500)
+
+        except Exception as e:
+            logger.error(f"Error en _ejecutar_replanificacion_simple para OP {op_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
+
     # --- MÉTODO PRINCIPAL MODIFICADO ---
     def consolidar_y_aprobar_lote(self, op_ids: List[int], asignaciones: dict, usuario_id: int) -> tuple:
         """
@@ -130,11 +160,28 @@ class PlanificacionController(BaseController):
         """
         try:
             op_a_planificar_id, op_data = self._obtener_datos_op_a_planificar(op_ids, usuario_id)
+
             # --- CORRECCIÓN AQUÍ ---
             if not op_a_planificar_id:
                 error_dict = self.error_response(op_data, 500) # op_data tiene el mensaje de error
                 return error_dict, 500
             # ----------------------
+
+            # --- ¡VALIDACIÓN AÑADIDA! ---
+            op_estado_actual = op_data.get('estado')
+            estados_permitidos = ['PENDIENTE', 'EN ESPERA', 'LISTA PARA PRODUCIR']
+
+            if op_estado_actual not in estados_permitidos:
+                msg = f"La OP {op_a_planificar_id} en estado '{op_estado_actual}' no puede ser (re)planificada."
+                logger.warning(msg)
+                return self.error_response(msg, 400), 400
+
+            # Si es una consolidación (len > 1), DEBE estar en PENDIENTE
+            if len(op_ids) > 1 and op_estado_actual != 'PENDIENTE':
+                msg = "La consolidación solo es posible para OPs en estado PENDIENTE."
+                logger.warning(msg)
+                return self.error_response(msg, 400), 400
+            # --- FIN VALIDACIÓN AÑADIDA ---
 
             linea_propuesta = asignaciones.get('linea_asignada')
             fecha_inicio_propuesta_str = asignaciones.get('fecha_inicio')
@@ -270,13 +317,20 @@ class PlanificacionController(BaseController):
                     'fecha_fin_estimada': fecha_fin_estimada.isoformat(),
                     'op_id_confirmar': op_a_planificar_id,
                     # Pasar las asignaciones originales para la confirmación
-                    'asignaciones_confirmar': asignaciones
+                    'asignaciones_confirmar': asignaciones,
+                    'estado_actual': op_estado_actual # <-- ¡Importante! Pasamos el estado
                 }, 200 # Usamos 200 OK para indicar solicitud de confirmación
             else:
-                # Cabe en un día, aprobar directamente usando el helper
-                logger.info("OP cabe en un día. Ejecutando aprobación final...")
-                # Pasar las asignaciones originales al helper
-                return self._ejecutar_aprobacion_final(op_a_planificar_id, asignaciones, usuario_id)
+                # Cabe en un día, decidir qué helper llamar
+                logger.info(f"OP cabe en un día. Decidiendo flujo por estado '{op_estado_actual}'...")
+                if op_estado_actual == 'PENDIENTE':
+                    # Flujo original: Aprobar
+                    logger.info("Estado es PENDIENTE. Ejecutando aprobación final...")
+                    return self._ejecutar_aprobacion_final(op_a_planificar_id, asignaciones, usuario_id)
+                else:
+                    # Flujo nuevo: Re-planificar (solo actualizar)
+                    logger.info(f"Estado es {op_estado_actual}. Ejecutando re-planificación simple...")
+                    return self._ejecutar_replanificacion_simple(op_a_planificar_id, asignaciones, usuario_id)
 
         except Exception as e:
             logger.error(f"Error crítico en consolidar_y_aprobar_lote: {e}", exc_info=True)
@@ -934,6 +988,8 @@ class PlanificacionController(BaseController):
         Lógica central para la planificación automática.
         Intenta planificar OPs PENDIENTES en el horizonte dado.
         """
+        dias_horizonte = 30
+
         logger.info(f"[AutoPlan] Iniciando ejecución para {dias_horizonte} día(s). Usuario: {usuario_id}")
 
         # 1. Obtener OPs agrupadas (las que están 'PENDIENTE')
@@ -1082,7 +1138,7 @@ class PlanificacionController(BaseController):
         """
         try:
             # Puedes hacer que el horizonte sea un parámetro de la request si quieres
-            dias_horizonte_manual = 7
+            dias_horizonte_manual = 30
 
             # Reutiliza la lógica central
             resumen = self._ejecutar_planificacion_automatica(
@@ -1095,3 +1151,39 @@ class PlanificacionController(BaseController):
         except Exception as e:
             logger.error(f"Error en forzar_auto_planificacion: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
+
+
+    def confirmar_aprobacion_lote(self, op_id: int, asignaciones: dict, usuario_id: int) -> tuple:
+        """
+        Endpoint final para confirmar una aprobación (multi-día o no).
+        Omite la simulación de capacidad (ya se hizo) y ejecuta la acción
+        basándose en el estado de la OP.
+        """
+        try:
+            # 1. Obtener el estado actual de la OP
+            op_result = self.orden_produccion_controller.obtener_orden_por_id(op_id)
+            if not op_result.get('success'):
+                return self.error_response(f"No se encontró la OP ID {op_id}.", 404), 404
+
+            op_estado_actual = op_result['data'].get('estado')
+            logger.info(f"Confirmando aprobación para OP {op_id} (Estado: {op_estado_actual})...")
+
+            # 2. Decidir qué helper llamar basado en el estado
+            if op_estado_actual == 'PENDIENTE':
+                # Flujo original: Aprobar (pre-asignar + confirmar/aprobar)
+                logger.info("Estado es PENDIENTE. Ejecutando aprobación final...")
+                return self._ejecutar_aprobacion_final(op_id, asignaciones, usuario_id)
+
+            elif op_estado_actual in ['EN ESPERA', 'LISTA PARA PRODUCIR']:
+                # Flujo nuevo: Re-planificar (solo actualizar)
+                logger.info(f"Estado es {op_estado_actual}. Ejecutando re-planificación simple...")
+                return self._ejecutar_replanificacion_simple(op_id, asignaciones, usuario_id)
+
+            else:
+                msg = f"La OP {op_id} en estado '{op_estado_actual}' no puede ser confirmada."
+                logger.warning(msg)
+                return self.error_response(msg, 400), 400
+
+        except Exception as e:
+            logger.error(f"Error crítico en confirmar_aprobacion_lote: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500), 500

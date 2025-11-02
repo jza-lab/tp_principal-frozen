@@ -183,7 +183,9 @@ def confirmar_aprobacion_api():
 
     controller = PlanificacionController()
     # Llama al helper que solo ejecuta la aprobación
-    response, status_code = controller._ejecutar_aprobacion_final(
+    # --- ¡CAMBIO AQUÍ! ---
+    # Llama a la nueva función "inteligente" que decide el flujo
+    response, status_code = controller.confirmar_aprobacion_lote(
         op_id,
         asignaciones,
         usuario_id

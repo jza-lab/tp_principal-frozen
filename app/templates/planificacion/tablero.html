@@ -236,17 +236,36 @@
                                                 <dt class='col-12 border-top pt-2 mt-2'><i class='bi bi-clock-history me-1'></i>Inicio Plan.:</dt>
                                                 <dd class='col-12'>{{ op.fecha_inicio_planificada or 'N/P' }}</dd>
                                             </dl>
+                                            {# --- INICIO: NUEVO BOTÓN DE RE-PLANIFICAR --- #}
+                                            {# Asumimos un permiso 'replanificar_op'. Ajusta si es necesario. #}
+                                            {% if 'replanificar_op' is has_permission and not is_operario %}
+                                            <div class='border-top pt-2 mt-2'>
+                                                <button class='btn btn-sm btn-outline-primary w-100 btn-open-replan-modal'
+                                                        data-op-id='{{ op.id }}'
+                                                        data-op-codigo='{{ op.codigo }}'
+                                                        data-op-producto='{{ op.producto_nombre | e }}'
+                                                        data-op-cantidad='{{ op.cantidad_planificada }}'
+                                                        data-op-linea='{{ op.linea_asignada }}'
+                                                        data-op-fecha-inicio='{{ op.fecha_inicio_planificada }}'
+                                                        data-op-supervisor='{{ op.supervisor_responsable_id }}'
+                                                        data-op-operario='{{ op.operario_asignado_id }}'
+                                                        >
+                                                    <i class='bi bi-calendar-range me-1'></i> Re-Planificar esta OP
+                                                </button>
+                                            </div>
+                                            {% endif %}
                                         {% endset %}
         
                                         {# --- INICIO CAMBIO: Wrapper ahora activa POPOVER --- #}
                                         <div class="op-card-mini-wrapper d-block mb-2" 
                                              tabindex="0" 
                                              data-bs-toggle="popover" 
-                                             data-bs-trigger="focus" 
+                                             data-bs-trigger="click" 
                                              data-bs-html="true" 
                                              title="<i class='bi bi-info-circle me-2'></i>Detalle Rápido: {{ op.codigo }}"
                                              data-bs-content="{{ popover_content | e }}"
                                              style="cursor: pointer;"
+                                             data-op-id="{{ op.id }}"
                                         >
                                         
                                             {# --- CONTENIDO VISUAL DE LA TARJETA (SIN CAMBIOS) --- #}
@@ -717,6 +736,79 @@
 </div>
 {# --- END FEEDBACK MODAL --- #}
 
+{# --- MODAL DE RE-PLANIFICACIÓN (NUEVO) --- #}
+<div class="modal fade" id="replanModal" tabindex="-1" aria-labelledby="replanModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="replanModalLabel">Re-Planificar Orden de Producción</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <form id="replanForm">
+            <input type="hidden" id="replan_op_id" name="op_id">
+            
+            {# Info de la OP #}
+            <div class="card bg-light p-3 mb-3">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Producto:</strong> <span id="replan_producto_nombre"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Código:</strong> <code id="replan_op_codigo"></code>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Cantidad:</strong> <span id="replan_cantidad"></span>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+            <h5 class="mb-3">Nuevos Parámetros de Planificación</h5>
+            
+            {# Inputs (copiados del modal de Plan Maestro) #}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label form-label-sm fw-bold">Nueva Línea <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-sm mb-1" id="replan_select_linea" name="linea_asignada">
+                        <option value="1">Línea 1</option>
+                        <option value="2">Línea 2</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label form-label-sm fw-bold">Nueva Fecha de Inicio <span class="text-danger">*</span></label>
+                    <input type="date" 
+                           class="form-control form-control-sm mb-1" 
+                           id="replan_input_fecha_inicio" 
+                           name="fecha_inicio"
+                           min="{{ now.date().isoformat() }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label form-label-sm">Supervisor (Opc)</label>
+                    <select class="form-select form-select-sm mb-1" id="replan_select_supervisor" name="supervisor_id">
+                        <option value="">Seleccionar...</option>
+                        {% for sup in supervisores %}<option value="{{ sup.id }}">{{ sup.nombre }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label form-label-sm">Operario (Opc)</label>
+                    <select class="form-select form-select-sm mb-1" id="replan_select_operario" name="operario_id">
+                        <option value="">Seleccionar...</option>
+                        {% for op_user in operarios %}<option value="{{ op_user.id }}">{{ op_user.nombre }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-replan"><i class="bi bi-check-lg"></i> Confirmar Re-planificación</button>
+      </div>
+    </div>
+  </div>
+</div>
+{# --- FIN MODAL RE-PLANIFICACIÓN --- #}
+
 {% endblock %}
 
 {% block extra_js %}
@@ -788,5 +880,122 @@
     });
     </script>
     {# --- FIN DEL NUEVO SCRIPT --- #}
+
+    <script>
+    // --- LÓGICA PARA MODAL DE RE-PLANIFICACIÓN (NUEVO) ---
+    const replanModalElement = document.getElementById('replanModal');
+    if (replanModalElement) {
+        const replanModal = new bootstrap.Modal(replanModalElement);
+        
+        // 1. Delegación de eventos para abrir el modal desde el popover
+        document.body.addEventListener('click', function(e) {
+            // Usamos .closest() para capturar clics en el botón o su icono
+            const replanButton = e.target.closest('.btn-open-replan-modal');
+            
+            if (replanButton) {
+                e.stopPropagation();
+                const opData = replanButton.dataset;
+
+                // Poblar los campos de información
+                document.getElementById('replan_op_id').value = opData.opId;
+                document.getElementById('replan_producto_nombre').textContent = opData.opProducto;
+                document.getElementById('replan_op_codigo').textContent = opData.opCodigo;
+                document.getElementById('replan_cantidad').textContent = opData.opCantidad;
+                
+                // Pre-rellenar el formulario con los valores actuales
+                document.getElementById('replan_select_linea').value = opData.opLinea || '1';
+                document.getElementById('replan_input_fecha_inicio').value = opData.opFechaInicio || '{{ now.date().isoformat() }}';
+                document.getElementById('replan_select_supervisor').value = opData.opSupervisor || '';
+                document.getElementById('replan_select_operario').value = opData.opOperario || '';
+
+                // Cerrar el popover activo (si existe)
+                const popoverTrigger = document.querySelector(`[data-bs-toggle="popover"][data-op-id="${opData.opId}"]`);
+                if (popoverTrigger) {
+                    const popoverInstance = bootstrap.Popover.getInstance(popoverTrigger);
+                    if (popoverInstance) {
+                        popoverInstance.hide();
+                    }
+                }
+                
+                // Mostrar el modal de re-planificación
+                replanModal.show();
+            }
+        });
+
+        // 2. Event listener para el botón de confirmar
+        const confirmReplanBtn = document.getElementById('btn-confirm-replan');
+        confirmReplanBtn.addEventListener('click', async function() {
+            const opId = document.getElementById('replan_op_id').value;
+            
+            const asignaciones = {
+                linea_asignada: parseInt(document.getElementById('replan_select_linea').value),
+                fecha_inicio: document.getElementById('replan_input_fecha_inicio').value,
+                supervisor_id: document.getElementById('replan_select_supervisor').value ? parseInt(document.getElementById('replan_select_supervisor').value) : null,
+                operario_id: document.getElementById('replan_select_operario').value ? parseInt(document.getElementById('replan_select_operario').value) : null
+            };
+
+            // ¡REUTILIZAMOS la lógica y la URL del Plan Maestro!
+            // Asumimos que la URL está definida en planificacion.js o globalmente
+            // Si no, reemplaza 'urlPlanificarLote' con la URL real, ej: '/api/planificacion/consolidar_y_aprobar'
+            const url = window.urlPlanificarLote; 
+            
+            // Reutilizamos la función 'planificarLote' de planificacion.js
+            // Pasamos el ID de la OP individual como una lista
+            // y las nuevas asignaciones.
+            
+            // Esta llamada asume que tienes 'planificarLote' en el scope global
+            // desde planificacion.js. Si no, tendríamos que duplicar la lógica fetch.
+            // Asumiremos que podemos llamar a la lógica fetch directamente
+            // y que 'showFeedbackModal' y 'confirmarAsignacionLote' están disponibles.
+
+            // --- Lógica fetch (similar a la de planificacion.js) ---
+            // Reemplaza esto si tienes una función reutilizable
+            showLoadingSpinner(this);
+
+            try {
+                // NOTA: Esta URL debe ser la correcta para tu endpoint de consolidación
+                const response = await fetch('{{ url_for("planificacion.consolidar_y_aprobar_api") }}', { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}' // Asegúrate de tener CSRF token si es necesario
+                    },
+                    body: JSON.stringify({
+                        op_ids: [parseInt(opId)], // ¡La clave! Enviamos la OP única como lista
+                        asignaciones: asignaciones
+                    })
+                });
+
+                const result = await response.json();
+                replanModal.hide();
+                
+                // Reutilizamos el 'feedbackModal'
+                if (response.status === 409 && result.error === 'SOBRECARGA_CAPACIDAD') {
+                    showFeedbackModal('error', result.title, result.message);
+                } else if (response.status === 200 && result.error === 'MULTI_DIA_CONFIRM') {
+                    showFeedbackModal('Confirmación Multi-Día', result.message, 'confirm', () => {
+                        // Reutiliza la lógica de confirmación
+                        confirmarAsignacionLote(
+                            result.op_id_confirmar, 
+                            result.asignaciones_confirmar,
+                            result.estado_actual // <-- ¡Parámetro añadido!
+                        );
+                    });
+                } else if (response.status === 200 && result.success) {
+                    showFeedbackModal('success', '¡Re-planificado!', 'La OP ha sido re-planificada exitosamente.', null, true); // true = auto-reload
+                } else {
+                    showFeedbackModal('error', 'Error', result.error || 'No se pudo re-planificar la OP.');
+                }
+
+            } catch (error) {
+                replanModal.hide();
+                showFeedbackModal('error', 'Error de Red', `Error: ${error.message}`);
+            } finally {
+                hideLoadingSpinner(this, 'Confirmar Re-planificación');
+            }
+            // --- Fin lógica fetch ---
+        });
+    }
+    </script>
 
 {% endblock %}
