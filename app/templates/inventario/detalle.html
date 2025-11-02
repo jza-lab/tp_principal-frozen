@@ -43,7 +43,6 @@
 </ul>
 
 <div class="tab-content" id="loteDetailTabContent">
-    <!-- Pestaña 1: Información General -->
     <div class="tab-pane fade show active" id="info-content" role="tabpanel" aria-labelledby="info-tab">
         <div class="row mt-4">
             <div class="col-lg-12">
@@ -168,9 +167,9 @@
                         <h5 class="mb-0"><i class="bi bi-diagram-3-fill me-2"></i>Trazabilidad del Lote</h5>
                     </div>
                     <div class="card-body">
-                        <div id="sankey_trazabilidad" style="width: 100%; height: 500px;">
+                        <div id="sankey_trazabilidad" style="width: 100%; min-height: 400px;">
                             <div class="d-flex justify-content-center align-items-center h-100">
-                                <div class="spinner-border text-primary" role="status">
+                                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
                                     <span class="visually-hidden">Cargando gráfico...</span>
                                 </div>
                             </div>
@@ -185,62 +184,112 @@
 
 
 {% block extra_js %}
-<!-- Google Charts Loader -->
 <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const trazabilidadTab = document.getElementById('trazabilidad-tab');
+        const container = document.getElementById('sankey_trazabilidad');
         let chartLoaded = false;
 
+        // 1. Escuchar evento para mostrar la pestaña de trazabilidad
         trazabilidadTab.addEventListener('shown.bs.tab', function () {
             if (!chartLoaded) {
                 loadTrazabilidadChart();
             }
         });
 
+        // 2. Opcional: Cargar si la pestaña ya está activa (ej. al recargar la página)
+        if (document.getElementById('trazabilidad-content').classList.contains('show')) {
+                loadTrazabilidadChart();
+        }
+
+        // 3. Función para cargar Google Charts
         function loadTrazabilidadChart() {
+            if (chartLoaded) return; // Evitar recargas
+            
+            // Mostrar spinner (ya está en el HTML, pero nos aseguramos)
+            container.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100">
+                                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                                            <span class="visually-hidden">Cargando gráfico...</span>
+                                        </div>
+                                    </div>`;
+            
             google.charts.load('current', { 'packages': ['sankey'] });
             google.charts.setOnLoadCallback(drawSankeyChart);
         }
 
+        // 4. Función para dibujar el gráfico
         function drawSankeyChart() {
-            fetch(`{{ url_for('inventario_view.api_trazabilidad_lote', id_lote=lote.id_lote) }}`)
-                .then(response => response.json())
+            const apiUrl = `{{ url_for('inventario_view.api_trazabilidad_lote', id_lote=lote.id_lote) }}`;
+            // Usamos la unidad de medida del lote para el tooltip
+            const unidadMedida = "{{ lote.insumo_unidad_medida | default('unidades') | safe }}";
+
+            fetch(apiUrl)
+                .then(response => {
+                    if (!response.ok) throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
+                    return response.json();
+                })
                 .then(apiData => {
-                    if (!apiData.success || !apiData.data.links || apiData.data.links.length === 0) {
-                        document.getElementById('sankey_trazabilidad').innerHTML = '<div class="alert alert-warning">No se encontraron datos de trazabilidad para este lote.</div>';
+                    // Validar la respuesta de la API
+                    if (!apiData.success || !apiData.data || !apiData.data.links || apiData.data.links.length === 0) {
+                        container.innerHTML = '<div class="alert alert-info text-center p-4">No se encontraron datos de trazabilidad para este lote.</div>';
                         return;
                     }
 
                     const dataTable = new google.visualization.DataTable();
                     dataTable.addColumn('string', 'De');
                     dataTable.addColumn('string', 'A');
-                    dataTable.addColumn('number', 'Cantidad');
-                    dataTable.addRows(apiData.data.links);
+                    dataTable.addColumn('number', `Cantidad (${unidadMedida})`);
+                    
+                    // --- INICIO DE LA CORRECCIÓN ---
+                    // El código anterior (dataTable.addRows(apiData.data.links);) era incorrecto.
+                    // Transformamos el array de objetos [ {source_name: 'A', ...}, ... ]
+                    // en un array de arrays [ ['A', 'B', 10], ... ] que Google Charts espera.
+                    
+                    const rows = apiData.data.links.map(link => [
+                        String(link.source_name),  // Nodo Origen
+                        String(link.target_name),  // Nodo Destino
+                        parseFloat(link.value)     // Cantidad
+                    ]);
+
+                    // Filtramos filas con valor 0, negativo o inválido
+                    const validRows = rows.filter(row => row[2] > 0);
+
+                    if (validRows.length === 0) {
+                            container.innerHTML = '<div class="alert alert-info text-center p-4">Este lote no tiene movimientos (consumos o traslados) registrados.</div>';
+                            return;
+                    }
+                    
+                    dataTable.addRows(validRows);
+                    // --- FIN DE LA CORRECCIÓN ---
 
                     const options = {
                         width: '100%',
-                        height: 500,
+                        // Altura dinámica: 150px base + 30px por cada fila
+                        height: Math.max(400, 150 + (validRows.length * 30)), 
                         sankey: {
                             node: {
-                                colors: ['#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99', '#e31a1c'],
-                                label: { fontName: 'Arial', fontSize: 14 }
+                                label: { fontName: 'Arial', fontSize: 14, color: '#333' },
+                                labelPadding: 10,
+                                nodePadding: 30, // Espacio vertical entre nodos
+                                width: 25        // Grosor de los nodos
                             },
                             link: {
-                                colorMode: 'gradient',
+                                colorMode: 'gradient', // 'source', 'target', 'gradient'
                                 colors: ['#a6cee3', '#1f78b4', '#b2df8a']
                             }
                         }
                     };
-
-                    const chart = new google.visualization.Sankey(document.getElementById('sankey_trazabilidad'));
+                    
+                    container.innerHTML = ''; // Limpiar el spinner
+                    const chart = new google.visualization.Sankey(container);
                     chart.draw(dataTable, options);
-                    chartLoaded = true;
+                    chartLoaded = true; // Marcar como cargado
                 })
                 .catch(error => {
                     console.error('Error al cargar los datos de trazabilidad:', error);
-                    document.getElementById('sankey_trazabilidad').innerHTML = '<div class="alert alert-danger">No se pudo cargar el gráfico de trazabilidad.</div>';
+                    container.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> No se pudo cargar el gráfico de trazabilidad. <br><small>${error.message}</small></div>`;
                 });
         }
     });

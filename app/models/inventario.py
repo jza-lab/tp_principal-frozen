@@ -2,6 +2,7 @@ from app.models.base_model import BaseModel
 from typing import Dict, List, Optional
 from datetime import date, datetime, timedelta
 import logging
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -360,125 +361,160 @@ class InventarioModel(BaseModel):
         except Exception as e:
             logger.error(f"Error al recalcular el stock para el insumo {insumo_id}: {str(e)}")
             return {'success': False, 'error': str(e)}
-        
-    def get_trazabilidad_ascendente(self, id_lote_insumo: str) -> Dict:
+    def get_trazabilidad_ascendente(self, id_lote_insumo) -> Dict:
         """
-        Obtiene la trazabilidad "hacia arriba" de un lote de insumo.
-        Encuentra OPs, Lotes de Producto y Pedidos de Venta asociados.
-        
-        @param id_lote_insumo: El ID del lote de la tabla 'insumos_inventario'.
+        Obtiene la trazabilidad ascendente de un lote de insumo.
+        Este método llama a una función de base de datos (RPC) 
+        y luego procesa los resultados para construir un árbol de dependencias.
         """
         try:
-            # 1. Buscar en qué OPs se usó este lote de insumo
+            # 1. Llamar a la función RPC de la base de datos
             
-            # --- CORRECCIÓN AQUÍ: Se cambió 'cantidad_utilizada' por 'cantidad_reservada' ---
-            reservas_insumo_result = self.db.table('reservas_insumos').select(
-                'cantidad_reservada, orden_produccion:ordenes_produccion(id, codigo, estado)'
-            ).eq('lote_inventario_id', id_lote_insumo).execute()
+            # --- INICIO DE LA CORRECCIÓN 1: Usar el nombre de función correcto ---
+            # El setup.sql 
+            # también define 'get_trazabilidad_ascendente' (línea 1832).
+            # Probamos usar esa en lugar de la que no encontraba.
+            result = self.db.rpc(
+                'get_trazabilidad_ascendente',  # <-- Nombre corregido (sin 'insumo_')
+                {'p_id_lote_insumo': str(id_lote_insumo)}
+            ).execute()
             # --- FIN DE LA CORRECCIÓN 1 ---
-
-            if not reservas_insumo_result.data:
-                logger.info(f"Trazabilidad: Lote {id_lote_insumo} no encontrado en 'reservas_insumos'.")
+            
+            if not result.data:
+                logger.warning(f"No se encontró trazabilidad ascendente para {id_lote_insumo}")
                 return {'success': True, 'data': {'ops': [], 'productos': [], 'pedidos': []}}
 
+            # 2. Procesar los datos crudos del RPC
             op_data = {}
-            op_ids = []
+            producto_data = {}
+            insumo_data = {}
             
-            # Agrupar por OP
-            for reserva in reservas_insumo_result.data:
-                op = reserva.get('orden_produccion')
-                if not op: continue
-                
-                op_id = op['id']
-                if op_id not in op_data:
-                    op_data[op_id] = {
-                        'id': op_id,
-                        'codigo_op': op.get('codigo'), 
-                        'estado': op.get('estado'),
-                        'cantidad_insumo_utilizada': 0,
+            for row in result.data:
+                id_op = row.get('id_op')
+                if id_op not in op_data:
+                    op_data[id_op] = {
+                        'id': id_op,
+                        'codigo_orden_produccion': row.get('codigo_op'),
                         'productos_fabricados': [],
-                        'pedidos_asociados': []
+                        'pedidos_asociados': [] 
                     }
-                    op_ids.append(op_id)
                 
-                # --- CORRECCIÓN AQUÍ: Se cambió 'cantidad_utilizada' por 'cantidad_reservada' ---
-                op_data[op_id]['cantidad_insumo_utilizada'] += reserva.get('cantidad_reservada', 0)
+                id_lote_prod = row.get('id_lote_producto')
+                if id_lote_prod not in producto_data:
+                    producto_data[id_lote_prod] = {
+                        'id_lote_producto': id_lote_prod,
+                        'codigo_lote_producto': row.get('codigo_lote_producto'),
+                        'nombre_producto': row.get('nombre_producto'),
+                        'id_op': id_op,
+                        'insumos_utilizados': []
+                    }
+                
+                # El 'id_consumo_insumo' puede no ser único si la función RPC 
+                # no lo maneja, pero lo usamos como key de 'insumo_data'
+                # Asumimos que la fila 'row' es única por consumo.
+                # Si 'id_consumo_insumo' es None, esto podría agrupar mal.
+                # Vamos a usar una tupla (lote_prod, lote_insumo) si id_consumo no existe
+                id_lote_insumo_row = row.get('id_lote_insumo')
+                id_consumo_key = row.get('id_consumo_insumo') or f"{id_lote_prod}-{id_lote_insumo_row}"
+
+                if id_consumo_key not in insumo_data:
+                    insumo_info = {
+                        'id_consumo_insumo': row.get('id_consumo_insumo'),
+                        'id_lote_insumo': id_lote_insumo_row,
+                        'codigo_lote_insumo': row.get('codigo_lote_insumo'),
+                        'nombre_insumo': row.get('nombre_insumo'),
+                        'cantidad_utilizada': float(row.get('cantidad_utilizada', 0) or 0)
+                    }
+                    insumo_data[id_consumo_key] = insumo_info
+                    producto_data[id_lote_prod]['insumos_utilizados'].append(insumo_info)
+
+            # Re-asignar productos a OPs
+            for prod in producto_data.values():
+                if prod['id_op'] in op_data:
+                    op_data[prod['id_op']]['productos_fabricados'].append(prod)
+
+            # 3. Buscar Pedidos asociados a los lotes de producto fabricados
+            lotes_producto_ids = list(producto_data.keys())
+            if not lotes_producto_ids:
+                return {'success': True, 'data': {'ops': list(op_data.values()), 'productos': [], 'pedidos': []}}
+
+            reservas_productos_resp = self.db.table('reservas_productos').select('*').in_('lote_producto_id', lotes_producto_ids).execute()
+            reservas_productos = reservas_productos_resp.data
+            
+            pedido_ids = list(set(r['id_pedido'] for r in reservas_productos if r.get('id_pedido')))
+            
+            pedidos_info_map = {} # { id_pedido: {'id': ..., 'codigo_pedido': ..., 'nombre_cliente': ...} }
+            if pedido_ids:
+                pedidos_resp = self.db.table('pedidos').select('id_pedido, codigo_pedido, id_cliente').in_('id_pedido', pedido_ids).execute()
+                
+                cliente_ids = list(set(p['id_cliente'] for p in pedidos_resp.data if p.get('id_cliente')))
+                clientes_data = {}
+                if cliente_ids:
+                    clientes_resp = self.db.table('clientes').select('id_cliente, nombre, apellido').in_('id_cliente', cliente_ids).execute()
+                    for c in clientes_resp.data:
+                        clientes_data[c['id_cliente']] = f"{c.get('nombre', '')} {c.get('apellido', '')}".strip()
+
+                for p in pedidos_resp.data:
+                    pedidos_info_map[p['id_pedido']] = {
+                        'id': p['id_pedido'],
+                        'codigo_pedido': p.get('codigo_pedido') or f"Venta-{p['id_pedido']}",
+                        'nombre_cliente': clientes_data.get(p.get('id_cliente'), 'N/A')
+                    }
+
+            # 4. Procesar y asociar Pedidos
+            lote_a_pedido_cantidad = {} # { (lote_prod_id, pedido_id): cantidad_total }
+            
+            for reserva_prod in reservas_productos:
+                pedido_id = reserva_prod.get('id_pedido')
+                lote_prod_id = reserva_prod.get('lote_producto_id')
+                
+                if not pedido_id or not lote_prod_id or pedido_id not in pedidos_info_map:
+                    continue
+                
+                # --- INICIO DE LA CORRECCIÓN 2: Sumar ambas cantidades ---
+                # (Esta corrección la mantenemos)
+                cantidad_reservada = float(reserva_prod.get('cantidad_reservada', 0) or 0)
+                cantidad_consumida = float(reserva_prod.get('cantidad_consumida', 0) or 0)
+                cantidad_total_asignada = cantidad_reservada + cantidad_consumida
                 # --- FIN DE LA CORRECCIÓN 2 ---
 
-            if not op_ids:
-                 return {'success': True, 'data': {'ops': list(op_data.values()), 'productos': [], 'pedidos': []}}
+                if cantidad_total_asignada == 0:
+                   continue
 
-            # 2. Buscar qué lotes de producto generaron esas OPs
-            lotes_producto_result = self.db.table('lotes_productos').select(
-                'id_lote, orden_produccion_id, cantidad_inicial, producto:productos(id, nombre)'
-            ).in_('orden_produccion_id', op_ids).execute()
+                key = (lote_prod_id, pedido_id)
+                lote_a_pedido_cantidad[key] = lote_a_pedido_cantidad.get(key, 0.0) + cantidad_total_asignada
+            
+            pedidos_final_map = {} # { pedido_id: { 'id': ..., 'codigo_pedido': ..., 'cantidad_asignada': ... } }
 
-            producto_data = {}
-            lote_producto_ids = []
-
-            for lote_prod in lotes_producto_result.data:
-                prod = lote_prod.get('producto')
-                if not prod: continue
+            for (lote_prod_id, pedido_id), cantidad_total in lote_a_pedido_cantidad.items():
                 
-                lote_prod_id = lote_prod['id_lote_producto']
-                op_id = lote_prod['orden_produccion_id']
+                id_op = producto_data.get(lote_prod_id, {}).get('id_op')
+                if not id_op or id_op not in op_data:
+                    continue
+
+                if pedido_id not in pedidos_final_map:
+                    pedidos_final_map[pedido_id] = {
+                        **pedidos_info_map[pedido_id],
+                        'cantidad_asignada': 0.0
+                    }
                 
-                prod_info = {
-                    'id': prod['id'],
-                    'nombre': prod.get('nombre'),
-                    'codigo': prod.get('codigo'), 
-                    'id_lote_producto': lote_prod_id,
-                    'cantidad_producida': lote_prod.get('cantidad_producida')
-                }
+                pedidos_final_map[pedido_id]['cantidad_asignada'] += cantidad_total
                 
-                if lote_prod_id not in producto_data:
-                    producto_data[lote_prod_id] = prod_info
-                    lote_producto_ids.append(lote_prod_id)
+                op_pedidos_list = op_data[id_op]['pedidos_asociados']
+                pedido_encontrado = next((p for p in op_pedidos_list if p['id'] == pedido_id), None)
                 
-                if op_id in op_data:
-                    op_data[op_id]['productos_fabricados'].append(prod_info)
-
-            # 3. Buscar qué pedidos usaron esos lotes de producto
-            if not lote_producto_ids:
-                return {'success': True, 'data': {'ops': list(op_data.values()), 'productos': list(producto_data.values()), 'pedidos': []}}
-
-            reservas_producto_result = self.db.table('reservas_productos').select(
-                'lote_producto_id, cantidad_reservada, item:pedido_items(id, pedido:pedidos!pedido_items_pedido_id_fkey(id, nombre_cliente))'
-            ).in_('lote_producto_id', lote_producto_ids).execute()
-
-            pedido_data = {}
-
-            for reserva_prod in reservas_producto_result.data:
-                item = reserva_prod.get('item')
-                if not item: continue
-                pedido = item.get('pedido')
-                if not pedido: continue
-
-                pedido_id = pedido['id']
-                lote_prod_id = reserva_prod['lote_producto_id']
-                
-                pedido_info = {
-                    'id': pedido_id,
-                    'nombre_cliente': pedido.get('nombre_cliente'),
-                    'codigo_pedido': pedido.get('codigo_pedido') or f"Venta-{pedido_id}",
-                    'cantidad_asignada': reserva_prod.get('cantidad_reservada', 0)
-                }
-
-                if pedido_id not in pedido_data:
-                    pedido_data[pedido_id] = pedido_info
+                if not pedido_encontrado:
+                    op_pedidos_list.append({
+                        **pedidos_info_map[pedido_id],
+                        'cantidad_asignada': cantidad_total
+                    })
                 else:
-                    pedido_data[pedido_id]['cantidad_asignada'] += reserva_prod.get('cantidad_reservada', 0)
-                
-                for op in op_data.values():
-                    for prod in op['productos_fabricados']:
-                        if prod['id_lote_producto'] == lote_prod_id:
-                            if not any(p['id'] == pedido_id for p in op['pedidos_asociados']):
-                                op['pedidos_asociados'].append(pedido_info)
-
+                    pedido_encontrado['cantidad_asignada'] += cantidad_total
+            
             final_data = {
                 'ops': list(op_data.values()),
                 'productos': list(producto_data.values()),
-                'pedidos': list(pedido_data.values())
+                'pedidos': list(pedidos_final_map.values())
             }
 
             return {'success': True, 'data': final_data}

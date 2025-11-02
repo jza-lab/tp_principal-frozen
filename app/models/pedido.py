@@ -550,3 +550,11 @@ class PedidoModel(BaseModel):
             logger.error(f"Error obteniendo top productos: {str(e)}")
             return {'success': False, 'error': str(e)}
 
+class PedidoItemModel(BaseModel):
+    """Modelo para la tabla pedido_items"""
+
+    def get_table_name(self) -> str:
+        return 'pedido_items'
+
+    def get_primary_key(self) -> str:
+        return 'id'

@@ -5,6 +5,11 @@ from app.models.insumo import InsumoModel
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.configuracion_controller import ConfiguracionController
 #from app.services.stock_service import StockService
+from app.models.lote_producto import LoteProductoModel
+from app.models.orden_compra_model import OrdenCompraModel
+from app.models.orden_produccion import OrdenProduccionModel
+from app.models.pedido import PedidoModel, PedidoItemModel
+from app.models.reserva_producto import ReservaProductoModel
 from app.schemas.inventario_schema import InsumosInventarioSchema
 from typing import Dict, Optional
 import logging
@@ -15,6 +20,7 @@ from marshmallow import ValidationError
 from app.models.receta import RecetaModel # O donde tengas la lógica de recetas
 from app.models.reserva_insumo import ReservaInsumoModel # El nuevo modelo que debes crear
 from app.schemas.reserva_insumo_schema import ReservaInsumoSchema # El nuevo schema
+
 
 
 logger = logging.getLogger(__name__)
@@ -31,6 +37,13 @@ class InventarioController(BaseController):
         #self.stock_service = StockService()
         self.schema = InsumosInventarioSchema()
         self.reserva_insumo_model = ReservaInsumoModel()
+
+        self.orden_compra_model = OrdenCompraModel()
+        self.op_model = OrdenProduccionModel()
+        self.lote_producto_model = LoteProductoModel()
+        self.reserva_producto_model = ReservaProductoModel()
+        self.pedido_model = PedidoModel()
+        self.pedido_item_model = PedidoItemModel()
 
     def reservar_stock_insumos_para_op(self, orden_produccion: Dict, usuario_id: int) -> dict:
         """
@@ -770,15 +783,191 @@ class InventarioController(BaseController):
             logger.error(f"Error obteniendo insumos en cuarentena: {str(e)}")
             return {'count': 0, 'data': []}
 
-
     def obtener_trazabilidad_lote(self, id_lote):
         """
-        Obtiene la trazabilidad completa (ascendente) para un lote de insumo.
-        """
-        # El id_lote de la ruta es el id_lote_insumo
-        response = self.inventario_model.get_trazabilidad_ascendente(id_lote)
+        Obtiene la trazabilidad ascendente estricta para un lote de insumo:
+        Lote Insumo -> OP -> Lote Producto -> Pedido.
         
-        if response.get('success'):
-            return response, 200
-        else:
-            return {'success': False, 'error': response}, 500
+        El ancho del flujo (value) se calcula por prorrateo en cada etapa
+        para conservar la cantidad original del insumo trazado.
+        """
+        try:
+            links = [] # Lista final de enlaces para Sankey
+
+            # --- 1. NODO INICIAL: LOTE INSUMO ---
+            lote_insumo_resp = self.inventario_model.find_by_id(id_lote, 'id_lote')
+            if not lote_insumo_resp.get('success'):
+                return self.error_response('Lote de insumo no encontrado', 404)
+            
+            lote_insumo = lote_insumo_resp.get('data')
+            lote_insumo_node = f"Lote Insumo: {lote_insumo.get('numero_lote_proveedor') or id_lote[:8]}"
+
+            # --- 2. ENLACE 1: LOTE INSUMO -> OP ---
+            
+            # Buscar OPs que usaron este lote (vía reservas_insumos)
+            reservas_insumo_resp = self.reserva_insumo_model.find_all(
+                filters={'lote_inventario_id': str(id_lote)}
+            )
+            
+            if not reservas_insumo_resp.get('success') or not reservas_insumo_resp.get('data'):
+                logger.info(f"Lote {id_lote} no tiene reservas de insumos.")
+                return self.success_response({"links": []})
+
+            # op_consumo guarda la cantidad trazada original que va a cada OP
+            op_consumo = {} # { id_op: cantidad_trazada }
+            op_ids = set()
+            for reserva in reservas_insumo_resp.get('data', []):
+                id_op = reserva.get('orden_produccion_id')
+                if id_op:
+                    op_ids.add(id_op)
+                    cantidad = float(reserva.get('cantidad_reservada', 0) or 0) + float(reserva.get('cantidad_consumida', 0) or 0)
+                    op_consumo[id_op] = op_consumo.get(id_op, 0.0) + cantidad
+
+            if not op_ids:
+                logger.info(f"El lote {id_lote} no ha sido utilizado en ninguna OP.")
+                return self.success_response({"links": []})
+
+            # Obtener detalles de OPs y crear Nodos/Enlaces
+            ops_resp = self.op_model.find_all(filters={'id': ('in', list(op_ids))})
+            op_nodes = {} # { id_op: 'Nombre Nodo OP' }
+            
+            if not ops_resp.get('success'):
+                 return self.error_response(f"Error al buscar OPs: {ops_resp.get('error')}")
+
+            for op in ops_resp.get('data', []):
+                op_id = op.get('id')
+                op_node_name = f"OP: {op.get('codigo') or op_id}"
+                op_nodes[op_id] = op_node_name
+                
+                cantidad_trazada_op = op_consumo.get(op_id, 0.0)
+                if cantidad_trazada_op > 0:
+                    links.append({
+                        "source_name": lote_insumo_node,
+                        "target_name": op_node_name,
+                        "value": cantidad_trazada_op
+                    })
+
+            # --- 3. ENLACE 2: OP -> LOTE PRODUCTO (Prorrateo) ---
+            
+            lotes_prod_resp = self.lote_producto_model.find_all(
+                filters={'orden_produccion_id': ('in', list(op_ids))}
+            )
+
+            if not lotes_prod_resp.get('success') or not lotes_prod_resp.get('data'):
+                logger.info(f"Las OPs {op_ids} no generaron lotes de producto.")
+                return self.success_response({"links": links})
+
+            # Pre-calcular la producción total de cada OP para el prorrateo
+            op_total_producido = {} # { op_id: total_producido }
+            for lote_prod in lotes_prod_resp.get('data', []):
+                op_id = lote_prod.get('orden_produccion_id')
+                cantidad_lote = float(lote_prod.get('cantidad_inicial', 0) or 0)
+                op_total_producido[op_id] = op_total_producido.get(op_id, 0.0) + cantidad_lote
+
+            lote_prod_nodos = {} # { id_lote_prod: 'Nombre Nodo' }
+            lote_prod_cantidad_trazada = {} # { id_lote_prod: cantidad_trazada_prorrateada }
+            lote_prod_ids = set()
+
+            # Calcular enlaces OP -> Lote Prod
+            for lote_prod in lotes_prod_resp.get('data', []):
+                lote_prod_id = lote_prod.get('id_lote')
+                lote_prod_ids.add(lote_prod_id)
+                op_id = lote_prod.get('orden_produccion_id')
+                
+                lote_prod_node = f"Lote Prod: {lote_prod.get('numero_lote') or lote_prod_id}"
+                lote_prod_nodos[lote_prod_id] = lote_prod_node
+                
+                cantidad_trazada_op = op_consumo.get(op_id, 0.0)
+                total_producido = op_total_producido.get(op_id, 0.0)
+                cantidad_lote = float(lote_prod.get('cantidad_inicial', 0) or 0)
+
+                cantidad_trazada_lote = 0.0
+                if total_producido > 0:
+                    proporcion = cantidad_lote / total_producido
+                    cantidad_trazada_lote = cantidad_trazada_op * proporcion
+                
+                lote_prod_cantidad_trazada[lote_prod_id] = cantidad_trazada_lote
+
+                if cantidad_trazada_lote > 0:
+                    links.append({
+                        "source_name": op_nodes[op_id],
+                        "target_name": lote_prod_node,
+                        "value": cantidad_trazada_lote
+                    })
+
+            # --- 4. ENLACE 3: LOTE PRODUCTO -> PEDIDO (Prorrateo) ---
+            
+            reservas_prod_resp = self.reserva_producto_model.find_all(
+                filters={'lote_producto_id': ('in', list(lote_prod_ids))}
+            )
+            
+            if not reservas_prod_resp.get('success') or not reservas_prod_resp.get('data'):
+                logger.info(f"Los lotes de producto {lote_prod_ids} no están en ningún pedido.")
+                return self.success_response({"links": links})
+
+            # Pre-calcular el total reservado de cada lote de producto
+            lote_prod_total_reservado = {} # { lote_prod_id: total_reservado }
+            pedido_reservas_agregadas = {} # { (lote_prod_id, pedido_id): cantidad_total_reservada }
+            pedido_ids = set()
+
+            for res_prod in reservas_prod_resp.get('data', []):
+                lote_prod_id = res_prod.get('lote_producto_id')
+                pedido_id = res_prod.get('pedido_id')
+                
+                if not pedido_id or not lote_prod_id:
+                    continue
+                    
+                cantidad = float(res_prod.get('cantidad_reservada', 0) or 0) + float(res_prod.get('cantidad_despachada', 0) or 0)
+                
+                if cantidad > 0:
+                    lote_prod_total_reservado[lote_prod_id] = lote_prod_total_reservado.get(lote_prod_id, 0.0) + cantidad
+                    
+                    key = (lote_prod_id, pedido_id)
+                    pedido_reservas_agregadas[key] = pedido_reservas_agregadas.get(key, 0.0) + cantidad
+                    
+                    pedido_ids.add(pedido_id)
+
+            if not pedido_ids:
+                 logger.info(f"Lotes {lote_prod_ids} reservados pero sin ID de pedido.")
+                 return self.success_response({"links": links})
+
+            # Obtener detalles de Pedidos
+            pedidos_resp = self.pedido_model.find_all(
+                filters={'id': ('in', list(pedido_ids))}
+            )
+            
+            if not pedidos_resp.get('success'):
+                 return self.error_response("Error al buscar Pedidos")
+
+            pedido_nodes = {} # { id_pedido: 'Nombre Nodo Pedido' }
+            for pedido in pedidos_resp.get('data', []):
+                pedido_id = pedido.get('id')
+                cliente_nombre = pedido.get('nombre_cliente') or f"Cliente s/n" 
+                pedido_node_name = f"Pedido: #{pedido_id} ({cliente_nombre})"
+                pedido_nodes[pedido_id] = pedido_node_name
+
+            # Calcular enlaces Lote Prod -> Pedido
+            for (lote_prod_id, pedido_id), cantidad_reservada_agg in pedido_reservas_agregadas.items():
+                
+                cantidad_trazada_lote = lote_prod_cantidad_trazada.get(lote_prod_id, 0.0)
+                total_reservado_lote = lote_prod_total_reservado.get(lote_prod_id, 0.0)
+
+                cantidad_trazada_pedido = 0.0
+                if total_reservado_lote > 0:
+                    proporcion = cantidad_reservada_agg / total_reservado_lote
+                    cantidad_trazada_pedido = cantidad_trazada_lote * proporcion
+
+                if cantidad_trazada_pedido > 0:
+                    # Asegurarse de que ambos nodos existen antes de crear el enlace
+                    if lote_prod_id in lote_prod_nodos and pedido_id in pedido_nodes:
+                        links.append({
+                            "source_name": lote_prod_nodos[lote_prod_id],
+                            "target_name": pedido_nodes[pedido_id],
+                            "value": cantidad_trazada_pedido
+                        })
+
+            return self.success_response({"links": links})
+
+        except Exception as e:
+            logger.error(f"Error en obtener_trazabilidad_lote (manual) para {id_lote}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {e}", 500)
