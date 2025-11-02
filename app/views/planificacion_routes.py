@@ -13,124 +13,48 @@ planificacion_bp = Blueprint('planificacion', __name__, url_prefix='/planificaci
 logger = logging.getLogger(__name__)
 
 
-@planificacion_bp.route('/') # La ruta principal ahora manejará todo
+@planificacion_bp.route('/')
 @permission_required(accion='consultar_plan_de_produccion')
 def index():
     controller = PlanificacionController()
-    current_user = get_jwt()
-    user_roles = current_user.get('roles', [])
-    is_operario = 'OPERARIO' in user_roles
-    is_supervisor_calidad = 'SUPERVISOR_CALIDAD' in user_roles
-    # ... (obtener semana, horizonte, mps_data - sin cambios) ...
+    
+    # 1. Recolectar parámetros de la solicitud
     week_str = request.args.get('semana')
-    if not week_str:
-        today = date.today()
-        start_of_week_iso = today - timedelta(days=today.isoweekday() - 1)
-        week_str = start_of_week_iso.strftime("%Y-W%V")
     try:
         horizonte_dias = request.args.get('horizonte', default=7, type=int)
-        if horizonte_dias <= 0: horizonte_dias = 7
-    except ValueError: horizonte_dias = 7
-    response_pendientes, _ = controller.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias)
-    # ... (manejo de mps_data - sin cambios) ...
-    mps_data_para_template = { 'mps_agrupado': [], 'inicio_horizonte': 'N/A', 'fin_horizonte': 'N/A', 'dias_horizonte': horizonte_dias }
-    if response_pendientes.get('success'): mps_data_para_template = response_pendientes.get('data', mps_data_para_template)
-    else: flash(response_pendientes.get('error', 'Error cargando MPS.'), 'error'); mps_data_para_template['dias_horizonte'] = horizonte_dias
+        if horizonte_dias <= 0:
+            horizonte_dias = 7
+    except ValueError:
+        horizonte_dias = 7
+        
+    user_roles = get_jwt().get('roles', [])
 
+    # 2. Delegar toda la lógica de obtención de datos al controlador
+    response, status_code = controller.obtener_datos_para_tablero_planificacion(
+        week_str=week_str,
+        horizonte_dias=horizonte_dias,
+        user_roles=user_roles
+    )
 
-    # --- INICIALIZACIÓN DE VARIABLES ---
-    ordenes_por_dia = {}
-    inicio_semana = None # Inicializar aquí
-    fin_semana = None    # Inicializar aquí
-    ordenes_para_crp = [] # <--- INICIALIZAR AQUÍ
-    carga_calculada = {}
-    capacidad_disponible = {}
-    ordenes_combinadas = []
-    # ----------------------------------
+    # 3. Manejar la respuesta del controlador
+    if status_code >= 400 or not response.get('success'):
+        flash(response.get('error', 'Ocurrió un error al cargar los datos del tablero.'), 'danger')
+        # Renderizar la plantilla con un contexto vacío o de error
+        return render_template('planificacion/tablero.html', error=True)
 
-    # 3. Obtener OPs para el CALENDARIO SEMANAL
-    response_semanal, _ = controller.obtener_planificacion_semanal(week_str)
-    ops_visibles_por_dia_formato = {} # <--- Usar nuevo nombre
-    if response_semanal.get('success'):
-        data_semanal = response_semanal.get('data', {})
-        ordenes_por_dia = data_semanal.get('ops_visibles_por_dia', {}) # <--- Usar nuevo nombre
-        ops_visibles_por_dia_formato = ordenes_por_dia
-        inicio_semana_str = data_semanal.get('inicio_semana')
-        fin_semana_str = data_semanal.get('fin_semana')
-        if inicio_semana_str: inicio_semana = date.fromisoformat(inicio_semana_str) # Asignar si existe
-        if fin_semana_str: fin_semana = date.fromisoformat(fin_semana_str)       # Asignar si existe
-    else:
-        flash(response_semanal.get('error', 'Error cargando planificación semanal.'), 'error')
+    context = response.get('data', {})
+    
+    # Si el controlador devuelve un error específico de MPS, lo mostramos
+    if 'error' in context.get('mps_data', {}):
+        flash(context['mps_data']['error'], 'warning')
 
-    # --- OBTENER OPS RELEVANTES PARA CRP ---
-    # 1. OPs de la semana
-    ops_semana = [op for dia, lista_ops in ordenes_por_dia.items() for op in lista_ops if op.get('estado') not in ['COMPLETADA', 'CANCELADA']]
-
-    # 2. Combinar y eliminar duplicados
-    ops_combinadas_dict = {op['id']: op for op in ops_semana if op.get('id')}
-    ordenes_para_crp = list(ops_combinadas_dict.values()) # Ahora sí, se asigna valor
-    # Ahora 'ordenes_combinadas' siempre será una lista (posiblemente vacía)
-    ordenes_combinadas = list(ops_combinadas_dict.values())
-    logger.info(f"Total OPs consideradas para CRP: {len(ordenes_para_crp)}")
-
-    # --- NUEVO FILTRO POR FECHA ---
-    ordenes_para_crp_filtradas = []
-    if inicio_semana and fin_semana: # Asegurarse que las fechas son válidas
-        for op in ordenes_combinadas:
-            fecha_inicio_op_str = op.get('fecha_inicio_planificada')
-            if fecha_inicio_op_str:
-                try:
-                    fecha_inicio_op = date.fromisoformat(fecha_inicio_op_str)
-                    # Incluir solo si la fecha de inicio está DENTRO de la semana seleccionada
-                    if inicio_semana <= fecha_inicio_op <= fin_semana:
-                        ordenes_para_crp_filtradas.append(op)
-                except ValueError:
-                    logger.warning(f"OP {op.get('codigo')} omitida de CRP (fecha inválida): {fecha_inicio_op_str}")
-            # else: # Opcional: ¿Incluir OPs sin fecha planificada? Probablemente no para CRP.
-            #    logger.warning(f"OP {op.get('codigo')} omitida de CRP (sin fecha inicio planificada)")
-    # -----------------------------
-
-    logger.info(f"Total OPs filtradas para CRP (semana {week_str}): {len(ordenes_para_crp_filtradas)}")
-
-    # --- CALCULAR CARGA Y CAPACIDAD (Usando la lista filtrada) ---
-    carga_calculada = {}
-    capacidad_disponible = {}
-    # Esta condición ahora usa la lista filtrada
-    if ordenes_para_crp_filtradas and inicio_semana and fin_semana:
-        carga_calculada = controller.calcular_carga_capacidad(ordenes_para_crp_filtradas) # <--- PASAR LISTA FILTRADA
-        capacidad_disponible = controller.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
-    # -------------------------------------------------------------
-
-    # ... (lógica para obtener supervisores, operarios, columnas, navegación - sin cambios) ...
-    usuario_controller = UsuarioController()
-    supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR']); operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
-    supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []; operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
-    try:
-        year, week_num_str = week_str.split('-W'); week_num = int(week_num_str); current_week_start = date.fromisocalendar(int(year), week_num, 1)
-        prev_week_start = current_week_start - timedelta(days=7); next_week_start = current_week_start + timedelta(days=7)
-        prev_week_str = prev_week_start.strftime("%Y-W%V"); next_week_str = next_week_start.strftime("%Y-W%V")
-    except ValueError: prev_week_str = None; next_week_str = None; logger.warning(f"Error parseando week_str {week_str}")
-
+    # 4. Renderizar la plantilla con el contexto preparado por el controlador
     return render_template(
         'planificacion/tablero.html',
-        mps_data=mps_data_para_template,
-        inicio_semana=inicio_semana.isoformat() if inicio_semana else None, # Pasar ISO o None
-        fin_semana=fin_semana.isoformat() if fin_semana else None,       # Pasar ISO o None
-        semana_actual_str=week_str,
-        semana_anterior_str=prev_week_str,
-        semana_siguiente_str=next_week_str,
-        supervisores=supervisores,
-        operarios=operarios,
-        carga_crp=carga_calculada,
-        capacidad_crp=capacidad_disponible,
-        ordenes_por_dia=ordenes_por_dia,
-        inicio_semana_crp=inicio_semana.isoformat() if inicio_semana else None, # Usar las mismas fechas
-        fin_semana_crp=fin_semana.isoformat() if fin_semana else None,
+        **context,
         now=datetime.utcnow(),
         timedelta=timedelta,
-        date=date,
-        is_operario=is_operario,
-        is_supervisor_calidad=is_supervisor_calidad
+        date=date
     )
 
 # --- NUEVA RUTA PARA CONFIRMACIÓN MULTI-DÍA ---

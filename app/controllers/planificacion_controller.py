@@ -11,7 +11,6 @@ from app.models.insumo import InsumoModel
 import math
 from app.controllers.inventario_controller import InventarioController
 from app.models.centro_trabajo_model import CentroTrabajoModel
-from app.models.operacion_receta_model import OperacionRecetaModel
 from decimal import Decimal
 
 
@@ -23,64 +22,8 @@ class PlanificacionController(BaseController):
         self.orden_produccion_controller = OrdenProduccionController()
         self.inventario_controller = InventarioController()
         self.centro_trabajo_model = CentroTrabajoModel()
-        self.operacion_receta_model = OperacionRecetaModel()
         self.receta_model = RecetaModel() # Asegúrate que esté inicializado
         self.insumo_model = InsumoModel() # Asegúrate que esté inicializado
-
-    def obtener_ops_para_tablero(self) -> tuple:
-        """
-        Obtiene todas las OPs activas y las agrupa por estado para el tablero Kanban.
-        """
-        try:
-            # --- CORRECCIÓN DEFINITIVA ---
-            # Usamos los nombres exactos de la base de datos y solo los que corresponden al tablero.
-            estados_activos = [
-                'EN ESPERA',
-                'LISTA PARA PRODUCIR',
-                'EN_LINEA_1',
-                'EN_LINEA_2',
-                'EN_EMPAQUETADO',
-                'CONTROL_DE_CALIDAD',
-                'COMPLETADA'
-            ]
-            # ----------------------------
-
-            response, _ = self.orden_produccion_controller.obtener_ordenes(
-                filtros={'estado': ('in', estados_activos)}
-            )
-
-            if not response.get('success'):
-                return self.error_response("Error al cargar las órdenes de producción.")
-
-            ordenes = response.get('data', [])
-
-            # Agrupamos las órdenes por estado y calculamos la prioridad
-            ordenes_por_estado = defaultdict(list)
-            today = date.today()
-            for orden in ordenes:
-                # --- Lógica de Prioridad ---
-                prioridad = 'BAJA' # Por defecto
-                fecha_meta_str = orden.get('fecha_meta')
-                if fecha_meta_str:
-                    try:
-                        fecha_meta = date.fromisoformat(fecha_meta_str)
-                        dias_diferencia = (fecha_meta - today).days
-                        if dias_diferencia <= 2:
-                            prioridad = 'ALTA'
-                        elif dias_diferencia <= 7:
-                            prioridad = 'MEDIA'
-                    except ValueError:
-                        pass # Si la fecha es inválida, se queda como BAJA
-                orden['prioridad'] = prioridad
-                # --- Fin Lógica de Prioridad ---
-                
-                ordenes_por_estado[orden['estado']].append(orden)
-
-            return self.success_response(data=dict(ordenes_por_estado))
-
-        except Exception as e:
-            logger.error(f"Error preparando datos para el tablero: {e}", exc_info=True)
-            return self.error_response(f"Error interno: {str(e)}", 500)
 
     def consolidar_ops(self, op_ids: List[int], usuario_id: int) -> tuple:
         """
@@ -132,129 +75,76 @@ class PlanificacionController(BaseController):
             return error_dict, 500
         # ----------------------
 
-    # --- MÉTODO PRINCIPAL MODIFICADO ---
+    # --- MÉTODO PRINCIPAL REFACTORIZADO ---
     def consolidar_y_aprobar_lote(self, op_ids: List[int], asignaciones: dict, usuario_id: int) -> tuple:
         """
-        Orquesta: Consolida, VERIFICA CAPACIDAD MULTI-DÍA,
-        SI CABE EN 1 DÍA -> Aprueba.
-        SI CABE EN >1 DÍA -> Devuelve CONFIRMACIÓN.
-        SI NO CABE -> Devuelve SOBRECARGA.
+        Orquesta la consolidación y aprobación de un lote de OPs, manejando la
+        verificación de capacidad (CRP) y la lógica de aprobación.
         """
         try:
+            # 1. Obtener y validar datos de la OP (consolidada o no)
             op_a_planificar_id, op_data = self._obtener_datos_op_a_planificar(op_ids, usuario_id)
-            # --- CORRECCIÓN AQUÍ ---
             if not op_a_planificar_id:
-                error_dict = self.error_response(op_data, 500) # op_data tiene el mensaje de error
-                return error_dict, 500
-            # ----------------------
+                return self.error_response(op_data, 500) # op_data tiene el mensaje de error
 
             linea_propuesta = asignaciones.get('linea_asignada')
-            fecha_inicio_propuesta_str = asignaciones.get('fecha_inicio')
-            if not linea_propuesta or not fecha_inicio_propuesta_str:
-             error_dict = self.error_response("Faltan línea o fecha.", 400)
-             return error_dict, 400
-            try: fecha_inicio_propuesta = date.fromisoformat(fecha_inicio_propuesta_str)
+            fecha_inicio_str = asignaciones.get('fecha_inicio')
+
+            if not linea_propuesta or not fecha_inicio_str:
+                return self.error_response("Faltan línea o fecha de inicio.", 400)
+            try:
+                fecha_inicio_propuesta = date.fromisoformat(fecha_inicio_str)
             except ValueError:
-                 # --- CORRECCIÓN AQUÍ ---
-                 error_dict = self.error_response("Formato fecha inválido.", 400)
-                 return error_dict, 400
-                 # ----------------------
+                return self.error_response("Formato de fecha inválido. Usar YYYY-MM-DD.", 400)
 
-            logger.info(f"Verificando capacidad multi-día para OP {op_a_planificar_id} en Línea {linea_propuesta} desde {fecha_inicio_propuesta_str}...")
-
-            carga_adicional_total = float(self._calcular_carga_op(op_data))
-            dias_necesarios = 0
-            fecha_fin_estimada = fecha_inicio_propuesta
-
-            if carga_adicional_total <= 0:
-                 logger.warning(f"OP {op_a_planificar_id} con carga 0. Saltando verificación CRP.")
-                 dias_necesarios = 1
-                 fecha_fin_estimada = fecha_inicio_propuesta
-            else:
-                carga_restante_op = carga_adicional_total
-                fecha_actual_simulacion = fecha_inicio_propuesta
-                dia_actual_offset = 0
-                max_dias_simulacion = 30
-
-                while carga_restante_op > 0.01 and dia_actual_offset < max_dias_simulacion:
-                    fecha_actual_str = fecha_actual_simulacion.isoformat()
-                    dias_necesarios += 1
-                    fecha_fin_estimada = fecha_actual_simulacion
-
-                    capacidad_dict_dia = self.obtener_capacidad_disponible([linea_propuesta], fecha_actual_simulacion, fecha_actual_simulacion)
-                    capacidad_dia_actual = capacidad_dict_dia.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
-
-                    if capacidad_dia_actual <= 0 and carga_restante_op > 0.01:
-                         logger.warning(f"SOBRECARGA (Día sin capacidad): Línea {linea_propuesta}, Fecha: {fecha_actual_str}")
-                         return self._generar_respuesta_sobrecarga(linea_propuesta, fecha_actual_str, 0, carga_restante_op, 0)
-
-                    # Obtener carga existente (manejo seguro de respuesta)
-                    ops_existentes_resultado = self.orden_produccion_controller.obtener_ordenes(filtros={
-                        'fecha_inicio_planificada': fecha_actual_str,
-                        'linea_asignada': linea_propuesta,
-                        'estado': ('not.in', ['PENDIENTE', 'COMPLETADA', 'CANCELADA', 'CONSOLIDADA'])
-                    })
-                    carga_existente_dia = 0.0
-                    if isinstance(ops_existentes_resultado, tuple) and len(ops_existentes_resultado) == 2:
-                        ops_existentes_resp, _ = ops_existentes_resultado
-                        if ops_existentes_resp.get('success'):
-                            ops_mismo_dia = [op for op in ops_existentes_resp.get('data', []) if op.get('id') != op_a_planificar_id]
-                            if ops_mismo_dia:
-                                carga_existente_dict = self.calcular_carga_capacidad(ops_mismo_dia)
-                                carga_existente_dia = carga_existente_dict.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
-                    else: logger.error(f"Error inesperado al obtener OPs existentes para {fecha_actual_str}: {ops_existentes_resultado}")
-                    logger.debug(f"    Carga existente: {carga_existente_dia:.2f} min")
-
-
-                    capacidad_restante_dia = max(0.0, capacidad_dia_actual - carga_existente_dia)
-                    logger.debug(f"    Capacidad restante día: {capacidad_restante_dia:.2f} min")
-
-
-                    if capacidad_restante_dia < 1 and carga_restante_op > 0.01:
-                        logger.warning(f"SOBRECARGA (Día ya lleno): Línea {linea_propuesta}, Fecha: {fecha_actual_str}.")
-                        return self._generar_respuesta_sobrecarga(linea_propuesta, fecha_actual_str, capacidad_dia_actual, carga_restante_op, carga_existente_dia)
-
-                    carga_a_asignar_hoy = min(carga_restante_op, capacidad_restante_dia)
-
-                    if carga_a_asignar_hoy > 0:
-                        carga_restante_op -= carga_a_asignar_hoy
-                        logger.debug(f"  -> Asignado {carga_a_asignar_hoy:.2f} min a {fecha_actual_str}. Restante OP: {carga_restante_op:.2f} min")
-
-                    fecha_actual_simulacion += timedelta(days=1)
-                    dia_actual_offset += 1
-
-                if carga_restante_op > 0.01: # No cupo en el horizonte
-                    logger.warning(f"SOBRECARGA (Horizonte excedido)")
-                    return self._generar_respuesta_sobrecarga(linea_propuesta, fecha_fin_estimada.isoformat(), 0, carga_restante_op, 0, horizonte_excedido=True)
-
-            logger.info(f"Verificación CRP OK. OP {op_a_planificar_id} requiere ~{dias_necesarios} día(s), finalizando aprox. {fecha_fin_estimada.isoformat()}.")
-
-            if dias_necesarios > 1:
-                # Devolver respuesta para confirmación del usuario
-                return {
-                    'success': False, # No es un éxito final aún
-                    'error': 'MULTI_DIA_CONFIRM',
-                    'message': (f"Esta OP requiere aproximadamente {dias_necesarios} días para completarse "
-                                f"(hasta {fecha_fin_estimada.isoformat()}) debido a la capacidad de la línea. "
-                                f"¿Desea confirmar la planificación?"),
-                    'dias_necesarios': dias_necesarios,
-                    'fecha_fin_estimada': fecha_fin_estimada.isoformat(),
-                    'op_id_confirmar': op_a_planificar_id,
-                    # Pasar las asignaciones originales para la confirmación
-                    'asignaciones_confirmar': asignaciones
-                }, 200 # Usamos 200 OK para indicar solicitud de confirmación
-            else:
-                # Cabe en un día, aprobar directamente usando el helper
-                logger.info("OP cabe en un día. Ejecutando aprobación final...")
-                # Pasar las asignaciones originales al helper
+            # 2. Calcular carga total de la OP
+            carga_total_op = float(self.orden_produccion_controller.calcular_carga_op(op_data))
+            if carga_total_op <= 0:
+                logger.warning(f"OP {op_a_planificar_id} con carga 0. Aprobando directamente.")
                 return self._ejecutar_aprobacion_final(op_a_planificar_id, asignaciones, usuario_id)
+
+            # 3. Simular la planificación (CRP) para verificar capacidad
+            logger.info(f"Iniciando simulación CRP para OP {op_a_planificar_id} en Línea {linea_propuesta} desde {fecha_inicio_str}...")
+            resultado_simulacion = self._simular_crp_multi_dia(
+                op_a_planificar_id, carga_total_op, linea_propuesta, fecha_inicio_propuesta
+            )
+
+            # 4. Actuar según el resultado de la simulación
+            status = resultado_simulacion.get('status')
+
+            if status == 'SOBRECARGA':
+                # Generar respuesta de error detallada
+                return self._generar_respuesta_sobrecarga(**resultado_simulacion['detalle'])
+
+            elif status == 'OK':
+                dias_necesarios = resultado_simulacion['dias_necesarios']
+                fecha_fin_estimada_str = resultado_simulacion['fecha_fin_estimada'].isoformat()
+                logger.info(f"Simulación CRP OK. OP {op_a_planificar_id} requiere ~{dias_necesarios} día(s), finalizando aprox. {fecha_fin_estimada_str}.")
+
+                if dias_necesarios > 1:
+                    # Requiere confirmación del usuario para planificación multi-día
+                    return {
+                        'success': False,
+                        'error': 'MULTI_DIA_CONFIRM',
+                        'message': (f"Esta OP requiere aproximadamente {dias_necesarios} días para completarse "
+                                    f"(hasta {fecha_fin_estimada_str}) debido a la capacidad de la línea. "
+                                    f"¿Desea confirmar la planificación?"),
+                        'dias_necesarios': dias_necesarios,
+                        'fecha_fin_estimada': fecha_fin_estimada_str,
+                        'op_id_confirmar': op_a_planificar_id,
+                        'asignaciones_confirmar': asignaciones
+                    }, 200
+                else:
+                    # Cabe en un solo día, aprobar directamente
+                    logger.info("OP cabe en un día. Ejecutando aprobación final...")
+                    return self._ejecutar_aprobacion_final(op_a_planificar_id, asignaciones, usuario_id)
+            else:
+                 # Caso inesperado, como un status desconocido
+                 return self.error_response("Resultado inesperado de la simulación de capacidad.", 500)
 
         except Exception as e:
             logger.error(f"Error crítico en consolidar_y_aprobar_lote: {e}", exc_info=True)
-            # --- CORRECCIÓN AQUÍ ---
-            error_dict = self.error_response(f"Error interno: {str(e)}", 500)
-            return error_dict, 500
-            # ----------------------
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
 
 
     # --- NUEVO HELPER para obtener datos OP (MODIFICADO) ---
@@ -277,23 +167,6 @@ class PlanificacionController(BaseController):
 
         if not op_a_planificar_id or not op_data: return None, "No se pudieron obtener los datos de la OP."
         return op_a_planificar_id, op_data
-
-    # --- NUEVO HELPER para calcular carga de una OP ---
-    def _calcular_carga_op(self, op_data: Dict) -> Decimal:
-        """ Calcula la carga total en minutos para una OP dada. """
-        carga_total = Decimal(0)
-        receta_id = op_data.get('receta_id')
-        cantidad = Decimal(op_data.get('cantidad_planificada', 0))
-        if not receta_id or cantidad <= 0: return carga_total
-
-        operaciones = self.obtener_operaciones_receta(receta_id)
-        if not operaciones: return carga_total
-
-        for op_step in operaciones:
-            t_prep = Decimal(op_step.get('tiempo_preparacion', 0))
-            t_ejec_unit = Decimal(op_step.get('tiempo_ejecucion_unitario', 0))
-            carga_total += t_prep + (t_ejec_unit * cantidad)
-        return carga_total
 
     # --- HELPER para generar respuesta de sobrecarga (MENSAJE MEJORADO) ---
     def _generar_respuesta_sobrecarga(self, linea: int, fecha_str: str, cap_dia: float, carga_op_restante: float, carga_exist: float, horizonte_excedido: bool = False) -> tuple:
@@ -378,72 +251,6 @@ class PlanificacionController(BaseController):
 
         except Exception as e:
             logger.error(f"Error recomendando línea para OP {op_id}: {e}", exc_info=True)
-            return self.error_response(f"Error interno: {str(e)}", 500)
-
-    def mover_orden(self, op_id: int, nuevo_estado: str, user_role: str) -> tuple:
-        """
-        Orquesta el cambio de estado de una OP, validando permisos según el rol.
-        """
-        if not nuevo_estado:
-            return self.error_response("El 'nuevo_estado' es requerido.", 400)
-
-        # --- Lógica de Permisos Específica por Rol ---
-        try:
-            # Obtener el estado actual para validar la transición
-            op_actual_res = self.orden_produccion_controller.obtener_orden_por_id(op_id)
-            if not op_actual_res.get('success'):
-                return self.error_response("Orden de Producción no encontrada.", 404)
-            estado_actual = op_actual_res['data'].get('estado')
-
-            # Validar permisos para SUPERVISOR_CALIDAD
-            if user_role == 'SUPERVISOR_CALIDAD':
-                # Mapa de transiciones permitidas: {estado_origen: [estados_destino_validos]}
-                allowed_transitions = {
-                    'EN_EMPAQUETADO': ['CONTROL_DE_CALIDAD'],
-                    'CONTROL_DE_CALIDAD': ['COMPLETADA']
-                }
-                # Verificar si la transición solicitada es válida
-                if estado_actual not in allowed_transitions or nuevo_estado not in allowed_transitions[estado_actual]:
-                    return self.error_response(
-                        f"Movimiento de '{estado_actual}' a '{nuevo_estado}' no permitido para Supervisor de Calidad.",
-                        403
-                    )
-
-            # Validar permisos para OPERARIO
-            elif user_role == 'OPERARIO':
-                 # El OPERARIO solo puede mover desde 'LISTA PARA PRODUCIR' a una línea,
-                 # o desde una línea a 'EMPAQUETADO'.
-                allowed_transitions = {
-                    'LISTA PARA PRODUCIR': ['EN_LINEA_1', 'EN_LINEA_2'],
-                    'EN_LINEA_1': ['EN_EMPAQUETADO'],
-                    'EN_LINEA_2': ['EN_EMPAQUETADO'],
-                    'EN_EMPAQUETADO': ['CONTROL_DE_CALIDAD']
-                }
-                if estado_actual not in allowed_transitions or nuevo_estado not in allowed_transitions[estado_actual]:
-                    return self.error_response(
-                        f"Movimiento de '{estado_actual}' a '{nuevo_estado}' no permitido para Operario.",
-                        403
-                    )
-
-
-            # --- Ejecución del cambio de estado ---
-            resultado = {}
-            # Lógica existente para manejar 'COMPLETADA' u otros estados
-            if nuevo_estado == 'COMPLETADA':
-                response_dict, _ = self.orden_produccion_controller.cambiar_estado_orden(op_id, nuevo_estado)
-                resultado = response_dict
-            else:
-                resultado = self.orden_produccion_controller.cambiar_estado_orden_simple(op_id, nuevo_estado)
-
-            if resultado.get('success'):
-                return self.success_response(data=resultado.get('data'))
-            else:
-                # Proveer un mensaje de error más específico si está disponible
-                error_msg = resultado.get('error', 'Error desconocido al cambiar el estado.')
-                return self.error_response(error_msg, 500)
-
-        except Exception as e:
-            logger.error(f"Error crítico en mover_orden para OP {op_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
     def obtener_ops_pendientes_planificacion(self, dias_horizonte: int = 7) -> tuple:
@@ -591,167 +398,182 @@ class PlanificacionController(BaseController):
             return self.error_response(f"Error interno: {str(e)}", 500)
 
 
-    # --- MÉTODO REESCRITO ---
+    # --- MÉTODO PRINCIPAL REFACTORIZADO ---
     def obtener_planificacion_semanal(self, week_str: Optional[str] = None) -> tuple:
         """
-        Obtiene las OPs planificadas para una semana específica, calculando los días
-        que cada OP ocupa y agrupándolas por día visible.
+        Orquesta la obtención de la planificación semanal, delegando la lógica
+        compleja a métodos auxiliares.
         """
         try:
-            # Configurar locale (sin cambios)
-            try: locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
-            except locale.Error:
-                try: locale.setlocale(locale.LC_TIME, 'Spanish_Spain.1252')
-                except locale.Error: logger.warning("Locale español no disponible.")
+            # 1. Determinar el rango de la semana a visualizar
+            rango_semana = self._determinar_rango_semana(week_str)
+            start_of_week = rango_semana['start']
+            end_of_week = rango_semana['end']
+            week_identifier = rango_semana['identifier']
 
-            # 1. Determinar rango de la semana (sin cambios)
-            if week_str:
-                try:
-                    year, week_num = map(int, week_str.split('-W'))
-                    start_of_week = date.fromisocalendar(year, week_num, 1)
-                except ValueError: return self.error_response("Formato semana inválido.", 400)
-            else:
-                today = date.today(); start_of_week = today - timedelta(days=today.weekday())
-                week_str = start_of_week.strftime("%Y-%W") # Corregido a %W si %V daba error antes
-            end_of_week = start_of_week + timedelta(days=6)
+            # 2. Obtener todas las OPs que podrían ser relevantes para esta semana
+            ordenes_relevantes = self._obtener_ops_relevantes_para_rango(start_of_week, end_of_week)
+            if not ordenes_relevantes:
+                # Si no hay OPs, devolver una respuesta vacía pero bien formada
+                resultado_vacio = {
+                    'ops_visibles_por_dia': { (start_of_week + timedelta(days=i)).isoformat(): [] for i in range(7) },
+                    'inicio_semana': start_of_week.isoformat(),
+                    'fin_semana': end_of_week.isoformat(),
+                    'semana_actual_str': week_identifier
+                }
+                return self.success_response(data=resultado_vacio)
 
-            # 2. Obtener OPs RELEVANTES (que podrían estar activas en la semana)
-            #   - Que NO estén completadas/canceladas/consolidadas/pendientes
-            #   - Que empiecen ANTES del FIN de la semana
-            #   - (Opcional: añadir filtro para que terminen DESPUÉS del INICIO de la semana si tienes fecha_fin_estimada)
-            dias_previos_margen = 14 # Traer OPs que empezaron hasta 2 semanas antes, por si son largas
-            fecha_inicio_filtro = start_of_week - timedelta(days=dias_previos_margen)
+            # 3. Simular la duración y los días exactos que cada OP ocupará
+            ops_con_dias_calculados = self._simular_dias_ocupados_para_ops(ordenes_relevantes, start_of_week, end_of_week)
 
-            filtros_amplios = {
-                'fecha_inicio_planificada_desde': fecha_inicio_filtro.isoformat(),
-                'fecha_inicio_planificada_hasta': end_of_week.isoformat(), # Solo necesitamos las que empiezan hasta el final de la semana
-                'estado': ('in', [ # Solo las activas en producción
-                    'EN ESPERA', # Podría cambiar a Lista si llega stock
-                    'LISTA PARA PRODUCIR',
-                    'EN_LINEA_1',
-                    'EN_LINEA_2',
-                    'EN_EMPAQUETADO',
-                    'CONTROL_DE_CALIDAD'
-                 ])
-            }
-            response_ops, _ = self.orden_produccion_controller.obtener_ordenes(filtros_amplios)
-            if not response_ops.get('success'):
-                return self.error_response("Error al obtener OPs para cálculo semanal.", 500)
+            # 4. Construir la estructura final agrupando las OPs por día visible
+            ops_visibles_por_dia = self._construir_vista_diaria(ops_con_dias_calculados, start_of_week)
 
-            ordenes_relevantes = response_ops.get('data', [])
-            if not ordenes_relevantes: # Si no hay OPs, devolver vacío
-                 resultado_vacio = { 'ops_visibles_por_dia': {}, 'inicio_semana': start_of_week.isoformat(), 'fin_semana': end_of_week.isoformat(), 'semana_actual_str': week_str }
-                 return self.success_response(data=resultado_vacio)
-
-
-            # 3. Obtener Capacidad para el rango necesario (desde la OP más temprana hasta el fin de semana)
-            fechas_inicio_ops = [date.fromisoformat(op['fecha_inicio_planificada']) for op in ordenes_relevantes if op.get('fecha_inicio_planificada')]
-            fecha_min_calculo = min(fechas_inicio_ops) if fechas_inicio_ops else start_of_week
-            # Ampliar rango final por si OPs terminan después
-            fecha_max_calculo = end_of_week + timedelta(days=14)
-
-            capacidad_rango = self.obtener_capacidad_disponible([1, 2], fecha_min_calculo, fecha_max_calculo)
-
-            # 4. Simular duración y días ocupados para CADA OP
-            ops_con_dias_ocupados = []
-            carga_acumulada_simulacion = {1: defaultdict(float), 2: defaultdict(float)} # Para simular carga existente
-
-            # Ordenar para procesar las más antiguas primero (más realista)
-            ordenes_relevantes.sort(key=lambda op: op.get('fecha_inicio_planificada', '9999-12-31'))
-
-            for orden in ordenes_relevantes:
-                op_id = orden.get('id')
-                linea_asignada = orden.get('linea_asignada')
-                fecha_inicio_str = orden.get('fecha_inicio_planificada')
-
-                if not linea_asignada or not fecha_inicio_str: continue # Saltar si faltan datos clave
-
-                try:
-                    fecha_inicio_op = date.fromisoformat(fecha_inicio_str)
-                    carga_total_op = float(self._calcular_carga_op(orden))
-                    if carga_total_op <= 0: continue
-
-                    dias_ocupados_por_esta_op = []
-                    carga_restante_sim = carga_total_op
-                    fecha_actual_sim = fecha_inicio_op
-                    dias_simulados = 0
-                    max_dias_op_sim = 30 # Límite
-
-                    while carga_restante_sim > 0.01 and dias_simulados < max_dias_op_sim:
-                        fecha_actual_sim_str = fecha_actual_sim.isoformat()
-                        cap_dia = capacidad_rango.get(linea_asignada, {}).get(fecha_actual_sim_str, 0.0)
-                        carga_existente_sim = carga_acumulada_simulacion[linea_asignada].get(fecha_actual_sim_str, 0.0)
-                        cap_restante_sim = max(0.0, cap_dia - carga_existente_sim)
-
-                        carga_a_asignar_sim = min(carga_restante_sim, cap_restante_sim)
-
-                        if carga_a_asignar_sim > 0:
-                            dias_ocupados_por_esta_op.append(fecha_actual_sim_str) # Añadir fecha a la lista de la OP
-                            carga_acumulada_simulacion[linea_asignada][fecha_actual_sim_str] += carga_a_asignar_sim
-                            carga_restante_sim -= carga_a_asignar_sim
-
-                        # Si aún queda carga, pasar al siguiente día
-                        if carga_restante_sim > 0.01:
-                             fecha_actual_sim += timedelta(days=1)
-                        dias_simulados += 1
-
-                    # Guardar la OP junto con los días que ocupa
-                    orden['dias_ocupados_calculados'] = dias_ocupados_por_esta_op
-                    ops_con_dias_ocupados.append(orden)
-
-                except Exception as e_sim:
-                     logger.error(f"Error simulando OP {op_id}: {e_sim}", exc_info=True)
-
-
-            # 5. Construir el diccionario final para la plantilla
-            ops_visibles_por_dia = defaultdict(list)
-            for i in range(7):
-                dia_semana_actual = start_of_week + timedelta(days=i)
-                ops_visibles_por_dia[dia_semana_actual.isoformat()] = []
-            for op in ops_con_dias_ocupados:
-                for fecha_ocupada_iso in op.get('dias_ocupados_calculados', []):
-                    if start_of_week.isoformat() <= fecha_ocupada_iso <= end_of_week.isoformat():
-                        if op not in ops_visibles_por_dia[fecha_ocupada_iso]:
-                             ops_visibles_por_dia[fecha_ocupada_iso].append(op)
-
-            # --- CORRECCIÓN: MAPEO MANUAL DE DÍAS ---
-            # 6. Formatear claves con nombre del día (Usando mapeo manual)
-
-##            # Diccionario para traducir abreviaturas de días (inglés -> español)
-##            dias_abbr_es = {
-##                'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mié',
-##                'Thu': 'Jue', 'Fri': 'Vie', 'Sat': 'Sáb', 'Sun': 'Dom'
-##            }
-##
-##            formatted_grouped_by_day = {}
-##            ordered_ops_visibles = dict(sorted(ops_visibles_por_dia.items()))
-##            for dia_iso, ops_dia in ordered_ops_visibles.items():
-##                try:
-##                    dia_dt = date.fromisoformat(dia_iso)
-##                    # Obtener abreviatura en INGLÉS (%a)
-##                    abbr_en = dia_dt.strftime("%a")
-##                    # Traducir usando el diccionario (default a inglés si falla)
-##                    abbr_es = dias_abbr_es.get(abbr_en, abbr_en)
-##                    # Formatear fecha (DD/MM)
-##                    fecha_num = dia_dt.strftime("%d/%m")
-##                    # Crear clave final
-##                    key_display = f"{abbr_es} {fecha_num}"
-##                except ValueError:
-##                    key_display = dia_iso # Fallback
-##                formatted_grouped_by_day[key_display] = ops_dia
-##            # --- FIN CORRECCIÓN ---
-
+            # 5. Devolver el resultado final
             resultado = {
-                'ops_visibles_por_dia': ops_visibles_por_dia, # Usar el diccionario formateado
+                'ops_visibles_por_dia': ops_visibles_por_dia,
                 'inicio_semana': start_of_week.isoformat(),
                 'fin_semana': end_of_week.isoformat(),
-                'semana_actual_str': week_str
+                'semana_actual_str': week_identifier
             }
             return self.success_response(data=resultado)
 
+        except ValueError as ve: # Capturar errores de formato de fecha/semana
+            logger.warning(f"Error de formato en obtener_planificacion_semanal: {ve}")
+            return self.error_response(str(ve), 400)
         except Exception as e:
-            logger.error(f"Error obteniendo planificación semanal (v2): {e}", exc_info=True)
-            return self.error_response(f"Error interno: {str(e)}", 500)
+            logger.error(f"Error crítico en obtener_planificacion_semanal: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    # --- NUEVOS HELPERS PARA obtener_planificacion_semanal ---
+
+    def _determinar_rango_semana(self, week_str: Optional[str]) -> Dict:
+        """
+        Calcula las fechas de inicio y fin de una semana.
+        Usa 'week_str' (ej. "2023-W45") o la semana actual si es None.
+        """
+        if week_str:
+            try:
+                year, week_num = map(int, week_str.split('-W'))
+                start = date.fromisocalendar(year, week_num, 1)
+                identifier = week_str
+            except (ValueError, TypeError):
+                raise ValueError("Formato de semana inválido. Usar 'YYYY-WNN'.")
+        else:
+            today = date.today()
+            start = today - timedelta(days=today.weekday())
+            # Usar isocalendar para obtener el formato YYYY-WNN consistente
+            identifier = f"{start.isocalendar().year}-W{start.isocalendar().week:02d}"
+        
+        end = start + timedelta(days=6)
+        return {'start': start, 'end': end, 'identifier': identifier}
+
+    def _obtener_ops_relevantes_para_rango(self, start_of_week: date, end_of_week: date) -> List[Dict]:
+        """
+        Obtiene las OPs activas que inician antes del fin de la semana,
+        con un margen para incluir OPs largas que pudieran seguir en proceso.
+        """
+        dias_margen_previo = 14 # Traer OPs que empezaron hasta 2 semanas antes
+        fecha_inicio_filtro = start_of_week - timedelta(days=dias_margen_previo)
+
+        filtros = {
+            'fecha_inicio_planificada_desde': fecha_inicio_filtro.isoformat(),
+            'fecha_inicio_planificada_hasta': end_of_week.isoformat(),
+            'estado': ('in', [
+                'EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2',
+                'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD'
+            ])
+        }
+        response_ops, _ = self.orden_produccion_controller.obtener_ordenes(filtros)
+
+        if not response_ops.get('success'):
+            logger.error(f"Error al obtener OPs para cálculo semanal: {response_ops.get('error')}")
+            # Lanzar una excepción o devolver lista vacía para que el método principal maneje el error.
+            # Devolver lista vacía es más simple aquí.
+            return []
+        
+        return response_ops.get('data', [])
+
+    def _simular_dias_ocupados_para_ops(self, ordenes: List[Dict], start_of_week: date, end_of_week: date) -> List[Dict]:
+        """
+        Para una lista de OPs, calcula y añade la clave 'dias_ocupados_calculados'
+        a cada una, simulando su duración día por día.
+        """
+        # 1. Determinar el rango de capacidad necesario
+        fechas_inicio_ops = [date.fromisoformat(op['fecha_inicio_planificada']) for op in ordenes if op.get('fecha_inicio_planificada')]
+        if not fechas_inicio_ops: return [] # No hay nada que simular
+        
+        fecha_min_calculo = min(fechas_inicio_ops)
+        dias_margen_posterior = 14 # Margen por si las OPs son largas
+        fecha_max_calculo = end_of_week + timedelta(days=dias_margen_posterior)
+        
+        capacidad_rango = self.obtener_capacidad_disponible([1, 2], fecha_min_calculo, fecha_max_calculo)
+
+        # 2. Simulación
+        carga_acumulada_simulacion = {1: defaultdict(float), 2: defaultdict(float)}
+        ordenes.sort(key=lambda op: op.get('fecha_inicio_planificada', '9999-12-31')) # Procesar cronológicamente
+
+        for orden in ordenes:
+            try:
+                linea = orden.get('linea_asignada')
+                fecha_inicio_str = orden.get('fecha_inicio_planificada')
+                if not linea or not fecha_inicio_str: continue
+
+                fecha_inicio = date.fromisoformat(fecha_inicio_str)
+                carga_total = float(self.orden_produccion_controller.calcular_carga_op(orden))
+                if carga_total <= 0: continue
+
+                dias_ocupados = []
+                carga_restante = carga_total
+                fecha_actual = fecha_inicio
+                dias_simulados = 0
+                max_dias_simulacion_op = 30 # Límite por OP
+
+                while carga_restante > 0.01 and dias_simulados < max_dias_simulacion_op:
+                    fecha_str = fecha_actual.isoformat()
+                    cap_dia = capacidad_rango.get(linea, {}).get(fecha_str, 0.0)
+                    carga_existente = carga_acumulada_simulacion[linea].get(fecha_str, 0.0)
+                    cap_restante = max(0.0, cap_dia - carga_existente)
+                    
+                    carga_a_asignar = min(carga_restante, cap_restante)
+                    
+                    if carga_a_asignar > 0:
+                        dias_ocupados.append(fecha_str)
+                        carga_acumulada_simulacion[linea][fecha_str] += carga_a_asignar
+                        carga_restante -= carga_a_asignar
+
+                    if carga_restante > 0.01:
+                        fecha_actual += timedelta(days=1)
+                    dias_simulados += 1
+                
+                orden['dias_ocupados_calculados'] = dias_ocupados
+            except Exception as e:
+                logger.error(f"Error simulando duración para OP {orden.get('id')}: {e}", exc_info=True)
+                orden['dias_ocupados_calculados'] = [] # Asegurarse que la clave exista
+
+        return ordenes
+
+    def _construir_vista_diaria(self, ops_con_dias: List[Dict], start_of_week: date) -> Dict:
+        """
+        Toma OPs con sus días ocupados y las agrupa en un diccionario
+        por cada día de la semana visible.
+        """
+        vista_diaria = defaultdict(list)
+        end_of_week_str = (start_of_week + timedelta(days=6)).isoformat()
+        start_of_week_str = start_of_week.isoformat()
+        
+        # Inicializar todos los días de la semana
+        for i in range(7):
+            vista_diaria[(start_of_week + timedelta(days=i)).isoformat()] = []
+
+        for op in ops_con_dias:
+            for fecha_ocupada_iso in op.get('dias_ocupados_calculados', []):
+                if start_of_week_str <= fecha_ocupada_iso <= end_of_week_str:
+                    # Evitar duplicados si una OP se procesa de alguna manera dos veces
+                    if op not in vista_diaria[fecha_ocupada_iso]:
+                        vista_diaria[fecha_ocupada_iso].append(op)
+        
+        return dict(vista_diaria)
 
     def obtener_capacidad_disponible(self, centro_trabajo_ids: List[int], fecha_inicio: date, fecha_fin: date) -> Dict:
         """
@@ -806,12 +628,6 @@ class PlanificacionController(BaseController):
             return {}
 
 
-    def obtener_operaciones_receta(self, receta_id: int) -> List[Dict]:
-        """ Obtiene las operaciones de una receta desde el modelo. """
-        result = self.operacion_receta_model.find_by_receta_id(receta_id)
-        return result.get('data', []) if result.get('success') else []
-
-
     def calcular_carga_capacidad(self, ordenes_planificadas: List[Dict]) -> Dict:
         """
         Calcula la carga (en minutos) por centro de trabajo y fecha, DISTRIBUYENDO
@@ -849,7 +665,7 @@ class PlanificacionController(BaseController):
                 if linea_asignada not in [1, 2] or not fecha_inicio_op_str: continue
 
                 fecha_inicio_op = date.fromisoformat(fecha_inicio_op_str)
-                carga_total_op = float(self._calcular_carga_op(orden)) # Usar helper que calcula carga total
+                carga_total_op = float(self.orden_produccion_controller.calcular_carga_op(orden)) # Usar helper que calcula carga total
                 if carga_total_op <= 0: continue
 
                 logger.debug(f"Distribuyendo carga para OP {orden.get('codigo', orden.get('id'))}: {carga_total_op:.2f} min en Línea {linea_asignada} desde {fecha_inicio_op_str}")
@@ -943,3 +759,101 @@ class PlanificacionController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico en obtener_ops_para_hoy: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def obtener_datos_para_tablero_planificacion(self, week_str: Optional[str], horizonte_dias: int, user_roles: List[str]) -> tuple:
+        """
+        Orquesta la obtención de todos los datos necesarios para renderizar el tablero de planificación.
+        """
+        try:
+            # Lógica para determinar la semana
+            if not week_str:
+                today = date.today()
+                start_of_week_iso = today - timedelta(days=today.isoweekday() - 1)
+                week_str = start_of_week_iso.strftime("%Y-W%V")
+
+            # Obtener OPs pendientes para MPS
+            response_pendientes, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias)
+            mps_data = {'mps_agrupado': [], 'inicio_horizonte': 'N/A', 'fin_horizonte': 'N/A', 'dias_horizonte': horizonte_dias}
+            if response_pendientes.get('success'):
+                mps_data = response_pendientes.get('data', mps_data)
+            else:
+                # En lugar de flashear un mensaje, lo devolveremos en la respuesta
+                mps_data['error'] = response_pendientes.get('error', 'Error cargando MPS.')
+
+            # Obtener planificación semanal
+            response_semanal, _ = self.obtener_planificacion_semanal(week_str)
+            ordenes_por_dia = {}
+            inicio_semana = None
+            fin_semana = None
+            if response_semanal.get('success'):
+                data_semanal = response_semanal.get('data', {})
+                ordenes_por_dia = data_semanal.get('ops_visibles_por_dia', {})
+                inicio_semana_str = data_semanal.get('inicio_semana')
+                fin_semana_str = data_semanal.get('fin_semana')
+                if inicio_semana_str: inicio_semana = date.fromisoformat(inicio_semana_str)
+                if fin_semana_str: fin_semana = date.fromisoformat(fin_semana_str)
+
+            # Lógica de CRP
+            ops_semana = [op for dia, lista_ops in ordenes_por_dia.items() for op in lista_ops if op.get('estado') not in ['COMPLETADA', 'CANCELADA']]
+            ops_combinadas_dict = {op['id']: op for op in ops_semana if op.get('id')}
+            ordenes_combinadas = list(ops_combinadas_dict.values())
+            
+            ordenes_para_crp_filtradas = []
+            if inicio_semana and fin_semana:
+                for op in ordenes_combinadas:
+                    fecha_inicio_op_str = op.get('fecha_inicio_planificada')
+                    if fecha_inicio_op_str:
+                        try:
+                            fecha_inicio_op = date.fromisoformat(fecha_inicio_op_str)
+                            if inicio_semana <= fecha_inicio_op <= fin_semana:
+                                ordenes_para_crp_filtradas.append(op)
+                        except ValueError:
+                            pass
+            
+            carga_calculada = {}
+            capacidad_disponible = {}
+            if ordenes_para_crp_filtradas and inicio_semana and fin_semana:
+                carga_calculada = self.calcular_carga_capacidad(ordenes_para_crp_filtradas)
+                capacidad_disponible = self.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
+
+            # Lógica de navegación de semana
+            prev_week_str, next_week_str = None, None
+            try:
+                year, week_num_str = week_str.split('-W')
+                week_num = int(week_num_str)
+                current_week_start = date.fromisocalendar(int(year), week_num, 1)
+                prev_week_start = current_week_start - timedelta(days=7)
+                next_week_start = current_week_start + timedelta(days=7)
+                prev_week_str = prev_week_start.strftime("%Y-W%V")
+                next_week_str = next_week_start.strftime("%Y-W%V")
+            except ValueError:
+                logger.warning(f"Error parseando week_str {week_str}")
+
+            # Datos de usuarios
+            from app.controllers.usuario_controller import UsuarioController
+            usuario_controller = UsuarioController()
+            supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
+            operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
+            supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []
+            operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
+
+            # Ensamblar el contexto para la plantilla
+            context = {
+                'mps_data': mps_data,
+                'inicio_semana': inicio_semana.isoformat() if inicio_semana else None,
+                'fin_semana': fin_semana.isoformat() if fin_semana else None,
+                'semana_actual_str': week_str,
+                'semana_anterior_str': prev_week_str,
+                'semana_siguiente_str': next_week_str,
+                'supervisores': supervisores,
+                'operarios': operarios,
+                'carga_crp': carga_calculada,
+                'capacidad_crp': capacidad_disponible,
+                'ordenes_por_dia': ordenes_por_dia,
+                'is_operario': 'OPERARIO' in user_roles,
+                'is_supervisor_calidad': 'SUPERVISOR_CALIDAD' in user_roles
+            }
+            return self.success_response(data=context)
+        except Exception as e:
+            logger.error(f"Error obteniendo datos para el tablero de planificación: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)

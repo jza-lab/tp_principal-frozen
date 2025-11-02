@@ -128,7 +128,7 @@
                             {# Botones de acción según el estado #}
                             {% if estado_key == 'LISTA PARA PRODUCIR' %}
                                 <div class="d-grid mt-3">
-                                    <a href="{{ url_for('op_tabla.foco_produccion', op_id=orden.id) }}" class="btn btn-primary btn-sm">
+                                    <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}" class="btn btn-primary btn-sm">
                                         <i class="bi bi-play-fill me-1"></i> Iniciar Trabajo
                                     </a>
                                 </div>

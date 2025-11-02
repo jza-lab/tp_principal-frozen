@@ -106,7 +106,7 @@
                                     <li><a class="dropdown-item {% if request.endpoint == 'orden_produccion.listar' %}active{% endif %}" href="{{ url_for('orden_produccion.listar') }}"><i class="fas fa-clipboard-list me-2"></i> Ordenes de Producción</a></li>
                                     {% endif %}
                                     {% if 'consultar_plan_de_produccion' is has_permission %}
-                                    <li><a class="dropdown-item {% if request.endpoint == 'op_tabla.tablero_produccion' %}active{% endif %}" href="{{ url_for('op_tabla.tablero_produccion') }}"><i class="bi bi-kanban me-2"></i> Producción de Hoy</a></li>
+                                    <li><a class="dropdown-item {% if request.endpoint == 'produccion_kanban.tablero_produccion' %}active{% endif %}" href="{{ url_for('produccion_kanban.tablero_produccion') }}"><i class="bi bi-kanban me-2"></i> Producción de Hoy</a></li>
                                     {% endif %}
                                 </ul>
                             </li>
