@@ -49,6 +49,15 @@ class InventarioModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo lotes por insumo: {str(e)}")
             return {'success': False, 'error': str(e)}
+        
+    def get_stock_critico(self):
+        try:
+            result = self.db.rpc('get_insumos_stock_critico', {}).execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error obteniendo stock crítico: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
 
     # ✅ SOBRESCRIBE: Sobrescribimos el método 'update' para asegurar la sanitización de datos.
     # Esto asegura que f_vencimiento se convierta a string antes de la DB.
@@ -276,7 +285,7 @@ class InventarioModel(BaseModel):
             insumos_catalogo = {item['id_insumo']: item for item in catalogo_resp.data}
 
             # 2. Calcular el stock agregado desde el inventario
-            inventario_resp = self.db.table('insumos_inventario').select('id_insumo', 'cantidad_actual').in_('estado', ['disponible', 'reservado']).execute()
+            inventario_resp = self.db.table(self.get_table_name()).select('id_insumo', 'cantidad_actual').in_('estado', ['disponible', 'reservado']).execute()
             if not hasattr(inventario_resp, 'data'):
                 raise Exception("No se pudo obtener el inventario de insumos.")
 

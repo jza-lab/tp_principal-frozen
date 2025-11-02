@@ -330,6 +330,14 @@ class OrdenCompraModel(BaseModel):
         except Exception as e:
             logger.error(f"Error buscando códigos de OC y precios por insumo_id: {e}")
             return {'success': False, 'error': str(e)}
+        
+    def get_egresos_en_periodo(self, fecha_inicio, fecha_fin):
+        try:
+            result = self.db.table(self.get_table_name()).select('fecha_emision, total').gte('fecha_emision', fecha_inicio).lte('fecha_emision', fecha_fin).eq('estado', 'RECIBIDA_COMPLETA').execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error obteniendo egresos: {str(e)}")
+            return {'success': False, 'error': str(e)}
 
 @dataclass
 class OrdenCompraItem:

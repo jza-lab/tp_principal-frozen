@@ -192,3 +192,8 @@ def editar_lote(id_lote):
 
     return render_template('inventario/editar_lote.html', lote=lote)
 # --- FIN DE LA CORRECCIÓN ---
+@inventario_view_bp.route('/api/lote/<id_lote>/trazabilidad')
+def api_trazabilidad_lote(id_lote):
+    controller = InventarioController()
+    response, status_code = controller.obtener_trazabilidad_lote(id_lote)
+    return jsonify(response), status_code

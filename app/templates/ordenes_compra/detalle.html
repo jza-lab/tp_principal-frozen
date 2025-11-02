@@ -312,8 +312,7 @@
                                     </td>
                                     <td class="text-end" style="max-width: 150px;">
                                         <input type="number" name="precio_unitario[]"
-                                            class="form-control form-control-sm text-end precio-unitario" value="{{ "
-                                            %.2f"|format(item.precio_unitario|float) }}" min="0" step="any" required>
+                                            class="form-control form-control-sm text-end precio-unitario" value="{{ "%.2f"|format(item.precio_unitario|float) }}" min="0" step="any" required>
                                     </td>
                                     {% else %}
                                     <td class="text-end">$ {{ item.precio_unitario | formato_moneda }}</td>

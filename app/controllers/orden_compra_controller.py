@@ -1,6 +1,7 @@
 from typing import Dict, TYPE_CHECKING
 from flask import request, jsonify
 from flask_jwt_extended import get_jwt
+from marshmallow import ValidationError
 from app.models.orden_compra_model import OrdenCompraItemModel, OrdenCompraModel
 from app.models.orden_compra_model import OrdenCompra
 from app.controllers.inventario_controller import InventarioController
