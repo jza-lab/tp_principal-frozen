@@ -900,3 +900,42 @@ class PlanificacionController(BaseController):
             2: dict(carga_distribuida[2])
         }
         return resultado_final
+
+    def obtener_ops_para_hoy(self) -> tuple:
+        """
+        Obtiene las órdenes de producción planificadas para comenzar hoy o que ya están
+        en proceso, y las agrupa por estado para el tablero Kanban del operario.
+        """
+        try:
+            today_iso = date.today().isoformat()
+            
+            # Filtra OPs que inician hoy o que ya están en un estado de producción activo
+            # independientemente de cuándo iniciaron.
+            filtros = {
+                'fecha_inicio_planificada': today_iso,
+                'estados_produccion': True # Un flag para una lógica de filtro especial en el modelo
+            }
+
+            response, _ = self.orden_produccion_controller.obtener_ordenes_para_kanban_hoy()
+
+            if not response.get('success'):
+                logger.error(f"Error al obtener OPs para el Kanban de hoy: {response.get('error')}")
+                return self.error_response("Error al cargar las órdenes para el tablero de producción.")
+
+            ordenes = response.get('data', [])
+            
+            # Agrupar por estado
+            ordenes_por_estado = defaultdict(list)
+            for orden in ordenes:
+                estado = orden.get('estado')
+                # Simplificamos los estados para el kanban si es necesario
+                if estado in ['EN_LINEA_1', 'EN_LINEA_2']:
+                    estado = 'EN PROCESO'
+                
+                ordenes_por_estado[estado].append(orden)
+            
+            return self.success_response(data=dict(ordenes_por_estado))
+
+        except Exception as e:
+            logger.error(f"Error crítico en obtener_ops_para_hoy: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)

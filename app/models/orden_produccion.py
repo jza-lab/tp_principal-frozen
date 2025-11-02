@@ -369,3 +369,36 @@ class OrdenProduccionModel(BaseModel):
         except Exception as e:
             logger.error(f"Error al buscar órdenes por IDs: {op_ids}. Error: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def get_for_kanban_hoy(self) -> Dict:
+        """
+        Obtiene todas las OPs relevantes para el tablero de producción,
+        independientemente de su fecha de inicio.
+        """
+        try:
+            estados_kanban = [
+                'LISTA PARA PRODUCIR',
+                'EN PROCESO',
+                'PAUSADA',
+                'CONTROL DE CALIDAD',
+                'EN_LINEA_1',
+                'EN_LINEA_2'
+            ]
+
+            query = self.db.table(self.get_table_name()).select(
+                "*, productos(nombre, unidad_medida), "
+                "creador:usuario_creador_id(nombre, apellido), "
+                "supervisor:supervisor_responsable_id(nombre, apellido), "
+                "operario:operario_asignado_id(nombre, apellido)"
+            ).in_('estado', estados_kanban)
+            
+            result = query.execute()
+
+            if result.data:
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error en get_for_kanban_hoy: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}

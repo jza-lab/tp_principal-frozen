@@ -1,0 +1,25 @@
+/* Estilos para la vista de foco de producción */
+
+.foco-container {
+    padding: 1rem;
+}
+
+.pause-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 193, 7, 0.8); /* Amarillo de advertencia con transparencia */
+    z-index: 1050; /* Por encima de la mayoría de los elementos, pero debajo de los modales (1055+) */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #333;
+    text-align: center;
+}
+
+.pause-overlay-content .pause-icon {
+    font-size: 5rem;
+    margin-bottom: 1rem;
+}

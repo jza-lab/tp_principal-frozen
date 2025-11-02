@@ -20,6 +20,11 @@ from app.models.pedido import PedidoModel
 from datetime import date
 from app.models.receta import RecetaModel
 from app.models.insumo import InsumoModel # Asegúrate de importar esto
+from app.models.motivo_paro_model import MotivoParoModel
+from app.models.motivo_desperdicio_model import MotivoDesperdicioModel
+from app.models.registro_paro_model import RegistroParoModel
+from app.models.registro_desperdicio_model import RegistroDesperdicioModel
+
 
 logger = logging.getLogger(__name__)
 
@@ -902,3 +907,170 @@ class OrdenProduccionController(BaseController):
                 'columnas': {}, 'ordenes_por_estado': {}, 'supervisores': [], 'operarios': [],
                 'now': datetime.now(), 'timedelta': timedelta, 'error': str(e)
             }
+
+    def obtener_datos_para_vista_foco(self, orden_id: int) -> tuple:
+        """
+        Prepara todos los datos necesarios para la vista de foco de una orden de producción.
+        """
+        try:
+            # 1. Obtener los datos principales de la orden
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden_data = orden_result['data']
+
+            # 2. Obtener los ingredientes de la receta
+            receta_id = orden_data.get('receta_id')
+            ingredientes = []
+            if receta_id:
+                receta_model = RecetaModel()
+                ingredientes_result = receta_model.get_ingredientes(receta_id)
+                if ingredientes_result.get('success'):
+                    ingredientes = ingredientes_result.get('data', [])
+
+            # 3. Obtener los motivos de paro y desperdicio
+            motivo_paro_model = MotivoParoModel()
+            motivos_paro_result = motivo_paro_model.find_all()
+            motivos_paro = motivos_paro_result.get('data', []) if motivos_paro_result.get('success') else []
+
+            motivo_desperdicio_model = MotivoDesperdicioModel()
+            motivos_desperdicio_result = motivo_desperdicio_model.find_all()
+            motivos_desperdicio = motivos_desperdicio_result.get('data', []) if motivos_desperdicio_result.get('success') else []
+            
+            # 4. Ensamblar todos los datos
+            datos_completos = {
+                'orden': orden_data,
+                'ingredientes': ingredientes,
+                'motivos_paro': motivos_paro,
+                'motivos_desperdicio': motivos_desperdicio
+            }
+
+            return self.success_response(data=datos_completos)
+
+        except Exception as e:
+            logger.error(f"Error en obtener_datos_para_vista_foco para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def reportar_avance(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
+        """
+        Registra el avance de producción para una orden, incluyendo desperdicios,
+        y opcionalmente finaliza la orden.
+        """
+        try:
+            cantidad_buena = Decimal(data.get('cantidad_buena', 0))
+            cantidad_desperdicio = Decimal(data.get('cantidad_desperdicio', 0))
+            motivo_desperdicio_id = data.get('motivo_desperdicio_id')
+            finalizar_orden = data.get('finalizar_orden', False)
+
+            # 1. Validar datos
+            if cantidad_buena < 0 or cantidad_desperdicio < 0:
+                return self.error_response("Las cantidades no pueden ser negativas.", 400)
+            if cantidad_desperdicio > 0 and not motivo_desperdicio_id:
+                return self.error_response("Se requiere un motivo para el desperdicio.", 400)
+
+            # 2. Registrar desperdicio si existe
+            if cantidad_desperdicio > 0:
+                desperdicio_model = RegistroDesperdicioModel()
+                desperdicio_data = {
+                    'orden_produccion_id': orden_id,
+                    'motivo_desperdicio_id': int(motivo_desperdicio_id),
+                    'cantidad': cantidad_desperdicio,
+                    'usuario_id': usuario_id
+                }
+                desperdicio_model.create(desperdicio_data)
+
+            # 3. Actualizar la cantidad producida en la orden
+            orden_actual = self.model.find_by_id(orden_id)
+            if not orden_actual:
+                return self.error_response("Orden de producción no encontrada.", 404)
+            
+            nueva_cantidad_producida = Decimal(orden_actual.get('cantidad_producida', 0)) + cantidad_buena
+            
+            update_data = {'cantidad_producida': nueva_cantidad_producida}
+            
+            # 4. Finalizar la orden si se solicita
+            if finalizar_orden:
+                # Lógica para determinar el siguiente estado. Por ahora, 'EN_EMPAQUETADO'
+                update_data['estado'] = 'EN_EMPAQUETADO'
+                # También se debería registrar la fecha_fin
+                update_data['fecha_fin'] = datetime.now().isoformat()
+
+            self.model.update(orden_id, update_data)
+            
+            return self.success_response(message="Avance reportado correctamente.")
+
+        except Exception as e:
+            logger.error(f"Error en reportar_avance para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def pausar_produccion(self, orden_id: int, motivo_id: int, usuario_id: int) -> tuple:
+        """
+        Registra el inicio de una pausa para una orden de producción.
+        """
+        try:
+            paro_model = RegistroParoModel()
+            
+            # Verificar si ya existe una pausa activa para esta OP
+            pausa_activa = paro_model.find_all({'orden_produccion_id': orden_id, 'fecha_fin': 'is.null'})
+            if pausa_activa.get('data'):
+                return self.error_response("La orden ya se encuentra pausada.", 409) # 409 Conflict
+
+            # Crear el nuevo registro de pausa
+            datos_pausa = {
+                'orden_produccion_id': orden_id,
+                'motivo_paro_id': motivo_id,
+                'usuario_id': usuario_id,
+                'fecha_inicio': datetime.now().isoformat()
+            }
+            paro_model.create(datos_pausa)
+
+            return self.success_response(message="Producción pausada correctamente.")
+
+        except Exception as e:
+            logger.error(f"Error en pausar_produccion para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def reanudar_produccion(self, orden_id: int, usuario_id: int) -> tuple:
+        """
+        Registra el fin de una pausa para una orden de producción.
+        """
+        try:
+            paro_model = RegistroParoModel()
+
+            # Encontrar la pausa activa
+            pausa_activa_result = paro_model.find_all({'orden_produccion_id': orden_id, 'fecha_fin': 'is.null'}, limit=1)
+            
+            if not pausa_activa_result.get('data'):
+                return self.error_response("No se encontró una pausa activa para reanudar.", 404)
+
+            pausa_activa = pausa_activa_result['data'][0]
+            id_registro_paro = pausa_activa['id']
+
+            # Actualizar el registro con la fecha de fin
+            update_data = {
+                'fecha_fin': datetime.now().isoformat()
+            }
+            paro_model.update(id_registro_paro, update_data)
+
+            return self.success_response(message="Producción reanudada correctamente.")
+
+        except Exception as e:
+            logger.error(f"Error en reanudar_produccion para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def obtener_ordenes_para_kanban_hoy(self) -> tuple:
+        """
+        Obtiene las órdenes de producción relevantes para el tablero Kanban del día.
+        Esto incluye OPs que comienzan hoy y aquellas que ya están en producción.
+        """
+        try:
+            result = self.model.get_for_kanban_hoy()
+
+            if result.get('success'):
+                return self.success_response(data=result.get('data', []))
+            else:
+                error_msg = result.get('error', 'Error desconocido al obtener órdenes para el Kanban de hoy.')
+                return self.error_response(error_msg, 500)
+        except Exception as e:
+            logger.error(f"Error crítico en obtener_ordenes_para_kanban_hoy: {e}", exc_info=True)
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)

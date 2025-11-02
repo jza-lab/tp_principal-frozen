@@ -1,0 +1,42 @@
+<!-- Modal para Reportar Avance -->
+<div class="modal fade" id="modalReportarAvance" tabindex="-1" aria-labelledby="modalReportarAvanceLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalReportarAvanceLabel"><i class="bi bi-clipboard-data me-2"></i>Reportar Avance de Producción</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formReportarAvance">
+                    <div class="mb-3">
+                        <label for="cantidad-buena" class="form-label">Cantidad Buena Producida (kg) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="cantidad-buena" required step="0.01" min="0">
+                    </div>
+                    <div class="mb-3">
+                        <label for="cantidad-desperdicio" class="form-label">Cantidad Desperdicio (kg)</label>
+                        <input type="number" class="form-control" id="cantidad-desperdicio" step="0.01" min="0" value="0">
+                    </div>
+                    <div class="mb-3" id="motivo-desperdicio-container" style="display: none;">
+                        <label for="motivo-desperdicio" class="form-label">Motivo del Desperdicio <span class="text-danger">*</span></label>
+                        <select class="form-select" id="motivo-desperdicio">
+                            <option value="">Seleccione un motivo...</option>
+                            <!-- Opciones se llenarán dinámicamente con JS -->
+                        </select>
+                    </div>
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="finalizar-orden">
+                        <label class="form-check-label" for="finalizar-orden">Marcar para finalizar la orden (Reporte Total)</label>
+                    </div>
+                     <div class="mb-3">
+                        <label for="observaciones-reporte" class="form-label">Observaciones</label>
+                        <textarea class="form-control" id="observaciones-reporte" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary" form="formReportarAvance" id="btn-submit-reporte">Confirmar Reporte</button>
+            </div>
+        </div>
+    </div>
+</div>
