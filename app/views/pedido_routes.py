@@ -7,7 +7,7 @@ from app.controllers.cliente_controller import ClienteController
 from app.utils.decorators import permission_required
 from app.utils.estados import OV_FILTROS_UI, OV_MAP_STRING_TO_INT
 import re
-from datetime import datetime
+from datetime import datetime, date, timedelta
 import base64
 
 orden_venta_bp = Blueprint('orden_venta', __name__, url_prefix='/orden-venta')
@@ -74,7 +74,6 @@ def listar():
 def nueva():
     """Gestiona la creación de un nuevo pedido de venta."""
     controller = PedidoController()
-    hoy = datetime.now().strftime('%Y-%m-%d')
 
     if request.method == 'POST':
         json_data = request.get_json()
@@ -82,7 +81,6 @@ def nueva():
             return jsonify({"success": False, "error": "Datos no válidos"}), 400
 
         usuario_id = get_jwt_identity()
-
         response, status_code = controller.crear_pedido_con_items(json_data, usuario_id)
 
         if status_code < 300:
@@ -92,10 +90,27 @@ def nueva():
         else:
             return jsonify({'success': False, 'message': response.get('message', 'Error al crear el pedido.')}), status_code
 
-    # Método GET
+    # --- Método GET (Aquí está la corrección) ---
+
+    # 1. Usar 'date.today()' que es más limpio para cálculos de días
+    today_date = date.today()
+
+    # 2. Calcular la fecha límite de 7 días
+    fecha_limite_7_dias = (today_date + timedelta(days=7)).isoformat()
+
+    # 3. Cargar los productos
     response, _ = controller.obtener_datos_para_formulario()
     productos = response.get('data', {}).get('productos', [])
-    return render_template('orden_venta/formulario.html', productos=productos, pedido=None, is_edit=False, today=hoy)
+
+    # 4. Pasar ambas variables al template
+    return render_template(
+        'orden_venta/formulario.html',
+        productos=productos,
+        pedido=None,
+        is_edit=False,
+        today=today_date.isoformat(), # <-- Variable 'today' (formato YYYY-MM-DD)
+        fecha_limite=fecha_limite_7_dias # <-- ¡NUEVA VARIABLE AÑADIDA!
+    )
 
 @orden_venta_bp.route('/<int:id>/editar', methods=['GET', 'POST', 'PUT'])
 @permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
@@ -320,7 +335,7 @@ def generar_proforma_api():
 
     if not pedido_data or 'id_cliente' not in pedido_data:
         return jsonify({'success': False, 'error': 'Datos incompletos.'}), 400
-    
+
     cliente_controller = ClienteController()
     controller = PedidoController()
     # Get client data

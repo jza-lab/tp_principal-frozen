@@ -349,11 +349,17 @@
                         </div>
 
                         <div class="col-md-6">
+                            <div class="col-md-6">
                             <label for="fecha_requerido" class="form-label">Fecha requerida de Entrega <span
                                     class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_requerido" name="fecha_requerido"
-                                value="{{ pedido.fecha_requerido[:10] if pedido and pedido.fecha_requerido else today}}"
-                                required {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %} max="{{ fecha_limite }}" min="{{ today }}">
+                                value="{{ pedido.fecha_requerido[:10] if pedido and pedido.fecha_requerido else fecha_limite }}"
+                                required {% if pedido and pedido.estado != 'PENDIENTE' %}readonly{% endif %} 
+                                min="{{ fecha_limite }}">
+                            
+                            <div id="fecha-validation-feedback" class="mt-2" style="display: none;">
+                                </div>
+                            </div>
                         </div>
 
                         <div class="col-12">

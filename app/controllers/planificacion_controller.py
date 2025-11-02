@@ -216,88 +216,24 @@ class PlanificacionController(BaseController):
                 fecha_fin_estimada = fecha_inicio_propuesta # Se actualizará al último día USADO
                 # ----------------------------------------------------------------
 
-                while carga_restante_op > 0.01 and dia_actual_offset < max_dias_simulacion:
-                    fecha_actual_str = fecha_actual_simulacion.isoformat()
-                    # --- MODIFICADO: No incrementar días necesarios aquí ---
-                    # dias_necesarios += 1 <-- Se mueve abajo
+                # --- ¡NUEVA LLAMADA AL HELPER DE SIMULACIÓN! ---
+                simulacion_result = self._simular_asignacion_carga(
+                    carga_total_op=carga_adicional_total,
+                    linea_propuesta=linea_propuesta,
+                    fecha_inicio_busqueda=fecha_inicio_propuesta,
+                    op_id_a_excluir=op_a_planificar_id # Excluir la propia OP si se está replanificando
+                )
 
-                    capacidad_dict_dia = self.obtener_capacidad_disponible([linea_propuesta], fecha_actual_simulacion, fecha_actual_simulacion)
-                    capacidad_dia_actual = capacidad_dict_dia.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
+                if not simulacion_result['success']:
+                    # La simulación falló (Sobrecarga)
+                    logger.warning(f"SOBRECARGA para OP {op_a_planificar_id}: {simulacion_result['error_data'].get('message')}")
+                    # Devolvemos el diccionario de error y el status 409
+                    return simulacion_result['error_data'], 409
 
-                    # --- MODIFICADO: Lógica para saltar días no laborables ---
-                    if capacidad_dia_actual <= 0:
-                        logger.debug(f"Día {fecha_actual_str} sin capacidad (feriado/inactivo). Buscando siguiente...")
-                        fecha_actual_simulacion += timedelta(days=1)
-                        dia_actual_offset += 1
-                        continue # Saltar al siguiente día del bucle
-                    # -------------------------------------------------------
-
-                    # Obtener carga existente (manejo seguro de respuesta)
-                    ops_existentes_resultado = self.orden_produccion_controller.obtener_ordenes(filtros={
-                        'fecha_inicio_planificada': fecha_actual_str,
-                        'linea_asignada': linea_propuesta,
-                        'estado': ('not.in', ['PENDIENTE', 'COMPLETADA', 'CANCELADA', 'CONSOLIDADA'])
-                    })
-                    carga_existente_dia = 0.0
-                    if isinstance(ops_existentes_resultado, tuple) and len(ops_existentes_resultado) == 2:
-                        ops_existentes_resp, _ = ops_existentes_resultado
-                        if ops_existentes_resp.get('success'):
-                            ops_mismo_dia = [op for op in ops_existentes_resp.get('data', []) if op.get('id') != op_a_planificar_id]
-                            if ops_mismo_dia:
-                                carga_existente_dict = self.calcular_carga_capacidad(ops_mismo_dia)
-                                carga_existente_dia = carga_existente_dict.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
-                    else: logger.error(f"Error inesperado al obtener OPs existentes para {fecha_actual_str}: {ops_existentes_resultado}")
-                    logger.debug(f"    Carga existente: {carga_existente_dia:.2f} min")
-
-                    capacidad_restante_dia = max(0.0, capacidad_dia_actual - carga_existente_dia)
-                    logger.debug(f"    Capacidad restante día: {capacidad_restante_dia:.2f} min")
-
-                    # --- MODIFICADO: Lógica para saltar días llenos ---
-                    if capacidad_restante_dia < 1:
-                        # Si el día está lleno, simplemente avanzamos al siguiente.
-                        # No es un error a menos que nunca encontremos espacio.
-                        logger.debug(f"Día {fecha_actual_str} lleno (Cap: {capacidad_dia_actual}, Carga: {carga_existente_dia}). Buscando siguiente...")
-                        fecha_actual_simulacion += timedelta(days=1)
-                        dia_actual_offset += 1
-                        continue # Saltar al siguiente día del bucle
-                    # --------------------------------------------------
-
-                    # --- ¡DÍA VÁLIDO ENCONTRADO! ---
-
-                    # Si es el primer día que encontramos con espacio, guardarlo
-                    if primer_dia_asignado is None:
-                        primer_dia_asignado = fecha_actual_simulacion
-                        logger.info(f"[AutoPlan] Capacidad encontrada. Iniciando asignación en: {fecha_actual_str}")
-
-                    # Incrementar contador de días *usados*
-                    dias_necesarios += 1
-                    fecha_fin_estimada = fecha_actual_simulacion # Actualizar la fecha de fin estimada
-
-                    carga_a_asignar_hoy = min(carga_restante_op, capacidad_restante_dia)
-
-                    # Esta comprobación es redundante si capacidad_restante_dia >= 1, pero es segura
-                    if carga_a_asignar_hoy > 0:
-                        carga_restante_op -= carga_a_asignar_hoy
-                        logger.debug(f"  -> Asignado {carga_a_asignar_hoy:.2f} min a {fecha_actual_str}. Restante OP: {carga_restante_op:.2f} min")
-
-                    fecha_actual_simulacion += timedelta(days=1)
-                    dia_actual_offset += 1
-
-                # --- FIN DEL BUCLE while ---
-
-                # --- MODIFICADO: Comprobación post-bucle ---
-
-                # Caso 1: El bucle terminó sin encontrar NINGÚN día con espacio
-                if primer_dia_asignado is None:
-                    logger.warning(f"SOBRECARGA (Horizonte excedido sin inicio): No se encontró capacidad para {carga_adicional_total:.0f} min en {max_dias_simulacion} días.")
-                    return self._generar_respuesta_sobrecarga(linea_propuesta, (fecha_actual_simulacion - timedelta(days=1)).isoformat(), 0, carga_adicional_total, 0, horizonte_excedido=True)
-
-                # Caso 2: El bucle terminó, asignamos algo, pero no todo
-                if carga_restante_op > 0.01:
-                    logger.warning(f"SOBRECARGA (Horizonte excedido con inicio): No cupo toda la carga. Faltan {carga_restante_op:.0f} min.")
-                    return self._generar_respuesta_sobrecarga(linea_propuesta, fecha_fin_estimada.isoformat(), 0, carga_restante_op, 0, horizonte_excedido=True)
-
-                # Caso 3: ¡Éxito! Cupo todo.
+                # Si la simulación fue exitosa, extraemos los datos
+                primer_dia_asignado = simulacion_result['fecha_inicio_real']
+                fecha_fin_estimada = simulacion_result['fecha_fin_estimada']
+                dias_necesarios = simulacion_result['dias_necesarios']
 
                 # ¡IMPORTANTE! Actualizar la fecha de inicio en 'asignaciones' a la real encontrada
                 asignaciones['fecha_inicio'] = primer_dia_asignado.isoformat()
@@ -601,31 +537,42 @@ class PlanificacionController(BaseController):
                 if not receta_id_agrupada: continue
 
                 # a) Calcular Tiempo de Producción y Línea Sugerida
+                # 1. Crear una "OP simulada" con la cantidad total
+                op_simulada = {
+                    'receta_id': receta_id_agrupada,
+                    'cantidad_planificada': cantidad_total_agrupada
+                }
+
+                # 2. Calcular la carga total en minutos usando el helper de la planificación real
+                carga_total_minutos_agg = float(self._calcular_carga_op(op_simulada)) #
+
+                if carga_total_minutos_agg > 0:
+                    data['sugerencia_t_prod_dias'] = math.ceil(carga_total_minutos_agg / 480) # Asumiendo 480 min/día
+                else:
+                    data['sugerencia_t_prod_dias'] = 0
+
+                # 3. Obtener compatibilidad de línea y sugerir (Lógica de sugerencia de línea separada)
                 receta_res = self.receta_model.find_by_id(receta_id_agrupada, 'id')
                 if receta_res.get('success'):
                     receta = receta_res['data']
-                    linea_compatible_str = receta.get('linea_compatible', '2') # <-- Obtener linea_compatible
-                    data['linea_compatible'] = linea_compatible_str # <-- Guardar linea_compatible
+                    linea_compatible_str = receta.get('linea_compatible', '2')
+                    data['linea_compatible'] = linea_compatible_str
 
+                    # Lógica de sugerencia de línea (esto puede permanecer igual)
                     linea_compatible_list = linea_compatible_str.split(',')
-                    tiempo_prep = receta.get('tiempo_preparacion_minutos', 0)
+                    # Los campos de tiempo L1/L2 ahora solo se usan para decidir la línea, no para calcular el tiempo
                     tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
                     tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
                     UMBRAL_CANTIDAD_LINEA_1 = 50
                     puede_l1 = '1' in linea_compatible_list and tiempo_l1 > 0
                     puede_l2 = '2' in linea_compatible_list and tiempo_l2 > 0
                     linea_sug_agg = 0
-                    tiempo_prod_unit_elegido_agg = 0
                     if puede_l1 and puede_l2:
                         linea_sug_agg = 1 if cantidad_total_agrupada >= UMBRAL_CANTIDAD_LINEA_1 else 2
-                        tiempo_prod_unit_elegido_agg = tiempo_l1 if linea_sug_agg == 1 else tiempo_l2
-                    elif puede_l1: linea_sug_agg = 1; tiempo_prod_unit_elegido_agg = tiempo_l1
-                    elif puede_l2: linea_sug_agg = 2; tiempo_prod_unit_elegido_agg = tiempo_l2
+                    elif puede_l1: linea_sug_agg = 1
+                    elif puede_l2: linea_sug_agg = 2
 
-                    if linea_sug_agg > 0:
-                         t_prod_minutos_agg = tiempo_prep + (tiempo_prod_unit_elegido_agg * cantidad_total_agrupada)
-                         data['sugerencia_t_prod_dias'] = math.ceil(t_prod_minutos_agg / 480)
-                         data['sugerencia_linea'] = linea_sug_agg
+                    data['sugerencia_linea'] = linea_sug_agg if linea_sug_agg > 0 else None
 
                 # b) Verificar Stock Agregado (sin cambios funcionales)
                 ingredientes_result = self.receta_model.get_ingredientes(receta_id_agrupada)
@@ -674,7 +621,7 @@ class PlanificacionController(BaseController):
 
 
     # --- MÉTODO REESCRITO ---
-    def obtener_planificacion_semanal(self, week_str: Optional[str] = None) -> tuple:
+    def obtener_planificacion_semanal(self, week_str: Optional[str] = None, ordenes_pre_cargadas: Optional[List[Dict]] = None) -> tuple:
         """
         Obtiene las OPs planificadas para una semana específica, calculando los días
         que cada OP ocupa y agrupándolas por día visible.
@@ -697,26 +644,34 @@ class PlanificacionController(BaseController):
                 week_str = start_of_week.strftime("%Y-%W") # Corregido a %W si %V daba error antes
             end_of_week = start_of_week + timedelta(days=6)
 
-            # 2. Obtener OPs RELEVANTES (que podrían estar activas en la semana)
-            #   - Que NO estén completadas/canceladas/consolidadas/pendientes
-            #   - Que empiecen ANTES del FIN de la semana
-            #   - (Opcional: añadir filtro para que terminen DESPUÉS del INICIO de la semana si tienes fecha_fin_estimada)
-            dias_previos_margen = 14 # Traer OPs que empezaron hasta 2 semanas antes, por si son largas
-            fecha_inicio_filtro = start_of_week - timedelta(days=dias_previos_margen)
+            if ordenes_pre_cargadas is not None:
+                # Usar la lista pre-cargada si se proveyó
+                ordenes_relevantes = ordenes_pre_cargadas
+                logger.debug("obtener_planificacion_semanal: Usando lista de OPs pre-cargada.")
+            else:
+                # Bloque de fallback: si no se pasa lista, buscarla como antes
+                logger.debug("obtener_planificacion_semanal: No se pasó lista pre-cargada, buscando OPs...")
+                dias_previos_margen = 14 # Traer OPs que empezaron hasta 2 semanas antes
+                fecha_inicio_filtro = start_of_week - timedelta(days=dias_previos_margen)
 
-            filtros_amplios = {
-                'fecha_inicio_planificada_desde': fecha_inicio_filtro.isoformat(),
-                'fecha_inicio_planificada_hasta': end_of_week.isoformat(), # Solo necesitamos las que empiezan hasta el final de la semana
-                'estado': ('in', [ # Solo las activas en producción
-                    'EN ESPERA', # Podría cambiar a Lista si llega stock
-                    'LISTA PARA PRODUCIR',
-                    'EN_LINEA_1',
-                    'EN_LINEA_2',
-                    'EN_EMPAQUETADO',
-                    'CONTROL_DE_CALIDAD'
-                 ])
-            }
-            response_ops, _ = self.orden_produccion_controller.obtener_ordenes(filtros_amplios)
+                filtros_amplios = {
+                    'fecha_inicio_planificada_desde': fecha_inicio_filtro.isoformat(),
+                    'fecha_inicio_planificada_hasta': end_of_week.isoformat(),
+                    'estado': ('in', [
+                        'EN ESPERA',
+                        'LISTA PARA PRODUCIR',
+                        'EN_LINEA_1',
+                        'EN_LINEA_2',
+                        'EN_EMPAQUETADO',
+                        'CONTROL_DE_CALIDAD'
+                     ])
+                }
+                response_ops, _ = self.orden_produccion_controller.obtener_ordenes(filtros_amplios)
+                if not response_ops.get('success'):
+                    return self.error_response("Error al obtener OPs para cálculo semanal.", 500)
+
+                ordenes_relevantes = response_ops.get('data', [])
+
             if not response_ops.get('success'):
                 return self.error_response("Error al obtener OPs para cálculo semanal.", 500)
 
@@ -1187,3 +1142,155 @@ class PlanificacionController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico en confirmar_aprobacion_lote: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500), 500
+
+
+    def _simular_asignacion_carga(self, carga_total_op: float, linea_propuesta: int, fecha_inicio_busqueda: date, op_id_a_excluir: Optional[int] = None) -> dict:
+        """
+        Simula la asignación de carga día por día y devuelve la fecha de inicio real y la fecha de fin.
+        Reutiliza la lógica del bucle 'while' de 'consolidar_y_aprobar_lote'.
+
+        Devuelve: {
+            'success': bool,
+            'fecha_inicio_real': date | None,
+            'fecha_fin_estimada': date | None,
+            'dias_necesarios': int,
+            'error_data': dict | None
+        }
+        """
+        carga_restante_op = carga_total_op
+        fecha_actual_simulacion = fecha_inicio_busqueda
+        dia_actual_offset = 0
+        max_dias_simulacion = 30 # Horizonte de búsqueda
+        dias_necesarios = 0
+
+        primer_dia_asignado = None
+        fecha_fin_estimada = fecha_inicio_busqueda
+
+        while carga_restante_op > 0.01 and dia_actual_offset < max_dias_simulacion:
+            fecha_actual_str = fecha_actual_simulacion.isoformat()
+
+            capacidad_dict_dia = self.obtener_capacidad_disponible([linea_propuesta], fecha_actual_simulacion, fecha_actual_simulacion)
+            capacidad_dia_actual = capacidad_dict_dia.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
+
+            if capacidad_dia_actual <= 0:
+                fecha_actual_simulacion += timedelta(days=1)
+                dia_actual_offset += 1
+                continue # Saltar día no laborable
+
+            # Obtener carga existente
+            ops_existentes_resultado = self.orden_produccion_controller.obtener_ordenes(filtros={
+                'fecha_inicio_planificada': fecha_actual_str,
+                'linea_asignada': linea_propuesta,
+                'estado': ('not.in', ['PENDIENTE', 'COMPLETADA', 'CANCELADA', 'CONSOLIDADA'])
+            })
+            carga_existente_dia = 0.0
+            if isinstance(ops_existentes_resultado, tuple) and len(ops_existentes_resultado) == 2:
+                ops_existentes_resp, _ = ops_existentes_resultado
+                if ops_existentes_resp.get('success'):
+                    # Excluir la OP que estamos replanificando (si aplica)
+                    ops_mismo_dia = [op for op in ops_existentes_resp.get('data', []) if op.get('id') != op_id_a_excluir]
+                    if ops_mismo_dia:
+                        carga_existente_dict = self.calcular_carga_capacidad(ops_mismo_dia)
+                        carga_existente_dia = carga_existente_dict.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
+
+            capacidad_restante_dia = max(0.0, capacidad_dia_actual - carga_existente_dia)
+
+            if capacidad_restante_dia < 1:
+                fecha_actual_simulacion += timedelta(days=1)
+                dia_actual_offset += 1
+                continue # Saltar día lleno
+
+            # Día válido encontrado
+            if primer_dia_asignado is None:
+                primer_dia_asignado = fecha_actual_simulacion
+
+            dias_necesarios += 1
+            fecha_fin_estimada = fecha_actual_simulacion
+            carga_a_asignar_hoy = min(carga_restante_op, capacidad_restante_dia)
+
+            if carga_a_asignar_hoy > 0:
+                carga_restante_op -= carga_a_asignar_hoy
+
+            fecha_actual_simulacion += timedelta(days=1)
+            dia_actual_offset += 1
+
+        # --- Fin del bucle ---
+
+        if primer_dia_asignado is None:
+            error_data, _ = self._generar_respuesta_sobrecarga(linea_propuesta, (fecha_actual_simulacion - timedelta(days=1)).isoformat(), 0, carga_total_op, 0, horizonte_excedido=True)
+            return {'success': False, 'fecha_inicio_real': None, 'fecha_fin_estimada': None, 'dias_necesarios': 0, 'error_data': error_data}
+
+        if carga_restante_op > 0.01:
+            error_data, _ = self._generar_respuesta_sobrecarga(linea_propuesta, fecha_fin_estimada.isoformat(), 0, carga_restante_op, 0, horizonte_excedido=True)
+            return {'success': False, 'fecha_inicio_real': primer_dia_asignado, 'fecha_fin_estimada': fecha_fin_estimada, 'dias_necesarios': dias_necesarios, 'error_data': error_data}
+
+        return {
+            'success': True,
+            'fecha_inicio_real': primer_dia_asignado,
+            'fecha_fin_estimada': fecha_fin_estimada,
+            'dias_necesarios': dias_necesarios,
+            'error_data': None
+        }
+
+    def api_validar_fecha_requerida(self, items_data: List[Dict], fecha_requerida_str: str) -> tuple:
+        """
+        Endpoint API para validar si un conjunto de items de pedido puede
+        ser producido para una fecha requerida.
+        """
+        try:
+            fecha_requerida_cliente = date.fromisoformat(fecha_requerida_str)
+            fecha_sugerida_mas_tardia = date.today()
+
+            # 1. Simular la carga de cada item que requiera producción
+            for item in items_data:
+                producto_id = item.get('producto_id')
+                cantidad = float(item.get('cantidad', 0))
+                if not producto_id or cantidad <= 0:
+                    continue
+
+                # 2. Verificar si el producto necesita producción (tiene receta)
+                receta_res = self.receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
+                if not receta_res.get('success') or not receta_res.get('data'):
+                    continue # Este item es solo de stock, no afecta la planificación de producción
+
+                receta = receta_res['data'][0]
+
+                # 3. Calcular carga total para este item
+                op_simulada = {'receta_id': receta['id'], 'cantidad_planificada': cantidad}
+                carga_total_min = float(self._calcular_carga_op(op_simulada))
+                if carga_total_min <= 0:
+                    continue
+
+                # 4. Encontrar línea sugerida (lógica de 'obtener_ops_pendientes')
+                # (Esta lógica se simplifica, puedes mejorarla)
+                linea_compatible_str = receta.get('linea_compatible', '2')
+                linea_compatible_list = linea_compatible_str.split(',')
+                linea_sugerida = int(linea_compatible_list[0]) # Tomar la primera compatible como sugerencia simple
+
+                # 5. Simular asignación
+                simulacion_result = self._simular_asignacion_carga(
+                    carga_total_op=carga_total_min,
+                    linea_propuesta=linea_sugerida,
+                    fecha_inicio_busqueda=date.today(), # Buscar desde hoy
+                    op_id_a_excluir=None # Es un pedido nuevo, no hay OP para excluir
+                )
+
+                if simulacion_result['success']:
+                    fecha_fin_item = simulacion_result['fecha_fin_estimada']
+                    fecha_sugerida_mas_tardia = max(fecha_sugerida_mas_tardia, fecha_fin_item)
+                else:
+                    # Si la simulación falla (sin capacidad en 30 días), devolvemos el error
+                    return self.error_response(f"No hay capacidad en los próximos 30 días para {item.get('nombre_producto')}. {simulacion_result['error_data'].get('message')}", 409)
+
+            # 6. Comparar y devolver resultado
+            data_respuesta = {
+                'fecha_requerida_cliente': fecha_requerida_cliente.isoformat(),
+                'fecha_sugerida_mas_proxima': fecha_sugerida_mas_tardia.isoformat(),
+                'llega_a_tiempo': fecha_sugerida_mas_tardia <= fecha_requerida_cliente
+            }
+
+            return self.success_response(data=data_respuesta)
+
+        except Exception as e:
+            logger.error(f"Error en api_validar_fecha_requerida: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)

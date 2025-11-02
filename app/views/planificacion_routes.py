@@ -84,33 +84,14 @@ def index():
     ordenes_combinadas = list(ops_combinadas_dict.values())
     logger.info(f"Total OPs consideradas para CRP: {len(ordenes_para_crp)}")
 
-    # --- NUEVO FILTRO POR FECHA ---
-    ordenes_para_crp_filtradas = []
-    if inicio_semana and fin_semana: # Asegurarse que las fechas son válidas
-        for op in ordenes_combinadas:
-            fecha_inicio_op_str = op.get('fecha_inicio_planificada')
-            if fecha_inicio_op_str:
-                try:
-                    fecha_inicio_op = date.fromisoformat(fecha_inicio_op_str)
-                    # Incluir solo si la fecha de inicio está DENTRO de la semana seleccionada
-                    if inicio_semana <= fecha_inicio_op <= fin_semana:
-                        ordenes_para_crp_filtradas.append(op)
-                except ValueError:
-                    logger.warning(f"OP {op.get('codigo')} omitida de CRP (fecha inválida): {fecha_inicio_op_str}")
-            # else: # Opcional: ¿Incluir OPs sin fecha planificada? Probablemente no para CRP.
-            #    logger.warning(f"OP {op.get('codigo')} omitida de CRP (sin fecha inicio planificada)")
-    # -----------------------------
 
-    logger.info(f"Total OPs filtradas para CRP (semana {week_str}): {len(ordenes_para_crp_filtradas)}")
-
-    # --- CALCULAR CARGA Y CAPACIDAD (Usando la lista filtrada) ---
+    # --- CALCULAR CARGA Y CAPACIDAD (Usando la lista combinada) ---
     carga_calculada = {}
     capacidad_disponible = {}
-    # Esta condición ahora usa la lista filtrada
-    if ordenes_para_crp_filtradas and inicio_semana and fin_semana:
-        carga_calculada = controller.calcular_carga_capacidad(ordenes_para_crp_filtradas) # <--- PASAR LISTA FILTRADA
+    # Esta condición ahora usa la lista combinada (ordenes_para_crp)
+    if ordenes_para_crp and inicio_semana and fin_semana: # <-- CAMBIO AQUÍ
+        carga_calculada = controller.calcular_carga_capacidad(ordenes_para_crp) # <--- CAMBIO AQUÍ
         capacidad_disponible = controller.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
-    # -------------------------------------------------------------
 
     # ... (lógica para obtener supervisores, operarios, columnas, navegación - sin cambios) ...
     usuario_controller = UsuarioController()
@@ -268,4 +249,20 @@ def forzar_planificacion():
     # usuario_id = get_jwt_identity() # Obtener usuario del token
     usuario_id = 1 # Usar un ID de prueba si no tienes auth
     response, status_code = controller.forzar_auto_planificacion(usuario_id)
+    return jsonify(response), status_code
+
+@planificacion_bp.route('/api/validar-fecha-requerida', methods=['POST'])
+##@jwt_required()
+def validar_fecha_requerida_api():
+    data = request.json
+    items_data = data.get('items', [])
+    fecha_requerida = data.get('fecha_requerida')
+
+    if not items_data or not fecha_requerida:
+        return jsonify({'success': False, 'error': 'Faltan items o fecha_requerida.'}), 400
+
+
+    controller = PlanificacionController()
+
+    response, status_code = controller.api_validar_fecha_requerida(items_data, fecha_requerida)
     return jsonify(response), status_code
