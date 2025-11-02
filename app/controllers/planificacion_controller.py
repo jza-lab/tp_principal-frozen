@@ -13,6 +13,9 @@ from app.controllers.inventario_controller import InventarioController
 from app.models.centro_trabajo_model import CentroTrabajoModel
 from app.models.operacion_receta_model import OperacionRecetaModel
 from decimal import Decimal
+import os # <-- Añadir
+from datetime import date # <-- Asegúrate que esté
+from flask import jsonify # <-- Añadir (o usar desde tu BaseController si ya lo tienes)
 
 
 logger = logging.getLogger(__name__)
@@ -161,17 +164,26 @@ class PlanificacionController(BaseController):
                 dia_actual_offset = 0
                 max_dias_simulacion = 30
 
+                # --- MODIFICADO: Nuevas variables para rastrear el inicio real ---
+                primer_dia_asignado = None
+                fecha_fin_estimada = fecha_inicio_propuesta # Se actualizará al último día USADO
+                # ----------------------------------------------------------------
+
                 while carga_restante_op > 0.01 and dia_actual_offset < max_dias_simulacion:
                     fecha_actual_str = fecha_actual_simulacion.isoformat()
-                    dias_necesarios += 1
-                    fecha_fin_estimada = fecha_actual_simulacion
+                    # --- MODIFICADO: No incrementar días necesarios aquí ---
+                    # dias_necesarios += 1 <-- Se mueve abajo
 
                     capacidad_dict_dia = self.obtener_capacidad_disponible([linea_propuesta], fecha_actual_simulacion, fecha_actual_simulacion)
                     capacidad_dia_actual = capacidad_dict_dia.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
 
-                    if capacidad_dia_actual <= 0 and carga_restante_op > 0.01:
-                         logger.warning(f"SOBRECARGA (Día sin capacidad): Línea {linea_propuesta}, Fecha: {fecha_actual_str}")
-                         return self._generar_respuesta_sobrecarga(linea_propuesta, fecha_actual_str, 0, carga_restante_op, 0)
+                    # --- MODIFICADO: Lógica para saltar días no laborables ---
+                    if capacidad_dia_actual <= 0:
+                        logger.debug(f"Día {fecha_actual_str} sin capacidad (feriado/inactivo). Buscando siguiente...")
+                        fecha_actual_simulacion += timedelta(days=1)
+                        dia_actual_offset += 1
+                        continue # Saltar al siguiente día del bucle
+                    # -------------------------------------------------------
 
                     # Obtener carga existente (manejo seguro de respuesta)
                     ops_existentes_resultado = self.orden_produccion_controller.obtener_ordenes(filtros={
@@ -190,17 +202,33 @@ class PlanificacionController(BaseController):
                     else: logger.error(f"Error inesperado al obtener OPs existentes para {fecha_actual_str}: {ops_existentes_resultado}")
                     logger.debug(f"    Carga existente: {carga_existente_dia:.2f} min")
 
-
                     capacidad_restante_dia = max(0.0, capacidad_dia_actual - carga_existente_dia)
                     logger.debug(f"    Capacidad restante día: {capacidad_restante_dia:.2f} min")
 
+                    # --- MODIFICADO: Lógica para saltar días llenos ---
+                    if capacidad_restante_dia < 1:
+                        # Si el día está lleno, simplemente avanzamos al siguiente.
+                        # No es un error a menos que nunca encontremos espacio.
+                        logger.debug(f"Día {fecha_actual_str} lleno (Cap: {capacidad_dia_actual}, Carga: {carga_existente_dia}). Buscando siguiente...")
+                        fecha_actual_simulacion += timedelta(days=1)
+                        dia_actual_offset += 1
+                        continue # Saltar al siguiente día del bucle
+                    # --------------------------------------------------
 
-                    if capacidad_restante_dia < 1 and carga_restante_op > 0.01:
-                        logger.warning(f"SOBRECARGA (Día ya lleno): Línea {linea_propuesta}, Fecha: {fecha_actual_str}.")
-                        return self._generar_respuesta_sobrecarga(linea_propuesta, fecha_actual_str, capacidad_dia_actual, carga_restante_op, carga_existente_dia)
+                    # --- ¡DÍA VÁLIDO ENCONTRADO! ---
+
+                    # Si es el primer día que encontramos con espacio, guardarlo
+                    if primer_dia_asignado is None:
+                        primer_dia_asignado = fecha_actual_simulacion
+                        logger.info(f"[AutoPlan] Capacidad encontrada. Iniciando asignación en: {fecha_actual_str}")
+
+                    # Incrementar contador de días *usados*
+                    dias_necesarios += 1
+                    fecha_fin_estimada = fecha_actual_simulacion # Actualizar la fecha de fin estimada
 
                     carga_a_asignar_hoy = min(carga_restante_op, capacidad_restante_dia)
 
+                    # Esta comprobación es redundante si capacidad_restante_dia >= 1, pero es segura
                     if carga_a_asignar_hoy > 0:
                         carga_restante_op -= carga_a_asignar_hoy
                         logger.debug(f"  -> Asignado {carga_a_asignar_hoy:.2f} min a {fecha_actual_str}. Restante OP: {carga_restante_op:.2f} min")
@@ -208,11 +236,27 @@ class PlanificacionController(BaseController):
                     fecha_actual_simulacion += timedelta(days=1)
                     dia_actual_offset += 1
 
-                if carga_restante_op > 0.01: # No cupo en el horizonte
-                    logger.warning(f"SOBRECARGA (Horizonte excedido)")
+                # --- FIN DEL BUCLE while ---
+
+                # --- MODIFICADO: Comprobación post-bucle ---
+
+                # Caso 1: El bucle terminó sin encontrar NINGÚN día con espacio
+                if primer_dia_asignado is None:
+                    logger.warning(f"SOBRECARGA (Horizonte excedido sin inicio): No se encontró capacidad para {carga_adicional_total:.0f} min en {max_dias_simulacion} días.")
+                    return self._generar_respuesta_sobrecarga(linea_propuesta, (fecha_actual_simulacion - timedelta(days=1)).isoformat(), 0, carga_adicional_total, 0, horizonte_excedido=True)
+
+                # Caso 2: El bucle terminó, asignamos algo, pero no todo
+                if carga_restante_op > 0.01:
+                    logger.warning(f"SOBRECARGA (Horizonte excedido con inicio): No cupo toda la carga. Faltan {carga_restante_op:.0f} min.")
                     return self._generar_respuesta_sobrecarga(linea_propuesta, fecha_fin_estimada.isoformat(), 0, carga_restante_op, 0, horizonte_excedido=True)
 
-            logger.info(f"Verificación CRP OK. OP {op_a_planificar_id} requiere ~{dias_necesarios} día(s), finalizando aprox. {fecha_fin_estimada.isoformat()}.")
+                # Caso 3: ¡Éxito! Cupo todo.
+
+                # ¡IMPORTANTE! Actualizar la fecha de inicio en 'asignaciones' a la real encontrada
+                asignaciones['fecha_inicio'] = primer_dia_asignado.isoformat()
+
+                logger.info(f"Verificación CRP OK. OP {op_a_planificar_id} requiere ~{dias_necesarios} día(s).")
+                logger.info(f"Inicio real: {primer_dia_asignado.isoformat()}, Fin aprox: {fecha_fin_estimada.isoformat()}.")
 
             if dias_necesarios > 1:
                 # Devolver respuesta para confirmación del usuario
@@ -884,3 +928,170 @@ class PlanificacionController(BaseController):
             2: dict(carga_distribuida[2])
         }
         return resultado_final
+
+    def _ejecutar_planificacion_automatica(self, usuario_id: int, dias_horizonte: int = 1) -> dict:
+        """
+        Lógica central para la planificación automática.
+        Intenta planificar OPs PENDIENTES en el horizonte dado.
+        """
+        logger.info(f"[AutoPlan] Iniciando ejecución para {dias_horizonte} día(s). Usuario: {usuario_id}")
+
+        # 1. Obtener OPs agrupadas (las que están 'PENDIENTE')
+        res_ops_pendientes, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte)
+        if not res_ops_pendientes.get('success'):
+            logger.error("[AutoPlan] Fallo al obtener OPs pendientes.")
+            return {'errores': ['No se pudieron obtener OPs pendientes.']}
+
+        grupos_a_planificar = res_ops_pendientes.get('data', {}).get('mps_agrupado', [])
+        if not grupos_a_planificar:
+            logger.info("[AutoPlan] No se encontraron OPs pendientes en el horizonte.")
+            return {'ops_planificadas': [], 'ops_con_oc': [], 'errores': []}
+
+        # 2. Definir contadores para el resumen
+        ops_planificadas_exitosamente = []
+        ops_con_oc_generada = []
+        errores_encontrados = []
+
+        fecha_planificacion_str = date.today().isoformat()
+
+        # 3. Iterar sobre cada grupo de producto
+        for grupo in grupos_a_planificar:
+            op_ids = [op['id'] for op in grupo['ordenes']]
+            op_codigos = [op['codigo'] for op in grupo['ordenes']]
+            producto_nombre = grupo.get('producto_nombre', 'N/A')
+
+            try:
+                # 4. Determinar asignaciones automáticas
+                linea_sugerida = grupo.get('sugerencia_linea')
+                if not linea_sugerida:
+                    msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) omitido: No hay línea sugerida."
+                    logger.warning(f"[AutoPlan] {msg}")
+                    errores_encontrados.append(msg)
+                    continue
+
+                asignaciones_auto = {
+                    'linea_asignada': linea_sugerida,
+                    'fecha_inicio': fecha_planificacion_str,
+                    'supervisor_id': None, # El supervisor asignará esto manualmente
+                    'operario_id': None
+                }
+
+                logger.info(f"[AutoPlan] Intentando planificar OPs {op_codigos} en Línea {linea_sugerida} para {fecha_planificacion_str}...")
+
+                # 5. Llamar a la lógica de consolidación y aprobación existente
+                # Esta función ya maneja la consolidación, verificación de CAPACIDAD
+                # y (si pasa) la aprobación (que a su vez verifica STOCK y crea OC)
+                res_planif_dict, res_planif_status = self.consolidar_y_aprobar_lote(
+                    op_ids, asignaciones_auto, usuario_id
+                )
+
+                # 6. Interpretar la respuesta
+                if res_planif_status == 200 and res_planif_dict.get('success'):
+                    # ¡Éxito! La OP se planificó
+                    logger.info(f"[AutoPlan] ÉXITO: OPs {op_codigos} planificadas.")
+                    ops_planificadas_exitosamente.extend(op_codigos)
+
+                    # Verificar si se generó una OC (respuesta de aprobar_orden)
+                    if res_planif_dict.get('data', {}).get('oc_generada'):
+                        oc_codigo = res_planif_dict['data'].get('oc_codigo', 'N/A')
+                        logger.info(f"[AutoPlan] -> Se generó OC {oc_codigo} para OPs {op_codigos}.")
+                        ops_con_oc_generada.append({'ops': op_codigos, 'oc': oc_codigo})
+
+                elif res_planif_dict.get('error') == 'MULTI_DIA_CONFIRM':
+                    # --- ¡NUEVA LÓGICA DE APROBACIÓN AUTOMÁTICA MULTI-DÍA! ---
+                    dias_nec = res_planif_dict.get('dias_necesarios', 'varios')
+                    logger.info(f"[AutoPlan] OP {op_codigos} requiere {dias_nec} días. Aprobando automáticamente...")
+
+                    # Extraer los datos necesarios que la función de confirmación nos devolvió
+                    op_id_para_confirmar = res_planif_dict.get('op_id_confirmar')
+                    asignaciones_para_confirmar = res_planif_dict.get('asignaciones_confirmar')
+
+                    if not op_id_para_confirmar or not asignaciones_para_confirmar:
+                        msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) es multi-día pero faltan datos para auto-confirmar."
+                        logger.error(f"[AutoPlan] {msg}")
+                        errores_encontrados.append(msg)
+                        continue # Saltar al siguiente grupo
+
+                    try:
+                        # Llamar a la misma función que usaría el flujo manual al confirmar
+                        # Esta función ya existe: _ejecutar_aprobacion_final
+                        res_aprob_dict, status_aprob = self._ejecutar_aprobacion_final(
+                            op_id_para_confirmar,
+                            asignaciones_para_confirmar,
+                            usuario_id
+                        )
+
+                        # Interpretar la respuesta de la aprobación final
+                        if status_aprob < 400 and res_aprob_dict.get('success'):
+                            logger.info(f"[AutoPlan] ÉXITO (Multi-Día): OPs {op_codigos} planificadas.")
+                            # Usamos op_codigos que son los códigos de las OPs originales
+                            # que se consolidaron en op_id_para_confirmar
+                            ops_planificadas_exitosamente.extend(op_codigos)
+
+                            # Re-chequear si esta aprobación generó una OC
+                            # (La función aprobar_orden dentro de _ejecutar_aprobacion_final maneja esto)
+                            if res_aprob_dict.get('data', {}).get('oc_generada'):
+                                oc_codigo = res_aprob_dict['data'].get('oc_codigo', 'N/A')
+                                logger.info(f"[AutoPlan] -> Se generó OC {oc_codigo} para OPs {op_codigos}.")
+                                ops_con_oc_generada.append({'ops': op_codigos, 'oc': oc_codigo})
+                        else:
+                            # La aprobación final falló (ej. error de stock crítico en el último minuto)
+                            msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló en la aprobación final multi-día: {res_aprob_dict.get('error', 'Error desconocido')}"
+                            logger.error(f"[AutoPlan] {msg}")
+                            errores_encontrados.append(msg)
+
+                    except Exception as e_aprob:
+                        msg = f"Excepción crítica al auto-aprobar OPs {op_codigos}: {str(e_aprob)}"
+                        logger.error(f"[AutoPlan] {msg}", exc_info=True)
+                        errores_encontrados.append(msg)
+                    # --- FIN NUEVA LÓGICA ---
+
+                elif res_planif_dict.get('error') == 'SOBRECARGA_CAPACIDAD':
+                    # Error de capacidad
+                    msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló por SOBRECARGA de capacidad."
+                    logger.warning(f"[AutoPlan] {msg}")
+                    errores_encontrados.append(f"{msg} - {res_planif_dict.get('message', '')}")
+
+                else:
+                    # Otro error (ej. fallo al reservar stock, etc.)
+                    msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló: {res_planif_dict.get('error', 'Desconocido')}"
+                    logger.error(f"[AutoPlan] {msg}")
+                    errores_encontrados.append(msg)
+
+            except Exception as e:
+                msg = f"Excepción crítica al procesar OPs {op_codigos}: {str(e)}"
+                logger.error(f"[AutoPlan] {msg}", exc_info=True)
+                errores_encontrados.append(msg)
+
+        # 7. Devolver el resumen
+        resumen = {
+            'ops_planificadas': ops_planificadas_exitosamente,
+            'ops_con_oc': ops_con_oc_generada,
+            'errores': errores_encontrados,
+            'total_planificadas': len(ops_planificadas_exitosamente),
+            'total_oc_generadas': len(ops_con_oc_generada),
+            'total_errores': len(errores_encontrados)
+        }
+        logger.info(f"[AutoPlan] Finalizado. Resumen: {resumen}")
+        return resumen
+
+    def forzar_auto_planificacion(self, usuario_id: int) -> tuple:
+        """
+        Endpoint manual para forzar la ejecución de la planificación automática.
+        Usa un horizonte más amplio (ej. 7 días) por defecto.
+        """
+        try:
+            # Puedes hacer que el horizonte sea un parámetro de la request si quieres
+            dias_horizonte_manual = 7
+
+            # Reutiliza la lógica central
+            resumen = self._ejecutar_planificacion_automatica(
+                usuario_id=usuario_id,
+                dias_horizonte=dias_horizonte_manual
+            )
+
+            return self.success_response(data=resumen, message="Planificación manual ejecutada.")
+
+        except Exception as e:
+            logger.error(f"Error en forzar_auto_planificacion: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)

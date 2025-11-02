@@ -7,11 +7,17 @@ from app.controllers.usuario_controller import UsuarioController
 from datetime import date, timedelta, datetime # <--- SE AÑADIÓ DATETIME
 from app.utils.decorators import permission_required
 from datetime import date, timedelta
+from app import csrf
+
 
 planificacion_bp = Blueprint('planificacion', __name__, url_prefix='/planificacion')
 
 logger = logging.getLogger(__name__)
 
+
+# --- 2. ¡Esta es la línea clave! ---
+csrf.exempt(planificacion_bp)
+# ------------------------------------
 
 @planificacion_bp.route('/') # La ruta principal ahora manejará todo
 @permission_required(accion='consultar_plan_de_produccion')
@@ -250,4 +256,14 @@ def consolidar_y_aprobar_api():
         asignaciones=data.get('asignaciones', {}),
         usuario_id=usuario_id
     )
+    return jsonify(response), status_code
+
+@planificacion_bp.route('/forzar_auto_planificacion', methods=['POST'])
+##@jwt_required() # Proteger el endpoint
+# @admin_required # Proteger aún más
+def forzar_planificacion():
+    controller = PlanificacionController()
+    # usuario_id = get_jwt_identity() # Obtener usuario del token
+    usuario_id = 1 # Usar un ID de prueba si no tienes auth
+    response, status_code = controller.forzar_auto_planificacion(usuario_id)
     return jsonify(response), status_code

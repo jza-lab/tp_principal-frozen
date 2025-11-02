@@ -10,6 +10,7 @@ from datetime import date
 
 inventario_view_bp = Blueprint('inventario_view', __name__, url_prefix='/inventario')
 
+
 @inventario_view_bp.route('/')
 @permission_required(accion='almacen_consulta_stock')
 def listar_lotes():
