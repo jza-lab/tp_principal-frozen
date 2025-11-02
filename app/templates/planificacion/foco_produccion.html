@@ -8,93 +8,299 @@
 
 {% block app_content %}
 <div class="foco-container" id="foco-container" data-op-id="{{ orden.id }}">
-    <!-- Encabezado con opción para volver -->
-    <div class="foco-header">
-        <a href="{{ url_for('produccion_kanban.tablero_produccion') }}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-arrow-left"></i> Volver al Tablero
-        </a>
-        <h2 class="h4 mb-0">Orden de Producción Activa</h2>
-    </div>
-
-    <!-- Panel de Pausa (inicialmente oculto) -->
+    
     <div class="pause-overlay" id="pause-overlay" style="display: none;">
         <div class="pause-overlay-content">
-            <i class="bi bi-pause-circle-fill pause-icon"></i>
-            <h1>PRODUCCIÓN PAUSADA</h1>
+            <div class="pause-icon-container">
+                <i class="bi bi-pause-circle-fill pause-icon-main"></i>
+                <div class="pulse-ring"></div>
+            </div>
+            <h1 class="pause-title">PRODUCCIÓN PAUSADA</h1>
+            <p class="pause-subtitle">El cronómetro está detenido</p>
+            <div class="pause-info-card">
+                <div class="pause-info-row">
+                    <span class="pause-info-label">Motivo:</span>
+                    <span class="pause-info-value" id="motivo-pausa-actual">Esperando reanudar...</span>
+                </div>
+                <div class="pause-info-row">
+                    <span class="pause-info-label">Tiempo en pausa:</span>
+                    <span class="pause-info-value" id="tiempo-pausa">00:00:00</span>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Contenido Principal -->
+    <div class="foco-header">
+        <div class="header-left">
+            <a href="{{ url_for('produccion_kanban.tablero_produccion') }}" class="btn btn-back">
+                <i class="bi bi-arrow-left"></i> Volver al Tablero
+            </a>
+        </div>
+        
+        <div class="header-center">
+            <h2 class="header-title">Orden de Producción Activa</h2>
+            <div class="header-badges">
+                <span class="badge-status badge-active" id="status-badge">
+                    <i class="bi bi-play-circle-fill"></i> EN PRODUCCIÓN
+                </span>
+                <span class="badge-line">
+                    <i class="bi bi-diagram-3"></i> Línea {{ orden.linea_asignada or 'N/D' }}
+                </span>
+            </div>
+        </div>
+
+<!----        <div class="header-right">
+            <button class="btn btn-help" title="Llamar al supervisor">
+                <i class="bi bi-headset"></i>
+            </button>
+        </div> -->
+    </div>
+
     <div class="foco-body">
-        <!-- Columna Izquierda: Datos Principales y Progreso -->
-        <div class="foco-main-col">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h3>{{ orden.producto_nombre }}</h3>
-                    <p class="text-muted mb-0">Nº de OP: <strong>{{ orden.codigo }}</strong></p>
+        
+        {#  Columna izquierda informacion de la orden #}
+        <div class="foco-col foco-col-left">
+            
+            {# Card: Información del Producto #}
+            <div class="card card-product">
+                <div class="card-header-custom">
+                    <i class="bi bi-box-seam"></i> INFORMACIÓN DEL PRODUCTO
                 </div>
                 <div class="card-body">
-                    <h4>Objetivo de Producción</h4>
-                    <p class="display-4">{{ orden.cantidad_planificada }} kg</p>
-
-                    <hr>
-
-                    <h4>Progreso Actual</h4>
-                    <div class="row text-center mb-2">
-                        <div class="col">
-                            <div class="h5">Producido (OK)</div>
-                            <p class="display-6" id="cantidad-producida">{{ orden.cantidad_producida or 0 }} kg</p>
-                        </div>
-                        <div class="col">
-                            <div class="h5">Desperdicio</div>
-                            <p class="display-6" id="cantidad-desperdicio">0 kg</p>
-                        </div>
+                    <h3 class="product-name">{{ orden.producto_nombre }}</h3>
+                    <div class="product-code">
+                        <i class="bi bi-upc-scan"></i> {{ orden.codigo }}
                     </div>
-                    <div class="progress" style="height: 25px;">
-                        <div id="progress-bar" class="progress-bar" role="progressbar" style="width: {{ (orden.cantidad_producida or 0) / orden.cantidad_planificada * 100 }}%;" aria-valuenow="{{ (orden.cantidad_producida or 0) / orden.cantidad_planificada * 100 }}" aria-valuemin="0" aria-valuemax="100"></div>
-                    </div>
-
-                    <hr>
-
-                    <h4>Tiempo de Trabajo</h4>
-                    <div class="timer-display" id="timer">00:00:00</div>
-                </div>
-                <div class="card-footer">
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-primary btn-lg" id="btn-reportar-avance" data-bs-toggle="modal" data-bs-target="#modalReportarAvance"><i class="bi bi-check-circle-fill me-2"></i>Reportar Avance</button>
-                        <button class="btn btn-warning btn-lg" id="btn-pausar-reanudar" data-bs-toggle="modal" data-bs-target="#modalPausarProduccion"><i class="bi bi-pause-fill me-2"></i>Pausar Trabajo</button>
+                    <div class="product-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">Lote:</span>
+                            <span class="meta-value">{{ orden.lote or 'AUTO' }}</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Fecha Meta:</span>
+                            <span class="meta-value">{{ orden.fecha_meta or 'N/D' }}</span>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Columna Derecha: Información de Apoyo -->
-        <div class="foco-side-col">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="bi bi-info-circle me-2"></i>Información de Apoyo</h5>
+            {# Card: Materiales / Receta #}
+            <div class="card card-materials">
+                <div class="card-header-custom">
+                    <i class="bi bi-list-check"></i> MATERIALES CLAVE
                 </div>
                 <div class="card-body">
-                    <h6>Materiales Clave / Receta</h6>
-                    <ul class="list-group list-group-flush">
+                    <div class="materials-list">
                         {% for ing in ingredientes %}
-                            <li class="list-group-item">{{ ing.nombre_insumo }} - {{ ing.cantidad }} {{ ing.unidad_medida }}</li>
+                        <div class="material-item">
+                            <div class="material-icon">
+                                <i class="bi bi-check-circle-fill"></i>
+                            </div>
+                            <div class="material-info">
+                                <span class="material-name">{{ ing.nombre_insumo }}</span>
+                                <span class="material-qty">{{ ing.cantidad }} {{ ing.unidad_medida }}</span>
+                            </div>
+                        </div>
                         {% else %}
-                            <li class="list-group-item">No se encontraron ingredientes.</li>
+                        <p class="text-muted text-center">Sin materiales definidos</p>
                         {% endfor %}
-                    </ul>
-                    <div class="d-grid mt-3">
-                        <a href="#" class="btn btn-outline-primary" target="_blank">
-                            <i class="bi bi-file-earmark-pdf me-2"></i>Ver Receta (PDF)
-                        </a>
+                    </div>
+                    <button class="btn btn-outline-primary btn-block mt-3">
+                        <i class="bi bi-file-earmark-pdf"></i> Ver Receta (PDF)
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        {#  Columna central: métricas y progreso #}
+        <div class="foco-col foco-col-center">
+            
+            {# Panel: Objetivo de Producción #}
+            <div class="objetivo-panel">
+                <div class="objetivo-label">OBJETIVO DE PRODUCCIÓN</div>
+                <div class="objetivo-cantidad">
+                    {{ orden.cantidad_planificada }} <span class="objetivo-unidad">kg</span>
+                </div>
+            </div>
+
+            {# Panel: Progreso Actual (Grid 2x2) #}
+            <div class="progreso-grid">
+                <div class="progreso-card progreso-producido">
+                    <div class="progreso-icon">
+                        <i class="bi bi-check-circle-fill"></i>
+                    </div>
+                    <div class="progreso-content">
+                        <div class="progreso-label">Producido (OK)</div>
+                        <div class="progreso-value" id="cantidad-producida">
+                            {{ orden.cantidad_producida or 0 }} <span class="progreso-unit">kg</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="progreso-card progreso-desperdicio">
+                    <div class="progreso-icon">
+                        <i class="bi bi-x-circle-fill"></i>
+                    </div>
+                    <div class="progreso-content">
+                        <div class="progreso-label">Desperdicio</div>
+                        <div class="progreso-value" id="cantidad-desperdicio">
+                            0 <span class="progreso-unit">kg</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="progreso-card progreso-ritmo">
+                    <div class="progreso-icon">
+                        <i class="bi bi-speedometer2"></i>
+                    </div>
+                    <div class="progreso-content">
+                        <div class="progreso-label">Ritmo Actual</div>
+                        <div class="progreso-value" id="ritmo-actual">
+                            0 <span class="progreso-unit">kg/h</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="progreso-card progreso-objetivo-ritmo">
+                    <div class="progreso-icon">
+                        <i class="bi bi-bullseye"></i>
+                    </div>
+                    <div class="progreso-content">
+                        <div class="progreso-label">Ritmo Objetivo</div>
+                        <div class="progreso-value">
+                            {{ orden.ritmo_objetivo or 5 }} <span class="progreso-unit">kg/h</span>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {# Barra de Progreso Visual #}
+            <div class="progress-container">
+                <div class="progress-label-row">
+                    <span>Progreso de la Orden</span>
+                    <span id="porcentaje-progreso">0%</span>
+                </div>
+                <div class="progress-bar-custom">
+                    <div class="progress-fill-custom" id="progress-bar" style="width: {{ (orden.cantidad_producida or 0) / orden.cantidad_planificada * 100 }}%;">
+                        <div class="progress-shine"></div>
+                    </div>
+                </div>
+            </div>
+
+            {# Cronómetro Grande #}
+            <div class="timer-panel">
+                <div class="timer-label">TIEMPO DE TRABAJO</div>
+                <div class="timer-display" id="timer">00:00:00</div>
+                <div class="timer-sublabel">
+                    <span id="timer-status">Cronómetro activo</span>
+                </div>
+            </div>
+
+            {# Botones de Acción Principales #}
+            <div class="action-buttons">
+                <button class="btn btn-action btn-reportar" id="btn-reportar-avance" data-bs-toggle="modal" data-bs-target="#modalReportarAvance">
+                    <i class="bi bi-clipboard-check-fill"></i>
+                    <span>Reportar Avance</span>
+                </button>
+                <button class="btn btn-action btn-pausar" id="btn-pausar-reanudar" data-bs-toggle="modal" data-bs-target="#modalPausarProduccion">
+                    <i class="bi bi-pause-fill"></i>
+                    <span>Pausar Trabajo</span>
+                </button>
+            </div>
+
         </div>
+
+        {#  Columna derecha: métricas OEE y alertas #}
+        <div class="foco-col foco-col-right">
+            
+            {# Card: OEE en Tiempo Real #}
+            <div class="card card-oee">
+                <div class="card-header-custom">
+                    <i class="bi bi-graph-up-arrow"></i> MÉTRICAS OEE
+                </div>
+                <div class="card-body">
+                    <div class="oee-main">
+                        <div class="oee-label">OEE ACTUAL</div>
+                        <div class="oee-value" id="oee-value">95<span class="oee-percent">%</span></div>
+                    </div>
+                    <div class="oee-components">
+                        <div class="oee-component">
+                            <div class="oee-comp-label">Disponibilidad</div>
+                            <div class="oee-comp-bar">
+                                <div class="oee-comp-fill" style="width: 98%; background: #10b981;"></div>
+                            </div>
+                            <div class="oee-comp-value">98%</div>
+                        </div>
+                        <div class="oee-component">
+                            <div class="oee-comp-label">Rendimiento</div>
+                            <div class="oee-comp-bar">
+                                <div class="oee-comp-fill" style="width: 95%; background: #3b82f6;"></div>
+                            </div>
+                            <div class="oee-comp-value">95%</div>
+                        </div>
+                        <div class="oee-component">
+                            <div class="oee-comp-label">Calidad</div>
+                            <div class="oee-comp-bar">
+                                <div class="oee-comp-fill" style="width: 100%; background: #8b5cf6;"></div>
+                            </div>
+                            <div class="oee-comp-value">100%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Card: Estado del Turno #}
+            <div class="card card-shift">
+                <div class="card-header-custom">
+                    <i class="bi bi-clock-history"></i> INFORMACIÓN DEL TURNO
+                </div>
+                <div class="card-body">
+                    <div class="shift-info">
+                        <div class="shift-row">
+                            <span class="shift-label">Turno Actual:</span>
+                            <span class="shift-value">Mañana (08:00 - 16:00)</span>
+                        </div>
+                        <div class="shift-row">
+                            <span class="shift-label">Operario:</span>
+                            <span class="shift-value">{{ orden.operario_nombre or 'No asignado' }}</span>
+                        </div>
+                        <div class="shift-row">
+                            <span class="shift-label">Supervisor:</span>
+                            <span class="shift-value">{{ orden.supervisor_nombre or 'No asignado' }}</span>
+                        </div>
+                        <div class="shift-row">
+                            <span class="shift-label">Tiempo restante:</span>
+                            <span class="shift-value" id="tiempo-restante-turno">4h 32min</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# Card: Últimas Actividades / Log #}
+            <div class="card card-activity">
+                <div class="card-header-custom">
+                    <i class="bi bi-activity"></i> REGISTRO DE ACTIVIDAD
+                </div>
+                <div class="card-body">
+                    <div class="activity-list" id="activity-log">
+                        <div class="activity-item">
+                            <div class="activity-time">13:45</div>
+                            <div class="activity-desc">
+                                <i class="bi bi-play-fill text-success"></i>
+                                Producción iniciada
+                            </div>
+                        </div>
+                        <!-- Más actividades se agregarán dinámicamente -->
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
     </div>
 </div>
 
-<!-- Modales -->
 {% include 'planificacion/modals/modal_reportar_avance.html' %}
 {% include 'planificacion/modals/modal_pausar_produccion.html' %}
 
@@ -104,6 +310,8 @@
     <script>
         // Pasar datos del backend al script de JS
         const ORDEN_ID = {{ orden.id | tojson }};
+        const ORDEN_CANTIDAD_PLANIFICADA = {{ orden.cantidad_planificada | tojson }};
+        const ORDEN_RITMO_OBJETIVO = {{ orden.ritmo_objetivo or 5 | tojson }};
         const MOTIVOS_PARO = {{ motivos_paro | tojson }};
         const MOTIVOS_DESPERDICIO = {{ motivos_desperdicio | tojson }};
     </script>

@@ -46,23 +46,36 @@ def tablero_produccion():
 @permission_required(accion='produccion_ejecucion')
 def foco_produccion(op_id):
     """
-    Muestra la vista de foco para una OP. Al acceder, intenta iniciar el trabajo.
-    (Esta ruta podría quedarse aquí o moverse a un blueprint de "ejecución" si crece)
+    Muestra la vista de foco para una OP. Si la OP está 'LISTA PARA PRODUCIR',
+    intenta iniciar el trabajo. Si ya está 'EN PROCESO', simplemente muestra el foco.
     """
     usuario_id = get_jwt_identity()
     orden_controller = OrdenProduccionController()
 
-    response_inicio, status_inicio = orden_controller.iniciar_trabajo_op(op_id, usuario_id)
-    if status_inicio >= 400:
-        flash(response_inicio.get('error', 'No se pudo iniciar el trabajo.'), 'danger')
-        return redirect(url_for('produccion_kanban.tablero_produccion')) # Actualizar redirect
+    # 1. Obtener la orden primero para saber su estado
+    orden_result = orden_controller.obtener_orden_por_id(op_id)
+    if not orden_result.get('success'):
+        flash('Orden de producción no encontrada.', 'danger')
+        return redirect(url_for('produccion_kanban.tablero_produccion'))
+    
+    orden_actual = orden_result.get('data', {})
+    estado_actual = orden_actual.get('estado')
 
+    # 2. Solo intentar iniciar el trabajo si está en el estado correcto
+    # Se aceptan ambos formatos por posible inconsistencia en la BD
+    if estado_actual in ['LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR']:
+        response_inicio, status_inicio = orden_controller.iniciar_trabajo_op(op_id, usuario_id)
+        if status_inicio >= 400:
+            flash(response_inicio.get('error', 'No se pudo iniciar el trabajo.'), 'danger')
+            return redirect(url_for('produccion_kanban.tablero_produccion'))
+
+    # 3. Cargar los datos para la vista de foco (se ejecuta siempre, después del posible inicio)
     response_vista, status_vista = orden_controller.obtener_datos_para_vista_foco(op_id)
     if status_vista >= 400:
         flash(response_vista.get('error', 'Error al cargar datos de la orden.'), 'danger')
-        return redirect(url_for('produccion_kanban.tablero_produccion')) # Actualizar redirect
+        return redirect(url_for('produccion_kanban.tablero_produccion'))
         
-    return render_template('planificacion/foco_produccion.html', **response_vista.get('data', {})) # Plantilla renombrada
+    return render_template('planificacion/foco_produccion.html', **response_vista.get('data', {}))
 
 @produccion_kanban_bp.route('/api/mover-op/<int:op_id>', methods=['POST'])
 @jwt_required()
