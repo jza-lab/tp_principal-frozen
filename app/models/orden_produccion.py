@@ -374,19 +374,20 @@ class OrdenProduccionModel(BaseModel):
         try:
             # --- CORRECCIÓN ---
             consumo_result = self.db.table('reservas_insumos').select(
-                'orden_produccion_id, cantidad_reservada, ordenes_produccion(codigo)'
-            ).eq('lote_inventario_id', id_lote_insumo).execute()
+                 'orden_produccion_id, cantidad_reservada, ordenes_produccion!inner(codigo, estado)'
+            ).eq('lote_inventario_id', id_lote_insumo).not_.eq('ordenes_produccion.estado', 'CANCELADO').execute()
             # --- FIN CORRECCIÓN ---
 
             if consumo_result.data:
                 ops = []
                 for item in consumo_result.data:
                     op_data = item.get('ordenes_produccion', {})
-                    ops.append({
-                        'id': item.get('orden_produccion_id'),
-                        'codigo': op_data.get('codigo', 'N/A'),
-                        'cantidad_usada': item.get('cantidad_reservada', 0)
-                    })
+                    if op_data:
+                        ops.append({
+                            'id': item.get('orden_produccion_id'),
+                            'codigo': op_data.get('codigo', 'N/A'),
+                            'cantidad_usada': item.get('cantidad_reservada', 0)
+                        })
                 return {'success': True, 'data': ops}
             else:
                 return {'success': True, 'data': []}

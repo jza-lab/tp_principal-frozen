@@ -771,61 +771,14 @@ class InventarioController(BaseController):
             return {'count': 0, 'data': []}
 
 
-    def obtener_trazabilidad_lote(self, id_lote_insumo):
-        from app.models.orden_produccion import OrdenProduccionModel
-        from app.models.pedido import PedidoModel
-
-        orden_produccion_model = OrdenProduccionModel()
-        pedido_model = PedidoModel()
+    def obtener_trazabilidad_lote(self, id_lote):
+        """
+        Obtiene la trazabilidad completa (ascendente) para un lote de insumo.
+        """
+        # El id_lote de la ruta es el id_lote_insumo
+        response = self.inventario_model.get_trazabilidad_ascendente(id_lote)
         
-        links = []
-        try:
-            lote_insumo_res = self.inventario_model.find_by_id(id_lote_insumo, 'id_lote')
-            
-            if not lote_insumo_res.get('success'):
-                return self.error_response("Lote de insumo no encontrado")
-            
-            lote_insumo = lote_insumo_res.get('data', {})
-            lote_insumo_nombre = f"Lote Insumo: {lote_insumo.get('numero_lote', lote_insumo.get('numero_lote_proveedor'))}"
-
-            ops_res = orden_produccion_model.get_ops_by_lote_insumo(id_lote_insumo)
-            if not ops_res.get('success'):
-                return self.error_response("Error buscando órdenes de producción")
-            
-            ordenes_produccion = ops_res.get('data', [])
-
-            for op in ordenes_produccion:
-                op_id = op.get('id')
-                op_nombre = f"Orden Prod-{op.get('codigo', op_id)}"
-                cantidad_usada = op.get('cantidad_usada', 0)
-                links.append([lote_insumo_nombre, op_nombre, cantidad_usada])
-
-                lotes_prod_res = orden_produccion_model.get_lotes_producto_by_op(op_id)
-                if not lotes_prod_res.get('success'):
-                    continue
-                
-                lotes_producto = lotes_prod_res.get('data', [])
-                
-                for lote_prod in lotes_producto:
-                    lote_prod_id = lote_prod.get('id_lote')
-                    lote_prod_nombre = f"Lote Prod: {lote_prod.get('numero_lote', lote_prod_id)}"
-                    cantidad_producida = lote_prod.get('cantidad_producida', 0)
-                    links.append([op_nombre, lote_prod_nombre, cantidad_producida])
-
-                    pedidos_res = pedido_model.get_pedidos_by_lote_producto(lote_prod_id)
-                    if not pedidos_res.get('success'):
-                        continue
-                    
-                    pedidos = pedidos_res.get('data', [])
-
-                    for pedido in pedidos:
-                        pedido_id = pedido.get('id')
-                        cliente_nombre = pedido.get('cliente_nombre', f"Venta-{pedido_id}")
-                        cantidad_vendida = pedido.get('cantidad_vendida', 0)
-                        links.append([lote_prod_nombre, cliente_nombre, cantidad_vendida])
-
-            return self.success_response(data={"links": links})
-
-        except Exception as e:
-            logger.error(f"Error en obtener_trazabilidad_lote: {e}")
-            return self.error_response(str(e))
+        if response.get('success'):
+            return response, 200
+        else:
+            return {'success': False, 'error': response}, 500

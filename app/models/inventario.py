@@ -360,3 +360,129 @@ class InventarioModel(BaseModel):
         except Exception as e:
             logger.error(f"Error al recalcular el stock para el insumo {insumo_id}: {str(e)}")
             return {'success': False, 'error': str(e)}
+        
+    def get_trazabilidad_ascendente(self, id_lote_insumo: str) -> Dict:
+        """
+        Obtiene la trazabilidad "hacia arriba" de un lote de insumo.
+        Encuentra OPs, Lotes de Producto y Pedidos de Venta asociados.
+        
+        @param id_lote_insumo: El ID del lote de la tabla 'insumos_inventario'.
+        """
+        try:
+            # 1. Buscar en qué OPs se usó este lote de insumo
+            
+            # --- CORRECCIÓN AQUÍ: Se cambió 'cantidad_utilizada' por 'cantidad_reservada' ---
+            reservas_insumo_result = self.db.table('reservas_insumos').select(
+                'cantidad_reservada, orden_produccion:ordenes_produccion(id, codigo, estado)'
+            ).eq('lote_inventario_id', id_lote_insumo).execute()
+            # --- FIN DE LA CORRECCIÓN 1 ---
+
+            if not reservas_insumo_result.data:
+                logger.info(f"Trazabilidad: Lote {id_lote_insumo} no encontrado en 'reservas_insumos'.")
+                return {'success': True, 'data': {'ops': [], 'productos': [], 'pedidos': []}}
+
+            op_data = {}
+            op_ids = []
+            
+            # Agrupar por OP
+            for reserva in reservas_insumo_result.data:
+                op = reserva.get('orden_produccion')
+                if not op: continue
+                
+                op_id = op['id']
+                if op_id not in op_data:
+                    op_data[op_id] = {
+                        'id': op_id,
+                        'codigo_op': op.get('codigo'), 
+                        'estado': op.get('estado'),
+                        'cantidad_insumo_utilizada': 0,
+                        'productos_fabricados': [],
+                        'pedidos_asociados': []
+                    }
+                    op_ids.append(op_id)
+                
+                # --- CORRECCIÓN AQUÍ: Se cambió 'cantidad_utilizada' por 'cantidad_reservada' ---
+                op_data[op_id]['cantidad_insumo_utilizada'] += reserva.get('cantidad_reservada', 0)
+                # --- FIN DE LA CORRECCIÓN 2 ---
+
+            if not op_ids:
+                 return {'success': True, 'data': {'ops': list(op_data.values()), 'productos': [], 'pedidos': []}}
+
+            # 2. Buscar qué lotes de producto generaron esas OPs
+            lotes_producto_result = self.db.table('lotes_productos').select(
+                'id_lote, orden_produccion_id, cantidad_inicial, producto:productos(id, nombre)'
+            ).in_('orden_produccion_id', op_ids).execute()
+
+            producto_data = {}
+            lote_producto_ids = []
+
+            for lote_prod in lotes_producto_result.data:
+                prod = lote_prod.get('producto')
+                if not prod: continue
+                
+                lote_prod_id = lote_prod['id_lote_producto']
+                op_id = lote_prod['orden_produccion_id']
+                
+                prod_info = {
+                    'id': prod['id'],
+                    'nombre': prod.get('nombre'),
+                    'codigo': prod.get('codigo'), 
+                    'id_lote_producto': lote_prod_id,
+                    'cantidad_producida': lote_prod.get('cantidad_producida')
+                }
+                
+                if lote_prod_id not in producto_data:
+                    producto_data[lote_prod_id] = prod_info
+                    lote_producto_ids.append(lote_prod_id)
+                
+                if op_id in op_data:
+                    op_data[op_id]['productos_fabricados'].append(prod_info)
+
+            # 3. Buscar qué pedidos usaron esos lotes de producto
+            if not lote_producto_ids:
+                return {'success': True, 'data': {'ops': list(op_data.values()), 'productos': list(producto_data.values()), 'pedidos': []}}
+
+            reservas_producto_result = self.db.table('reservas_productos').select(
+                'lote_producto_id, cantidad_reservada, item:pedido_items(id, pedido:pedidos!pedido_items_pedido_id_fkey(id, nombre_cliente))'
+            ).in_('lote_producto_id', lote_producto_ids).execute()
+
+            pedido_data = {}
+
+            for reserva_prod in reservas_producto_result.data:
+                item = reserva_prod.get('item')
+                if not item: continue
+                pedido = item.get('pedido')
+                if not pedido: continue
+
+                pedido_id = pedido['id']
+                lote_prod_id = reserva_prod['lote_producto_id']
+                
+                pedido_info = {
+                    'id': pedido_id,
+                    'nombre_cliente': pedido.get('nombre_cliente'),
+                    'codigo_pedido': pedido.get('codigo_pedido') or f"Venta-{pedido_id}",
+                    'cantidad_asignada': reserva_prod.get('cantidad_reservada', 0)
+                }
+
+                if pedido_id not in pedido_data:
+                    pedido_data[pedido_id] = pedido_info
+                else:
+                    pedido_data[pedido_id]['cantidad_asignada'] += reserva_prod.get('cantidad_reservada', 0)
+                
+                for op in op_data.values():
+                    for prod in op['productos_fabricados']:
+                        if prod['id_lote_producto'] == lote_prod_id:
+                            if not any(p['id'] == pedido_id for p in op['pedidos_asociados']):
+                                op['pedidos_asociados'].append(pedido_info)
+
+            final_data = {
+                'ops': list(op_data.values()),
+                'productos': list(producto_data.values()),
+                'pedidos': list(pedido_data.values())
+            }
+
+            return {'success': True, 'data': final_data}
+        
+        except Exception as e:
+            logger.error(f"Error obteniendo trazabilidad ascendente para lote {id_lote_insumo}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}

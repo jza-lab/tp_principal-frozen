@@ -505,39 +505,29 @@ class PedidoModel(BaseModel):
         """
         try:
             reserva_result = self.db.table('reservas_productos').select(
-                'pedido_item_id, cantidad_reservada, pedido_items(pedido_id)'
+                'cantidad_reservada, pedido_items!inner(pedido_id, pedidos!pedido_items_pedido_id_fkey!inner(id, nombre_cliente, codigo_pedido))'
             ).eq('lote_producto_id', id_lote_producto).execute()
+            # --- FIN DE LA CORRECCIÓN ---
             if not reserva_result.data:
                 return {'success': True, 'data': []}
 
             pedidos = []
-            clientes_vistos = set()
 
             # Procesar TODOS los items
             for item in reserva_result.data:
-                item_data = item.get('pedido_items', {})
-                if not item_data:
-                    continue
-                
-                pedido_id = item_data.get('pedido_id')
-                
-                # 2. Buscar el cliente de ese pedido_id
-                pedido_info = self.db.table('pedidos').select('id_cliente, nombre_cliente').eq('id', pedido_id).maybe_single().execute()
-                
-                if pedido_info.data:
-                    cliente_nombre = pedido_info.data.get('nombre_cliente', f"Cliente {pedido_info.data.get('id_cliente')}")
+                item_data = item.get('pedido_items')
+                if not item_data: continue
+                pedido_data = item_data.get('pedidos')
+                if not pedido_data: continue
                     
-                    # Agrupar por cliente
-                    if cliente_nombre not in clientes_vistos:
-                        pedidos.append({
-                            'id': item_data.get('pedido_id'),
-                            'cliente_nombre': cliente_nombre,
-                            'cantidad_vendida': item.get('cantidad_asignada', 0)
-                        })
-                        clientes_vistos.add(cliente_nombre)
-            
-            # --- CORRECCIÓN ---
-            # El return debe estar AFUERA del loop, aquí.
+                    # Usar el codigo_pedido si existe, sino un fallback con el ID
+                pedido_nombre = pedido_data.get('codigo_pedido') or f"Venta-{pedido_data.get('id')}"
+                pedidos.append({
+                            'id': pedido_data.get('id'),
+                    'cliente_nombre': pedido_nombre, # Usamos el nombre único del pedido
+                    'cantidad_vendida': item.get('cantidad_reservada', 0)
+                })
+
             return {'success': True, 'data': pedidos}
 
         except Exception as e:
