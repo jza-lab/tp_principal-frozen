@@ -62,55 +62,23 @@
     </div>
 </div>
 
-<style>
-/* Estilos para el switch toggle */
-.form-switch-custom {
-    display: inline-block;
-    position: relative;
-}
-
-.form-switch-custom input[type="checkbox"] {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-
-.switch-slider {
-    position: relative;
-    display: inline-block;
-    width: 44px;
-    height: 24px;
-    background-color: #dc3545;
-    border-radius: 24px;
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-
-.switch-slider:before {
-    content: "";
-    position: absolute;
-    width: 18px;
-    height: 18px;
-    left: 3px;
-    top: 3px;
-    background-color: white;
-    border-radius: 50%;
-    transition: transform 0.3s;
-}
-
-.form-switch-custom input[type="checkbox"]:checked + .switch-slider {
-    background-color: #198754;
-}
-
-.form-switch-custom input[type="checkbox"]:checked + .switch-slider:before {
-    transform: translateX(20px);
-}
-
-.switch-slider:hover {
-    opacity: 0.8;
-}
-</style>
+<!-- Modal de Notificación -->
+<div class="modal fade" id="notificationModal" tabindex="-1" aria-labelledby="notificationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" id="notificationModalHeader">
+                <h5 class="modal-title" id="notificationModalLabel">Notificación</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="notificationModalBody">
+                <!-- El mensaje se insertará aquí -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
 (function() {
@@ -154,18 +122,12 @@
                 case 'edit':
                     prepareEditForm(parseInt(id, 10));
                     break;
-                case 'delete':
-                    deleteQA(parseInt(id, 10));
+                case 'activate':
+                    updateQAState(parseInt(id, 10), true);
                     break;
-            }
-        });
-
-        // Event listener para los switches
-        document.addEventListener('change', function(event) {
-            if (event.target.classList.contains('toggle-activo')) {
-                const id = parseInt(event.target.dataset.id, 10);
-                const nuevoEstado = event.target.checked;
-                toggleActivoState(id, nuevoEstado);
+                case 'deactivate':
+                    updateQAState(parseInt(id, 10), false);
+                    break;
             }
         });
     }
@@ -195,21 +157,22 @@
                             <td>${escapeHTML(qa.pregunta)}</td>
                             <td>${escapeHTML(qa.respuesta)}</td>
                             <td>
-                                <div class="form-switch-custom">
-                                    <input type="checkbox" 
-                                           class="toggle-activo" 
-                                           data-id="${qa.id}" 
-                                           ${qa.activo ? 'checked' : ''}>
-                                    <span class="switch-slider"></span>
-                                </div>
+                                <span class="badge ${qa.activo ? 'bg-success' : 'bg-danger'}">
+                                    ${qa.activo ? 'Activo' : 'Inactivo'}
+                                </span>
                             </td>
                             <td class="text-end">
                                 <button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${qa.id}" title="Editar">
                                     <i class="bi bi-pencil"></i>
                                 </button>
-                                <button class="btn btn-sm btn-outline-danger" data-action="delete" data-id="${qa.id}" title="Deshabilitar">
-    <i class="bi bi-x-circle"></i>
-</button>
+                                ${qa.activo ?
+                                    `<button class="btn btn-sm btn-outline-danger" data-action="deactivate" data-id="${qa.id}" title="Desactivar">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>` :
+                                    `<button class="btn btn-sm btn-outline-success" data-action="activate" data-id="${qa.id}" title="Activar">
+                                        <i class="bi bi-check-circle"></i>
+                                    </button>`
+                                }
                             </td>
                         </tr>
                     `;
@@ -218,8 +181,26 @@
             }
         } catch (error) {
             console.error('Error en loadQAs:', error);
-            alert('No se pudieron cargar los datos.');
+            showNotificationModal('No se pudieron cargar los datos.', true);
         }
+    }
+
+    function showNotificationModal(message, isError = false) {
+        const modal = new bootstrap.Modal(document.getElementById('notificationModal'));
+        const modalHeader = document.getElementById('notificationModalHeader');
+        const modalBody = document.getElementById('notificationModalBody');
+        
+        modalBody.textContent = message;
+        
+        if (isError) {
+            modalHeader.classList.remove('bg-success', 'text-white');
+            modalHeader.classList.add('bg-danger', 'text-white');
+        } else {
+            modalHeader.classList.remove('bg-danger', 'text-white');
+            modalHeader.classList.add('bg-success', 'text-white');
+        }
+        
+        modal.show();
     }
 
     function prepareCreateForm() {
@@ -245,11 +226,11 @@
                 document.getElementById('chatbotQAModalLabel').textContent = 'Editar Pregunta y Respuesta';
                 new bootstrap.Modal(document.getElementById('chatbotQAModal')).show();
             } else {
-                alert('Registro no encontrado.');
+                showNotificationModal('Registro no encontrado.', true);
             }
         } catch (error) {
             console.error('Error en prepareEditForm:', error);
-            alert('No se pudo cargar el registro.');
+            showNotificationModal('No se pudo cargar el registro.', true);
         }
     }
 
@@ -259,7 +240,7 @@
         const form = document.getElementById('chatbotQAForm');
         if (!form) {
             console.error('Formulario no encontrado');
-            alert('Error: Formulario no encontrado');
+            showNotificationModal('Error: Formulario no encontrado', true);
             return;
         }
         
@@ -270,7 +251,7 @@
         const csrfTokenEl = form.querySelector('input[name="csrf_token"]');
         if (!csrfTokenEl) {
             console.error('CSRF token no encontrado');
-            alert('Error: Token de seguridad no encontrado');
+            showNotificationModal('Error: Token de seguridad no encontrado', true);
             return;
         }
         
@@ -281,7 +262,7 @@
         console.log('Datos a enviar:', { url, method, preguntaValue, respuestaValue });
 
         if (!preguntaValue || !respuestaValue) {
-            alert('Por favor completa todos los campos requeridos');
+            showNotificationModal('Por favor completa todos los campos requeridos', true);
             return;
         }
 
@@ -336,22 +317,22 @@
             await loadQAs();
             
             // Mostrar mensaje de éxito
-            alert('¡Guardado exitosamente!');
+            showNotificationModal('¡Guardado exitosamente!');
 
         } catch (error) {
             console.error('Error completo:', error);
-            alert(`Error al guardar: ${error.message}`);
+            showNotificationModal(`Error al guardar: ${error.message}`, true);
         }
     }
 
-    async function toggleActivoState(id, nuevoEstado) {
-        console.log(`Cambiando estado de QA ${id} a ${nuevoEstado}`);
+    async function updateQAState(id, isActive) {
+        console.log(`Cambiando estado de QA ${id} a ${isActive}`);
         
         const csrfToken = document.querySelector('input[name="csrf_token"]').value;
         
         const formData = new URLSearchParams();
         formData.append('csrf_token', csrfToken);
-        formData.append('activo', nuevoEstado ? 'on' : 'off');
+        formData.append('activo', isActive ? 'on' : 'off');
 
         try {
             const response = await fetch(`/admin/chatbot/qas/${id}/toggle`, {
@@ -369,41 +350,19 @@
             }
 
             const result = await response.json();
-            console.log('Estado cambiado exitosamente:', result);
+            const message = isActive ? 'Pregunta activada exitosamente.' : 'Pregunta desactivada exitosamente.';
+            showNotificationModal(message);
             
             // Recargar la tabla para reflejar cambios
             await loadQAs();
 
         } catch (error) {
             console.error('Error al cambiar estado:', error);
-            alert(`Error: ${error.message}`);
-            // Recargar para revertir el switch visualmente
+            showNotificationModal(`Error: ${error.message}`, true);
+            // Recargar para refrescar la tabla
             await loadQAs();
         }
     }
-
-async function deleteQA(id) {
-    if (!confirm('¿Estás seguro de que quieres deshabilitar esta pregunta?')) return;
-
-    const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-
-    try {
-        const response = await fetch(`/admin/chatbot/qas/${id}`, {
-            method: 'DELETE',
-            headers: {
-                'X-CSRF-TOKEN': csrfToken
-            }
-        });
-        
-        if (!response.ok) throw new Error('Error al deshabilitar el registro.');
-        
-        alert('Deshabilitada exitosamente');
-        await loadQAs();
-    } catch (error) {
-        console.error('Error en deleteQA:', error);
-        alert('No se pudo deshabilitar el registro.');
-    }
-}
 
     function escapeHTML(str) {
         if (typeof str !== 'string') return '';

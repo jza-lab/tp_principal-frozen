@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const chatbotMessages = document.getElementById('chatbot-messages');
     const chatbotOptions = document.getElementById('chatbot-options');
 
-    let knowledgeBase = {}; // Ahora será un objeto que se cargará desde la API
+    let knowledgeBase = []; // Ahora será un array de objetos
 
     // Cargar las preguntas y respuestas desde la API al iniciar
     async function loadKnowledgeBase() {
@@ -16,11 +16,8 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             const result = await response.json();
             if (result.success && Array.isArray(result.data)) {
-                // Transformar el array en un objeto para fácil acceso
-                knowledgeBase = result.data.reduce((acc, qa) => {
-                    acc[qa.pregunta] = qa.respuesta;
-                    return acc;
-                }, {});
+                // Guardamos el array completo
+                knowledgeBase = result.data;
             }
         } catch (error) {
             console.error('Error al cargar la base de conocimientos:', error);
@@ -52,28 +49,39 @@ document.addEventListener('DOMContentLoaded', function () {
         chatbotMessages.innerHTML = '<div class="chatbot-message bot">¡Hola! Soy tu asistente virtual. Selecciona una opción para ayudarte:</div>';
         chatbotOptions.innerHTML = '';
 
-        if (Object.keys(knowledgeBase).length === 0) {
+        if (knowledgeBase.length === 0) {
             addMessage('No hay preguntas frecuentes disponibles en este momento.', 'bot');
             return;
         }
 
-        for (const question in knowledgeBase) {
+        knowledgeBase.forEach(qa => {
             const button = document.createElement('button');
             button.classList.add('chatbot-option-btn');
-            button.textContent = question;
-            button.addEventListener('click', () => handleOptionClick(question));
+            button.textContent = qa.pregunta;
+            button.addEventListener('click', () => handleOptionClick(qa));
             chatbotOptions.appendChild(button);
-        }
+        });
     }
 
-    function handleOptionClick(question) {
-        const answer = knowledgeBase[question];
-        addMessage(question, 'user');
-        
-        setTimeout(() => {
-            addMessage(answer, 'bot');
-            showReturnMenuOption();
-        }, 500);
+    function handleOptionClick(qa) {
+        addMessage(qa.pregunta, 'user');
+
+        // Lógica de redirección
+        if (qa.type === 'redirect' && qa.url) {
+            setTimeout(() => {
+                addMessage(qa.respuesta, 'bot');
+                // Esperar un momento antes de redirigir para que el usuario lea el mensaje
+                setTimeout(() => {
+                    window.location.href = qa.url;
+                }, 1000);
+            }, 500);
+        } else {
+            // Lógica de respuesta normal
+            setTimeout(() => {
+                addMessage(qa.respuesta, 'bot');
+                showReturnMenuOption();
+            }, 500);
+        }
 
         chatbotOptions.innerHTML = '';
     }
