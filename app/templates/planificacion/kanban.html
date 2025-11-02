@@ -75,7 +75,7 @@
                                     <strong>Cantidad:</strong> {{ orden.cantidad_planificada }} kg
                                 </span>
                                 
-                                {% if estado_key in ['EN ESPERA', 'LISTA PARA PRODUCIR'] %}
+                                {% if estado_key in ['EN_ESPERA', 'LISTA_PARA_PRODUCIR'] %}
                                 <span class="mb-1">
                                     <i class="bi bi-diagram-3 me-2"></i>
                                     <strong>Línea:</strong> 
@@ -126,7 +126,7 @@
                             </div>
                             
                             {# Botones de acción según el estado #}
-                            {% if estado_key == 'LISTA PARA PRODUCIR' %}
+                            {% if estado_key == 'LISTA_PARA_PRODUCIR' %}
                                 <div class="d-grid mt-3">
                                     <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}" class="btn btn-primary btn-sm">
                                         <i class="bi bi-play-fill me-1"></i> Iniciar Trabajo

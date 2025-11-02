@@ -28,11 +28,15 @@ class ProduccionKanbanController(BaseController):
             # 2. Agrupar por estado (lógica movida desde el antiguo controller)
             ordenes_por_estado = defaultdict(list)
             for orden in ordenes:
-                estado = orden.get('estado')
-                if estado in ['EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'EN_PRODUCCION']:
-                    estado = 'EN_PROCESO'
-                if estado in OP_KANBAN_COLUMNAS:
-                    ordenes_por_estado[estado].append(orden)
+                # Normalizar el estado de la BD (con espacios) al formato de constante (con guion bajo)
+                estado_db = orden.get('estado', '').strip()
+                estado_constante = estado_db.replace(' ', '_')
+
+                if estado_constante in ['EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'EN_PRODUCCION']:
+                    estado_constante = 'EN_PROCESO'
+                
+                if estado_constante in OP_KANBAN_COLUMNAS:
+                    ordenes_por_estado[estado_constante].append(orden)
 
             # 3. Determinar qué columnas mostrar (lógica movida desde la ruta)
             columnas = OP_KANBAN_COLUMNAS

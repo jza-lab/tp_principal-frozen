@@ -818,7 +818,45 @@ class OrdenProduccionController(BaseController):
         """
         Prepara todos los datos necesarios para la vista de foco de una orden de producción.
         """
-    
+        try:
+            # 1. Obtener los datos principales de la orden
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden_data = orden_result['data']
+
+            # 2. Obtener los ingredientes de la receta
+            receta_id = orden_data.get('receta_id')
+            ingredientes = []
+            if receta_id:
+                receta_model = RecetaModel()
+                ingredientes_result = receta_model.get_ingredientes(receta_id)
+                if ingredientes_result.get('success'):
+                    ingredientes = ingredientes_result.get('data', [])
+
+            # 3. Obtener los motivos de paro y desperdicio
+            motivo_paro_model = MotivoParoModel()
+            motivos_paro_result = motivo_paro_model.find_all()
+            motivos_paro = motivos_paro_result.get('data', []) if motivos_paro_result.get('success') else []
+
+            motivo_desperdicio_model = MotivoDesperdicioModel()
+            motivos_desperdicio_result = motivo_desperdicio_model.find_all()
+            motivos_desperdicio = motivos_desperdicio_result.get('data', []) if motivos_desperdicio_result.get('success') else []
+            
+            # 4. Ensamblar todos los datos
+            datos_completos = {
+                'orden': orden_data,
+                'ingredientes': ingredientes,
+                'motivos_paro': motivos_paro,
+                'motivos_desperdicio': motivos_desperdicio
+            }
+
+            return self.success_response(data=datos_completos)
+
+        except Exception as e:
+            logger.error(f"Error en obtener_datos_para_vista_foco para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
     # endregion
 
     # region Helpers de Aprobación
@@ -877,46 +915,6 @@ class OrdenProduccionController(BaseController):
         return self.success_response(
             message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
         )
-
-    # endregion
-        try:
-            # 1. Obtener los datos principales de la orden
-            orden_result = self.obtener_orden_por_id(orden_id)
-            if not orden_result.get('success'):
-                return self.error_response("Orden de producción no encontrada.", 404)
-            orden_data = orden_result['data']
-
-            # 2. Obtener los ingredientes de la receta
-            receta_id = orden_data.get('receta_id')
-            ingredientes = []
-            if receta_id:
-                receta_model = RecetaModel()
-                ingredientes_result = receta_model.get_ingredientes(receta_id)
-                if ingredientes_result.get('success'):
-                    ingredientes = ingredientes_result.get('data', [])
-
-            # 3. Obtener los motivos de paro y desperdicio
-            motivo_paro_model = MotivoParoModel()
-            motivos_paro_result = motivo_paro_model.find_all()
-            motivos_paro = motivos_paro_result.get('data', []) if motivos_paro_result.get('success') else []
-
-            motivo_desperdicio_model = MotivoDesperdicioModel()
-            motivos_desperdicio_result = motivo_desperdicio_model.find_all()
-            motivos_desperdicio = motivos_desperdicio_result.get('data', []) if motivos_desperdicio_result.get('success') else []
-            
-            # 4. Ensamblar todos los datos
-            datos_completos = {
-                'orden': orden_data,
-                'ingredientes': ingredientes,
-                'motivos_paro': motivos_paro,
-                'motivos_desperdicio': motivos_desperdicio
-            }
-
-            return self.success_response(data=datos_completos)
-
-        except Exception as e:
-            logger.error(f"Error en obtener_datos_para_vista_foco para OP {orden_id}: {e}", exc_info=True)
-            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
 
     # endregion
 
@@ -1133,15 +1131,15 @@ class OrdenProduccionController(BaseController):
             if estado_actual == 'EN_PROCESO' and operario_actual == usuario_id:
                 return self.success_response(message="El trabajo ya fue iniciado por este usuario.")
 
-            # Solo se puede iniciar si está en "LISTA PARA PRODUCIR"
-            if estado_actual != 'LISTA PARA PRODUCIR':
+            # Solo se puede iniciar si está en "LISTA PARA PRODUCIR" (aceptamos ambos formatos por inconsistencia en DB)
+            if estado_actual not in ['LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR']:
                 return self.error_response(f"No se puede iniciar el trabajo. La orden está en estado '{estado_actual}'.", 409) # 409 Conflict
 
             # 3. Preparar y ejecutar la actualización
             update_data = {
                 'operario_asignado_id': usuario_id,
                 'estado': 'EN_PROCESO',
-                'fecha_inicio_real': datetime.now().isoformat() # Registrar cuándo empezó realmente
+                'fecha_inicio': datetime.now().isoformat() # Registrar cuándo empezó realmente
             }
 
             update_result = self.model.update(orden_id, update_data)

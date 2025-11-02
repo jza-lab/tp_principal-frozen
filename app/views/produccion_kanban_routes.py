@@ -62,7 +62,7 @@ def foco_produccion(op_id):
         flash(response_vista.get('error', 'Error al cargar datos de la orden.'), 'danger')
         return redirect(url_for('produccion_kanban.tablero_produccion')) # Actualizar redirect
         
-    return render_template('produccion/foco_produccion.html', **response_vista.get('data', {})) # Plantilla renombrada
+    return render_template('planificacion/foco_produccion.html', **response_vista.get('data', {})) # Plantilla renombrada
 
 @produccion_kanban_bp.route('/api/mover-op/<int:op_id>', methods=['POST'])
 @jwt_required()

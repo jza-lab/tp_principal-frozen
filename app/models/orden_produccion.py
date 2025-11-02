@@ -349,10 +349,16 @@ class OrdenProduccionModel(BaseModel):
                     )
             else:
                 # Filtro para supervisores/gerentes: mostrar todas las OPs en estados relevantes.
-                estados_kanban = [
-                    'LISTA_PARA_PRODUCIR', 'EN_PROCESO', 'CONTROL_DE_CALIDAD', 'COMPLETADA', 'EN_ESPERA'
+                estados_kanban_python = [
+                    'EN_ESPERA', 'LISTA_PARA_PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'EN_PROCESO', 'CONTROL_DE_CALIDAD', 'COMPLETADA'
                 ]
-                query = query.in_('estado', estados_kanban)
+                # Manejar la inconsistencia de formato en la base de datos
+                estados_kanban_db = [estado.replace('_', ' ') for estado in estados_kanban_python]
+                if 'EN PROCESO' in estados_kanban_db:
+                    estados_kanban_db.remove('EN PROCESO')
+                estados_kanban_db.append('EN_PROCESO')
+                
+                query = query.in_('estado', estados_kanban_db)
 
             result = query.execute()
 
