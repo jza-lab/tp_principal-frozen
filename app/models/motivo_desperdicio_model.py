@@ -1,8 +1,11 @@
-from app.models.base_model import BaseModel
+from .base_model import BaseModel
 
 class MotivoDesperdicioModel(BaseModel):
-    def __init__(self):
-        super().__init__(table_name='motivos_desperdicio')
-
+    """
+    Modelo para interactuar con la tabla de motivos de desperdicio en la base de datos.
+    """
     def get_table_name(self):
-        return 'motivos_desperdicio'
+        return "mes_kanban.motivos_desperdicio"
+
+    def get_schema_name(self):
+        return "mes_kanban"

@@ -370,28 +370,46 @@ class OrdenProduccionModel(BaseModel):
             logger.error(f"Error al buscar órdenes por IDs: {op_ids}. Error: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    def get_for_kanban_hoy(self) -> Dict:
+    def get_for_kanban_hoy(self, filtros_operario: Optional[Dict] = None) -> Dict:
         """
-        Obtiene todas las OPs relevantes para el tablero de producción,
-        independientemente de su fecha de inicio.
+        Obtiene las OPs para el Kanban. Si se proveen filtros de operario,
+        la consulta se ajusta para mostrar solo OPs relevantes para ese usuario.
         """
         try:
-            estados_kanban = [
-                'LISTA PARA PRODUCIR',
-                'EN PROCESO',
-                'PAUSADA',
-                'CONTROL DE CALIDAD',
-                'EN_LINEA_1',
-                'EN_LINEA_2'
-            ]
-
             query = self.db.table(self.get_table_name()).select(
                 "*, productos(nombre, unidad_medida), "
                 "creador:usuario_creador_id(nombre, apellido), "
                 "supervisor:supervisor_responsable_id(nombre, apellido), "
                 "operario:operario_asignado_id(nombre, apellido)"
-            ).in_('estado', estados_kanban)
-            
+            )
+
+            if filtros_operario and filtros_operario.get('rol') == 'OPERARIO':
+                usuario_id = filtros_operario.get('usuario_id')
+                if not usuario_id:
+                    return {'success': True, 'data': []}
+
+                # Obtener la línea de producción asignada al operario
+                user_response = self.db.table('usuarios').select('linea_produccion_id').eq('id', usuario_id).single().execute()
+                linea_operario = user_response.data.get('linea_produccion_id') if user_response.data else None
+                
+                if not linea_operario:
+                    # Si el operario no tiene línea, solo puede ver las que ya tiene asignadas
+                    query = query.eq('operario_asignado_id', usuario_id).eq('estado', 'EN_PROCESO')
+                else:
+                    # Filtro para un operario:
+                    # 1. Órdenes en 'LISTA_PARA_PRODUCIR' que pertenecen a su línea.
+                    # 2. Órdenes en 'EN_PROCESO' que él mismo haya iniciado.
+                    query = query.or_(
+                        f"and(estado.eq.LISTA_PARA_PRODUCIR,linea_asignada.eq.{linea_operario})",
+                        f"and(estado.eq.EN_PROCESO,operario_asignado_id.eq.{usuario_id})"
+                    )
+            else:
+                # Filtro para supervisores/gerentes: mostrar todas las OPs en estados relevantes.
+                estados_kanban = [
+                    'LISTA_PARA_PRODUCIR', 'EN_PROCESO', 'CONTROL_DE_CALIDAD', 'COMPLETADA', 'EN_ESPERA'
+                ]
+                query = query.in_('estado', estados_kanban)
+
             result = query.execute()
 
             if result.data:

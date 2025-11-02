@@ -40,8 +40,15 @@
                     <hr>
 
                     <h4>Progreso Actual</h4>
-                    <div class="progress-display">
-                        <span id="cantidad-producida">{{ orden.cantidad_producida or 0 }}</span> / {{ orden.cantidad_planificada }} kg
+                    <div class="row text-center mb-2">
+                        <div class="col">
+                            <div class="h5">Producido (OK)</div>
+                            <p class="display-6" id="cantidad-producida">{{ orden.cantidad_producida or 0 }} kg</p>
+                        </div>
+                        <div class="col">
+                            <div class="h5">Desperdicio</div>
+                            <p class="display-6" id="cantidad-desperdicio">0 kg</p>
+                        </div>
                     </div>
                     <div class="progress" style="height: 25px;">
                         <div id="progress-bar" class="progress-bar" role="progressbar" style="width: {{ (orden.cantidad_producida or 0) / orden.cantidad_planificada * 100 }}%;" aria-valuenow="{{ (orden.cantidad_producida or 0) / orden.cantidad_planificada * 100 }}" aria-valuemin="0" aria-valuemax="100"></div>
@@ -54,8 +61,8 @@
                 </div>
                 <div class="card-footer">
                     <div class="d-grid gap-2">
-                        <button class="btn btn-primary btn-lg" id="btn-reportar-avance"><i class="bi bi-check-circle-fill me-2"></i>Reportar Avance</button>
-                        <button class="btn btn-warning btn-lg" id="btn-pausar-reanudar"><i class="bi bi-pause-fill me-2"></i>Pausar Trabajo</button>
+                        <button class="btn btn-primary btn-lg" id="btn-reportar-avance" data-bs-toggle="modal" data-bs-target="#modalReportarAvance"><i class="bi bi-check-circle-fill me-2"></i>Reportar Avance</button>
+                        <button class="btn btn-warning btn-lg" id="btn-pausar-reanudar" data-bs-toggle="modal" data-bs-target="#modalPausarProduccion"><i class="bi bi-pause-fill me-2"></i>Pausar Trabajo</button>
                     </div>
                 </div>
             </div>

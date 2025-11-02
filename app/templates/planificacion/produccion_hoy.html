@@ -75,7 +75,7 @@
                                     <strong>Cantidad:</strong> {{ orden.cantidad_planificada }} kg
                                 </span>
                                 
-                                {% if estado_key in ['EN_ESPERA', 'LISTA_PARA_PRODUCIR'] %}
+                                {% if estado_key in ['EN ESPERA', 'LISTA PARA PRODUCIR'] %}
                                 <span class="mb-1">
                                     <i class="bi bi-diagram-3 me-2"></i>
                                     <strong>Línea:</strong> 
@@ -92,7 +92,7 @@
                                     <strong>Inicio:</strong> {{ orden.fecha_inicio_planificada or 'Sin asignar' }}
                                 </span>
 
-                                {% if estado_key == 'LISTA_PARA_PRODUCIR' and orden.sugerencia_t_prod_dias is not none %}
+                                {% if estado_key == 'LISTA PARA PRODUCIR' and orden.sugerencia_t_prod_dias is not none %}
                                 <span class="mb-1">
                                     <i class="bi bi-clock me-2"></i>
                                     <strong>Tiempo Est.:</strong> {{ orden.sugerencia_t_prod_dias }} días
@@ -126,22 +126,11 @@
                             </div>
                             
                             {# Botones de acción según el estado #}
-                            {% if estado_key == 'LISTA_PARA_PRODUCIR' %}
+                            {% if estado_key == 'LISTA PARA PRODUCIR' %}
                                 <div class="d-grid mt-3">
-                                    <button class="btn btn-primary btn-sm btn-iniciar-op" 
-                                            data-op-id="{{ orden.id }}" 
-                                            data-op-sugerencia-linea="{{ orden.linea_asignada or '' }}">
+                                    <a href="{{ url_for('op_tabla.foco_produccion', op_id=orden.id) }}" class="btn btn-primary btn-sm">
                                         <i class="bi bi-play-fill me-1"></i> Iniciar Trabajo
-                                    </button>
-                                </div>
-                            {% elif estado_key.startswith('EN_LINEA') %}
-                                <div class="card-actions mt-2">
-                                    <button class="btn btn-pause btn-sm" onclick="pauseOrder({{ orden.id }})">
-                                        ⏸️ Pausar
-                                    </button>
-                                    <button class="btn btn-complete btn-sm" onclick="reportProgress({{ orden.id }})">
-                                        ✅ Reportar
-                                    </button>
+                                    </a>
                                 </div>
                             {% endif %}
                         </div>
@@ -161,174 +150,6 @@
     </div>
 </div>
 
-{# --- MODAL: INICIAR ORDEN DE PRODUCCIÓN --- #}
-<div class="modal fade" id="modalIniciarOp" tabindex="-1" aria-labelledby="modalIniciarOpLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="modalIniciarOpLabel">
-            <i class="bi bi-play-circle-fill me-2"></i>Iniciar Orden de Producción
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <p>Está a punto de iniciar la OP <strong id="modal-op-codigo"></strong>.</p>
-        <form id="formIniciarOp">
-          <input type="hidden" id="modal-op-id" name="op_id">
-          
-          <div class="mb-3">
-            <label for="modal-linea-produccion" class="form-label">
-                Confirmar línea de producción <span class="text-danger">*</span>
-            </label>
-            <select class="form-select" id="modal-linea-produccion" name="linea_produccion" required>
-              <option value="1">Línea 1</option>
-              <option value="2">Línea 2</option>
-            </select>
-            <div class="form-text" id="modal-linea-sugerida-text"></div>
-          </div>
-          
-          <div class="mb-3">
-            <label class="form-label">Verificación de operario</label>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="check-materiales" required>
-              <label class="form-check-label" for="check-materiales">
-                Materias primas disponibles
-              </label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="check-limpieza" required>
-              <label class="form-check-label" for="check-limpieza">
-                Línea limpia y sanitizada
-              </label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="check-equipos" required>
-              <label class="form-check-label" for="check-equipos">
-                Equipos funcionando correctamente
-              </label>
-            </div>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="submit" class="btn btn-primary" form="formIniciarOp">
-            <i class="bi bi-play-fill me-1"></i>Iniciar Trabajo
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-{# --- MODAL: REPORTAR AVANCE --- #}
-<div class="modal fade" id="modalReportarAvance" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">
-            <i class="bi bi-clipboard-data me-2"></i>Reportar Avance de Producción
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <form id="formReportarAvance">
-          <input type="hidden" id="modal-report-op-id">
-          
-          <div class="mb-3">
-            <label for="cantidad-producida" class="form-label">
-                Cantidad Producida (Buena) <span class="text-danger">*</span>
-            </label>
-            <input type="number" class="form-control" id="cantidad-producida" 
-                   placeholder="Ej: 40.0" step="0.1" required>
-          </div>
-          
-          <div class="mb-3">
-            <label for="cantidad-desperdicio" class="form-label">
-                Cantidad Desperdicio (Mala)
-            </label>
-            <input type="number" class="form-control" id="cantidad-desperdicio" 
-                   placeholder="Ej: 2.0" step="0.1" value="0">
-          </div>
-          
-          <div class="mb-3">
-            <label for="motivo-desperdicio" class="form-label">
-                Motivo de Desperdicio (si aplica)
-            </label>
-            <select class="form-select" id="motivo-desperdicio">
-              <option value="">Sin desperdicio</option>
-              <option value="falla_empaque">Falla de empaque</option>
-              <option value="materia_prima">Materia prima defectuosa</option>
-              <option value="temperatura">Error de temperatura</option>
-              <option value="proceso">Error de proceso</option>
-              <option value="contaminacion">Contaminación cruzada</option>
-            </select>
-          </div>
-          
-          <div class="mb-3">
-            <label for="observaciones" class="form-label">Observaciones adicionales</label>
-            <textarea class="form-control" id="observaciones" rows="3" 
-                      placeholder="Comentarios opcionales sobre el proceso..."></textarea>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="submit" class="btn btn-success" form="formReportarAvance">
-            <i class="bi bi-check-lg me-1"></i>Confirmar Reporte
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-{# --- MODAL: PAUSAR ORDEN --- #}
-<div class="modal fade" id="modalPausarOrden" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">
-            <i class="bi bi-pause-circle-fill me-2"></i>Pausar Orden de Producción
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <form id="formPausarOrden">
-          <input type="hidden" id="modal-pause-op-id">
-          
-          <div class="mb-3">
-            <label for="motivo-pausa" class="form-label">
-                Motivo de la pausa <span class="text-danger">*</span>
-            </label>
-            <select class="form-select" id="motivo-pausa" required>
-              <option value="">Seleccionar motivo...</option>
-              <option value="averia">Avería de máquina</option>
-              <option value="mantenimiento">Mantenimiento programado</option>
-              <option value="espera_material">Espera de material/insumo</option>
-              <option value="espera_supervisor">Espera de supervisor</option>
-              <option value="break">Break/Almuerzo</option>
-              <option value="cambio_turno">Cambio de turno</option>
-              <option value="calidad">Problema de calidad</option>
-              <option value="otro">Otro</option>
-            </select>
-          </div>
-          
-          <div class="mb-3">
-            <label for="detalles-pausa" class="form-label">Detalles adicionales</label>
-            <textarea class="form-control" id="detalles-pausa" rows="3" 
-                      placeholder="Describe el motivo de la pausa..."></textarea>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="submit" class="btn btn-warning" form="formPausarOrden">
-            <i class="bi bi-pause-fill me-1"></i>Confirmar Pausa
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
 {% endblock %}
 
 {% block extra_js %}
@@ -336,5 +157,6 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     
     {# --- SCRIPT PRINCIPAL DE PRODUCCIÓN HOY --- #}
-    <script src="{{ url_for('static', filename='js/planificacion/produccion_hoy.js') }}"></script>
+    {# Se elimina el script viejo que manejaba modales, ya no son necesarios en esta vista #}
+    {# <script src="{{ url_for('static', filename='js/planificacion/produccion_hoy.js') }}"></script> #}
 {% endblock %}

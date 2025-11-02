@@ -866,8 +866,8 @@ class OrdenProduccionController(BaseController):
         try:
             # 1. Definir las columnas del tablero
             columnas = {
-                'EN_ESPERA': 'En Espera',
-                'LISTA_PARA_PRODUCIR': 'Lista para producir',
+                'EN ESPERA': 'En Espera',
+                'LISTA PARA PRODUCIR': 'Lista para producir',
                 'EN_LINEA_1': 'Línea 1',
                 'EN_LINEA_2': 'Línea 2',
                 'EN_EMPAQUETADO': 'Empaquetado',
@@ -1074,3 +1074,45 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico en obtener_ordenes_para_kanban_hoy: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
+    def iniciar_trabajo_op(self, orden_id: int, usuario_id: int) -> tuple:
+        """
+        Asigna una orden a un operario y cambia su estado a EN_PROCESO.
+        Esta acción es idempotente: si la orden ya está asignada al usuario y en proceso, no hace nada.
+        """
+        try:
+            # 1. Obtener la orden de producción
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden = orden_result['data']
+
+            # 2. Validar estado
+            estado_actual = orden.get('estado')
+            operario_actual = orden.get('operario_asignado_id')
+
+            # Si ya está en proceso y asignada al mismo usuario, no hacer nada (éxito idempotente)
+            if estado_actual == 'EN_PROCESO' and operario_actual == usuario_id:
+                return self.success_response(message="El trabajo ya fue iniciado por este usuario.")
+
+            # Solo se puede iniciar si está en "LISTA PARA PRODUCIR"
+            if estado_actual != 'LISTA PARA PRODUCIR':
+                return self.error_response(f"No se puede iniciar el trabajo. La orden está en estado '{estado_actual}'.", 409) # 409 Conflict
+
+            # 3. Preparar y ejecutar la actualización
+            update_data = {
+                'operario_asignado_id': usuario_id,
+                'estado': 'EN_PROCESO',
+                'fecha_inicio_real': datetime.now().isoformat() # Registrar cuándo empezó realmente
+            }
+
+            update_result = self.model.update(orden_id, update_data)
+
+            if update_result.get('success'):
+                return self.success_response(data=update_result.get('data'), message="Trabajo iniciado correctamente.")
+            else:
+                return self.error_response(f"Error al actualizar la orden: {update_result.get('error')}", 500)
+
+        except Exception as e:
+            logger.error(f"Error en iniciar_trabajo_op para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)

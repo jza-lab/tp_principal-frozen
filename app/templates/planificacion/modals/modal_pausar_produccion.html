@@ -1,30 +1,29 @@
-<!-- Modal para Pausar Producción -->
-<div class="modal fade" id="modalPausarProduccion" tabindex="-1" aria-labelledby="modalPausarProduccionLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalPausarProduccionLabel"><i class="bi bi-pause-circle me-2"></i>Registrar Motivo de Pausa</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <form id="formPausarProduccion">
-                    <div class="mb-3">
-                        <label for="motivo-paro" class="form-label">Seleccione el motivo de la pausa <span class="text-danger">*</span></label>
-                        <select class="form-select" id="motivo-paro" required>
-                            <option value="">Seleccione un motivo...</option>
-                            <!-- Opciones se llenarán dinámicamente con JS -->
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="observaciones-pausa" class="form-label">Observaciones (Opcional)</label>
-                        <textarea class="form-control" id="observaciones-pausa" rows="2"></textarea>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-warning" form="formPausarProduccion" id="btn-submit-pausa">Confirmar Pausa</button>
-            </div>
-        </div>
+<div class="modal fade" id="modalPausarProduccion" tabindex="-1" aria-labelledby="modalPausarLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalPausarLabel"><i class="bi bi-pause-circle-fill me-2"></i>Pausar Producción</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="form-pausar">
+          <div class="mb-3">
+            <label for="motivo-paro" class="form-label">Seleccione el Motivo de la Pausa <span class="text-danger">*</span></label>
+            <select class="form-select" id="motivo-paro" name="motivo_paro_id" required>
+              <option value="" disabled selected>-- Elegir un motivo --</option>
+              {% for motivo in motivos_paro %}
+              <option value="{{ motivo.id }}">{{ motivo.descripcion }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-warning" form="form-pausar" id="btn-confirmar-pausa">
+          <i class="bi bi-pause-fill me-1"></i>Confirmar Pausa
+        </button>
+      </div>
     </div>
+  </div>
 </div>

@@ -7,17 +7,27 @@ from app.utils.decorators import permission_required
 
 op_tabla_bp = Blueprint("op_tabla", __name__, url_prefix="/tabla-produccion")
 
+from app.utils.estados import OP_KANBAN_COLUMNAS # Importar las columnas del Kanban
+
 @op_tabla_bp.route('/')
+@jwt_required()
 @permission_required(accion='consultar_plan_de_produccion')
 def tablero_produccion():
     """
-    Muestra el tablero Kanban para operarios con las órdenes de producción
-    planificadas para el día de hoy.
+    Muestra el tablero Kanban. La vista se filtra automáticamente si el
+    usuario es un operario.
     """
+    jwt_data = get_jwt()
+    usuario_rol = jwt_data.get('rol', '')
+    usuario_id = get_jwt_identity()
+    
     controller = PlanificacionController()
     
-    # Obtener OPs planificadas para hoy
-    response, _ = controller.obtener_ops_para_hoy()
+    # Pasar los datos del usuario al controlador para que aplique el filtro
+    response, _ = controller.obtener_ops_para_hoy(
+        usuario_id=usuario_id, 
+        usuario_rol=usuario_rol
+    )
     
     if not response.get('success'):
         flash(response.get('error', 'Error al cargar las órdenes de producción de hoy.'), 'error')
@@ -25,34 +35,44 @@ def tablero_produccion():
     else:
         ordenes_por_estado = response.get('data', {})
 
-    # Definir las columnas que la plantilla espera
-    columnas = {
-        'LISTA PARA PRODUCIR': 'Lista para Producir',
-        'EN PROCESO': 'En Proceso',
-        'PAUSADA': 'Pausada',
-        'CONTROL DE CALIDAD': 'Control de Calidad'
-    }
+    # Usar el diccionario de columnas centralizado desde estados.py
+    columnas = OP_KANBAN_COLUMNAS
+
+    # Si es un operario, filtramos las columnas que verá
+    if usuario_rol == 'OPERARIO':
+        columnas = {
+            'LISTA_PARA_PRODUCIR': 'Lista para Producir',
+            'EN_PROCESO': 'En Proceso'
+        }
 
     return render_template(
         'planificacion/produccion_hoy.html',
         ordenes_por_estado=ordenes_por_estado,
-        columnas=columnas
+        columnas=columnas,
+        usuario_rol=usuario_rol # Pasar el rol a la plantilla
     )
 
 @op_tabla_bp.route('/foco/<int:op_id>')
+@jwt_required()
 @permission_required(accion='produccion_ejecucion')
 def foco_produccion(op_id):
     """
-    Muestra la vista de foco para una orden de producción activa.
+    Muestra la vista de foco para una OP. Al acceder, intenta iniciar el trabajo.
     """
+    usuario_id = get_jwt_identity()
     orden_controller = OrdenProduccionController()
-    response, status_code = orden_controller.obtener_datos_para_vista_foco(op_id)
 
-    if status_code == 200:
-        return render_template('planificacion/foco_produccion.html', **response['data'])
-    else:
-        flash(response.get('error', 'Error desconocido al cargar la orden.'), 'danger')
+    response_inicio, status_inicio = orden_controller.iniciar_trabajo_op(op_id, usuario_id)
+    if status_inicio >= 400:
+        flash(response_inicio.get('error', 'No se pudo iniciar el trabajo.'), 'danger')
         return redirect(url_for('op_tabla.tablero_produccion'))
+
+    response_vista, status_vista = orden_controller.obtener_datos_para_vista_foco(op_id)
+    if status_vista >= 400:
+        flash(response_vista.get('error', 'Error al cargar datos de la orden.'), 'danger')
+        return redirect(url_for('op_tabla.tablero_produccion'))
+        
+    return render_template('planificacion/foco_produccion.html', **response_vista.get('data', {}))
 
 @op_tabla_bp.route('/api/mover-op/<int:op_id>', methods=['POST'])
 @permission_required(accion='produccion_ejecucion') # Permiso más general
@@ -75,6 +95,7 @@ def mover_op_api(op_id):
 @jwt_required()
 @permission_required(accion='produccion_ejecucion')
 def api_reportar_avance(op_id):
+    """ API endpoint para reportar avance (bueno y desperdicio). """
     data = request.get_json()
     usuario_id = get_jwt_identity()
     controller = OrdenProduccionController()
@@ -85,6 +106,7 @@ def api_reportar_avance(op_id):
 @jwt_required()
 @permission_required(accion='produccion_ejecucion')
 def api_pausar_produccion(op_id):
+    """ API endpoint para registrar el inicio de una pausa. """
     data = request.get_json()
     motivo_id = data.get('motivo_id')
     if not motivo_id:
@@ -99,6 +121,7 @@ def api_pausar_produccion(op_id):
 @jwt_required()
 @permission_required(accion='produccion_ejecucion')
 def api_reanudar_produccion(op_id):
+    """ API endpoint para registrar el fin de una pausa. """
     usuario_id = get_jwt_identity()
     controller = OrdenProduccionController()
     response, status_code = controller.reanudar_produccion(op_id, usuario_id)

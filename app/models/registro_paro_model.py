@@ -1,8 +1,11 @@
-from app.models.base_model import BaseModel
+from .base_model import BaseModel
 
 class RegistroParoModel(BaseModel):
-    def __init__(self):
-        super().__init__(table_name='registros_paro')
-
+    """
+    Modelo para interactuar con la tabla de registros de paro en la base de datos.
+    """
     def get_table_name(self):
-        return 'registros_paro'
+        return "mes_kanban.registros_paro"
+
+    def get_schema_name(self):
+        return "mes_kanban"

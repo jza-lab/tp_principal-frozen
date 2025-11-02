@@ -1,205 +1,162 @@
+// app/static/js/planificacion/foco_produccion.js
 document.addEventListener('DOMContentLoaded', function () {
-
     // --- ELEMENTOS DEL DOM ---
     const focoContainer = document.getElementById('foco-container');
-    const opId = focoContainer.dataset.opId;
-
+    const ordenId = focoContainer.dataset.opId;
     const timerDisplay = document.getElementById('timer');
-    const progressBar = document.getElementById('progress-bar');
-    const cantidadProducidaSpan = document.getElementById('cantidad-producida');
-    
-    const btnReportarAvance = document.getElementById('btn-reportar-avance');
-    const btnPausarReanudar = document.getElementById('btn-pausar-reanudar');
     const pauseOverlay = document.getElementById('pause-overlay');
+    const btnPausarReanudar = document.getElementById('btn-pausar-reanudar');
+    const btnConfirmarPausa = document.getElementById('btn-confirmar-pausa');
+    const btnConfirmarReporte = document.getElementById('btn-confirmar-reporte');
+    const cantidadProducidaDisplay = document.getElementById('cantidad-producida');
+    const cantidadDesperdicioDisplay = document.getElementById('cantidad-desperdicio');
+    const progressBar = document.getElementById('progress-bar');
+    const cantidadMalaInput = document.getElementById('cantidad-mala');
+    const motivoDesperdicioContainer = document.getElementById('motivo-desperdicio-container');
+    const motivoDesperdicioSelect = document.getElementById('motivo-desperdicio');
 
-    // Modales
-    const modalReportarAvance = new bootstrap.Modal(document.getElementById('modalReportarAvance'));
-    const modalPausarProduccion = new bootstrap.Modal(document.getElementById('modalPausarProduccion'));
-
-    // Formularios de modales
-    const formReportarAvance = document.getElementById('formReportarAvance');
-    const formPausarProduccion = document.getElementById('formPausarProduccion');
-    
     // --- ESTADO ---
     let timerInterval;
+    let segundosTranscurridos = 0;
     let isPaused = false;
-    let accumulatedTime = 0; // Tiempo en segundos
-    let lastStartTime = Date.now();
-
-    // --- INICIALIZACIÓN ---
-
-    function init() {
-        populateDropdowns();
-        startTimer();
-        setupEventListeners();
-        // Chequear si ya está en pausa al cargar la página (lógica más avanzada)
-    }
-
-    function populateDropdowns() {
-        const motivoDesperdicioSelect = document.getElementById('motivo-desperdicio');
-        MOTIVOS_DESPERDICIO.forEach(motivo => {
-            const option = new Option(motivo.descripcion, motivo.id);
-            motivoDesperdicioSelect.add(option);
-        });
-
-        const motivoParoSelect = document.getElementById('motivo-paro');
-        MOTIVOS_PARO.forEach(motivo => {
-            const option = new Option(motivo.descripcion, motivo.id);
-            motivoParoSelect.add(option);
-        });
-    }
 
     // --- LÓGICA DEL CRONÓMETRO ---
+    function formatTime(seconds) {
+        const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+        const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        return `${h}:${m}:${s}`;
+    }
 
     function startTimer() {
-        lastStartTime = Date.now();
-        timerInterval = setInterval(updateTimer, 1000);
+        if (timerInterval) return;
+        timerInterval = setInterval(() => {
+            segundosTranscurridos++;
+            timerDisplay.textContent = formatTime(segundosTranscurridos);
+        }, 1000);
     }
 
     function stopTimer() {
         clearInterval(timerInterval);
-        accumulatedTime += (Date.now() - lastStartTime) / 1000;
+        timerInterval = null;
     }
 
-    function updateTimer() {
-        const elapsedTime = accumulatedTime + (Date.now() - lastStartTime) / 1000;
-        const hours = Math.floor(elapsedTime / 3600);
-        const minutes = Math.floor((elapsedTime % 3600) / 60);
-        const seconds = Math.floor(elapsedTime % 60);
-        timerDisplay.textContent = 
-            `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    // --- LÓGICA DE PAUSA / REANUDACIÓN ---
+    function pausarProduccion() {
+        stopTimer();
+        isPaused = true;
+        pauseOverlay.style.display = 'flex';
+        btnPausarReanudar.innerHTML = '<i class="bi bi-play-fill me-2"></i>Reanudar Trabajo';
+        btnPausarReanudar.classList.remove('btn-warning');
+        btnPausarReanudar.classList.add('btn-success');
     }
 
-    // --- MANEJADORES DE EVENTOS ---
-
-    function setupEventListeners() {
-        btnReportarAvance.addEventListener('click', () => {
-            modalReportarAvance.show();
-        });
-
-        formReportarAvance.addEventListener('submit', handleReportarAvance);
-
-        btnPausarReanudar.addEventListener('click', handlePausaReanudar);
-        
-        formPausarProduccion.addEventListener('submit', handleConfirmarPausa);
-
-        // Mostrar/ocultar motivo de desperdicio
-        document.getElementById('cantidad-desperdicio').addEventListener('input', function() {
-            const container = document.getElementById('motivo-desperdicio-container');
-            container.style.display = parseFloat(this.value) > 0 ? 'block' : 'none';
-        });
+    function reanudarProduccion() {
+        startTimer();
+        isPaused = false;
+        pauseOverlay.style.display = 'none';
+        btnPausarReanudar.innerHTML = '<i class="bi bi-pause-fill me-2"></i>Pausar Trabajo';
+        btnPausarReanudar.classList.remove('btn-success');
+        btnPausarReanudar.classList.add('btn-warning');
     }
 
-    // --- LÓGICA DE ACCIONES ---
-
-    async function handleReportarAvance(event) {
-        event.preventDefault();
-        const btn = document.getElementById('btn-submit-reporte');
-        btn.disabled = true;
-
-        const data = {
-            cantidad_buena: document.getElementById('cantidad-buena').value,
-            cantidad_desperdicio: document.getElementById('cantidad-desperdicio').value || 0,
-            motivo_desperdicio_id: document.getElementById('motivo-desperdicio').value,
-            finalizar_orden: document.getElementById('finalizar-orden').checked,
-            observaciones: document.getElementById('observaciones-reporte').value
-        };
-
-        try {
-            const response = await fetch(`/tabla-produccion/api/op/${opId}/reportar`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Error en el servidor');
-            
-            modalReportarAvance.hide();
-            // TODO: Actualizar UI sin recargar
-            if (data.finalizar_orden) {
-                alert('¡Orden Finalizada! Redirigiendo al tablero...');
-                window.location.href = '/tabla-produccion';
-            } else {
-                window.location.reload(); // Recarga simple por ahora para ver el progreso
-            }
-
-        } catch (error) {
-            alert(`Error al reportar avance: ${error.message}`);
-        } finally {
-            btn.disabled = false;
-        }
-    }
-
-    function handlePausaReanudar() {
-        if (isPaused) {
-            // Lógica para reanudar
-            handleReanudar();
-        } else {
-            // Lógica para pausar
-            modalPausarProduccion.show();
-        }
-    }
-    
-    async function handleConfirmarPausa(event) {
-        event.preventDefault();
-        const btn = document.getElementById('btn-submit-pausa');
-        btn.disabled = true;
-        
+    btnConfirmarPausa.addEventListener('click', async (e) => {
+        e.preventDefault();
         const motivoId = document.getElementById('motivo-paro').value;
         if (!motivoId) {
-            alert('Debe seleccionar un motivo de pausa.');
-            btn.disabled = false;
+            // Manejar error de validación
             return;
         }
 
-        try {
-            const response = await fetch(`/tabla-produccion/api/op/${opId}/pausar`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ motivo_id: motivoId })
-            });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Error en el servidor');
+        const response = await fetch(`/tabla-produccion/api/op/${ordenId}/pausar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ motivo_id: motivoId })
+        });
 
-            modalPausarProduccion.hide();
-            isPaused = true;
-            stopTimer();
-            pauseOverlay.style.display = 'flex';
-            btnPausarReanudar.innerHTML = '<i class="bi bi-play-fill me-2"></i>Reanudar Trabajo';
-            btnPausarReanudar.classList.replace('btn-warning', 'btn-success');
-            btnReportarAvance.disabled = true;
-
-        } catch (error) {
-            alert(`Error al pausar la producción: ${error.message}`);
-        } finally {
-            btn.disabled = false;
+        if (response.ok) {
+            pausarProduccion();
+            bootstrap.Modal.getInstance(document.getElementById('modalPausarProduccion')).hide();
+        } else {
+            // Manejar error
         }
-    }
-
-    async function handleReanudar() {
-        btnPausarReanudar.disabled = true;
-        try {
-            const response = await fetch(`/tabla-produccion/api/op/${opId}/reanudar`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+    });
+    
+    btnPausarReanudar.addEventListener('click', async () => {
+        if (isPaused) {
+            const response = await fetch(`/tabla-produccion/api/op/${ordenId}/reanudar`, {
+                method: 'POST'
             });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Error en el servidor');
-            
-            isPaused = false;
-            startTimer();
-            pauseOverlay.style.display = 'none';
-            btnPausarReanudar.innerHTML = '<i class="bi bi-pause-fill me-2"></i>Pausar Trabajo';
-            btnPausarReanudar.classList.replace('btn-success', 'btn-warning');
-            btnReportarAvance.disabled = false;
-
-        } catch (error) {
-            alert(`Error al reanudar la producción: ${error.message}`);
-        } finally {
-            btnPausarReanudar.disabled = false;
+            if (response.ok) {
+                reanudarProduccion();
+            } else {
+                // Manejar error
+            }
+        } else {
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalPausarProduccion')).show();
         }
-    }
+    });
 
-    // --- INICIAR TODO ---
-    init();
+    // --- LÓGICA DE REPORTE DE AVANCE ---
+    cantidadMalaInput.addEventListener('input', () => {
+        const cantidadMala = parseFloat(cantidadMalaInput.value) || 0;
+        if (cantidadMala > 0) {
+            motivoDesperdicioContainer.style.display = 'block';
+            motivoDesperdicioSelect.required = true;
+        } else {
+            motivoDesperdicioContainer.style.display = 'none';
+            motivoDesperdicioSelect.required = false;
+        }
+    });
+
+    btnConfirmarReporte.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const form = document.getElementById('form-reportar');
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        const data = {
+            cantidad_buena: document.getElementById('cantidad-buena').value,
+            cantidad_desperdicio: cantidadMalaInput.value,
+            motivo_desperdicio_id: motivoDesperdicioSelect.value,
+            finalizar_orden: document.querySelector('input[name="tipo_reporte"]:checked').value === 'final'
+        };
+
+        const response = await fetch(`/tabla-produccion/api/op/${ordenId}/reportar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            if (data.finalizar_orden) {
+                window.location.href = '/tabla-produccion/';
+            } else {
+                // Actualizar UI
+                // Esta parte debería obtener los nuevos totales desde la respuesta de la API
+                // Por simplicidad, lo calculamos en el frontend por ahora.
+                const totalProducido = parseFloat(cantidadProducidaDisplay.textContent) + parseFloat(data.cantidad_buena);
+                const totalDesperdicio = parseFloat(cantidadDesperdicioDisplay.textContent) + parseFloat(data.cantidad_desperdicio);
+                cantidadProducidaDisplay.textContent = `${totalProducido.toFixed(2)} kg`;
+                cantidadDesperdicioDisplay.textContent = `${totalDesperdicio.toFixed(2)} kg`;
+                
+                // Actualizar barra de progreso
+                const cantidadPlanificada = parseFloat(document.querySelector('.display-4').textContent);
+                const progress = (totalProducido / cantidadPlanificada) * 100;
+                progressBar.style.width = `${progress}%`;
+                progressBar.setAttribute('aria-valuenow', progress);
+                
+                bootstrap.Modal.getInstance(document.getElementById('modalReportarAvance')).hide();
+                form.reset();
+            }
+        } else {
+            // Manejar error
+        }
+    });
+
+
+    // --- INICIALIZACIÓN ---
+    startTimer();
 });

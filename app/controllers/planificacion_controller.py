@@ -928,11 +928,15 @@ class PlanificacionController(BaseController):
             ordenes_por_estado = defaultdict(list)
             for orden in ordenes:
                 estado = orden.get('estado')
-                # Simplificamos los estados para el kanban si es necesario
-                if estado in ['EN_LINEA_1', 'EN_LINEA_2']:
-                    estado = 'EN PROCESO'
                 
-                ordenes_por_estado[estado].append(orden)
+                # Agrupar todos los estados de producción activos bajo "EN PROCESO"
+                if estado in ['EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'EN_PRODUCCION']:
+                    estado = 'EN_PROCESO'
+                
+                # Asegurarse de que el estado exista en las columnas definidas para el Kanban
+                from app.utils.estados import OP_KANBAN_COLUMNAS
+                if estado in OP_KANBAN_COLUMNAS:
+                    ordenes_por_estado[estado].append(orden)
             
             return self.success_response(data=dict(ordenes_por_estado))
 

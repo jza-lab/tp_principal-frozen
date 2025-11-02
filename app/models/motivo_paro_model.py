@@ -1,8 +1,11 @@
-from app.models.base_model import BaseModel
+from .base_model import BaseModel
 
 class MotivoParoModel(BaseModel):
-    def __init__(self):
-        super().__init__(table_name='motivos_paro')
-
+    """
+    Modelo para interactuar con la tabla de motivos de paro en la base de datos.
+    """
     def get_table_name(self):
-        return 'motivos_paro'
+        return "mes_kanban.motivos_paro"
+
+    def get_schema_name(self):
+        return "mes_kanban"
