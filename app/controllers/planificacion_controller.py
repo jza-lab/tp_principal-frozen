@@ -146,6 +146,80 @@ class PlanificacionController(BaseController):
             logger.error(f"Error crítico en consolidar_y_aprobar_lote: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
 
+    def _simular_crp_multi_dia(self, op_id: int, carga_total_op: float, linea: int, fecha_inicio: date) -> Dict:
+        """
+        Simula la planificación de una OP día por día para verificar si hay
+        capacidad suficiente en el horizonte de planificación.
+        """
+        max_dias_simulacion = 30
+        fecha_fin_horizonte = fecha_inicio + timedelta(days=max_dias_simulacion)
+
+        capacidad_horizonte = self.obtener_capacidad_disponible([linea], fecha_inicio, fecha_fin_horizonte)
+        
+        ops_planificadas_res, _ = self.orden_produccion_controller.obtener_ordenes({
+            'linea_asignada': linea,
+            'fecha_inicio_planificada_desde': fecha_inicio.isoformat(),
+            'fecha_inicio_planificada_hasta': fecha_fin_horizonte.isoformat(),
+            'estado': ('in', ('EN ESPERA', 'LISTA PARA PRODUCIR'))
+        })
+        ops_planificadas = [op for op in ops_planificadas_res.get('data', []) if op.get('id') != op_id]
+
+        carga_existente_horizonte = self.calcular_carga_capacidad(ops_planificadas)
+
+        carga_restante_sim = carga_total_op
+        fecha_actual_sim = fecha_inicio
+        dias_necesarios_sim = 0
+        
+        while carga_restante_sim > 0.01 and (fecha_actual_sim - fecha_inicio).days < max_dias_simulacion:
+            fecha_iso = fecha_actual_sim.isoformat()
+            
+            capacidad_dia = capacidad_horizonte.get(linea, {}).get(fecha_iso, 0.0)
+            carga_existente_dia = carga_existente_horizonte.get(linea, {}).get(fecha_iso, 0.0)
+            
+            capacidad_real_restante_dia = max(0.0, capacidad_dia - carga_existente_dia)
+
+            if dias_necesarios_sim == 0 and capacidad_real_restante_dia < carga_restante_sim and capacidad_real_restante_dia < capacidad_dia:
+                 return {
+                     'status': 'SOBRECARGA',
+                     'detalle': {
+                         'linea': linea,
+                         'fecha_str': fecha_iso,
+                         'cap_dia': capacidad_dia,
+                         'carga_op_restante': carga_restante_sim,
+                         'carga_exist': carga_existente_dia
+                     }
+                 }
+
+            carga_a_asignar_hoy = min(carga_restante_sim, capacidad_real_restante_dia)
+            
+            if carga_a_asignar_hoy > 0:
+                carga_restante_sim -= carga_a_asignar_hoy
+                if dias_necesarios_sim == 0:
+                    dias_necesarios_sim = 1
+                elif (fecha_actual_sim - fecha_inicio).days + 1 > dias_necesarios_sim:
+                    dias_necesarios_sim = (fecha_actual_sim - fecha_inicio).days + 1
+            
+            if carga_restante_sim > 0.01:
+                fecha_actual_sim += timedelta(days=1)
+
+        if carga_restante_sim > 0.01:
+            return {
+                'status': 'SOBRECARGA',
+                'detalle': {
+                    'linea': linea,
+                    'fecha_str': fecha_inicio.isoformat(),
+                    'cap_dia': 0,
+                    'carga_op_restante': carga_restante_sim,
+                    'carga_exist': 0,
+                    'horizonte_excedido': True
+                }
+            }
+        else:
+            return {
+                'status': 'OK',
+                'dias_necesarios': dias_necesarios_sim,
+                'fecha_fin_estimada': fecha_actual_sim
+            }
 
     # --- NUEVO HELPER para obtener datos OP (MODIFICADO) ---
     def _obtener_datos_op_a_planificar(self, op_ids: List[int], usuario_id: int) -> tuple: # <-- AÑADIR usuario_id
@@ -716,49 +790,6 @@ class PlanificacionController(BaseController):
             2: dict(carga_distribuida[2])
         }
         return resultado_final
-
-    def obtener_ops_para_hoy(self) -> tuple:
-        """
-        Obtiene las órdenes de producción planificadas para comenzar hoy o que ya están
-        en proceso, y las agrupa por estado para el tablero Kanban del operario.
-        """
-        try:
-            today_iso = date.today().isoformat()
-            
-            # Filtra OPs que inician hoy o que ya están en un estado de producción activo
-            # independientemente de cuándo iniciaron.
-            filtros = {
-                'fecha_inicio_planificada': today_iso,
-                'estados_produccion': True # Un flag para una lógica de filtro especial en el modelo
-            }
-
-            response, _ = self.orden_produccion_controller.obtener_ordenes_para_kanban_hoy()
-
-            if not response.get('success'):
-                logger.error(f"Error al obtener OPs para el Kanban de hoy: {response.get('error')}")
-                return self.error_response("Error al cargar las órdenes para el tablero de producción.")
-
-            ordenes = response.get('data', [])
-            
-            # Agrupar por estado
-            ordenes_por_estado = defaultdict(list)
-            for orden in ordenes:
-                estado = orden.get('estado')
-                
-                # Agrupar todos los estados de producción activos bajo "EN PROCESO"
-                if estado in ['EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'EN_PRODUCCION']:
-                    estado = 'EN_PROCESO'
-                
-                # Asegurarse de que el estado exista en las columnas definidas para el Kanban
-                from app.utils.estados import OP_KANBAN_COLUMNAS
-                if estado in OP_KANBAN_COLUMNAS:
-                    ordenes_por_estado[estado].append(orden)
-            
-            return self.success_response(data=dict(ordenes_por_estado))
-
-        except Exception as e:
-            logger.error(f"Error crítico en obtener_ops_para_hoy: {e}", exc_info=True)
-            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
 
     def obtener_datos_para_tablero_planificacion(self, week_str: Optional[str], horizonte_dias: int, user_roles: List[str]) -> tuple:
         """
