@@ -13,6 +13,7 @@ from app.models.token_blacklist_model import TokenBlacklistModel
 from app.models.rol import RoleModel
 from app.controllers.cliente_controller import ClienteController
 from app.models.reclamo import ReclamoModel
+from app.models.chatbot_qa import ChatbotQA
 from types import SimpleNamespace
 
 jwt = JWTManager()
@@ -97,6 +98,7 @@ def _register_blueprints(app: Flask):
     from app.views.admin_consulta_routes import consulta_bp
     from app.views.receta_routes import receta_bp
     from app.views.control_calidad_routes import control_calidad_bp
+    from app.views.chatbot_routes import chatbot_bp
     from app.views.reportes_routes import reportes_bp
 
     app.register_blueprint(main_bp)
@@ -128,6 +130,7 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(admin_reclamo_bp)
     app.register_blueprint(consulta_bp)
     app.register_blueprint(receta_bp)
+    app.register_blueprint(chatbot_bp)
     app.register_blueprint(reportes_bp)
 
 def _register_error_handlers(app: Flask):
@@ -276,6 +279,10 @@ def create_app() -> Flask:
     app.jinja_env.globals['has_permission'] = _has_permission_filter # Se registra como global
     app.jinja_env.tests['has_permission'] = _has_permission_filter # Y como test
     
+    with app.app_context():
+        chatbot_model = ChatbotQA()
+        chatbot_model.create_table_if_not_exists()
+
     _register_blueprints(app)
     _register_error_handlers(app)
     
