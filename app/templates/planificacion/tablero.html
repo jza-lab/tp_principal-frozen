@@ -972,15 +972,19 @@
                 // Reutilizamos el 'feedbackModal'
                 if (response.status === 409 && result.error === 'SOBRECARGA_CAPACIDAD') {
                     showFeedbackModal('error', result.title, result.message);
-                } else if (response.status === 200 && result.error === 'MULTI_DIA_CONFIRM') {
-                    showFeedbackModal('Confirmación Multi-Día', result.message, 'confirm', () => {
+                } else if (response.status === 200 && (result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM')) {
+                    // Unir las dos lógicas de confirmación
+                    const modalTitle = (result.error === 'LATE_CONFIRM') ? '⚠️ Planificación Tarde' : 'Confirmación Multi-Día';
+                    replanModal.hide();
+                    showFeedbackModal(modalTitle, result.message, 'confirm', () => {
                         // Reutiliza la lógica de confirmación
                         confirmarAsignacionLote(
                             result.op_id_confirmar, 
                             result.asignaciones_confirmar,
-                            result.estado_actual // <-- ¡Parámetro añadido!
+                            result.estado_actual
                         );
                     });
+                // --- FIN BLOQUE MODIFICADO ---
                 } else if (response.status === 200 && result.success) {
                     showFeedbackModal('success', '¡Re-planificado!', 'La OP ha sido re-planificada exitosamente.', null, true); // true = auto-reload
                 } else {

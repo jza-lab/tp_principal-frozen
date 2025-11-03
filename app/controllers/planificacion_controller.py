@@ -235,16 +235,47 @@ class PlanificacionController(BaseController):
                 fecha_fin_estimada = simulacion_result['fecha_fin_estimada']
                 dias_necesarios = simulacion_result['dias_necesarios']
 
+                # --- ¡NUEVA VALIDACIÓN DE FECHA META! ---
+                fecha_meta_str = op_data.get('fecha_meta')
+                va_a_terminar_tarde = False
+                fecha_meta = None
+                if fecha_meta_str:
+                    try:
+                        fecha_meta = date.fromisoformat(fecha_meta_str)
+                        if fecha_fin_estimada > fecha_meta:
+                            va_a_terminar_tarde = True
+                            logger.warning(f"Validación OP {op_a_planificar_id}: Terminará tarde (Fin: {fecha_fin_estimada}, Meta: {fecha_meta})")
+                    except ValueError:
+                        logger.warning(f"OP {op_a_planificar_id} tiene fecha meta inválida: {fecha_meta_str}")
+                # --- FIN VALIDACIÓN ---
+
                 # ¡IMPORTANTE! Actualizar la fecha de inicio en 'asignaciones' a la real encontrada
                 asignaciones['fecha_inicio'] = primer_dia_asignado.isoformat()
 
                 logger.info(f"Verificación CRP OK. OP {op_a_planificar_id} requiere ~{dias_necesarios} día(s).")
                 logger.info(f"Inicio real: {primer_dia_asignado.isoformat()}, Fin aprox: {fecha_fin_estimada.isoformat()}.")
 
-            if dias_necesarios > 1:
-                # Devolver respuesta para confirmación del usuario
+            # --- LÓGICA DE DECISIÓN MODIFICADA ---
+            if va_a_terminar_tarde:
+                # 1. Si va a terminar tarde, FORZAR confirmación (incluso si es 1 día)
                 return {
-                    'success': False, # No es un éxito final aún
+                    'success': False,
+                    'error': 'LATE_CONFIRM', # <-- Nuevo tipo de error
+                    'message': (f"⚠️ ¡Atención! La OP terminará el <b>{fecha_fin_estimada.isoformat()}</b>, "
+                                f"que es <b>después</b> de su Fecha Meta (<b>{fecha_meta_str}</b>).\n\n"
+                                f"Esto se debe a la falta de capacidad en la Línea {linea_propuesta}.\n\n"
+                                f"¿Desea confirmar esta planificación de todos modos?"),
+                    'fecha_fin_estimada': fecha_fin_estimada.isoformat(),
+                    'fecha_meta': fecha_meta_str,
+                    'op_id_confirmar': op_a_planificar_id,
+                    'asignaciones_confirmar': asignaciones,
+                    'estado_actual': op_estado_actual
+                }, 200 # Usar 200 OK para que el frontend lo maneje como confirmación
+
+            elif dias_necesarios > 1:
+                # 2. Si es multi-día PERO está a tiempo
+                return {
+                    'success': False,
                     'error': 'MULTI_DIA_CONFIRM',
                     'message': (f"Esta OP requiere aproximadamente {dias_necesarios} días para completarse "
                                 f"(hasta {fecha_fin_estimada.isoformat()}) debido a la capacidad de la línea. "
@@ -252,21 +283,21 @@ class PlanificacionController(BaseController):
                     'dias_necesarios': dias_necesarios,
                     'fecha_fin_estimada': fecha_fin_estimada.isoformat(),
                     'op_id_confirmar': op_a_planificar_id,
-                    # Pasar las asignaciones originales para la confirmación
                     'asignaciones_confirmar': asignaciones,
-                    'estado_actual': op_estado_actual # <-- ¡Importante! Pasamos el estado
-                }, 200 # Usamos 200 OK para indicar solicitud de confirmación
+                    'estado_actual': op_estado_actual
+                }, 200
             else:
-                # Cabe en un día, decidir qué helper llamar
+                # 3. Cabe en un día y está a tiempo
                 logger.info(f"OP cabe en un día. Decidiendo flujo por estado '{op_estado_actual}'...")
                 if op_estado_actual == 'PENDIENTE':
-                    # Flujo original: Aprobar
+                    # ... (lógica 'PENDIENTE' sin cambios) ...
                     logger.info("Estado es PENDIENTE. Ejecutando aprobación final...")
                     return self._ejecutar_aprobacion_final(op_a_planificar_id, asignaciones, usuario_id)
                 else:
-                    # Flujo nuevo: Re-planificar (solo actualizar)
+                    # ... (lógica 're-planificación' sin cambios) ...
                     logger.info(f"Estado es {op_estado_actual}. Ejecutando re-planificación simple...")
                     return self._ejecutar_replanificacion_simple(op_a_planificar_id, asignaciones, usuario_id)
+            # --- FIN LÓGICA DE DECISIÓN ---
 
         except Exception as e:
             logger.error(f"Error crítico en consolidar_y_aprobar_lote: {e}", exc_info=True)
@@ -1056,6 +1087,13 @@ class PlanificacionController(BaseController):
                         logger.error(f"[AutoPlan] {msg}", exc_info=True)
                         errores_encontrados.append(msg)
                     # --- FIN NUEVA LÓGICA ---
+                # --- ¡NUEVO BLOQUE AÑADIDO! ---
+                elif res_planif_dict.get('error') == 'LATE_CONFIRM':
+                    # La auto-planificación NO debe aprobar OPs que terminan tarde.
+                    msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) NO SE PLANIFICÓ: Terminaría después de su Fecha Meta. Requiere revisión manual."
+                    logger.warning(f"[AutoPlan] {msg}")
+                    errores_encontrados.append(msg)
+                # --- FIN NUEVO BLOQUE ---
 
                 elif res_planif_dict.get('error') == 'SOBRECARGA_CAPACIDAD':
                     # Error de capacidad
