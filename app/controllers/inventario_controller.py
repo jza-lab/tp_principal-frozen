@@ -552,13 +552,9 @@ class InventarioController(BaseController):
 
                 # --- INICIO DE LA CORRECCIÓN ---
                 #
-                # El 'if' que estaba aquí era el error.
-                # Ahora sumamos la 'cantidad_actual' (la parte disponible)
-                # sin importar si el estado del lote es 'disponible' o 'cuarentena'.
-                #
-                insumos_agrupados[insumo_id]['cantidad_total'] += cantidad_actual
-                #
-                # --- FIN DE LA CORRECCIÓN ---
+                # Solo sumar a la cantidad total si el lote está 'disponible'
+                if lote.get('estado') and lote.get('estado').lower() == 'disponible':
+                    insumos_agrupados[insumo_id]['cantidad_total'] += cantidad_actual
 
                 insumos_agrupados[insumo_id]['lotes'].append(lote)
 

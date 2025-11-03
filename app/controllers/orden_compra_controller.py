@@ -332,10 +332,50 @@ class OrdenCompraController:
             logger.error(f"Error rechazando orden {orden_id}: {e}")
             return {'success': False, 'error': str(e)}
 
+    def _reiniciar_bandera_stock_recibido(self, orden_id: int):
+        """
+        Recorre la cadena de órdenes de compra hacia atrás (a través de 'complementa_a_orden_id')
+        y para cada orden, quita la bandera 'en_espera_de_reestock' de todos sus insumos.
+        Esto es crucial para permitir que se generen nuevas OCs automáticas para esos insumos.
+        """
+        logger.info(f"Iniciando reinicio de bandera 'en_espera_de_reestock' desde la OC ID: {orden_id}.")
+        current_id = orden_id
+        processed_ids = set()
+
+        try:
+            while current_id and current_id not in processed_ids:
+                processed_ids.add(current_id)
+                orden_res = self.model.get_one_with_details(current_id)
+
+                if not orden_res.get('success'):
+                    logger.warning(f"No se encontró la orden con ID {current_id} en la cadena de reinicio de bandera.")
+                    break
+
+                orden_actual = orden_res['data']
+                logger.info(f"Procesando OC {orden_actual.get('codigo_oc')} (ID: {current_id}) para quitar banderas.")
+
+                # Quitar estado 'en espera' de los insumos de esta orden
+                if 'items' in orden_actual and orden_actual['items']:
+                    for item in orden_actual['items']:
+                        if item.get('insumo_id'):
+                            self.insumo_controller.insumo_model.quitar_en_espera(item['insumo_id'])
+                            logger.info(f"Bandera 'en_espera_de_reestock' reiniciada para insumo ID: {item['insumo_id']}.")
+                else:
+                    logger.info(f"La OC {current_id} no tiene items para procesar.")
+
+                # Moverse a la orden que esta complementa
+                current_id = orden_actual.get('complementa_a_orden_id')
+
+            logger.info(f"Finalizado el reinicio de banderas para la cadena de la OC ID: {orden_id}.")
+
+        except Exception as e:
+            logger.error(f"Error crítico durante el reinicio de banderas para la cadena de la OC {orden_id}: {e}", exc_info=True)
+
+
     def _marcar_cadena_como_en_control_calidad(self, orden_id):
         """
-        Marca una orden y todas sus predecesoras como 'EN_CONTROL_CALIDAD'
-        y quita el estado 'en_espera_de_reestock' de sus insumos.
+        Marca una orden y todas sus predecesoras como 'EN_CONTROL_CALIDAD'.
+        La lógica de reinicio de la bandera de stock se ha movido a `_reiniciar_bandera_stock_recibido`.
         """
         try:
             current_id = orden_id
@@ -347,13 +387,7 @@ class OrdenCompraController:
 
                 orden_actual = orden_res['data']
 
-                # 1. Quitar estado 'en espera' de los insumos de esta orden
-                for item in orden_actual.get('items', []):
-                    if item.get('insumo_id'):
-                        self.insumo_controller.insumo_model.quitar_en_espera(item['insumo_id'])
-                        logger.info(f"Quitado estado 'en espera' del insumo {item['insumo_id']} de la OC {current_id}.")
-
-                # 2. Actualizar el estado de la orden actual a 'EN_CONTROL_CALIDAD'
+                # Actualizar el estado de la orden actual a 'EN_CONTROL_CALIDAD'
                 self.model.update(current_id, {
                     'estado': 'EN_CONTROL_CALIDAD',
                     'fecha_real_entrega': date.today().isoformat()
@@ -361,7 +395,7 @@ class OrdenCompraController:
 
                 logger.info(f"Orden {current_id} marcada como EN_CONTROL_CALIDAD.")
 
-                # 3. Moverse a la orden que esta complementa
+                # Moverse a la orden que esta complementa
                 current_id = orden_actual.get('complementa_a_orden_id')
 
         except Exception as e:
@@ -524,6 +558,11 @@ class OrdenCompraController:
                         'observaciones': f"{observaciones}\nRecepción completada. Pendiente de Control de Calidad."
                     }
                     self.model.update(orden_id, update_data)
+
+                    # >>> PASO CRÍTICO <<<
+                    # Al confirmar la recepción completa, se reinicia la bandera para que el sistema
+                    # pueda volver a generar OCs automáticas para estos insumos si es necesario.
+                    self._reiniciar_bandera_stock_recibido(orden_id)
 
                     # 2. Mensaje de éxito (ya NO se mueve a calidad)
                     final_message = f'Recepción completada. {lotes_creados} lotes creados.'

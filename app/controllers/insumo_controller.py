@@ -110,48 +110,8 @@ class InsumoController(BaseController):
             # Primero, actualizamos el stock de todos los insumos
             self.inventario_model.calcular_y_actualizar_stock_general()
             
-            # --- INICIO: Disparador automático de OCs (Refactorizado) ---
-            try:
-                # 1. Obtener el ID del proveedor default (PRV-0001)
-                proveedor_default_id = None
-                default_prov_res = ProveedorModel().get_all(filtros={'codigo': 'PRV-0001'})
-                if default_prov_res.get('success') and default_prov_res.get('data'):
-                    proveedor_default_id = default_prov_res['data'][0]['id']
-                else:
-                    logger.warning("Disparador automático: No se encontró proveedor 'PRV-0001'. Insumos sin proveedor no se repondrán.")
-
-                # 2. Buscar *todos* los insumos activos que no estén ya en espera
-                insumos_a_chequear_result = self.insumo_model.find_all(filters={
-                    'activo': True, 
-                    'en_espera_de_reestock': False
-                })
-
-                if insumos_a_chequear_result.get('success'):
-                    insumos_para_revisar = insumos_a_chequear_result.get('data', [])
-                    proveedores_para_oc = set() # Usamos un 'set' para evitar duplicados
-
-                    # 3. Iterar para encontrar *qué proveedores* necesitan una OC
-                    for insumo in insumos_para_revisar:
-                        stock = float(insumo.get('stock_actual') or 0)
-                        minimo = float(insumo.get('stock_min') or 0)
-                        
-                        if stock < minimo:
-                            proveedor_id = insumo.get('id_proveedor')
-                            if proveedor_id:
-                                proveedores_para_oc.add(proveedor_id)
-                            elif proveedor_default_id:
-                                # Si no tiene proveedor, se asigna al default
-                                proveedores_para_oc.add(proveedor_default_id)
-                    
-                    # 4. Ahora, para cada proveedor, generar *una* OC
-                    if proveedores_para_oc:
-                        logger.info(f"Disparador automático: Se generarán OCs para {len(proveedores_para_oc)} proveedores.")
-                        for prov_id in proveedores_para_oc:
-                            # Llamamos a la función refactorizada, pasando el ID default
-                            self._generar_oc_automatica_por_proveedor(prov_id, proveedor_default_id)
-                    
-            except Exception as e_auto_oc:
-                logger.error(f"Error crítico en el disparador automático de OCs: {e_auto_oc}", exc_info=True)
+            # --- INICIO: Disparador automático de OCs ---
+            self._revisar_y_generar_ocs_automaticas()
             # --- FIN: Disparador automático de OCs ---
             
             filtros = filtros or {}
@@ -498,6 +458,51 @@ class InsumoController(BaseController):
         except Exception as e:
             logger.error(f"Error en _verificar_y_reponer_stock (wrapper) para insumo {insumo_actualizado.get('id_insumo')}: {e}", exc_info=True)
 
+    def _revisar_y_generar_ocs_automaticas(self):
+        """
+        Método unificado para revisar todos los insumos y generar OCs automáticas.
+        """
+        try:
+            # 1. Obtener el ID del proveedor default (PRV-0001)
+            proveedor_default_id = None
+            default_prov_res = ProveedorModel().get_all(filtros={'codigo': 'PRV-0001'})
+            if default_prov_res.get('success') and default_prov_res.get('data'):
+                proveedor_default_id = default_prov_res['data'][0]['id']
+            else:
+                logger.warning("Disparador automático: No se encontró proveedor 'PRV-0001'. Insumos sin proveedor no se repondrán.")
+
+            # 2. Buscar *todos* los insumos activos que no estén ya en espera
+            insumos_a_chequear_result = self.insumo_model.find_all(filters={
+                'activo': True, 
+                'en_espera_de_reestock': False
+            })
+
+            if insumos_a_chequear_result.get('success'):
+                insumos_para_revisar = insumos_a_chequear_result.get('data', [])
+                proveedores_para_oc = set() # Usamos un 'set' para evitar duplicados
+
+                # 3. Iterar para encontrar *qué proveedores* necesitan una OC
+                for insumo in insumos_para_revisar:
+                    stock = float(insumo.get('stock_actual') or 0)
+                    minimo = float(insumo.get('stock_min') or 0)
+                    
+                    if stock < minimo:
+                        proveedor_id = insumo.get('id_proveedor')
+                        if proveedor_id:
+                            proveedores_para_oc.add(proveedor_id)
+                        elif proveedor_default_id:
+                            # Si no tiene proveedor, se asigna al default
+                            proveedores_para_oc.add(proveedor_default_id)
+                
+                # 4. Ahora, para cada proveedor, generar *una* OC
+                if proveedores_para_oc:
+                    logger.info(f"Disparador automático: Se generarán OCs para {len(proveedores_para_oc)} proveedores.")
+                    for prov_id in proveedores_para_oc:
+                        # Llamamos a la función refactorizada, pasando el ID default
+                        self._generar_oc_automatica_por_proveedor(prov_id, proveedor_default_id)
+                
+        except Exception as e_auto_oc:
+            logger.error(f"Error crítico en el disparador automático de OCs: {e_auto_oc}", exc_info=True)
 
     def _generar_oc_automatica_por_proveedor(self, proveedor_id: str, default_prov_id: Optional[str]):
         """

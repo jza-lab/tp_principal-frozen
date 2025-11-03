@@ -41,7 +41,7 @@ class InventarioModel(BaseModel):
                      .eq('id_insumo', id_insumo))
 
             if solo_disponibles:
-                query = query.in_('estado', ['disponible', 'reservado'])
+                query = query.ilike('estado', 'disponible')
 
             result = query.order('f_vencimiento').execute()
 
@@ -286,7 +286,7 @@ class InventarioModel(BaseModel):
             insumos_catalogo = {item['id_insumo']: item for item in catalogo_resp.data}
 
             # 2. Calcular el stock agregado desde el inventario
-            inventario_resp = self.db.table(self.get_table_name()).select('id_insumo', 'cantidad_actual').in_('estado', ['disponible', 'reservado']).execute()
+            inventario_resp = self.db.table(self.get_table_name()).select('id_insumo', 'cantidad_actual').ilike('estado', 'disponible').execute()
             if not hasattr(inventario_resp, 'data'):
                 raise Exception("No se pudo obtener el inventario de insumos.")
 
@@ -328,11 +328,11 @@ class InventarioModel(BaseModel):
     def recalcular_stock_para_insumo(self, insumo_id: str) -> Dict:
         """
         Calcula y actualiza el stock_actual para un único insumo basado en la suma
-        de sus lotes de inventario en estado 'disponible' o 'reservado'.
+        de sus lotes de inventario en estado 'disponible'.
         """
         try:
             # 1. Obtener todos los lotes relevantes para el insumo
-            lotes_resp = self.db.table(self.get_table_name()).select('cantidad_actual').eq('id_insumo', insumo_id).in_('estado', ['disponible', 'reservado']).execute()
+            lotes_resp = self.db.table(self.get_table_name()).select('cantidad_actual').eq('id_insumo', insumo_id).ilike('estado', 'disponible').execute()
             
             if not hasattr(lotes_resp, 'data'):
                 # Si hasattr falla, es probable que lotes_resp no sea un objeto esperado.
