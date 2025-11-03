@@ -1,9 +1,10 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.inventario_controller import InventarioController
 from app.utils.decorators import permission_required
 from flask_wtf import FlaskForm
+from app.controllers.control_calidad_insumo_controller import ControlCalidadInsumoController
 
 control_calidad_bp = Blueprint('control_calidad', __name__, url_prefix='/control-calidad')
 
@@ -48,7 +49,6 @@ def procesar_inspeccion(lote_id):
                 return redirect(url_for('orden_compra.detalle', id=orden_id))
         return redirect(url_for('control_calidad.listar_ordenes_para_inspeccion'))
 
-    from app.controllers.control_calidad_insumo_controller import ControlCalidadInsumoController
     cc_controller = ControlCalidadInsumoController()
     
     resultado, status_code = cc_controller.procesar_inspeccion(
@@ -64,13 +64,55 @@ def procesar_inspeccion(lote_id):
     else:
         flash(resultado.get('error', 'Ocurrió un error al procesar la inspección.'), 'danger')
 
-    # Redirigir de vuelta a la página de inspección de la misma orden
-    inventario_controller = InventarioController()
-    lote_res, _ = inventario_controller.obtener_lote_por_id(lote_id)
-    if lote_res.get('success'):
-         # Extraer orden_id del lote para la redirección
-        orden_id = cc_controller._extraer_oc_id_de_lote(lote_res.get('data'))
-        if orden_id:
-            return redirect(url_for('orden_compra.detalle', id=orden_id))
+    # Corrección: Redirigir siempre al detalle del lote modificado
+    return redirect(url_for('inventario_view.detalle_lote', id_lote=lote_id))
 
-    return redirect(url_for('control_calidad.listar_ordenes_para_inspeccion'))
+@control_calidad_bp.route('/api/lote/<string:lote_id>/<string:accion>', methods=['POST'])
+@jwt_required()
+@permission_required('realizar_control_de_calidad_insumos')
+def procesar_inspeccion_api(lote_id, accion):
+    """
+    API para procesar la inspección de un lote (Aceptar, Poner en Cuarentena, Rechazar).
+    """
+    user_id = get_jwt_identity()
+    
+    # Para 'Aceptar', no esperamos un cuerpo JSON.
+    if accion == 'aceptar':
+        form_data = {}
+        foto_file = None
+        decision = 'Aceptar'
+    else:
+        # Para 'cuarentena' y 'rechazar', esperamos datos de formulario multipart/form-data
+        # ya que puede incluir una foto.
+        form_data = request.form
+        foto_file = request.files.get('foto')
+        if accion == 'cuarentena':
+            decision = 'Poner en Cuarentena'
+        elif accion == 'rechazar':
+            decision = 'Rechazar'
+        else:
+            return jsonify({'success': False, 'error': 'Acción no válida.'}), 400
+
+    cc_controller = ControlCalidadInsumoController()
+    
+    resultado, status_code = cc_controller.procesar_inspeccion_api(
+        lote_id=lote_id,
+        decision=decision,
+        form_data=form_data,
+        foto_file=foto_file,
+        usuario_id=user_id
+    )
+    
+    return jsonify(resultado), status_code
+
+@control_calidad_bp.route('/api/orden/<int:orden_id>/finalizar', methods=['POST'])
+@jwt_required()
+@permission_required('realizar_control_de_calidad_insumos')
+def finalizar_inspeccion_api(orden_id):
+    """
+    API para marcar una orden como 'CERRADA' después de la inspección.
+    """
+    cc_controller = ControlCalidadInsumoController()
+    resultado, status_code = cc_controller.finalizar_inspeccion_orden(orden_id)
+    
+    return jsonify(resultado), status_code

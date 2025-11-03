@@ -369,3 +369,38 @@ class OrdenProduccionModel(BaseModel):
         except Exception as e:
             logger.error(f"Error al buscar órdenes por IDs: {op_ids}. Error: {str(e)}")
             return {'success': False, 'error': str(e)}
+    
+    def get_ops_by_lote_insumo(self, id_lote_insumo: str) -> Dict:
+        try:
+            # --- CORRECCIÓN ---
+            consumo_result = self.db.table('reservas_insumos').select(
+                 'orden_produccion_id, cantidad_reservada, ordenes_produccion!inner(codigo, estado)'
+            ).eq('lote_inventario_id', id_lote_insumo).not_.eq('ordenes_produccion.estado', 'CANCELADO').execute()
+            # --- FIN CORRECCIÓN ---
+
+            if consumo_result.data:
+                ops = []
+                for item in consumo_result.data:
+                    op_data = item.get('ordenes_produccion', {})
+                    if op_data:
+                        ops.append({
+                            'id': item.get('orden_produccion_id'),
+                            'codigo': op_data.get('codigo', 'N/A'),
+                            'cantidad_usada': item.get('cantidad_reservada', 0)
+                        })
+                return {'success': True, 'data': ops}
+            else:
+                return {'success': True, 'data': []}
+        except Exception as e:
+            logger.error(f"Error buscando OPs por lote de insumo {id_lote_insumo}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def get_lotes_producto_by_op(self, op_id: int) -> Dict:
+        try:
+            from app.models.lote_producto import LoteProductoModel
+            lote_producto_model = LoteProductoModel()
+            return lote_producto_model.find_all(filters={'orden_produccion_id': op_id})
+        except Exception as e:
+            logger.error(f"Error buscando lotes de producto para la OP {op_id}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+        

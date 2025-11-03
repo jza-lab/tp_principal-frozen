@@ -99,6 +99,7 @@ def _register_blueprints(app: Flask):
     from app.views.receta_routes import receta_bp
     from app.views.control_calidad_routes import control_calidad_bp
     from app.views.chatbot_routes import chatbot_bp
+    from app.views.reportes_routes import reportes_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
@@ -126,10 +127,11 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(alertas_bp)
     app.register_blueprint(cliente_bp)
     app.register_blueprint(reclamo_bp)
-    app.register_blueprint(admin_reclamo_bp) # <-- REGISTRO DE ADMIN RECLAMO
+    app.register_blueprint(admin_reclamo_bp)
     app.register_blueprint(consulta_bp)
     app.register_blueprint(receta_bp)
     app.register_blueprint(chatbot_bp)
+    app.register_blueprint(reportes_bp)
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""

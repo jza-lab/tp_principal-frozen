@@ -1,6 +1,7 @@
 from typing import Dict, TYPE_CHECKING
 from flask import request, jsonify
 from flask_jwt_extended import get_jwt
+from marshmallow import ValidationError
 from app.models.orden_compra_model import OrdenCompraItemModel, OrdenCompraModel
 from app.models.orden_compra_model import OrdenCompra
 from app.controllers.inventario_controller import InventarioController
@@ -141,11 +142,34 @@ class OrdenCompraController:
 
     def get_orden(self, orden_id):
         """
-        Obtiene una orden de compra específica con todos los detalles.
+        Obtiene una orden de compra específica con todos los detalles,
+        y calcula los valores originales para la vista.
         """
         try:
             result = self.model.get_one_with_details(orden_id)
             if result.get('success'):
+                orden_data = result['data']
+                
+                # Calcular totales basados en la cantidad SOLICITADA (valores originales)
+                subtotal_original = 0.0
+                if 'items' in orden_data and orden_data['items']:
+                    for item in orden_data['items']:
+                        try:
+                            cantidad_solicitada = float(item.get('cantidad_solicitada', 0))
+                            precio_unitario = float(item.get('precio_unitario', 0))
+                            subtotal_original += cantidad_solicitada * precio_unitario
+                        except (ValueError, TypeError):
+                            continue
+                
+                # Basado en la lógica de creación, se asume que el IVA del 21% siempre aplica.
+                iva_original = subtotal_original * 0.21
+                total_original = subtotal_original + iva_original
+                
+                # Añadir los valores originales al diccionario de datos para ser usados en la plantilla
+                orden_data['subtotal_original'] = round(subtotal_original, 2)
+                orden_data['iva_original'] = round(iva_original, 2)
+                orden_data['total_original'] = round(total_original, 2)
+
                 return result, 200
             else:
                 return result, 404
@@ -331,10 +355,50 @@ class OrdenCompraController:
             logger.error(f"Error rechazando orden {orden_id}: {e}")
             return {'success': False, 'error': str(e)}
 
+    def _reiniciar_bandera_stock_recibido(self, orden_id: int):
+        """
+        Recorre la cadena de órdenes de compra hacia atrás (a través de 'complementa_a_orden_id')
+        y para cada orden, quita la bandera 'en_espera_de_reestock' de todos sus insumos.
+        Esto es crucial para permitir que se generen nuevas OCs automáticas para esos insumos.
+        """
+        logger.info(f"Iniciando reinicio de bandera 'en_espera_de_reestock' desde la OC ID: {orden_id}.")
+        current_id = orden_id
+        processed_ids = set()
+
+        try:
+            while current_id and current_id not in processed_ids:
+                processed_ids.add(current_id)
+                orden_res = self.model.get_one_with_details(current_id)
+
+                if not orden_res.get('success'):
+                    logger.warning(f"No se encontró la orden con ID {current_id} en la cadena de reinicio de bandera.")
+                    break
+
+                orden_actual = orden_res['data']
+                logger.info(f"Procesando OC {orden_actual.get('codigo_oc')} (ID: {current_id}) para quitar banderas.")
+
+                # Quitar estado 'en espera' de los insumos de esta orden
+                if 'items' in orden_actual and orden_actual['items']:
+                    for item in orden_actual['items']:
+                        if item.get('insumo_id'):
+                            self.insumo_controller.insumo_model.quitar_en_espera(item['insumo_id'])
+                            logger.info(f"Bandera 'en_espera_de_reestock' reiniciada para insumo ID: {item['insumo_id']}.")
+                else:
+                    logger.info(f"La OC {current_id} no tiene items para procesar.")
+
+                # Moverse a la orden que esta complementa
+                current_id = orden_actual.get('complementa_a_orden_id')
+
+            logger.info(f"Finalizado el reinicio de banderas para la cadena de la OC ID: {orden_id}.")
+
+        except Exception as e:
+            logger.error(f"Error crítico durante el reinicio de banderas para la cadena de la OC {orden_id}: {e}", exc_info=True)
+
+
     def _marcar_cadena_como_en_control_calidad(self, orden_id):
         """
-        Marca una orden y todas sus predecesoras como 'EN_CONTROL_CALIDAD'
-        y quita el estado 'en_espera_de_reestock' de sus insumos.
+        Marca una orden y todas sus predecesoras como 'EN_CONTROL_CALIDAD'.
+        La lógica de reinicio de la bandera de stock se ha movido a `_reiniciar_bandera_stock_recibido`.
         """
         try:
             current_id = orden_id
@@ -346,13 +410,7 @@ class OrdenCompraController:
 
                 orden_actual = orden_res['data']
 
-                # 1. Quitar estado 'en espera' de los insumos de esta orden
-                for item in orden_actual.get('items', []):
-                    if item.get('insumo_id'):
-                        self.insumo_controller.insumo_model.quitar_en_espera(item['insumo_id'])
-                        logger.info(f"Quitado estado 'en espera' del insumo {item['insumo_id']} de la OC {current_id}.")
-
-                # 2. Actualizar el estado de la orden actual a 'EN_CONTROL_CALIDAD'
+                # Actualizar el estado de la orden actual a 'EN_CONTROL_CALIDAD'
                 self.model.update(current_id, {
                     'estado': 'EN_CONTROL_CALIDAD',
                     'fecha_real_entrega': date.today().isoformat()
@@ -360,7 +418,7 @@ class OrdenCompraController:
 
                 logger.info(f"Orden {current_id} marcada como EN_CONTROL_CALIDAD.")
 
-                # 3. Moverse a la orden que esta complementa
+                # Moverse a la orden que esta complementa
                 current_id = orden_actual.get('complementa_a_orden_id')
 
         except Exception as e:
@@ -503,14 +561,37 @@ class OrdenCompraController:
                 lotes_creados, lotes_error = self._crear_lotes_para_items_recibidos(items_para_lote, orden_data, usuario_id)
 
                 if items_faltantes:
+                    # --- INICIO DE LA CORRECCIÓN (Versión Robusta) ---
+                    # 1. Crear un mapa con las cantidades recibidas directamente del formulario.
+                    #    Esto evita condiciones de carrera al no depender de una re-lectura de la BD.
+                    cantidades_recibidas_map = {int(item_ids[i]): float(cantidades_recibidas_str[i] or 0) for i in range(len(item_ids))}
+
+                    # 2. Recalcular los totales de la orden padre usando el mapa de cantidades del formulario.
+                    subtotal_padre = 0
+                    for item in orden_data.get('items', []):
+                        item_id = item.get('id')
+                        # Se usa la cantidad del formulario, no se vuelve a leer de la BD
+                        cantidad_recibida = cantidades_recibidas_map.get(item_id, 0.0) 
+                        precio = float(item.get('precio_unitario', 0))
+                        subtotal_padre += cantidad_recibida * precio
+                    
+                    iva_padre = subtotal_padre * 0.21 if orden_data.get('iva', 0) > 0 else 0
+                    total_padre = subtotal_padre + iva_padre
+                    
+                    # 3. Crear la orden complementaria (esto ya funcionaba bien).
                     nueva_orden_result = self._crear_orden_complementaria(orden_data, items_faltantes, usuario_id)
                     if not nueva_orden_result.get('success'):
                         return {'success': False, 'error': f"Recepción parcial procesada, pero falló la creación de la orden complementaria: {nueva_orden_result.get('error')}"}
 
+                    # 4. Actualizar la orden padre con el nuevo estado, observaciones Y los totales recalculados.
                     self.model.update(orden_id, {
                         'estado': 'RECEPCION_INCOMPLETA',
-                        'observaciones': f"{observaciones}\nRecepción parcial. Pendiente completado en OC: {nueva_orden_result['data']['codigo_oc']}"
+                        'observaciones': f"{observaciones}\nRecepción parcial. Pendiente completado en OC: {nueva_orden_result['data']['codigo_oc']}",
+                        'subtotal': round(subtotal_padre, 2),
+                        'iva': round(iva_padre, 2),
+                        'total': round(total_padre, 2)
                     })
+                    # --- FIN DE LA CORRECCIÓN ---
 
                     return {'success': True, 'message': f'Recepción parcial registrada. Se creó la orden {nueva_orden_result["data"]["codigo_oc"]} para los insumos restantes.'}
                 else:
@@ -605,6 +686,10 @@ class OrdenCompraController:
 
             if result.get('success'):
                 logger.info(f"Orden de compra {orden_id} marcada como CERRADA.")
+                # >>> PASO CRÍTICO CORREGIDO <<<
+                # Al cerrar la orden, después de que Control de Calidad ha finalizado,
+                # se reinicia la bandera para permitir nuevas OC automáticas.
+                self._reiniciar_bandera_stock_recibido(orden_id)
             
             return result
 

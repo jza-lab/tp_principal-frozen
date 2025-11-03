@@ -16,8 +16,11 @@ def listar_lotes():
     """
     Muestra la lista de todos los lotes en el inventario, ahora agrupados por insumo.
     """
-    # Llama al nuevo método para obtener los datos agrupados
     controller = InventarioController()
+    # Primero, se recalcula y actualiza el stock en la base de datos.
+    controller.inventario_model.calcular_y_actualizar_stock_general()
+    
+    # Ahora, se obtienen los datos ya actualizados.
     response_agrupado, status_code = controller.obtener_lotes_agrupados_para_vista()
     filtros = request.args.to_dict()
     response, status_code = controller.obtener_lotes_para_vista(filtros)
@@ -192,3 +195,8 @@ def editar_lote(id_lote):
 
     return render_template('inventario/editar_lote.html', lote=lote)
 # --- FIN DE LA CORRECCIÓN ---
+@inventario_view_bp.route('/api/lote/<id_lote>/trazabilidad')
+def api_trazabilidad_lote(id_lote):
+    controller = InventarioController()
+    response, status_code = controller.obtener_trazabilidad_lote(id_lote)
+    return jsonify(response), status_code

@@ -2,6 +2,7 @@ from app.models.base_model import BaseModel
 from typing import Dict, List, Optional
 from datetime import date, datetime, timedelta
 import logging
+from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ class InventarioModel(BaseModel):
                      .eq('id_insumo', id_insumo))
 
             if solo_disponibles:
-                query = query.in_('estado', ['disponible', 'reservado'])
+                query = query.ilike('estado', 'disponible')
 
             result = query.order('f_vencimiento').execute()
 
@@ -49,6 +50,15 @@ class InventarioModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo lotes por insumo: {str(e)}")
             return {'success': False, 'error': str(e)}
+        
+    def get_stock_critico(self):
+        try:
+            result = self.db.rpc('get_insumos_stock_critico', {}).execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error obteniendo stock crítico: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
 
     # ✅ SOBRESCRIBE: Sobrescribimos el método 'update' para asegurar la sanitización de datos.
     # Esto asegura que f_vencimiento se convierta a string antes de la DB.
@@ -182,17 +192,17 @@ class InventarioModel(BaseModel):
     def get_all_lotes_for_view(self, filtros: Optional[Dict] = None) -> Dict:
         """
         Obtiene todos los lotes con detalles del insumo y proveedor para la vista de listado.
-        Solución robusta que consulta la tabla y enriquece los datos manualmente.
         """
         try:
-            # 1. Construir la consulta base sobre la tabla de lotes
-            query = self.db.table(self.get_table_name()).select('*')
+            # 1. Construir la consulta base pidiendo explícitamente los datos relacionados.
+            query = self.db.table(self.get_table_name()).select(
+                '*, insumo:insumos_catalogo(nombre), proveedor:proveedores(nombre)'
+            )
 
             # 2. Aplicar filtros dinámicamente
             if filtros:
                 for key, value in filtros.items():
                     if value:
-                        # Usar 'ilike' para búsquedas de texto flexibles y 'eq' para el resto
                         if key in ['documento_ingreso'] and isinstance(value, str):
                             query = query.ilike(key, f'%{value}%')
                         else:
@@ -204,23 +214,19 @@ class InventarioModel(BaseModel):
             if not result.data:
                 return {'success': True, 'data': []}
 
-            lotes = result.data
+            # 4. Aplanar los datos para que la plantilla los pueda usar fácilmente.
+            for lote in result.data:
+                if lote.get('insumo'):
+                    lote['insumo_nombre'] = lote['insumo'].get('nombre', 'Insumo no encontrado')
+                else:
+                    lote['insumo_nombre'] = 'Insumo no especificado'
+                
+                if lote.get('proveedor'):
+                    lote['proveedor_nombre'] = lote['proveedor'].get('nombre', 'Proveedor sin nombre')
+                else:
+                    lote['proveedor_nombre'] = 'Proveedor no especificado'
 
-            # 4. Obtener los IDs de insumos y proveedores para enriquecer los datos
-            insumo_ids = list(set(lote['id_insumo'] for lote in lotes if lote.get('id_insumo')))
-            
-            # 5. Consultar los nombres de los insumos en una sola llamada
-            insumos_data = {}
-            if insumo_ids:
-                insumos_resp = self.db.table('insumos_catalogo').select('id_insumo, nombre').in_('id_insumo', insumo_ids).execute()
-                if insumos_resp.data:
-                    insumos_data = {insumo['id_insumo']: insumo['nombre'] for insumo in insumos_resp.data}
-
-            # 6. Combinar los datos
-            for lote in lotes:
-                lote['insumo_nombre'] = insumos_data.get(lote.get('id_insumo'), 'Insumo no encontrado')
-            
-            return {'success': True, 'data': lotes}
+            return {'success': True, 'data': result.data}
 
         except Exception as e:
             logger.error(f"Error obteniendo lotes para la vista (robusto): {e}")
@@ -255,6 +261,9 @@ class InventarioModel(BaseModel):
                 lote['proveedor_nombre'] = lote['proveedor']['nombre']
             else:
                 lote['proveedor_nombre'] = 'N/A'
+
+            # Simulación de la URL de la imagen
+            lote['url_imagen'] = 'https://via.placeholder.com/800x600.png?text=Imagen+de+Prueba'
                 
             return {'success': True, 'data': lote}
 
@@ -264,51 +273,22 @@ class InventarioModel(BaseModel):
 
     def calcular_y_actualizar_stock_general(self) -> Dict:
         """
-        Calcula el stock actual para todos los insumos sumando los lotes de inventario
-        y lo actualiza en la tabla insumos_catalogo.
+        Dispara el recálculo de stock para todos los insumos activos.
         """
         try:
-            # 1. Obtener todos los insumos del catálogo
-            catalogo_resp = self.db.table('insumos_catalogo').select('id_insumo', 'stock_actual').execute()
+            # 1. Obtener todos los IDs de insumos activos del catálogo
+            catalogo_resp = self.db.table('insumos_catalogo').select('id_insumo').eq('activo', True).execute()
             if not hasattr(catalogo_resp, 'data'):
                 raise Exception("No se pudo obtener el catálogo de insumos.")
             
-            insumos_catalogo = {item['id_insumo']: item for item in catalogo_resp.data}
+            insumo_ids = [item['id_insumo'] for item in catalogo_resp.data]
 
-            # 2. Calcular el stock agregado desde el inventario
-            inventario_resp = self.db.table('insumos_inventario').select('id_insumo', 'cantidad_actual').in_('estado', ['disponible', 'reservado']).execute()
-            if not hasattr(inventario_resp, 'data'):
-                raise Exception("No se pudo obtener el inventario de insumos.")
-
-            stock_calculado = {}
-            for lote in inventario_resp.data:
-                insumo_id = lote['id_insumo']
-                cantidad = lote.get('cantidad_actual') or 0
-                stock_calculado[insumo_id] = stock_calculado.get(insumo_id, 0) + cantidad
-
-            # 3. Preparar los datos para la actualización
-            updates = []
-            for insumo_id, insumo_data in insumos_catalogo.items():
-                stock_nuevo = stock_calculado.get(insumo_id, 0)
-                stock_viejo = insumo_data.get('stock_actual') or 0
-
-                # Solo actualizar si el stock ha cambiado
-                if stock_nuevo != stock_viejo:
-                    updates.append({'id_insumo': insumo_id, 'stock_actual': stock_nuevo})
+            # 2. Iterar y llamar a la función de recálculo individual para cada uno
+            for insumo_id in insumo_ids:
+                # Se ignora el resultado, ya que la función interna maneja los errores.
+                self.recalcular_stock_para_insumo(insumo_id)
             
-            # 4. Ejecutar las actualizaciones de forma iterativa si hay cambios
-            if updates:
-                logger.info(f"Actualizando stock para {len(updates)} insumos.")
-                for item in updates:
-                    insumo_id = item['id_insumo']
-                    new_stock = item['stock_actual']
-                    (self.db.table('insumos_catalogo')
-                     .update({'stock_actual': new_stock})
-                     .eq('id_insumo', insumo_id)
-                     .execute())
-            else:
-                logger.info("No se requirieron actualizaciones de stock.")
-
+            logger.info(f"Recálculo de stock general completado para {len(insumo_ids)} insumos.")
             return {'success': True}
 
         except Exception as e:
@@ -317,25 +297,47 @@ class InventarioModel(BaseModel):
 
     def recalcular_stock_para_insumo(self, insumo_id: str) -> Dict:
         """
-        Calcula y actualiza el stock_actual para un único insumo basado en la suma
-        de sus lotes de inventario en estado 'disponible' o 'reservado'.
+        Calcula y actualiza el stock_actual y stock_total para un único insumo.
+        Esta es la fuente de verdad para los totales de stock.
         """
         try:
-            # 1. Obtener todos los lotes relevantes para el insumo
-            lotes_resp = self.db.table(self.get_table_name()).select('cantidad_actual').eq('id_insumo', insumo_id).in_('estado', ['disponible', 'reservado']).execute()
-            
+            # 1. Obtener todos los lotes para el insumo que no estén en un estado terminal (agotado, rechazado).
+            lotes_resp = self.db.table(self.get_table_name()) \
+                .select('cantidad_actual', 'cantidad_en_cuarentena', 'estado') \
+                .eq('id_insumo', insumo_id) \
+                .not_.in_('estado', ['agotado', 'rechazado', 'retirado']) \
+                .execute()
+
             if not hasattr(lotes_resp, 'data'):
-                # Si hasattr falla, es probable que lotes_resp no sea un objeto esperado.
-                error_msg = f"Respuesta inesperada de la base de datos al buscar lotes para el insumo {insumo_id}."
+                error_msg = f"Respuesta inesperada de la DB al buscar lotes para el insumo {insumo_id}."
                 logger.error(error_msg)
                 return {'success': False, 'error': error_msg}
 
-            # 2. Calcular el nuevo stock sumando las cantidades
-            nuevo_stock = sum(lote.get('cantidad_actual', 0) for lote in lotes_resp.data)
+            # 2. Calcular los nuevos stocks basados en las cantidades Y el estado.
+            nuevo_stock_actual = 0  # Solo 'disponible'
+            nuevo_stock_total = 0   # Físico: disponible + cuarentena + en revisión
 
-            # 3. Actualizar el stock en la tabla 'insumos_catalogo'
+            for lote in lotes_resp.data:
+                estado_lote = (lote.get('estado') or '').strip().lower()
+                cantidad_actual = float(lote.get('cantidad_actual') or 0)
+                cantidad_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
+
+                # Sumar al stock total (físico) si no es un estado terminal
+                nuevo_stock_total += (cantidad_actual + cantidad_cuarentena)
+                
+                # Sumar al stock disponible SOLO si el estado es 'disponible'
+                if estado_lote == 'disponible':
+                    nuevo_stock_actual += cantidad_actual
+
+            # 3. Preparar el payload de actualización
+            update_payload = {
+                'stock_actual': nuevo_stock_actual,
+                'stock_total': nuevo_stock_total
+            }
+
+            # 4. Actualizar ambos stocks en la tabla 'insumos_catalogo'
             update_resp = (self.db.table('insumos_catalogo')
-                           .update({'stock_actual': nuevo_stock})
+                           .update(update_payload)
                            .eq('id_insumo', insumo_id)
                            .execute())
 
@@ -344,10 +346,170 @@ class InventarioModel(BaseModel):
                  logger.error(error_msg)
                  return {'success': False, 'error': error_msg}
 
-
-            logger.info(f"Stock para el insumo {insumo_id} recalculado y actualizado a: {nuevo_stock}")
+            logger.info(f"Stock para el insumo {insumo_id} recalculado. Actual: {nuevo_stock_actual}, Total: {nuevo_stock_total}")
             return {'success': True}
 
         except Exception as e:
             logger.error(f"Error al recalcular el stock para el insumo {insumo_id}: {str(e)}")
+            return {'success': False, 'error': str(e)}
+    def get_trazabilidad_ascendente(self, id_lote_insumo) -> Dict:
+        """
+        Obtiene la trazabilidad ascendente de un lote de insumo.
+        Este método llama a una función de base de datos (RPC) 
+        y luego procesa los resultados para construir un árbol de dependencias.
+        """
+        try:
+            # 1. Llamar a la función RPC de la base de datos
+            
+            # --- INICIO DE LA CORRECCIÓN 1: Usar el nombre de función correcto ---
+            # El setup.sql 
+            # también define 'get_trazabilidad_ascendente' (línea 1832).
+            # Probamos usar esa en lugar de la que no encontraba.
+            result = self.db.rpc(
+                'get_trazabilidad_ascendente',  # <-- Nombre corregido (sin 'insumo_')
+                {'p_id_lote_insumo': str(id_lote_insumo)}
+            ).execute()
+            # --- FIN DE LA CORRECCIÓN 1 ---
+            
+            if not result.data:
+                logger.warning(f"No se encontró trazabilidad ascendente para {id_lote_insumo}")
+                return {'success': True, 'data': {'ops': [], 'productos': [], 'pedidos': []}}
+
+            # 2. Procesar los datos crudos del RPC
+            op_data = {}
+            producto_data = {}
+            insumo_data = {}
+            
+            for row in result.data:
+                id_op = row.get('id_op')
+                if id_op not in op_data:
+                    op_data[id_op] = {
+                        'id': id_op,
+                        'codigo_orden_produccion': row.get('codigo_op'),
+                        'productos_fabricados': [],
+                        'pedidos_asociados': [] 
+                    }
+                
+                id_lote_prod = row.get('id_lote_producto')
+                if id_lote_prod not in producto_data:
+                    producto_data[id_lote_prod] = {
+                        'id_lote_producto': id_lote_prod,
+                        'codigo_lote_producto': row.get('codigo_lote_producto'),
+                        'nombre_producto': row.get('nombre_producto'),
+                        'id_op': id_op,
+                        'insumos_utilizados': []
+                    }
+                
+                # El 'id_consumo_insumo' puede no ser único si la función RPC 
+                # no lo maneja, pero lo usamos como key de 'insumo_data'
+                # Asumimos que la fila 'row' es única por consumo.
+                # Si 'id_consumo_insumo' es None, esto podría agrupar mal.
+                # Vamos a usar una tupla (lote_prod, lote_insumo) si id_consumo no existe
+                id_lote_insumo_row = row.get('id_lote_insumo')
+                id_consumo_key = row.get('id_consumo_insumo') or f"{id_lote_prod}-{id_lote_insumo_row}"
+
+                if id_consumo_key not in insumo_data:
+                    insumo_info = {
+                        'id_consumo_insumo': row.get('id_consumo_insumo'),
+                        'id_lote_insumo': id_lote_insumo_row,
+                        'codigo_lote_insumo': row.get('codigo_lote_insumo'),
+                        'nombre_insumo': row.get('nombre_insumo'),
+                        'cantidad_utilizada': float(row.get('cantidad_utilizada', 0) or 0)
+                    }
+                    insumo_data[id_consumo_key] = insumo_info
+                    producto_data[id_lote_prod]['insumos_utilizados'].append(insumo_info)
+
+            # Re-asignar productos a OPs
+            for prod in producto_data.values():
+                if prod['id_op'] in op_data:
+                    op_data[prod['id_op']]['productos_fabricados'].append(prod)
+
+            # 3. Buscar Pedidos asociados a los lotes de producto fabricados
+            lotes_producto_ids = list(producto_data.keys())
+            if not lotes_producto_ids:
+                return {'success': True, 'data': {'ops': list(op_data.values()), 'productos': [], 'pedidos': []}}
+
+            reservas_productos_resp = self.db.table('reservas_productos').select('*').in_('lote_producto_id', lotes_producto_ids).execute()
+            reservas_productos = reservas_productos_resp.data
+            
+            pedido_ids = list(set(r['id_pedido'] for r in reservas_productos if r.get('id_pedido')))
+            
+            pedidos_info_map = {} # { id_pedido: {'id': ..., 'codigo_pedido': ..., 'nombre_cliente': ...} }
+            if pedido_ids:
+                pedidos_resp = self.db.table('pedidos').select('id_pedido, codigo_pedido, id_cliente').in_('id_pedido', pedido_ids).execute()
+                
+                cliente_ids = list(set(p['id_cliente'] for p in pedidos_resp.data if p.get('id_cliente')))
+                clientes_data = {}
+                if cliente_ids:
+                    clientes_resp = self.db.table('clientes').select('id_cliente, nombre, apellido').in_('id_cliente', cliente_ids).execute()
+                    for c in clientes_resp.data:
+                        clientes_data[c['id_cliente']] = f"{c.get('nombre', '')} {c.get('apellido', '')}".strip()
+
+                for p in pedidos_resp.data:
+                    pedidos_info_map[p['id_pedido']] = {
+                        'id': p['id_pedido'],
+                        'codigo_pedido': p.get('codigo_pedido') or f"Venta-{p['id_pedido']}",
+                        'nombre_cliente': clientes_data.get(p.get('id_cliente'), 'N/A')
+                    }
+
+            # 4. Procesar y asociar Pedidos
+            lote_a_pedido_cantidad = {} # { (lote_prod_id, pedido_id): cantidad_total }
+            
+            for reserva_prod in reservas_productos:
+                pedido_id = reserva_prod.get('id_pedido')
+                lote_prod_id = reserva_prod.get('lote_producto_id')
+                
+                if not pedido_id or not lote_prod_id or pedido_id not in pedidos_info_map:
+                    continue
+                
+                # --- INICIO DE LA CORRECCIÓN 2: Sumar ambas cantidades ---
+                # (Esta corrección la mantenemos)
+                cantidad_reservada = float(reserva_prod.get('cantidad_reservada', 0) or 0)
+                cantidad_consumida = float(reserva_prod.get('cantidad_consumida', 0) or 0)
+                cantidad_total_asignada = cantidad_reservada + cantidad_consumida
+                # --- FIN DE LA CORRECCIÓN 2 ---
+
+                if cantidad_total_asignada == 0:
+                   continue
+
+                key = (lote_prod_id, pedido_id)
+                lote_a_pedido_cantidad[key] = lote_a_pedido_cantidad.get(key, 0.0) + cantidad_total_asignada
+            
+            pedidos_final_map = {} # { pedido_id: { 'id': ..., 'codigo_pedido': ..., 'cantidad_asignada': ... } }
+
+            for (lote_prod_id, pedido_id), cantidad_total in lote_a_pedido_cantidad.items():
+                
+                id_op = producto_data.get(lote_prod_id, {}).get('id_op')
+                if not id_op or id_op not in op_data:
+                    continue
+
+                if pedido_id not in pedidos_final_map:
+                    pedidos_final_map[pedido_id] = {
+                        **pedidos_info_map[pedido_id],
+                        'cantidad_asignada': 0.0
+                    }
+                
+                pedidos_final_map[pedido_id]['cantidad_asignada'] += cantidad_total
+                
+                op_pedidos_list = op_data[id_op]['pedidos_asociados']
+                pedido_encontrado = next((p for p in op_pedidos_list if p['id'] == pedido_id), None)
+                
+                if not pedido_encontrado:
+                    op_pedidos_list.append({
+                        **pedidos_info_map[pedido_id],
+                        'cantidad_asignada': cantidad_total
+                    })
+                else:
+                    pedido_encontrado['cantidad_asignada'] += cantidad_total
+            
+            final_data = {
+                'ops': list(op_data.values()),
+                'productos': list(producto_data.values()),
+                'pedidos': list(pedidos_final_map.values())
+            }
+
+            return {'success': True, 'data': final_data}
+        
+        except Exception as e:
+            logger.error(f"Error obteniendo trazabilidad ascendente para lote {id_lote_insumo}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}

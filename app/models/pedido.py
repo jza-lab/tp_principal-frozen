@@ -498,3 +498,63 @@ class PedidoModel(BaseModel):
             return {'success': False, 'error': str(e)}
     # --- FIN DEL MÉTODO NUEVO ---
 
+    def get_pedidos_by_lote_producto(self, id_lote_producto: str) -> Dict:
+        """
+        Encuentra los pedidos y clientes que recibieron un lote de producto específico.
+        Utiliza la tabla de asignación 'reserva_productos'.
+        """
+        try:
+            reserva_result = self.db.table('reservas_productos').select(
+                'cantidad_reservada, pedido_items!inner(pedido_id, pedidos!pedido_items_pedido_id_fkey!inner(id, nombre_cliente, codigo_pedido))'
+            ).eq('lote_producto_id', id_lote_producto).execute()
+            # --- FIN DE LA CORRECCIÓN ---
+            if not reserva_result.data:
+                return {'success': True, 'data': []}
+
+            pedidos = []
+
+            # Procesar TODOS los items
+            for item in reserva_result.data:
+                item_data = item.get('pedido_items')
+                if not item_data: continue
+                pedido_data = item_data.get('pedidos')
+                if not pedido_data: continue
+                    
+                    # Usar el codigo_pedido si existe, sino un fallback con el ID
+                pedido_nombre = pedido_data.get('codigo_pedido') or f"Venta-{pedido_data.get('id')}"
+                pedidos.append({
+                            'id': pedido_data.get('id'),
+                    'cliente_nombre': pedido_nombre, # Usamos el nombre único del pedido
+                    'cantidad_vendida': item.get('cantidad_reservada', 0)
+                })
+
+            return {'success': True, 'data': pedidos}
+
+        except Exception as e:
+            logger.error(f"Error buscando pedidos por lote de producto {id_lote_producto}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def get_ingresos_en_periodo(self, fecha_inicio, fecha_fin):
+        try:
+            result = self.db.table(self.get_table_name()).select('fecha_solicitud, total').gte('fecha_solicitud', fecha_inicio).lte('fecha_solicitud', fecha_fin).eq('estado', 'COMPLETADO').execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error obteniendo ingresos: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def get_top_selling_products(self, limit=5):
+        try:
+            result = self.db.rpc('get_top_productos_vendidos', {'limite': limit}).execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error obteniendo top productos: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+class PedidoItemModel(BaseModel):
+    """Modelo para la tabla pedido_items"""
+
+    def get_table_name(self) -> str:
+        return 'pedido_items'
+
+    def get_primary_key(self) -> str:
+        return 'id'

@@ -17,6 +17,10 @@ class InsumosCatalogoSchema(Schema):
         allow_none=True,
         load_default=None
     )
+    stock_total = fields.Float(
+        allow_none=True,
+        load_default=None
+    )
     stock_actual = fields.Float(
         allow_none=True,
         load_default=None
