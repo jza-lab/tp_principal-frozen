@@ -85,15 +85,15 @@
                             </div>
                             <div class="col-6">
                                 <div class="small text-muted">Subtotal Original</div>
-                                <div class="fw-bold">$ {{ (orden.subtotal_original if is_received and orden.subtotal_original is defined else orden.subtotal) | formato_moneda }}</div>
+                                <div class="fw-bold">$ {{ orden.subtotal_original | formato_moneda }}</div>
                             </div>
                             <div class="col-6">
                                 <div class="small text-muted">IVA Original</div>
-                                <div class="fw-bold">$ {{ (orden.iva_original if is_received and orden.iva_original is defined else orden.iva) | formato_moneda }}</div>
+                                <div class="fw-bold">$ {{ orden.iva_original | formato_moneda }}</div>
                             </div>
                             <div class="col-12">
                                 <div class="small text-muted">Total Original</div>
-                                <div class="fw-bold h5">$ {{ (orden.total_original if is_received and orden.total_original is defined else orden.total) | formato_moneda }}</div>
+                                <div class="fw-bold h5">$ {{ orden.total_original | formato_moneda }}</div>
                             </div>
 
                             {% if is_received %}

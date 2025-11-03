@@ -142,11 +142,34 @@ class OrdenCompraController:
 
     def get_orden(self, orden_id):
         """
-        Obtiene una orden de compra específica con todos los detalles.
+        Obtiene una orden de compra específica con todos los detalles,
+        y calcula los valores originales para la vista.
         """
         try:
             result = self.model.get_one_with_details(orden_id)
             if result.get('success'):
+                orden_data = result['data']
+                
+                # Calcular totales basados en la cantidad SOLICITADA (valores originales)
+                subtotal_original = 0.0
+                if 'items' in orden_data and orden_data['items']:
+                    for item in orden_data['items']:
+                        try:
+                            cantidad_solicitada = float(item.get('cantidad_solicitada', 0))
+                            precio_unitario = float(item.get('precio_unitario', 0))
+                            subtotal_original += cantidad_solicitada * precio_unitario
+                        except (ValueError, TypeError):
+                            continue
+                
+                # Basado en la lógica de creación, se asume que el IVA del 21% siempre aplica.
+                iva_original = subtotal_original * 0.21
+                total_original = subtotal_original + iva_original
+                
+                # Añadir los valores originales al diccionario de datos para ser usados en la plantilla
+                orden_data['subtotal_original'] = round(subtotal_original, 2)
+                orden_data['iva_original'] = round(iva_original, 2)
+                orden_data['total_original'] = round(total_original, 2)
+
                 return result, 200
             else:
                 return result, 404
@@ -582,11 +605,6 @@ class OrdenCompraController:
                     }
                     self.model.update(orden_id, update_data)
 
-                    # >>> PASO CRÍTICO <<<
-                    # Al confirmar la recepción completa, se reinicia la bandera para que el sistema
-                    # pueda volver a generar OCs automáticas para estos insumos si es necesario.
-                    self._reiniciar_bandera_stock_recibido(orden_id)
-
                     # 2. Mensaje de éxito (ya NO se mueve a calidad)
                     final_message = f'Recepción completada. {lotes_creados} lotes creados.'
                     if lotes_error > 0: final_message += f' ({lotes_error} con error).'
@@ -668,6 +686,10 @@ class OrdenCompraController:
 
             if result.get('success'):
                 logger.info(f"Orden de compra {orden_id} marcada como CERRADA.")
+                # >>> PASO CRÍTICO CORREGIDO <<<
+                # Al cerrar la orden, después de que Control de Calidad ha finalizado,
+                # se reinicia la bandera para permitir nuevas OC automáticas.
+                self._reiniciar_bandera_stock_recibido(orden_id)
             
             return result
 
