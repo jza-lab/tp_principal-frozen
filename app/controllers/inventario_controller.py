@@ -71,7 +71,7 @@ class InventarioController(BaseController):
                 cantidad_necesaria = float(ingrediente.get('cantidad', 0)) * cantidad_a_producir
 
                 lotes_disponibles_res = self.inventario_model.find_all(
-                    filters={'id_insumo': insumo_id, 'cantidad_actual': ('gt', 0)},
+                    filters={'id_insumo': insumo_id, 'estado': ('ilike', 'disponible'), 'cantidad_actual': ('gt', 0)},
                     order_by='f_ingreso.asc'
                 )
                 lotes_disponibles = lotes_disponibles_res.get('data', [])
@@ -155,7 +155,7 @@ class InventarioController(BaseController):
                 lotes_disponibles_res = self.inventario_model.find_all(
                     filters={
                         'id_insumo': insumo_id,
-                        'estado': 'disponible', # <-- Solo lotes 'disponible' (en minúscula)
+                        'estado': ('ilike', 'disponible'),
                         'cantidad_actual': ('gt', 0)
                     }
                 )
@@ -201,7 +201,7 @@ class InventarioController(BaseController):
             lotes_result = self.inventario_model.find_all(
                 filters={
                     'id_insumo': insumo_id,
-                    'estado': 'disponible', # Revisa si es minúscula en tu DB
+                    'estado': ('ilike', 'disponible'),
                     'cantidad_actual': ('gt', 0)
                 }
             )

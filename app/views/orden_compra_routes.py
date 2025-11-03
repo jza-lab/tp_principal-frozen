@@ -95,6 +95,24 @@ def detalle(id):
 
     orden = response_data.get("data")
     lotes = []
+
+    # --- INICIO DE LA LÓGICA PARA CÁLCULO DE TOTALES ORIGINALES ---
+    # Si la orden es una recepción parcial, los totales en la BD reflejan lo recibido.
+    # Aquí calculamos los totales originales basados en la cantidad solicitada para mostrarlos en la UI.
+    if orden and orden.get('items'):
+        subtotal_original = sum(
+            float(item.get('cantidad_solicitada', 0)) * float(item.get('precio_unitario', 0))
+            for item in orden['items']
+        )
+        
+        # Asumimos que si el IVA actual es > 0, el original también lo tenía.
+        iva_original = subtotal_original * 0.21 if orden.get('iva', 0) > 0 else 0
+        total_original = subtotal_original + iva_original
+        
+        orden['subtotal_original'] = subtotal_original
+        orden['iva_original'] = iva_original
+        orden['total_original'] = total_original
+    # --- FIN DE LA LÓGICA ---
     
     # Si la orden está en control de calidad, buscamos sus lotes para inspección
     if orden and orden.get('estado') == 'EN_CONTROL_CALIDAD':

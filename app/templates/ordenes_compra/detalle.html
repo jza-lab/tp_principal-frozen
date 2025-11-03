@@ -78,18 +78,41 @@
                                     <div class="fw-bold">{{ orden.proveedor_nombre or 'N/A' }}</div>
                                 </div>
                             </div>
+                            {% set is_received = orden.estado in ['RECEPCION_INCOMPLETA', 'RECEPCION_COMPLETA', 'EN_CONTROL_CALIDAD', 'CERRADA'] %}
+                            
+                            <div class="col-12">
+                                <h6 class="text-muted mb-2">Valores Originales</h6>
+                            </div>
                             <div class="col-6">
-                                <div class="small text-muted">Subtotal</div>
+                                <div class="small text-muted">Subtotal Original</div>
+                                <div class="fw-bold">$ {{ (orden.subtotal_original if is_received and orden.subtotal_original is defined else orden.subtotal) | formato_moneda }}</div>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">IVA Original</div>
+                                <div class="fw-bold">$ {{ (orden.iva_original if is_received and orden.iva_original is defined else orden.iva) | formato_moneda }}</div>
+                            </div>
+                            <div class="col-12">
+                                <div class="small text-muted">Total Original</div>
+                                <div class="fw-bold h5">$ {{ (orden.total_original if is_received and orden.total_original is defined else orden.total) | formato_moneda }}</div>
+                            </div>
+
+                            {% if is_received %}
+                            <div class="col-12 mt-3">
+                                <h6 class="text-muted mb-2">Valores Recibidos</h6>
+                            </div>
+                            <div class="col-6">
+                                <div class="small text-muted">Subtotal Recibido</div>
                                 <div id="orden-subtotal" class="fw-bold">$ {{ orden.subtotal | formato_moneda }}</div>
                             </div>
                             <div class="col-6">
-                                <div class="small text-muted">IVA</div>
+                                <div class="small text-muted">IVA Recibido</div>
                                 <div id="orden-iva" class="fw-bold">$ {{ orden.iva | formato_moneda }}</div>
                             </div>
                             <div class="col-12">
-                                <div class="small text-muted">Total</div>
-                                <div id="orden-total" class="fw-bold h5">$ {{ orden.total | formato_moneda }}</div>
+                                <div class="small text-muted">Total Recibido</div>
+                                <div id="orden-total" class="fw-bold h5 text-success">$ {{ orden.total | formato_moneda }}</div>
                             </div>
+                            {% endif %}
                         </div>
                     </div>
 
@@ -292,9 +315,9 @@
                             <thead>
                                 <tr>
                                     <th scope="col">Insumo</th>
-                                    <th scope="col" class="text-end">Cantidad Solicitada</th>
-                                    {% if orden.estado == 'EN_TRANSITO' %}
-                                    <th scope="col" class="text-center">Cantidad Recibida</th>
+                                    <th scope="col" class="text-end">Cant. Solicitada</th>
+                                    {% if orden.estado in ['RECEPCION_INCOMPLETA', 'RECEPCION_COMPLETA', 'EN_CONTROL_CALIDAD', 'CERRADA', 'EN_TRANSITO'] %}
+                                    <th scope="col" class="text-end">Cant. Recibida</th>
                                     {% endif %}
                                     <th scope="col" class="text-end">Precio Unitario</th>
                                     <th scope="col" class="text-end">Subtotal</th>
@@ -310,23 +333,26 @@
                                         {% endif %}
                                     </td>
                                     <td class="text-end">{{ item.cantidad_solicitada }}</td>
+                                    
                                     {% if orden.estado == 'EN_TRANSITO' %}
-                                    <td class="text-center" style="max-width: 150px;">
-                                        <input type="number" name="cantidad_recibida[]"
-                                            class="form-control form-control-sm text-center cantidad-recibida"
-                                            value="{{ item.cantidad_solicitada }}" min="0" step="any" required>
-                                    </td>
-                                    <td class="text-end" style="max-width: 150px;">
-                                        <input type="number" name="precio_unitario[]"
-                                            class="form-control form-control-sm text-end precio-unitario" value="{{ "%.2f"|format(item.precio_unitario|float) }}" min="0" step="any" required>
-                                    </td>
-                                    {% else %}
-                                    <td class="text-end">$ {{ item.precio_unitario | formato_moneda }}</td>
+                                        <td class="text-center" style="max-width: 150px;">
+                                            <input type="number" name="cantidad_recibida[]" class="form-control form-control-sm text-center cantidad-recibida" value="{{ item.cantidad_solicitada }}" min="0" step="any" required>
+                                        </td>
+                                    {% elif orden.estado in ['RECEPCION_INCOMPLETA', 'RECEPCION_COMPLETA', 'EN_CONTROL_CALIDAD', 'CERRADA'] %}
+                                        <td class="text-end">{{ item.cantidad_recibida | default(0) }}</td>
                                     {% endif %}
+
+                                    {% if orden.estado == 'EN_TRANSITO' %}
+                                        <td class="text-end" style="max-width: 150px;">
+                                            <input type="number" name="precio_unitario[]" class="form-control form-control-sm text-end precio-unitario" value="{{ "%.2f"|format(item.precio_unitario|float) }}" min="0" step="any" required>
+                                        </td>
+                                    {% else %}
+                                        <td class="text-end">$ {{ item.precio_unitario | formato_moneda }}</td>
+                                    {% endif %}
+                                    
                                     <td class="text-end fw-bold subtotal-item">
-                                        {% if orden.estado in ['RECEPCION_INCOMPLETA', 'RECEPCION_COMPLETA', 'EN_CONTROL_CALIDAD', 'CERRADA'] and item.cantidad_recibida is not none %}
+                                        {% if item.cantidad_recibida is not none and orden.estado in ['RECEPCION_INCOMPLETA', 'RECEPCION_COMPLETA', 'EN_CONTROL_CALIDAD', 'CERRADA'] %}
                                             $ {{ (item.cantidad_recibida * item.precio_unitario) | formato_moneda }}
-                                        {# Si está en tránsito, el JS lo calculará. Si es PENDIENTE/APROBADA, usa el subtotal original. #}
                                         {% else %}
                                             $ {{ item.subtotal | formato_moneda }}
                                         {% endif %}
@@ -414,122 +440,109 @@
     </div>
 </div>
 {% endblock %}
-{# --- INICIO DE LA CORRECCIÓN --- #}
-{# El script ahora está dentro del bloque extra_js, asegurando que se cargue en el orden correcto #}
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const formularioRecepcion = document.getElementById('recepcionForm');
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('recepcionForm');
+    if (!form) return;
 
-        if (formularioRecepcion) {
-            // La lógica de cálculo de totales solo debe ejecutarse en la pantalla de recepción.
-            {% if orden.estado == 'EN_TRANSITO' %}
-            const ivaOriginal = {{ orden.iva| float | tojson}}
+    {% if orden.estado == 'EN_TRANSITO' %}
+    const ivaRate = {{ 0.21 if orden.iva > 0 else 0 }};
+
+    const formatCurrency = (value) => {
+        const number = parseFloat(value) || 0;
+        return `$ ${number.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    const updateTotals = () => {
+        let subtotal = 0;
+        form.querySelectorAll('.item-row').forEach(row => {
+            const qtyInput = row.querySelector('.cantidad-recibida');
+            const priceInput = row.querySelector('.precio-unitario');
+            const subtotalCell = row.querySelector('.subtotal-item');
+            
+            if (qtyInput && priceInput && subtotalCell) {
+                const qty = parseFloat(qtyInput.value) || 0;
+                const price = parseFloat(priceInput.value) || 0;
+                const itemSubtotal = qty * price;
+                subtotalCell.textContent = formatCurrency(itemSubtotal);
+                subtotal += itemSubtotal;
+            }
+        });
+
+        // Actualiza los totales de la sección 'Valores Recibidos'
+        const subtotalEl = document.getElementById('orden-subtotal');
+        const ivaEl = document.getElementById('orden-iva');
+        const totalEl = document.getElementById('orden-total');
+        
+        if (subtotalEl && ivaEl && totalEl) {
+            const iva = subtotal * ivaRate;
+            const total = subtotal + iva;
+            subtotalEl.textContent = formatCurrency(subtotal);
+            ivaEl.textContent = formatCurrency(iva);
+            totalEl.textContent = formatCurrency(total);
         }
     };
 
-    function formatearMoneda(valor) {
-        const numero = parseFloat(valor) || 0;
-        return `$ ${numero.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-
-    function actualizarTotales() {
-        let granSubtotal = 0;
-        document.querySelectorAll('.item-row').forEach(fila => {
-            const campoCantidad = fila.querySelector('.cantidad-recibida');
-            const campoPrecio = fila.querySelector('.precio-unitario');
-            const celdaSubtotal = fila.querySelector('.subtotal-item');
-
-            if (campoCantidad && campoPrecio && celdaSubtotal) {
-                const cantidad = parseFloat(campoCantidad.value) || 0;
-                const precio = parseFloat(campoPrecio.value) || 0;
-                const subtotalItem = cantidad * precio;
-
-                celdaSubtotal.textContent = formatearMoneda(subtotalItem);
-                granSubtotal += subtotalItem;
-            }
-        });
-
-        const elementoSubtotal = document.querySelector('#orden-subtotal');
-        const elementoIva = document.querySelector('#orden-iva');
-        const elementoTotal = document.querySelector('#orden-total');
-
-        if (elementoSubtotal && elementoIva && elementoTotal) {
-            let iva = 0;
-            if (ivaOriginal > 0) {
-                iva = granSubtotal * 0.21;
-            }
-            const total = granSubtotal + iva;
-
-            elementoSubtotal.textContent = formatearMoneda(granSubtotal);
-            elementoIva.textContent = formatearMoneda(iva);
-            elementoTotal.textContent = formatearMoneda(total);
-        }
-    }
-
-    formularioRecepcion.addEventListener('input', function (e) {
+    form.addEventListener('input', (e) => {
         if (e.target.classList.contains('cantidad-recibida') || e.target.classList.contains('precio-unitario')) {
-            actualizarTotales();
+            updateTotals();
         }
     });
 
-    // Cálculo inicial al cargar la página
-    actualizarTotales();
-    {% endif %}
+    updateTotals(); // Cálculo inicial al cargar la página
+    
+    const partialReceptionModal = new bootstrap.Modal(document.getElementById('confirmacionRecepcionParcialModal'));
+    
+    const submitTheForm = (action) => {
+        let actionInput = form.querySelector('input[name="accion"]');
+        if (!actionInput) {
+            actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'accion';
+            form.appendChild(actionInput);
+        }
+        actionInput.value = action;
+        form.submit();
+    };
 
-    // El manejador del submit es necesario siempre que el formulario exista.
-    const recepcionModal = new bootstrap.Modal(document.getElementById('confirmacionRecepcionParcialModal'));
-
-    formularioRecepcion.addEventListener('submit', function (e) {
+    form.addEventListener('submit', (e) => {
         e.preventDefault();
+        
         const submitter = e.submitter;
-        if (!submitter || submitter.value !== 'aceptar') {
-            this.submit();
+        const action = submitter ? submitter.value : null;
+
+        if (action !== 'aceptar') {
+            submitTheForm(action || 'rechazar');
             return;
         }
 
-        let esRecepcionParcial = false;
-        document.querySelectorAll('.item-row').forEach(fila => {
-            const cantidadSolicitada = parseFloat(fila.querySelector('td:nth-child(2)').textContent);
-            const cantidadRecibida = parseFloat(fila.querySelector('.cantidad-recibida').value);
-            if (cantidadRecibida < cantidadSolicitada) {
-                esRecepcionParcial = true;
+        let isPartial = false;
+        form.querySelectorAll('.item-row').forEach(row => {
+            const requestedQtyText = row.cells[1] ? row.cells[1].textContent.trim() : '0';
+            const requestedQty = parseFloat(requestedQtyText);
+            
+            const receivedQtyInput = row.querySelector('.cantidad-recibida');
+            const receivedQty = receivedQtyInput ? (parseFloat(receivedQtyInput.value) || 0) : 0;
+
+            if (receivedQty < requestedQty) {
+                isPartial = true;
             }
         });
 
-        if (esRecepcionParcial) {
-            recepcionModal.show();
+        if (isPartial) {
+            partialReceptionModal.show();
         } else {
-            submitFormulario(submitter);
+            submitTheForm('aceptar');
         }
     });
 
-    document.getElementById('confirmarRecepcionBtn').addEventListener('click', function () {
-        const submitter = document.querySelector('button[name="accion"][value="aceptar"]');
-        submitFormulario(submitter);
+    document.getElementById('confirmarRecepcionBtn').addEventListener('click', () => {
+        submitTheForm('aceptar');
     });
 
-    function submitFormulario(submitter) {
-        if (!submitter) return;
-
-        const hiddenInput = document.createElement('input');
-        hiddenInput.type = 'hidden';
-        hiddenInput.name = 'accion';
-        hiddenInput.value = submitter.value;
-        formularioRecepcion.appendChild(hiddenInput);
-
-        const overlay = document.getElementById('loadingOverlay');
-        if (overlay) {
-            overlay.style.display = 'flex';
-        }
-
-        setTimeout(() => {
-            formularioRecepcion.submit();
-        }, 50);
-    }
-    }
+    {% endif %}
 });
 </script>
 <script src="{{ url_for('static', filename='js/controlCalidad.js') }}"></script>
 {% endblock %}
-{# --- FIN DE LA CORRECCIÓN --- #}

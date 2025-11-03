@@ -270,72 +270,22 @@ class InventarioModel(BaseModel):
 
     def calcular_y_actualizar_stock_general(self) -> Dict:
         """
-        Calcula el stock disponible (solo lotes 'disponibles') y el stock total (disponible + cuarentena)
-        para todos los insumos y actualiza la tabla insumos_catalogo.
+        Dispara el recálculo de stock para todos los insumos activos.
         """
         try:
-            # 1. Obtener todos los insumos del catálogo
-            catalogo_resp = self.db.table('insumos_catalogo').select('id_insumo', 'stock_actual', 'stock_total').execute()
+            # 1. Obtener todos los IDs de insumos activos del catálogo
+            catalogo_resp = self.db.table('insumos_catalogo').select('id_insumo').eq('activo', True).execute()
             if not hasattr(catalogo_resp, 'data'):
                 raise Exception("No se pudo obtener el catálogo de insumos.")
-            insumos_catalogo = {item['id_insumo']: item for item in catalogo_resp.data}
-
-            # 2. Calcular stocks agregados desde el inventario
-            inventario_resp = self.db.table(self.get_table_name()).select('id_insumo', 'cantidad_actual', 'cantidad_en_cuarentena', 'estado').execute()
-            if not hasattr(inventario_resp, 'data'):
-                raise Exception("No se pudo obtener el inventario de insumos.")
-
-            stock_disponible_calculado = {}
-            stock_total_calculado = {}
-            for lote in inventario_resp.data:
-                insumo_id = lote['id_insumo']
-                
-                # Inicializar si es la primera vez que vemos este insumo
-                if insumo_id not in stock_disponible_calculado:
-                    stock_disponible_calculado[insumo_id] = 0
-                if insumo_id not in stock_total_calculado:
-                    stock_total_calculado[insumo_id] = 0
-                
-                # Lógica unificada: calcular siempre basado en las cantidades, no en el estado.
-                cantidad_disp = float(lote.get('cantidad_actual') or 0)
-                cantidad_cuar = float(lote.get('cantidad_en_cuarentena') or 0)
-                
-                stock_disponible_calculado[insumo_id] += cantidad_disp
-                stock_total_calculado[insumo_id] += (cantidad_disp + cantidad_cuar)
-
-            # 3. Preparar los datos para la actualización
-            updates = []
-            for insumo_id, insumo_data in insumos_catalogo.items():
-                stock_disp_nuevo = stock_disponible_calculado.get(insumo_id, 0)
-                stock_total_nuevo = stock_total_calculado.get(insumo_id, 0)
-                
-                stock_disp_viejo = insumo_data.get('stock_actual') or 0
-                stock_total_viejo = insumo_data.get('stock_total') or 0
-
-                # Solo actualizar si alguno de los stocks ha cambiado
-                if stock_disp_nuevo != stock_disp_viejo or stock_total_nuevo != stock_total_viejo:
-                    updates.append({
-                        'id_insumo': insumo_id,
-                        'stock_actual': stock_disp_nuevo,
-                        'stock_total': stock_total_nuevo
-                    })
             
-            # 4. Ejecutar las actualizaciones de forma iterativa si hay cambios
-            if updates:
-                logger.info(f"Actualizando stock para {len(updates)} insumos.")
-                for item in updates:
-                    insumo_id = item['id_insumo']
-                    update_payload = {
-                        'stock_actual': item['stock_actual'],
-                        'stock_total': item['stock_total']
-                    }
-                    (self.db.table('insumos_catalogo')
-                     .update(update_payload)
-                     .eq('id_insumo', insumo_id)
-                     .execute())
-            else:
-                logger.info("No se requirieron actualizaciones de stock.")
+            insumo_ids = [item['id_insumo'] for item in catalogo_resp.data]
 
+            # 2. Iterar y llamar a la función de recálculo individual para cada uno
+            for insumo_id in insumo_ids:
+                # Se ignora el resultado, ya que la función interna maneja los errores.
+                self.recalcular_stock_para_insumo(insumo_id)
+            
+            logger.info(f"Recálculo de stock general completado para {len(insumo_ids)} insumos.")
             return {'success': True}
 
         except Exception as e:
@@ -360,17 +310,21 @@ class InventarioModel(BaseModel):
                 logger.error(error_msg)
                 return {'success': False, 'error': error_msg}
 
-            # 2. Calcular los nuevos stocks basados puramente en las cantidades.
-            #    - stock_actual: Suma de todo lo que está 'disponible para usar'.
-            #    - stock_total: Suma de lo disponible + lo que está en cuarentena (stock físico total).
-            nuevo_stock_actual = 0
-            nuevo_stock_total = 0
+            # 2. Calcular los nuevos stocks basados en las cantidades Y el estado.
+            nuevo_stock_actual = 0  # Solo 'disponible'
+            nuevo_stock_total = 0   # Físico: disponible + cuarentena + en revisión
+
             for lote in lotes_resp.data:
-                cantidad_disp = float(lote.get('cantidad_actual') or 0)
-                cantidad_cuar = float(lote.get('cantidad_en_cuarentena') or 0)
+                estado_lote = (lote.get('estado') or '').strip().lower()
+                cantidad_actual = float(lote.get('cantidad_actual') or 0)
+                cantidad_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
+
+                # Sumar al stock total (físico) si no es un estado terminal
+                nuevo_stock_total += (cantidad_actual + cantidad_cuarentena)
                 
-                nuevo_stock_actual += cantidad_disp
-                nuevo_stock_total += (cantidad_disp + cantidad_cuar)
+                # Sumar al stock disponible SOLO si el estado es 'disponible'
+                if estado_lote == 'disponible':
+                    nuevo_stock_actual += cantidad_actual
 
             # 3. Preparar el payload de actualización
             update_payload = {
