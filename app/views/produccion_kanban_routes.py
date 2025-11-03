@@ -137,6 +137,6 @@ def api_get_estado_produccion(op_id):
     API endpoint para obtener el estado actual de producción de una OP.
     Devuelve el tiempo trabajado, la cantidad producida y si está en pausa.
     """
-    controller = OrdenProduccionController()
+    controller = ProduccionKanbanController()
     response, status_code = controller.obtener_estado_produccion(op_id)
     return jsonify(response), status_code

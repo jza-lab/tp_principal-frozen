@@ -25,8 +25,7 @@ class MotivoParoModel(BaseModel):
         """
         try:
             # --- 3. Corregir la forma de llamar a la tabla con esquema ---
-            table_with_schema = f"{self.get_schema_name()}.{self.get_table_name()}"
-            query = self.db.table(table_with_schema).select("*")
+            query = self.db.schema(self.get_schema_name()).table(self.get_table_name()).select("*")
             
             # Aplicar filtros si se proporcionan
             if filters:

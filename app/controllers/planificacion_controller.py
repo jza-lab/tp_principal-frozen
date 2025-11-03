@@ -21,12 +21,19 @@ class PlanificacionController(BaseController):
     """
     def __init__(self):
         super().__init__()
-        self.orden_produccion_controller = OrdenProduccionController()
+        self._orden_produccion_controller = None
         self.inventario_controller = InventarioController()
         self.centro_trabajo_model = CentroTrabajoModel()
         self.receta_model = RecetaModel()
         self.insumo_model = InsumoModel()
 
+    @property
+    def orden_produccion_controller(self):
+        """Lazy loader for OrdenProduccionController to prevent circular dependency."""
+        if self._orden_produccion_controller is None:
+            from app.controllers.orden_produccion_controller import OrdenProduccionController
+            self._orden_produccion_controller = OrdenProduccionController()
+        return self._orden_produccion_controller
     # region: API Pública del Controlador
     def consolidar_ops(self, op_ids: List[int], usuario_id: int) -> tuple:
         """
@@ -152,16 +159,110 @@ class PlanificacionController(BaseController):
         """
         Endpoint manual para forzar la ejecución de la planificación automática.
         """
-        try:
-            dias_horizonte_manual = 30
-            resumen = self._ejecutar_planificacion_automatica(
-                usuario_id=usuario_id,
-                dias_horizonte=dias_horizonte_manual
-            )
-            return self.success_response(data=resumen, message="Planificación manual ejecutada.")
-        except Exception as e:
-            logger.error(f"Error en forzar_auto_planificacion: {e}", exc_info=True)
-            return self.error_response(f"Error interno: {str(e)}", 500)
+    def _calcular_carga_op(self, op_data: Dict) -> Decimal:
+        """ Calcula la carga total en minutos para una OP dada. """
+        carga_total = Decimal(0)
+        receta_id = op_data.get('receta_id')
+        cantidad = Decimal(op_data.get('cantidad_planificada', 0))
+        if not receta_id or cantidad <= 0: return carga_total
+
+        operaciones = self.orden_produccion_controller._obtener_operaciones_receta(receta_id)
+        if not operaciones: return carga_total
+
+        for op_step in operaciones:
+            t_prep = Decimal(op_step.get('tiempo_preparacion', 0))
+            t_ejec_unit = Decimal(op_step.get('tiempo_ejecucion_unitario', 0))
+            carga_total += t_prep + (t_ejec_unit * cantidad)
+        return carga_total
+
+    def calcular_carga_capacidad(self, ordenes_planificadas: List[Dict]) -> Dict:
+        """
+        Calcula la carga (en minutos) por centro de trabajo y fecha, DISTRIBUYENDO
+        la carga de cada OP a lo largo de los días necesarios según la capacidad diaria.
+        Devuelve: { centro_id: { fecha_iso: carga_minutos_asignada_ese_dia, ... }, ... }
+        """
+        carga_distribuida = {1: defaultdict(float), 2: defaultdict(float)}
+        # Necesitamos la capacidad para simular la distribución
+        # Obtener rango de fechas mínimo y máximo de las OPs planificadas
+        fechas_inicio = []
+        for op in ordenes_planificadas:
+             if op.get('fecha_inicio_planificada'):
+                 try: fechas_inicio.append(date.fromisoformat(op['fecha_inicio_planificada']))
+                 except ValueError: pass
+
+        if not fechas_inicio: return {1:{}, 2:{}} # No hay OPs válidas para calcular
+
+        fecha_min = min(fechas_inicio)
+        # Estimar una fecha máxima razonable (ej. fecha min + 30 días, o basado en plazos)
+        fecha_max_estimada = fecha_min + timedelta(days=30)
+
+        # Obtener capacidad para todo el rango relevante
+        capacidad_disponible_rango = self.obtener_capacidad_disponible([1, 2], fecha_min, fecha_max_estimada)
+
+        # Ordenar OPs por fecha de inicio para procesar cronológicamente
+        ordenes_ordenadas = sorted(
+            [op for op in ordenes_planificadas if op.get('fecha_inicio_planificada')],
+            key=lambda op: op['fecha_inicio_planificada']
+        )
+
+        for orden in ordenes_ordenadas:
+            try:
+                linea_asignada = orden.get('linea_asignada')
+                fecha_inicio_op_str = orden.get('fecha_inicio_planificada')
+                if linea_asignada not in [1, 2] or not fecha_inicio_op_str: continue
+
+                fecha_inicio_op = date.fromisoformat(fecha_inicio_op_str)
+                carga_total_op = float(self._calcular_carga_op(orden)) # Usar helper que calcula carga total
+                if carga_total_op <= 0: continue
+
+                logger.debug(f"Distribuyendo carga para OP {orden.get('codigo', orden.get('id'))}: {carga_total_op:.2f} min en Línea {linea_asignada} desde {fecha_inicio_op_str}")
+
+                # Simular asignación día por día
+                carga_restante_op = carga_total_op
+                fecha_actual_sim = fecha_inicio_op
+                dias_procesados = 0
+                max_dias_op = 30 # Límite por OP
+
+                while carga_restante_op > 0.01 and dias_procesados < max_dias_op: # Usar > 0.01 por precisión float
+                    fecha_actual_str = fecha_actual_sim.isoformat()
+
+                    # Capacidad NETA del día (considerando eficiencia, etc.)
+                    capacidad_dia = capacidad_disponible_rango.get(linea_asignada, {}).get(fecha_actual_str, 0.0)
+
+                    # Carga YA ASIGNADA a este día por OPs anteriores en este cálculo
+                    carga_ya_asignada_este_dia = carga_distribuida[linea_asignada].get(fecha_actual_str, 0.0)
+
+                    # Capacidad REALMENTE restante en el día
+                    capacidad_restante_hoy = max(0.0, capacidad_dia - carga_ya_asignada_este_dia)
+
+                    # Cuánto podemos asignar de la OP actual a este día
+                    carga_a_asignar_hoy = min(carga_restante_op, capacidad_restante_hoy)
+
+                    if carga_a_asignar_hoy > 0:
+                        carga_distribuida[linea_asignada][fecha_actual_str] += carga_a_asignar_hoy
+                        carga_restante_op -= carga_a_asignar_hoy
+                        logger.debug(f"  -> Asignado {carga_a_asignar_hoy:.2f} min a {fecha_actual_str}. Restante OP: {carga_restante_op:.2f} min")
+                    # else: # No cabe nada hoy
+                    #    logger.debug(f"  -> No cabe carga en {fecha_actual_str}. Cap restante: {capacidad_restante_hoy:.2f}")
+
+
+                    # Pasar al siguiente día
+                    fecha_actual_sim += timedelta(days=1)
+                    dias_procesados += 1
+
+                if carga_restante_op > 0.01:
+                     logger.warning(f"OP {orden.get('codigo', orden.get('id'))}: No se pudo asignar toda la carga ({carga_restante_op:.2f} min restantes) en {max_dias_op} días.")
+                     # La carga que se pudo asignar hasta ahora sí se incluye en carga_distribuida
+
+            except Exception as e:
+                 logger.error(f"Error distribuyendo carga para OP {orden.get('codigo', orden.get('id'))}: {e}", exc_info=True)
+
+        # Convertir defaultdicts internos a dicts normales para devolver
+        resultado_final = {
+            1: dict(carga_distribuida[1]),
+            2: dict(carga_distribuida[2])
+        }
+        return resultado_final
 
     # endregion
     # ==============================================================================

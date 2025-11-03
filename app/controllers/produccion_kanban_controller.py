@@ -94,3 +94,14 @@ class ProduccionKanbanController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico en mover_orden (Kanban) para OP {op_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
+
+    def obtener_estado_produccion(self, op_id: int) -> tuple:
+        """
+        Obtiene el estado de producción en tiempo real para una OP.
+        Delega la llamada al controlador de órdenes de producción.
+        """
+        try:
+            return self.orden_produccion_controller.obtener_estado_produccion_op(op_id)
+        except Exception as e:
+            logger.error(f"Error al obtener estado de producción para OP {op_id} desde KanbanController: {e}", exc_info=True)
+            return self.error_response(f"Error interno al consultar estado: {str(e)}", 500)

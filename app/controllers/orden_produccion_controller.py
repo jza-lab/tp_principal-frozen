@@ -51,8 +51,15 @@ class OrdenProduccionController(BaseController):
         self.receta_model = RecetaModel()
         self.insumo_model = InsumoModel()
         self.operacion_receta_model = OperacionRecetaModel()
-        from app.controllers.planificacion_controller import PlanificacionController
-        self.planificacion_controller = PlanificacionController()
+        self._planificacion_controller = None
+
+    @property
+    def planificacion_controller(self):
+        """Lazy loader for PlanificacionController to prevent circular dependency."""
+        if self._planificacion_controller is None:
+            from app.controllers.planificacion_controller import PlanificacionController
+            self._planificacion_controller = PlanificacionController()
+        return self._planificacion_controller
 
     # endregion
 
@@ -1355,4 +1362,38 @@ class OrdenProduccionController(BaseController):
             self.model.update(id_value=op_id, data=update_data, id_field='id')
         logger.info(f"OPs originales {op_ids} actualizadas a estado CONSOLIDADA.")
 
+    def obtener_estado_produccion_op(self, op_id: int) -> tuple:
+        """
+        Obtiene el estado de producción en tiempo real para una OP específica.
+        Calcula el avance y devuelve datos clave.
+        """
+        try:
+            # 1. Obtener la orden de producción
+            op_result = self.obtener_orden_por_id(op_id)
+            if not op_result.get('success'):
+                return self.error_response("Orden de Producción no encontrada.", 404)
+            
+            orden = op_result['data']
+            
+            # 2. Extraer cantidades y calcular avance
+            cantidad_planificada = Decimal(orden.get('cantidad_planificada', 0))
+            cantidad_producida = Decimal(orden.get('cantidad_producida', 0))
+            
+            avance_porcentaje = 0
+            if cantidad_planificada > 0:
+                avance_porcentaje = round((cantidad_producida / cantidad_planificada) * 100, 2)
+
+            # 3. Preparar la respuesta
+            estado_produccion = {
+                'cantidad_planificada': float(cantidad_planificada),
+                'cantidad_producida': float(cantidad_producida),
+                'avance_porcentaje': float(avance_porcentaje),
+                'estado_actual': orden.get('estado')
+            }
+            
+            return self.success_response(data=estado_produccion)
+
+        except Exception as e:
+            logger.error(f"Error al obtener estado de producción para OP {op_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
     # endregion
