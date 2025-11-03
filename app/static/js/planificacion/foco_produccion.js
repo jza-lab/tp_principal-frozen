@@ -56,9 +56,16 @@ document.addEventListener('DOMContentLoaded', function () {
         oee: 100,
         
         // Historial
-        inicioProduccion: new Date(),
+        inicioProduccion: ORDEN_FECHA_INICIO ? new Date(ORDEN_FECHA_INICIO) : new Date(),
         tiempoTotalPausas: 0
     };
+
+    // Calcular segundos iniciales si la producción ya empezó
+    if (ORDEN_FECHA_INICIO) {
+        const ahora = new Date();
+        const inicio = new Date(ORDEN_FECHA_INICIO);
+        estado.segundosTranscurridos = Math.floor((ahora - inicio) / 1000);
+    }
 
     // ===== FUNCIONES DE FORMATO =====
     function formatTime(seconds) {
