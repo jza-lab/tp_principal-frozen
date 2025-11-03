@@ -1,9 +1,9 @@
 import logging
 from flask import Blueprint, render_template, flash, request, jsonify
-from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
 from app.controllers.planificacion_controller import PlanificacionController
 from app.controllers.usuario_controller import UsuarioController
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from app.utils.decorators import permission_required
 from app import csrf
 
@@ -16,25 +16,29 @@ csrf.exempt(planificacion_bp)
 @permission_required(accion='consultar_plan_de_produccion')
 def index():
     """
-    Muestra la vista principal de planificación, que incluye el Plan Maestro de Producción (MPS)
-    y el Calendario Semanal de capacidad (CRP).
+    Muestra la vista principal de planificación, incluyendo MPS y CRP.
     """
     controller = PlanificacionController()
     usuario_controller = UsuarioController()
     
-    # 1. Obtener parámetros de la solicitud
+    # Obtener rol del usuario
+    jwt_data = get_jwt()
+    user_role = jwt_data.get('rol', '')
+    is_operario = user_role == 'OPERARIO'
+    is_supervisor_calidad = user_role == 'SUPERVISOR_CALIDAD'
+
     week_str = request.args.get('semana')
     horizonte_dias = request.args.get('horizonte', default=7, type=int)
 
-    # 2. Obtener datos para el Plan Maestro (MPS)
+    # Datos para el Plan Maestro (MPS)
     ctx_mps = {}
     response_mps, _ = controller.obtener_ops_pendientes_planificacion(horizonte_dias)
     if response_mps.get('success'):
         ctx_mps = response_mps.get('data', {})
     else:
-        flash(response_mps.get('error', 'Error cargando el Plan Maestro de Producción.'), 'danger')
+        flash(response_mps.get('error', 'Error cargando el Plan Maestro.'), 'danger')
 
-    # 3. Obtener datos para el Calendario Semanal (CRP)
+    # Datos para el Calendario Semanal
     ctx_semanal = {}
     response_semanal, _ = controller.obtener_planificacion_semanal(week_str)
     if response_semanal.get('success'):
@@ -42,39 +46,60 @@ def index():
     else:
         flash(response_semanal.get('error', 'Error cargando la planificación semanal.'), 'danger')
 
-    # 4. Obtener datos para los formularios (Supervisores y Operarios)
-    supervisores_resp, _ = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
-    operarios_resp, _ = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
+    # Datos para los formularios
+    supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
+    operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
     
-    # 5. Navegación de semana para el calendario
+    # Lógica de CRP (Carga vs Capacidad)
+    carga_crp = {}
+    capacidad_crp = {}
+    inicio_semana_crp = ctx_semanal.get('inicio_semana')
+    fin_semana_crp = ctx_semanal.get('fin_semana')
+
+    if inicio_semana_crp and fin_semana_crp:
+        fecha_inicio_obj = date.fromisoformat(inicio_semana_crp)
+        fecha_fin_obj = date.fromisoformat(fin_semana_crp)
+        
+        ops_visibles = ctx_semanal.get('ops_visibles_por_dia', {})
+        ordenes_para_crp = [op for lista_ops in ops_visibles.values() for op in lista_ops]
+
+        if ordenes_para_crp:
+            carga_crp = controller.calcular_carga_capacidad(ordenes_para_crp)
+        
+        capacidad_crp = controller.obtener_capacidad_disponible([1, 2], fecha_inicio_obj, fecha_fin_obj)
+
+    # Navegación de semana
     try:
-        current_year, week_num_int = map(int, (ctx_semanal.get('semana_actual_str') or '2023-W01').split('-W'))
+        current_year, week_num_int = map(int, (ctx_semanal.get('semana_actual_str') or f"{date.today().year}-W{date.today().isocalendar().week}").split('-W'))
         current_week_start = date.fromisocalendar(current_year, week_num_int, 1)
         prev_week_start = current_week_start - timedelta(days=7)
         next_week_start = current_week_start + timedelta(days=7)
-        prev_week_str = prev_week_start.strftime("%Y-W%V")
-        next_week_str = next_week_start.strftime("%Y-W%V")
+        semana_anterior_str = prev_week_start.strftime("%Y-W%V")
+        semana_siguiente_str = next_week_start.strftime("%Y-W%V")
     except (ValueError, TypeError):
-        prev_week_str, next_week_str = None, None
-        logger.warning(f"Error al parsear week_str para la navegación: {week_str}")
+        semana_anterior_str, semana_siguiente_str = None, None
 
-    # 6. Renderizar la plantilla con todo el contexto
     return render_template(
         'planificacion/tablero.html',
-        mps_agrupado=ctx_mps.get('mps_agrupado', []),
-        inicio_horizonte=ctx_mps.get('inicio_horizonte'),
-        fin_horizonte=ctx_mps.get('fin_horizonte'),
-        ops_visibles_por_dia=ctx_semanal.get('ops_visibles_por_dia', {}),
-        inicio_semana=ctx_semanal.get('inicio_semana'),
-        fin_semana=ctx_semanal.get('fin_semana'),
+        mps_data=ctx_mps,
+        ordenes_por_dia=ctx_semanal.get('ops_visibles_por_dia', {}),
         semana_actual_str=ctx_semanal.get('semana_actual_str'),
         supervisores=supervisores_resp.get('data', []),
         operarios=operarios_resp.get('data', []),
-        prev_week_str=prev_week_str,
-        next_week_str=next_week_str
+        semana_anterior_str=semana_anterior_str,
+        semana_siguiente_str=semana_siguiente_str,
+        carga_crp=carga_crp,
+        capacidad_crp=capacidad_crp,
+        inicio_semana_crp=inicio_semana_crp,
+        fin_semana_crp=fin_semana_crp,
+        is_operario=is_operario,
+        is_supervisor_calidad=is_supervisor_calidad,
+        now=datetime.now(),
+        date=date,
+        timedelta=timedelta
     )
 
-# --- Rutas de API para Planificación ---
+# --- Rutas de API (sin cambios) ---
 
 @planificacion_bp.route('/api/consolidar', methods=['POST'])
 @jwt_required()
@@ -122,4 +147,19 @@ def forzar_planificacion():
     usuario_id = get_jwt_identity()
     controller = PlanificacionController()
     response, status_code = controller.forzar_auto_planificacion(usuario_id)
+    return jsonify(response), status_code
+
+@planificacion_bp.route('/api/validar-fecha-requerida', methods=['POST'])
+@jwt_required()
+def validar_fecha_requerida_api():
+    data = request.json
+    items_data = data.get('items', [])
+    fecha_requerida = data.get('fecha_requerida')
+
+    if not items_data or not fecha_requerida:
+        return jsonify({'success': False, 'error': 'Faltan items o fecha_requerida.'}), 400
+
+    controller = PlanificacionController()
+    # Asumo que el método `api_validar_fecha_requerida` existe en el controlador
+    response, status_code = controller.api_validar_fecha_requerida(items_data, fecha_requerida)
     return jsonify(response), status_code
