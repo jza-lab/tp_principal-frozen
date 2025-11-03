@@ -21,23 +21,21 @@ class PlanificacionController(BaseController):
     """
     def __init__(self):
         super().__init__()
+        self.orden_produccion_controller = OrdenProduccionController()
         self.inventario_controller = InventarioController()
         self.centro_trabajo_model = CentroTrabajoModel()
         self.receta_model = RecetaModel()
         self.insumo_model = InsumoModel()
 
     # region: API Pública del Controlador
-    # ==============================================================================
-
     def consolidar_ops(self, op_ids: List[int], usuario_id: int) -> tuple:
         """
         Orquesta la consolidación de OPs llamando al controlador de órdenes de producción.
         """
-        orden_produccion_controller = OrdenProduccionController()
         if not op_ids or len(op_ids) < 2:
             return self.error_response("Se requieren al menos dos órdenes para consolidar.", 400)
         try:
-            resultado = orden_produccion_controller.consolidar_ordenes_produccion(op_ids, usuario_id)
+            resultado = self.orden_produccion_controller.consolidar_ordenes_produccion(op_ids, usuario_id)
             if resultado.get('success'):
                 return self.success_response(data=resultado.get('data'))
             else:
@@ -51,7 +49,6 @@ class PlanificacionController(BaseController):
         Método principal para planificar un lote de OPs. Orquesta la consolidación (si es necesario),
         verifica la capacidad (CRP) y ejecuta la aprobación o replanificación según el estado de la OP.
         """
-        orden_produccion_controller = OrdenProduccionController()
         try:
             op_a_planificar_id, op_data = self._obtener_datos_op_a_planificar(op_ids, usuario_id)
             if not op_a_planificar_id:
@@ -79,11 +76,10 @@ class PlanificacionController(BaseController):
             except ValueError:
                 return self.error_response("Formato de fecha inválido. Usar YYYY-MM-DD.", 400)
 
-            carga_total_op = float(orden_produccion_controller.calcular_carga_op(op_data))
+            carga_total_op = float(self.orden_produccion_controller.calcular_carga_op(op_data))
             if carga_total_op <= 0:
                 logger.warning(f"OP {op_a_planificar_id} con carga 0. Saltando verificación CRP.")
                 dias_necesarios = 1
-                fecha_fin_estimada = fecha_inicio_propuesta
             else:
                 simulacion_result = self._simular_asignacion_carga(
                     carga_total_op=carga_total_op,
@@ -132,9 +128,8 @@ class PlanificacionController(BaseController):
         Endpoint final para confirmar una aprobación. Omite la simulación de capacidad (ya se hizo)
         y ejecuta la acción basándose en el estado de la OP.
         """
-        orden_produccion_controller = OrdenProduccionController()
         try:
-            op_result = orden_produccion_controller.obtener_orden_por_id(op_id)
+            op_result = self.orden_produccion_controller.obtener_orden_por_id(op_id)
             if not op_result.get('success'):
                 return self.error_response(f"No se encontró la OP ID {op_id}.", 404), 404
 
@@ -178,7 +173,6 @@ class PlanificacionController(BaseController):
         """
         Obtiene OPs PENDIENTES, las agrupa por producto y calcula sugerencias de planificación.
         """
-        orden_produccion_controller = OrdenProduccionController()
         try:
             hoy = date.today()
             fecha_fin_horizonte = hoy + timedelta(days=int(dias_horizonte))
@@ -187,7 +181,7 @@ class PlanificacionController(BaseController):
                 'fecha_meta_desde': hoy.isoformat(),
                 'fecha_meta_hasta': fecha_fin_horizonte.isoformat()
             }
-            response, _ = orden_produccion_controller.obtener_ordenes(filtros)
+            response, _ = self.orden_produccion_controller.obtener_ordenes(filtros)
             if not response.get('success'):
                 return self.error_response("Error al cargar órdenes pendientes.")
 
@@ -259,7 +253,6 @@ class PlanificacionController(BaseController):
 
     def _ejecutar_aprobacion_final(self, op_id: int, asignaciones: dict, usuario_id: int) -> tuple:
         """ Ejecuta los pasos de pre-asignación y confirmación/aprobación. """
-        orden_produccion_controller = OrdenProduccionController()
         try:
             datos_pre_asignar = {
                 'linea_asignada': asignaciones.get('linea_asignada'),
@@ -268,12 +261,12 @@ class PlanificacionController(BaseController):
             }
             datos_pre_asignar = {k: v for k, v in datos_pre_asignar.items() if v is not None}
 
-            res_pre_asig_dict, res_pre_asig_status = orden_produccion_controller.pre_asignar_recursos(
+            res_pre_asig_dict, res_pre_asig_status = self.orden_produccion_controller.pre_asignar_recursos(
                 op_id, datos_pre_asignar, usuario_id)
             if res_pre_asig_status >= 400:
                 return res_pre_asig_dict, res_pre_asig_status
 
-            res_conf_dict, res_conf_status = orden_produccion_controller.confirmar_inicio_y_aprobar(
+            res_conf_dict, res_conf_status = self.orden_produccion_controller.confirmar_inicio_y_aprobar(
                 op_id, {'fecha_inicio_planificada': asignaciones.get('fecha_inicio')}, usuario_id)
             return res_conf_dict, res_conf_status
         except Exception as e:
@@ -286,7 +279,6 @@ class PlanificacionController(BaseController):
         SOLO actualiza los campos de planificación de una OP que YA ESTÁ planificada.
         NO cambia el estado ni vuelve a verificar el stock.
         """
-        orden_produccion_controller = OrdenProduccionController()
         logger.info(f"[RePlan] Ejecutando re-planificación simple para OP {op_id}...")
         try:
             update_data = {
@@ -296,7 +288,7 @@ class PlanificacionController(BaseController):
                 'operario_asignado_id': asignaciones.get('operario_id')
             }
             update_data = {k: v for k, v in update_data.items() if v is not None}
-            update_result = orden_produccion_controller.model.update(op_id, update_data, 'id')
+            update_result = self.orden_produccion_controller.model.update(op_id, update_data, 'id')
 
             if update_result.get('success'):
                 return self.success_response(data=update_result.get('data'), message="OP re-planificada exitosamente.")
@@ -405,7 +397,6 @@ class PlanificacionController(BaseController):
         """
         Simula la asignación de carga día por día y devuelve la fecha de inicio real y la fecha de fin.
         """
-        orden_produccion_controller = OrdenProduccionController()
         carga_restante_op = carga_total_op
         fecha_actual_simulacion = fecha_inicio_busqueda
         max_dias_simulacion = 30
@@ -422,7 +413,7 @@ class PlanificacionController(BaseController):
             cap_dia_actual = cap_dict_dia.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
             if cap_dia_actual <= 0: continue
 
-            ops_existentes, _ = orden_produccion_controller.obtener_ordenes(filtros={
+            ops_existentes, _ = self.orden_produccion_controller.obtener_ordenes(filtros={
                 'fecha_inicio_planificada': fecha_actual_str, 'linea_asignada': linea_propuesta,
                 'estado': ('not.in', ['PENDIENTE', 'COMPLETADA', 'CANCELADA', 'CONSOLIDADA'])
             })
@@ -432,7 +423,7 @@ class PlanificacionController(BaseController):
                 if ops_mismo_dia:
                     # Este cálculo es una simplificación; un cálculo preciso distribuiría la carga de cada OP existente.
                     # Para CRP rápido, sumamos la carga total de OPs que *inician* ese día.
-                    carga_existente_dia = sum(float(orden_produccion_controller.calcular_carga_op(op)) for op in ops_mismo_dia)
+                    carga_existente_dia = sum(float(self.orden_produccion_controller.calcular_carga_op(op)) for op in ops_mismo_dia)
 
             cap_restante_dia = max(0.0, cap_dia_actual - carga_existente_dia)
             if cap_restante_dia < 1: continue
@@ -457,53 +448,6 @@ class PlanificacionController(BaseController):
             'dias_necesarios': dias_necesarios, 'error_data': None
         }
 
-    def calcular_carga_capacidad(self, ordenes_planificadas: List[Dict]) -> Dict:
-        """
-        Calcula la carga (en minutos) por centro de trabajo y fecha, distribuyendo
-        la carga de cada OP a lo largo de los días necesarios según la capacidad diaria.
-        """
-        orden_produccion_controller = OrdenProduccionController()
-        carga_distribuida = {1: defaultdict(float), 2: defaultdict(float)}
-        fechas_inicio = [date.fromisoformat(op['fecha_inicio_planificada']) for op in ordenes_planificadas if op.get('fecha_inicio_planificada')]
-        if not fechas_inicio: return {1:{}, 2:{}}
-
-        fecha_min = min(fechas_inicio)
-        fecha_max_estimada = fecha_min + timedelta(days=30)
-        capacidad_disponible_rango = self.obtener_capacidad_disponible([1, 2], fecha_min, fecha_max_estimada)
-
-        ordenes_ordenadas = sorted([op for op in ordenes_planificadas if op.get('fecha_inicio_planificada')], key=lambda op: op['fecha_inicio_planificada'])
-
-        for orden in ordenes_ordenadas:
-            try:
-                linea_asignada = orden.get('linea_asignada')
-                fecha_inicio_op_str = orden.get('fecha_inicio_planificada')
-                if linea_asignada not in [1, 2] or not fecha_inicio_op_str: continue
-
-                fecha_inicio_op = date.fromisoformat(fecha_inicio_op_str)
-                carga_total_op = float(orden_produccion_controller.calcular_carga_op(orden))
-                if carga_total_op <= 0: continue
-
-                carga_restante_op = carga_total_op
-                fecha_actual_sim = fecha_inicio_op
-                dias_procesados = 0
-                while carga_restante_op > 0.01 and dias_procesados < 30:
-                    fecha_actual_str = fecha_actual_sim.isoformat()
-                    capacidad_dia = capacidad_disponible_rango.get(linea_asignada, {}).get(fecha_actual_str, 0.0)
-                    carga_ya_asignada_este_dia = carga_distribuida[linea_asignada].get(fecha_actual_str, 0.0)
-                    capacidad_restante_hoy = max(0.0, capacidad_dia - carga_ya_asignada_este_dia)
-                    carga_a_asignar_hoy = min(carga_restante_op, capacidad_restante_hoy)
-
-                    if carga_a_asignar_hoy > 0:
-                        carga_distribuida[linea_asignada][fecha_actual_str] += carga_a_asignar_hoy
-                        carga_restante_op -= carga_a_asignar_hoy
-                    
-                    fecha_actual_sim += timedelta(days=1)
-                    dias_procesados += 1
-            except Exception as e:
-                 logger.error(f"Error distribuyendo carga para OP {orden.get('id')}: {e}", exc_info=True)
-
-        return {1: dict(carga_distribuida[1]), 2: dict(carga_distribuida[2])}
-
     # endregion
     # ==============================================================================
 
@@ -512,16 +456,15 @@ class PlanificacionController(BaseController):
 
     def _obtener_datos_op_a_planificar(self, op_ids: List[int], usuario_id: int) -> tuple:
         """ Obtiene los datos de la OP (consolidada o individual). Devuelve (id, data) o (None, error_msg). """
-        orden_produccion_controller = OrdenProduccionController()
         if len(op_ids) > 1:
-            resultado_consol = orden_produccion_controller.consolidar_ordenes_produccion(op_ids, usuario_id)
+            resultado_consol = self.orden_produccion_controller.consolidar_ordenes_produccion(op_ids, usuario_id)
             if not resultado_consol.get('success'):
                 return None, f"Error al consolidar: {resultado_consol.get('error')}"
             op_data = resultado_consol.get('data', {})
             return op_data.get('id'), op_data
         else:
             op_id = op_ids[0]
-            op_result = orden_produccion_controller.obtener_orden_por_id(op_id)
+            op_result = self.orden_produccion_controller.obtener_orden_por_id(op_id)
             if not op_result.get('success'):
                 return None, f"No se encontró la OP ID {op_id}."
             return op_id, op_result.get('data')
@@ -560,7 +503,6 @@ class PlanificacionController(BaseController):
 
     def _calcular_sugerencias_para_grupo(self, data: Dict):
         """ Calcula tiempos, línea sugerida y stock para un grupo de OPs. """
-        orden_produccion_controller = OrdenProduccionController()
         receta_id = data['receta_id']
         cantidad_total = data['cantidad_total']
         data.update({'sugerencia_t_prod_dias': 0, 'sugerencia_linea': None, 'sugerencia_t_proc_dias': 0, 'sugerencia_stock_ok': False, 'sugerencia_insumos_faltantes': [], 'linea_compatible': None})
@@ -568,7 +510,7 @@ class PlanificacionController(BaseController):
 
         # Tiempo de Producción y Línea
         op_simulada = {'receta_id': receta_id, 'cantidad_planificada': cantidad_total}
-        carga_total_min = float(orden_produccion_controller.calcular_carga_op(op_simulada))
+        carga_total_min = float(self.orden_produccion_controller.calcular_carga_op(op_simulada))
         if carga_total_min > 0:
             data['sugerencia_t_prod_dias'] = math.ceil(carga_total_min / 480) # Asumiendo 8h/día
 
@@ -592,7 +534,7 @@ class PlanificacionController(BaseController):
                 stock_disp = stock_disp_res.get('data', {}).get('stock_disponible', 0)
                 if stock_disp < cant_necesaria:
                     data['sugerencia_stock_ok'] = False
-                    data['sugerencia_insumos_faltantes'].append({'insumo_id': ing['id_insumo'], 'nombre': ing.get('nombre_insumo'), 'cantidad_faltante': cant_necesaria - stock_disp})
+                    data['sugerencia_insumos_faltantes'].append({'nombre': ing.get('nombre_insumo'), 'cantidad_faltante': cant_necesaria - stock_disp})
             
             if not data['sugerencia_stock_ok']:
                 tiempos_entrega = [self.insumo_model.find_by_id(ins['insumo_id'], 'id_insumo')['data'].get('tiempo_entrega_dias', 0) for ins in data['sugerencia_insumos_faltantes']]
@@ -617,18 +559,16 @@ class PlanificacionController(BaseController):
 
     def _obtener_ops_relevantes_para_rango(self, start_of_week: date, end_of_week: date) -> List[Dict]:
         """ Obtiene las OPs activas que inician antes del fin de la semana. """
-        orden_produccion_controller = OrdenProduccionController()
         filtros = {
             'fecha_inicio_planificada_desde': (start_of_week - timedelta(days=14)).isoformat(),
             'fecha_inicio_planificada_hasta': end_of_week.isoformat(),
             'estado': ('in', ['EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD'])
         }
-        response_ops, _ = orden_produccion_controller.obtener_ordenes(filtros)
+        response_ops, _ = self.orden_produccion_controller.obtener_ordenes(filtros)
         return response_ops.get('data', []) if response_ops.get('success') else []
 
     def _simular_dias_ocupados_para_ops(self, ordenes: List[Dict], start_of_week: date, end_of_week: date) -> List[Dict]:
         """ Para una lista de OPs, calcula y añade la clave 'dias_ocupados_calculados'. """
-        orden_produccion_controller = OrdenProduccionController()
         fechas_inicio_ops = [date.fromisoformat(op['fecha_inicio_planificada']) for op in ordenes if op.get('fecha_inicio_planificada')]
         if not fechas_inicio_ops: return []
         
@@ -642,7 +582,7 @@ class PlanificacionController(BaseController):
             linea, fecha_str = orden.get('linea_asignada'), orden.get('fecha_inicio_planificada')
             if not linea or not fecha_str: continue
             
-            carga_total = float(orden_produccion_controller.calcular_carga_op(orden))
+            carga_total = float(self.orden_produccion_controller.calcular_carga_op(orden))
             if carga_total <= 0: continue
 
             dias_ocupados = []

@@ -512,6 +512,53 @@ document.addEventListener('DOMContentLoaded', function () {
     document.head.appendChild(style);
 
     // ===== INICIALIZACIÓN =====
+    async function inicializarVista() {
+        console.log("Diagnóstico de Motivos de Pausa:", MOTIVOS_PARO);
+        popularSelects();
+    
+        try {
+            const response = await fetch(`/produccion/kanban/api/op/${ordenId}/estado`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+    
+            if (data.success) {
+                const estadoServidor = data.data;
+                
+                // Actualizar estado local con datos del servidor
+                estado.segundosTranscurridos = estadoServidor.segundos_trabajados;
+                estado.cantidadProducida = parseFloat(estadoServidor.cantidad_producida) || 0;
+                
+                // Actualizar la UI inicial
+                timerDisplay.textContent = formatTime(estado.segundosTranscurridos);
+                actualizarProduccion(0, 0); // Llama con 0 para no sumar, solo para refrescar la UI
+    
+                if (estadoServidor.is_paused) {
+                    // Si el servidor dice que está en pausa, ponemos la UI en modo pausa
+                    // pero sin llamar a la API de nuevo.
+                    const ultimoMotivo = "Pausa activa"; // No podemos saber el motivo exacto aun
+                    pausarProduccion(ultimoMotivo); 
+                } else {
+                    // Si no está en pausa, iniciamos el cronómetro del cliente
+                    startTimer();
+                }
+    
+            } else {
+                showNotification('⚠️ No se pudo cargar el estado actual. Se iniciará de cero.', 'warning');
+                startTimer();
+            }
+        } catch (error) {
+            console.error('Error al inicializar el estado:', error);
+            showNotification('❌ Error de red al cargar estado. Se iniciará de cero.', 'error');
+            startTimer();
+        }
+    
+        actualizarRitmo();
+        calcularOEE();
+        console.log('✅ Sistema MES de producción inicializado correctamente');
+    }
+    
     function popularSelects() {
         // Popular motivos de paro
         if (typeof MOTIVOS_PARO !== 'undefined' && MOTIVOS_PARO.length > 0) {
@@ -536,10 +583,5 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    popularSelects();
-    startTimer();
-    actualizarRitmo();
-    calcularOEE();
-    
-    console.log('✅ Sistema MES de producción inicializado correctamente');
+    inicializarVista();
 });

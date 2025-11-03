@@ -51,8 +51,8 @@ class OrdenProduccionController(BaseController):
         self.receta_model = RecetaModel()
         self.insumo_model = InsumoModel()
         self.operacion_receta_model = OperacionRecetaModel()
-        # from app.controllers.planificacion_controller import PlanificacionController
-        # self.planificacion_controller = PlanificacionController()
+        from app.controllers.planificacion_controller import PlanificacionController
+        self.planificacion_controller = PlanificacionController()
 
     # endregion
 
@@ -994,12 +994,10 @@ class OrdenProduccionController(BaseController):
         """
         Obtiene la capacidad neta de una línea (en minutos) para una fecha específica.
         """
-        from app.controllers.planificacion_controller import PlanificacionController
-        planificacion_controller = PlanificacionController()
         if not linea_asignada:
             return Decimal('0.0')
         
-        capacidad_data = planificacion_controller.obtener_capacidad_disponible(
+        capacidad_data = self.planificacion_controller.obtener_capacidad_disponible(
             [linea_asignada], fecha, fecha
         )
         

@@ -128,3 +128,15 @@ def api_reanudar_produccion(op_id):
     controller = OrdenProduccionController()
     response, status_code = controller.reanudar_produccion(op_id, usuario_id)
     return jsonify(response), status_code
+
+@produccion_kanban_bp.route('/api/op/<int:op_id>/estado', methods=['GET'])
+@jwt_required()
+@permission_required(accion='produccion_ejecucion')
+def api_get_estado_produccion(op_id):
+    """
+    API endpoint para obtener el estado actual de producción de una OP.
+    Devuelve el tiempo trabajado, la cantidad producida y si está en pausa.
+    """
+    controller = OrdenProduccionController()
+    response, status_code = controller.obtener_estado_produccion(op_id)
+    return jsonify(response), status_code
