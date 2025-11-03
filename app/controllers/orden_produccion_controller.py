@@ -1101,14 +1101,23 @@ class OrdenProduccionController(BaseController):
             if not orden_actual:
                 return self.error_response("Orden de producción no encontrada.", 404)
             
-            nueva_cantidad_producida = Decimal(orden_actual.get('cantidad_producida', 0)) + cantidad_buena
+            cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
+            cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
+            nueva_cantidad_producida = cantidad_producida_actual + cantidad_buena
+
+            # --- VALIDACIÓN DE CANTIDAD MÁXIMA (CON TOLERANCIA) ---
+            # Se usa una pequeña tolerancia para evitar errores de punto flotante
+            TOLERANCIA = Decimal('0.001')
+            if nueva_cantidad_producida > cantidad_planificada + TOLERANCIA:
+                return self.error_response(f"La cantidad reportada ({cantidad_buena}) excede la cantidad pendiente ({cantidad_planificada - cantidad_producida_actual}).", 400)
             
-            update_data = {'cantidad_producida': nueva_cantidad_producida}
+            # Asegurarse de no sobrepasar el límite planificado debido a la tolerancia
+            update_data = {'cantidad_producida': min(nueva_cantidad_producida, cantidad_planificada)}
             
-            # 4. Finalizar la orden si se solicita
-            if finalizar_orden:
-                # Lógica para determinar el siguiente estado. Por ahora, 'EN_EMPAQUETADO'
-                update_data['estado'] = 'EN_EMPAQUETADO'
+            # --- LÓGICA DE TRANSICIÓN DE ESTADO ---
+            # Si se finaliza O la nueva cantidad alcanza el total, mover a Control de Calidad
+            if finalizar_orden or nueva_cantidad_producida >= cantidad_planificada:
+                update_data['estado'] = 'CONTROL_DE_CALIDAD'
                 # También se debería registrar la fecha_fin
                 update_data['fecha_fin'] = datetime.now().isoformat()
 

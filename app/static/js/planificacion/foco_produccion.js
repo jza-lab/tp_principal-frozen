@@ -287,6 +287,14 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // --- NUEVA VALIDACIÓN DE CANTIDAD MÁXIMA ---
+        const cantidadPendiente = estado.cantidadPlanificada - estado.cantidadProducida;
+        if (cantidadBuena > cantidadPendiente) {
+            showNotification(`❌ No se puede reportar más de lo pendiente (${formatNumber(cantidadPendiente, 2)} kg).`, 'error');
+            return;
+        }
+        // -----------------------------------------
+
         try {
             const response = await fetch(`/produccion/kanban/api/op/${ordenId}/reportar`, {
                 method: 'POST',
@@ -305,10 +313,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const data = await response.json();
             
             if (response.ok && data.success) {
-                if (finalizarOrden) {
-                    showNotification('✅ Orden finalizada correctamente', 'success');
+                if (finalizarOrden || (estado.cantidadProducida + cantidadBuena) >= estado.cantidadPlanificada) {
+                    showNotification('✅ Orden completada y enviada a Control de Calidad', 'success');
                     setTimeout(() => {
-                        window.location.href = '/tabla-produccion/';
+                        window.location.href = '/produccion/kanban/'; // Redirigir al Kanban
                     }, 1500);
                 } else {
                     // Actualizar UI
@@ -347,12 +355,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ===== CALCULAR RITMO ACTUAL =====
     function actualizarRitmo() {
-        if (estado.segundosTranscurridos === 0) return;
+        if (estado.segundosTranscurridos <= 0) { // Mayor seguridad con <=
+            ritmoActualDisplay.innerHTML = `0 <span class="progreso-unit">kg/h</span>`;
+            return;
+        }
         
         const horasTranscurridas = estado.segundosTranscurridos / 3600;
         const ritmoActual = estado.cantidadProducida / horasTranscurridas;
         
-        ritmoActualDisplay.innerHTML = `${formatNumber(ritmoActual)} <span class="progreso-unit">kg/h</span>`;
+        // Asegurarse de que el ritmo no sea NaN si horasTranscurridas es 0
+        ritmoActualDisplay.innerHTML = `${formatNumber(ritmoActual || 0)} <span class="progreso-unit">kg/h</span>`;
         
         // Colorear según rendimiento
         const card = ritmoActualDisplay.closest('.progreso-card');
@@ -520,6 +532,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ===== INICIALIZACIÓN =====
     async function inicializarVista() {
+        // Inicializar displays a 0 para evitar NaN visualmente
+        timerDisplay.textContent = formatTime(0);
+        ritmoActualDisplay.innerHTML = `0 <span class="progreso-unit">kg/h</span>`;
+
         console.log("Diagnóstico de Motivos de Pausa:", MOTIVOS_PARO);
         popularSelects();
     
@@ -534,20 +550,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 const estadoServidor = data.data;
                 
                 // Actualizar estado local con datos del servidor
-                estado.segundosTranscurridos = estadoServidor.segundos_trabajados;
+                estado.segundosTranscurridos = estadoServidor.segundos_trabajados || 0; // Asegurar que sea un número
                 estado.cantidadProducida = parseFloat(estadoServidor.cantidad_producida) || 0;
                 
-                // Actualizar la UI inicial
+                // Actualizar la UI inmediatamente con los datos del servidor
                 timerDisplay.textContent = formatTime(estado.segundosTranscurridos);
-                actualizarProduccion(0, 0); // Llama con 0 para no sumar, solo para refrescar la UI
+                actualizarProduccion(0, 0); // Refresca la UI sin sumar nada
+                actualizarRitmo(); // Calcular ritmo inicial
     
                 if (estadoServidor.is_paused) {
-                    // Si el servidor dice que está en pausa, ponemos la UI en modo pausa
-                    // pero sin llamar a la API de nuevo.
-                    const ultimoMotivo = "Pausa activa"; // No podemos saber el motivo exacto aun
+                    const ultimoMotivo = "Pausa activa";
                     pausarProduccion(ultimoMotivo); 
                 } else {
-                    // Si no está en pausa, iniciamos el cronómetro del cliente
                     startTimer();
                 }
     
@@ -561,7 +575,6 @@ document.addEventListener('DOMContentLoaded', function () {
             startTimer();
         }
     
-        actualizarRitmo();
         calcularOEE();
         console.log('✅ Sistema MES de producción inicializado correctamente');
     }

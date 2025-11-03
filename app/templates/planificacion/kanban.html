@@ -126,19 +126,25 @@
                             </div>
                             
                             {# Botones de acción según el estado #}
-                            {% if estado_key == 'LISTA_PARA_PRODUCIR' %}
-                                <div class="d-grid mt-3">
+                            <div class="d-grid mt-3">
+                                {% if estado_key == 'LISTA_PARA_PRODUCIR' %}
                                     <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}" class="btn btn-primary btn-sm">
                                         <i class="bi bi-play-fill me-1"></i> Iniciar Trabajo
                                     </a>
-                                </div>
-                            {% elif estado_key == 'EN_PROCESO' %}
-                                <div class="d-grid mt-3">
+                                {% elif estado_key == 'EN_PROCESO' %}
                                     <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}" class="btn btn-success btn-sm">
                                         <i class="bi bi-eye-fill me-1"></i> Ver Foco
                                     </a>
-                                </div>
-                            {% endif %}
+                                {% elif estado_key == 'CONTROL_DE_CALIDAD' %}
+                                    {% if has_permission('aprobar_control_calidad') %}
+                                    <button class="btn btn-info btn-sm btn-aprobar-calidad" data-op-id="{{ orden.id }}">
+                                        <i class="bi bi-check-circle-fill me-1"></i> Aprobar y Completar
+                                    </button>
+                                    {% else %}
+                                    <span class="text-muted small">Pendiente de aprobación de Calidad</span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                     {% endfor %}
@@ -165,4 +171,40 @@
     {# --- SCRIPT PRINCIPAL DE PRODUCCIÓN HOY --- #}
     {# Se elimina el script viejo que manejaba modales, ya no son necesarios en esta vista #}
     {# <script src="{{ url_for('static', filename='js/planificacion/produccion_hoy.js') }}"></script> #}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Manejar clic en el botón de aprobar calidad
+        document.querySelectorAll('.btn-aprobar-calidad').forEach(button => {
+            button.addEventListener('click', function() {
+                const opId = this.dataset.opId;
+                if (!confirm(`¿Está seguro de que desea aprobar y completar la Orden de Producción #${opId}? Esta acción creará el lote de producto terminado.`)) {
+                    return;
+                }
+
+                fetch(`/produccion/kanban/api/op/${opId}/aprobar-calidad`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                        // El token CSRF se añade automáticamente por el script global
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('¡Éxito! ' + data.message);
+                        // Opcional: mover visualmente la tarjeta o simplemente recargar
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Se produjo un error de red. Por favor, intente de nuevo.');
+                });
+            });
+        });
+    });
+    </script>
 {% endblock %}

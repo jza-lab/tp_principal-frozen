@@ -11,6 +11,7 @@ from app.controllers.inventario_controller import InventarioController
 from app.models.receta import RecetaModel
 from app.models.insumo import InsumoModel
 from app.models.centro_trabajo_model import CentroTrabajoModel
+from app.models.operacion_receta_model import OperacionRecetaModel
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class PlanificacionController(BaseController):
         self.centro_trabajo_model = CentroTrabajoModel()
         self.receta_model = RecetaModel()
         self.insumo_model = InsumoModel()
+        self.operacion_receta_model = OperacionRecetaModel()
 
     @property
     def orden_produccion_controller(self):
@@ -166,7 +168,7 @@ class PlanificacionController(BaseController):
         cantidad = Decimal(op_data.get('cantidad_planificada', 0))
         if not receta_id or cantidad <= 0: return carga_total
 
-        operaciones = self.orden_produccion_controller._obtener_operaciones_receta(receta_id)
+        operaciones = self._obtener_operaciones_receta(receta_id)
         if not operaciones: return carga_total
 
         for op_step in operaciones:
@@ -174,6 +176,74 @@ class PlanificacionController(BaseController):
             t_ejec_unit = Decimal(op_step.get('tiempo_ejecucion_unitario', 0))
             carga_total += t_prep + (t_ejec_unit * cantidad)
         return carga_total
+
+    def _obtener_operaciones_receta(self, receta_id: int) -> List[Dict]:
+        """ Obtiene las operaciones de una receta desde el modelo. """
+        result = self.operacion_receta_model.find_by_receta_id(receta_id)
+        return result.get('data', []) if result.get('success') else []
+
+    def api_validar_fecha_requerida(self, items_data: List[Dict], fecha_requerida_str: str) -> tuple:
+        """
+        Endpoint API para validar si un conjunto de items de pedido puede
+        ser producido para una fecha requerida.
+        """
+        try:
+            fecha_requerida_cliente = date.fromisoformat(fecha_requerida_str)
+            fecha_sugerida_mas_tardia = date.today()
+
+            # 1. Simular la carga de cada item que requiera producción
+            for item in items_data:
+                producto_id = item.get('producto_id')
+                cantidad = float(item.get('cantidad', 0))
+                if not producto_id or cantidad <= 0:
+                    continue
+
+                # 2. Verificar si el producto necesita producción (tiene receta)
+                receta_res = self.receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
+                if not receta_res.get('success') or not receta_res.get('data'):
+                    continue # Este item es solo de stock, no afecta la planificación de producción
+
+                receta = receta_res['data'][0]
+
+                # 3. Calcular carga total para este item
+                op_simulada = {'receta_id': receta['id'], 'cantidad_planificada': cantidad}
+                carga_total_min = float(self._calcular_carga_op(op_simulada))
+                if carga_total_min <= 0:
+                    continue
+
+                # 4. Encontrar línea sugerida (lógica de 'obtener_ops_pendientes')
+                # (Esta lógica se simplifica, puedes mejorarla)
+                linea_compatible_str = receta.get('linea_compatible', '2')
+                linea_compatible_list = linea_compatible_str.split(',')
+                linea_sugerida = int(linea_compatible_list[0]) # Tomar la primera compatible como sugerencia simple
+
+                # 5. Simular asignación
+                simulacion_result = self._simular_asignacion_carga(
+                    carga_total_op=carga_total_min,
+                    linea_propuesta=linea_sugerida,
+                    fecha_inicio_busqueda=date.today(), # Buscar desde hoy
+                    op_id_a_excluir=None # Es un pedido nuevo, no hay OP para excluir
+                )
+
+                if simulacion_result['success']:
+                    fecha_fin_item = simulacion_result['fecha_fin_estimada']
+                    fecha_sugerida_mas_tardia = max(fecha_sugerida_mas_tardia, fecha_fin_item)
+                else:
+                    # Si la simulación falla (sin capacidad en 30 días), devolvemos el error
+                    return self.error_response(f"No hay capacidad en los próximos 30 días para {item.get('nombre_producto')}. {simulacion_result['error_data'].get('message')}", 409)
+
+            # 6. Comparar y devolver resultado
+            data_respuesta = {
+                'fecha_requerida_cliente': fecha_requerida_cliente.isoformat(),
+                'fecha_sugerida_mas_proxima': fecha_sugerida_mas_tardia.isoformat(),
+                'llega_a_tiempo': fecha_sugerida_mas_tardia <= fecha_requerida_cliente
+            }
+
+            return self.success_response(data=data_respuesta)
+
+        except Exception as e:
+            logger.error(f"Error en api_validar_fecha_requerida: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
 
     def calcular_carga_capacidad(self, ordenes_planificadas: List[Dict]) -> Dict:
         """

@@ -140,3 +140,17 @@ def api_get_estado_produccion(op_id):
     controller = ProduccionKanbanController()
     response, status_code = controller.obtener_estado_produccion(op_id)
     return jsonify(response), status_code
+
+@produccion_kanban_bp.route('/api/op/<int:op_id>/aprobar-calidad', methods=['POST'])
+@jwt_required()
+@permission_required(accion='aprobar_control_calidad')
+def api_aprobar_calidad(op_id):
+    """
+    API endpoint para que un supervisor de calidad apruebe una orden y la mueva a 'COMPLETADA'.
+    """
+    # En una implementación futura, se podría pasar un usuario_id si es relevante.
+    # usuario_id = get_jwt_identity()
+    controller = OrdenProduccionController()
+    # Usamos el método robusto que ya maneja la creación de lotes.
+    response, status_code = controller.cambiar_estado_orden(op_id, 'COMPLETADA')
+    return jsonify(response), status_code
