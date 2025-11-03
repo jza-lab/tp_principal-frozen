@@ -102,6 +102,75 @@ function showFeedbackModal(title, message, type = 'info', confirmCallback = null
     modalInstance.show();
 }
 
+   /**
+ * Muestra un spinner en un botón y lo deshabilita.
+ * @param {HTMLElement} button El elemento botón.
+ * @param {string} [text] El texto a mostrar junto al spinner (opcional).
+ */
+function showLoadingSpinner(button, text = 'Procesando...') {
+    if (!button) return;
+    button.disabled = true;
+    // Usamos innerHTML para el spinner
+    button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${text}`;
+}
+
+/**
+ * Oculta el spinner de un botón, lo habilita y restaura su texto.
+ * @param {HTMLElement} button El elemento botón.
+ * @param {string} originalText El texto original del botón.
+ */
+function hideLoadingSpinner(button, originalText) {
+    if (!button) return;
+    button.disabled = false;
+    button.innerHTML = originalText;
+}
+
+
+/**
+ * Envía la confirmación final para una OP multi-día.
+ * @param {number} opIdConfirmar ID de la OP (Super-OP) a confirmar.
+ * @param {object} asignacionesConfirmar Objeto con las asignaciones.
+ * @param {string} [estadoActual='PENDIENTE'] El estado de la OP (ignorado, el backend lo verificará).
+ */
+async function confirmarAsignacionLote(opIdConfirmar, asignacionesConfirmar, estadoActual = 'PENDIENTE') {
+    // Esta función es extraída de la lógica de ".btn-consolidar-y-aprobar"
+    try {
+        // --- ¡¡FIX!!: USAR EL ENDPOINT DE CONFIRMACIÓN DEDICADO ---
+        const endpointUrl = '/planificacion/api/confirmar-aprobacion'; // <-- RUTA CORRECTA
+        const body = {
+            op_id: opIdConfirmar, // Enviar como ID simple
+            asignaciones: asignacionesConfirmar
+        };
+        
+        // Asumimos que tienes un <meta name="csrf-token" content="..."> en tu HTML
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+        const confirmResponse = await fetch(endpointUrl, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken 
+            },
+            body: JSON.stringify(body)
+        });
+        // --- FIN DEL FIX ---
+
+        const confirmResult = await confirmResponse.json();
+        if (confirmResult.success) {
+            // Mostrar éxito y recargar
+            showFeedbackModal('Confirmado', confirmResult.message || "Lote planificado.", 'success');
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            // Mostrar error de API (ej. si la validación falla de nuevo)
+            showFeedbackModal('Error al Confirmar', confirmResult.error || confirmResult.message, 'error');
+        }
+    } catch (confirmError) {
+        // Mostrar error de red
+        console.error("Error red al confirmar:", confirmError);
+        showFeedbackModal('Error de Conexión', 'No se pudo confirmar la planificación.', 'error');
+    }
+}
+
 
 // --- LÓGICAS AL CARGAR LA PÁGINA ---
 document.addEventListener('DOMContentLoaded', function () {
@@ -254,7 +323,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const popoverTriggerList = document.querySelectorAll('[data-bs-toggle="popover"]');
     const popoverList = [...popoverTriggerList].map(popoverTriggerEl => {
         return new bootstrap.Popover(popoverTriggerEl, {
-             sanitize: false // Permite HTML en el contenido
+             sanitize: false// Permite HTML en el contenido
         });
     });
     // ---------------------------------------------------
@@ -366,31 +435,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         'Confirmación Requerida',
                         result.message,
                         'confirm',
-                        async () => { // Función callback si el usuario confirma
-                            // ... (lógica del segundo fetch sin cambios) ...
-                            // Esta lógica ya maneja sus propios estados de carga/error
-                            // en el *segundo* modal (feedbackModal)
-                            const opIdConfirmar = result.op_id_confirmar;
-                            const asignacionesConfirmar = result.asignaciones_confirmar;
-                            try {
-                                const confirmResponse = await fetch('/planificacion/api/confirmar-aprobacion', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ op_id: opIdConfirmar, asignaciones: asignacionesConfirmar })
-                                });
-                                const confirmResult = await confirmResponse.json();
-                                if (confirmResult.success) {
-                                    showFeedbackModal('Confirmado', confirmResult.message || "Lote planificado.", 'success');
-                                    setTimeout(() => window.location.reload(), 1500);
-                                } else {
-                                    showFeedbackModal('Error al Confirmar', confirmResult.error || confirmResult.message, 'error');
-                                }
-                            } catch (confirmError) {
-                                console.error("Error red al confirmar:", confirmError);
-                                showFeedbackModal('Error de Conexión', 'No se pudo confirmar la planificación.', 'error');
-                            }
+                        () => { 
+                            // --- ¡CAMBIO AQUÍ! ---
+                            // Ahora solo llamamos a la función reutilizable
+                            confirmarAsignacionLote(result.op_id_confirmar, result.asignaciones_confirmar);
                         } // Fin callback
-                    ); // Fin showFeedbackModal confirm
+                    );
 
                     // ELIMINAMOS el listener 'hidden.bs.modal'
                     // Ya no es necesario porque llamamos a toggleModalLock(false) arriba.
@@ -452,3 +502,37 @@ document.addEventListener('DOMContentLoaded', function () {
 
     }); // Fin addEventListener 'click' en 'document'
 }); // Fin del DOMContentLoaded
+
+ // --- BOTÓN DE REPLANIFICAR (abre modal #replanModal) ---
+document.addEventListener('click', function (e) {
+    const replanBtn = e.target.closest('.btn-open-replan-modal');
+    if (!replanBtn) return;
+
+    // Cerrar el popover activo (para que no quede abierto encima del modal)
+    const popoverEl = bootstrap.Popover.getInstance(replanBtn.closest('[data-bs-toggle="popover"]'));
+    if (popoverEl) popoverEl.hide();
+
+    // Tomar datos de la OP desde data-attributes
+    const opId = replanBtn.dataset.opId;
+    const codigo = replanBtn.dataset.opCodigo || '';
+    const producto = replanBtn.dataset.opProducto || '';
+    const cantidad = replanBtn.dataset.opCantidad || '';
+    const linea = replanBtn.dataset.opLinea || '';
+    const fechaInicio = replanBtn.dataset.opFechaInicio || '';
+    const supervisor = replanBtn.dataset.opSupervisor || '';
+    const operario = replanBtn.dataset.opOperario || '';
+
+    // Cargar los datos en el modal
+    document.getElementById('replan_op_id').value = opId;
+    document.getElementById('replan_op_codigo').textContent = codigo;
+    document.getElementById('replan_producto_nombre').textContent = producto;
+    document.getElementById('replan_cantidad').textContent = cantidad;
+    document.getElementById('replan_select_linea').value = linea || '1';
+    document.getElementById('replan_input_fecha_inicio').value = fechaInicio || '';
+    document.getElementById('replan_select_supervisor').value = supervisor || '';
+    document.getElementById('replan_select_operario').value = operario || '';
+
+    // Mostrar el modal
+    const replanModal = new bootstrap.Modal(document.getElementById('replanModal'));
+    replanModal.show();
+});

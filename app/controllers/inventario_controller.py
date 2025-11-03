@@ -231,7 +231,6 @@ class InventarioController(BaseController):
         """Crear un nuevo lote de inventario"""
         try:
             data.pop('csrf_token', None)
-
             # --- LÓGICA CORREGIDA ---
             # Copiamos la cantidad inicial a la actual ANTES de la validación.
             # El formulario envía 'cantidad_inicial', así que lo usamos para crear 'cantidad_actual'.

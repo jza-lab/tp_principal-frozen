@@ -117,18 +117,36 @@ document.addEventListener('DOMContentLoaded', function () {
                 row.querySelectorAll('[name^="' + prefix + '-"], [id^="' + prefix + '-"]').forEach(el => {
                     updateElementIndex(el, prefix, newIndex);
                 });
+                
                 const productSelect = row.querySelector('select[name$="-producto_id"]');
                 const removeButton = row.querySelector('.remove-item-btn');
+                const cantidadInput = row.querySelector('.item-quantity'); // <-- Localizar input de cantidad
 
                 attachListeners(row);
 
                 if (productSelect) {
                     productSelect.removeEventListener('change', handleProductChange);
                     productSelect.addEventListener('change', handleProductChange);
+                    
                     productSelect.removeEventListener('change', updateAvailableProducts);
                     productSelect.addEventListener('change', updateAvailableProducts);
+
+                    // --- AÑADIR LISTENER DE VALIDACIÓN ---
+                    productSelect.removeEventListener('change', validarFechaRequerida);
+                    productSelect.addEventListener('change', validarFechaRequerida);
+                    // ---------------------------------
+                    
                     handleProductChange({ target: productSelect });
                 }
+
+                // --- AÑADIR LISTENER DE VALIDACIÓN PARA CANTIDAD ---
+                if (cantidadInput) {
+                    cantidadInput.removeEventListener('change', validarFechaRequerida);
+                    cantidadInput.addEventListener('change', validarFechaRequerida);
+                    cantidadInput.removeEventListener('input', validarFechaRequerida); // Para cambios rápidos
+                    cantidadInput.addEventListener('input', validarFechaRequerida);
+                }
+                // ---------------------------------------------
 
                 if (removeButton) {
                     removeButton.removeEventListener('click', removeItem);
@@ -143,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             toggleNoItemsMessage();
             updateAvailableProducts();
-            recalculate()
+            recalculate();
         }
 
         function addItem() {
@@ -182,6 +200,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     });
                 }
                 updateAvailableProducts();
+                validarFechaRequerida();
             }
         }
         if (addItemBtn) {
@@ -190,9 +209,17 @@ document.addEventListener('DOMContentLoaded', function () {
         reindexRows();
         updateAvailableProducts();
 
+        // --- AÑADIR ESTE BLOQUE PARA LA FECHA ---
+        const fechaRequeridaInput = document.getElementById('fecha_requerido');
+        if (fechaRequeridaInput) {
+            fechaRequeridaInput.addEventListener('change', validarFechaRequerida);
+        }
+        // --------------------------------------
+
     } catch (e) {
         console.error("Error crítico en la inicialización del formset de pedidos:", e);
     }
+
 });
 
 const form = document.getElementById('pedido-form'); 
@@ -473,6 +500,85 @@ function buildPayload() {
         });
 
         return payload;
+    }
+
+
+async function validarFechaRequerida() {
+        // Asegurarse de que los elementos existan
+        const fechaRequeridaInput = document.getElementById('fecha_requerido');
+        const fechaFeedbackDiv = document.getElementById('fecha-validation-feedback');
+        if (!fechaRequeridaInput || !fechaFeedbackDiv) {
+            return;
+        }
+
+        const fechaSeleccionada = fechaRequeridaInput.value;
+        if (!fechaSeleccionada) {
+            fechaFeedbackDiv.style.display = 'none'; // Ocultar si no hay fecha
+            return;
+        }
+
+        // 1. Recolectar items (reutilizando lógica de updateTotals)
+        const itemsParaValidar = [];
+        const itemRows = document.querySelectorAll('#items-container tr.item-row');
+        
+        itemRows.forEach(row => {
+            const productoSelect = row.querySelector('.producto-selector');
+            const cantidadInput = row.querySelector('.item-quantity');
+            
+            if (productoSelect && cantidadInput && productoSelect.value && cantidadInput.value > 0) {
+                itemsParaValidar.push({
+                    producto_id: productoSelect.value,
+                    cantidad: parseFloat(cantidadInput.value),
+                    nombre_producto: productoSelect.options[productoSelect.selectedIndex].text // Para mensajes de error
+                });
+            }
+        });
+
+        if (itemsParaValidar.length === 0) {
+            fechaFeedbackDiv.style.display = 'none'; // Ocultar si no hay items
+            return; 
+        }
+
+        // 2. Mostrar spinner
+        fechaFeedbackDiv.style.display = 'block';
+        fechaFeedbackDiv.className = 'alert alert-info border-0 p-2 small';
+        fechaFeedbackDiv.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Validando capacidad...';
+
+        // 3. Llamar a la API
+        try {
+            const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+            const response = await fetch('/planificacion/api/validar-fecha-requerida', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({
+                    items: itemsParaValidar,
+                    fecha_requerida: fechaSeleccionada
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                const data = result.data;
+                if (data.llega_a_tiempo) {
+                    fechaFeedbackDiv.className = 'alert alert-success border-0 p-2 small';
+                    fechaFeedbackDiv.innerHTML = `<i class="bi bi-check-circle-fill"></i> ¡Perfecto! Podemos completar el pedido para el <b>${data.fecha_requerida_cliente}</b>.`;
+                } else {
+                    fechaFeedbackDiv.className = 'alert alert-warning border-0 p-2 small';
+                    fechaFeedbackDiv.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i> <b>Atención:</b> La fecha más próxima que podemos prometer es el <b>${data.fecha_sugerida_mas_proxima}</b>.`;
+                }
+            } else {
+                fechaFeedbackDiv.className = 'alert alert-danger border-0 p-2 small';
+                fechaFeedbackDiv.innerHTML = `<i class="bi bi-x-octagon-fill"></i> Error: ${result.error || 'No se pudo validar la fecha.'}`;
+            }
+
+        } catch (error) {
+            fechaFeedbackDiv.className = 'alert alert-danger border-0 p-2 small';
+            fechaFeedbackDiv.innerHTML = `<i class="bi bi-ethernet"></i> Error de red al validar la fecha.`;
+        }
     }
 
     // Para asegurar que la función esté disponible globalmente después de redefinirla.

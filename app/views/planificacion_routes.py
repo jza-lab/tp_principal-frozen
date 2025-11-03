@@ -7,13 +7,17 @@ from app.controllers.usuario_controller import UsuarioController
 from datetime import date, timedelta, datetime # <--- SE AÑADIÓ DATETIME
 from app.utils.decorators import permission_required
 from datetime import date, timedelta
+from app import csrf
+
 
 planificacion_bp = Blueprint('planificacion', __name__, url_prefix='/planificacion')
 
 logger = logging.getLogger(__name__)
 
+# --- 2. ¡Esta es la línea clave! ---
+csrf.exempt(planificacion_bp)
 
-@planificacion_bp.route('/')
+@planificacion_bp.route('/') # La ruta principal ahora manejará todo
 @permission_required(accion='consultar_plan_de_produccion')
 def index():
     controller = PlanificacionController()
@@ -42,11 +46,66 @@ def index():
         # Renderizar la plantilla con un contexto vacío o de error
         return render_template('planificacion/tablero.html', error=True)
 
-    context = response.get('data', {})
-    
-    # Si el controlador devuelve un error específico de MPS, lo mostramos
-    if 'error' in context.get('mps_data', {}):
-        flash(context['mps_data']['error'], 'warning')
+    # 3. Obtener OPs para el CALENDARIO SEMANAL
+    response_semanal, _ = controller.obtener_planificacion_semanal(week_str)
+    ops_visibles_por_dia_formato = {} # <--- Usar nuevo nombre
+    if response_semanal.get('success'):
+        data_semanal = response_semanal.get('data', {})
+        ordenes_por_dia = data_semanal.get('ops_visibles_por_dia', {}) # <--- Usar nuevo nombre
+        ops_visibles_por_dia_formato = ordenes_por_dia
+        inicio_semana_str = data_semanal.get('inicio_semana')
+        fin_semana_str = data_semanal.get('fin_semana')
+        if inicio_semana_str: inicio_semana = date.fromisoformat(inicio_semana_str) # Asignar si existe
+        if fin_semana_str: fin_semana = date.fromisoformat(fin_semana_str)       # Asignar si existe
+    else:
+        flash(response_semanal.get('error', 'Error cargando planificación semanal.'), 'error')
+
+    # --- OBTENER OPS RELEVANTES PARA CRP ---
+    # 1. OPs del Kanban
+    response_kanban, _ = controller.obtener_ops_para_tablero()
+    ordenes_kanban_dict = response_kanban.get('data', {}) if response_kanban.get('success') else {}
+    ops_kanban = [op for estado, lista_ops in ordenes_kanban_dict.items() if estado not in ['COMPLETADA', 'CANCELADA'] for op in lista_ops]
+
+    # 2. OPs de la semana
+    ops_semana = [op for dia, lista_ops in ordenes_por_dia.items() for op in lista_ops if op.get('estado') not in ['COMPLETADA', 'CANCELADA']]
+
+    # 3. Combinar y eliminar duplicados
+    ops_combinadas_dict = {op['id']: op for op in ops_kanban + ops_semana if op.get('id')}
+    ordenes_para_crp = list(ops_combinadas_dict.values()) # Ahora sí, se asigna valor
+    # Ahora 'ordenes_combinadas' siempre será una lista (posiblemente vacía)
+    ordenes_combinadas = list(ops_combinadas_dict.values())
+    logger.info(f"Total OPs consideradas para CRP: {len(ordenes_para_crp)}")
+
+
+    # --- CALCULAR CARGA Y CAPACIDAD (Usando la lista combinada) ---
+    carga_calculada = {}
+    capacidad_disponible = {}
+    # Esta condición ahora usa la lista combinada (ordenes_para_crp)
+    if ordenes_para_crp and inicio_semana and fin_semana: # <-- CAMBIO AQUÍ
+        carga_calculada = controller.calcular_carga_capacidad(ordenes_para_crp) # <--- CAMBIO AQUÍ
+        capacidad_disponible = controller.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
+
+    # ... (lógica para obtener supervisores, operarios, columnas, navegación - sin cambios) ...
+    usuario_controller = UsuarioController()
+    supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR']); operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
+    supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []; operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
+    columnas_kanban = { 'EN ESPERA': 'En Espera', 'LISTA PARA PRODUCIR':'Listas', 'EN_LINEA_1': 'L1', 'EN_LINEA_2': 'L2', 'EN_EMPAQUETADO': 'Emp.', 'CONTROL_DE_CALIDAD': 'CC', 'COMPLETADA': 'OK' }
+    ordenes_por_estado = ordenes_kanban_dict # Usar el dict obtenido antes
+    try:
+        year, week_num_str = week_str.split('-W'); week_num = int(week_num_str); current_week_start = date.fromisocalendar(int(year), week_num, 1)
+        prev_week_start = current_week_start - timedelta(days=7); next_week_start = current_week_start + timedelta(days=7)
+        prev_week_str = prev_week_start.strftime("%Y-W%V"); next_week_str = next_week_start.strftime("%Y-W%V")
+    except ValueError: prev_week_str = None; next_week_str = None; logger.warning(f"Error parseando week_str {week_str}")
+
+    columnas_kanban = {
+        'EN ESPERA': 'En Espera',
+        'LISTA PARA PRODUCIR':'Lista para producir', # <-- Cambiado
+        'EN_LINEA_1': 'Linea 1',                     # <-- Cambiado
+        'EN_LINEA_2': 'Linea 2',                     # <-- Cambiado
+        'EN_EMPAQUETADO': 'Empaquetado',             # <-- Cambiado
+        'CONTROL_DE_CALIDAD': 'Control de Calidad',  # <-- Cambiado
+        'COMPLETADA': 'Completada'                   # <-- Cambiado
+    }
 
     # 4. Renderizar la plantilla con el contexto preparado por el controlador
     return render_template(
@@ -82,7 +141,9 @@ def confirmar_aprobacion_api():
 
     controller = PlanificacionController()
     # Llama al helper que solo ejecuta la aprobación
-    response, status_code = controller._ejecutar_aprobacion_final(
+    # --- ¡CAMBIO AQUÍ! ---
+    # Llama a la nueva función "inteligente" que decide el flujo
+    response, status_code = controller.confirmar_aprobacion_lote(
         op_id,
         asignaciones,
         usuario_id
@@ -137,4 +198,30 @@ def consolidar_y_aprobar_api():
         asignaciones=data.get('asignaciones', {}),
         usuario_id=usuario_id
     )
+    return jsonify(response), status_code
+
+@planificacion_bp.route('/forzar_auto_planificacion', methods=['POST'])
+##@jwt_required() # Proteger el endpoint
+# @admin_required # Proteger aún más
+def forzar_planificacion():
+    controller = PlanificacionController()
+    # usuario_id = get_jwt_identity() # Obtener usuario del token
+    usuario_id = 1 # Usar un ID de prueba si no tienes auth
+    response, status_code = controller.forzar_auto_planificacion(usuario_id)
+    return jsonify(response), status_code
+
+@planificacion_bp.route('/api/validar-fecha-requerida', methods=['POST'])
+##@jwt_required()
+def validar_fecha_requerida_api():
+    data = request.json
+    items_data = data.get('items', [])
+    fecha_requerida = data.get('fecha_requerida')
+
+    if not items_data or not fecha_requerida:
+        return jsonify({'success': False, 'error': 'Faltan items o fecha_requerida.'}), 400
+
+
+    controller = PlanificacionController()
+
+    response, status_code = controller.api_validar_fecha_requerida(items_data, fecha_requerida)
     return jsonify(response), status_code

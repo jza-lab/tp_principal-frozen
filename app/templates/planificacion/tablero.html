@@ -239,17 +239,36 @@
                                                 <dt class='col-12 border-top pt-2 mt-2'><i class='bi bi-clock-history me-1'></i>Inicio Plan.:</dt>
                                                 <dd class='col-12'>{{ op.fecha_inicio_planificada or 'N/P' }}</dd>
                                             </dl>
+                                            {# --- INICIO: NUEVO BOTÓN DE RE-PLANIFICAR --- #}
+                                            {# Asumimos un permiso 'replanificar_op'. Ajusta si es necesario. #}
+                                            {% if 'replanificar_op' is has_permission and not is_operario %}
+                                            <div class='border-top pt-2 mt-2'>
+                                                <button class='btn btn-sm btn-outline-primary w-100 btn-open-replan-modal'
+                                                        data-op-id='{{ op.id }}'
+                                                        data-op-codigo='{{ op.codigo }}'
+                                                        data-op-producto='{{ op.producto_nombre | e }}'
+                                                        data-op-cantidad='{{ op.cantidad_planificada }}'
+                                                        data-op-linea='{{ op.linea_asignada }}'
+                                                        data-op-fecha-inicio='{{ op.fecha_inicio_planificada }}'
+                                                        data-op-supervisor='{{ op.supervisor_responsable_id }}'
+                                                        data-op-operario='{{ op.operario_asignado_id }}'
+                                                        >
+                                                    <i class='bi bi-calendar-range me-1'></i> Re-Planificar esta OP
+                                                </button>
+                                            </div>
+                                            {% endif %}
                                         {% endset %}
         
                                         {# --- INICIO CAMBIO: Wrapper ahora activa POPOVER --- #}
                                         <div class="op-card-mini-wrapper d-block mb-2" 
                                              tabindex="0" 
                                              data-bs-toggle="popover" 
-                                             data-bs-trigger="focus" 
+                                             data-bs-trigger="click" 
                                              data-bs-html="true" 
                                              title="<i class='bi bi-info-circle me-2'></i>Detalle Rápido: {{ op.codigo }}"
                                              data-bs-content="{{ popover_content | e }}"
                                              style="cursor: pointer;"
+                                             data-op-id="{{ op.id }}"
                                         >
                                         
                                             {# --- CONTENIDO VISUAL DE LA TARJETA (SIN CAMBIOS) --- #}
@@ -632,6 +651,79 @@
   </div>
 </div>
 {# --- END FEEDBACK MODAL --- #}
+
+{# --- MODAL DE RE-PLANIFICACIÓN (NUEVO) --- #}
+<div class="modal fade" id="replanModal" tabindex="-1" aria-labelledby="replanModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="replanModalLabel">Re-Planificar Orden de Producción</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <form id="replanForm">
+            <input type="hidden" id="replan_op_id" name="op_id">
+            
+            {# Info de la OP #}
+            <div class="card bg-light p-3 mb-3">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Producto:</strong> <span id="replan_producto_nombre"></span>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Código:</strong> <code id="replan_op_codigo"></code>
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Cantidad:</strong> <span id="replan_cantidad"></span>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+            <h5 class="mb-3">Nuevos Parámetros de Planificación</h5>
+            
+            {# Inputs (copiados del modal de Plan Maestro) #}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label form-label-sm fw-bold">Nueva Línea <span class="text-danger">*</span></label>
+                    <select class="form-select form-select-sm mb-1" id="replan_select_linea" name="linea_asignada">
+                        <option value="1">Línea 1</option>
+                        <option value="2">Línea 2</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label form-label-sm fw-bold">Nueva Fecha de Inicio <span class="text-danger">*</span></label>
+                    <input type="date" 
+                           class="form-control form-control-sm mb-1" 
+                           id="replan_input_fecha_inicio" 
+                           name="fecha_inicio"
+                           min="{{ now.date().isoformat() }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label form-label-sm">Supervisor (Opc)</label>
+                    <select class="form-select form-select-sm mb-1" id="replan_select_supervisor" name="supervisor_id">
+                        <option value="">Seleccionar...</option>
+                        {% for sup in supervisores %}<option value="{{ sup.id }}">{{ sup.nombre }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label form-label-sm">Operario (Opc)</label>
+                    <select class="form-select form-select-sm mb-1" id="replan_select_operario" name="operario_id">
+                        <option value="">Seleccionar...</option>
+                        {% for op_user in operarios %}<option value="{{ op_user.id }}">{{ op_user.nombre }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-replan"><i class="bi bi-check-lg"></i> Confirmar Re-planificación</button>
+      </div>
+    </div>
+  </div>
+</div>
+{# --- FIN MODAL RE-PLANIFICACIÓN --- #}
 
 {% endblock %}
 

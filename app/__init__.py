@@ -204,7 +204,7 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
     app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
-    app.config["JWT_COOKIE_CSRF_PROTECT"] = False  
+    app.config["JWT_COOKIE_CSRF_PROTECT"] = False
     app.json = CustomJSONEncoder(app)
 
     CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -275,10 +275,10 @@ def create_app() -> Flask:
     # 3. Registrar la función decorada. No es necesario cambiar esta parte.
     app.jinja_env.globals['has_permission'] = _has_permission_filter # Se registra como global
     app.jinja_env.tests['has_permission'] = _has_permission_filter # Y como test
-    
+
     _register_blueprints(app)
     _register_error_handlers(app)
-    
+
     @app.before_request
     def before_request_loader():
         """
@@ -291,7 +291,17 @@ def create_app() -> Flask:
         # ya que es innecesario y causa consultas a la BD por cada CSS, JS, etc.
         if request.endpoint and (request.endpoint.startswith('static') or request.blueprint == 'static'):
             return
-        
+
         verify_jwt_in_request(optional=True)
+
+    # --- INICIALIZAR SCHEDULER ---
+    # Importar solo si está habilitado para evitar dependencias
+    if app.config.get('AUTO_PLAN_ENABLED'):
+        try:
+            from app.scheduler import init_scheduler
+            init_scheduler(app)
+        except ImportError:
+            app.logger.error("No se pudo cargar el módulo del scheduler.")
+    # -----------------------------
 
     return app
