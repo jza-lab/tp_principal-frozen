@@ -64,16 +64,8 @@ def procesar_inspeccion(lote_id):
     else:
         flash(resultado.get('error', 'Ocurrió un error al procesar la inspección.'), 'danger')
 
-    # Redirigir de vuelta a la página de inspección de la misma orden
-    inventario_controller = InventarioController()
-    lote_res, _ = inventario_controller.obtener_lote_por_id(lote_id)
-    if lote_res.get('success'):
-         # Extraer orden_id del lote para la redirección
-        orden_id = cc_controller._extraer_oc_id_de_lote(lote_res.get('data'))
-        if orden_id:
-            return redirect(url_for('orden_compra.detalle', id=orden_id))
-
-    return redirect(url_for('control_calidad.listar_ordenes_para_inspeccion'))
+    # Corrección: Redirigir siempre al detalle del lote modificado
+    return redirect(url_for('inventario_view.detalle_lote', id_lote=lote_id))
 
 @control_calidad_bp.route('/api/lote/<string:lote_id>/<string:accion>', methods=['POST'])
 @jwt_required()

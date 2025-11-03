@@ -251,7 +251,10 @@ class InventarioController(BaseController):
             if 'cantidad_inicial' in data and 'cantidad_actual' not in data:
                 data['cantidad_actual'] = data['cantidad_inicial']
 
-            # Ahora sí, validamos los datos. El schema ya encontrará el campo 'cantidad_actual'.
+            # Corrección Definitiva: Eliminar costo_total ANTES de la validación.
+            data.pop('costo_total', None)
+
+            # Ahora sí, validamos los datos.
             validated_data = self.schema.load(data)
             # --------------------------
 

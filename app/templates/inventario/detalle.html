@@ -29,6 +29,11 @@
         <a href="{{ url_for('inventario_view.listar_lotes') }}" class="btn btn-outline-secondary me-2">
             <i class="bi bi-arrow-left me-1"></i>Ir al Inventario de Insumos
         </a>
+        {% if lote.url_imagen %}
+        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#imageModal">
+            <i class="bi bi-camera me-1"></i>Ver Foto
+        </button>
+        {% endif %}
         {% set can_edit = 'modificar_materias_primas' is has_permission %}
         <a href="{{ url_for('insumos_api.editar_lote', id_insumo=lote.id_insumo, id_lote=lote.id_lote) if can_edit else '#' }}"
             class="btn btn-primary {% if not can_edit %}disabled{% endif %}">
@@ -187,6 +192,25 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para la imagen -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageModalLabel">Foto del Lote</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                {% if lote.url_imagen %}
+                <img src="{{ lote.url_imagen }}" class="img-fluid" alt="Foto del Lote">
+                {% else %}
+                <p>No hay imagen disponible para este lote.</p>
+                {% endif %}
             </div>
         </div>
     </div>

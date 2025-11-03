@@ -261,6 +261,9 @@ class InventarioModel(BaseModel):
                 lote['proveedor_nombre'] = lote['proveedor']['nombre']
             else:
                 lote['proveedor_nombre'] = 'N/A'
+
+            # Simulación de la URL de la imagen
+            lote['url_imagen'] = 'https://via.placeholder.com/800x600.png?text=Imagen+de+Prueba'
                 
             return {'success': True, 'data': lote}
 

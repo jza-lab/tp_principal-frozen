@@ -71,7 +71,9 @@ class ControlCalidadInsumoController(BaseController):
             cantidad_a_procesar_str = form_data.get('cantidad')
             cantidad_a_procesar = float(cantidad_a_procesar_str) if cantidad_a_procesar_str else cantidad_original
 
-            if cantidad_a_procesar <= 0 or cantidad_a_procesar > cantidad_original:
+            # Corrección para la validación de punto flotante
+            TOLERANCIA = 1e-9
+            if cantidad_a_procesar <= 0 or (cantidad_a_procesar - cantidad_original) > TOLERANCIA:
                 return self.error_response('La cantidad a procesar no es válida.', 400)
 
             es_parcial = cantidad_a_procesar < cantidad_original
@@ -80,45 +82,28 @@ class ControlCalidadInsumoController(BaseController):
             if not nuevo_estado_lote:
                 return self.error_response('La decisión tomada no es válida.', 400)
 
-            if not es_parcial:
-                # Lógica original para el lote completo
-                update_data = {'estado': nuevo_estado_lote}
-                if decision == 'Rechazar':
-                    update_data['cantidad_actual'] = 0
-                elif decision == 'Poner en Cuarentena':
-                    update_data['cantidad_actual'] = 0
-                    update_data['cantidad_en_cuarentena'] = cantidad_original
-                    update_data['motivo_cuarentena'] = form_data.get('comentarios', '')
-                
+            # Lógica unificada para procesamiento parcial y total
+            update_data = {}
+            if decision == 'Aceptar':
+                # No se hace nada especial, la cantidad ya está disponible
+                pass
+            elif decision == 'Rechazar':
+                update_data['cantidad_actual'] = cantidad_original - cantidad_a_procesar
+                # Opcional: registrar la cantidad rechazada en otro campo si existiera
+            elif decision == 'Poner en Cuarentena':
+                cantidad_en_cuarentena_actual = float(lote.get('cantidad_en_cuarentena', 0) or 0)
+                update_data['cantidad_actual'] = cantidad_original - cantidad_a_procesar
+                update_data['cantidad_en_cuarentena'] = cantidad_en_cuarentena_actual + cantidad_a_procesar
+                update_data['estado'] = 'cuarentena'
+                update_data['motivo_cuarentena'] = form_data.get('comentarios', '')
+
+            if update_data:
                 update_result = self.inventario_model.update(lote_id, update_data, 'id_lote')
                 if not update_result.get('success'):
-                    return self.error_response(f"Error al actualizar el lote completo: {update_result.get('error')}", 500)
+                    return self.error_response(f"Error al actualizar el lote: {update_result.get('error')}", 500)
                 lote_actualizado = update_result['data']
             else:
-                # Lógica para división de lote
-                # 1. Actualizar lote original
-                update_data_original = {'cantidad_actual': cantidad_original - cantidad_a_procesar}
-                update_result_original = self.inventario_model.update(lote_id, update_data_original, 'id_lote')
-                if not update_result_original.get('success'):
-                    return self.error_response(f"Error al actualizar el lote original: {update_result_original.get('error')}", 500)
-                
-                # 2. Crear nuevo lote para la parte procesada
-                nuevo_lote_data = lote.copy()
-                del nuevo_lote_data['id_lote']
-                del nuevo_lote_data['created_at']
-                nuevo_lote_data['cantidad_inicial'] = cantidad_a_procesar
-                nuevo_lote_data['cantidad_actual'] = 0 if decision in ['Rechazar', 'Poner en Cuarentena'] else cantidad_a_procesar
-                nuevo_lote_data['cantidad_en_cuarentena'] = cantidad_a_procesar if decision == 'Poner en Cuarentena' else 0
-                nuevo_lote_data['estado'] = nuevo_estado_lote
-                nuevo_lote_data['motivo_cuarentena'] = form_data.get('comentarios', '') if decision == 'Poner en Cuarentena' else None
-                nuevo_lote_data['numero_lote_proveedor'] = f"{lote.get('numero_lote_proveedor', 'LOTE')}-PARCIAL"
-
-                create_result = self.inventario_model.create(nuevo_lote_data)
-                if not create_result.get('success'):
-                     # Intentar revertir la actualización del lote original
-                    self.inventario_model.update(lote_id, {'cantidad_actual': cantidad_original}, 'id_lote')
-                    return self.error_response(f"Error al crear el nuevo lote parcial: {create_result.get('error')}", 500)
-                lote_actualizado = create_result['data']
+                lote_actualizado = lote
 
             # Registrar el evento de C.C. si es necesario
             if decision in ['Poner en Cuarentena', 'Rechazar']:
