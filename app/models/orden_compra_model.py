@@ -225,10 +225,18 @@ class OrdenCompraModel(BaseModel):
                 if complementa_a_res and complementa_a_res.data:
                     orden['complementa_a_orden'] = complementa_a_res.data
 
+            # --- INICIO DE CORRECCIÓN 406 (Alternativa) ---
             # Consulta separada para la orden que la continúa (su "hija")
-            continuada_por_res = self.db.table(self.get_table_name()).select("id, codigo_oc").eq("complementa_a_orden_id", orden_id).maybe_single().execute()
+            # Se elimina .maybe_single() para evitar el error 406 Not Acceptable
+            # y se pide solo la info necesaria (id, codigo_oc)
+            
+            continuada_por_res = self.db.table(self.get_table_name()).select("id, codigo_oc").eq("complementa_a_orden_id", orden_id).execute()
+
+            # Como .execute() devuelve una lista, verificamos si la lista tiene datos
+            # y asignamos solo el primer elemento.
             if continuada_por_res and continuada_por_res.data:
-                orden['continuada_por_orden'] = continuada_por_res.data
+                orden['continuada_por_orden'] = continuada_por_res.data[0]
+            # --- FIN DE CORRECCIÓN 406 ---
 
 
             # Procesamiento de datos anidados (sin cambios)

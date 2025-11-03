@@ -43,6 +43,7 @@
                     'EN ESPERA DE INSUMO': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
                     'EN_TRANSITO': {'class': 'bg-primary-soft text-primary', 'icon': 'truck'},
                     'RECEPCION_COMPLETA': {'class': 'bg-success-soft text-success', 'icon': 'box-seam'},
+                    'EN_CONTROL_CALIDAD': {'class': 'bg-info-soft text-info', 'icon': 'clipboard-check'},                    
                     'RECEPCION_INCOMPLETA': {'class': 'bg-danger-soft text-danger', 'icon': 'box-seam'},
                     'RECHAZADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
@@ -181,6 +182,94 @@
                 </div>
             </div>
         </div>
+        
+        {% if orden.estado == 'EN_CONTROL_CALIDAD' %}
+        <!-- Lista de Lotes a Inspeccionar -->
+        <div class="card mt-4">
+            <div class="card-header bg-info-soft">
+                <h4 class="card-title mb-0 text-info"><i class="bi bi-clipboard-check me-2"></i>Panel de Control de Calidad</h4>
+            </div>
+            <div class="card-body">
+                {% if lotes %}
+                    <p class="mb-3">Los siguientes lotes de insumos requieren inspección para ser aprobados e ingresados al stock disponible.</p>
+                    {% for lote in lotes %}
+                        {% if lote.get('estado') == 'EN REVISION' %}
+                            <div class="card mb-3 shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="card-title">{{ lote.get('insumo_nombre') }} (Lote: {{ lote.get('id_lote') }})</h5>
+                                    <p class="card-text mb-2">
+                                        <span class="badge bg-light text-dark">Cantidad Recibida: {{ lote.get('cantidad_inicial') }} {{ lote.get('unidad_medida') }}</span>
+                                    </p>
+                                    
+                                    <form action="{{ url_for('control_calidad.procesar_inspeccion', lote_id=lote.get('id_lote')) }}" method="POST" enctype="multipart/form-data">
+                                        {{ csrf_form.csrf_token }}
+                                        <div class="row g-3">
+                                            <div class="col-md-4">
+                                                <div class="form-group">
+                                                    <label for="resultado_inspeccion_{{ lote.get('id_lote') }}" class="form-label small">Resultado de la Inspección</label>
+                                                    <select name="resultado_inspeccion" id="resultado_inspeccion_{{ lote.get('id_lote') }}" class="form-select form-select-sm">
+                                                        {% for estado in estados_inspeccion %}
+                                                        <option value="{{ estado }}">{{ estado }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-5">
+                                                <div class="form-group">
+                                                    <label for="comentarios_{{ lote.get('id_lote') }}" class="form-label small">Comentarios (Opcional)</label>
+                                                    <textarea name="comentarios" id="comentarios_{{ lote.get('id_lote') }}" class="form-control form-control-sm" rows="1"></textarea>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="form-group">
+                                                    <label for="foto_{{ lote.get('id_lote') }}" class="form-label small">Foto (Opcional)</label>
+                                                    <input type="file" name="foto" id="foto_{{ lote.get('id_lote') }}" class="form-control form-control-sm">
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3 d-flex justify-content-end gap-2">
+                                            <button type="submit" name="decision" value="Rechazar" class="btn btn-sm btn-outline-danger">Rechazar Lote</button>
+                                            <button type="submit" name="decision" value="Poner en Cuarentena" class="btn btn-sm btn-outline-warning">Poner en Cuarentena</button>
+                                            <button type="submit" name="decision" value="Aceptar" class="btn btn-sm btn-success">Aceptar Lote</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="card mb-3 shadow-sm bg-light">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h5 class="card-title text-muted">{{ lote.get('insumo_nombre') }} (Lote: {{ lote.get('id_lote') }})</h5>
+                                            <p class="card-text mb-0">
+                                                <span class="badge bg-secondary">Cantidad: {{ lote.get('cantidad_inicial') }} {{ lote.get('unidad_medida') }}</span>
+                                            </p>
+                                        </div>
+                                        <div>
+                                            {% set estado_lote_config = {
+                                                'disponible': {'class': 'bg-success-soft text-success', 'icon': 'check-circle-fill', 'text': 'Aceptado'},
+                                                'cuarentena': {'class': 'bg-warning-soft text-warning', 'icon': 'exclamation-triangle-fill', 'text': 'En Cuarentena'},
+                                                'rechazado': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle-fill', 'text': 'Rechazado'}
+                                            } %}
+                                            {% set config_lote = estado_lote_config.get(lote.get('estado'), {'class': 'bg-secondary', 'icon': 'question-circle-fill', 'text': lote.get('estado')}) %}
+                                            <span class="badge {{ config_lote.class }} fs-6">
+                                                <i class="bi bi-{{ config_lote.icon }} me-1"></i> {{ config_lote.text }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                {% else %}
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle-fill me-2"></i> Todos los insumos de esta orden de compra ya han sido inspeccionados.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
 
         <form id="recepcionForm"
             action="{{ url_for('orden_compra.procesar_recepcion', orden_id=orden.id) if orden.estado == 'EN_TRANSITO' else '' }}"

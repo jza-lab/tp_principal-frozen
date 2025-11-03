@@ -138,6 +138,8 @@ OC_EN_TRANSITO = 'EN_TRANSITO'
 OC_RECEPCION_COMPLETA = 'RECEPCION_COMPLETA'
 OC_RECEPCION_INCOMPLETA = 'RECEPCION_INCOMPLETA'
 OC_PAGADA = 'PAGADA'
+OC_EN_CONTROL_DE_CALIDAD = 'EN_CONTROL_CALIDAD'
+OC_CERRADA = 'CERRADA'
 
 
 # --- Mapeo de cadena a entero ---
@@ -148,6 +150,8 @@ OC_MAP_STRING_TO_INT = {
     OC_EN_TRANSITO: 40,
     OC_RECEPCION_INCOMPLETA: 50,
     OC_RECEPCION_COMPLETA: 60,
+    OC_EN_CONTROL_DE_CALIDAD: 65, # Nuevo estado
+    OC_CERRADA: 70, # Nuevo estado
     OC_COMPLETADA: 80, # Mantenido por si se usa como estado final lógico
     OC_PAGADA: 90,
     OC_RECHAZADA: -10,
@@ -161,6 +165,8 @@ OC_FILTROS_UI = [
     (OC_EN_TRANSITO, 'En Transito'),
     (OC_RECEPCION_INCOMPLETA, 'Recepción Incompleta'),
     (OC_RECEPCION_COMPLETA, 'Recepción Completa'),
+    (OC_EN_CONTROL_DE_CALIDAD, 'En Control de Calidad'),
+    (OC_CERRADA, 'Cerrada'),
     (OC_RECHAZADA, 'Rechazada')
 ]
 

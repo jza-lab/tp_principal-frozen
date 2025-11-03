@@ -62,8 +62,10 @@
                     'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
                     'EN ESPERA DE INSUMO': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
                     'EN_TRANSITO': {'class': 'bg-primary-soft text-primary', 'icon': 'truck'},
+                    'EN_CONTROL_CALIDAD': {'class': 'bg-info-soft text-info', 'icon': 'clipboard-check'},
                     'RECEPCION_COMPLETA': {'class': 'bg-success-soft text-success', 'icon': 'box-seam'},
                     'RECEPCION_INCOMPLETA': {'class': 'bg-danger-soft text-danger', 'icon': 'box-seam'},
+                    'CERRADA': {'class': 'bg-dark-soft text-dark', 'icon': 'lock-fill'},
                     'RECHAZADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
                     {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark', 'icon':
@@ -160,9 +162,29 @@
                         title="Recibir Mercadería">
                         <i class="bi bi-box-arrow-in-down"></i> Recibir
                     </a>
+                    {% endif %}    
+
+                {# --- ESTADO: RECEPCION COMPLETA --- #}
+                 {% elif orden.estado == 'RECEPCION_COMPLETA' %}
+                {% if has_permission('realizar_control_de_calidad_insumos') %}
+                    <form action="{{ url_for('orden_compra.iniciar_calidad', id=orden.id) }}" method="POST" class="d-grid">
+                        {{ csrf_form.csrf_token }}
+                        <button type="submit" class="btn btn-info">
+                            <i class="bi bi-clipboard-check me-1"></i>Control de Calidad
+                        </button>
+                    </form>
                     {% endif %}
 
+                {% elif orden.estado == 'EN_CONTROL_CALIDAD' %}
+
+                {% if has_permission('realizar_control_de_calidad_insumos') %}
+                    <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-info d-grid">
+                        <i class="bi bi-clipboard-check me-1"></i>Inspeccionar
+                    </a>
                 {% endif %}
+                {% endif %}
+
+                    
                     </div>
                 </div>
             </div>

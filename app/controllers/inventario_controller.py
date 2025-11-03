@@ -235,7 +235,7 @@ class InventarioController(BaseController):
             # --- LÓGICA CORREGIDA ---
             # Copiamos la cantidad inicial a la actual ANTES de la validación.
             # El formulario envía 'cantidad_inicial', así que lo usamos para crear 'cantidad_actual'.
-            if 'cantidad_inicial' in data and data['cantidad_inicial']:
+            if 'cantidad_inicial' in data and 'cantidad_actual' not in data:
                 data['cantidad_actual'] = data['cantidad_inicial']
 
             # Ahora sí, validamos los datos. El schema ya encontrará el campo 'cantidad_actual'.
