@@ -538,14 +538,37 @@ class OrdenCompraController:
                 lotes_creados, lotes_error = self._crear_lotes_para_items_recibidos(items_para_lote, orden_data, usuario_id)
 
                 if items_faltantes:
+                    # --- INICIO DE LA CORRECCIÓN (Versión Robusta) ---
+                    # 1. Crear un mapa con las cantidades recibidas directamente del formulario.
+                    #    Esto evita condiciones de carrera al no depender de una re-lectura de la BD.
+                    cantidades_recibidas_map = {int(item_ids[i]): float(cantidades_recibidas_str[i] or 0) for i in range(len(item_ids))}
+
+                    # 2. Recalcular los totales de la orden padre usando el mapa de cantidades del formulario.
+                    subtotal_padre = 0
+                    for item in orden_data.get('items', []):
+                        item_id = item.get('id')
+                        # Se usa la cantidad del formulario, no se vuelve a leer de la BD
+                        cantidad_recibida = cantidades_recibidas_map.get(item_id, 0.0) 
+                        precio = float(item.get('precio_unitario', 0))
+                        subtotal_padre += cantidad_recibida * precio
+                    
+                    iva_padre = subtotal_padre * 0.21 if orden_data.get('iva', 0) > 0 else 0
+                    total_padre = subtotal_padre + iva_padre
+                    
+                    # 3. Crear la orden complementaria (esto ya funcionaba bien).
                     nueva_orden_result = self._crear_orden_complementaria(orden_data, items_faltantes, usuario_id)
                     if not nueva_orden_result.get('success'):
                         return {'success': False, 'error': f"Recepción parcial procesada, pero falló la creación de la orden complementaria: {nueva_orden_result.get('error')}"}
 
+                    # 4. Actualizar la orden padre con el nuevo estado, observaciones Y los totales recalculados.
                     self.model.update(orden_id, {
                         'estado': 'RECEPCION_INCOMPLETA',
-                        'observaciones': f"{observaciones}\nRecepción parcial. Pendiente completado en OC: {nueva_orden_result['data']['codigo_oc']}"
+                        'observaciones': f"{observaciones}\nRecepción parcial. Pendiente completado en OC: {nueva_orden_result['data']['codigo_oc']}",
+                        'subtotal': round(subtotal_padre, 2),
+                        'iva': round(iva_padre, 2),
+                        'total': round(total_padre, 2)
                     })
+                    # --- FIN DE LA CORRECCIÓN ---
 
                     return {'success': True, 'message': f'Recepción parcial registrada. Se creó la orden {nueva_orden_result["data"]["codigo_oc"]} para los insumos restantes.'}
                 else:

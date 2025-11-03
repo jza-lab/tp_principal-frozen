@@ -513,59 +513,56 @@ class InventarioController(BaseController):
 
     def obtener_lotes_agrupados_para_vista(self) -> tuple:
         """
-        Obtiene los lotes, los agrupa por insumo y calcula los totales para la vista.
+        Obtiene los lotes, los agrupa por insumo y enriquece con datos del catálogo.
+        (Versión robusta para evitar errores con lotes huérfanos)
         """
         try:
-            response, _ = self.obtener_lotes_para_vista()
-            if not response.get('success'):
-                return self.error_response(response.get('error', 'No se pudieron obtener los lotes.'))
+            # 1. Obtener la lista definitiva de insumos desde el catálogo
+            catalogo_response = self.insumo_model.find_all(filters={'activo': True})
+            if not catalogo_response.get('success'):
+                return self.error_response(catalogo_response.get('error', 'No se pudo obtener el catálogo de insumos.'), 500)
+            
+            insumos_del_catalogo = catalogo_response.get('data', [])
 
-            lotes = response.get('data', [])
-            insumos_agrupados = {}
-
-            # Agrupar lotes por insumo
-            for lote in lotes:
+            # 2. Obtener todos los lotes y agruparlos por insumo_id
+            lotes_response, _ = self.obtener_lotes_para_vista()
+            if not lotes_response.get('success'):
+                return self.error_response(lotes_response.get('error', 'No se pudieron obtener los lotes de inventario.'), 500)
+            
+            lotes_por_insumo = {}
+            for lote in lotes_response.get('data', []):
                 insumo_id = lote.get('id_insumo')
-                if not insumo_id:
-                    continue
+                if insumo_id:
+                    if insumo_id not in lotes_por_insumo:
+                        lotes_por_insumo[insumo_id] = []
+                    # Convertir cantidades a float
+                    lote['cantidad_actual'] = float(lote.get('cantidad_actual') or 0)
+                    lote['cantidad_en_cuarentena'] = float(lote.get('cantidad_en_cuarentena') or 0)
+                    lotes_por_insumo[insumo_id].append(lote)
 
-                if insumo_id not in insumos_agrupados:
-                    insumos_agrupados[insumo_id] = {
-                        'id_insumo': insumo_id,
-                        'insumo_nombre': lote.get('insumo_nombre', 'N/A'),
-                        'insumo_categoria': lote.get('insumo_categoria', 'Sin categoría'),
-                        'insumo_unidad_medida': lote.get('insumo_unidad_medida', ''),
-                        'cantidad_total': 0.0, # <-- Inicializar como float
-                        'lotes': []
-                    }
-
-                # --- INICIO DE LA CORRECCIÓN ---
-                # Convertir cantidades a float al leerlas.
-                # Usamos 'or 0' para manejar valores None o NULOS.
-                cantidad_actual = float(lote.get('cantidad_actual') or 0)
-                cantidad_en_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
-
-                # Asignar los floats de vuelta al objeto 'lote'
-                lote['cantidad_actual'] = cantidad_actual
-                lote['cantidad_en_cuarentena'] = cantidad_en_cuarentena
-                # --- FIN DE LA CORRECCIÓN ---
-
-                # --- INICIO DE LA CORRECCIÓN ---
-                #
-                # Solo sumar a la cantidad total si el lote está 'disponible'
-                if lote.get('estado') and lote.get('estado').lower() == 'disponible':
-                    insumos_agrupados[insumo_id]['cantidad_total'] += cantidad_actual
-
-                insumos_agrupados[insumo_id]['lotes'].append(lote)
-
-            # Calcular estado general y preparar la lista final
+            # 3. Construir el resultado final iterando sobre los insumos del catálogo
             resultado_final = []
-            for insumo_id, data in insumos_agrupados.items():
-                if data['cantidad_total'] > 0:
-                    data['estado_general'] = 'Disponible'
+            for insumo in insumos_del_catalogo:
+                insumo_id = insumo['id_insumo']
+                
+                # Crear la estructura de datos para la vista
+                datos_insumo_para_vista = {
+                    'id_insumo': insumo_id,
+                    'insumo_nombre': insumo.get('nombre', 'N/A'),
+                    'insumo_categoria': insumo.get('categoria', 'Sin categoría'),
+                    'insumo_unidad_medida': insumo.get('unidad_medida', ''),
+                    'stock_actual': float(insumo.get('stock_actual') or 0),
+                    'stock_total': float(insumo.get('stock_total') or 0),
+                    'lotes': lotes_por_insumo.get(insumo_id, []) # Adjuntar lotes (puede ser una lista vacía)
+                }
+
+                # Calcular el estado general
+                if datos_insumo_para_vista['stock_actual'] > 0:
+                    datos_insumo_para_vista['estado_general'] = 'Disponible'
                 else:
-                    data['estado_general'] = 'Agotado'
-                resultado_final.append(data)
+                    datos_insumo_para_vista['estado_general'] = 'Agotado'
+
+                resultado_final.append(datos_insumo_para_vista)
 
             # Ordenar por nombre de insumo
             resultado_final.sort(key=lambda x: x['insumo_nombre'])
@@ -573,7 +570,7 @@ class InventarioController(BaseController):
             return self.success_response(data=resultado_final)
 
         except Exception as e:
-            logger.error(f"Error agrupando lotes para la vista: {str(e)}")
+            logger.error(f"Error agrupando lotes para la vista (robusto): {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def eliminar_lote(self, id_lote: str) -> tuple:
@@ -685,8 +682,18 @@ class InventarioController(BaseController):
             nueva_cantidad_disponible = cantidad_actual_disponible - cantidad
             nueva_cantidad_cuarentena = cantidad_actual_cuarentena + cantidad
 
+            # --- LÓGICA DE ESTADO REFORZADA ---
+            # El estado general del lote depende de si tiene *algo* disponible para usar.
+            if nueva_cantidad_disponible > 0:
+                nuevo_estado = 'disponible'
+            elif nueva_cantidad_cuarentena > 0:
+                nuevo_estado = 'cuarentena'
+            else:
+                nuevo_estado = 'agotado'
+            # --- FIN DE LA LÓGICA ---
+            
             update_data = {
-                'estado': 'cuarentena', # Marcar como 'cuarentena' (minúscula)
+                'estado': nuevo_estado,
                 'motivo_cuarentena': motivo,
                 'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
                 'cantidad_actual': nueva_cantidad_disponible

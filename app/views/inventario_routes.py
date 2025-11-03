@@ -16,8 +16,11 @@ def listar_lotes():
     """
     Muestra la lista de todos los lotes en el inventario, ahora agrupados por insumo.
     """
-    # Llama al nuevo método para obtener los datos agrupados
     controller = InventarioController()
+    # Primero, se recalcula y actualiza el stock en la base de datos.
+    controller.inventario_model.calcular_y_actualizar_stock_general()
+    
+    # Ahora, se obtienen los datos ya actualizados.
     response_agrupado, status_code = controller.obtener_lotes_agrupados_para_vista()
     filtros = request.args.to_dict()
     response, status_code = controller.obtener_lotes_para_vista(filtros)

@@ -192,17 +192,17 @@ class InventarioModel(BaseModel):
     def get_all_lotes_for_view(self, filtros: Optional[Dict] = None) -> Dict:
         """
         Obtiene todos los lotes con detalles del insumo y proveedor para la vista de listado.
-        Solución robusta que consulta la tabla y enriquece los datos manualmente.
         """
         try:
-            # 1. Construir la consulta base sobre la tabla de lotes
-            query = self.db.table(self.get_table_name()).select('*')
+            # 1. Construir la consulta base pidiendo explícitamente los datos relacionados.
+            query = self.db.table(self.get_table_name()).select(
+                '*, insumo:insumos_catalogo(nombre), proveedor:proveedores(nombre)'
+            )
 
             # 2. Aplicar filtros dinámicamente
             if filtros:
                 for key, value in filtros.items():
                     if value:
-                        # Usar 'ilike' para búsquedas de texto flexibles y 'eq' para el resto
                         if key in ['documento_ingreso'] and isinstance(value, str):
                             query = query.ilike(key, f'%{value}%')
                         else:
@@ -214,23 +214,19 @@ class InventarioModel(BaseModel):
             if not result.data:
                 return {'success': True, 'data': []}
 
-            lotes = result.data
+            # 4. Aplanar los datos para que la plantilla los pueda usar fácilmente.
+            for lote in result.data:
+                if lote.get('insumo'):
+                    lote['insumo_nombre'] = lote['insumo'].get('nombre', 'Insumo no encontrado')
+                else:
+                    lote['insumo_nombre'] = 'Insumo no especificado'
+                
+                if lote.get('proveedor'):
+                    lote['proveedor_nombre'] = lote['proveedor'].get('nombre', 'Proveedor sin nombre')
+                else:
+                    lote['proveedor_nombre'] = 'Proveedor no especificado'
 
-            # 4. Obtener los IDs de insumos y proveedores para enriquecer los datos
-            insumo_ids = list(set(lote['id_insumo'] for lote in lotes if lote.get('id_insumo')))
-            
-            # 5. Consultar los nombres de los insumos en una sola llamada
-            insumos_data = {}
-            if insumo_ids:
-                insumos_resp = self.db.table('insumos_catalogo').select('id_insumo, nombre').in_('id_insumo', insumo_ids).execute()
-                if insumos_resp.data:
-                    insumos_data = {insumo['id_insumo']: insumo['nombre'] for insumo in insumos_resp.data}
-
-            # 6. Combinar los datos
-            for lote in lotes:
-                lote['insumo_nombre'] = insumos_data.get(lote.get('id_insumo'), 'Insumo no encontrado')
-            
-            return {'success': True, 'data': lotes}
+            return {'success': True, 'data': result.data}
 
         except Exception as e:
             logger.error(f"Error obteniendo lotes para la vista (robusto): {e}")
@@ -274,46 +270,67 @@ class InventarioModel(BaseModel):
 
     def calcular_y_actualizar_stock_general(self) -> Dict:
         """
-        Calcula el stock actual para todos los insumos sumando los lotes de inventario
-        y lo actualiza en la tabla insumos_catalogo.
+        Calcula el stock disponible (solo lotes 'disponibles') y el stock total (disponible + cuarentena)
+        para todos los insumos y actualiza la tabla insumos_catalogo.
         """
         try:
             # 1. Obtener todos los insumos del catálogo
-            catalogo_resp = self.db.table('insumos_catalogo').select('id_insumo', 'stock_actual').execute()
+            catalogo_resp = self.db.table('insumos_catalogo').select('id_insumo', 'stock_actual', 'stock_total').execute()
             if not hasattr(catalogo_resp, 'data'):
                 raise Exception("No se pudo obtener el catálogo de insumos.")
-            
             insumos_catalogo = {item['id_insumo']: item for item in catalogo_resp.data}
 
-            # 2. Calcular el stock agregado desde el inventario
-            inventario_resp = self.db.table(self.get_table_name()).select('id_insumo', 'cantidad_actual').ilike('estado', 'disponible').execute()
+            # 2. Calcular stocks agregados desde el inventario
+            inventario_resp = self.db.table(self.get_table_name()).select('id_insumo', 'cantidad_actual', 'cantidad_en_cuarentena', 'estado').execute()
             if not hasattr(inventario_resp, 'data'):
                 raise Exception("No se pudo obtener el inventario de insumos.")
 
-            stock_calculado = {}
+            stock_disponible_calculado = {}
+            stock_total_calculado = {}
             for lote in inventario_resp.data:
                 insumo_id = lote['id_insumo']
-                cantidad = lote.get('cantidad_actual') or 0
-                stock_calculado[insumo_id] = stock_calculado.get(insumo_id, 0) + cantidad
+                
+                # Inicializar si es la primera vez que vemos este insumo
+                if insumo_id not in stock_disponible_calculado:
+                    stock_disponible_calculado[insumo_id] = 0
+                if insumo_id not in stock_total_calculado:
+                    stock_total_calculado[insumo_id] = 0
+                
+                # Lógica unificada: calcular siempre basado en las cantidades, no en el estado.
+                cantidad_disp = float(lote.get('cantidad_actual') or 0)
+                cantidad_cuar = float(lote.get('cantidad_en_cuarentena') or 0)
+                
+                stock_disponible_calculado[insumo_id] += cantidad_disp
+                stock_total_calculado[insumo_id] += (cantidad_disp + cantidad_cuar)
 
             # 3. Preparar los datos para la actualización
             updates = []
             for insumo_id, insumo_data in insumos_catalogo.items():
-                stock_nuevo = stock_calculado.get(insumo_id, 0)
-                stock_viejo = insumo_data.get('stock_actual') or 0
+                stock_disp_nuevo = stock_disponible_calculado.get(insumo_id, 0)
+                stock_total_nuevo = stock_total_calculado.get(insumo_id, 0)
+                
+                stock_disp_viejo = insumo_data.get('stock_actual') or 0
+                stock_total_viejo = insumo_data.get('stock_total') or 0
 
-                # Solo actualizar si el stock ha cambiado
-                if stock_nuevo != stock_viejo:
-                    updates.append({'id_insumo': insumo_id, 'stock_actual': stock_nuevo})
+                # Solo actualizar si alguno de los stocks ha cambiado
+                if stock_disp_nuevo != stock_disp_viejo or stock_total_nuevo != stock_total_viejo:
+                    updates.append({
+                        'id_insumo': insumo_id,
+                        'stock_actual': stock_disp_nuevo,
+                        'stock_total': stock_total_nuevo
+                    })
             
             # 4. Ejecutar las actualizaciones de forma iterativa si hay cambios
             if updates:
                 logger.info(f"Actualizando stock para {len(updates)} insumos.")
                 for item in updates:
                     insumo_id = item['id_insumo']
-                    new_stock = item['stock_actual']
+                    update_payload = {
+                        'stock_actual': item['stock_actual'],
+                        'stock_total': item['stock_total']
+                    }
                     (self.db.table('insumos_catalogo')
-                     .update({'stock_actual': new_stock})
+                     .update(update_payload)
                      .eq('id_insumo', insumo_id)
                      .execute())
             else:
@@ -327,25 +344,43 @@ class InventarioModel(BaseModel):
 
     def recalcular_stock_para_insumo(self, insumo_id: str) -> Dict:
         """
-        Calcula y actualiza el stock_actual para un único insumo basado en la suma
-        de sus lotes de inventario en estado 'disponible'.
+        Calcula y actualiza el stock_actual y stock_total para un único insumo.
+        Esta es la fuente de verdad para los totales de stock.
         """
         try:
-            # 1. Obtener todos los lotes relevantes para el insumo
-            lotes_resp = self.db.table(self.get_table_name()).select('cantidad_actual').eq('id_insumo', insumo_id).ilike('estado', 'disponible').execute()
-            
+            # 1. Obtener todos los lotes para el insumo que no estén en un estado terminal (agotado, rechazado).
+            lotes_resp = self.db.table(self.get_table_name()) \
+                .select('cantidad_actual', 'cantidad_en_cuarentena', 'estado') \
+                .eq('id_insumo', insumo_id) \
+                .not_.in_('estado', ['agotado', 'rechazado', 'retirado']) \
+                .execute()
+
             if not hasattr(lotes_resp, 'data'):
-                # Si hasattr falla, es probable que lotes_resp no sea un objeto esperado.
-                error_msg = f"Respuesta inesperada de la base de datos al buscar lotes para el insumo {insumo_id}."
+                error_msg = f"Respuesta inesperada de la DB al buscar lotes para el insumo {insumo_id}."
                 logger.error(error_msg)
                 return {'success': False, 'error': error_msg}
 
-            # 2. Calcular el nuevo stock sumando las cantidades
-            nuevo_stock = sum(lote.get('cantidad_actual', 0) for lote in lotes_resp.data)
+            # 2. Calcular los nuevos stocks basados puramente en las cantidades.
+            #    - stock_actual: Suma de todo lo que está 'disponible para usar'.
+            #    - stock_total: Suma de lo disponible + lo que está en cuarentena (stock físico total).
+            nuevo_stock_actual = 0
+            nuevo_stock_total = 0
+            for lote in lotes_resp.data:
+                cantidad_disp = float(lote.get('cantidad_actual') or 0)
+                cantidad_cuar = float(lote.get('cantidad_en_cuarentena') or 0)
+                
+                nuevo_stock_actual += cantidad_disp
+                nuevo_stock_total += (cantidad_disp + cantidad_cuar)
 
-            # 3. Actualizar el stock en la tabla 'insumos_catalogo'
+            # 3. Preparar el payload de actualización
+            update_payload = {
+                'stock_actual': nuevo_stock_actual,
+                'stock_total': nuevo_stock_total
+            }
+
+            # 4. Actualizar ambos stocks en la tabla 'insumos_catalogo'
             update_resp = (self.db.table('insumos_catalogo')
-                           .update({'stock_actual': nuevo_stock})
+                           .update(update_payload)
                            .eq('id_insumo', insumo_id)
                            .execute())
 
@@ -354,8 +389,7 @@ class InventarioModel(BaseModel):
                  logger.error(error_msg)
                  return {'success': False, 'error': error_msg}
 
-
-            logger.info(f"Stock para el insumo {insumo_id} recalculado y actualizado a: {nuevo_stock}")
+            logger.info(f"Stock para el insumo {insumo_id} recalculado. Actual: {nuevo_stock_actual}, Total: {nuevo_stock_total}")
             return {'success': True}
 
         except Exception as e:

@@ -242,7 +242,7 @@ def procesar_recepcion(orden_id):
             f"Error al procesar la recepción: {resultado.get('error', 'Error desconocido')}",
             "error",
         )
-    return redirect(url_for("orden_compra.detalle", id=orden_id))
+    return redirect(url_for("orden_compra.listar"))
 
 
 @orden_compra_bp.route("/<int:id>/iniciar-calidad", methods=["POST"])
