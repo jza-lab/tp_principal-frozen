@@ -252,7 +252,7 @@
 }
 
 .card-header-custom {
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: #343a40;
     color: white;
     padding: 12px 20px;
     font-weight: 700;
@@ -368,7 +368,7 @@
 
 /* ===== COLUMNA CENTRAL: MÉTRICAS Y ACCIONES ===== */
 .objetivo-panel {
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: #343a40;
     color: white;
     padding: 25px;
     border-radius: 12px;

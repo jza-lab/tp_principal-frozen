@@ -31,6 +31,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const cantidadMalaInput = document.getElementById('cantidad-mala');
     const motivoDesperdicioContainer = document.getElementById('motivo-desperdicio-container');
     const motivoDesperdicioSelect = document.getElementById('motivo-desperdicio');
+    const motivoParoSelect = document.getElementById('motivo-paro');
+
     
     // ===== ESTADO DE LA APLICACIÓN =====
     let estado = {
@@ -196,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const response = await fetch(`/tabla-produccion/api/op/${ordenId}/pausar`, {
+            const response = await fetch(`/produccion/kanban/api/op/${ordenId}/pausar`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -222,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function reanudarAPI() {
         try {
-            const response = await fetch(`/tabla-produccion/api/op/${ordenId}/reanudar`, {
+            const response = await fetch(`/produccion/kanban/api/op/${ordenId}/reanudar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
@@ -279,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const response = await fetch(`/tabla-produccion/api/op/${ordenId}/reportar`, {
+            const response = await fetch(`/produccion/kanban/api/op/${ordenId}/reportar`, {
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
@@ -510,6 +512,31 @@ document.addEventListener('DOMContentLoaded', function () {
     document.head.appendChild(style);
 
     // ===== INICIALIZACIÓN =====
+    function popularSelects() {
+        // Popular motivos de paro
+        if (typeof MOTIVOS_PARO !== 'undefined' && MOTIVOS_PARO.length > 0) {
+            motivoParoSelect.innerHTML = '<option value="" disabled selected>-- Elegir un motivo --</option>';
+            MOTIVOS_PARO.forEach(motivo => {
+                const option = document.createElement('option');
+                option.value = motivo.id;
+                option.textContent = motivo.descripcion;
+                motivoParoSelect.appendChild(option);
+            });
+        }
+
+        // Popular motivos de desperdicio (si es necesario)
+        if (typeof MOTIVOS_DESPERDICIO !== 'undefined' && MOTIVOS_DESPERDICIO.length > 0) {
+            motivoDesperdicioSelect.innerHTML = '<option value="" disabled selected>-- Elegir un motivo --</option>';
+            MOTIVOS_DESPERDICIO.forEach(motivo => {
+                const option = document.createElement('option');
+                option.value = motivo.id;
+                option.textContent = motivo.descripcion;
+                motivoDesperdicioSelect.appendChild(option);
+            });
+        }
+    }
+
+    popularSelects();
     startTimer();
     actualizarRitmo();
     calcularOEE();

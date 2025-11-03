@@ -51,6 +51,8 @@ class OrdenProduccionController(BaseController):
         self.receta_model = RecetaModel()
         self.insumo_model = InsumoModel()
         self.operacion_receta_model = OperacionRecetaModel()
+        from app.controllers.planificacion_controller import PlanificacionController
+        self.planificacion_controller = PlanificacionController()
 
     # endregion
 
@@ -834,6 +836,9 @@ class OrdenProduccionController(BaseController):
                 if ingredientes_result.get('success'):
                     ingredientes = ingredientes_result.get('data', [])
 
+            # 3. Calcular Ritmo Objetivo
+            orden_data['ritmo_objetivo'] = self._calcular_ritmo_objetivo(orden_data)
+
             # 3. Obtener los motivos de paro y desperdicio
             motivo_paro_model = MotivoParoModel()
             motivos_paro_result = motivo_paro_model.find_all()
@@ -984,6 +989,75 @@ class OrdenProduccionController(BaseController):
         for op_id in op_ids:
             self.model.update(id_value=op_id, data=update_data, id_field='id')
         logger.info(f"OPs originales {op_ids} actualizadas a estado CONSOLIDADA.")
+
+    def _obtener_capacidad_linea(self, linea_asignada: int, fecha: date) -> Decimal:
+        """
+        Obtiene la capacidad neta de una línea (en minutos) para una fecha específica.
+        """
+        if not linea_asignada:
+            return Decimal('0.0')
+        
+        capacidad_data = self.planificacion_controller.obtener_capacidad_disponible(
+            [linea_asignada], fecha, fecha
+        )
+        
+        capacidad_en_minutos = capacidad_data.get(linea_asignada, {}).get(fecha.isoformat(), 0.0)
+        return Decimal(str(capacidad_en_minutos))
+
+    def _calcular_ritmo_objetivo(self, orden: Dict) -> Decimal:
+        """
+        Calcula el ritmo objetivo en kg/h basado en tiempo disponible y capacidad.
+        """
+        from datetime import datetime, date
+        
+        ritmo_necesario = Decimal('0.0')
+        
+        # Método 1: Basado en tiempo disponible hasta la fecha meta
+        try:
+            fecha_meta_str = orden.get('fecha_meta')
+            if fecha_meta_str:
+                fecha_meta = date.fromisoformat(fecha_meta_str)
+                dias_disponibles = (fecha_meta - date.today()).days
+                
+                if dias_disponibles > 0:
+                    capacidad_total_horizonte_minutos = Decimal('0.0')
+                    for i in range(dias_disponibles):
+                        fecha_a_consultar = date.today() + timedelta(days=i)
+                        capacidad_total_horizonte_minutos += self._obtener_capacidad_linea(
+                            orden.get('linea_asignada'), fecha_a_consultar
+                        )
+                    
+                    horas_disponibles = capacidad_total_horizonte_minutos / Decimal('60.0')
+                    cantidad_planificada = Decimal(orden.get('cantidad_planificada', '0.0'))
+                    
+                    if horas_disponibles > 0:
+                        ritmo_necesario = cantidad_planificada / horas_disponibles
+        except Exception as e:
+            logger.warning(f"No se pudo calcular el ritmo necesario por tiempo para OP {orden.get('id')}: {e}")
+
+        # Método 2: Basado en capacidad de la línea para el día de hoy (como referencia)
+        capacidad_linea_hoy_minutos = self._obtener_capacidad_linea(orden.get('linea_asignada'), date.today())
+        
+        ritmo_por_capacidad = Decimal('0.0')
+        if capacidad_linea_hoy_minutos > 0:
+            # Para obtener kg/h, necesitamos saber cuántos kg se pueden hacer en esos minutos.
+            # Esto depende del tiempo de producción unitario de la receta.
+            receta_result = self.receta_model.find_by_id(orden.get('receta_id'), 'id')
+            if receta_result.get('success'):
+                receta = receta_result['data']
+                campo_tiempo = f"tiempo_prod_unidad_linea{orden.get('linea_asignada')}"
+                tiempo_por_unidad = Decimal(receta.get(campo_tiempo, '0.0'))
+                
+                if tiempo_por_unidad > 0:
+                    unidades_por_hora = Decimal('60.0') / tiempo_por_unidad
+                    # Asumiendo que 1 unidad = 1 kg. Esto podría necesitar ajuste.
+                    ritmo_por_capacidad = unidades_por_hora
+
+        # Usar el mayor de los dos (más exigente) o un default de 5 si ambos fallan
+        ritmo_final = max(ritmo_necesario, ritmo_por_capacidad)
+        
+        return round(ritmo_final, 2) if ritmo_final > 0 else Decimal('5.00')
+
 
     # endregion
 
