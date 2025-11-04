@@ -8,9 +8,6 @@
 
 {% block app_content %}
 
-{# Contenedor para notificaciones toast #}
-<div id="toast-container-kanban" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1056"></div>
-
 {# --- FILTROS RÁPIDOS --- #}
 <div class="quick-filters">
     <span class="filter-label">Filtrar:</span>
@@ -103,28 +100,27 @@
                                 {% endif %}
                                 
                                 {# Para órdenes en proceso - Mostrar progreso #}
-                                {% if estado_key.startswith('EN_LINEA') and orden.cantidad_producida is not none %}
+                                {% if estado_key == 'EN_PROCESO' %}
+                                <span class="mb-1">
+                                    <i class="bi bi-person-check-fill me-2"></i>
+                                    <strong>Operario:</strong> {{ orden.operario_nombre or 'No asignado' }}
+                                </span>
                                 <span class="mb-1">
                                     <i class="bi bi-activity me-2"></i>
-                                    <strong>Progreso:</strong> {{ orden.cantidad_producida }} / {{ orden.cantidad_planificada }} kg
+                                    <strong>Progreso:</strong> {{ orden.cantidad_producida or 0 }} / {{ orden.cantidad_planificada }} kg
                                 </span>
-                                <div class="progress-bar-kanban">
-                                    <div class="progress-fill-kanban" style="width: {{ (orden.cantidad_producida / orden.cantidad_planificada * 100) | round }}%"></div>
-                                </div>
-                                
-                                {# Timer activo #}
-                                <div class="active-timer">
-                                    <div class="timer-pulse"></div>
-                                    <span class="timer-text">⏱️ En proceso</span>
-                                </div>
-                                {% endif %}
-                                
-                                {# Mostrar operario si está asignado #}
-                                {% if orden.operario_nombre %}
+                                {% if orden.pedidos_asociados %}
                                 <span class="mb-1">
-                                    <i class="bi bi-person-fill me-2"></i>
-                                    <strong>Operario:</strong> {{ orden.operario_nombre }}
+                                    <i class="bi bi-receipt me-2"></i>
+                                    <strong>Pedido:</strong> 
+                                    <a href="{{ url_for('pedidos.ver_pedido', pedido_id=orden.pedidos_asociados[0].id) }}">
+                                        #{{ orden.pedidos_asociados[0].id }}
+                                    </a>
                                 </span>
+                                {% endif %}
+                                <div class="progress-bar-kanban mt-1">
+                                    <div class="progress-fill-kanban" style="width: {{ (orden.cantidad_producida or 0) / orden.cantidad_planificada * 100 }}%"></div>
+                                </div>
                                 {% endif %}
                             </div>
                             
@@ -165,6 +161,25 @@
     </div>
 </div>
 
+<!-- Modal de Confirmación -->
+<div class="modal fade" id="confirmacionModal" tabindex="-1" aria-labelledby="confirmacionModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="confirmacionModalLabel">Confirmar Acción</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        ¿Está seguro de que desea aprobar y completar la Orden de Producción? Esta acción creará el lote de producto terminado.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmarAccion">Aceptar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -172,79 +187,59 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     
     {# --- SCRIPT PRINCIPAL DE PRODUCCIÓN HOY --- #}
-    {# Se elimina el script viejo que manejaba modales, ya no son necesarios en esta vista #}
-    {# <script src="{{ url_for('static', filename='js/planificacion/produccion_hoy.js') }}"></script> #}
     <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Manejar clic en el botón de aprobar calidad
+        const confirmacionModal = new bootstrap.Modal(document.getElementById('confirmacionModal'));
+        const btnConfirmarAccion = document.getElementById('btnConfirmarAccion');
+        let currentOpId = null;
+
         document.querySelectorAll('.btn-aprobar-calidad').forEach(button => {
             button.addEventListener('click', function() {
-                const opId = this.dataset.opId;
-                // Usar un modal de Bootstrap en lugar de confirm() si es posible,
-                // pero por ahora confirm() es funcional.
-                if (!confirm(`¿Está seguro de que desea aprobar y completar la Orden de Producción #${opId}? Esta acción creará el lote de producto terminado.`)) {
-                    return;
-                }
-
-                fetch(`/produccion/kanban/api/op/${opId}/aprobar-calidad`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showNotification('✅ ¡Éxito! ' + data.message, 'success');
-                        setTimeout(() => location.reload(), 2000);
-                    } else {
-                        showNotification('❌ Error: ' + data.error, 'danger');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error de red:', error);
-                    showNotification('❌ Se produjo un error de red.', 'danger');
-                });
+                currentOpId = this.dataset.opId;
+                confirmacionModal.show();
             });
         });
 
-        // Función de notificación (adaptada para Bootstrap 5)
-        function showNotification(message, type = 'info') {
-            const container = document.getElementById('toast-container-kanban');
-            if (!container) {
-                console.error("El contenedor de toasts '#toast-container-kanban' no fue encontrado.");
-                alert(message); // Fallback a alert
-                return;
-            }
-            
-            // Mapear nuestros tipos a los colores de fondo de Bootstrap
-            const bg_color = type === 'danger' ? 'bg-danger' : (type === 'success' ? 'bg-success' : 'bg-primary');
+        btnConfirmarAccion.addEventListener('click', function() {
+            if (!currentOpId) return;
 
-            const toastEl = document.createElement('div');
-            toastEl.className = `toast align-items-center text-white ${bg_color} border-0`;
-            toastEl.setAttribute('role', 'alert');
-            toastEl.setAttribute('aria-live', 'assertive');
-            toastEl.setAttribute('aria-atomic', 'true');
-            
-            toastEl.innerHTML = `
-                <div class="d-flex">
-                    <div class="toast-body">
-                        ${message}
-                    </div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>
-            `;
-            
-            container.appendChild(toastEl);
-            
-            const toast = new bootstrap.Toast(toastEl);
-            toast.show();
-
-            toastEl.addEventListener('hidden.bs.toast', () => {
-                toastEl.remove();
+            fetch(`/produccion/kanban/api/op/${currentOpId}/aprobar-calidad`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                confirmacionModal.hide();
+                if (data.success) {
+                    // Usar el sistema de toasts global si está disponible, sino un simple alert.
+                    if (window.showToast) {
+                        window.showToast('¡Éxito! ' + data.message, 'success');
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        alert('¡Éxito! ' + data.message);
+                        location.reload();
+                    }
+                } else {
+                    if (window.showToast) {
+                        window.showToast('Error: ' + data.error, 'danger');
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                }
+            })
+            .catch(error => {
+                confirmacionModal.hide();
+                console.error('Error:', error);
+                if (window.showToast) {
+                    window.showToast('Se produjo un error de red. Por favor, intente de nuevo.', 'danger');
+                } else {
+                    alert('Se produjo un error de red. Por favor, intente de nuevo.');
+                }
             });
-        }
+        });
     });
     </script>
 {% endblock %}

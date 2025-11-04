@@ -4,6 +4,8 @@ from collections import defaultdict
 from app.controllers.base_controller import BaseController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.utils.estados import OP_KANBAN_COLUMNAS
+from app.models.op_cronometro_model import OpCronometroModel
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +99,41 @@ class ProduccionKanbanController(BaseController):
 
     def obtener_estado_produccion(self, op_id: int) -> tuple:
         """
-        Obtiene el estado de producción en tiempo real para una OP.
-        Delega la llamada al controlador de órdenes de producción.
+        Obtiene el estado de producción en tiempo real para una OP, incluyendo el tiempo trabajado.
         """
         try:
-            return self.orden_produccion_controller.obtener_estado_produccion_op(op_id)
+            # Obtener el estado base de la producción
+            estado_base_res, status_code = self.orden_produccion_controller.obtener_estado_produccion_op(op_id)
+            if status_code >= 400:
+                return estado_base_res, status_code
+
+            estado_produccion = estado_base_res.get('data', {})
+
+            # Calcular el tiempo trabajado
+            cronometro_model = OpCronometroModel()
+            intervalos_res = cronometro_model.get_intervalos_por_op(op_id)
+            if not intervalos_res.get('success'):
+                logger.error(f"No se pudieron obtener los intervalos del cronómetro para OP {op_id}")
+                estado_produccion['tiempo_trabajado'] = 0
+            else:
+                intervalos = intervalos_res.get('data', [])
+                tiempo_total_segundos = 0
+                for intervalo in intervalos:
+                    start_time = datetime.fromisoformat(intervalo['start_time'])
+                    end_time_str = intervalo.get('end_time')
+                    
+                    if end_time_str:
+                        end_time = datetime.fromisoformat(end_time_str)
+                    else:
+                        # Si el intervalo está abierto, calcular el tiempo hasta ahora
+                        end_time = datetime.now(start_time.tzinfo)
+                    
+                    tiempo_total_segundos += (end_time - start_time).total_seconds()
+                
+                estado_produccion['tiempo_trabajado'] = int(tiempo_total_segundos)
+
+            return self.success_response(data=estado_produccion)
+
         except Exception as e:
             logger.error(f"Error al obtener estado de producción para OP {op_id} desde KanbanController: {e}", exc_info=True)
             return self.error_response(f"Error interno al consultar estado: {str(e)}", 500)
