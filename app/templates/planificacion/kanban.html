@@ -113,7 +113,7 @@
                                 <span class="mb-1">
                                     <i class="bi bi-receipt me-2"></i>
                                     <strong>Pedido:</strong> 
-                                    <a href="{{ url_for('pedidos.ver_pedido', pedido_id=orden.pedidos_asociados[0].id) }}">
+                                    <a href="{{ url_for('orden_venta.detalle', id=orden.pedidos_asociados[0].id) }}">
                                         #{{ orden.pedidos_asociados[0].id }}
                                     </a>
                                 </span>

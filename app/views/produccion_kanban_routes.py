@@ -2,7 +2,8 @@
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from app.controllers.orden_produccion_controller import OrdenProduccionController
-from app.controllers.produccion_kanban_controller import ProduccionKanbanController # <-- Cambiado
+from app.controllers.produccion_kanban_controller import ProduccionKanbanController
+from app.controllers.op_cronometro_controller import OpCronometroController
 from app.utils.decorators import permission_required
 
 # Renombrado para mayor claridad
@@ -153,4 +154,29 @@ def api_aprobar_calidad(op_id):
     controller = OrdenProduccionController()
     # Usamos el método robusto que ya maneja la creación de lotes.
     response, status_code = controller.cambiar_estado_orden(op_id, 'COMPLETADA')
+    return jsonify(response), status_code
+
+
+
+# --- Rutas para el Cronómetro del Foco de Producción ---
+@produccion_kanban_bp.route('/api/op/<int:op_id>/cronometro/iniciar', methods=['POST'])
+@jwt_required()
+@permission_required(accion='iniciar_orden_de_produccion') # O el permiso que corresponda
+def iniciar_cronometro_op(op_id):
+    """
+    Endpoint para registrar el inicio de un intervalo de trabajo.
+    """
+    controller = OpCronometroController()
+    response, status_code = controller.registrar_inicio(op_id)
+    return jsonify(response), status_code
+
+@produccion_kanban_bp.route('/api/op/<int:op_id>/cronometro/detener', methods=['POST'])
+@jwt_required()
+@permission_required(accion='pausar_orden_de_produccion') # O el permiso que corresponda
+def detener_cronometro_op(op_id):
+    """
+    Endpoint para registrar el fin de un intervalo de trabajo (pausa o finalización).
+    """
+    controller = OpCronometroController()
+    response, status_code = controller.registrar_fin(op_id)
     return jsonify(response), status_code

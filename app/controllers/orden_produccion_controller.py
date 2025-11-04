@@ -25,7 +25,7 @@ from app.models.motivo_desperdicio_model import MotivoDesperdicioModel
 from app.models.registro_paro_model import RegistroParoModel
 from app.models.registro_desperdicio_model import RegistroDesperdicioModel
 from app.models.operacion_receta_model import OperacionRecetaModel
-from app.models.op_cronometro_model import OpCronometroModel
+from app.controllers.op_cronometro_controller import OpCronometroController
 
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class OrdenProduccionController(BaseController):
         self.receta_model = RecetaModel()
         self.insumo_model = InsumoModel()
         self.operacion_receta_model = OperacionRecetaModel()
-        self.op_cronometro_model = OpCronometroModel()
+        self.op_cronometro_controller = OpCronometroController()
         self._planificacion_controller = None
 
     @property
@@ -404,12 +404,9 @@ class OrdenProduccionController(BaseController):
             # 5. Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
             result = self.model.cambiar_estado(orden_id, nuevo_estado)
             if result.get('success'):
-                # Si la orden se completa o cancela, detener el cronómetro
-                if nuevo_estado in ['COMPLETADA', 'CANCELADA']:
-                    intervalo_abierto = self.op_cronometro_model.get_ultimo_intervalo_abierto(orden_id)
-                    if intervalo_abierto.get('success') and intervalo_abierto.get('data'):
-                        self.op_cronometro_model.update_intervalo(intervalo_abierto['data']['id'], datetime.now().isoformat())
-
+                # La lógica del cronómetro se ha movido a otros métodos para evitar la doble detención.
+                # El cronómetro ahora se detiene cuando se reporta el 100% o cuando se pausa.
+                
                 from app.controllers.pedido_controller import PedidoController
                 pedido_controller = PedidoController()
                 # Después de cambiar el estado de la OP, verificamos si el estado del pedido de venta debe cambiar.
@@ -1172,9 +1169,7 @@ class OrdenProduccionController(BaseController):
             paro_model.create(datos_pausa)
 
             # Pausar el cronómetro
-            intervalo_abierto = self.op_cronometro_model.get_ultimo_intervalo_abierto(orden_id)
-            if intervalo_abierto.get('success') and intervalo_abierto.get('data'):
-                self.op_cronometro_model.update_intervalo(intervalo_abierto['data']['id'], datetime.now().isoformat())
+            self.op_cronometro_controller.registrar_fin(orden_id)
 
             return self.success_response(message="Producción pausada correctamente.")
 
@@ -1222,7 +1217,7 @@ class OrdenProduccionController(BaseController):
                 return self.error_response(f"Error crítico al reanudar la orden: {cambio_estado_result.get('error')}", 500)
 
             # Reanudar el cronómetro
-            self.op_cronometro_model.create_intervalo(orden_id, datetime.now().isoformat())
+            self.op_cronometro_controller.registrar_inicio(orden_id)
 
             return self.success_response(message="Producción reanudada correctamente.")
 
@@ -1282,7 +1277,7 @@ class OrdenProduccionController(BaseController):
 
             if update_result.get('success'):
                 # Iniciar el cronómetro
-                self.op_cronometro_model.create_intervalo(orden_id, datetime.now().isoformat())
+                self.op_cronometro_controller.registrar_inicio(orden_id)
                 return self.success_response(data=update_result.get('data'), message="Trabajo iniciado correctamente.")
             else:
                 return self.error_response(f"Error al actualizar la orden: {update_result.get('error')}", 500)

@@ -210,18 +210,16 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const response = await fetch(`/produccion/kanban/api/op/${ordenId}/pausar`, {
+            // Primero, pausar la OP. Esto detendrá el cronómetro en el backend.
+            const responsePausa = await fetch(`/produccion/kanban/api/op/${ordenId}/pausar`, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ motivo_id: motivoId })
             });
 
-            const data = await response.json();
+            const dataPausa = await responsePausa.json();
             
-            if (response.ok && data.success) {
+            if (responsePausa.ok && dataPausa.success) {
                 pausarProduccion(motivoTexto);
                 bootstrap.Modal.getInstance(document.getElementById('modalPausarProduccion')).hide();
                 showNotification('⏸️ Producción pausada correctamente', 'warning');
@@ -289,6 +287,8 @@ document.addEventListener('DOMContentLoaded', function () {
     
                 if (nuevaCantidadTotal >= estado.cantidadPlanificada) {
                     showNotification('✅ Avance reportado. Orden enviada a Control de Calidad.', 'success');
+                    // Detener el cronómetro antes de redirigir
+                    await fetch(`/produccion/kanban/api/op/${ordenId}/cronometro/detener`, { method: 'POST' });
                     setTimeout(() => {
                         window.location.href = '/produccion/kanban/'; // Redirigir siempre que se completa
                     }, 2000);
@@ -567,6 +567,9 @@ document.addEventListener('DOMContentLoaded', function () {
         popularSelects();
     
         try {
+            // Primero, iniciar el cronómetro en el backend.
+            await fetch(`/produccion/kanban/api/op/${ordenId}/cronometro/iniciar`, { method: 'POST' });
+
             const response = await fetch(`/produccion/kanban/api/op/${ordenId}/estado`);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -577,7 +580,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const estadoServidor = data.data;
                 
                 // Actualizar estado local con datos del servidor
-                estado.segundosTranscurridos = estadoServidor.segundos_trabajados || 0; // Asegurar que sea un número
+                estado.segundosTranscurridos = estadoServidor.tiempo_trabajado || 0;
                 estado.cantidadProducida = parseFloat(estadoServidor.cantidad_producida) || 0;
                 
                 // Actualizar la UI inmediatamente con los datos del servidor
@@ -585,8 +588,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 actualizarProduccion(0, 0); // Refresca la UI sin sumar nada
                 actualizarRitmo(); // Calcular ritmo inicial
     
-                if (estadoServidor.is_paused) {
-                    const ultimoMotivo = "Pausa activa";
+                if (estadoServidor.estado_actual === 'PAUSADA') {
+                    const ultimoMotivo = "Pausa activa"; // Esto podría mejorarse obteniendo el motivo real
                     pausarProduccion(ultimoMotivo); 
                 } else {
                     startTimer();
