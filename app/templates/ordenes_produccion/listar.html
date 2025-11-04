@@ -164,8 +164,12 @@
                         {% endif %}
                     </div>
 
-                    {# Acciones (SOLO DETALLE) #}
+                    {# Acciones (DETALLE Y TRAZABILIDAD) #}
                     <div class="d-flex justify-content-end align-items-center action-buttons pt-2">
+                        <button type="button" class="btn btn-sm btn-outline-success me-2 btn-trazabilidad"
+                            data-op-id="{{ orden.id }}" title="Ver Trazabilidad">
+                            <i class="bi bi-arrows-fullscreen"></i> Trazabilidad
+                        </button>
                         <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}"
                             class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                             <i class="bi bi-eye"></i> Detalle
@@ -191,5 +195,33 @@
 
 {% endblock %}
 
+{% block app_content_after %}
+<!-- Modal de Trazabilidad -->
+<div class="modal fade" id="trazabilidadModal" tabindex="-1" aria-labelledby="trazabilidadModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="trazabilidadModalLabel">Trazabilidad de la Orden de Producción</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="trazabilidadModalBody">
+        <!-- Contenido dinámico se insertará aquí -->
+        <div class="text-center">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+            <p>Cargando datos de trazabilidad...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/ordenes_produccion/trazabilidad.js') }}"></script>
 {% endblock %}
