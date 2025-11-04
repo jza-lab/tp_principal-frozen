@@ -27,19 +27,17 @@
     </a>
     {# --- INICIO: BOTÓN AÑADIDO --- #}
     {# Asumimos un permiso 'forzar_auto_planificacion'. Si es otro, ajústalo. #}
-    {% if 'forzar_auto_planificacion' is has_permission %}
+    
     <button type="button" class="btn btn-primary ms-2" id="btn-forzar-auto-planificacion" title="Ejecutar la planificación automática de OPs PENDIENTES ahora">
         <i class="bi bi-robot me-1"></i> Forzar Auto-Planificación
     </button>
-    {% endif %}
+    
     {# --- FIN: BOTÓN AÑADIDO --- #}
     {# --- ¡NUEVO BOTÓN DE CONFIGURACIÓN! --- #}
     {# Asumimos un permiso de 'admin' o 'configurar_planificacion' #}
-    {% if 'admin' is has_permission %} 
     <a href="{{ url_for('planificacion.configuracion_lineas') }}" class="btn btn-outline-info ms-2" title="Configurar capacidad y bloqueos de líneas">
         <i class="bi bi-gear-fill me-1"></i> Configurar Líneas
     </a>
-    {% endif %}
     {# --- FIN NUEVO BOTÓN --- #}
 </div>
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
