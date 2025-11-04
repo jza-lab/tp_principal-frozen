@@ -208,20 +208,19 @@
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
-                }
+                },
+                body: JSON.stringify({ nuevo_estado: 'COMPLETADA' })
             })
             .then(response => response.json())
             .then(data => {
                 confirmacionModal.hide();
                 if (data.success) {
-                    // Usar el sistema de toasts global si está disponible, sino un simple alert.
-                    if (window.showToast) {
-                        window.showToast('¡Éxito! ' + data.message, 'success');
-                        setTimeout(() => location.reload(), 2000);
-                    } else {
-                        alert('¡Éxito! ' + data.message);
+                    // Usar siempre el sistema de toasts, que ya sabemos que existe.
+                    showToast('¡Éxito! Orden completada y lote generado.', 'success');
+                    // Recargar la página para ver el cambio reflejado.
+                    setTimeout(() => {
                         location.reload();
-                    }
+                    }, 1500);
                 } else {
                     if (window.showToast) {
                         window.showToast('Error: ' + data.error, 'danger');

@@ -4,8 +4,6 @@ from collections import defaultdict
 from app.controllers.base_controller import BaseController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.utils.estados import OP_KANBAN_COLUMNAS
-from app.models.op_cronometro_model import OpCronometroModel
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +99,8 @@ class ProduccionKanbanController(BaseController):
         """
         Obtiene el estado de producción en tiempo real para una OP, incluyendo el tiempo trabajado.
         """
+        from app.models.op_cronometro_model import OpCronometroModel
+        from datetime import datetime
         try:
             # Obtener el estado base de la producción
             estado_base_res, status_code = self.orden_produccion_controller.obtener_estado_produccion_op(op_id)

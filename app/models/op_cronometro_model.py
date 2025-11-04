@@ -61,7 +61,7 @@ class OpCronometroModel(BaseModel):
         Obtiene todos los intervalos de tiempo para una orden de producción.
         """
         try:
-            result = self.db.table(self.get_table_name()) \
+            result = self._get_query_builder() \
                 .select('*') \
                 .eq('op_id', op_id) \
                 .execute()
