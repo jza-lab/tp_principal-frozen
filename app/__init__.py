@@ -100,9 +100,11 @@ def _register_blueprints(app: Flask):
     from app.views.control_calidad_routes import control_calidad_bp
     from app.views.chatbot_routes import chatbot_bp
     from app.views.reportes_routes import reportes_bp
+    from app.views.proveedor_routes import proveedor_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
+    app.register_blueprint(proveedor_bp)
     app.register_blueprint(control_calidad_bp)
     app.register_blueprint(insumos_bp)
     app.register_blueprint(inventario_api_bp)

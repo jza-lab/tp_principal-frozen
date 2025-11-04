@@ -38,9 +38,11 @@ class TrazabilidadController:
                         proveedor_nombre = proveedor_info.get('nombre', 'N/A') if proveedor_info else 'N/A'
                         
                         insumos_usados.append({
+                            'id_lote_insumo': lote_inventario.get('id_lote'),
                             'lote_insumo': lote_inventario.get('numero_lote_proveedor', 'N/A'),
                             'nombre_insumo': lote_inventario.get('insumo',{}).get('nombre', 'N/A'),
                             'cantidad_usada': reserva.get('cantidad_reservada'),
+                            'id_proveedor': proveedor_info.get('id'),
                             'proveedor': proveedor_nombre
                         })
 
@@ -78,9 +80,6 @@ class TrazabilidadController:
                     'cliente': pedido.get('nombre_cliente', 'N/A'),
                     'fecha_entrega': pedido.get('fecha_requerido')
                 })
-
-            # 4. Estructurar la respuesta final
-            vendedor_nombre = 'N/A'
 
             # 4. Estructurar la respuesta final
             response_data = {
