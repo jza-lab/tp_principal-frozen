@@ -356,7 +356,7 @@ class OrdenProduccionController(BaseController):
             estado_actual = orden_produccion['estado']
 
             if nuevo_estado == 'COMPLETADA':
-                if estado_actual != 'CONTROL_DE_CALIDAD':
+                if not estado_actual or estado_actual.strip() != 'CONTROL_DE_CALIDAD':
                     return self.error_response("La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
 
                 # 1. Verificar si la OP está vinculada a ítems de pedido
