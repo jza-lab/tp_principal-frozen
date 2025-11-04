@@ -494,6 +494,24 @@ class PlanificacionController(BaseController):
                     )
 
 
+            # --- INICIO DE LA LÓGICA DE CONSUMO DE STOCK ---
+            estados_de_consumo = ['EN_LINEA_1', 'EN_LINEA_2']
+            if estado_actual == 'LISTA PARA PRODUCIR' and nuevo_estado in estados_de_consumo:
+                logger.info(f"OP {op_id} movida a producción. Consumiendo stock de insumos...")
+                
+                # Obtener el ID del usuario actual para registrar el consumo
+                # (Asumimos que está disponible en el contexto de la petición o se pasa como argumento)
+                # Aquí usamos un valor por defecto, pero debería ser el usuario autenticado.
+                usuario_id = 1 # OJO: Reemplazar con el ID del usuario real
+                
+                consumo_result = self.inventario_controller.consumir_stock_para_op(op_actual_res['data'], usuario_id)
+                
+                if not consumo_result.get('success'):
+                    error_msg = f"No se pudo iniciar la producción por falta de stock: {consumo_result.get('error')}"
+                    logger.error(error_msg)
+                    return self.error_response(error_msg, 409) # 409 Conflict es un buen código para esto
+            # --- FIN DE LA LÓGICA DE CONSUMO DE STOCK ---
+
             # --- Ejecución del cambio de estado ---
             resultado = {}
             # Lógica existente para manejar 'COMPLETADA' u otros estados
