@@ -357,6 +357,8 @@ class OrdenProduccionModel(BaseModel):
                 if 'EN PROCESO' in estados_kanban_db:
                     estados_kanban_db.remove('EN PROCESO')
                 estados_kanban_db.append('EN_PROCESO')
+                # AÑADIR TAMBIÉN LA VERSIÓN CON GUION BAJO PARA CONTROL DE CALIDAD, YA QUE SE GUARDA ASÍ
+                estados_kanban_db.append('CONTROL_DE_CALIDAD')
                 
                 query = query.in_('estado', estados_kanban_db)
 
