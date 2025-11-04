@@ -95,6 +95,9 @@ def detalle(id):
 
     orden = response_data.get("data")
     lotes = []
+
+    # La lógica para calcular los totales originales ahora está centralizada en el OrdenCompraController.
+    # La plantilla recibe directamente los campos `subtotal_original`, `iva_original` y `total_original`.
     
     # Si la orden está en control de calidad, buscamos sus lotes para inspección
     if orden and orden.get('estado') == 'EN_CONTROL_CALIDAD':
@@ -242,7 +245,7 @@ def procesar_recepcion(orden_id):
             f"Error al procesar la recepción: {resultado.get('error', 'Error desconocido')}",
             "error",
         )
-    return redirect(url_for("orden_compra.detalle", id=orden_id))
+    return redirect(url_for("orden_compra.listar"))
 
 
 @orden_compra_bp.route("/<int:id>/iniciar-calidad", methods=["POST"])

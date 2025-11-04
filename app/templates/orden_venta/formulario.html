@@ -354,7 +354,6 @@
                         </div>
 
                         <div class="col-md-6">
-                            <div class="col-md-6">
                             <label for="fecha_requerido" class="form-label">Fecha requerida de Entrega <span
                                     class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="fecha_requerido" name="fecha_requerido"
@@ -364,7 +363,20 @@
                             
                             <div id="fecha-validation-feedback" class="mt-2" style="display: none;">
                                 </div>
-                            </div>
+                        </div>
+
+                        <div class="col-md-4">
+                            <label for="condicion_venta" class="form-label">Condición de Venta <span
+                                    class="text-danger">*</span></label>
+                            <select class="form-select" id="condicion_venta" name="condicion_venta" required>
+                                <option value="contado" {% if pedido and pedido.condicion_venta=='contado' %}selected{%
+                                    endif %}>Al Contado
+                                </option>
+                                <option value="credito_30" {% if pedido and pedido.condicion_venta=='credito_30'
+                                    %}selected{% endif %}>Crédito 30 días</option>
+                                <option value="credito_90" {% if pedido and pedido.condicion_venta=='credito_90'
+                                    %}selected{% endif %}>Crédito 90 días</option>
+                            </select>
                         </div>
 
                         <div class="col-12">

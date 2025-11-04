@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
+from app.controllers.trazabilidad_controller import TrazabilidadController
 from app.utils.decorators import permission_any_of, permission_required
 
 # Blueprint para endpoints de API interna
@@ -128,3 +129,13 @@ def buscar_usuario_por_legajo():
         return jsonify(resultado)
     
     return jsonify({'success': False, 'error': resultado.get('error', 'Usuario no encontrado')}), 404
+
+@api_bp.route('/orden_produccion/<int:orden_id>/trazabilidad', methods=['GET'])
+@permission_required(accion='consultar_trazabilidad')
+def get_trazabilidad_op(orden_id):
+    """Devuelve la traza completa de una orden de producción."""
+    controller = TrazabilidadController()
+    resultado = controller.get_trazabilidad_orden_produccion(orden_id)
+    if resultado.get('success'):
+        return jsonify(success=True, data=resultado.get('data'))
+    return jsonify(success=False, error=resultado.get('error')), 500

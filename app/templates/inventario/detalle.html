@@ -2,6 +2,16 @@
 
 {% block title %}Detalle del Lote - {{ lote.numero_lote_proveedor or 'N/A' }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/listarUsuarios.css') }}">
+<style>
+    #sankey_trazabilidad svg g {
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+
 {% block app_content %}
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
@@ -19,6 +29,11 @@
         <a href="{{ url_for('inventario_view.listar_lotes') }}" class="btn btn-outline-secondary me-2">
             <i class="bi bi-arrow-left me-1"></i>Ir al Inventario de Insumos
         </a>
+        {% if lote.url_imagen %}
+        <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#imageModal">
+            <i class="bi bi-camera me-1"></i>Ver Foto
+        </button>
+        {% endif %}
         {% set can_edit = 'modificar_materias_primas' is has_permission %}
         <a href="{{ url_for('insumos_api.editar_lote', id_insumo=lote.id_insumo, id_lote=lote.id_lote) if can_edit else '#' }}"
             class="btn btn-primary {% if not can_edit %}disabled{% endif %}">
@@ -27,8 +42,25 @@
     </div>
 </div>
 
-<div class="row">
-    <div class="col-lg-8">
+<ul class="nav nav-tabs-custom mb-3" id="loteDetailTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link-custom active" id="info-tab" data-bs-toggle="tab" data-bs-target="#info-content"
+            type="button" role="tab" aria-controls="info-content" aria-selected="true">
+            <i class="bi bi-info-circle me-1"></i>Información General
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link-custom" id="trazabilidad-tab" data-bs-toggle="tab"
+            data-bs-target="#trazabilidad-content" type="button" role="tab" aria-controls="trazabilidad-content"
+            aria-selected="false">
+            <i class="bi bi-diagram-3 me-1"></i>Trazabilidad
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="loteDetailTabContent">
+
+    <div class="tab-pane fade show active" id="info-content" role="tabpanel" aria-labelledby="info-tab">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Información del Lote <code
@@ -37,17 +69,15 @@
                 <span class="badge bg-success fs-6">{{ lote.estado | title }}</span>
                 {% elif lote.estado == 'cuarentena' %}
                 <span class="badge bg-warning text-dark fs-6"
-                      title="Motivo: {{ lote.motivo_cuarentena or 'Sin motivo' }}"
-                      data-bs-toggle="tooltip"> <i class="bi bi-shield-lock me-1"></i>{{ lote.estado | title }}
+                    title="Motivo: {{ lote.motivo_cuarentena or 'Sin motivo' }}" data-bs-toggle="tooltip"> <i
+                        class="bi bi-shield-lock me-1"></i>{{ lote.estado | title }}
                 </span>
-                {% elif lote.estado == 'RECHAZADO' %}  
+                {% elif lote.estado == 'RECHAZADO' %}
                 <span class="badge bg-danger fs-6">{{ lote.estado | title }}</span>
                 {% endif %}
-                
             </div>
             <div class="card-body">
                 <div class="row g-4">
-
                     <div class="col-md-6">
                         <h6 class="text-muted mb-3"><i class="bi bi-box-seam me-1"></i>Detalles del Insumo</h6>
                         <div class="d-grid gap-3">
@@ -75,7 +105,6 @@
                             </div>
                         </div>
                     </div>
-
                     <div class="col-md-6">
                         <h6 class="text-muted mb-3"><i class="bi bi-currency-dollar me-1"></i>Stock y Costos</h6>
                         <div class="row g-3">
@@ -93,17 +122,18 @@
                             </div>
                             <div class="col-6">
                                 <label class="small text-muted">Precio Unitario</label>
-                                <div class="fw-bold"> {{ lote.precio_unitario | formato_moneda if lote.precio_unitario
+                                <div class="fw-bold"> {{ lote.precio_unitario | formato_moneda if
+                                    lote.precio_unitario
                                     else 'N/A' }}</div>
                             </div>
                             <div class="col-6">
                                 <label class="small text-muted">Costo Total Ingreso</label>
-                                <div class="fw-bold"> {{ lote.costo_total | formato_moneda if lote.costo_total else
+                                <div class="fw-bold"> {{ lote.costo_total | formato_moneda if lote.costo_total
+                                    else
                                     'N/A' }}</div>
                             </div>
                         </div>
                     </div>
-
                     <div class="col-md-6">
                         <h6 class="text-muted mb-3"><i class="bi bi-geo-alt me-1"></i>Fechas y Ubicación</h6>
                         <div class="d-grid gap-3">
@@ -123,7 +153,6 @@
                             </div>
                         </div>
                     </div>
-
                     {% if lote.observaciones %}
                     <div class="col-12">
                         <h6 class="text-muted mb-2"><i class="bi bi-sticky me-1"></i>Observaciones del Lote</h6>
@@ -137,18 +166,176 @@
         </div>
     </div>
 
-    <div class="col-lg-4">
+    <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
         <div class="card">
             <div class="card-header">
-                <h6 class="mb-0">
-                    <i class="bi bi-info-circle me-1"></i>
-                    Ayuda
-                </h6>
+                <h5 class="mb-0"><i class="bi bi-diagram-3-fill me-2"></i>Trazabilidad del Lote</h5>
             </div>
             <div class="card-body">
-                <p class="text-muted">Próximamente se podrán realizar ajustes de stock y movimientos desde aquí.</p>
+                <p class="text-muted mb-2">Este diagrama de Sankey ilustra la trazabilidad de este lote:</p>
+                <ul class="list-unstyled text-muted small mb-3">
+                    <li><i class="bi bi-square-fill me-2" style="color: #a6cee3;"></i> <strong>Nodos:</strong> Las
+                        barras verticales representan entidades (OC, Lotes, OPs, Pedidos).</li>
+                    <li><i class="bi bi-arrow-right-short me-2" style="color: #1f78b4;"></i> <strong>Flujos:</strong>
+                        Las bandas horizontales muestran el movimiento del material. El <strong>ancho</strong> de la
+                        banda es proporcional a la <strong>cantidad</strong>.</li>
+                    <li><i class="bi bi-mouse me-2"></i> <strong>Interactividad:</strong> Puede hacer clic en un nodo
+                        (ej: "OP: ...") para ver su página de detalle.</li>
+                </ul>
+                <hr classs="mb-4">
+                <div style="width: 100%; overflow-x: auto;">
+                    <div id="sankey_trazabilidad" style="min-height: 400px; min-width: 600px;">
+                        <div class="d-flex justify-content-center align-items-center h-100">
+                            <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                                <span class="visually-hidden">Cargando gráfico...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Modal para la imagen -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageModalLabel">Foto del Lote</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                {% if lote.url_imagen %}
+                <img src="{{ lote.url_imagen }}" class="img-fluid" alt="Foto del Lote">
+                {% else %}
+                <p>No hay imagen disponible para este lote.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const trazabilidadTab = document.getElementById('trazabilidad-tab');
+        const container = document.getElementById('sankey_trazabilidad');
+        let chartLoaded = false;
+        let chart = null;
+        let dataTable = null;
+        let nodeMap = null; // Mapa para las URLs
+
+        trazabilidadTab.addEventListener('shown.bs.tab', function () {
+            if (!chartLoaded) {
+                loadTrazabilidadChart();
+            }
+        });
+
+        if (document.getElementById('trazabilidad-content').classList.contains('show')) {
+            loadTrazabilidadChart();
+        }
+
+        function loadTrazabilidadChart() {
+            if (chartLoaded) return;
+            container.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100">
+                                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                                            <span class="visually-hidden">Cargando gráfico...</span>
+                                        </div>
+                                    </div>`;
+            google.charts.load('current', { 'packages': ['sankey'] });
+            google.charts.setOnLoadCallback(drawSankeyChart);
+        }
+
+        function drawSankeyChart() {
+            const apiUrl = `{{ url_for('inventario_view.api_trazabilidad_lote', id_lote=lote.id_lote) }}`;
+            const unidadMedida = "{{ lote.insumo_unidad_medida | default('unidades') | safe }}";
+
+            fetch(apiUrl)
+                .then(response => {
+                    if (!response.ok) throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
+                    return response.json();
+                })
+                .then(apiData => {
+                    if (!apiData.success || !apiData.data || !apiData.data.links || apiData.data.links.length === 0) {
+                        container.innerHTML = '<div class="alert alert-info text-center p-4">No se encontraron datos de trazabilidad para este lote.</div>';
+                        return;
+                    }
+
+                    const links = apiData.data.links;
+                    nodeMap = apiData.data.node_map || {};
+
+                    dataTable = new google.visualization.DataTable();
+                    dataTable.addColumn('string', 'De');
+                    dataTable.addColumn('string', 'A');
+                    dataTable.addColumn('number', `Cantidad (${unidadMedida})`);
+
+                    const rows = links.map(link => [
+                        String(link.source_name),
+                        String(link.target_name),
+                        parseFloat(link.value)
+                    ]);
+
+                    const validRows = rows.filter(row => row[2] > 0);
+
+                    if (validRows.length === 0) {
+                        container.innerHTML = '<div class="alert alert-info text-center p-4">Este lote no tiene movimientos (consumos o traslados) registrados.</div>';
+                        return;
+                    }
+
+                    dataTable.addRows(validRows);
+
+                    const options = {
+                        width: '100%',
+                        height: Math.max(400, 150 + (validRows.length * 30)),
+                        sankey: {
+                            node: {
+                                label: { fontName: 'Arial', fontSize: 14, color: '#333' },
+                                labelPadding: 10,
+                                nodePadding: 50,
+                                width: 25,
+                                interactivity: true,
+                                // --- NUEVO: Color de Nodos (cuadrados) basado en valor ---
+                                colorMode: 'gradient',
+                                colors: ['#353463', '#1c1a73', '#050342'] // Paleta de Grises (claro a oscuro)
+                            },
+                            link: {
+                                colorMode: 'gradient',
+                                // --- AJUSTADO: Color de Links (flujos) de claro a oscuro ---
+                                colors: ['#a6cee3', '#1f78b4', '#b2df8a'] // Paleta de Azules (claro a oscuro)
+                            }
+                        }
+                    };
+                    container.innerHTML = '';
+                    chart = new google.visualization.Sankey(container);
+
+                    google.visualization.events.addListener(chart, 'select', function () {
+                        if (!chart || !nodeMap) return;
+                        const selection = chart.getSelection();
+                        if (selection.length === 0) return;
+
+                        const item = selection[0];
+
+                        if (item.name) {
+                            const nodeLabel = item.name;
+                            if (nodeMap[nodeLabel]) {
+                                window.location.href = nodeMap[nodeLabel];
+                            }
+                        }
+                    });
+
+                    chart.draw(dataTable, options);
+                    chartLoaded = true;
+                })
+                .catch(error => {
+                    console.error('Error al cargar los datos de trazabilidad:', error);
+                    container.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> No se pudo cargar el gráfico de trazabilidad. <br><small>${error.message}</small></div>`;
+                });
+        }
+    });
+</script>
 {% endblock %}

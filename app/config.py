@@ -18,8 +18,6 @@ class Config:
     DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1', 't')
     TESTING = os.getenv('FLASK_TESTING', 'False').lower() in ('true', '1', 't')
 
-
-
     # Evitar problemas de puertos
     USE_RELOADER = DEBUG
 

@@ -1,0 +1,90 @@
+{% extends 'layouts/app_layout.html' %}
+
+{% block title %}Dashboard de Reportes{% endblock %}
+
+{% block app_content %}
+<div class="container-fluid mt-4">
+    <h1 class="h2">Dashboard de Reportes</h1>
+    <p>Análisis visual de los datos clave de la empresa.</p>
+
+    <!-- Pestañas de Navegación -->
+    <ul class="nav nav-tabs" id="reportesTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="financiero-tab" data-bs-toggle="tab" data-bs-target="#financiero" type="button" role="tab" aria-controls="financiero" aria-selected="true">Financiero</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="ventas-tab" data-bs-toggle="tab" data-bs-target="#ventas" type="button" role="tab" aria-controls="ventas" aria-selected="false">Ventas</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="stock-tab" data-bs-toggle="tab" data-bs-target="#stock" type="button" role="tab" aria-controls="stock" aria-selected="false">Stock</button>
+        </li>
+    </ul>
+
+    <!-- Contenido de las Pestañas -->
+    <div class="tab-content" id="reportesTabContent">
+        <!-- Pestaña Financiero -->
+        <div class="tab-pane fade show active" id="financiero" role="tabpanel" aria-labelledby="financiero-tab">
+            <div class="row mt-4">
+                <div class="col-xl-12">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            Ingresos vs. Egresos
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Período
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item" href="#" data-periodo="semanal">Semanal</a></li>
+                                    <li><a class="dropdown-item" href="#" data-periodo="mensual">Mensual</a></li>
+                                    <li><a class="dropdown-item" href="#" data-periodo="anual">Anual</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="ingresosVsEgresosChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestaña Ventas -->
+        <div class="tab-pane fade" id="ventas" role="tabpanel" aria-labelledby="ventas-tab">
+            <div class="row mt-4">
+                <div class="col-xl-12">
+                    <div class="card">
+                        <div class="card-header">
+                            Top 5 Productos Más Vendidos
+                        </div>
+                        <div class="card-body">
+                            <canvas id="topProductosChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestaña Stock -->
+        <div class="tab-pane fade" id="stock" role="tabpanel" aria-labelledby="stock-tab">
+            <div class="row mt-4">
+                <div class="col-xl-12">
+                    <div class="card">
+                        <div class="card-header">
+                            Insumos con Stock Crítico
+                        </div>
+                        <div class="card-body">
+                            <canvas id="stockCriticoChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+<script src="{{ url_for('static', filename='js/reportes/reportes.js') }}"></script>
+{% endblock %}

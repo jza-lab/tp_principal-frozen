@@ -1,0 +1,426 @@
+{% extends 'layouts/app_layout.html' %}
+
+{% block title %}Gestión de Chatbot{% endblock %}
+
+{% block app_content %}
+<div class="card card-table">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0">Gestión de Preguntas y Respuestas del Chatbot</h3>
+        <div class="card-tools">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#chatbotQAModal" data-action="create">
+                <i class="bi bi-plus-lg"></i> Añadir Nueva
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover" id="chatbotQATable">
+                <thead>
+                    <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">Pregunta</th>
+                        <th scope="col">Respuesta</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col" class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="chatbotQATableBody">
+                    <!-- Las filas se cargarán dinámicamente -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Crear y Editar -->
+<div class="modal fade" id="chatbotQAModal" tabindex="-1" aria-labelledby="chatbotQAModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="chatbotQAModalLabel">Añadir Nueva Pregunta y Respuesta</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="chatbotQAForm">
+                    {{ csrf_form.csrf_token }}
+                    <input type="hidden" id="qaId" name="id">
+                    <div class="mb-3">
+                        <label for="pregunta" class="form-label">Pregunta</label>
+                        <input type="text" class="form-control" id="pregunta" name="pregunta" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="respuesta" class="form-label">Respuesta</label>
+                        <textarea class="form-control" id="respuesta" name="respuesta" rows="4" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="parentId" class="form-label">Pregunta Padre (Opcional)</label>
+                        <select class="form-select" id="parentId" name="parent_id">
+                            <option value="">-- Ninguna (Pregunta Principal) --</option>
+                            <!-- Opciones se cargarán dinámicamente -->
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="saveChatbotQAButton">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Notificación -->
+<div class="modal fade" id="notificationModal" tabindex="-1" aria-labelledby="notificationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" id="notificationModalHeader">
+                <h5 class="modal-title" id="notificationModalLabel">Notificación</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="notificationModalBody">
+                <!-- El mensaje se insertará aquí -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    console.log('=== SCRIPT CARGADO ===');
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM cargado');
+        loadQAs();
+        setupEventListeners();
+    });
+
+    function setupEventListeners() {
+        console.log('Configurando event listeners');
+        
+        // Delegación de eventos global
+        document.addEventListener('click', function(event) {
+            const target = event.target.closest('button, [data-action]');
+            
+            if (!target) return;
+            
+            console.log('Click detectado:', target.id || target.dataset.action);
+
+            // Botón Guardar
+            if (target.id === 'saveChatbotQAButton') {
+                console.log('¡GUARDANDO!');
+                event.preventDefault();
+                event.stopPropagation();
+                handleFormSubmit();
+                return;
+            }
+
+            // Botones de acción
+            const action = target.dataset.action;
+            const id = target.dataset.id;
+
+            switch (action) {
+                case 'create':
+                    prepareCreateForm();
+                    break;
+                case 'edit':
+                    prepareEditForm(parseInt(id, 10));
+                    break;
+                case 'activate':
+                    updateQAState(parseInt(id, 10), true);
+                    break;
+                case 'deactivate':
+                    updateQAState(parseInt(id, 10), false);
+                    break;
+            }
+        });
+    }
+
+    async function loadQAs() {
+        console.log('Cargando QAs...');
+        try {
+            const response = await fetch('/admin/chatbot/qas');
+            if (!response.ok) throw new Error('Error al cargar los datos.');
+            
+            const result = await response.json();
+            console.log('QAs recibidas:', result);
+            
+            if (result.success && Array.isArray(result.data)) {
+                const tableBody = document.getElementById('chatbotQATableBody');
+                tableBody.innerHTML = '';
+                
+                if (result.data.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay registros. Haz clic en "Añadir Nueva" para crear uno.</td></tr>';
+                    return;
+                }
+                
+                result.data.forEach((qa, index) => {
+                    // Encontrar el nombre de la pregunta padre
+                    const parent = qa.parent_id ? result.data.find(p => p.id === qa.parent_id) : null;
+                    const parentName = parent ? parent.pregunta : '';
+
+                    const row = `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>
+                                ${escapeHTML(qa.pregunta)}
+                                ${parentName ? `<br><small class="text-muted">↳ Sub-pregunta de: ${escapeHTML(parentName)}</small>` : ''}
+                            </td>
+                            <td>${escapeHTML(qa.respuesta)}</td>
+                            <td>
+                                <span class="badge ${qa.activo ? 'bg-success' : 'bg-danger'}">
+                                    ${qa.activo ? 'Activo' : 'Inactivo'}
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-primary" data-action="edit" data-id="${qa.id}" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                ${qa.activo ?
+                                    `<button class="btn btn-sm btn-outline-danger" data-action="deactivate" data-id="${qa.id}" title="Desactivar">
+                                        <i class="bi bi-x-circle"></i>
+                                    </button>` :
+                                    `<button class="btn btn-sm btn-outline-success" data-action="activate" data-id="${qa.id}" title="Activar">
+                                        <i class="bi bi-check-circle"></i>
+                                    </button>`
+                                }
+                            </td>
+                        </tr>
+                    `;
+                    tableBody.innerHTML += row;
+                });
+            }
+        } catch (error) {
+            console.error('Error en loadQAs:', error);
+            showNotificationModal('No se pudieron cargar los datos.', true);
+        }
+    }
+
+    function showNotificationModal(message, isError = false) {
+        const modal = new bootstrap.Modal(document.getElementById('notificationModal'));
+        const modalHeader = document.getElementById('notificationModalHeader');
+        const modalBody = document.getElementById('notificationModalBody');
+        
+        modalBody.textContent = message;
+        
+        if (isError) {
+            modalHeader.classList.remove('bg-success', 'text-white');
+            modalHeader.classList.add('bg-danger', 'text-white');
+        } else {
+            modalHeader.classList.remove('bg-danger', 'text-white');
+            modalHeader.classList.add('bg-success', 'text-white');
+        }
+        
+        modal.show();
+    }
+
+    async function populateParentSelect(selectedParentId = null) {
+        const parentSelect = document.getElementById('parentId');
+        parentSelect.innerHTML = '<option value="">-- Ninguna (Pregunta Principal) --</option>'; // Reset
+        
+        try {
+            const response = await fetch('/admin/chatbot/qas');
+            const result = await response.json();
+
+            if (result.success && Array.isArray(result.data)) {
+                result.data.forEach(qa => {
+                    // Evitar que una pregunta sea su propio padre
+                    const currentId = document.getElementById('qaId').value;
+                    if (qa.id.toString() !== currentId) {
+                        const option = document.createElement('option');
+                        option.value = qa.id;
+                        option.textContent = qa.pregunta;
+                        if (qa.id === selectedParentId) {
+                            option.selected = true;
+                        }
+                        parentSelect.appendChild(option);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error al poblar el select de preguntas padre:', error);
+        }
+    }
+
+    async function prepareCreateForm() {
+        console.log('Preparando formulario de creación');
+        document.getElementById('chatbotQAForm').reset();
+        document.getElementById('qaId').value = '';
+        document.getElementById('chatbotQAModalLabel').textContent = 'Añadir Nueva Pregunta y Respuesta';
+        await populateParentSelect();
+    }
+
+    async function prepareEditForm(id) {
+        console.log('Preparando edición ID:', id);
+        try {
+            const response = await fetch(`/admin/chatbot/qas`);
+            if (!response.ok) throw new Error('Error al obtener el registro.');
+            
+            const result = await response.json();
+            const qa = result.data.find(item => item.id === id);
+
+            if (qa) {
+                document.getElementById('qaId').value = qa.id;
+                document.getElementById('pregunta').value = qa.pregunta;
+                document.getElementById('respuesta').value = qa.respuesta;
+                document.getElementById('chatbotQAModalLabel').textContent = 'Editar Pregunta y Respuesta';
+                
+                await populateParentSelect(qa.parent_id);
+
+                new bootstrap.Modal(document.getElementById('chatbotQAModal')).show();
+            } else {
+                showNotificationModal('Registro no encontrado.', true);
+            }
+        } catch (error) {
+            console.error('Error en prepareEditForm:', error);
+            showNotificationModal('No se pudo cargar el registro.', true);
+        }
+    }
+
+    async function handleFormSubmit() {
+        console.log('=== GUARDANDO ===');
+        
+        const form = document.getElementById('chatbotQAForm');
+        if (!form) {
+            console.error('Formulario no encontrado');
+            showNotificationModal('Error: Formulario no encontrado', true);
+            return;
+        }
+        
+        const id = document.getElementById('qaId').value;
+        const url = id ? `/admin/chatbot/qas/${id}` : '/admin/chatbot/qas';
+        const method = id ? 'PUT' : 'POST';
+        
+        const csrfTokenEl = form.querySelector('input[name="csrf_token"]');
+        if (!csrfTokenEl) {
+            console.error('CSRF token no encontrado');
+            showNotificationModal('Error: Token de seguridad no encontrado', true);
+            return;
+        }
+        
+        const csrfToken = csrfTokenEl.value;
+        const preguntaValue = form.pregunta.value.trim();
+        const respuestaValue = form.respuesta.value.trim();
+        
+        console.log('Datos a enviar:', { url, method, preguntaValue, respuestaValue });
+
+        if (!preguntaValue || !respuestaValue) {
+            showNotificationModal('Por favor completa todos los campos requeridos', true);
+            return;
+        }
+
+        const formData = new URLSearchParams();
+        formData.append('csrf_token', csrfToken);
+        formData.append('pregunta', preguntaValue);
+        formData.append('respuesta', respuestaValue);
+        formData.append('parent_id', document.getElementById('parentId').value);
+
+        // Cuando se crea, por defecto activo = 'on'
+        if (!id) {
+            formData.append('activo', 'on');
+        }
+
+        console.log('FormData:', formData.toString());
+
+        try {
+            console.log('Enviando petición a:', url);
+            const response = await fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: formData
+            });
+
+            console.log('Respuesta status:', response.status);
+            
+            const responseText = await response.text();
+            console.log('Respuesta texto:', responseText);
+
+            let result;
+            try {
+                result = JSON.parse(responseText);
+                console.log('Respuesta JSON:', result);
+            } catch (e) {
+                console.error('No es JSON válido:', responseText);
+                throw new Error('Respuesta inválida del servidor');
+            }
+
+            if (!response.ok) {
+                throw new Error(result.error || `Error ${response.status}`);
+            }
+            
+            console.log('¡Guardado exitoso!');
+            
+            const modalEl = document.getElementById('chatbotQAModal');
+            const modalInstance = bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+            
+            await loadQAs();
+            
+            // Mostrar mensaje de éxito
+            showNotificationModal('¡Guardado exitosamente!');
+
+        } catch (error) {
+            console.error('Error completo:', error);
+            showNotificationModal(`Error al guardar: ${error.message}`, true);
+        }
+    }
+
+    async function updateQAState(id, isActive) {
+        console.log(`Cambiando estado de QA ${id} a ${isActive}`);
+        
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        
+        const formData = new URLSearchParams();
+        formData.append('csrf_token', csrfToken);
+        formData.append('activo', isActive ? 'on' : 'off');
+
+        try {
+            const response = await fetch(`/admin/chatbot/qas/${id}/toggle`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-TOKEN': csrfToken
+                },
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Error al cambiar el estado');
+            }
+
+            const result = await response.json();
+            const message = isActive ? 'Pregunta activada exitosamente.' : 'Pregunta desactivada exitosamente.';
+            showNotificationModal(message);
+            
+            // Recargar la tabla para reflejar cambios
+            await loadQAs();
+
+        } catch (error) {
+            console.error('Error al cambiar estado:', error);
+            showNotificationModal(`Error: ${error.message}`, true);
+            // Recargar para refrescar la tabla
+            await loadQAs();
+        }
+    }
+
+    function escapeHTML(str) {
+        if (typeof str !== 'string') return '';
+        const p = document.createElement('p');
+        p.appendChild(document.createTextNode(str));
+        return p.innerHTML;
+    }
+    
+    console.log('=== SCRIPT INICIALIZADO ===');
+})();
+</script>
+
+{% endblock %}

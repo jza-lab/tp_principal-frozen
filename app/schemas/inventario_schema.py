@@ -50,6 +50,7 @@ class InsumosInventarioSchema(Schema):
         allow_none=True
     )
     observaciones = fields.Str(allow_none=True)
+    url_imagen = fields.Str(allow_none=True)
 
     estado = fields.Str(validate=validate.OneOf([
         'disponible', 'agotado', 'reservado', 'vencido', 'retirado', 'cuarentena', 'EN REVISION', 'RECHAZADO'

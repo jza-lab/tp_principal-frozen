@@ -58,44 +58,56 @@ class ControlCalidadInsumoController(BaseController):
 
     def procesar_inspeccion(self, lote_id: str, decision: str, form_data: Dict, foto_file, usuario_id: int) -> tuple:
         """
-        Procesa el resultado de una inspección de calidad para un lote de insumo.
+        Procesa el resultado de una inspección de calidad para un lote de insumo, manejando cantidades parciales.
         """
         try:
             lote_existente_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
             if not lote_existente_res.get('success') or not lote_existente_res.get('data'):
                 return self.error_response('El lote de insumo no fue encontrado.', 404)
             lote = lote_existente_res['data']
-            insumo_id = lote.get('id_insumo') # Guardamos el ID del insumo para el recálculo
+            insumo_id = lote.get('id_insumo')
+            cantidad_original = float(lote.get('cantidad_actual', 0))
 
-            nuevo_estado_lote = {
-                'Aceptar': 'disponible',
-                'Poner en Cuarentena': 'cuarentena',
-                'Rechazar': 'RECHAZADO'
-            }.get(decision)
+            cantidad_a_procesar_str = form_data.get('cantidad')
+            cantidad_a_procesar = float(cantidad_a_procesar_str) if cantidad_a_procesar_str else cantidad_original
 
+            # Corrección para la validación de punto flotante
+            TOLERANCIA = 1e-9
+            if cantidad_a_procesar <= 0 or (cantidad_a_procesar - cantidad_original) > TOLERANCIA:
+                return self.error_response('La cantidad a procesar no es válida.', 400)
+
+            es_parcial = cantidad_a_procesar < cantidad_original
+
+            nuevo_estado_lote = {'Aceptar': 'disponible', 'Poner en Cuarentena': 'cuarentena', 'Rechazar': 'RECHAZADO'}.get(decision)
             if not nuevo_estado_lote:
                 return self.error_response('La decisión tomada no es válida.', 400)
 
-            # Preparar los datos de actualización del lote
-            update_data = {'estado': nuevo_estado_lote, 'updated_at': datetime.now().isoformat()}
-
-            # Si el lote es RECHAZADO, su cantidad se convierte en 0
-            if decision == 'Rechazar':
-                update_data['cantidad_actual'] = 0
-                update_data['cantidad_en_cuarentena'] = 0 # Asegurarse de que también sea 0
-            
-            # Si se pone en cuarentena, toda la cantidad_actual pasa a cantidad_en_cuarentena
+            # Lógica unificada para procesamiento parcial y total
+            update_data = {}
+            if decision == 'Aceptar':
+                # FIX: Es necesario agregar el estado para que se ejecute el update
+                update_data['estado'] = nuevo_estado_lote 
+                # No se hace nada especial con la cantidad, la cantidad_actual es la disponible.
+                pass
+            elif decision == 'Rechazar':
+                update_data['cantidad_actual'] = cantidad_original - cantidad_a_procesar
+                # FIX: Es necesario agregar el estado para que se ejecute el update
+                update_data['estado'] = nuevo_estado_lote
+                # Opcional: registrar la cantidad rechazada en otro campo si existiera
             elif decision == 'Poner en Cuarentena':
-                cantidad_a_mover = lote.get('cantidad_actual', 0)
-                motivo = form_data.get('comentarios', 'Sin motivo especificado.') # Extraemos el motivo del formulario
-                update_data['cantidad_actual'] = 0
-                update_data['cantidad_en_cuarentena'] = cantidad_a_mover
-                update_data['motivo_cuarentena'] = motivo # Añadimos el motivo a la actualización
+                cantidad_en_cuarentena_actual = float(lote.get('cantidad_en_cuarentena', 0) or 0)
+                update_data['cantidad_actual'] = cantidad_original - cantidad_a_procesar
+                update_data['cantidad_en_cuarentena'] = cantidad_en_cuarentena_actual + cantidad_a_procesar
+                update_data['estado'] = 'cuarentena'
+                update_data['motivo_cuarentena'] = form_data.get('comentarios', '')
 
-            # Actualizar el lote en la base de datos
-            update_result = self.inventario_model.update(lote_id, update_data, 'id_lote')
-            if not update_result.get('success'):
-                return self.error_response(f"Error al actualizar el estado del lote: {update_result.get('error')}", 500)
+            if update_data:
+                update_result = self.inventario_model.update(lote_id, update_data, 'id_lote')
+                if not update_result.get('success'):
+                    return self.error_response(f"Error al actualizar el lote: {update_result.get('error')}", 500)
+                lote_actualizado = update_result['data']
+            else:
+                lote_actualizado = lote
 
             # Registrar el evento de C.C. si es necesario
             if decision in ['Poner en Cuarentena', 'Rechazar']:
@@ -107,30 +119,51 @@ class ControlCalidadInsumoController(BaseController):
                     'orden_compra_id': orden_compra_id,
                     'usuario_supervisor_id': usuario_id,
                     'decision_final': decision.upper().replace(' ', '_'),
-                    'resultado_inspeccion': form_data.get('resultado_inspeccion'),
                     'comentarios': form_data.get('comentarios'),
                     'foto_url': foto_url
                 }
-                registro_result = self.model.create_registro(registro_data)
-                if not registro_result.get('success'):
-                    logger.error(f"Falló la creación del registro de C.C. para el lote {lote_id}: {registro_result.get('error')}")
+                self.model.create_registro(registro_data)
+
+                # Guardar la URL de la imagen en el lote de inventario
+                if foto_url:
+                    self.inventario_model.update(lote_id, {'url_imagen': foto_url}, 'id_lote')
 
             # Recalcular el stock del insumo afectado
             if insumo_id:
-                recalculo_res = self.inventario_model.recalcular_stock_para_insumo(insumo_id)
-                if not recalculo_res.get('success'):
-                    logger.error(f"El lote {lote_id} se actualizó, pero falló el recálculo de stock para el insumo {insumo_id}: {recalculo_res.get('error')}")
+                self.inventario_model.recalcular_stock_para_insumo(insumo_id)
 
             # Verificar si la orden de compra asociada ya puede ser cerrada
             orden_compra_id_a_verificar = self._extraer_oc_id_de_lote(lote)
             if orden_compra_id_a_verificar:
                 self._verificar_y_cerrar_orden_si_completa(orden_compra_id_a_verificar)
             
-            return self.success_response(message=f"Lote {lote_id} procesado con éxito. Nuevo estado: {nuevo_estado_lote}.")
+            return self.success_response(data=lote_actualizado, message=f"Lote {lote_id} procesado con éxito.")
 
         except Exception as e:
             logger.error(f"Error crítico procesando inspección para el lote {lote_id}: {e}", exc_info=True)
             return self.error_response('Error interno del servidor.', 500)
+
+    def procesar_inspeccion_api(self, lote_id: str, decision: str, form_data: Dict, foto_file, usuario_id: int) -> tuple:
+        """
+        Versión API para procesar una inspección. Devuelve el lote actualizado.
+        """
+        try:
+            resultado, status_code = self.procesar_inspeccion(lote_id, decision, form_data, foto_file, usuario_id)
+            return resultado, status_code
+        except Exception as e:
+            logger.error(f"Error en procesar_inspeccion_api: {e}", exc_info=True)
+            return self.error_response('Error interno del servidor.'), 500
+
+    def finalizar_inspeccion_orden(self, orden_compra_id: int) -> tuple:
+        """
+        Cierra una orden de compra una vez que toda la inspección ha terminado.
+        """
+        try:
+            self._verificar_y_cerrar_orden_si_completa(orden_compra_id)
+            return self.success_response(message=f"Proceso de finalización para la orden {orden_compra_id} ejecutado.")
+        except Exception as e:
+            logger.error(f"Error al finalizar la inspección para la orden {orden_compra_id}: {e}", exc_info=True)
+            return self.error_response("Error interno al intentar finalizar la inspección."), 500
 
     def _extraer_oc_id_de_lote(self, lote: Dict) -> int | None:
         """
@@ -190,4 +223,3 @@ class ControlCalidadInsumoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error crítico al verificar y cerrar la OC {orden_compra_id}: {e}", exc_info=True)
-

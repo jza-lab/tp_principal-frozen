@@ -13,6 +13,7 @@ from marshmallow import ValidationError
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.producto_controller import ProductoController
 from app.controllers.etapa_produccion_controller import EtapaProduccionController
+from app.models.reserva_insumo import ReservaInsumoModel
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
 from app.controllers.pedido_controller import PedidoController
@@ -219,12 +220,17 @@ def detalle(id):
     if pedidos_asociados_resp.get('data') and len(pedidos_asociados_resp.get('data'))>0:
         pedidos_asociados=pedidos_asociados_resp.get('data')
 
+    reserva_insumo_model = ReservaInsumoModel()
+    lotes_insumos_reservados_result = reserva_insumo_model.get_by_orden_produccion_id(id)
+    lotes_insumos_reservados = lotes_insumos_reservados_result.get("data", [])
+
     return render_template(
         "ordenes_produccion/detalle.html",
         orden=orden,
         ingredientes=ingredientes,
         desglose_origen=desglose_origen,
-        pedidos_asociados=pedidos_asociados
+        pedidos_asociados=pedidos_asociados,
+        lotes_insumos_reservados=lotes_insumos_reservados
     )
 
 

@@ -20,7 +20,7 @@ class ReservaInsumoModel(BaseModel):
         try:
             # --- CONSULTA CORREGIDA ---
             result = self.db.table(self.get_table_name()).select(
-                '*, orden_produccion:ordenes_produccion(id, codigo), lote_inventario:insumos_inventario(numero_lote_proveedor, insumo:insumos_catalogo(nombre))'
+                '*, orden_produccion:ordenes_produccion(id, codigo), lote_inventario:lotes_inventario(numero_lote_proveedor, insumo:insumos_catalogo(nombre))'
             ).order('created_at', desc=True).execute()
 
             flat_data = []
@@ -46,4 +46,17 @@ class ReservaInsumoModel(BaseModel):
             return {'success': True, 'data': flat_data}
         except Exception as e:
             logger.error(f"Error obteniendo detalles de reservas de insumos: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+    
+    
+    def get_by_orden_produccion_id(self, orden_produccion_id: int):
+        """Obtiene todas las reservas de insumos para una orden de producción específica."""
+        try:
+            result = self.db.table(self.get_table_name()).select(
+                '*, lote_inventario:lote_inventario_id(*, insumo:insumos_catalogo(nombre), proveedor:id_proveedor(id, nombre))'
+            ).eq('orden_produccion_id', orden_produccion_id).execute()
+
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error obteniendo reservas por ID de orden de producción: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}

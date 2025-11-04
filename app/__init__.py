@@ -3,8 +3,8 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager, unset_jwt_cookies, get_current_user, verify_jwt_in_request
 from flask_wtf.csrf import CSRFProtect
 from flask_wtf import FlaskForm
-from app.config import Config 
-from jinja2 import pass_context 
+from app.config import Config
+from jinja2 import pass_context
 import logging
 from .json_encoder import CustomJSONEncoder
 from datetime import timedelta, datetime
@@ -13,6 +13,7 @@ from app.models.token_blacklist_model import TokenBlacklistModel
 from app.models.rol import RoleModel
 from app.controllers.cliente_controller import ClienteController
 from app.models.reclamo import ReclamoModel
+from app.models.chatbot_qa import ChatbotQA
 from types import SimpleNamespace
 
 jwt = JWTManager()
@@ -47,10 +48,10 @@ def user_lookup_callback(_jwt_header, jwt_data):
         'nombre_completo': f"{jwt_data.get('nombre', '')} {jwt_data.get('apellido', '')}".strip(),
         # Reconstruimos el objeto 'roles' directamente desde el token
         'roles': {'codigo': rol_codigo, 'nombre': jwt_data.get('rol_nombre', rol_codigo)},
-        
+
         # --- NUEVA LÍNEA ---
         # Cargamos la lista de permisos que guardamos en el token durante el login
-        'permisos': jwt_data.get('permisos', []) 
+        'permisos': jwt_data.get('permisos', [])
     }
     return SimpleNamespace(**user_data)
 
@@ -98,9 +99,13 @@ def _register_blueprints(app: Flask):
     from app.views.receta_routes import receta_bp
     from app.views.produccion_kanban_routes import produccion_kanban_bp
     from app.views.control_calidad_routes import control_calidad_bp
+    from app.views.chatbot_routes import chatbot_bp
+    from app.views.reportes_routes import reportes_bp
+    from app.views.proveedor_routes import proveedor_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
+    app.register_blueprint(proveedor_bp)
     app.register_blueprint(control_calidad_bp)
     app.register_blueprint(insumos_bp)
     app.register_blueprint(inventario_api_bp)
@@ -125,10 +130,12 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(alertas_bp)
     app.register_blueprint(cliente_bp)
     app.register_blueprint(reclamo_bp)
-    app.register_blueprint(admin_reclamo_bp) # <-- REGISTRO DE ADMIN RECLAMO
+    app.register_blueprint(admin_reclamo_bp)
     app.register_blueprint(consulta_bp)
     app.register_blueprint(receta_bp)
     app.register_blueprint(produccion_kanban_bp)
+    app.register_blueprint(chatbot_bp)
+    app.register_blueprint(reportes_bp)
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""
@@ -168,7 +175,7 @@ def _formato_moneda_filter(value):
         return value
 
 # --- SECCIÓN MODIFICADA ---
-@pass_context 
+@pass_context
 def _has_permission_filter(context, accion: str) -> bool:
     """
     --- VERSIÓN OPTIMIZADA ---
@@ -185,7 +192,7 @@ def _has_permission_filter(context, accion: str) -> bool:
         # --- LÓGICA MODIFICADA ---
         # 1. Obtenemos la lista de permisos desde el objeto 'user' (cargado desde el token)
         user_permissions = getattr(user, 'permisos', [])
-        
+
         # 2. Verificamos si la 'accion' está en la lista (¡esto es súper rápido!)
         return accion in user_permissions
         # --- FIN DE LA LÓGICA MODIFICADA ---
@@ -275,6 +282,10 @@ def create_app() -> Flask:
     # 3. Registrar la función decorada. No es necesario cambiar esta parte.
     app.jinja_env.globals['has_permission'] = _has_permission_filter # Se registra como global
     app.jinja_env.tests['has_permission'] = _has_permission_filter # Y como test
+
+    with app.app_context():
+        chatbot_model = ChatbotQA()
+        chatbot_model.create_table_if_not_exists()
 
     _register_blueprints(app)
     _register_error_handlers(app)

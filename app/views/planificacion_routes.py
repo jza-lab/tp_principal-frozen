@@ -1,5 +1,5 @@
 import logging
-from flask import Blueprint, render_template, flash, request, jsonify
+from flask import Blueprint, render_template, flash, url_for, request, jsonify, session, redirect 
 from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
 from app.controllers.planificacion_controller import PlanificacionController
 from app.controllers.usuario_controller import UsuarioController
@@ -163,3 +163,69 @@ def validar_fecha_requerida_api():
     # Asumo que el método `api_validar_fecha_requerida` existe en el controlador
     response, status_code = controller.api_validar_fecha_requerida(items_data, fecha_requerida)
     return jsonify(response), status_code
+
+@planificacion_bp.route('/configuracion', methods=['GET'])
+##@jwt_required()
+# @permission_required(accion='configurar_planificacion') # <-- Asegura esto
+def configuracion_lineas():
+    """Muestra la página de configuración de líneas y bloqueos."""
+    controller = PlanificacionController()
+    response, status_code = controller.obtener_datos_configuracion()
+    if status_code != 200:
+        flash(response.get('error', 'No se pudieron cargar los datos de configuración.'), 'error')
+        return redirect(url_for('planificacion.index'))
+
+    return render_template(
+        'planificacion/configuracion.html',
+        lineas=response.get('data', {}).get('lineas', []),
+        bloqueos=response.get('data', {}).get('bloqueos', []),
+        now=datetime.utcnow()  # <-- ¡AÑADIR ESTA LÍNEA!
+    )
+
+@planificacion_bp.route('/configuracion/guardar-linea', methods=['POST'])
+##@jwt_required()
+# @permission_required(accion='configurar_planificacion')
+def guardar_configuracion_linea():
+    """Guarda los cambios de eficiencia/utilización de una línea."""
+    data = request.form
+    controller = PlanificacionController()
+    response, status_code = controller.actualizar_configuracion_linea(data)
+
+    if status_code == 200:
+        flash(response.get('message', 'Línea actualizada.'), 'success')
+    else:
+        flash(response.get('error', 'Error al actualizar.'), 'error')
+
+    return redirect(url_for('planificacion.configuracion_lineas'))
+
+
+@planificacion_bp.route('/configuracion/agregar-bloqueo', methods=['POST'])
+##@jwt_required()
+# @permission_required(accion='configurar_planificacion')
+def agregar_bloqueo_capacidad():
+    """Agrega un nuevo bloqueo de mantenimiento."""
+    data = request.form
+    controller = PlanificacionController()
+    response, status_code = controller.agregar_bloqueo(data)
+
+    if status_code == 201:
+        flash(response.get('message', 'Bloqueo agregado.'), 'success')
+    else:
+        flash(response.get('error', 'Error al agregar bloqueo.'), 'error')
+
+    return redirect(url_for('planificacion.configuracion_lineas'))
+
+@planificacion_bp.route('/configuracion/eliminar-bloqueo/<int:bloqueo_id>', methods=['POST'])
+##@jwt_required()
+# @permission_required(accion='configurar_planificacion')
+def eliminar_bloqueo_capacidad(bloqueo_id):
+    """Elimina un bloqueo de mantenimiento."""
+    controller = PlanificacionController()
+    response, status_code = controller.eliminar_bloqueo(bloqueo_id)
+
+    if status_code == 200:
+        flash(response.get('message', 'Bloqueo eliminado.'), 'success')
+    else:
+        flash(response.get('error', 'Error al eliminar.'), 'error')
+
+    return redirect(url_for('planificacion.configuracion_lineas'))

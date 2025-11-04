@@ -16,10 +16,10 @@
             <td>{{ lote.numero_lote_proveedor or 'N/A' }}</td>
             
             <td class="text-end fw-bold">
-                {% if lote.estado == 'cuarentena' %}
+                {% if lote.cantidad_en_cuarentena > 0 %}
                     <div class="d-flex flex-column text-end" style="font-size: 0.9em; line-height: 1.4;">
-                        <span>{{ lote.cantidad_actual | round(2) }} <small class="text-success">(Disp)</small></span>
-                        <span>{{ lote.cantidad_en_cuarentena | round(2) }} <small class="text-warning">(Cuar)</small></span>
+                        <span class="text-warning">{{ lote.cantidad_en_cuarentena | round(2) }} <small>(Cuar)</small></span>
+                        <span class="text-muted">{{ lote.cantidad_actual | round(2) }} <small>(Disp)</small></span>
                     </div>
                 {% else %}
                     {{ lote.cantidad_actual | round(2) }} <small class="text-muted" style="font-size: 0.8em;">{{ lote.insumo_unidad_medida or '' }}</small>
@@ -72,7 +72,7 @@
                     <i class="bi bi-shield-lock"></i>
                 </button>
                 {% endif %}
-                {% if lote.estado == 'cuarentena' and lote.cantidad_en_cuarentena > 0 %}
+                {% if lote.cantidad_en_cuarentena > 0 %}
                 <button type="button" class="btn btn-sm btn-outline-success" 
                         title="Liberar de Cuarentena"
                         data-bs-toggle="modal"

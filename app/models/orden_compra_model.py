@@ -269,7 +269,7 @@ class OrdenCompraModel(BaseModel):
 
     def update_with_items(self, orden_id: int, orden_data: Dict, items_data: List[Dict]) -> Dict:
         """
-        Actualiza una orden de compra y sus items.
+        Actualiza una orden de compra y sus items de forma inteligente, preservando la cantidad recibida.
         """
         try:
             # 1. Actualizar la orden de compra principal
@@ -280,18 +280,36 @@ class OrdenCompraModel(BaseModel):
             if not update_result.get('success'):
                 raise Exception(f"Error al actualizar la orden de compra principal: {update_result.get('error')}")
 
-            # 2. Eliminar los items antiguos
-            self.db.table('orden_compra_items').delete().eq('orden_compra_id', orden_id).execute()
+            # 2. Obtener los items existentes de la orden
+            existing_items_res = self.item_model.find_by_orden_id(orden_id)
+            if not existing_items_res.get('success'):
+                raise Exception("No se pudieron obtener los items existentes.")
+            
+            existing_items_map = {item['id']: item for item in existing_items_res.get('data', [])}
+            
+            # 3. Procesar los items que vienen del formulario (items_data)
+            updated_item_ids = set()
+            for item_form_data in items_data:
+                item_id = item_form_data.get('id')
+                if item_id and int(item_id) in existing_items_map:
+                    # Es un item existente, se actualiza
+                    existing_item = existing_items_map[int(item_id)]
+                    
+                    # PRESERVAR la cantidad recibida si no viene en el form
+                    if 'cantidad_recibida' not in item_form_data:
+                        item_form_data['cantidad_recibida'] = existing_item.get('cantidad_recibida', 0.0)
+                        
+                    self.item_model.update(int(item_id), item_form_data)
+                    updated_item_ids.add(int(item_id))
+                else:
+                    # Es un item nuevo, se crea
+                    item_form_data['orden_compra_id'] = orden_id
+                    self.item_model.create(item_form_data)
 
-            # 3. Insertar los nuevos items
-            if items_data:
-                for item in items_data:
-                    item['orden_compra_id'] = orden_id
-                
-                items_result = self.item_model.create_many(items_data)
-                if not items_result.get('success'):
-                    # This is not a true rollback, but we raise an error.
-                    raise Exception(f"Error al re-insertar los ítems de la orden: {items_result.get('error')}")
+            # 4. Eliminar los items que ya no están en el formulario
+            ids_to_delete = set(existing_items_map.keys()) - updated_item_ids
+            for item_id in ids_to_delete:
+                self.item_model.delete(item_id, 'id')
 
             logger.info(f"Orden de compra {orden_id} y sus items actualizados correctamente.")
             return self.get_one_with_details(orden_id)
@@ -329,6 +347,14 @@ class OrdenCompraModel(BaseModel):
 
         except Exception as e:
             logger.error(f"Error buscando códigos de OC y precios por insumo_id: {e}")
+            return {'success': False, 'error': str(e)}
+        
+    def get_egresos_en_periodo(self, fecha_inicio, fecha_fin):
+        try:
+            result = self.db.table(self.get_table_name()).select('fecha_emision, total').gte('fecha_emision', fecha_inicio).lte('fecha_emision', fecha_fin).eq('estado', 'RECIBIDA_COMPLETA').execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error obteniendo egresos: {str(e)}")
             return {'success': False, 'error': str(e)}
 
 @dataclass
