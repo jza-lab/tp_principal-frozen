@@ -1,0 +1,135 @@
+{% extends 'layouts/app_layout.html' %}
+
+{% block title %}Configuración de Líneas{% endblock %}
+
+{% block app_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">Configuración de Líneas de Producción</h1>
+        <p class="text-muted mb-0">Ajuste la capacidad estándar, eficiencia y bloqueos por mantenimiento.</p>
+    </div>
+    <div class="btn-toolbar">
+        <a href="{{ url_for('planificacion.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Volver al Tablero
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">Capacidad General de Líneas</h5>
+            </div>
+            <div class="card-body">
+                {% for linea in lineas %}
+                <form action="{{ url_for('planificacion.guardar_configuracion_linea') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="linea_id" value="{{ linea.id }}">
+                    
+                    <h6 class="mb-3">Línea {{ linea.id }} ({{ linea.nombre }})</h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Capacidad Estándar</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" name="capacidad_std" value="{{ linea.tiempo_disponible_std_dia | round(0) }}" step="1">
+                                <span class="input-group-text">min/día</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Eficiencia (%)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" name="eficiencia" value="{{ (linea.eficiencia * 100) | round(0) }}" min="0" max="100" step="1">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Utilización (%)</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" name="utilizacion" value="{{ (linea.utilizacion * 100) | round(0) }}" min="0" max="100" step="1">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm mt-3">Guardar Línea {{ linea.id }}</button>
+                </form>
+                {% if not loop.last %}<hr class="my-4">{% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">Bloqueos por Mantenimiento</h5>
+            </div>
+            <div class="card-body">
+                <h6>Agregar Nuevo Bloqueo</h6>
+                <form action="{{ url_for('planificacion.agregar_bloqueo_capacidad') }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Línea</label>
+                            <select name="centro_trabajo_id" class="form-select" required>
+                                {% for linea in lineas %}<option value="{{ linea.id }}">Línea {{ linea.id }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Fecha</label>
+                            <input type="date" name="fecha_bloqueo" class="form-control" min="{{ now.date().isoformat() }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Minutos</label>
+                            <input type="number" name="minutos_bloqueados" class="form-control" placeholder="Ej: 240" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Motivo</label>
+                            <input type="text" name="motivo_bloqueo" class="form-control" placeholder="Ej: Mantenimiento preventivo">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-sm mt-3">
+                        <i class="bi bi-plus-circle me-1"></i> Agregar Bloqueo
+                    </button>
+                </form>
+                
+                <hr class="my-4">
+                <h6>Bloqueos Programados</h6>
+                {% if not bloqueos %}
+                <div class="alert alert-info">No hay bloqueos programados.</div>
+                {% else %}
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Línea</th>
+                            <th>Fecha</th>
+                            <th>Minutos</th>
+                            <th>Motivo</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for bloqueo in bloqueos %}
+                        <tr>
+                            <td>Línea {{ bloqueo.centro_trabajo_id }}</td>
+                            <td>{{ bloqueo.fecha }}</td>
+                            <td>{{ bloqueo.minutos_bloqueados | round(0) }} min</td>
+                            <td>{{ bloqueo.motivo or 'N/A' }}</td>
+                            <td>
+                                <form action="{{ url_for('planificacion.eliminar_bloqueo_capacidad', bloqueo_id=bloqueo.id) }}" method="POST" onsubmit="return confirm('¿Está seguro que desea eliminar este bloqueo?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm p-1">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

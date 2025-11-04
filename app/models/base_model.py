@@ -62,7 +62,7 @@ class BaseModel(ABC):
             if result.data:
                 logger.info(f"Registro creado en {self.table_name}: {result.data[0]}")
                 return {'success': True, 'data': result.data[0]}
-            
+
             return {'success': False, 'error': 'No se pudo crear el registro'}
 
         except Exception as e:
@@ -81,7 +81,7 @@ class BaseModel(ABC):
 
             if result.data:
                 return {'success': True, 'data': result.data[0]}
-            
+
             return {'success': False, 'error': 'Registro no encontrado'}
 
         except Exception as e:
@@ -100,6 +100,21 @@ class BaseModel(ABC):
                 for key, value in filters.items():
                     if value is None:
                         continue
+                    # --- LÓGICA CORREGIDA PARA OPERADORES (ej. 'fecha_gte') ---
+                    if '_' in key:
+                        parts = key.split('_')
+                        operator = parts[-1]
+                        column_name = '_'.join(parts[:-1]) # Reconstruir el nombre de la columna
+
+                        op_map = {
+                            'eq': query.eq, 'gt': query.gt, 'gte': query.gte,
+                            'lt': query.lt, 'lte': query.lte, 'in': query.in_
+                        }
+
+                        if operator in op_map:
+                            query = op_map[operator](column_name, value)
+                            continue # Importante: saltar al siguiente filtro
+                    # --- FIN DE LA CORRECCIÓN ---
                     if isinstance(value, tuple) and len(value) == 2:
                         operator, filter_value = value
                         op_map = {
@@ -144,7 +159,7 @@ class BaseModel(ABC):
             if result.data:
                 logger.info(f"Registro actualizado en {self.table_name}: {id_value}")
                 return {'success': True, 'data': result.data[0]}
-            
+
             return {'success': False, 'error': 'No se pudo actualizar el registro o no se encontró.'}
 
         except Exception as e:
@@ -184,9 +199,9 @@ class BaseModel(ABC):
                 for key, value in filtros.items():
                     if value is not None:
                         query = query.eq(key, value)
-            
+
             response = query.execute()
-            
+
             return {'success': True, 'data': response.count}
         except Exception as e:
             logger.error(f"Error contando registros en {self.table_name}: {e}")
