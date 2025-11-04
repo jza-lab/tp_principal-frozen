@@ -464,7 +464,7 @@ class PedidoModel(BaseModel):
 
         try:
 
-            query = self.db.table(self.get_table_name()).select('*').in_('id', pedido_ids)
+            query = self.db.table(self.get_table_name()).select('*, vendedor:id_vendedor(nombre, apellido)').in_('id', pedido_ids)
 
             result = query.execute()
 
