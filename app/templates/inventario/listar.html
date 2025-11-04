@@ -31,8 +31,8 @@
             <tr>
                 <th style="width: 40px;"></th>
                 <th>Insumo</th>
-                <th class="text-end">Stock Disponible</th>
                 <th class="text-end">Stock Total Físico</th>
+                <th class="text-end">Stock Disponible</th>
                 <th>Estado General</th>
                 <th class="text-center">Lotes</th>
             </tr>
@@ -53,11 +53,11 @@
                     <div class="fw-bold">{{ insumo.insumo_nombre }}</div>
                     <small class="text-muted">{{ insumo.insumo_categoria }}</small>
                 </td>
-                <td class="text-end fw-bold">
-                    {{ (insumo.stock_actual | default(0)) | round(2) }} {{ insumo.insumo_unidad_medida }}
-                </td>
                 <td class="text-end text-muted">
                     {{ (insumo.stock_total | default(0)) | round(2) }} {{ insumo.insumo_unidad_medida }}
+                </td>
+                <td class="text-end fw-bold">
+                    {{ (insumo.stock_actual | default(0)) | round(2) }} {{ insumo.insumo_unidad_medida }}
                 </td>
                 <td>
                     {% if insumo.estado_general == 'Disponible' %}

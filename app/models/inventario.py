@@ -262,9 +262,6 @@ class InventarioModel(BaseModel):
             else:
                 lote['proveedor_nombre'] = 'N/A'
 
-            # Simulación de la URL de la imagen
-            lote['url_imagen'] = 'https://via.placeholder.com/800x600.png?text=Imagen+de+Prueba'
-                
             return {'success': True, 'data': lote}
 
         except Exception as e:
@@ -313,20 +310,20 @@ class InventarioModel(BaseModel):
                 logger.error(error_msg)
                 return {'success': False, 'error': error_msg}
 
-            # 2. Calcular los nuevos stocks basados en las cantidades Y el estado.
-            nuevo_stock_actual = 0  # Solo 'disponible'
-            nuevo_stock_total = 0   # Físico: disponible + cuarentena + en revisión
+            # 2. Calcular los nuevos stocks con lógica refinada final.
+            nuevo_stock_actual = 0  # Usable: 'disponible' + porción disponible de 'en cuarentena'.
+            nuevo_stock_total = 0   # Físico: disponible + cuarentena + en revisión.
 
             for lote in lotes_resp.data:
                 estado_lote = (lote.get('estado') or '').strip().lower()
                 cantidad_actual = float(lote.get('cantidad_actual') or 0)
                 cantidad_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
 
-                # Sumar al stock total (físico) si no es un estado terminal
+                # El stock total es la suma de todo lo físico que existe y no está en estado terminal.
                 nuevo_stock_total += (cantidad_actual + cantidad_cuarentena)
                 
-                # Sumar al stock disponible SOLO si el estado es 'disponible'
-                if estado_lote == 'disponible':
+                # El stock disponible NO debe sumar la cantidad de lotes 'en revision'.
+                if estado_lote != 'en revision':
                     nuevo_stock_actual += cantidad_actual
 
             # 3. Preparar el payload de actualización

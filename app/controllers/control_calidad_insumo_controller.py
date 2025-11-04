@@ -85,10 +85,14 @@ class ControlCalidadInsumoController(BaseController):
             # Lógica unificada para procesamiento parcial y total
             update_data = {}
             if decision == 'Aceptar':
-                # No se hace nada especial, la cantidad ya está disponible
+                # FIX: Es necesario agregar el estado para que se ejecute el update
+                update_data['estado'] = nuevo_estado_lote 
+                # No se hace nada especial con la cantidad, la cantidad_actual es la disponible.
                 pass
             elif decision == 'Rechazar':
                 update_data['cantidad_actual'] = cantidad_original - cantidad_a_procesar
+                # FIX: Es necesario agregar el estado para que se ejecute el update
+                update_data['estado'] = nuevo_estado_lote
                 # Opcional: registrar la cantidad rechazada en otro campo si existiera
             elif decision == 'Poner en Cuarentena':
                 cantidad_en_cuarentena_actual = float(lote.get('cantidad_en_cuarentena', 0) or 0)
@@ -107,11 +111,11 @@ class ControlCalidadInsumoController(BaseController):
 
             # Registrar el evento de C.C. si es necesario
             if decision in ['Poner en Cuarentena', 'Rechazar']:
-                foto_url = self._subir_foto_y_obtener_url(foto_file, lote_actualizado.get('id_lote'))
+                foto_url = self._subir_foto_y_obtener_url(foto_file, lote_id)
                 orden_compra_id = self._extraer_oc_id_de_lote(lote)
                 
                 registro_data = {
-                    'lote_insumo_id': lote_actualizado.get('id_lote'),
+                    'lote_insumo_id': lote_id,
                     'orden_compra_id': orden_compra_id,
                     'usuario_supervisor_id': usuario_id,
                     'decision_final': decision.upper().replace(' ', '_'),
@@ -119,6 +123,10 @@ class ControlCalidadInsumoController(BaseController):
                     'foto_url': foto_url
                 }
                 self.model.create_registro(registro_data)
+
+                # Guardar la URL de la imagen en el lote de inventario
+                if foto_url:
+                    self.inventario_model.update(lote_id, {'url_imagen': foto_url}, 'id_lote')
 
             # Recalcular el stock del insumo afectado
             if insumo_id:
@@ -130,40 +138,6 @@ class ControlCalidadInsumoController(BaseController):
                 self._verificar_y_cerrar_orden_si_completa(orden_compra_id_a_verificar)
             
             return self.success_response(data=lote_actualizado, message=f"Lote {lote_id} procesado con éxito.")
-        except Exception as e:
-            logger.error(f"Error crítico procesando inspección para el lote {lote_id}: {e}", exc_info=True)
-            return self.error_response('Error interno del servidor.', 500)
-
-            # Registrar el evento de C.C. si es necesario
-            if decision in ['Poner en Cuarentena', 'Rechazar']:
-                foto_url = self._subir_foto_y_obtener_url(foto_file, lote_id)
-                orden_compra_id = self._extraer_oc_id_de_lote(lote)
-                
-                registro_data = {
-                    'lote_insumo_id': lote_id,
-                    'orden_compra_id': orden_compra_id,
-                    'usuario_supervisor_id': usuario_id,
-                    'decision_final': decision.upper().replace(' ', '_'),
-                    'resultado_inspeccion': form_data.get('resultado_inspeccion'),
-                    'comentarios': form_data.get('comentarios'),
-                    'foto_url': foto_url
-                }
-                registro_result = self.model.create_registro(registro_data)
-                if not registro_result.get('success'):
-                    logger.error(f"Falló la creación del registro de C.C. para el lote {lote_id}: {registro_result.get('error')}")
-
-            # Recalcular el stock del insumo afectado
-            if insumo_id:
-                recalculo_res = self.inventario_model.recalcular_stock_para_insumo(insumo_id)
-                if not recalculo_res.get('success'):
-                    logger.error(f"El lote {lote_id} se actualizó, pero falló el recálculo de stock para el insumo {insumo_id}: {recalculo_res.get('error')}")
-
-            # Verificar si la orden de compra asociada ya puede ser cerrada
-            orden_compra_id_a_verificar = self._extraer_oc_id_de_lote(lote)
-            if orden_compra_id_a_verificar:
-                self._verificar_y_cerrar_orden_si_completa(orden_compra_id_a_verificar)
-            
-            return self.success_response(data=update_result.get('data'), message=f"Lote {lote_id} procesado con éxito. Nuevo estado: {nuevo_estado_lote}.")
 
         except Exception as e:
             logger.error(f"Error crítico procesando inspección para el lote {lote_id}: {e}", exc_info=True)
@@ -249,4 +223,3 @@ class ControlCalidadInsumoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error crítico al verificar y cerrar la OC {orden_compra_id}: {e}", exc_info=True)
-
