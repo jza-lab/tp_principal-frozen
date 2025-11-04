@@ -49,9 +49,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const upstreamHtml = upstream.insumos.length > 0 ? upstream.insumos.map(insumo => `
             <tr>
                 <td>${insumo.nombre_insumo}</td>
-                <td>${insumo.lote_insumo}</td>
+                <td><a href="/inventario/lote/${insumo.id_lote_insumo}" target="_blank">${insumo.lote_insumo}</a></td>
                 <td>${insumo.cantidad_usada}</td>
-                <td>${insumo.proveedor}</td>
+                <td><a href="/proveedores/${insumo.id_proveedor}/ordenes_compra" target="_blank">${insumo.proveedor}</a></td>
             </tr>
         `).join('') : '<tr><td colspan="4" class="text-center">No se utilizaron insumos directos.</td></tr>';
 

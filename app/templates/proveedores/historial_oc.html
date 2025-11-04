@@ -1,0 +1,69 @@
+{% extends 'layouts/app_layout.html' %}
+
+{% block title %}Historial de Órdenes de {{ proveedor.nombre }}{% endblock %}
+
+{% block app_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+    <div>
+        <h1 class="h2 mb-1">
+            Historial de Órdenes de Compra
+        </h1>
+        <p class="text-muted mb-0">Proveedor: <strong>{{ proveedor.nombre }}</strong></p>
+    </div>
+    <div class="btn-toolbar">
+        <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Órdenes de Compra Recibidas</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th># OC</th>
+                    <th>Fecha Emisión</th>
+                    <th>Fecha Entrega Estimada</th>
+                    <th>Fecha Entrega Real</th>
+                    <th class="text-end">Total</th>
+                    <th class="text-center">Estado</th>
+                    <th>Calidad</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for oc in ordenes_compra %}
+                <tr>
+                    <td><a href="{{ url_for('orden_compra.detalle', id=oc.id) }}" class="fw-bold">{{ oc.codigo_oc }}</a></td>
+                    <td>{{ oc.fecha_emision | format_datetime('%d/%m/%Y') }}</td>
+                    <td>{{ oc.fecha_estimada_entrega | format_datetime('%d/%m/%Y') }}</td>
+                    <td>{{ oc.fecha_real_entrega | format_datetime('%d/%m/%Y') if oc.fecha_real_entrega else 'N/A' }}</td>
+                    <td class="text-end">{{ oc.total | formato_moneda }}</td>
+                    <td class="text-center">
+                        <span class="badge bg-secondary">{{ oc.estado }}</span>
+                    </td>
+                    <td>
+                        {% if oc.estado == 'RECEPCION_INCOMPLETA' %}
+                            <span class="badge bg-warning text-dark">Problema de Cantidad</span>
+                        {% elif oc.estado == 'RECHAZADA' %}
+                            <span class="badge bg-danger">Problema de Calidad</span>
+                        {% elif oc.estado == 'COMPLETADA' or oc.estado == 'CERRADA' %}
+                            <span class="badge bg-success">Sin Problemas</span>
+                        {% else %}
+                            <span class="badge bg-light text-dark">No aplica</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">Este proveedor no tiene órdenes de compra asociadas.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
