@@ -217,11 +217,28 @@ class PlanificacionController(BaseController):
                 # ----------------------------------------------------------------
 
                 # --- ¡NUEVA LLAMADA AL HELPER DE SIMULACIÓN! ---
+
+                # 1. Obtener el mapa de carga actual de TODAS las OPs EXCEPTO la que estamos planificando
+                filtros_ops = {
+                    'estado': ('in', [
+                        'EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1',
+                        'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD'
+                    ]),
+                    'id': ('not.in', [op_a_planificar_id]) # <-- Excluir la OP actual
+                }
+                ops_resp, _ = self.orden_produccion_controller.obtener_ordenes(filtros_ops)
+                ops_actuales = ops_resp.get('data', []) if ops_resp.get('success') else []
+
+                logger.info(f"[consolidar_lote] Calculando carga actual basada en {len(ops_actuales)} OPs (excluyendo {op_a_planificar_id})...")
+                carga_actual_map = self.calcular_carga_capacidad(ops_actuales)
+
+                # 2. Llamar al simulador pasándole el mapa de carga
                 simulacion_result = self._simular_asignacion_carga(
                     carga_total_op=carga_adicional_total,
                     linea_propuesta=linea_propuesta,
                     fecha_inicio_busqueda=fecha_inicio_propuesta,
-                    op_id_a_excluir=op_a_planificar_id # Excluir la propia OP si se está replanificando
+                    op_id_a_excluir=op_a_planificar_id, # (Este ya no es necesario, pero no hace daño)
+                    carga_actual_map=carga_actual_map # <-- ¡PASAR EL MAPA DE CARGA REAL!
                 )
 
                 if not simulacion_result['success']:
@@ -1182,7 +1199,7 @@ class PlanificacionController(BaseController):
             return self.error_response(f"Error interno: {str(e)}", 500), 500
 
 
-    def _simular_asignacion_carga(self, carga_total_op: float, linea_propuesta: int, fecha_inicio_busqueda: date, op_id_a_excluir: Optional[int] = None) -> dict:
+    def _simular_asignacion_carga(self, carga_total_op: float, linea_propuesta: int, fecha_inicio_busqueda: date, op_id_a_excluir: Optional[int] = None, carga_actual_map: Optional[Dict] = None) -> dict:
         """
         Simula la asignación de carga día por día y devuelve la fecha de inicio real y la fecha de fin.
         Reutiliza la lógica del bucle 'while' de 'consolidar_y_aprobar_lote'.
@@ -1215,22 +1232,12 @@ class PlanificacionController(BaseController):
                 dia_actual_offset += 1
                 continue # Saltar día no laborable
 
-            # Obtener carga existente
-            ops_existentes_resultado = self.orden_produccion_controller.obtener_ordenes(filtros={
-                'fecha_inicio_planificada': fecha_actual_str,
-                'linea_asignada': linea_propuesta,
-                'estado': ('not.in', ['PENDIENTE', 'COMPLETADA', 'CANCELADA', 'CONSOLIDADA'])
-            })
-            carga_existente_dia = 0.0
-            if isinstance(ops_existentes_resultado, tuple) and len(ops_existentes_resultado) == 2:
-                ops_existentes_resp, _ = ops_existentes_resultado
-                if ops_existentes_resp.get('success'):
-                    # Excluir la OP que estamos replanificando (si aplica)
-                    ops_mismo_dia = [op for op in ops_existentes_resp.get('data', []) if op.get('id') != op_id_a_excluir]
-                    if ops_mismo_dia:
-                        carga_existente_dict = self.calcular_carga_capacidad(ops_mismo_dia)
-                        carga_existente_dia = carga_existente_dict.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
+            # Obtener carga existente (¡MODIFICADO!)
+            # Ya no consultamos la DB, usamos el mapa de carga pre-calculado.
+            if carga_actual_map is None:
+                carga_actual_map = {} # Asegurar que el mapa exista
 
+            carga_existente_dia = carga_actual_map.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
             capacidad_restante_dia = max(0.0, capacidad_dia_actual - carga_existente_dia)
 
             if capacidad_restante_dia < 1:
@@ -1279,6 +1286,22 @@ class PlanificacionController(BaseController):
             fecha_requerida_cliente = date.fromisoformat(fecha_requerida_str)
             fecha_sugerida_mas_tardia = date.today()
 
+            # --- ¡NUEVA LÓGICA DE CARGA REAL! ---
+            # 1. Obtener TODAS las OPs planificadas que afectan la capacidad futura
+            filtros_ops = {
+                'estado': ('in', [
+                    'EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1',
+                    'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD'
+                ])
+            }
+            ops_resp, _ = self.orden_produccion_controller.obtener_ordenes(filtros_ops)
+            ops_actuales = ops_resp.get('data', []) if ops_resp.get('success') else []
+
+            # 2. Calcular el mapa de carga real (usando la misma lógica del CRP)
+            logger.info(f"[api_validar_fecha] Calculando carga actual basada en {len(ops_actuales)} OPs...")
+            carga_actual_map = self.calcular_carga_capacidad(ops_actuales)
+            # --- FIN NUEVA LÓGICA ---
+
             # 1. Simular la carga de cada item que requiera producción
             for item in items_data:
                 producto_id = item.get('producto_id')
@@ -1310,7 +1333,8 @@ class PlanificacionController(BaseController):
                     carga_total_op=carga_total_min,
                     linea_propuesta=linea_sugerida,
                     fecha_inicio_busqueda=date.today(), # Buscar desde hoy
-                    op_id_a_excluir=None # Es un pedido nuevo, no hay OP para excluir
+                    op_id_a_excluir=None, # Es un pedido nuevo, no hay OP para excluir
+                    carga_actual_map=carga_actual_map # <-- ¡PASAR EL MAPA DE CARGA REAL!
                 )
 
                 if simulacion_result['success']:
