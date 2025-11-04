@@ -3,8 +3,8 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager, unset_jwt_cookies, get_current_user, verify_jwt_in_request
 from flask_wtf.csrf import CSRFProtect
 from flask_wtf import FlaskForm
-from app.config import Config 
-from jinja2 import pass_context 
+from app.config import Config
+from jinja2 import pass_context
 import logging
 from .json_encoder import CustomJSONEncoder
 from datetime import timedelta, datetime
@@ -48,10 +48,10 @@ def user_lookup_callback(_jwt_header, jwt_data):
         'nombre_completo': f"{jwt_data.get('nombre', '')} {jwt_data.get('apellido', '')}".strip(),
         # Reconstruimos el objeto 'roles' directamente desde el token
         'roles': {'codigo': rol_codigo, 'nombre': jwt_data.get('rol_nombre', rol_codigo)},
-        
+
         # --- NUEVA LÍNEA ---
         # Cargamos la lista de permisos que guardamos en el token durante el login
-        'permisos': jwt_data.get('permisos', []) 
+        'permisos': jwt_data.get('permisos', [])
     }
     return SimpleNamespace(**user_data)
 
@@ -171,7 +171,7 @@ def _formato_moneda_filter(value):
         return value
 
 # --- SECCIÓN MODIFICADA ---
-@pass_context 
+@pass_context
 def _has_permission_filter(context, accion: str) -> bool:
     """
     --- VERSIÓN OPTIMIZADA ---
@@ -188,7 +188,7 @@ def _has_permission_filter(context, accion: str) -> bool:
         # --- LÓGICA MODIFICADA ---
         # 1. Obtenemos la lista de permisos desde el objeto 'user' (cargado desde el token)
         user_permissions = getattr(user, 'permisos', [])
-        
+
         # 2. Verificamos si la 'accion' está en la lista (¡esto es súper rápido!)
         return accion in user_permissions
         # --- FIN DE LA LÓGICA MODIFICADA ---
@@ -207,7 +207,7 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config.from_object(Config)
     app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
-    app.config["JWT_COOKIE_CSRF_PROTECT"] = False  
+    app.config["JWT_COOKIE_CSRF_PROTECT"] = False
     app.json = CustomJSONEncoder(app)
 
     CORS(app, resources={r"/api/*": {"origins": "*"}})
@@ -278,14 +278,14 @@ def create_app() -> Flask:
     # 3. Registrar la función decorada. No es necesario cambiar esta parte.
     app.jinja_env.globals['has_permission'] = _has_permission_filter # Se registra como global
     app.jinja_env.tests['has_permission'] = _has_permission_filter # Y como test
-    
+
     with app.app_context():
         chatbot_model = ChatbotQA()
         chatbot_model.create_table_if_not_exists()
 
     _register_blueprints(app)
     _register_error_handlers(app)
-    
+
     @app.before_request
     def before_request_loader():
         """
@@ -298,7 +298,17 @@ def create_app() -> Flask:
         # ya que es innecesario y causa consultas a la BD por cada CSS, JS, etc.
         if request.endpoint and (request.endpoint.startswith('static') or request.blueprint == 'static'):
             return
-        
+
         verify_jwt_in_request(optional=True)
+
+    # --- INICIALIZAR SCHEDULER ---
+    # Importar solo si está habilitado para evitar dependencias
+    if app.config.get('AUTO_PLAN_ENABLED'):
+        try:
+            from app.scheduler import init_scheduler
+            init_scheduler(app)
+        except ImportError:
+            app.logger.error("No se pudo cargar el módulo del scheduler.")
+    # -----------------------------
 
     return app

@@ -1,17 +1,23 @@
 # En app/routes/planificacion_routes.py
 import logging
-from flask import Blueprint, render_template, flash, url_for, request, jsonify, session # Añade request y jsonify
+from flask import Blueprint, render_template, flash, url_for, request, jsonify, session, redirect # Añade request y jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
 from app.controllers.planificacion_controller import PlanificacionController
 from app.controllers.usuario_controller import UsuarioController
 from datetime import date, timedelta, datetime # <--- SE AÑADIÓ DATETIME
 from app.utils.decorators import permission_required
 from datetime import date, timedelta
+from app import csrf
+
 
 planificacion_bp = Blueprint('planificacion', __name__, url_prefix='/planificacion')
 
 logger = logging.getLogger(__name__)
 
+
+# --- 2. ¡Esta es la línea clave! ---
+csrf.exempt(planificacion_bp)
+# ------------------------------------
 
 @planificacion_bp.route('/') # La ruta principal ahora manejará todo
 @permission_required(accion='consultar_plan_de_produccion')
@@ -78,33 +84,14 @@ def index():
     ordenes_combinadas = list(ops_combinadas_dict.values())
     logger.info(f"Total OPs consideradas para CRP: {len(ordenes_para_crp)}")
 
-    # --- NUEVO FILTRO POR FECHA ---
-    ordenes_para_crp_filtradas = []
-    if inicio_semana and fin_semana: # Asegurarse que las fechas son válidas
-        for op in ordenes_combinadas:
-            fecha_inicio_op_str = op.get('fecha_inicio_planificada')
-            if fecha_inicio_op_str:
-                try:
-                    fecha_inicio_op = date.fromisoformat(fecha_inicio_op_str)
-                    # Incluir solo si la fecha de inicio está DENTRO de la semana seleccionada
-                    if inicio_semana <= fecha_inicio_op <= fin_semana:
-                        ordenes_para_crp_filtradas.append(op)
-                except ValueError:
-                    logger.warning(f"OP {op.get('codigo')} omitida de CRP (fecha inválida): {fecha_inicio_op_str}")
-            # else: # Opcional: ¿Incluir OPs sin fecha planificada? Probablemente no para CRP.
-            #    logger.warning(f"OP {op.get('codigo')} omitida de CRP (sin fecha inicio planificada)")
-    # -----------------------------
 
-    logger.info(f"Total OPs filtradas para CRP (semana {week_str}): {len(ordenes_para_crp_filtradas)}")
-
-    # --- CALCULAR CARGA Y CAPACIDAD (Usando la lista filtrada) ---
+    # --- CALCULAR CARGA Y CAPACIDAD (Usando la lista combinada) ---
     carga_calculada = {}
     capacidad_disponible = {}
-    # Esta condición ahora usa la lista filtrada
-    if ordenes_para_crp_filtradas and inicio_semana and fin_semana:
-        carga_calculada = controller.calcular_carga_capacidad(ordenes_para_crp_filtradas) # <--- PASAR LISTA FILTRADA
+    # Esta condición ahora usa la lista combinada (ordenes_para_crp)
+    if ordenes_para_crp and inicio_semana and fin_semana: # <-- CAMBIO AQUÍ
+        carga_calculada = controller.calcular_carga_capacidad(ordenes_para_crp) # <--- CAMBIO AQUÍ
         capacidad_disponible = controller.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
-    # -------------------------------------------------------------
 
     # ... (lógica para obtener supervisores, operarios, columnas, navegación - sin cambios) ...
     usuario_controller = UsuarioController()
@@ -177,7 +164,9 @@ def confirmar_aprobacion_api():
 
     controller = PlanificacionController()
     # Llama al helper que solo ejecuta la aprobación
-    response, status_code = controller._ejecutar_aprobacion_final(
+    # --- ¡CAMBIO AQUÍ! ---
+    # Llama a la nueva función "inteligente" que decide el flujo
+    response, status_code = controller.confirmar_aprobacion_lote(
         op_id,
         asignaciones,
         usuario_id
@@ -251,3 +240,95 @@ def consolidar_y_aprobar_api():
         usuario_id=usuario_id
     )
     return jsonify(response), status_code
+
+@planificacion_bp.route('/forzar_auto_planificacion', methods=['POST'])
+##@jwt_required() # Proteger el endpoint
+# @admin_required # Proteger aún más
+def forzar_planificacion():
+    controller = PlanificacionController()
+    # usuario_id = get_jwt_identity() # Obtener usuario del token
+    usuario_id = 1 # Usar un ID de prueba si no tienes auth
+    response, status_code = controller.forzar_auto_planificacion(usuario_id)
+    return jsonify(response), status_code
+
+@planificacion_bp.route('/api/validar-fecha-requerida', methods=['POST'])
+##@jwt_required()
+def validar_fecha_requerida_api():
+    data = request.json
+    items_data = data.get('items', [])
+    fecha_requerida = data.get('fecha_requerida')
+
+    if not items_data or not fecha_requerida:
+        return jsonify({'success': False, 'error': 'Faltan items o fecha_requerida.'}), 400
+
+
+    controller = PlanificacionController()
+
+    response, status_code = controller.api_validar_fecha_requerida(items_data, fecha_requerida)
+    return jsonify(response), status_code
+
+@planificacion_bp.route('/configuracion', methods=['GET'])
+##@jwt_required()
+# @permission_required(accion='configurar_planificacion') # <-- Asegura esto
+def configuracion_lineas():
+    """Muestra la página de configuración de líneas y bloqueos."""
+    controller = PlanificacionController()
+    response, status_code = controller.obtener_datos_configuracion()
+    if status_code != 200:
+        flash(response.get('error', 'No se pudieron cargar los datos de configuración.'), 'error')
+        return redirect(url_for('planificacion.index'))
+
+    return render_template(
+        'planificacion/configuracion.html',
+        lineas=response.get('data', {}).get('lineas', []),
+        bloqueos=response.get('data', {}).get('bloqueos', []),
+        now=datetime.utcnow()  # <-- ¡AÑADIR ESTA LÍNEA!
+    )
+
+@planificacion_bp.route('/configuracion/guardar-linea', methods=['POST'])
+##@jwt_required()
+# @permission_required(accion='configurar_planificacion')
+def guardar_configuracion_linea():
+    """Guarda los cambios de eficiencia/utilización de una línea."""
+    data = request.form
+    controller = PlanificacionController()
+    response, status_code = controller.actualizar_configuracion_linea(data)
+
+    if status_code == 200:
+        flash(response.get('message', 'Línea actualizada.'), 'success')
+    else:
+        flash(response.get('error', 'Error al actualizar.'), 'error')
+
+    return redirect(url_for('planificacion.configuracion_lineas'))
+
+
+@planificacion_bp.route('/configuracion/agregar-bloqueo', methods=['POST'])
+##@jwt_required()
+# @permission_required(accion='configurar_planificacion')
+def agregar_bloqueo_capacidad():
+    """Agrega un nuevo bloqueo de mantenimiento."""
+    data = request.form
+    controller = PlanificacionController()
+    response, status_code = controller.agregar_bloqueo(data)
+
+    if status_code == 201:
+        flash(response.get('message', 'Bloqueo agregado.'), 'success')
+    else:
+        flash(response.get('error', 'Error al agregar bloqueo.'), 'error')
+
+    return redirect(url_for('planificacion.configuracion_lineas'))
+
+@planificacion_bp.route('/configuracion/eliminar-bloqueo/<int:bloqueo_id>', methods=['POST'])
+##@jwt_required()
+# @permission_required(accion='configurar_planificacion')
+def eliminar_bloqueo_capacidad(bloqueo_id):
+    """Elimina un bloqueo de mantenimiento."""
+    controller = PlanificacionController()
+    response, status_code = controller.eliminar_bloqueo(bloqueo_id)
+
+    if status_code == 200:
+        flash(response.get('message', 'Bloqueo eliminado.'), 'success')
+    else:
+        flash(response.get('error', 'Error al eliminar.'), 'error')
+
+    return redirect(url_for('planificacion.configuracion_lineas'))
