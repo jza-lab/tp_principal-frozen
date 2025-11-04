@@ -582,22 +582,26 @@ class PlanificacionController(BaseController):
 
             cap_dict_dia = self.obtener_capacidad_disponible([linea_propuesta], fecha_actual_sim, fecha_actual_sim)
             cap_dia_actual = cap_dict_dia.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
-            if cap_dia_actual <= 0: continue
+            if cap_dia_actual <= 0:
+                continue
 
-            ops_existentes, _ = self.orden_produccion_controller.obtener_ordenes(filtros={
-                'fecha_inicio_planificada': fecha_actual_str, 'linea_asignada': linea_propuesta,
+            ops_existentes_resultado = self.orden_produccion_controller.obtener_ordenes(filtros={
+                'fecha_inicio_planificada': fecha_actual_str,
+                'linea_asignada': linea_propuesta,
                 'estado': ('not.in', ['PENDIENTE', 'COMPLETADA', 'CANCELADA', 'CONSOLIDADA'])
             })
             carga_existente_dia = 0.0
-            if ops_existentes.get('success'):
-                ops_mismo_dia = [op for op in ops_existentes.get('data', []) if op.get('id') != op_id_a_excluir]
-                if ops_mismo_dia:
-                    # Este cálculo es una simplificación; un cálculo preciso distribuiría la carga de cada OP existente.
-                    # Para CRP rápido, sumamos la carga total de OPs que *inician* ese día.
-                    carga_existente_dia = sum(float(self.orden_produccion_controller.calcular_carga_op(op)) for op in ops_mismo_dia)
+            if isinstance(ops_existentes_resultado, tuple) and len(ops_existentes_resultado) == 2:
+                ops_existentes_resp, _ = ops_existentes_resultado
+                if ops_existentes_resp.get('success'):
+                    ops_mismo_dia = [op for op in ops_existentes_resp.get('data', []) if op.get('id') != op_id_a_excluir]
+                    if ops_mismo_dia:
+                        carga_existente_dict = self.calcular_carga_capacidad(ops_mismo_dia)
+                        carga_existente_dia = carga_existente_dict.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
 
             cap_restante_dia = max(0.0, cap_dia_actual - carga_existente_dia)
-            if cap_restante_dia < 1: continue
+            if cap_restante_dia < 1:
+                continue
 
             if primer_dia_asignado is None:
                 primer_dia_asignado = fecha_actual_sim
@@ -605,18 +609,23 @@ class PlanificacionController(BaseController):
             carga_a_asignar_hoy = min(carga_restante_op, cap_restante_dia)
             if carga_a_asignar_hoy > 0:
                 carga_restante_op -= carga_a_asignar_hoy
-                dias_necesarios += 1 # Contar día solo si se usó
+                dias_necesarios += 1
                 fecha_fin_estimada = fecha_actual_sim
+        
+        if primer_dia_asignado is None:
+            error_data, _ = self._generar_respuesta_sobrecarga(linea_propuesta, (fecha_actual_simulacion - timedelta(days=1)).isoformat(), 0, carga_total_op, 0, horizonte_excedido=True)
+            return {'success': False, 'fecha_inicio_real': None, 'fecha_fin_estimada': None, 'dias_necesarios': 0, 'error_data': error_data}
 
-        if primer_dia_asignado is None or carga_restante_op > 0.01:
-            error_data, _ = self._generar_respuesta_sobrecarga(
-                linea_propuesta, (fecha_inicio_busqueda + timedelta(days=max_dias_simulacion-1)).isoformat(), 
-                0, carga_restante_op, 0, horizonte_excedido=True)
-            return {'success': False, 'error_data': error_data}
+        if carga_restante_op > 0.01:
+            error_data, _ = self._generar_respuesta_sobrecarga(linea_propuesta, fecha_fin_estimada.isoformat(), 0, carga_restante_op, 0, horizonte_excedido=True)
+            return {'success': False, 'fecha_inicio_real': primer_dia_asignado, 'fecha_fin_estimada': fecha_fin_estimada, 'dias_necesarios': dias_necesarios, 'error_data': error_data}
 
         return {
-            'success': True, 'fecha_inicio_real': primer_dia_asignado, 'fecha_fin_estimada': fecha_fin_estimada,
-            'dias_necesarios': dias_necesarios, 'error_data': None
+            'success': True,
+            'fecha_inicio_real': primer_dia_asignado,
+            'fecha_fin_estimada': fecha_fin_estimada,
+            'dias_necesarios': dias_necesarios,
+            'error_data': None
         }
 
     # endregion
@@ -642,13 +651,43 @@ class PlanificacionController(BaseController):
 
     def _generar_respuesta_sobrecarga(self, linea: int, fecha_str: str, cap_dia: float, carga_op_restante: float, carga_exist: float, horizonte_excedido: bool = False) -> tuple:
         """ Crea el diccionario y status code para error de sobrecarga con mensaje claro. """
+        max_dias_simulacion = 30
         titulo = "⚠️ Sobrecarga de Capacidad Detectada"
+        mensaje = ""
+
         if horizonte_excedido:
-            mensaje = f"No hay suficiente capacidad en los próximos 30 días para planificar {carga_op_restante:.0f} min restantes en la Línea {linea}."
+            mensaje = (f"No hay suficiente capacidad en los próximos {max_dias_simulacion} días para planificar toda la carga de esta OP ({carga_op_restante:.0f} min restantes) "
+                       f"en la Línea {linea}, comenzando desde {fecha_str}.\n\n"
+                       f"**Sugerencia:** Considere dividir la OP manualmente en lotes más pequeños o ajustar la capacidad disponible.")
         else:
-            mensaje = (f"Capacidad insuficiente en la Línea {linea} para el día {fecha_str}. "
-                       f"Se requieren {carga_op_restante:.0f} min pero solo quedan {max(0.0, cap_dia - carga_exist):.0f} min disponibles.")
-        return {'success': False, 'error': 'SOBRECARGA_CAPACIDAD', 'title': titulo, 'message': mensaje}, 409
+            carga_proyectada_dia = carga_exist + carga_op_restante
+            exceso = carga_proyectada_dia - cap_dia
+            if cap_dia - carga_exist <= 0 and carga_exist > 0:
+                exceso = carga_op_restante
+                mensaje = (f"La Línea {linea} ya está completa para el día {fecha_str}.\n"
+                           f"(Capacidad: {cap_dia:.0f} min, Carga ya asignada: {carga_exist:.0f} min).\n\n"
+                           f"No se pueden añadir los {carga_op_restante:.0f} min requeridos por esta OP.\n\n"
+                           f"**Acción requerida: Por favor, seleccione una fecha de inicio diferente o asigne la OP a la Línea {2 if linea == 1 else 1} si es compatible.")
+            elif cap_dia - carga_exist <= 0 and carga_exist == 0:
+                mensaje = (f"La **Línea {linea}** tiene 0 minutos de capacidad disponible para el día {fecha_str} (puede ser feriado o estar inactiva).\n\n"
+                           f"No se pueden asignar los {carga_op_restante:.0f} min requeridos por esta OP.\n\n"
+                           f"Acción requerida: Por favor, seleccione una fecha de inicio diferente.")
+            else:
+                capacidad_real_restante = max(0.0, cap_dia - carga_exist)
+                exceso_real = carga_op_restante - capacidad_real_restante
+                mensaje = (f"Capacidad insuficiente en la Línea {linea} para el día {fecha_str}.\n"
+                           f"- Capacidad total del día: {cap_dia:.0f} min\n"
+                           f"- Carga ya asignada: {carga_exist:.0f} min\n"
+                           f"- Capacidad restante: {capacidad_real_restante:.0f} min\n\n"
+                           f"Esta OP requiere {carga_op_restante:.0f} min adicionales, excediendo la capacidad en {exceso_real:.0f} min.\n\n"
+                           f"Acción requerida: Elija una fecha de inicio posterior, asigne a otra línea (si es compatible) o divida la OP.")
+
+        return {
+            'success': False,
+            'error': 'SOBRECARGA_CAPACIDAD',
+            'title': titulo,
+            'message': mensaje
+        }, 409
 
     def _agrupar_ops_por_producto(self, ordenes: List[Dict]) -> Dict:
         """ Agrupa una lista de OPs por producto. """
