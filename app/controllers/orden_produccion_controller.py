@@ -1131,17 +1131,29 @@ class OrdenProduccionController(BaseController):
 
     def pausar_produccion(self, orden_id: int, motivo_id: int, usuario_id: int) -> tuple:
         """
-        Registra el inicio de una pausa para una orden de producción.
+        Pausa una orden de producción, cambiando su estado y registrando el paro.
+        Es idempotente: si ya está pausada, devuelve éxito.
         """
         try:
-            paro_model = RegistroParoModel()
-            
-            # Verificar si ya existe una pausa activa para esta OP
-            pausa_activa = paro_model.find_all({'orden_produccion_id': orden_id, 'fecha_fin': 'is.null'})
-            if pausa_activa.get('data'):
-                return self.error_response("La orden ya se encuentra pausada.", 409) # 409 Conflict
+            # 1. Obtener la orden y verificar su estado
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden = orden_result['data']
 
-            # Crear el nuevo registro de pausa
+            if orden.get('estado') == 'PAUSADA':
+                return self.success_response(message="La orden ya se encontraba pausada.")
+
+            if orden.get('estado') != 'EN_PROCESO':
+                return self.error_response(f"No se puede pausar una orden que no está 'EN PROCESO'. Estado actual: {orden.get('estado')}", 409)
+
+            # 2. Cambiar el estado de la orden a PAUSADA
+            cambio_estado_result = self.model.cambiar_estado(orden_id, 'PAUSADA')
+            if not cambio_estado_result.get('success'):
+                return self.error_response(f"Error al cambiar el estado de la orden a PAUSADA: {cambio_estado_result.get('error')}", 500)
+
+            # 3. Crear el registro de paro
+            paro_model = RegistroParoModel()
             datos_pausa = {
                 'orden_produccion_id': orden_id,
                 'motivo_paro_id': motivo_id,
@@ -1158,25 +1170,42 @@ class OrdenProduccionController(BaseController):
 
     def reanudar_produccion(self, orden_id: int, usuario_id: int) -> tuple:
         """
-        Registra el fin de una pausa para una orden de producción.
+        Reanuda una orden de producción, cambiando su estado a EN_PROCESO y
+        cerrando el registro de paro activo.
         """
         try:
-            paro_model = RegistroParoModel()
+            # 1. Obtener la orden y verificar su estado
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden = orden_result['data']
 
-            # Encontrar la pausa activa
+            if orden.get('estado') == 'EN_PROCESO':
+                return self.success_response(message="La orden ya se encontraba en proceso.")
+
+            if orden.get('estado') != 'PAUSADA':
+                return self.error_response(f"No se puede reanudar una orden que no está 'PAUSADA'. Estado actual: {orden.get('estado')}", 409)
+
+            # 2. Encontrar y cerrar el registro de paro activo
+            paro_model = RegistroParoModel()
             pausa_activa_result = paro_model.find_all({'orden_produccion_id': orden_id, 'fecha_fin': 'is.null'}, limit=1)
             
             if not pausa_activa_result.get('data'):
-                return self.error_response("No se encontró una pausa activa para reanudar.", 404)
+                # Si no hay pausa activa pero el estado es PAUSADA, es una inconsistencia.
+                # Forzamos la reanudación para desbloquear al usuario.
+                logger.warning(f"Inconsistencia: OP {orden_id} está PAUSADA pero no tiene registro de paro activo. Se reanudará de todas formas.")
+            else:
+                pausa_activa = pausa_activa_result['data'][0]
+                id_registro_paro = pausa_activa['id']
+                update_data = {'fecha_fin': datetime.now().isoformat()}
+                paro_model.update(id_registro_paro, update_data)
 
-            pausa_activa = pausa_activa_result['data'][0]
-            id_registro_paro = pausa_activa['id']
-
-            # Actualizar el registro con la fecha de fin
-            update_data = {
-                'fecha_fin': datetime.now().isoformat()
-            }
-            paro_model.update(id_registro_paro, update_data)
+            # 3. Cambiar el estado de la orden de vuelta a EN_PROCESO
+            cambio_estado_result = self.model.cambiar_estado(orden_id, 'EN_PROCESO')
+            if not cambio_estado_result.get('success'):
+                # Si esto falla, la OP podría quedar bloqueada en PAUSADA. Es un estado crítico.
+                logger.error(f"CRÍTICO: La OP {orden_id} no pudo ser reanudada a EN_PROCESO y podría estar bloqueada.")
+                return self.error_response(f"Error crítico al reanudar la orden: {cambio_estado_result.get('error')}", 500)
 
             return self.success_response(message="Producción reanudada correctamente.")
 
