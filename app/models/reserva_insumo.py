@@ -20,7 +20,7 @@ class ReservaInsumoModel(BaseModel):
         try:
             # --- CONSULTA CORREGIDA ---
             result = self.db.table(self.get_table_name()).select(
-                '*, orden_produccion:ordenes_produccion(id, codigo), lote_inventario:lotes_inventario(numero_lote_proveedor, insumo:insumos_catalogo(nombre))'
+                '*, orden_produccion:ordenes_produccion(id, codigo), lote_inventario:lote_inventario_id(numero_lote_proveedor, insumo:insumos_catalogo(nombre))'
             ).order('created_at', desc=True).execute()
 
             flat_data = []
