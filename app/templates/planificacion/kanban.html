@@ -215,12 +215,7 @@
             .then(data => {
                 confirmacionModal.hide();
                 if (data.success) {
-                    // Usar siempre el sistema de toasts, que ya sabemos que existe.
-                    showToast('¡Éxito! Orden completada y lote generado.', 'success');
-                    // Recargar la página para ver el cambio reflejado.
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1500);
+                    location.reload();
                 } else {
                     if (window.showToast) {
                         window.showToast('Error: ' + data.error, 'danger');
