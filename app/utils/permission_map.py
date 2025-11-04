@@ -70,6 +70,7 @@ CANONICAL_PERMISSION_MAP = {
     # Módulo: Calidad
     'controlar_calidad_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Realizar controles de calidad
     'aprobar_lotes_calidad': ['SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'], # Aprobación final de calidad
+    'aprobar_control_calidad': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE'], # Nuevo permiso para aprobar OPs desde el Kanban
     'produccion_control_proceso': ['SUPERVISOR_CALIDAD', 'SUPERVISOR', 'GERENTE'],
     'registrar_desperdicios': ['SUPERVISOR_CALIDAD'],
     'consultar_reportes_calidad': ['SUPERVISOR_CALIDAD'],

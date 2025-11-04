@@ -17,9 +17,10 @@ from app.models.reserva_insumo import ReservaInsumoModel
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
 from app.controllers.pedido_controller import PedidoController
+from app.controllers.planificacion_controller import PlanificacionController
 from app.utils.decorators import roles_required, permission_any_of
 from app.utils.decorators import permission_required
-from datetime import date
+from datetime import date, datetime, timedelta
 from app.utils.estados import OP_FILTROS_UI, OP_MAP_STRING_TO_INT
 
 orden_produccion_bp = Blueprint("orden_produccion", __name__, url_prefix="/ordenes")

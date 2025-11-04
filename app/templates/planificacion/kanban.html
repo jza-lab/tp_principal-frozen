@@ -1,0 +1,239 @@
+{% extends "layouts/app_layout.html" %}
+
+{% block title %}Producción del Día{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/planificacion/kanban.css') }}">
+{% endblock %}
+
+{% block app_content %}
+
+<!--{# --- FILTROS RÁPIDOS --- #}
+<div class="quick-filters">
+    <span class="filter-label">Filtrar:</span>
+    <button class="filter-btn active" data-filter="todas">Todas</button>
+    <button class="filter-btn" data-filter="mis-ordenes">Mis Órdenes</button>
+    <button class="filter-btn" data-filter="linea-1">Línea 1</button>
+    <button class="filter-btn" data-filter="linea-2">Línea 2</button>
+    <button class="filter-btn" data-filter="alta-prioridad">Alta Prioridad</button>
+</div> -->
+
+{# --- TABLERO KANBAN --- #}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="h4 mb-0">Tablero Kanban (Producción en Curso)</h3>
+    
+</div>
+
+<div class="table-responsive">
+    <div class="row flex-nowrap g-3">
+        {% for estado_key, titulo_columna in columnas.items() %}
+        <div class="col mb-4 kanban-column-wrapper" data-estado="{{ estado_key }}" style="min-width: 320px;">
+            <div class="kanban-column h-100" data-estado="{{ estado_key }}">
+                <div class="column-header">
+                    <span class="kanban-title-text" 
+                        style="cursor: pointer; flex-grow: 1;"
+                       >
+                        {{ titulo_columna }}
+                    </span>
+
+                    <div class="column-header-controls d-flex align-items-center ms-2">
+                        <span class="badge bg-secondary rounded-pill me-2">{{ ordenes_por_estado.get(estado_key, [])|length }}</span>
+                        
+                    </div>
+                </div>
+                
+                <div class="kanban-cards" id="kanban-cards-{{ estado_key }}">
+                    {% set ordenes_en_columna = ordenes_por_estado.get(estado_key, []) %}
+                    {% if ordenes_en_columna %}
+                    {% for orden in ordenes_en_columna %}
+                    {% set prioridad = orden.get('prioridad', 'BAJA') %}
+                    {% set prioridad_class = 'borde-baja' %}
+                    {% if prioridad == 'ALTA' %}
+                        {% set prioridad_class = 'borde-alta' %}
+                    {% elif prioridad == 'MEDIA' %}
+                        {% set prioridad_class = 'borde-media' %}
+                    {% endif %}
+                    <div class="card kanban-card mb-2 {{ prioridad_class }}" 
+                         data-op-id="{{ orden.id }}"
+                         data-linea="{{ orden.linea_asignada or '' }}"
+                         data-prioridad="{{ prioridad }}">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="card-title mb-0">{{ orden.producto_nombre or 'N/A' }}</h6>
+                                <span class="badge {{ 'bg-danger' if prioridad == 'ALTA' else ('bg-warning text-dark' if prioridad == 'MEDIA' else 'bg-success') }}">
+                                    {{ prioridad }}
+                                </span>
+                            </div>
+                            
+                            <p class="card-text mb-2">
+                                <i class="bi bi-upc-scan me-1"></i> <code>{{ orden.codigo }}</code>
+                            </p>
+                            
+                            <div class="d-flex flex-column small">
+                                <span class="mb-1">
+                                    <i class="bi bi-box-seam me-2"></i>
+                                    <strong>Cantidad:</strong> {{ orden.cantidad_planificada }} kg
+                                </span>
+                                
+                                {% if estado_key in ['EN_ESPERA', 'LISTA_PARA_PRODUCIR'] %}
+                                <span class="mb-1">
+                                    <i class="bi bi-diagram-3 me-2"></i>
+                                    <strong>Línea:</strong> 
+                                    {% if orden.linea_asignada %}
+                                        Línea {{ orden.linea_asignada }}
+                                    {% else %}
+                                        <span class="text-muted">Sin asignar</span>
+                                    {% endif %}
+                                </span>
+                                {% endif %}
+                                
+                                <span class="mb-1">
+                                    <i class="bi bi-calendar-event me-2"></i>
+                                    <strong>Inicio:</strong> {{ orden.fecha_inicio_planificada or 'Sin asignar' }}
+                                </span>
+
+                                {% if estado_key == 'LISTA PARA PRODUCIR' and orden.sugerencia_t_prod_dias is not none %}
+                                <span class="mb-1">
+                                    <i class="bi bi-clock me-2"></i>
+                                    <strong>Tiempo Est.:</strong> {{ orden.sugerencia_t_prod_dias }} días
+                                </span>
+                                {% endif %}
+                                
+                                {# Para órdenes en proceso - Mostrar progreso #}
+                                {% if estado_key == 'EN_PROCESO' %}
+                                <span class="mb-1">
+                                    <i class="bi bi-person-check-fill me-2"></i>
+                                    <strong>Operario:</strong> {{ orden.operario_nombre or 'No asignado' }}
+                                </span>
+                                <span class="mb-1">
+                                    <i class="bi bi-activity me-2"></i>
+                                    <strong>Progreso:</strong> {{ orden.cantidad_producida or 0 }} / {{ orden.cantidad_planificada }} kg
+                                </span>
+                                {% if orden.pedidos_asociados %}
+                                <span class="mb-1">
+                                    <i class="bi bi-receipt me-2"></i>
+                                    <strong>Pedido:</strong> 
+                                    <a href="{{ url_for('orden_venta.detalle', id=orden.pedidos_asociados[0].id) }}">
+                                        #{{ orden.pedidos_asociados[0].id }}
+                                    </a>
+                                </span>
+                                {% endif %}
+                                <div class="progress-bar-kanban mt-1">
+                                    <div class="progress-fill-kanban" style="width: {{ (orden.cantidad_producida or 0) / orden.cantidad_planificada * 100 }}%"></div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            {# Botones de acción según el estado #}
+                            <div class="d-grid mt-3">
+                                {% if estado_key == 'LISTA_PARA_PRODUCIR' %}
+                                    <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-play-fill me-1"></i> Iniciar Trabajo
+                                    </a>
+                                {% elif estado_key == 'EN_PROCESO' %}
+                                    <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}" class="btn btn-success btn-sm">
+                                        <i class="bi bi-eye-fill me-1"></i> Ver Foco
+                                    </a>
+                                {% elif estado_key == 'CONTROL_DE_CALIDAD' %}
+                                    {% if has_permission('aprobar_control_calidad') %}
+                                    <button class="btn btn-info btn-sm btn-aprobar-calidad" data-op-id="{{ orden.id }}">
+                                        <i class="bi bi-check-circle-fill me-1"></i> Aprobar y Completar
+                                    </button>
+                                    {% else %}
+                                    <span class="text-muted small">Pendiente de aprobación de Calidad</span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    {# Mensaje si no hay órdenes en la columna #}
+                    <p class="text-center text-muted fst-italic mt-3">
+                        <i class="bi bi-inbox" style="font-size: 32px; display: block; margin-bottom: 8px; opacity: 0.5;"></i>
+                        Sin órdenes
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Modal de Confirmación -->
+<div class="modal fade" id="confirmacionModal" tabindex="-1" aria-labelledby="confirmacionModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="confirmacionModalLabel">Confirmar Acción</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        ¿Está seguro de que desea aprobar y completar la Orden de Producción? Esta acción creará el lote de producto terminado.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmarAccion">Aceptar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+    {# --- SCRIPT DE KANBAN (SORTABLE) --- #}
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    
+    {# --- SCRIPT PRINCIPAL DE PRODUCCIÓN HOY --- #}
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const confirmacionModal = new bootstrap.Modal(document.getElementById('confirmacionModal'));
+        const btnConfirmarAccion = document.getElementById('btnConfirmarAccion');
+        let currentOpId = null;
+
+        document.querySelectorAll('.btn-aprobar-calidad').forEach(button => {
+            button.addEventListener('click', function() {
+                currentOpId = this.dataset.opId;
+                confirmacionModal.show();
+            });
+        });
+
+        btnConfirmarAccion.addEventListener('click', function() {
+            if (!currentOpId) return;
+
+            fetch(`/produccion/kanban/api/op/${currentOpId}/aprobar-calidad`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ nuevo_estado: 'COMPLETADA' })
+            })
+            .then(response => response.json())
+            .then(data => {
+                confirmacionModal.hide();
+                if (data.success) {
+                    location.reload();
+                } else {
+                    if (window.showToast) {
+                        window.showToast('Error: ' + data.error, 'danger');
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                }
+            })
+            .catch(error => {
+                confirmacionModal.hide();
+                console.error('Error:', error);
+                if (window.showToast) {
+                    window.showToast('Se produjo un error de red. Por favor, intente de nuevo.', 'danger');
+                } else {
+                    alert('Se produjo un error de red. Por favor, intente de nuevo.');
+                }
+            });
+        });
+    });
+    </script>
+{% endblock %}

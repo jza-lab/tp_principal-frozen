@@ -97,6 +97,7 @@ def _register_blueprints(app: Flask):
     from app.views.admin_reclamo_routes import admin_reclamo_bp # <-- IMPORTACIÓN DE ADMIN RECLAMO
     from app.views.admin_consulta_routes import consulta_bp
     from app.views.receta_routes import receta_bp
+    from app.views.produccion_kanban_routes import produccion_kanban_bp
     from app.views.control_calidad_routes import control_calidad_bp
     from app.views.chatbot_routes import chatbot_bp
     from app.views.reportes_routes import reportes_bp
@@ -132,6 +133,7 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(admin_reclamo_bp)
     app.register_blueprint(consulta_bp)
     app.register_blueprint(receta_bp)
+    app.register_blueprint(produccion_kanban_bp)
     app.register_blueprint(chatbot_bp)
     app.register_blueprint(reportes_bp)
 

@@ -31,46 +31,6 @@ class PlanificacionController(BaseController):
         self.insumo_model = InsumoModel() # Asegúrate que esté inicializado
         self.bloqueo_capacidad_model = BloqueoCapacidadModel() # <-- Añadir esto
 
-    def obtener_ops_para_tablero(self) -> tuple:
-        """
-        Obtiene todas las OPs activas y las agrupa por estado para el tablero Kanban.
-        """
-        try:
-            # --- CORRECCIÓN DEFINITIVA ---
-            # Usamos los nombres exactos de la base de datos y solo los que corresponden al tablero.
-            estados_activos = [
-                'EN ESPERA',
-                'LISTA PARA PRODUCIR',
-                'EN PROCESO',
-                'EN_LINEA_1',
-                'EN_LINEA_2',
-                'EN_EMPAQUETADO',      # <-- NUEVO
-                'CONTROL_DE_CALIDAD',  # <-- NUEVO
-                'COMPLETADA'
-                # Añade aquí otros estados si tienes columnas para ellos, ej: 'EN ESPERA'
-            ]
-            # ----------------------------
-
-            response, _ = self.orden_produccion_controller.obtener_ordenes(
-                filtros={'estado': ('in', estados_activos)}
-            )
-
-            if not response.get('success'):
-                return self.error_response("Error al cargar las órdenes de producción.")
-
-            ordenes = response.get('data', [])
-
-            # Agrupamos las órdenes por estado usando un defaultdict
-            ordenes_por_estado = defaultdict(list)
-            for orden in ordenes:
-                ordenes_por_estado[orden['estado']].append(orden)
-
-            return self.success_response(data=dict(ordenes_por_estado))
-
-        except Exception as e:
-            logger.error(f"Error preparando datos para el tablero: {e}", exc_info=True)
-            return self.error_response(f"Error interno: {str(e)}", 500)
-
     def consolidar_ops(self, op_ids: List[int], usuario_id: int) -> tuple:
         """
         Orquesta la consolidación de OPs llamando al controlador de órdenes de producción.
@@ -323,7 +283,6 @@ class PlanificacionController(BaseController):
             error_dict = self.error_response(f"Error interno: {str(e)}", 500)
             return error_dict, 500
             # ----------------------
-
 
     # --- NUEVO HELPER para obtener datos OP (MODIFICADO) ---
     def _obtener_datos_op_a_planificar(self, op_ids: List[int], usuario_id: int) -> tuple: # <-- AÑADIR usuario_id
