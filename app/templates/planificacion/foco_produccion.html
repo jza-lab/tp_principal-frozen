@@ -27,6 +27,10 @@
                     <span class="pause-info-value" id="tiempo-pausa">00:00:00</span>
                 </div>
             </div>
+            <button class="btn btn-action btn-reanudar mt-4" id="btn-reanudar">
+                <i class="bi bi-play-fill"></i>
+                <span>Reanudar Producción</span>
+            </button>
         </div>
     </div>
 
@@ -316,5 +320,5 @@
         const MOTIVOS_PARO = {{ motivos_paro | tojson }};
         const MOTIVOS_DESPERDICIO = {{ motivos_desperdicio | tojson }};
     </script>
-    <script src="{{ url_for('static', filename='js/planificacion/foco_produccion.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/planificacion/foco_produccion.js', v='1.1') }}"></script>
 {% endblock %}

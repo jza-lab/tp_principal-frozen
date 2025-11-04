@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const btnReportarAvance = document.getElementById('btn-reportar-avance');
     const btnConfirmarPausa = document.getElementById('btn-confirmar-pausa');
     const btnConfirmarReporte = document.getElementById('btn-confirmar-reporte');
+    const btnReanudarOverlay = document.getElementById('btn-reanudar');
     
     // Formularios
     const cantidadMalaInput = document.getElementById('cantidad-mala');
@@ -193,6 +194,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    btnReanudarOverlay.addEventListener('click', () => {
+        reanudarAPI();
+    });
+
     btnConfirmarPausa.addEventListener('click', async (e) => {
         e.preventDefault();
         
@@ -221,10 +226,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 bootstrap.Modal.getInstance(document.getElementById('modalPausarProduccion')).hide();
                 showNotification('⏸️ Producción pausada correctamente', 'warning');
             } else {
-                showNotification('❌ Error al pausar: ' + (data.error || 'Error desconocido'), 'error');
+                const errorMessage = data.error || 'Error desconocido del servidor.';
+                console.error('Error al intentar pausar la producción:', errorMessage);
+                showNotification('❌ Error al pausar: ' + errorMessage, 'error');
             }
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Error de red al pausar:', error);
             showNotification('❌ Error de red al pausar la orden', 'error');
         }
     });
@@ -262,7 +269,47 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    btnConfirmarReporte.addEventListener('click', async (e) => {
+    async function enviarReporteAPI(payload) {
+        try {
+            const response = await fetch(`/produccion/kanban/api/op/${ordenId}/reportar`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
+            });
+    
+            const data = await response.json();
+    
+            if (response.ok && data.success) {
+                // El backend ahora decide el estado, por lo que la redirección o actualización
+                // se puede basar en si la nueva cantidad alcanza el objetivo.
+                const nuevaCantidadTotal = estado.cantidadProducida + payload.cantidad_buena;
+    
+                if (nuevaCantidadTotal >= estado.cantidadPlanificada) {
+                    showNotification('✅ Avance reportado. Orden enviada a Control de Calidad.', 'success');
+                    setTimeout(() => {
+                        window.location.href = '/produccion/kanban/'; // Redirigir siempre que se completa
+                    }, 2000);
+                } else {
+                    actualizarProduccion(payload.cantidad_buena, payload.cantidad_desperdicio);
+                    const form = document.getElementById('form-reportar');
+                    bootstrap.Modal.getInstance(document.getElementById('modalReportarAvance')).hide();
+                    form.reset();
+                    showNotification('📊 Avance reportado exitosamente', 'success');
+                    addActivityLog(`Reportado: +${formatNumber(payload.cantidad_buena)}kg producidos`, 'success');
+                }
+            } else {
+                showNotification(`❌ Error al reportar: ${data.error || 'Error desconocido'}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showNotification('❌ Error de red al reportar avance', 'error');
+        }
+    }
+
+    btnConfirmarReporte.addEventListener('click', (e) => {
         e.preventDefault();
         
         const form = document.getElementById('form-reportar');
@@ -270,68 +317,48 @@ document.addEventListener('DOMContentLoaded', function () {
             form.reportValidity();
             return;
         }
-
+    
         const cantidadBuena = parseFloat(document.getElementById('cantidad-buena').value) || 0;
-        const cantidadMala = parseFloat(cantidadMalaInput.value) || 0;
+        const cantidadMala = parseFloat(document.getElementById('cantidad-mala').value) || 0;
         const motivoDesperdicio = motivoDesperdicioSelect.value;
-        const finalizarOrden = document.querySelector('input[name="tipo_reporte"]:checked').value === 'final';
-        
-        // Validaciones
+    
+        // Validaciones básicas
         if (cantidadBuena <= 0) {
             showNotification('⚠️ Debe ingresar una cantidad producida válida', 'warning');
             return;
         }
-        
         if (cantidadMala > 0 && !motivoDesperdicio) {
             showNotification('⚠️ Debe seleccionar un motivo de desperdicio', 'warning');
             return;
         }
+    
+        const nuevaCantidadProducida = estado.cantidadProducida + cantidadBuena;
+        const cantidadMaximaPermitida = estado.cantidadPlanificada * 1.10;
+    
+        const payload = {
+            cantidad_buena: cantidadBuena,
+            cantidad_desperdicio: cantidadMala,
+            motivo_desperdicio_id: motivoDesperdicio,
+        };
 
-        // --- NUEVA VALIDACIÓN DE CANTIDAD MÁXIMA ---
-        const cantidadPendiente = estado.cantidadPlanificada - estado.cantidadProducida;
-        if (cantidadBuena > cantidadPendiente) {
-            showNotification(`❌ No se puede reportar más de lo pendiente (${formatNumber(cantidadPendiente, 2)} kg).`, 'error');
+        // Lógica de Sobreproducción
+        if (nuevaCantidadProducida > cantidadMaximaPermitida) {
+            const excedente = formatNumber(nuevaCantidadProducida - cantidadMaximaPermitida, 2);
+            showNotification(`❌ Límite de sobreproducción (10%) excedido por ${excedente} kg.`, 'error');
             return;
-        }
-        // -----------------------------------------
-
-        try {
-            const response = await fetch(`/produccion/kanban/api/op/${ordenId}/reportar`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({
-                    cantidad_buena: cantidadBuena,
-                    cantidad_desperdicio: cantidadMala,
-                    motivo_desperdicio_id: motivoDesperdicio,
-                    finalizar_orden: finalizarOrden
-                })
-            });
-
-            const data = await response.json();
+        } else if (nuevaCantidadProducida > estado.cantidadPlanificada) {
+            const sobreproduccion = formatNumber(nuevaCantidadProducida - estado.cantidadPlanificada, 2);
+            const confirmacion = confirm(
+                `Estás a punto de reportar una sobreproducción de ${sobreproduccion} kg.\n\n¿Deseas continuar?`
+            );
             
-            if (response.ok && data.success) {
-                if (finalizarOrden || (estado.cantidadProducida + cantidadBuena) >= estado.cantidadPlanificada) {
-                    showNotification('✅ Orden completada y enviada a Control de Calidad', 'success');
-                    setTimeout(() => {
-                        window.location.href = '/produccion/kanban/'; // Redirigir al Kanban
-                    }, 1500);
-                } else {
-                    // Actualizar UI
-                    actualizarProduccion(cantidadBuena, cantidadMala);
-                    bootstrap.Modal.getInstance(document.getElementById('modalReportarAvance')).hide();
-                    form.reset();
-                    showNotification('📊 Avance reportado exitosamente', 'success');
-                    addActivityLog(`Reportado: +${formatNumber(cantidadBuena)}kg producidos`, 'success');
-                }
-            } else {
-                showNotification('❌ Error al reportar: ' + (data.error || 'Error desconocido'), 'error');
+            if (confirmacion) {
+                enviarReporteAPI(payload);
             }
-        } catch (error) {
-            console.error('Error:', error);
-            showNotification('❌ Error de red al reportar avance', 'error');
+            // Si no confirma, no se hace nada.
+        } else {
+            // Reporte normal, sin sobreproducción
+            enviarReporteAPI(payload);
         }
     });
 

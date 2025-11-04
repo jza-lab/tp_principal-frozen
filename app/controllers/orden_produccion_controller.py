@@ -357,47 +357,65 @@ class OrdenProduccionController(BaseController):
                 if estado_actual != 'CONTROL_DE_CALIDAD':
                     return self.error_response("La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
 
-                # 1. Verificar si la OP está vinculada a ítems de pedido
+                cantidad_planificada = Decimal(orden_produccion.get('cantidad_planificada', 0))
+                cantidad_producida = Decimal(orden_produccion.get('cantidad_producida', 0))
+                cantidad_excedente = cantidad_producida - cantidad_planificada
+                cantidad_para_pedido = min(cantidad_producida, cantidad_planificada)
+
+                # 1. Lógica del Lote Principal (para la cantidad planificada)
                 items_a_surtir_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
                 items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
+                estado_lote_principal = 'RESERVADO' if items_vinculados else 'DISPONIBLE'
 
-                # 2. Decidir el estado inicial del lote
-                estado_lote_inicial = 'RESERVADO' if items_vinculados else 'DISPONIBLE'
-
-                # 3. Preparar y crear el lote con el estado decidido
-                datos_lote = {
+                datos_lote_principal = {
                     'producto_id': orden_produccion['producto_id'],
-                    'cantidad_inicial': orden_produccion['cantidad_planificada'],
+                    'cantidad_inicial': cantidad_para_pedido,
                     'orden_produccion_id': orden_id,
                     'fecha_produccion': date.today().isoformat(),
                     'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat(),
-                    'estado': estado_lote_inicial # <-- Pasamos el estado decidido
+                    'estado': estado_lote_principal
                 }
                 resultado_lote, status_lote = self.lote_producto_controller.crear_lote_desde_formulario(
-                    datos_lote, usuario_id=orden_produccion.get('usuario_creador_id', 1)
+                    datos_lote_principal, usuario_id=orden_produccion.get('usuario_creador_id', 1)
                 )
                 if status_lote >= 400:
-                    return self.error_response(f"Fallo al registrar el lote de producto: {resultado_lote.get('error')}", 500)
+                    return self.error_response(f"Fallo al registrar el lote principal de producto: {resultado_lote.get('error')}", 500)
+                
+                lote_principal_creado = resultado_lote['data']
+                message_to_use = f"Orden completada. Lote principal N° {lote_principal_creado['numero_lote']} creado."
 
-                lote_creado = resultado_lote['data']
-                message_to_use = f"Orden completada. Lote N° {lote_creado['numero_lote']} creado como '{estado_lote_inicial}'."
-
-                # 4. Si el lote se creó como RESERVADO, crear los registros de reserva
-                if estado_lote_inicial == 'RESERVADO':
+                if estado_lote_principal == 'RESERVADO':
                     for item in items_vinculados:
+                        # (código de creación de reservas se mantiene igual)
                         datos_reserva = {
-                            'lote_producto_id': lote_creado['id_lote'],
-                            'pedido_id': item['pedido_id'],
-                            'pedido_item_id': item['id'],
-                            'cantidad_reservada': float(item['cantidad']), # Asumimos que la OP cubre la cantidad del item
+                            'lote_producto_id': lote_principal_creado['id_lote'],
+                            'pedido_id': item['pedido_id'], 'pedido_item_id': item['id'],
+                            'cantidad_reservada': float(item['cantidad']),
                             'usuario_reserva_id': orden_produccion.get('usuario_creador_id', 1)
                         }
-                        # Creamos la reserva directamente, sin descontar stock
-                        self.lote_producto_controller.reserva_model.create(
-                            self.lote_producto_controller.reserva_schema.load(datos_reserva)
-                        )
-                    logger.info(f"Registros de reserva creados para el lote {lote_creado['numero_lote']}.")
-                    message_to_use += " y vinculado a los pedidos correspondientes."
+                        self.lote_producto_controller.reserva_model.create(self.lote_producto_controller.reserva_schema.load(datos_reserva))
+                    logger.info(f"Reservas creadas para el lote {lote_principal_creado['numero_lote']}.")
+
+                # 2. Lógica del Lote Excedente (si hay sobreproducción)
+                if cantidad_excedente > 0:
+                    datos_lote_excedente = {
+                        'producto_id': orden_produccion['producto_id'],
+                        'cantidad_inicial': cantidad_excedente,
+                        'orden_produccion_id': orden_id,
+                        'fecha_produccion': date.today().isoformat(),
+                        'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat(),
+                        'estado': 'DISPONIBLE' # El excedente siempre va a stock
+                    }
+                    resultado_excedente, status_excedente = self.lote_producto_controller.crear_lote_desde_formulario(
+                        datos_lote_excedente, usuario_id=orden_produccion.get('usuario_creador_id', 1)
+                    )
+                    if status_excedente >= 400:
+                        logger.error(f"Se creó el lote principal, pero falló la creación del lote excedente para OP {orden_id}.")
+                        # No devolvemos un error fatal, pero sí lo registramos. El mensaje al usuario se ajusta.
+                        message_to_use += f" ¡Atención! No se pudo registrar el lote excedente de {cantidad_excedente} unidades."
+                    else:
+                        lote_excedente_creado = resultado_excedente['data']
+                        message_to_use += f" Lote excedente N° {lote_excedente_creado['numero_lote']} ({cantidad_excedente} unidades) creado como 'DISPONIBLE'."
 
             # 5. Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
             result = self.model.cambiar_estado(orden_id, nuevo_estado)
@@ -1070,23 +1088,70 @@ class OrdenProduccionController(BaseController):
 
     def reportar_avance(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
         """
-        Registra el avance de producción para una orden, incluyendo desperdicios,
-        y opcionalmente finaliza la orden.
+        Registra el avance de producción, gestionando sobreproducción y desperdicios.
         """
         try:
             cantidad_buena = Decimal(data.get('cantidad_buena', 0))
             cantidad_desperdicio = Decimal(data.get('cantidad_desperdicio', 0))
             motivo_desperdicio_id = data.get('motivo_desperdicio_id')
-            finalizar_orden = data.get('finalizar_orden', False)
 
-            # 1. Validar datos
+            # 1. Validaciones iniciales
             if cantidad_buena < 0 or cantidad_desperdicio < 0:
                 return self.error_response("Las cantidades no pueden ser negativas.", 400)
             if cantidad_desperdicio > 0 and not motivo_desperdicio_id:
                 return self.error_response("Se requiere un motivo para el desperdicio.", 400)
 
-            # 2. Registrar desperdicio si existe
+            # 2. Obtener estado actual de la orden
+            orden_actual_res = self.model.find_by_id(orden_id)
+            if not orden_actual_res or not orden_actual_res.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden_actual = orden_actual_res.get('data', {})
+            
+            cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
+            cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
+            
+            cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
+            cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
+
+            # --- LÓGICA DE VALIDACIÓN REFACTORIZADA ---
+            TOLERANCIA_SOBREPRODUCCION = Decimal('1.10')
+            TOLERANCIA_FLOTANTE = Decimal('0.001')
+            cantidad_maxima_absoluta = cantidad_planificada * TOLERANCIA_SOBREPRODUCCION
+            
+            nueva_cantidad_producida_total = cantidad_producida_actual + cantidad_buena
+
+            # 1. Validar que el nuevo total no exceda el máximo absoluto permitido (110%)
+            if nueva_cantidad_producida_total > cantidad_maxima_absoluta + TOLERANCIA_FLOTANTE:
+                cantidad_restante_permitida = max(Decimal(0), cantidad_maxima_absoluta - cantidad_producida_actual)
+                error_msg = (
+                    f"DEBUG: Planificada={cantidad_planificada}, "
+                    f"Producida Actual={cantidad_producida_actual}, "
+                    f"Reporte Actual={cantidad_buena}, "
+                    f"Nuevo Total={nueva_cantidad_producida_total}, "
+                    f"Máximo Permitido={cantidad_maxima_absoluta}. --- "
+                    f"El reporte excede el límite. Puede añadir como máximo {cantidad_restante_permitida:.2f} kg."
+                )
+                return self.error_response(error_msg, 400)
+
+            # 2. Si este reporte causa sobreproducción (supera el 100%), verificar stock para la porción excedente
+            # Se activa si la producción actual era menor al 100% y ahora lo supera, o si ya estaba por encima y se añade más.
+            if nueva_cantidad_producida_total > cantidad_planificada + TOLERANCIA_FLOTANTE:
+                # Determinar cuánto de ESTE reporte es excedente
+                cantidad_excedente_de_este_reporte = nueva_cantidad_producida_total - max(cantidad_planificada, cantidad_producida_actual)
+                
+                orden_simulada_para_excedente = {
+                    'receta_id': orden_actual['receta_id'],
+                    'cantidad_planificada': cantidad_excedente_de_este_reporte
+                }
+                # Esta verificación mira el stock disponible (actual - reservado)
+                verificacion_stock_excedente = self.inventario_controller.verificar_stock_para_op(orden_simulada_para_excedente)
+                
+                if verificacion_stock_excedente['data']['insumos_faltantes']:
+                    return self.error_response(f"No hay suficientes insumos para la sobreproducción. Faltantes: {verificacion_stock_excedente['data']['insumos_faltantes']}", 400)
+
+            # 4. Registrar desperdicio si existe
             if cantidad_desperdicio > 0:
+                # (código para registrar desperdicio se mantiene igual)
                 desperdicio_model = RegistroDesperdicioModel()
                 desperdicio_data = {
                     'orden_produccion_id': orden_id,
@@ -1096,31 +1161,17 @@ class OrdenProduccionController(BaseController):
                 }
                 desperdicio_model.create(desperdicio_data)
 
-            # 3. Actualizar la cantidad producida en la orden
-            orden_actual = self.model.find_by_id(orden_id)
-            if not orden_actual:
-                return self.error_response("Orden de producción no encontrada.", 404)
+            # 5. Preparar datos para actualizar la orden
+            update_data = {'cantidad_producida': nueva_cantidad_producida_total}
             
-            cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
-            cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
-            nueva_cantidad_producida = cantidad_producida_actual + cantidad_buena
-
-            # --- VALIDACIÓN DE CANTIDAD MÁXIMA (CON TOLERANCIA) ---
-            # Se usa una pequeña tolerancia para evitar errores de punto flotante
-            TOLERANCIA = Decimal('0.001')
-            if nueva_cantidad_producida > cantidad_planificada + TOLERANCIA:
-                return self.error_response(f"La cantidad reportada ({cantidad_buena}) excede la cantidad pendiente ({cantidad_planificada - cantidad_producida_actual}).", 400)
-            
-            # Asegurarse de no sobrepasar el límite planificado debido a la tolerancia
-            update_data = {'cantidad_producida': min(nueva_cantidad_producida, cantidad_planificada)}
-            
-            # --- LÓGICA DE TRANSICIÓN DE ESTADO ---
-            # Si se finaliza O la nueva cantidad alcanza el total, mover a Control de Calidad
-            if finalizar_orden or nueva_cantidad_producida >= cantidad_planificada:
+            # 6. Transición de estado a Control de Calidad
+            # Si la producción alcanza o supera el 100% de lo planificado
+            if nueva_cantidad_producida_total >= cantidad_planificada - TOLERANCIA_FLOTANTE:
                 update_data['estado'] = 'CONTROL_DE_CALIDAD'
-                # También se debería registrar la fecha_fin
-                update_data['fecha_fin'] = datetime.now().isoformat()
+                if not orden_actual.get('fecha_fin'):
+                    update_data['fecha_fin'] = datetime.now().isoformat()
 
+            # 7. Actualizar la orden en la BD
             self.model.update(orden_id, update_data)
             
             return self.success_response(message="Avance reportado correctamente.")

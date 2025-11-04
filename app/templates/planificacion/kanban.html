@@ -8,6 +8,9 @@
 
 {% block app_content %}
 
+{# Contenedor para notificaciones toast #}
+<div id="toast-container-kanban" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1056"></div>
+
 {# --- FILTROS RÁPIDOS --- #}
 <div class="quick-filters">
     <span class="filter-label">Filtrar:</span>
@@ -177,6 +180,8 @@
         document.querySelectorAll('.btn-aprobar-calidad').forEach(button => {
             button.addEventListener('click', function() {
                 const opId = this.dataset.opId;
+                // Usar un modal de Bootstrap en lugar de confirm() si es posible,
+                // pero por ahora confirm() es funcional.
                 if (!confirm(`¿Está seguro de que desea aprobar y completar la Orden de Producción #${opId}? Esta acción creará el lote de producto terminado.`)) {
                     return;
                 }
@@ -186,25 +191,60 @@
                     headers: {
                         'Content-Type': 'application/json',
                         'X-Requested-With': 'XMLHttpRequest'
-                        // El token CSRF se añade automáticamente por el script global
                     }
                 })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        alert('¡Éxito! ' + data.message);
-                        // Opcional: mover visualmente la tarjeta o simplemente recargar
-                        location.reload();
+                        showNotification('✅ ¡Éxito! ' + data.message, 'success');
+                        setTimeout(() => location.reload(), 2000);
                     } else {
-                        alert('Error: ' + data.error);
+                        showNotification('❌ Error: ' + data.error, 'danger');
                     }
                 })
                 .catch(error => {
-                    console.error('Error:', error);
-                    alert('Se produjo un error de red. Por favor, intente de nuevo.');
+                    console.error('Error de red:', error);
+                    showNotification('❌ Se produjo un error de red.', 'danger');
                 });
             });
         });
+
+        // Función de notificación (adaptada para Bootstrap 5)
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('toast-container-kanban');
+            if (!container) {
+                console.error("El contenedor de toasts '#toast-container-kanban' no fue encontrado.");
+                alert(message); // Fallback a alert
+                return;
+            }
+            
+            // Mapear nuestros tipos a los colores de fondo de Bootstrap
+            const bg_color = type === 'danger' ? 'bg-danger' : (type === 'success' ? 'bg-success' : 'bg-primary');
+
+            const toastEl = document.createElement('div');
+            toastEl.className = `toast align-items-center text-white ${bg_color} border-0`;
+            toastEl.setAttribute('role', 'alert');
+            toastEl.setAttribute('aria-live', 'assertive');
+            toastEl.setAttribute('aria-atomic', 'true');
+            
+            toastEl.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            `;
+            
+            container.appendChild(toastEl);
+            
+            const toast = new bootstrap.Toast(toastEl);
+            toast.show();
+
+            toastEl.addEventListener('hidden.bs.toast', () => {
+                toastEl.remove();
+            });
+        }
     });
     </script>
 {% endblock %}
