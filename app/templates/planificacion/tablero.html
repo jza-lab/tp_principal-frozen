@@ -25,6 +25,14 @@
     <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2" title="Volver a la página anterior">
         <i class="bi bi-arrow-left"></i> Volver
     </a>
+    {# --- INICIO: BOTÓN AÑADIDO --- #}
+    {# Asumimos un permiso 'forzar_auto_planificacion'. Si es otro, ajústalo. #}
+    {% if 'forzar_auto_planificacion' is has_permission %}
+    <button type="button" class="btn btn-primary ms-2" id="btn-forzar-auto-planificacion" title="Ejecutar la planificación automática de OPs PENDIENTES ahora">
+        <i class="bi bi-robot me-1"></i> Forzar Auto-Planificación
+    </button>
+    {% endif %}
+    {# --- FIN: BOTÓN AÑADIDO --- #}
 </div>
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
@@ -831,6 +839,74 @@
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         
+
+        // --- INICIO: LÓGICA PARA FORZAR AUTO-PLANIFICACIÓN ---
+        const btnForzar = document.getElementById('btn-forzar-auto-planificacion');
+        if (btnForzar) {
+            btnForzar.addEventListener('click', async function() {
+                
+                const originalText = this.innerHTML;
+                // Reutilizamos tu función showLoadingSpinner
+                showLoadingSpinner(this, 'Planificando...'); 
+                
+                try {
+                    // Obtenemos el CSRF token como en tu otro script
+                    const csrfToken = '{{ csrf_token() }}'; 
+                    
+                    // Asumo que el endpoint de tu ruta se llama 'planificacion.forzar_auto_planificacion'
+                    // Si le pusiste un nombre diferente (ej. '..._api'), ajústalo aquí.
+                    const response = await fetch("{{ url_for('planificacion.forzar_planificacion') }}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken
+                        },
+                        body: JSON.stringify({}) // No necesita body, solo la llamada
+                    });
+
+                    const result = await response.json();
+                    // Reutilizamos tu función hideLoadingSpinner
+                    hideLoadingSpinner(this, originalText); 
+
+                    if (response.ok && result.success) {
+                        const data = result.data;
+                        
+                        // Construimos un resumen detallado
+                        let summaryMsg = `Planificación completada:
+                            - <b>${data.total_planificadas}</b> OPs planificadas.
+                            - <b>${data.total_oc_generadas}</b> OCs generadas.
+                            - <b>${data.total_errores}</b> errores.`;
+                        
+                        let modalType = 'success';
+
+                        // Si hubo errores, los añadimos al mensaje
+                        if(data.total_errores > 0) {
+                            modalType = 'warning'; // Cambia el modal a advertencia
+                            summaryMsg += "\n\n<b>Errores encontrados:</b>\n- " + data.errores.join("\n- ");
+                        }
+                        
+                        // Reutilizamos tu modal de feedback
+                        showFeedbackModal(
+                            (modalType === 'success' ? 'Planificación Exitosa' : 'Planificación con Errores'), 
+                            summaryMsg, 
+                            modalType
+                        );
+                        
+                        // Recargamos la página después de 5 segundos para ver los cambios
+                        setTimeout(() => window.location.reload(), 5000); 
+
+                    } else {
+                        showFeedbackModal('Error', result.message || 'No se pudo forzar la planificación.', 'error');
+                    }
+
+                } catch (error) {
+                    hideLoadingSpinner(this, originalText);
+                    showFeedbackModal('Error de Red', `Error al contactar el servidor: ${error.message}`, 'error');
+                }
+            });
+        }
+        // --- FIN: LÓGICA AUTO-PLANIFICACIÓN ---
+
         // --- LÓGICA PARA COMPRIMIR COLUMNAS (NUEVO) ---
         document.querySelectorAll('.kanban-compress-toggle').forEach(button => {
             button.addEventListener('click', function (e) {
