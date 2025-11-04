@@ -16,7 +16,7 @@ from decimal import Decimal
 import os # <-- Añadir
 from datetime import date # <-- Asegúrate que esté
 from flask import jsonify # <-- Añadir (o usar desde tu BaseController si ya lo tienes)
-
+from app.models.bloqueo_capacidad_model import BloqueoCapacidadModel # (Debes crear este modelo simple)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ class PlanificacionController(BaseController):
         self.operacion_receta_model = OperacionRecetaModel()
         self.receta_model = RecetaModel() # Asegúrate que esté inicializado
         self.insumo_model = InsumoModel() # Asegúrate que esté inicializado
+        self.bloqueo_capacidad_model = BloqueoCapacidadModel() # <-- Añadir esto
 
     def obtener_ops_para_tablero(self) -> tuple:
         """
@@ -648,6 +649,25 @@ class PlanificacionController(BaseController):
                         if insumo_data_res.get('success'): tiempos_entrega_agg.append(insumo_data_res['data'].get('tiempo_entrega_dias', 0))
                     data['sugerencia_t_proc_dias'] = max(tiempos_entrega_agg) if tiempos_entrega_agg else 0
 
+            # --- ¡NUEVA LÓGICA JIT PARA EL MODAL! ---
+                try:
+                    today = date.today()
+                    t_prod_dias = data.get('sugerencia_t_prod_dias', 0)
+                    t_proc_dias = data.get('sugerencia_t_proc_dias', 0)
+                    fecha_meta = date.fromisoformat(data['fecha_meta_mas_proxima'])
+
+                    fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
+                    fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
+
+                    fecha_inicio_base = max(fecha_inicio_ideal, fecha_disponibilidad_material)
+                    fecha_inicio_sugerida_jit = max(fecha_inicio_base, today) # No planificar en el pasado
+
+                    data['sugerencia_fecha_inicio_jit'] = fecha_inicio_sugerida_jit.isoformat()
+                except Exception as e_jit_modal:
+                    logger.warning(f"No se pudo calcular JIT para modal (Producto: {clave_producto}): {e_jit_modal}")
+                    data['sugerencia_fecha_inicio_jit'] = date.today().isoformat()
+                # --- FIN NUEVA LÓGICA JIT ---
+
             # 4. Convertir a lista ordenada (sin cambios)
             mps_lista_ordenada = sorted(
                 [ { 'producto_id': pid, 'producto_nombre': pname, **data }
@@ -841,26 +861,34 @@ class PlanificacionController(BaseController):
     def obtener_capacidad_disponible(self, centro_trabajo_ids: List[int], fecha_inicio: date, fecha_fin: date) -> Dict:
         """
         Calcula la capacidad disponible (en minutos) para centros de trabajo dados,
-        entre dos fechas (inclusive). Considera estándar, eficiencia y utilización.
-        Devuelve: { centro_id: { fecha_iso: capacidad_minutos, ... }, ... }
+        entre dos fechas (inclusive). Considera estándar, eficiencia, utilización Y BLOQUEOS.
         """
         capacidad_por_centro_y_fecha = defaultdict(dict)
         num_dias = (fecha_fin - fecha_inicio).days + 1
 
         try:
-            # --- CORRECCIÓN: Usar find_all con filtro 'in' ---
-            # Prepara el filtro para buscar por la lista de IDs
-            id_filter = ('in', tuple(centro_trabajo_ids)) # 'in' usualmente espera una tupla
+            # 1. Obtener datos de Centros de Trabajo (sin cambios)
+            id_filter = ('in', tuple(centro_trabajo_ids))
             ct_result = self.centro_trabajo_model.find_all(filters={'id': id_filter})
-            # ------------------------------------------------
-
             if not ct_result.get('success'):
                 logger.error(f"Error obteniendo centros de trabajo: {ct_result.get('error')}")
                 return {}
-
             centros_trabajo = {ct['id']: ct for ct in ct_result.get('data', [])}
 
-            # ... (resto de la lógica para calcular capacidad sin cambios) ...
+            # --- ¡NUEVO! 2. Obtener Bloqueos para este rango ---
+            filtros_bloqueo = {
+                'centro_trabajo_id': ('in', tuple(centro_trabajo_ids)),
+                'fecha_gte': fecha_inicio.isoformat(),
+                'fecha_lte': fecha_fin.isoformat()
+            }
+            bloqueos_resp = self.bloqueo_capacidad_model.find_all(filtros_bloqueo)
+            bloqueos_map = defaultdict(dict)
+            if bloqueos_resp.get('success'):
+                for bloqueo in bloqueos_resp.get('data', []):
+                    bloqueos_map[bloqueo['centro_trabajo_id']][bloqueo['fecha']] = Decimal(bloqueo['minutos_bloqueados'])
+            # --- FIN NUEVO BLOQUEO ---
+
+            # 3. Calcular capacidad día por día
             for dia_offset in range(num_dias):
                 fecha_actual = fecha_inicio + timedelta(days=dia_offset)
                 fecha_iso = fecha_actual.isoformat()
@@ -869,22 +897,27 @@ class PlanificacionController(BaseController):
                     if not centro:
                         capacidad_por_centro_y_fecha[ct_id][fecha_iso] = 0
                         continue
+
+                    # Calcular capacidad estándar
                     capacidad_std = Decimal(centro.get('tiempo_disponible_std_dia', 0))
                     eficiencia = Decimal(centro.get('eficiencia', 1.0))
                     utilizacion = Decimal(centro.get('utilizacion', 1.0))
                     num_maquinas = int(centro.get('numero_maquinas', 1))
                     capacidad_neta_dia = capacidad_std * eficiencia * utilizacion * num_maquinas
-                    capacidad_por_centro_y_fecha[ct_id][fecha_iso] = round(capacidad_neta_dia, 2)
 
+                    # --- ¡NUEVO! Restar bloqueos ---
+                    minutos_bloqueados = bloqueos_map.get(ct_id, {}).get(fecha_iso, 0)
+                    capacidad_final_dia = max(0, capacidad_neta_dia - minutos_bloqueados)
+                    # ----------------------------
 
-            # --- CONVERSIÓN A FLOAT ---
+                    capacidad_por_centro_y_fecha[ct_id][fecha_iso] = round(capacidad_final_dia, 2)
+
+            # ... (conversión a float, sin cambios) ...
             resultado_final_float = {}
             for centro_id, cap_fecha in capacidad_por_centro_y_fecha.items():
                 resultado_final_float[centro_id] = {fecha: float(cap) for fecha, cap in cap_fecha.items()}
-            # --------------------------
 
-            # return dict(capacidad_por_centro_y_fecha) # <- Línea antigua
-            return resultado_final_float # <- Devolver el diccionario con floats
+            return resultado_final_float
 
         except Exception as e:
             logger.error(f"Error calculando capacidad disponible: {e}", exc_info=True)
@@ -1028,14 +1061,33 @@ class PlanificacionController(BaseController):
                     errores_encontrados.append(msg)
                     continue
 
+                # --- ¡NUEVA LÓGICA JIT PARA AUTO-PLANIFICACIÓN! ---
+                try:
+                    today = date.today()
+                    t_prod_dias = grupo.get('sugerencia_t_prod_dias', 0)
+                    t_proc_dias = grupo.get('sugerencia_t_proc_dias', 0)
+                    fecha_meta = date.fromisoformat(grupo['fecha_meta_mas_proxima'])
+
+                    fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
+                    fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
+
+                    fecha_inicio_base = max(fecha_inicio_ideal, fecha_disponibilidad_material)
+                    fecha_inicio_planificada_jit = max(fecha_inicio_base, today) # No planificar en el pasado
+
+                    fecha_inicio_busqueda = fecha_inicio_planificada_jit.isoformat()
+                except Exception as e_jit_auto:
+                    logger.warning(f"No se pudo calcular JIT para {op_codigos}. Usando 'hoy'. Error: {e_jit_auto}")
+                    fecha_inicio_busqueda = fecha_planificacion_str # Fallback a "hoy"
+                # --- FIN NUEVA LÓGICA JIT ---
+
                 asignaciones_auto = {
                     'linea_asignada': linea_sugerida,
-                    'fecha_inicio': fecha_planificacion_str,
+                    'fecha_inicio': fecha_inicio_busqueda,
                     'supervisor_id': None, # El supervisor asignará esto manualmente
                     'operario_id': None
                 }
 
-                logger.info(f"[AutoPlan] Intentando planificar OPs {op_codigos} en Línea {linea_sugerida} para {fecha_planificacion_str}...")
+                logger.info(f"[AutoPlan] Intentando planificar OPs {op_codigos} en Línea {linea_sugerida} (JIT Start: {fecha_inicio_busqueda})...")
 
                 # 5. Llamar a la lógica de consolidación y aprobación existente
                 # Esta función ya maneja la consolidación, verificación de CAPACIDAD
@@ -1356,3 +1408,82 @@ class PlanificacionController(BaseController):
         except Exception as e:
             logger.error(f"Error en api_validar_fecha_requerida: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
+
+    # --- MÉTODOS NUEVOS PARA LA PÁGINA DE CONFIGURACIÓN ---
+
+    def obtener_datos_configuracion(self) -> tuple:
+        """Obtiene los datos de líneas (Centros) y los bloqueos existentes."""
+        try:
+            lineas_resp = self.centro_trabajo_model.find_all()
+            bloqueos_resp = self.bloqueo_capacidad_model.get_all_with_details() # (Debes crear este método en el modelo)
+
+            if not lineas_resp.get('success'):
+                return self.error_response("No se pudieron cargar las líneas.", 500)
+
+            return self.success_response(data={
+                "lineas": lineas_resp.get('data', []),
+                "bloqueos": bloqueos_resp.get('data', []) if bloqueos_resp.get('success') else []
+            })
+        except Exception as e:
+            logger.error(f"Error en obtener_datos_configuracion: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
+
+    def actualizar_configuracion_linea(self, data: dict) -> tuple:
+        """Actualiza la eficiencia y utilización de una línea."""
+        try:
+            linea_id = data.get('linea_id')
+            if not linea_id:
+                return self.error_response("Falta ID de línea.", 400)
+
+            # Convertir los porcentajes (ej: 85) a decimales (ej: 0.85)
+            eficiencia_pct = Decimal(data.get('eficiencia', 100))
+            utilizacion_pct = Decimal(data.get('utilizacion', 100))
+
+            update_data = {
+                'eficiencia': eficiencia_pct / 100, # <-- CORRECCIÓN
+                'utilizacion': utilizacion_pct / 100, # <-- CORRECCIÓN
+                'tiempo_disponible_std_dia': Decimal(data.get('capacidad_std', 480))
+            }
+
+            result = self.centro_trabajo_model.update(linea_id, update_data, 'id')
+            if result.get('success'):
+                return self.success_response(message="Línea actualizada.")
+            else:
+                return self.error_response(f"Error al actualizar: {result.get('error')}", 500)
+        except Exception as e:
+            return self.error_response(f"Error: {str(e)}", 500)
+
+    def agregar_bloqueo(self, data: dict) -> tuple:
+        """Agrega un nuevo bloqueo de capacidad."""
+        try:
+            nuevo_bloqueo = {
+                'centro_trabajo_id': int(data.get('centro_trabajo_id')),
+                'fecha': data.get('fecha_bloqueo'),
+                'minutos_bloqueados': Decimal(data.get('minutos_bloqueados', 0)),
+                'motivo': data.get('motivo_bloqueo')
+            }
+
+            if nuevo_bloqueo['minutos_bloqueados'] <= 0:
+                return self.error_response("Los minutos a bloquear deben ser mayores a 0.", 400)
+
+            result = self.bloqueo_capacidad_model.create(nuevo_bloqueo)
+            if result.get('success'):
+                return self.success_response(data=result.get('data'), message="Bloqueo agregado.", status_code=201)
+            else:
+                # Manejar error de unicidad (ya existe un bloqueo para ese día/línea)
+                if 'bloqueos_capacidad_centro_fecha_key' in str(result.get('error')):
+                    return self.error_response("Ya existe un bloqueo para esa línea en esa fecha. Edite el existente.", 409)
+                return self.error_response(f"Error: {result.get('error')}", 500)
+        except Exception as e:
+            return self.error_response(f"Error: {str(e)}", 500)
+
+    def eliminar_bloqueo(self, bloqueo_id: int) -> tuple:
+        """Elimina un bloqueo de capacidad."""
+        try:
+            result = self.bloqueo_capacidad_model.delete(bloqueo_id, 'id')
+            if result.get('success'):
+                return self.success_response(message="Bloqueo eliminado.")
+            else:
+                return self.error_response(f"Error al eliminar: {result.get('error')}", 500)
+        except Exception as e:
+            return self.error_response(f"Error: {str(e)}", 500)

@@ -33,6 +33,14 @@
     </button>
     {% endif %}
     {# --- FIN: BOTÓN AÑADIDO --- #}
+    {# --- ¡NUEVO BOTÓN DE CONFIGURACIÓN! --- #}
+    {# Asumimos un permiso de 'admin' o 'configurar_planificacion' #}
+    {% if 'admin' is has_permission %} 
+    <a href="{{ url_for('planificacion.configuracion_lineas') }}" class="btn btn-outline-info ms-2" title="Configurar capacidad y bloqueos de líneas">
+        <i class="bi bi-gear-fill me-1"></i> Configurar Líneas
+    </a>
+    {% endif %}
+    {# --- FIN NUEVO BOTÓN --- #}
 </div>
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
@@ -696,9 +704,9 @@
                             {# --- AÑADIR ATRIBUTO min --- #}
                             <input type="date" 
                                    class="form-control form-control-sm mb-1 modal-input-fecha-inicio" 
-                                   value="{{ fecha_inicio_sugerida }}" 
+                                   value="{{ item_mps.sugerencia_fecha_inicio_jit }}" 
                                    title="Fecha Inicio"
-                                   min="{{ now.date().isoformat() }}"> {# <-- Añadido aquí #}
+                                   min="{{ now.date().isoformat() }}"> {# <-- El 'min' sigue siendo 'hoy' #}
                             {# ------------------------- #}
                         </div>
                         <div class="mb-2"><label class="form-label form-label-sm">Supervisor (Opc)</label><select
