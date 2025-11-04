@@ -1,15 +1,15 @@
 import logging
 from collections import defaultdict
-from typing import List, Optional, Dict
-from datetime import date, timedelta
-import math
-from decimal import Decimal
-import locale
 from app.controllers.base_controller import BaseController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
-from app.controllers.inventario_controller import InventarioController
+from typing import List, Optional, Dict
+from datetime import date, timedelta
+from collections import defaultdict
+import locale
 from app.models.receta import RecetaModel
 from app.models.insumo import InsumoModel
+import math
+from app.controllers.inventario_controller import InventarioController
 from app.models.centro_trabajo_model import CentroTrabajoModel
 from app.models.operacion_receta_model import OperacionRecetaModel
 from decimal import Decimal
@@ -21,37 +21,23 @@ from app.models.bloqueo_capacidad_model import BloqueoCapacidadModel # (Debes cr
 logger = logging.getLogger(__name__)
 
 class PlanificacionController(BaseController):
-    """
-    Controlador para gestionar la planificación de la producción, incluyendo el Plan Maestro (MPS),
-    la planificación semanal y la simulación de capacidad (CRP).
-    """
     def __init__(self):
         super().__init__()
-        self._orden_produccion_controller = None
+        self.orden_produccion_controller = OrdenProduccionController()
         self.inventario_controller = InventarioController()
         self.centro_trabajo_model = CentroTrabajoModel()
-        self.receta_model = RecetaModel()
-        self.insumo_model = InsumoModel()
         self.operacion_receta_model = OperacionRecetaModel()
         self.receta_model = RecetaModel() # Asegúrate que esté inicializado
         self.insumo_model = InsumoModel() # Asegúrate que esté inicializado
         self.bloqueo_capacidad_model = BloqueoCapacidadModel() # <-- Añadir esto
 
-    @property
-    def orden_produccion_controller(self):
-        """Lazy loader for OrdenProduccionController to prevent circular dependency."""
-        if self._orden_produccion_controller is None:
-            from app.controllers.orden_produccion_controller import OrdenProduccionController
-            self._orden_produccion_controller = OrdenProduccionController()
-        return self._orden_produccion_controller
-   
-    # region: API Pública del Controlador
     def consolidar_ops(self, op_ids: List[int], usuario_id: int) -> tuple:
         """
         Orquesta la consolidación de OPs llamando al controlador de órdenes de producción.
         """
         if not op_ids or len(op_ids) < 2:
             return self.error_response("Se requieren al menos dos órdenes para consolidar.", 400)
+
         try:
             # Delegamos la lógica compleja al controlador que maneja la entidad
             resultado = self.orden_produccion_controller.consolidar_ordenes_produccion(op_ids, usuario_id)
@@ -65,6 +51,65 @@ class PlanificacionController(BaseController):
             logger.error(f"Error crítico en consolidar_ops: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
+    # --- HELPER: Ejecuta la aprobación final ---
+    def _ejecutar_aprobacion_final(self, op_id: int, asignaciones: dict, usuario_id: int) -> tuple:
+        """ Ejecuta los pasos de pre-asignación y confirmación/aprobación. """
+        try:
+            # PASO Pre-Asignar: Asegúrate de pasar todos los datos relevantes
+            datos_pre_asignar = {
+                'linea_asignada': asignaciones.get('linea_asignada'),
+                'supervisor_responsable_id': asignaciones.get('supervisor_id'),
+                'operario_asignado_id': asignaciones.get('operario_id')
+            }
+            datos_pre_asignar = {k: v for k, v in datos_pre_asignar.items() if v is not None} # Limpiar Nones
+
+            res_pre_asig_dict, res_pre_asig_status = self.orden_produccion_controller.pre_asignar_recursos(
+                op_id, datos_pre_asignar, usuario_id
+            )
+            if res_pre_asig_status >= 400: return res_pre_asig_dict, res_pre_asig_status
+
+            # PASO Confirmar Inicio y Aprobar
+            res_conf_dict, res_conf_status = self.orden_produccion_controller.confirmar_inicio_y_aprobar(
+                op_id, {'fecha_inicio_planificada': asignaciones.get('fecha_inicio')}, usuario_id
+            )
+            return res_conf_dict, res_conf_status
+        except Exception as e:
+            logger.error(f"Error en _ejecutar_aprobacion_final para OP {op_id}: {e}", exc_info=True)
+            # --- CORRECCIÓN AQUÍ ---
+            # Devolver tupla explícitamente
+            error_dict = self.error_response(f"Error interno al ejecutar aprobación final: {str(e)}", 500)
+            return error_dict, 500
+        # ----------------------
+
+    def _ejecutar_replanificacion_simple(self, op_id: int, asignaciones: dict, usuario_id: int) -> tuple:
+        """
+        SOLO actualiza los campos de planificación de una OP que YA ESTÁ planificada
+        (Ej: 'EN ESPERA' o 'LISTA PARA PRODUCIR').
+        NO cambia el estado ni vuelve a verificar el stock.
+        """
+        logger.info(f"[RePlan] Ejecutando re-planificación simple para OP {op_id}...")
+        try:
+            # Preparamos los datos a actualizar
+            update_data = {
+                'fecha_inicio_planificada': asignaciones.get('fecha_inicio'),
+                'linea_asignada': asignaciones.get('linea_asignada'),
+                'supervisor_responsable_id': asignaciones.get('supervisor_id'),
+                'operario_asignado_id': asignaciones.get('operario_id')
+            }
+            # Limpiar Nones por si el usuario no seleccionó supervisor/operario
+            update_data = {k: v for k, v in update_data.items() if v is not None}
+
+            # Usar el controlador de OP para hacer el update directo en el modelo
+            update_result = self.orden_produccion_controller.model.update(op_id, update_data, 'id')
+
+            if update_result.get('success'):
+                return self.success_response(data=update_result.get('data'), message="OP re-planificada exitosamente.")
+            else:
+                return self.error_response(f"Error al actualizar la OP: {update_result.get('error')}", 500)
+
+        except Exception as e:
+            logger.error(f"Error en _ejecutar_replanificacion_simple para OP {op_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
 
     # --- MÉTODO PRINCIPAL MODIFICADO ---
     def consolidar_y_aprobar_lote(self, op_ids: List[int], asignaciones: dict, usuario_id: int) -> tuple:
@@ -239,31 +284,28 @@ class PlanificacionController(BaseController):
             return error_dict, 500
             # ----------------------
 
-    def confirmar_aprobacion_lote(self, op_id: int, asignaciones: dict, usuario_id: int) -> tuple:
-        """
-        Endpoint final para confirmar una aprobación. Omite la simulación de capacidad (ya se hizo)
-        y ejecuta la acción basándose en el estado de la OP.
-        """
-        try:
-            op_result = self.orden_produccion_controller.obtener_orden_por_id(op_id)
-            if not op_result.get('success'):
-                return self.error_response(f"No se encontró la OP ID {op_id}.", 404), 404
+    # --- NUEVO HELPER para obtener datos OP (MODIFICADO) ---
+    def _obtener_datos_op_a_planificar(self, op_ids: List[int], usuario_id: int) -> tuple: # <-- AÑADIR usuario_id
+        """ Obtiene los datos de la OP (consolidada o individual). Devuelve (id, data) o (None, error_msg). """
+        op_a_planificar_id = None
+        op_data = None
+        if len(op_ids) > 1:
+            # --- PASAR usuario_id ---
+            resultado_consol = self.orden_produccion_controller.consolidar_ordenes_produccion(op_ids, usuario_id) # <-- USAR el usuario_id recibido
+            # ------------------------
+            if not resultado_consol.get('success'): return None, f"Error al consolidar: {resultado_consol.get('error')}"
+            op_a_planificar_id = resultado_consol.get('data', {}).get('id')
+            op_data = resultado_consol.get('data')
+        else:
+            op_a_planificar_id = op_ids[0]
+            op_result = self.orden_produccion_controller.obtener_orden_por_id(op_a_planificar_id)
+            if not op_result.get('success'): return None, f"No se encontró la OP ID {op_a_planificar_id}."
+            op_data = op_result.get('data')
 
-            op_estado_actual = op_result['data'].get('estado')
-            logger.info(f"Confirmando aprobación para OP {op_id} (Estado: {op_estado_actual})...")
+        if not op_a_planificar_id or not op_data: return None, "No se pudieron obtener los datos de la OP."
+        return op_a_planificar_id, op_data
 
-            if op_estado_actual == 'PENDIENTE':
-                return self._ejecutar_aprobacion_final(op_id, asignaciones, usuario_id)
-            elif op_estado_actual in ['EN ESPERA', 'LISTA PARA PRODUCIR']:
-                return self._ejecutar_replanificacion_simple(op_id, asignaciones, usuario_id)
-            else:
-                msg = f"La OP {op_id} en estado '{op_estado_actual}' no puede ser confirmada."
-                logger.warning(msg)
-                return self.error_response(msg, 400), 400
-        except Exception as e:
-            logger.error(f"Error crítico en confirmar_aprobacion_lote: {e}", exc_info=True)
-            return self.error_response(f"Error interno: {str(e)}", 500), 500
-
+    # --- NUEVO HELPER para calcular carga de una OP ---
     def _calcular_carga_op(self, op_data: Dict) -> Decimal:
         """ Calcula la carga total en minutos para una OP dada. """
         carga_total = Decimal(0)
@@ -280,6 +322,7 @@ class PlanificacionController(BaseController):
             carga_total += t_prep + (t_ejec_unit * cantidad)
         return carga_total
 
+    # --- HELPER para generar respuesta de sobrecarga (MENSAJE MEJORADO) ---
     def _generar_respuesta_sobrecarga(self, linea: int, fecha_str: str, cap_dia: float, carga_op_restante: float, carga_exist: float, horizonte_excedido: bool = False) -> tuple:
          """ Crea el diccionario y status code para error de sobrecarga con mensaje claro. """
          max_dias_simulacion = 30 # Asegúrate que esta variable esté definida o pásala como argumento
