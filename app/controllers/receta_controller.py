@@ -36,6 +36,37 @@ class RecetaController(BaseController):
             return {'success': True, 'data': receta}, 200
         except Exception as e:
             return {'success': False, 'error': f"Error al obtener ingredientes: {str(e)}"}, 500
+
+    def obtener_recetas_con_ingredientes_masivo(self, receta_ids: List[int]) -> tuple:
+        """
+        Obtiene múltiples recetas y sus ingredientes en un número mínimo de consultas.
+        """
+        if not receta_ids:
+            return self.success_response(data=[])
+
+        try:
+            # 1. Obtener todas las recetas base
+            recetas_res = self.model.find_all(filters={'id': receta_ids})
+            if not recetas_res.get('success'):
+                return self.error_response(f"Error al buscar recetas base: {recetas_res.get('error')}")
+
+            recetas_map = {r['id']: r for r in recetas_res['data']}
+
+            # 2. Obtener todos los ingredientes para esas recetas, haciendo join con insumos
+            ingredientes_res = self.model.db.table('receta_ingredientes').select('*, insumo:id_insumo(*)').in_('receta_id', receta_ids).execute()
+            
+            # 3. Agrupar ingredientes por receta_id
+            for ing in ingredientes_res.data:
+                receta_id = ing.get('receta_id')
+                if receta_id in recetas_map:
+                    if 'ingredientes' not in recetas_map[receta_id]:
+                        recetas_map[receta_id]['ingredientes'] = []
+                    recetas_map[receta_id]['ingredientes'].append(ing)
+            
+            return self.success_response(data=list(recetas_map.values()))
+
+        except Exception as e:
+            return self.error_response(f"Error crítico en obtención masiva de recetas: {str(e)}", 500)
     
     def obtener_ingredientes_para_receta(self, receta_id: int) -> Dict:
         """

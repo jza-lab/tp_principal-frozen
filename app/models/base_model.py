@@ -95,20 +95,26 @@ class BaseModel(ABC):
             logger.error(f"Error al buscar en {self.table_name}: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
-    def find_all(self, filters: Optional[Dict] = None, order_by: str = None, limit: Optional[int] = None) -> Dict:
+    def find_all(self, filters: Optional[Dict] = None, order_by: str = None, limit: Optional[int] = None, select_columns: Optional[List[str]] = None) -> Dict:
         """
         Obtiene todos los registros que coinciden con los filtros, con opciones
         de ordenación y límite.
         """
         try:
-            query = self._get_query_builder().select('*')
+            # Determinar qué columnas seleccionar
+            columns_to_select = ','.join(select_columns) if select_columns else '*'
+            query = self._get_query_builder().select(columns_to_select)
 
             if filters:
                 for key, value in filters.items():
                     if value is None:
                         continue
+                    
+                    # Si el valor es una lista, usar el operador 'in'
+                    if isinstance(value, list):
+                        query = query.in_(key, value)
                     # --- LÓGICA CORREGIDA PARA OPERADORES (ej. 'fecha_gte') ---
-                    if '_' in key:
+                    elif '_' in key:
                         parts = key.split('_')
                         operator = parts[-1]
                         column_name = '_'.join(parts[:-1]) # Reconstruir el nombre de la columna
@@ -122,7 +128,7 @@ class BaseModel(ABC):
                             query = op_map[operator](column_name, value)
                             continue # Importante: saltar al siguiente filtro
                     # --- FIN DE LA CORRECCIÓN ---
-                    if isinstance(value, tuple) and len(value) == 2:
+                    elif isinstance(value, tuple) and len(value) == 2:
                         operator, filter_value = value
                         op_map = {
                             'eq': query.eq, 'gt': query.gt, 'gte': query.gte,

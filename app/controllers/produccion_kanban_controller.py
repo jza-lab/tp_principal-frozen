@@ -25,31 +25,57 @@ class ProduccionKanbanController(BaseController):
         Incluye la lógica de filtrado de OPs y de columnas según el rol.
         """
         try:
-            # 1. Obtener las OPs del día
+            # 1. Obtener las OPs base
             response_ops, _ = self.orden_produccion_controller.obtener_ordenes_para_kanban_hoy()
             if not response_ops.get('success'):
                 return self.error_response("Error al cargar las órdenes para el tablero.")
-
             ordenes = response_ops.get('data', [])
-            
-            # 2. Enrich and group orders
+            if not ordenes:
+                return self.success_response(data={
+                    'ordenes_por_estado': {}, 'columnas': OP_KANBAN_COLUMNAS, 'metricas_dia': {}, 'usuario_rol': usuario_rol
+                })
+
+            # 2. Recopilar IDs para consultas masivas
+            op_ids = [o['id'] for o in ordenes]
+            receta_ids = list(set(o['receta_id'] for o in ordenes if o.get('receta_id')))
+
+            # 3. Realizar consultas masivas
+            desperdicios_map = self._obtener_desperdicios_masivo(op_ids)
+            recetas_map, insumos_necesarios_map = self._obtener_recetas_e_ingredientes_masivo(receta_ids)
+            stock_map = self._obtener_stock_masivo(list(insumos_necesarios_map.keys()))
+
+            # 4. Enriquecer y agrupar órdenes utilizando los datos precargados
             ordenes_enriquecidas = []
             for orden in ordenes:
+                op_id = orden.get('id')
+                receta_id = orden.get('receta_id')
+                
+                # Datos de desperdicio
+                total_desperdicio = desperdicios_map.get(op_id, 0.0)
+                cantidad_producida = float(orden.get('cantidad_producida', 0) or 0)
+                cantidad_total = cantidad_producida + total_desperdicio
+                orden['desperdicio_porcentaje'] = round((total_desperdicio / cantidad_total) * 100, 1) if cantidad_total > 0 else 0.0
+
+                # Datos de materiales
+                receta_actual = recetas_map.get(receta_id)
+                insumos_receta = insumos_necesarios_map.get(receta_id, {})
+                orden['materiales_disponibles'] = self._verificar_materiales_disponibles(orden, insumos_receta, stock_map)
+
+                # Resto del enriquecimiento que no depende de BBDD en bucle
                 orden['lote'] = self._obtener_lote_de_orden(orden)
                 orden['prioridad'] = self._calcular_prioridad(orden)
-                orden['fecha_meta_str'] = orden.get('fecha_meta') # Keep original for display
+                orden['fecha_meta_str'] = orden.get('fecha_meta')
                 orden['tiempo_hasta_meta_horas'] = self._calcular_tiempo_hasta_meta(orden)
                 orden['es_retrasada'] = self._es_retrasada(orden)
-                orden['tiempo_estimado_horas'] = self._calcular_tiempo_estimado(orden)
+                orden['tiempo_estimado_horas'] = self._calcular_tiempo_estimado(orden, receta_actual)
                 orden['turno'] = self._obtener_turno_actual()
                 orden['tiempo_transcurrido'] = self._formatear_tiempo_transcurrido(orden)
                 orden['ritmo_actual'] = self._calcular_ritmo_actual(orden)
                 orden['ritmo_objetivo'] = self._calcular_ritmo_objetivo(orden)
-                orden['oee_actual'] = self._calcular_oee_actual(orden)
-                orden['desperdicio_porcentaje'] = self._obtener_desperdicio_de_orden(orden)
-                orden['materiales_disponibles'] = self._verificar_materiales_disponibles(orden)
+                orden['oee_actual'] = self._calcular_oee_actual(orden, total_desperdicio)
                 ordenes_enriquecidas.append(orden)
 
+            # 5. Agrupar por estado
             ordenes_por_estado = defaultdict(list)
             for orden in ordenes_enriquecidas:
                 estado_db = orden.get('estado', '').strip()
@@ -70,7 +96,7 @@ class ProduccionKanbanController(BaseController):
             oee_promedio = round(oee_sum / oee_count, 0) if oee_count > 0 else 0
 
             total_producido = sum(float(o.get('cantidad_producida', 0) or 0) for o in ordenes_hoy)
-            total_desperdicio = sum(self._obtener_desperdicio_de_orden(o) for o in ordenes_hoy)
+            total_desperdicio = sum(desperdicios_map.get(o['id'], 0.0) for o in ordenes_hoy)
             desperdicio_promedio = round((total_desperdicio / (total_producido + total_desperdicio)) * 100, 1) if (total_producido + total_desperdicio) > 0 else 0.0
 
             a_tiempo_count = len([o for o in completadas_hoy if not o.get('es_retrasada')])
@@ -106,7 +132,49 @@ class ProduccionKanbanController(BaseController):
             logger.error(f"Error crítico al obtener datos para el tablero Kanban: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
-    # --- ENRICHMENT HELPERS ---
+    # --- BULK DATA FETCHING HELPERS ---
+
+    def _obtener_desperdicios_masivo(self, op_ids: list) -> dict:
+        response = self.desperdicio_model.find_all(filters={'orden_produccion_id': op_ids})
+        if not response.get('success'):
+            return {}
+        desperdicios_map = defaultdict(float)
+        for item in response.get('data', []):
+            op_id = item.get('orden_produccion_id')
+            cantidad = float(item.get('cantidad', 0) or 0)
+            desperdicios_map[op_id] += cantidad
+        return desperdicios_map
+
+    def _obtener_recetas_e_ingredientes_masivo(self, receta_ids: list) -> (dict, dict):
+        recetas_res, _ = self.receta_controller.obtener_recetas_con_ingredientes_masivo(receta_ids)
+        if not recetas_res.get('success'):
+            return {}, {}
+        
+        recetas_map = {r['id']: r for r in recetas_res['data']}
+        insumos_necesarios_map = defaultdict(dict)
+        
+        for receta in recetas_res['data']:
+            receta_id = receta['id']
+            for ingrediente in receta.get('ingredientes', []):
+                # Adaptar a la nueva estructura anidada
+                insumo_data = ingrediente.get('insumo')
+                if insumo_data and insumo_data.get('id_insumo'):
+                    insumo_id = insumo_data['id_insumo']
+                    cantidad_necesaria = ingrediente.get('cantidad', 0)
+                    insumos_necesarios_map[receta_id][insumo_id] = cantidad_necesaria
+                
+        return recetas_map, insumos_necesarios_map
+
+    def _obtener_stock_masivo(self, insumo_ids: list) -> dict:
+        # Asegurarse de que los IDs (que pueden ser UUIDs) se pasen como strings
+        insumo_ids_str = [str(id) for id in insumo_ids]
+        
+        stock_res, _ = self.insumo_controller.obtener_stock_de_insumos_por_ids(insumo_ids_str)
+        if not stock_res.get('success'):
+            return {}
+        return {item['id_insumo']: float(item.get('stock_actual', 0) or 0) for item in stock_res['data']}
+
+    # --- ENRICHMENT HELPERS (MODIFIED FOR BULK DATA) ---
 
     def _obtener_lote_de_orden(self, orden):
         """
@@ -115,18 +183,6 @@ class ProduccionKanbanController(BaseController):
         """
         # Lógica provisional para generar un lote si no está en los datos de la orden
         return orden.get('lote') or f'LOTE-{datetime.now().year}-{orden.get("id", 0):03d}'
-
-    def _obtener_desperdicio_de_orden(self, orden):
-        """Suma el desperdicio registrado para una orden de producción."""
-        op_id = orden.get('id')
-        if not op_id:
-            return 0.0
-        
-        response = self.desperdicio_model.find_all(filters={'orden_produccion_id': op_id})
-        if response.get('success'):
-            total_desperdicio = sum(float(item.get('cantidad', 0) or 0) for item in response.get('data', []))
-            return total_desperdicio
-        return 0.0
 
     def _calcular_prioridad(self, orden):
         """Calcula la prioridad basándose en el tiempo restante."""
@@ -194,23 +250,17 @@ class ProduccionKanbanController(BaseController):
         except (ValueError, TypeError):
             return "0min"
 
-    def _verificar_materiales_disponibles(self, orden):
-        """Verifica si hay stock suficiente de todos los insumos para la OP."""
-        receta_id = orden.get('receta_id')
-        cantidad_planificada = orden.get('cantidad_planificada')
-        if not receta_id or not cantidad_planificada:
-            return False
+    def _verificar_materiales_disponibles(self, orden: dict, insumos_receta: dict, stock_map: dict) -> bool:
+        """Verifica la disponibilidad de materiales usando datos precargados."""
+        cantidad_planificada = float(orden.get('cantidad_planificada', 0))
+        if not insumos_receta:
+            return True # Si no hay ingredientes, los materiales están "disponibles".
 
-        receta_res, _ = self.receta_controller.obtener_receta_con_ingredientes(receta_id)
-        if not receta_res.get('success'):
-            return False
-
-        for ingrediente in receta_res['data'].get('ingredientes', []):
-            insumo_id = ingrediente.get('id_insumo')
-            cantidad_necesaria = ingrediente.get('cantidad', 0) * cantidad_planificada
+        for insumo_id, cantidad_necesaria_por_unidad in insumos_receta.items():
+            cantidad_total_necesaria = cantidad_necesaria_por_unidad * cantidad_planificada
+            stock_actual = stock_map.get(insumo_id, 0.0)
             
-            stock_res, _ = self.insumo_controller.obtener_con_stock(insumo_id)
-            if not stock_res.get('success') or stock_res['data'].get('stock_actual', 0) < cantidad_necesaria:
+            if stock_actual < cantidad_total_necesaria:
                 return False
         return True
 
@@ -255,53 +305,44 @@ class ProduccionKanbanController(BaseController):
         except (ValueError, TypeError, ZeroDivisionError):
             return 10.0
 
-    def _calcular_oee_actual(self, orden):
-        """Calcula el OEE actual de la orden."""
+    def _calcular_oee_actual(self, orden: dict, total_desperdicio: float) -> int:
+        """Calcula el OEE de la orden usando datos precargados."""
         if orden.get('estado') != 'EN_PROCESO' or not orden.get('fecha_inicio'):
             return 0
         try:
-            # 1. Disponibilidad
             inicio = datetime.fromisoformat(orden['fecha_inicio']).astimezone(timezone.utc)
             ahora = datetime.now(timezone.utc)
             tiempo_total = (ahora - inicio).total_seconds()
-            tiempo_pausas = 0 # Placeholder
-            tiempo_productivo = tiempo_total - tiempo_pausas
-            disponibilidad = (tiempo_productivo / tiempo_total) * 100 if tiempo_total > 0 else 100
+            tiempo_productivo = tiempo_total  # Simplificación: sin pausas por ahora
+            disponibilidad = 100.0
 
-            # 2. Rendimiento
             horas_productivas = tiempo_productivo / 3600
             ritmo_objetivo = self._calcular_ritmo_objetivo(orden)
             produccion_teorica = ritmo_objetivo * horas_productivas
             produccion_real = float(orden.get('cantidad_producida', 0) or 0)
-            rendimiento = (produccion_real / produccion_teorica) * 100 if produccion_teorica > 0 else 100
+            rendimiento = (produccion_real / produccion_teorica) * 100 if produccion_teorica > 0 else 100.0
             rendimiento = min(rendimiento, 100)
 
-            # 3. Calidad
-            desperdicio = self._obtener_desperdicio_de_orden(orden)
-            cantidad_total = produccion_real + desperdicio
-            calidad = (produccion_real / cantidad_total) * 100 if cantidad_total > 0 else 100
+            cantidad_total = produccion_real + total_desperdicio
+            calidad = (produccion_real / cantidad_total) * 100 if cantidad_total > 0 else 100.0
 
             oee = (disponibilidad * rendimiento * calidad) / 10000
-            return round(oee, 0)
+            return int(round(oee, 0))
         except (ValueError, TypeError, ZeroDivisionError):
-            return None
+            return 0
 
-    def _calcular_tiempo_estimado(self, orden):
-        """Calcula el tiempo de producción estimado para una orden."""
-        receta_id = orden.get('receta_id')
+    def _calcular_tiempo_estimado(self, orden: dict, receta: dict) -> str:
+        """Calcula el tiempo de producción estimado usando datos precargados."""
+        if not receta:
+            return "N/D"
+
         cantidad_planificada = float(orden.get('cantidad_planificada', 0))
         linea_asignada = orden.get('linea_asignada')
 
-        if not all([receta_id, cantidad_planificada, linea_asignada]):
+        if not all([cantidad_planificada, linea_asignada]):
             return "N/D"
 
-        receta_res, _ = self.receta_controller.obtener_receta_con_ingredientes(receta_id)
-        if not receta_res.get('success'):
-            return "N/D"
-        
-        receta = receta_res['data']
         tiempo_preparacion = float(receta.get('tiempo_preparacion_minutos', 0))
-        
         tiempo_prod_key = f'tiempo_prod_unidad_linea{linea_asignada}'
         tiempo_prod_unidad = float(receta.get(tiempo_prod_key, 0))
 

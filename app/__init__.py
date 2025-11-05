@@ -300,9 +300,11 @@ def create_app() -> Flask:
         """
         # Evitar la verificación de JWT para las rutas de archivos estáticos,
         # ya que es innecesario y causa consultas a la BD por cada CSS, JS, etc.
-        if request.endpoint and (request.endpoint.startswith('static') or request.blueprint == 'static'):
+        if request.path.startswith('/static'):
             return
 
+        # Para las demás rutas, intentar verificar el JWT de forma opcional.
+        # Esto permite que `current_user` esté disponible globalmente sin forzar un login.
         verify_jwt_in_request(optional=True)
 
     # --- INICIALIZAR SCHEDULER ---
