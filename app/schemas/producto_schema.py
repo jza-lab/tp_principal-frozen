@@ -28,7 +28,8 @@ class ProductoSchema(Schema):
     cantidad_maxima_x_pedido = fields.Int(
         required=False,
         allow_none=True,
-        load_default=0
+        load_default=0,
+        validate=validate.Range(min=0, error="La cantidad máxima no puede ser negativa.")
     )
 
     peso_por_paquete_unidad = fields.Str(
@@ -52,5 +53,6 @@ class ProductoSchema(Schema):
     stock_min_produccion = fields.Int(
         required=False,
         allow_none=True,
-        load_default=0
+        load_default=0,
+        validate=validate.Range(min=0, error="El stock mínimo no puede ser negativo.")
     )

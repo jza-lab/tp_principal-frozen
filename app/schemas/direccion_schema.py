@@ -1,4 +1,4 @@
-from marshmallow import Schema, fields, validates_schema, ValidationError
+from marshmallow import Schema, fields, validates_schema, ValidationError, validate
 from marshmallow.validate import Length, Regexp
 
 class DireccionSchema(Schema):
@@ -7,7 +7,7 @@ class DireccionSchema(Schema):
     """
     id = fields.Int(dump_only=True)
     calle = fields.Str(required=True)
-    altura = fields.Int(required=True)
+    altura = fields.Int(required=True, validate=validate.Range(min=1, error="La altura debe ser un número positivo."))
     
     piso = fields.Str(
         allow_none=True,
