@@ -397,9 +397,9 @@
                     </div>
                 </div>
 
-                {% if carga_crp and capacidad_crp and inicio_semana_crp and fin_semana_crp %}
-                    {% set fecha_inicio = date.fromisoformat(inicio_semana_crp) %}
-                    {% set fecha_fin = date.fromisoformat(fin_semana_crp) %}
+                {% if carga_crp and capacidad_crp and inicio_semana and fin_semana %}
+                    {% set fecha_inicio = date.fromisoformat(inicio_semana) %}
+                    {% set fecha_fin = date.fromisoformat(fin_semana) %}
                     {% set num_dias = (fecha_fin - fecha_inicio).days + 1 %}
                     
                     {# --- CORRECCIÓN DE LOCALE: Mapa numérico (infalible) --- #}
