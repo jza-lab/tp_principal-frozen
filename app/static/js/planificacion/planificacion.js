@@ -536,3 +536,91 @@ document.addEventListener('click', function (e) {
     const replanModal = new bootstrap.Modal(document.getElementById('replanModal'));
     replanModal.show();
 });
+
+// --- LÓGICA PARA FORZAR LA AUTO-PLANIFICACIÓN ---
+document.addEventListener('DOMContentLoaded', function () {
+    const btnForzarPlanificacion = document.getElementById('btn-forzar-auto-planificacion');
+
+    if (btnForzarPlanificacion) {
+        btnForzarPlanificacion.addEventListener('click', function () {
+            
+            // 1. Mostrar modal de confirmación antes de ejecutar
+            showFeedbackModal(
+                'Confirmar Ejecución',
+                'Esto intentará planificar automáticamente todas las OPs pendientes en el horizonte. El proceso puede tardar unos segundos. ¿Desea continuar?',
+                'confirm',
+                async () => { // 2. El callback que se ejecuta si el usuario confirma
+                    const originalButtonText = btnForzarPlanificacion.innerHTML;
+                    showLoadingSpinner(btnForzarPlanificacion, 'Planificando...');
+
+                    try {
+                        const response = await fetch('/planificacion/forzar_auto_planificacion', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        const result = await response.json();
+                        hideLoadingSpinner(btnForzarPlanificacion, originalButtonText);
+
+                        if (result.success) {
+                            const resumen = result.data;
+                            // 3. Formatear el resumen para el modal
+                            let resumenHtml = `
+                                <p>La planificación automática ha finalizado.</p>
+                                <ul class="list-group">
+                                    <li class="list-group-item d-flex justify-content-between align-items-center list-group-item-success">
+                                        OPs Planificadas Exitosamente
+                                        <span class="badge bg-success rounded-pill">${resumen.total_planificadas}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center list-group-item-info">
+                                        Órdenes de Compra Generadas
+                                        <span class="badge bg-info rounded-pill">${resumen.total_oc_generadas}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center list-group-item-danger">
+                                        Errores o Advertencias
+                                        <span class="badge bg-danger rounded-pill">${resumen.total_errores}</span>
+                                    </li>
+                                </ul>
+                            `;
+
+                            if (resumen.total_errores > 0) {
+                                resumenHtml += '<h6 class="mt-3">Detalle de Errores:</h6><ul class="list-unstyled">';
+                                resumen.errores.forEach(err => {
+                                    resumenHtml += `<li class="small text-danger"><i class="bi bi-x-circle me-1"></i>${err}</li>`;
+                                });
+                                resumenHtml += '</ul>';
+                            }
+                            
+                            // 4. Mostrar el resumen en un modal de éxito y añadir botón para recargar
+                             showFeedbackModal(
+                                'Planificación Finalizada',
+                                resumenHtml,
+                                'success'
+                                // No usamos el callback de confirmación aquí, solo el botón "Cerrar"
+                            );
+
+                             // Sobrescribimos el botón "Cerrar" para que recargue la página
+                             const feedbackModal = document.getElementById('feedbackModal');
+                             const closeBtn = feedbackModal.querySelector('#feedbackModalCancelBtn');
+                             if(closeBtn) {
+                                 closeBtn.textContent = 'Aceptar y Recargar';
+                                 closeBtn.onclick = () => window.location.reload();
+                             }
+
+                        } else {
+                            // Si la API devuelve success: false
+                            showFeedbackModal('Error en la Planificación', result.error || 'Ocurrió un error desconocido.', 'error');
+                        }
+                    } catch (error) {
+                        // Error de red
+                        hideLoadingSpinner(btnForzarPlanificacion, originalButtonText);
+                        showFeedbackModal('Error de Conexión', 'No se pudo conectar con el servidor para ejecutar la planificación.', 'error');
+                        console.error('Error al forzar la planificación automática:', error);
+                    }
+                } // Fin del callback de confirmación
+            ); // Fin de showFeedbackModal (confirm)
+        });
+    }
+});
