@@ -541,8 +541,11 @@ class PlanificacionController(BaseController):
                 # ... (lógica fecha_meta_mas_proxima sin cambios) ...
                 fecha_meta_mas_proxima_actual = mps_agrupado[clave_producto]['fecha_meta_mas_proxima']
                 if fecha_meta_op_str:
-                     fecha_meta_op = date.fromisoformat(fecha_meta_op_str)
-                     if fecha_meta_mas_proxima_actual is None or fecha_meta_op < date.fromisoformat(fecha_meta_mas_proxima_actual):
+                     # El string puede venir como 'YYYY-MM-DD' o 'YYYY-MM-DDTHH:MM:SS...'
+                     # Al hacer split('T'), nos aseguramos de tomar solo la parte de la fecha.
+                     fecha_solo_str = fecha_meta_op_str.split('T')[0]
+                     fecha_meta_op = date.fromisoformat(fecha_solo_str)
+                     if fecha_meta_mas_proxima_actual is None or fecha_meta_op < date.fromisoformat(fecha_meta_mas_proxima_actual.split('T')[0]):
                           mps_agrupado[clave_producto]['fecha_meta_mas_proxima'] = fecha_meta_op_str
 
 

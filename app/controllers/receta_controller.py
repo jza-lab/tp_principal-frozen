@@ -11,7 +11,6 @@ class RecetaController(BaseController):
     def __init__(self):
         super().__init__()
         self.model = RecetaModel()
-        self.ingrediente_model = RecetaIngrediente
         self.schema = RecetaSchema()
 
     def obtener_recetas(self, filtros: Optional[Dict] = None) -> List[Dict]:
@@ -30,11 +29,13 @@ class RecetaController(BaseController):
             return None
 
         receta = receta_result['data']
-
-        ingredientes_result = self.ingrediente_model.find_all({'receta_id': receta_id})
-        receta['ingredientes'] = ingredientes_result.get('data', [])
-
-        return receta
+        
+        try:
+            ingredientes_result = self.model.db.table('receta_ingredientes').select('*').eq('receta_id', receta_id).execute()
+            receta['ingredientes'] = ingredientes_result.data
+            return {'success': True, 'data': receta}, 200
+        except Exception as e:
+            return {'success': False, 'error': f"Error al obtener ingredientes: {str(e)}"}, 500
     
     def obtener_ingredientes_para_receta(self, receta_id: int) -> Dict:
         """

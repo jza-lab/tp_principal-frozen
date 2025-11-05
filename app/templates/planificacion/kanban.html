@@ -8,6 +8,8 @@
 
 {% block app_content %}
 
+
+<!----
 {# PANEL SUPERIOR: MÉTRICAS DEL DÍA      #}
 <div class="metrics-panel">
     <div class="metrics-header">
@@ -72,7 +74,7 @@
             </div>
         </div>
     </div>
-</div>
+</div> -->
 
 {# FILTROS RÁPIDOS                       #}
 <div class="quick-filters">
@@ -165,7 +167,7 @@
                                     <span class="badge-late">
                                         <i class="bi bi-clock-history"></i> ATRASADA
                                     </span>
-                                    {% elif tiempo_hasta_meta < 4 %}
+                                    {% elif tiempo_hasta_meta is not none and tiempo_hasta_meta < 4 %}
                                     <span class="badge-urgent">
                                         <i class="bi bi-hourglass-top"></i> URGENTE
                                     </span>
@@ -226,17 +228,21 @@
                                         <div class="progress-labels">
                                             <span class="progress-produced">
                                                 <i class="bi bi-check-circle-fill"></i> 
-                                                {{ orden.cantidad_producida|round(1) }} kg
+                                                {{ (orden.cantidad_producida|default(0))|round(1) }} kg
                                             </span>
                                             <span class="progress-percentage">
-                                                {{ ((orden.cantidad_producida / orden.cantidad_planificada * 100)|round(0))|int }}%
+                                                {% if orden.cantidad_planificada > 0 %}
+                                                    {{ (( (orden.cantidad_producida|default(0)) / orden.cantidad_planificada * 100)|round(0))|int }}%
+                                                {% else %}
+                                                    0%
+                                                {% endif %}
                                             </span>
                                         </div>
                                         <div class="progress-bar-custom">
-                                            <div class="progress-fill-custom" style="width: {{ (orden.cantidad_producida / orden.cantidad_planificada * 100)|round(0) }}%"></div>
+                                            <div class="progress-fill-custom" style="width: {% if orden.cantidad_planificada > 0 %}{{ ( (orden.cantidad_producida|default(0)) / orden.cantidad_planificada * 100)|round(0) }}{% else %}0{% endif %}%"></div>
                                         </div>
                                         <div class="progress-target">
-                                            <span>Objetivo: {{ orden.cantidad_planificada }} kg</span>
+                                            <span>Objetivo: {{ orden.cantidad_planificada|default(0) }} kg</span>
                                         </div>
                                     </div>
                                     
@@ -308,23 +314,19 @@
                             {# ====== MÉTRICAS ADICIONALES (SOLO EN PROCESO) ====== #}
                             {% if estado_key.startswith('EN_LINEA') %}
                             <div class="metrics-mini-section">
-                                {% if orden.oee_actual %}
                                 <div class="mini-metric">
                                     <span class="mini-label">OEE:</span>
-                                    <span class="mini-value {{ 'text-success' if orden.oee_actual >= 85 else 'text-warning' }}">
-                                        {{ orden.oee_actual|round(0)|int }}%
+                                    <span class="mini-value {{ 'text-success' if (orden.oee_actual|default(0)) >= 85 else 'text-warning' }}">
+                                        {{ (orden.oee_actual|default(0))|round(0)|int }}%
                                     </span>
                                 </div>
-                                {% endif %}
                                 
-                                {% if orden.desperdicio_porcentaje is not none %}
                                 <div class="mini-metric">
                                     <span class="mini-label">Desperdicio:</span>
-                                    <span class="mini-value {{ 'text-danger' if orden.desperdicio_porcentaje > 5 else 'text-success' }}">
-                                        {{ orden.desperdicio_porcentaje|round(1) }}%
+                                    <span class="mini-value {{ 'text-danger' if (orden.desperdicio_porcentaje|default(0)) > 5 else 'text-success' }}">
+                                        {{ (orden.desperdicio_porcentaje|default(0))|round(1) }}%
                                     </span>
                                 </div>
-                                {% endif %}
                             </div>
                             {% endif %}
                             
@@ -336,12 +338,24 @@
                                         <i class="bi bi-play-fill"></i>
                                         <span>Iniciar Trabajo</span>
                                     </a>
-                                {% elif estado_key.startswith('EN_LINEA') %}
-                                    <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}" 
+                                {% elif estado_key == 'EN_PROCESO' %}
+                                    <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}"
                                        class="btn-action btn-action-success">
                                         <i class="bi bi-eye-fill"></i>
                                         <span>Ver Foco</span>
                                     </a>
+                                {% elif estado_key == 'CONTROL_DE_CALIDAD' %}
+                                    {% if 'aprobar_control_calidad' is has_permission %}
+                                    <button class="btn-action btn-action-approve btn-approve-quality" data-op-id="{{ orden.id }}">
+                                        <i class="bi bi-check2-circle"></i>
+                                        <span>Aprobar</span>
+                                    </button>
+                                    {% else %}
+                                    <button class="btn-action btn-action-secondary" disabled>
+                                        <i class="bi bi-hourglass-split"></i>
+                                        <span>Pend. Aprobación</span>
+                                    </button>
+                                    {% endif %}
                                 {% elif estado_key == 'EN_ESPERA' %}
                                     <button class="btn-action btn-action-secondary" disabled>
                                         <i class="bi bi-hourglass-split"></i>

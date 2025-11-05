@@ -101,6 +101,57 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
     
+    // ===== ACCIONES DE TARJETA =====
+    document.addEventListener('click', function(e) {
+        // --- Botón Aprobar Calidad ---
+        if (e.target.matches('.btn-approve-quality') || e.target.closest('.btn-approve-quality')) {
+            const button = e.target.closest('.btn-approve-quality');
+            const opId = button.dataset.opId;
+            
+            if (!opId) return;
+
+            // Deshabilitar botón para evitar doble clic
+            button.disabled = true;
+            button.innerHTML = '<i class="bi bi-hourglass-split"></i> Aprobando...';
+
+            approveQualityCheck(opId, button);
+        }
+    });
+
+    async function approveQualityCheck(opId, buttonElement) {
+        try {
+            const response = await fetch(`api/op/${opId}/aprobar-calidad`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(`Orden ${opId} aprobada y completada.`, 'success');
+                
+                // Mover la tarjeta a la columna 'COMPLETADA'
+                const card = buttonElement.closest('.kanban-card');
+                const completedColumn = document.getElementById('kanban-cards-COMPLETADA');
+                if (card && completedColumn) {
+                    card.remove();
+                    completedColumn.prepend(card); // Añadir al principio
+                    updateColumnCounts();
+                }
+            } else {
+                showNotification(`Error: ${result.error || 'No se pudo aprobar la orden.'}`, 'error');
+                button.disabled = false;
+                button.innerHTML = '<i class="bi bi-check2-circle"></i> Aprobar';
+            }
+        } catch (error) {
+            console.error('Error en la llamada API para aprobar calidad:', error);
+            showNotification('Error de conexión al intentar aprobar.', 'error');
+            button.disabled = false;
+            button.innerHTML = '<i class="bi bi-check2-circle"></i> Aprobar';
+        }
+    }
+
+
     // ===== DRAG & DROP (OPCIONAL - REQUIERE SORTABLE.JS) =====
     // Si quieres habilitar arrastrar y soltar entre columnas
     const initializeDragAndDrop = () => {

@@ -654,6 +654,16 @@
     transform: scale(1.02);
 }
 
+.btn-action-approve {
+    background: #0d9488; /* Teal */
+    color: white;
+}
+
+.btn-action-approve:hover {
+    background: #0f766e;
+    transform: scale(1.02);
+}
+
 .btn-action-secondary {
     background: #e5e7eb;
     color: #6b7280;
