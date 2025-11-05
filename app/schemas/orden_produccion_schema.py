@@ -18,6 +18,7 @@ class OrdenProduccionSchema(Schema):
     # Campos de solo lectura (generados por el sistema)
     id = fields.Int(dump_only=True)
     codigo = fields.Str(dump_only=True)
+    cantidad_producida = fields.Decimal(as_string=True, dump_only=True)
     usuario_creador_id = fields.Int(dump_only=True)
     fecha_inicio = fields.DateTime(dump_only=True, allow_none=True)
     fecha_fin = fields.DateTime(dump_only=True, allow_none=True)

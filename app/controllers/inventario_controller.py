@@ -123,6 +123,110 @@ class InventarioController(BaseController):
             logger.error(f"Error crítico al reservar insumos para OP {orden_produccion['id']}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
+    def consumir_stock_para_op(self, orden_produccion: Dict, usuario_id: int) -> dict:
+        """
+        Calcula los insumos necesarios para una OP y consume el stock.
+        Prioriza los lotes reservados para la OP y luego consume de los disponibles.
+        """
+        receta_model = RecetaModel()
+        reserva_insumo_model = ReservaInsumoModel()
+
+        try:
+            receta_id = orden_produccion['receta_id']
+            op_id = orden_produccion['id']
+            cantidad_a_producir = float(orden_produccion.get('cantidad_planificada', 0))
+
+            ingredientes_result = receta_model.get_ingredientes(receta_id)
+            if not ingredientes_result.get('success'):
+                raise Exception("No se pudieron obtener los ingredientes de la receta.")
+
+            ingredientes = ingredientes_result.get('data', [])
+            insumos_faltantes = []
+
+            for ingrediente in ingredientes:
+                insumo_id = ingrediente['id_insumo']
+                cantidad_necesaria = float(ingrediente.get('cantidad', 0)) * cantidad_a_producir
+                cantidad_restante_a_consumir = cantidad_necesaria
+
+                # Paso 1: Consumir lotes reservados específicamente para esta OP
+                lotes_reservados_res = self.inventario_model.find_all(
+                    filters={
+                        'id_insumo': insumo_id,
+                        'estado': ('ilike', 'reservado'),
+                        'orden_produccion_id': op_id,
+                        'cantidad_actual': ('gt', 0)
+                    },
+                    order_by='f_ingreso.asc'
+                )
+                
+                for lote in lotes_reservados_res.get('data', []):
+                    if cantidad_restante_a_consumir <= 0: break
+                    
+                    cantidad_en_lote = float(lote.get('cantidad_actual', 0))
+                    cantidad_a_consumir_de_lote = min(cantidad_en_lote, cantidad_restante_a_consumir)
+
+                    # Crear registro de consumo
+                    reserva_insumo_model.create({
+                        'orden_produccion_id': op_id,
+                        'lote_inventario_id': lote['id_lote'],
+                        'insumo_id': insumo_id,
+                        'cantidad_reservada': cantidad_a_consumir_de_lote, # Se usa el mismo campo para registrar el consumo
+                        'usuario_reserva_id': usuario_id
+                    })
+
+                    # Actualizar lote
+                    nueva_cantidad_lote = cantidad_en_lote - cantidad_a_consumir_de_lote
+                    update_data = {'cantidad_actual': nueva_cantidad_lote}
+                    if nueva_cantidad_lote <= 0:
+                        update_data['estado'] = 'agotado'
+                    self.inventario_model.update(lote['id_lote'], update_data, 'id_lote')
+
+                    cantidad_restante_a_consumir -= cantidad_a_consumir_de_lote
+                
+                # Paso 2: Si aún se necesita, consumir lotes disponibles
+                if cantidad_restante_a_consumir > 0:
+                    lotes_disponibles_res = self.inventario_model.find_all(
+                        filters={'id_insumo': insumo_id, 'estado': ('ilike', 'disponible'), 'cantidad_actual': ('gt', 0)},
+                        order_by='f_ingreso.asc'
+                    )
+                    for lote in lotes_disponibles_res.get('data', []):
+                        if cantidad_restante_a_consumir <= 0: break
+                        
+                        cantidad_en_lote = float(lote.get('cantidad_actual', 0))
+                        cantidad_a_consumir_de_lote = min(cantidad_en_lote, cantidad_restante_a_consumir)
+
+                        reserva_insumo_model.create({
+                            'orden_produccion_id': op_id,
+                            'lote_inventario_id': lote['id_lote'],
+                            'insumo_id': insumo_id,
+                            'cantidad_reservada': cantidad_a_consumir_de_lote,
+                            'usuario_reserva_id': usuario_id
+                        })
+                        
+                        nueva_cantidad_lote = cantidad_en_lote - cantidad_a_consumir_de_lote
+                        update_data = {'cantidad_actual': nueva_cantidad_lote}
+                        if nueva_cantidad_lote <= 0:
+                            update_data['estado'] = 'agotado'
+                        self.inventario_model.update(lote['id_lote'], update_data, 'id_lote')
+
+                        cantidad_restante_a_consumir -= cantidad_a_consumir_de_lote
+
+                if cantidad_restante_a_consumir > 0:
+                    insumos_faltantes.append({
+                        'insumo_id': insumo_id,
+                        'nombre': ingrediente.get('nombre_insumo', 'N/A'),
+                        'cantidad_faltante': cantidad_restante_a_consumir
+                    })
+
+            if insumos_faltantes:
+                return {'success': False, 'error': f"Stock insuficiente. Faltan: {insumos_faltantes}"}
+
+            return {'success': True, 'data': {'insumos_faltantes': insumos_faltantes}}
+
+        except Exception as e:
+            logger.error(f"Error crítico al consumir insumos para OP {orden_produccion['id']}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
 
     def verificar_stock_para_op(self, orden_produccion: Dict) -> dict:
         """

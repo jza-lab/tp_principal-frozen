@@ -23,6 +23,13 @@ class BaseModel(ABC):
         self.db = Database().client
         self.table_name = self.get_table_name()
 
+    def _get_query_builder(self):
+        """
+        Devuelve el constructor de consultas para la tabla del modelo.
+        Puede ser sobrescrito por subclases para especificar un esquema.
+        """
+        return self.db.table(self.table_name)
+
     @abstractmethod
     def get_table_name(self) -> str:
         """
@@ -57,7 +64,7 @@ class BaseModel(ABC):
         """
         try:
             clean_data = self._prepare_data_for_db(data)
-            result = self.db.table(self.table_name).insert(clean_data, returning="representation").execute()
+            result = self._get_query_builder().insert(clean_data, returning="representation").execute()
 
             if result.data:
                 logger.info(f"Registro creado en {self.table_name}: {result.data[0]}")
@@ -77,7 +84,7 @@ class BaseModel(ABC):
             if id_field is None:
                 id_field = "id"
 
-            result = self.db.table(self.table_name).select('*').eq(id_field, id_value).execute()
+            result = self._get_query_builder().select('*').eq(id_field, id_value).execute()
 
             if result.data:
                 return {'success': True, 'data': result.data[0]}
@@ -94,7 +101,7 @@ class BaseModel(ABC):
         de ordenación y límite.
         """
         try:
-            query = self.db.table(self.table_name).select('*')
+            query = self._get_query_builder().select('*')
 
             if filters:
                 for key, value in filters.items():
@@ -154,7 +161,7 @@ class BaseModel(ABC):
                 return {'success': False, 'error': 'No se proporcionaron datos para actualizar.'}
 
             clean_data = self._prepare_data_for_db(data)
-            result = self.db.table(self.table_name).update(clean_data).eq(id_field, id_value).execute()
+            result = self._get_query_builder().update(clean_data).eq(id_field, id_value).execute()
 
             if result.data:
                 logger.info(f"Registro actualizado en {self.table_name}: {id_value}")
@@ -175,10 +182,10 @@ class BaseModel(ABC):
                 id_field = "id"
 
             if soft_delete:
-                result = self.db.table(self.table_name).update({'activo': False}).eq(id_field, id_value).execute()
+                result = self._get_query_builder().update({'activo': False}).eq(id_field, id_value).execute()
                 message = 'Registro desactivado (eliminación lógica).'
             else:
-                result = self.db.table(self.table_name).delete().eq(id_field, id_value).execute()
+                result = self._get_query_builder().delete().eq(id_field, id_value).execute()
                 message = 'Registro eliminado físicamente.'
 
             logger.info(f"{message} ID: {id_value} en tabla: {self.table_name}")
@@ -193,7 +200,7 @@ class BaseModel(ABC):
         Cuenta el número de registros que coinciden con los filtros.
         """
         try:
-            query = self.db.table(self.table_name).select('id', count='exact')
+            query = self._get_query_builder().select('id', count='exact')
 
             if filtros:
                 for key, value in filtros.items():

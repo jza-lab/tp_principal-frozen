@@ -31,46 +31,6 @@ class PlanificacionController(BaseController):
         self.insumo_model = InsumoModel() # Asegúrate que esté inicializado
         self.bloqueo_capacidad_model = BloqueoCapacidadModel() # <-- Añadir esto
 
-    def obtener_ops_para_tablero(self) -> tuple:
-        """
-        Obtiene todas las OPs activas y las agrupa por estado para el tablero Kanban.
-        """
-        try:
-            # --- CORRECCIÓN DEFINITIVA ---
-            # Usamos los nombres exactos de la base de datos y solo los que corresponden al tablero.
-            estados_activos = [
-                'EN ESPERA',
-                'LISTA PARA PRODUCIR',
-                'EN PROCESO',
-                'EN_LINEA_1',
-                'EN_LINEA_2',
-                'EN_EMPAQUETADO',      # <-- NUEVO
-                'CONTROL_DE_CALIDAD',  # <-- NUEVO
-                'COMPLETADA'
-                # Añade aquí otros estados si tienes columnas para ellos, ej: 'EN ESPERA'
-            ]
-            # ----------------------------
-
-            response, _ = self.orden_produccion_controller.obtener_ordenes(
-                filtros={'estado': ('in', estados_activos)}
-            )
-
-            if not response.get('success'):
-                return self.error_response("Error al cargar las órdenes de producción.")
-
-            ordenes = response.get('data', [])
-
-            # Agrupamos las órdenes por estado usando un defaultdict
-            ordenes_por_estado = defaultdict(list)
-            for orden in ordenes:
-                ordenes_por_estado[orden['estado']].append(orden)
-
-            return self.success_response(data=dict(ordenes_por_estado))
-
-        except Exception as e:
-            logger.error(f"Error preparando datos para el tablero: {e}", exc_info=True)
-            return self.error_response(f"Error interno: {str(e)}", 500)
-
     def consolidar_ops(self, op_ids: List[int], usuario_id: int) -> tuple:
         """
         Orquesta la consolidación de OPs llamando al controlador de órdenes de producción.
@@ -324,7 +284,6 @@ class PlanificacionController(BaseController):
             return error_dict, 500
             # ----------------------
 
-
     # --- NUEVO HELPER para obtener datos OP (MODIFICADO) ---
     def _obtener_datos_op_a_planificar(self, op_ids: List[int], usuario_id: int) -> tuple: # <-- AÑADIR usuario_id
         """ Obtiene los datos de la OP (consolidada o individual). Devuelve (id, data) o (None, error_msg). """
@@ -493,6 +452,24 @@ class PlanificacionController(BaseController):
                         403
                     )
 
+
+            # --- INICIO DE LA LÓGICA DE CONSUMO DE STOCK ---
+            estados_de_consumo = ['EN_LINEA_1', 'EN_LINEA_2']
+            if estado_actual == 'LISTA PARA PRODUCIR' and nuevo_estado in estados_de_consumo:
+                logger.info(f"OP {op_id} movida a producción. Consumiendo stock de insumos...")
+                
+                # Obtener el ID del usuario actual para registrar el consumo
+                # (Asumimos que está disponible en el contexto de la petición o se pasa como argumento)
+                # Aquí usamos un valor por defecto, pero debería ser el usuario autenticado.
+                usuario_id = 1 # OJO: Reemplazar con el ID del usuario real
+                
+                consumo_result = self.inventario_controller.consumir_stock_para_op(op_actual_res['data'], usuario_id)
+                
+                if not consumo_result.get('success'):
+                    error_msg = f"No se pudo iniciar la producción por falta de stock: {consumo_result.get('error')}"
+                    logger.error(error_msg)
+                    return self.error_response(error_msg, 409) # 409 Conflict es un buen código para esto
+            # --- FIN DE LA LÓGICA DE CONSUMO DE STOCK ---
 
             # --- Ejecución del cambio de estado ---
             resultado = {}

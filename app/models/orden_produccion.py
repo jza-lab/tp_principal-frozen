@@ -2,9 +2,6 @@ from app.models.base_model import BaseModel
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 import logging
-# Importamos el modelo de Pedido para poder invocar su lógica
-from app.models.pedido import PedidoModel
-
 logger = logging.getLogger(__name__)
 
 class OrdenProduccionModel(BaseModel):
@@ -17,9 +14,8 @@ class OrdenProduccionModel(BaseModel):
 
     def cambiar_estado(self, orden_id: int, nuevo_estado: str, observaciones: Optional[str] = None) -> Dict:
         """
-        Cambia el estado de una orden de producción, actualiza fechas clave
-        (incluyendo fecha_inicio real al entrar en línea por primera vez) y el estado
-        de los items de pedido asociados.
+        Cambia el estado de una orden de producción y actualiza las fechas clave.
+        La lógica de negocio compleja (como actualizar pedidos) se maneja en el controlador.
         """
         try:
             # 1. Preparar los datos base para la actualización
@@ -27,80 +23,28 @@ class OrdenProduccionModel(BaseModel):
             if observaciones:
                 update_data['observaciones'] = observaciones
 
-            now_iso = datetime.now().isoformat() # Timestamp actual en formato ISO
+            now_iso = datetime.now().isoformat()
 
             # --- LÓGICA DE FECHAS MEJORADA ---
-            # Si la orden entra en una etapa de producción activa por primera vez
-            # Asegúrate que EN_PROCESO usa el formato correcto (guion bajo o espacio) si lo necesitas aquí
             if nuevo_estado in ['EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD']:
-                # Verificamos si la fecha_inicio ya fue establecida para no sobrescribirla
-                # Usamos find_by_id del propio modelo (self)
                 orden_actual_res = self.find_by_id(orden_id, 'id')
                 if orden_actual_res.get('success') and orden_actual_res.get('data') and not orden_actual_res['data'].get('fecha_inicio'):
-                    update_data['fecha_inicio'] = now_iso # Solo se establece si era Nulo
+                    update_data['fecha_inicio'] = now_iso
                     logger.info(f"Registrando inicio real de producción para OP {orden_id} a las {now_iso}")
 
-            # Si la orden se completa, registramos la fecha de fin
-            # Quitamos 'FINALIZADA' si no lo usas como estado final que genera lote
             elif nuevo_estado == 'COMPLETADA':
                 update_data['fecha_fin'] = now_iso
 
-            # Mantenemos la lógica para la fecha de aprobación (si aún la usas)
             elif nuevo_estado == 'APROBADA':
-                # Nota: Con el nuevo flujo de 'LISTA PARA PRODUCIR', este estado 'APROBADA'
-                # podría ya no ser necesario o tener un significado diferente.
-                # Revisa si esta lógica aún aplica.
                 fecha_aprobacion = datetime.now()
-                # Considera si la fecha fin estimada debe calcularse aquí o en otro lado
-                # fecha_fin_esperada = fecha_aprobacion + timedelta(weeks=1) # Ejemplo
                 update_data['fecha_aprobacion'] = fecha_aprobacion.isoformat()
-                # update_data['fecha_fin_estimada'] = fecha_fin_esperada.isoformat() # Descomentar si aplica
-            # --- FIN DE LA LÓGICA DE FECHAS ---
 
             # 2. Actualizar la orden de producción en la base de datos
-            # Usamos el método update de la clase base (o el propio si fue sobreescrito)
             update_result = self.update(id_value=orden_id, data=update_data, id_field='id')
             if not update_result.get('success'):
                 logger.error(f"Fallo al actualizar OP {orden_id} a estado {nuevo_estado}: {update_result.get('error')}")
-                return update_result
 
-            # 3. Lógica de actualización en cascada para los pedidos
-            nuevo_estado_item = None
-            # Estados que indican producción activa
-            if nuevo_estado in ['EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD']: # Ajustado
-                nuevo_estado_item = 'EN_PRODUCCION'
-            # Estado final que indica producto listo
-            elif nuevo_estado == 'COMPLETADA':
-                nuevo_estado_item = 'ALISTADO'
-
-            if nuevo_estado_item:
-                try:
-                    # Usar el cliente de DB directamente para operaciones en otra tabla
-                    items_result = self.db.table('pedido_items').select('id, pedido_id').eq('orden_produccion_id', orden_id).execute()
-
-                    if items_result.data:
-                        # Actualizar estado de los items asociados
-                        self.db.table('pedido_items').update({'estado': nuevo_estado_item}).eq('orden_produccion_id', orden_id).execute()
-                        logger.info(f"Items del pedido asociados a OP {orden_id} actualizados a {nuevo_estado_item}.")
-
-                        # Obtener IDs únicos de los pedidos afectados
-                        pedidos_ids_afectados = {item['pedido_id'] for item in items_result.data}
-
-                        # Instanciar PedidoModel y actualizar estado agregado de cada pedido
-                        pedido_model = PedidoModel()
-                        for pedido_id in pedidos_ids_afectados:
-                            # Este método debería recalcular el estado general del pedido
-                            pedido_model.actualizar_estado_agregado(pedido_id)
-                            logger.info(f"Estado agregado del Pedido {pedido_id} actualizado.")
-
-                except Exception as e_cascade:
-                    # Si falla la cascada, la OP ya cambió de estado. Loggeamos el error pero no revertimos.
-                    logger.error(f"Error en actualización cascada para OP {orden_id} -> Pedidos: {e_cascade}", exc_info=True)
-                    # Podrías añadir una advertencia al resultado si lo deseas
-                    update_result['warning'] = "Estado de OP actualizado, pero falló la actualización de pedidos asociados."
-
-
-            return update_result # Devuelve el resultado del update principal de la OP
+            return update_result
 
         except Exception as e:
             logger.error(f"Error crítico cambiando estado de la orden {orden_id} a {nuevo_estado}: {e}", exc_info=True)
@@ -369,38 +313,100 @@ class OrdenProduccionModel(BaseModel):
         except Exception as e:
             logger.error(f"Error al buscar órdenes por IDs: {op_ids}. Error: {str(e)}")
             return {'success': False, 'error': str(e)}
-    
-    def get_ops_by_lote_insumo(self, id_lote_insumo: str) -> Dict:
-        try:
-            # --- CORRECCIÓN ---
-            consumo_result = self.db.table('reservas_insumos').select(
-                 'orden_produccion_id, cantidad_reservada, ordenes_produccion!inner(codigo, estado)'
-            ).eq('lote_inventario_id', id_lote_insumo).not_.eq('ordenes_produccion.estado', 'CANCELADO').execute()
-            # --- FIN CORRECCIÓN ---
 
-            if consumo_result.data:
-                ops = []
-                for item in consumo_result.data:
-                    op_data = item.get('ordenes_produccion', {})
-                    if op_data:
-                        ops.append({
-                            'id': item.get('orden_produccion_id'),
-                            'codigo': op_data.get('codigo', 'N/A'),
-                            'cantidad_usada': item.get('cantidad_reservada', 0)
-                        })
-                return {'success': True, 'data': ops}
+    def get_for_kanban_hoy(self, filtros_operario: Optional[Dict] = None) -> Dict:
+        """
+        Obtiene las OPs para el Kanban. Si se proveen filtros de operario,
+        la consulta se ajusta para mostrar solo OPs relevantes para ese usuario.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select(
+                "*, productos(nombre, unidad_medida), "
+                "creador:usuario_creador_id(nombre, apellido), "
+                "supervisor:supervisor_responsable_id(nombre, apellido), "
+                "operario:operario_asignado_id(nombre, apellido)"
+            )
+
+            if filtros_operario and filtros_operario.get('rol') == 'OPERARIO':
+                usuario_id = filtros_operario.get('usuario_id')
+                if not usuario_id:
+                    return {'success': True, 'data': []}
+
+                # Obtener la línea de producción asignada al operario
+                user_response = self.db.table('usuarios').select('linea_produccion_id').eq('id', usuario_id).single().execute()
+                linea_operario = user_response.data.get('linea_produccion_id') if user_response.data else None
+                
+                if not linea_operario:
+                    # Si el operario no tiene línea, solo puede ver las que ya tiene asignadas
+                    query = query.eq('operario_asignado_id', usuario_id).eq('estado', 'EN_PROCESO')
+                else:
+                    # Filtro para un operario:
+                    # 1. Órdenes en 'LISTA_PARA_PRODUCIR' que pertenecen a su línea.
+                    # 2. Órdenes en 'EN_PROCESO' que él mismo haya iniciado.
+                    query = query.or_(
+                        f"and(estado.eq.LISTA_PARA_PRODUCIR,linea_asignada.eq.{linea_operario})",
+                        f"and(estado.eq.EN_PROCESO,operario_asignado_id.eq.{usuario_id})"
+                    )
+            else:
+                # Filtro para supervisores/gerentes: mostrar todas las OPs en estados relevantes.
+                estados_kanban_python = [
+                    'EN_ESPERA', 'LISTA_PARA_PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'EN_PROCESO', 'CONTROL_DE_CALIDAD', 'COMPLETADA'
+                ]
+                # Manejar la inconsistencia de formato en la base de datos
+                estados_kanban_db = [estado.replace('_', ' ') for estado in estados_kanban_python]
+                if 'EN PROCESO' in estados_kanban_db:
+                    estados_kanban_db.remove('EN PROCESO')
+                estados_kanban_db.append('EN_PROCESO')
+                # AÑADIR TAMBIÉN LA VERSIÓN CON GUION BAJO PARA CONTROL DE CALIDAD, YA QUE SE GUARDA ASÍ
+                estados_kanban_db.append('CONTROL_DE_CALIDAD')
+                
+                query = query.in_('estado', estados_kanban_db)
+
+            result = query.execute()
+
+            if result.data:
+                # Procesar y aplanar los resultados como en get_all_enriched
+                processed_data = []
+                for item in result.data:
+                    if item.get('productos'):
+                        producto_info = item.pop('productos')
+                        item['producto_nombre'] = producto_info.get('nombre', 'N/A')
+                    else:
+                        item['producto_nombre'] = 'N/A'
+
+                    if item.get('operario'):
+                        operario_info = item.pop('operario')
+                        item['operario_nombre'] = f"{operario_info.get('nombre', '')} {operario_info.get('apellido', '')}".strip()
+                    else:
+                        item['operario_nombre'] = None
+
+                    processed_data.append(item)
+
+                # Obtener pedidos asociados
+                op_ids = [op['id'] for op in processed_data]
+                pedidos_por_op = {}
+                if op_ids:
+                    items_result = self.db.table('pedido_items').select(
+                        'orden_produccion_id, pedido:pedidos!pedido_items_pedido_id_fkey(id)'
+                    ).in_('orden_produccion_id', op_ids).execute()
+
+                    if items_result.data:
+                        for item in items_result.data:
+                            op_id = item['orden_produccion_id']
+                            if op_id not in pedidos_por_op:
+                                pedidos_por_op[op_id] = []
+                            
+                            pedido_info = item.get('pedido')
+                            if pedido_info and not any(p['id'] == pedido_info['id'] for p in pedidos_por_op[op_id]):
+                                pedidos_por_op[op_id].append(pedido_info)
+                
+                for op in processed_data:
+                    op['pedidos_asociados'] = pedidos_por_op.get(op['id'], [])
+
+                return {'success': True, 'data': processed_data}
             else:
                 return {'success': True, 'data': []}
-        except Exception as e:
-            logger.error(f"Error buscando OPs por lote de insumo {id_lote_insumo}: {e}", exc_info=True)
-            return {'success': False, 'error': str(e)}
 
-    def get_lotes_producto_by_op(self, op_id: int) -> Dict:
-        try:
-            from app.models.lote_producto import LoteProductoModel
-            lote_producto_model = LoteProductoModel()
-            return lote_producto_model.find_all(filters={'orden_produccion_id': op_id})
         except Exception as e:
-            logger.error(f"Error buscando lotes de producto para la OP {op_id}: {e}", exc_info=True)
+            logger.error(f"Error en get_for_kanban_hoy: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
-        
