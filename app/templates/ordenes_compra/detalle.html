@@ -263,7 +263,7 @@
         <div class="modal fade" id="modal-inspeccion-accion" tabindex="-1" aria-labelledby="modalInspeccionLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
-                    <form id="form-inspeccion-accion" enctype="multipart/form-data">
+                    <form id="form-inspeccion-accion" method="POST" enctype="multipart/form-data">
                         <div class="modal-header">
                             <h5 class="modal-title" id="modalInspeccionLabel"></h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -281,8 +281,17 @@
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label for="modal-comentarios" class="form-label">Comentarios (Requerido)</label>
-                                <textarea class="form-control" id="modal-comentarios" name="comentarios" rows="3" required></textarea>
+                                <label for="modal-resultado-inspeccion" class="form-label">Resultado de Inspección (Requerido)</label>
+                                <select class="form-select" id="modal-resultado-inspeccion" name="resultado_inspeccion" required>
+                                    <option value="" selected disabled>Seleccione un resultado...</option>
+                                    {% for estado in estados_inspeccion %}
+                                    <option value="{{ estado }}">{{ estado }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="modal-comentarios" class="form-label">Comentarios</label>
+                                <textarea class="form-control" id="modal-comentarios" name="comentarios" rows="3"></textarea>
                             </div>
                             <div class="mb-3">
                                 <label for="modal-foto" class="form-label">Foto (Opcional)</label>
@@ -387,7 +396,7 @@
                             class="btn btn-danger {% if not can_receive %}disabled{% endif %}">
                             <i class="bi bi-x-circle me-1"></i>Rechazar Pedido
                         </button>
-                        <button type="submit" name="accion" value="aceptar" id="btn-aceptar-recepcion"
+                        <button type="submit" name="accion" value="aceptar"
                             class="btn btn-success {% if not can_receive %}disabled{% endif %}">
                             <i class="bi bi-check-circle me-1"></i>Aceptar Recepción
                         </button>
@@ -492,11 +501,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     updateTotals(); // Cálculo inicial al cargar la página
     
-    const partialReceptionModalEl = document.getElementById('confirmacionRecepcionParcialModal');
-    const partialReceptionModal = new bootstrap.Modal(partialReceptionModalEl);
-    const btnAceptar = document.getElementById('btn-aceptar-recepcion');
-    const originalButtonHTML = btnAceptar ? btnAceptar.innerHTML : '';
-
+    const partialReceptionModal = new bootstrap.Modal(document.getElementById('confirmacionRecepcionParcialModal'));
+    
     const submitTheForm = (action) => {
         let actionInput = form.querySelector('input[name="accion"]');
         if (!actionInput) {
@@ -520,14 +526,6 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        if (btnAceptar) {
-            btnAceptar.disabled = true;
-            btnAceptar.innerHTML = `
-                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                Procesando...
-            `;
-        }
-        
         let isPartial = false;
         form.querySelectorAll('.item-row').forEach(row => {
             const requestedQtyText = row.cells[1] ? row.cells[1].textContent.trim() : '0';
@@ -549,19 +547,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     document.getElementById('confirmarRecepcionBtn').addEventListener('click', () => {
-        // El botón ya está en estado de carga, solo enviamos el formulario.
         submitTheForm('aceptar');
     });
-
-    // Si el usuario cierra el modal de confirmación, restauramos el botón.
-    if (partialReceptionModalEl) {
-        partialReceptionModalEl.addEventListener('hidden.bs.modal', () => {
-            if (btnAceptar && btnAceptar.disabled) {
-                btnAceptar.disabled = false;
-                btnAceptar.innerHTML = originalButtonHTML;
-            }
-        });
-    }
 
     {% endif %}
 });

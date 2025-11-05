@@ -5,7 +5,8 @@ from app.utils.decorators import permission_required
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.proveedor_controller import ProveedorController
 from marshmallow import ValidationError
-from datetime import date
+from datetime import date, datetime
+from app.utils.estados import ESTADOS_INSPECCION
 
 
 inventario_view_bp = Blueprint('inventario_view', __name__, url_prefix='/inventario')
@@ -50,7 +51,8 @@ def listar_lotes():
     return render_template('inventario/listar.html',
                            insumos=insumos_agrupados,
                            insumos_stock=insumos_stock,
-                           insumos_full_data=insumos_full_data)
+                           insumos_full_data=insumos_full_data,
+                           estados_inspeccion=ESTADOS_INSPECCION)
 
 @inventario_view_bp.route('/lote/nuevo', methods=['GET', 'POST'])
 @jwt_required()
@@ -103,10 +105,18 @@ def detalle_lote(id_lote):
 
     if response.get('success'):
         lote = response.get('data')
-        insumo_resp = controller.insumo_model.find_by_id(lote.get('id_insumo'), 'id_insumo')
-        if insumo_resp.get('success'):
-            lote['insumo_nombre'] = insumo_resp['data'].get('nombre')
-            lote['insumo_unidad_medida'] = insumo_resp['data'].get('unidad_medida')
+        
+        # Convertir las fechas del historial de calidad a objetos datetime
+        if lote.get('historial_calidad'):
+            for evento in lote['historial_calidad']:
+                if evento.get('created_at'):
+                    try:
+                        # Eliminar la 'Z' y cualquier cosa después del punto si existe
+                        date_string = evento['created_at'].split('.')[0].replace('Z', '')
+                        evento['created_at'] = datetime.fromisoformat(date_string)
+                    except (ValueError, TypeError):
+                        # Si hay un error, simplemente dejar la cadena como está
+                        pass
 
         return render_template('inventario/detalle.html', lote=lote)
     else:
@@ -118,16 +128,25 @@ def detalle_lote(id_lote):
 @jwt_required()
 @permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
 def poner_en_cuarentena(id_lote):
-    controller = InventarioController() # <-- AÑADIDO AQUÍ
+    controller = InventarioController()
     try:
         motivo = request.form.get('motivo_cuarentena')
         cantidad = float(request.form.get('cantidad_cuarentena'))
         usuario_id = get_jwt_identity()
+        resultado_inspeccion = request.form.get('resultado_inspeccion')
+        foto_file = request.files.get('foto')
     except (TypeError, ValueError):
         flash('La cantidad debe ser un número válido.', 'danger')
         return redirect(url_for('inventario_view.listar_lotes'))
 
-    response, status_code = controller.poner_lote_en_cuarentena(id_lote, motivo, cantidad, usuario_id)
+    response, status_code = controller.poner_lote_en_cuarentena(
+        lote_id=id_lote,
+        motivo=motivo,
+        cantidad=cantidad,
+        usuario_id=usuario_id,
+        resultado_inspeccion=resultado_inspeccion,
+        foto_file=foto_file
+    )
 
     if response.get('success'):
         flash(response.get('message', 'Lote en cuarentena.'), 'success')

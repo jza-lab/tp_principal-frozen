@@ -191,3 +191,13 @@ def traducir_a_cadena(estado_int, tipo_orden):
         'OC': {v: k for k, v in OC_MAP_STRING_TO_INT.items()},
     }
     return REVERSE_MAPS.get(tipo_orden, {}).get(estado_int)
+
+ESTADOS_INSPECCION = [
+    "Paquete Roto",
+    "Paquete Dañado",
+    "Contaminación Visual",
+    "Olor Extraño",
+    "Textura Anómala",
+    "Error de Etiquetado",
+    "Otro"
+]

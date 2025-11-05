@@ -164,6 +164,41 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Historial de Calidad -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-shield-check me-2"></i>Historial de Control de Calidad y Cuarentena</h5>
+            </div>
+            <div class="card-body">
+                {% if lote.historial_calidad %}
+                    {% for evento in lote.historial_calidad %}
+                        <div class="row mb-4 pb-3 border-bottom">
+                            <div class="col-md-8">
+                                <p class="mb-1"><strong>Fecha:</strong> {{ evento.created_at.strftime('%Y-%m-%d %H:%M') if evento.created_at else 'N/A' }}</p>
+                                <p class="mb-1"><strong>Decisión:</strong> <span class="fw-bold">{{ evento.decision_final.replace('_', ' ') | title }}</span></p>
+                                <p class="mb-1"><strong>Motivo:</strong> {{ evento.resultado_inspeccion or 'No especificado' }}</p>
+                                {% if evento.comentarios %}
+                                <p class="mb-1"><strong>Comentarios:</strong> {{ evento.comentarios }}</p>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-4 text-center">
+                                {% if evento.foto_url %}
+                                    <a href="{{ evento.foto_url }}" target="_blank">
+                                        <img src="{{ evento.foto_url }}" alt="Foto de control de calidad" class="img-fluid rounded" style="max-height: 150px;">
+                                    </a>
+                                    <small class="text-muted d-block mt-1">Clic para ampliar</small>
+                                {% else %}
+                                    <div class="text-muted fst-italic mt-3">Sin foto adjunta</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">Este lote no tiene eventos de control de calidad o cuarentena registrados.</p>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
     <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
