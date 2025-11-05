@@ -13,13 +13,54 @@ CREATE TABLE public.CentrosTrabajo (
   updated_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
   CONSTRAINT CentrosTrabajo_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.alerta_riesgo (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  fecha_creacion timestamp with time zone NOT NULL DEFAULT now(),
+  codigo character varying,
+  origen_tipo_entidad character varying,
+  origen_id_entidad character varying,
+  estado character varying DEFAULT 'Borrador'::character varying,
+  motivos character varying,
+  detalle_motivo character varying,
+  resolucion_seleccionada character varying,
+  CONSTRAINT alerta_riesgo_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.alerta_riesgo_afectados (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  alerta_id bigint,
+  tipo_entidad character varying,
+  id_entidad character varying,
+  CONSTRAINT alerta_riesgo_afectados_pkey PRIMARY KEY (id),
+  CONSTRAINT alerta_riesgo_afectados_alerta_id_fkey FOREIGN KEY (alerta_id) REFERENCES public.alerta_riesgo(id)
+);
+CREATE TABLE public.bloqueos_capacidad (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  centro_trabajo_id bigint NOT NULL,
+  fecha date NOT NULL,
+  minutos_bloqueados numeric NOT NULL DEFAULT 0,
+  motivo text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT bloqueos_capacidad_pkey PRIMARY KEY (id),
+  CONSTRAINT bloqueos_capacidad_centro_trabajo_id_fkey FOREIGN KEY (centro_trabajo_id) REFERENCES public.CentrosTrabajo(id)
+);
+CREATE TABLE public.chatbot_qa (
+  id integer NOT NULL DEFAULT nextval('chatbot_qa_id_seq'::regclass),
+  pregunta text NOT NULL,
+  respuesta text NOT NULL,
+  activo boolean DEFAULT true,
+  creado_en timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+  parent_id integer,
+  CONSTRAINT chatbot_qa_pkey PRIMARY KEY (id),
+  CONSTRAINT chatbot_qa_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.chatbot_qa(id)
+);
 CREATE TABLE public.clientes (
   id integer GENERATED ALWAYS AS IDENTITY NOT NULL UNIQUE,
   codigo character varying NOT NULL UNIQUE,
   nombre character varying NOT NULL,
   telefono character varying,
   email character varying UNIQUE,
-  cuit character varying NOT NULL UNIQUE,
+  cuit character varying NOT NULL,
   activo boolean DEFAULT true,
   updated_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -39,6 +80,35 @@ CREATE TABLE public.configuracion (
   valor text,
   clave text NOT NULL,
   CONSTRAINT configuracion_pkey PRIMARY KEY (clave)
+);
+CREATE TABLE public.consultas (
+  id integer NOT NULL DEFAULT nextval('consultas_id_seq'::regclass),
+  nombre character varying NOT NULL,
+  email character varying NOT NULL DEFAULT 'Cliente registrado'::character varying,
+  mensaje text NOT NULL,
+  respuesta text,
+  estado character varying NOT NULL DEFAULT 'pendiente'::character varying,
+  fecha_creacion timestamp with time zone NOT NULL DEFAULT now(),
+  cliente_id integer,
+  CONSTRAINT consultas_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_cliente FOREIGN KEY (cliente_id) REFERENCES public.clientes(id)
+);
+CREATE TABLE public.control_calidad_insumos (
+  id integer NOT NULL DEFAULT nextval('control_calidad_insumos_id_seq'::regclass),
+  lote_insumo_id uuid NOT NULL,
+  orden_compra_id integer,
+  usuario_supervisor_id integer NOT NULL,
+  resultado_inspeccion text,
+  comentarios text,
+  foto_url text,
+  decision_final character varying NOT NULL,
+  fecha_inspeccion timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT control_calidad_insumos_pkey PRIMARY KEY (id),
+  CONSTRAINT control_calidad_insumos_lote_insumo_id_fkey FOREIGN KEY (lote_insumo_id) REFERENCES public.insumos_inventario(id_lote),
+  CONSTRAINT control_calidad_insumos_orden_compra_id_fkey FOREIGN KEY (orden_compra_id) REFERENCES public.ordenes_compra(id),
+  CONSTRAINT control_calidad_insumos_usuario_supervisor_id_fkey FOREIGN KEY (usuario_supervisor_id) REFERENCES public.usuarios(id)
 );
 CREATE TABLE public.despachos (
   id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -86,6 +156,8 @@ CREATE TABLE public.insumos_catalogo (
   stock_actual real,
   id_proveedor integer,
   tiempo_entrega_dias integer NOT NULL DEFAULT 1,
+  en_espera_de_reestock boolean DEFAULT false,
+  stock_total double precision,
   CONSTRAINT insumos_catalogo_pkey PRIMARY KEY (id_insumo),
   CONSTRAINT insumos_catalogo_id_proveedor_fkey FOREIGN KEY (id_proveedor) REFERENCES public.proveedores(id)
 );
@@ -102,15 +174,21 @@ CREATE TABLE public.insumos_inventario (
   ubicacion_fisica character varying,
   documento_ingreso character varying,
   observaciones text,
-  estado character varying DEFAULT 'disponible'::character varying CHECK (estado::text = ANY (ARRAY['disponible'::character varying, 'reservado'::character varying, 'agotado'::character varying, 'vencido'::character varying]::text[])),
+  estado character varying DEFAULT 'disponible'::character varying CHECK (estado::text = ANY (ARRAY['disponible'::text, 'reservado'::text, 'agotado'::text, 'vencido'::text, 'retirado'::text, 'cuarentena'::text, 'EN REVISION'::text, 'RECHAZADO'::text])),
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   usuario_ingreso_id integer,
   id_proveedor integer,
+  motivo_cuarentena text,
+  cantidad_en_cuarentena text,
+  id_orden_compra integer,
+  orden_produccion_id integer,
   CONSTRAINT insumos_inventario_pkey PRIMARY KEY (id_lote),
   CONSTRAINT insumos_inventario_id_insumo_fkey FOREIGN KEY (id_insumo) REFERENCES public.insumos_catalogo(id_insumo),
   CONSTRAINT fk_usuario_ingreso FOREIGN KEY (usuario_ingreso_id) REFERENCES public.usuarios(id),
-  CONSTRAINT fk_preveedor_ingreso FOREIGN KEY (id_proveedor) REFERENCES public.proveedores(id)
+  CONSTRAINT fk_preveedor_ingreso FOREIGN KEY (id_proveedor) REFERENCES public.proveedores(id),
+  CONSTRAINT insumos_inventario_id_orden_compra_fkey FOREIGN KEY (id_orden_compra) REFERENCES public.ordenes_compra(id),
+  CONSTRAINT insumos_inventario_orden_produccion_id_fkey FOREIGN KEY (orden_produccion_id) REFERENCES public.ordenes_produccion(id)
 );
 CREATE TABLE public.lotes_productos (
   id_lote integer NOT NULL DEFAULT nextval('lotes_productos_id_lote_seq'::regclass) UNIQUE,
@@ -121,14 +199,33 @@ CREATE TABLE public.lotes_productos (
   fecha_produccion date NOT NULL DEFAULT CURRENT_DATE,
   fecha_vencimiento date,
   costo_produccion_unitario numeric,
-  estado character varying NOT NULL DEFAULT 'DISPONIBLE'::character varying CHECK (estado::text = ANY (ARRAY['DISPONIBLE'::character varying, 'RESERVADO'::character varying, 'AGOTADO'::character varying, 'VENCIDO'::character varying, 'RETIRADO'::character varying]::text[])),
+  estado character varying NOT NULL DEFAULT 'DISPONIBLE'::character varying CHECK (estado::text = ANY (ARRAY['DISPONIBLE'::text, 'RESERVADO'::text, 'AGOTADO'::text, 'VENCIDO'::text, 'RETIRADO'::text, 'CUARENTENA'::text])),
   ubicacion_fisica character varying,
   orden_produccion_id integer,
   observaciones text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  motivo_cuarentena text,
+  cantidad_en_cuarentena numeric,
   CONSTRAINT lotes_productos_pkey PRIMARY KEY (id_lote, producto_id),
-  CONSTRAINT lotes_productos_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES public.productos(id)
+  CONSTRAINT lotes_productos_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES public.productos(id),
+  CONSTRAINT lotes_productos_orden_produccion_id_fkey FOREIGN KEY (orden_produccion_id) REFERENCES public.ordenes_produccion(id)
+);
+CREATE TABLE public.notas_credito (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  codigo_nc character varying,
+  cliente_id integer,
+  pedido_origen_id integer,
+  alerta_origen_id bigint,
+  monto real,
+  motivo character varying,
+  fecha_emision timestamp with time zone,
+  estado character varying DEFAULT 'Emitida'::character varying,
+  CONSTRAINT notas_credito_pkey PRIMARY KEY (id),
+  CONSTRAINT notas_credito_cliente_id_fkey FOREIGN KEY (cliente_id) REFERENCES public.clientes(id),
+  CONSTRAINT notas_credito_pedido_origen_id_fkey FOREIGN KEY (pedido_origen_id) REFERENCES public.pedidos(id),
+  CONSTRAINT notas_credito_alerta_origen_id_fkey FOREIGN KEY (alerta_origen_id) REFERENCES public.alerta_riesgo(id)
 );
 CREATE TABLE public.notificaciones (
   id integer NOT NULL DEFAULT nextval('notificaciones_id_seq'::regclass),
@@ -203,7 +300,7 @@ CREATE TABLE public.ordenes_produccion (
   producto_id integer NOT NULL,
   receta_id integer NOT NULL,
   cantidad_planificada numeric NOT NULL,
-  estado character varying NOT NULL DEFAULT 'PLANIFICADA'::character varying CHECK (estado::text = ANY (ARRAY['PENDIENTE'::character varying::text, 'APROBADA'::character varying::text, 'EN_PROCESO'::character varying::text, 'COMPLETADA'::character varying::text, 'CANCELADA'::character varying::text, 'EN ESPERA'::character varying::text, 'LISTA PARA PRODUCIR'::character varying::text, 'EN_LINEA_1'::character varying::text, 'EN_LINEA_2'::character varying::text, 'EN_EMPAQUETADO'::character varying::text, 'CONTROL_DE_CALIDAD'::character varying::text, 'CONSOLIDADA'::character varying::text])),
+  estado character varying NOT NULL DEFAULT 'PLANIFICADA'::character varying CHECK (estado::text = ANY (ARRAY['PENDIENTE'::text, 'APROBADA'::text, 'EN_PROCESO'::text, 'COMPLETADA'::text, 'CANCELADA'::text, 'EN ESPERA'::text, 'LISTA PARA PRODUCIR'::text, 'EN_LINEA_1'::text, 'EN_LINEA_2'::text, 'EN_EMPAQUETADO'::text, 'CONTROL_DE_CALIDAD'::text, 'CONSOLIDADA'::text, 'PAUSADA'::text])),
   fecha_planificada date,
   fecha_inicio timestamp with time zone,
   fecha_fin timestamp with time zone,
@@ -217,7 +314,7 @@ CREATE TABLE public.ordenes_produccion (
   supervisor_responsable_id integer,
   linea_produccion integer,
   super_op_id integer,
-  fecha_meta date,
+  fecha_meta timestamp with time zone,
   linea_asignada smallint,
   operario_asignado_id integer,
   sugerencia_fecha_inicio date,
@@ -227,6 +324,7 @@ CREATE TABLE public.ordenes_produccion (
   sugerencia_linea integer,
   fecha_inicio_planificada date,
   orden_compra_id integer,
+  cantidad_producida numeric DEFAULT '0'::numeric,
   CONSTRAINT ordenes_produccion_pkey PRIMARY KEY (id),
   CONSTRAINT ordenes_produccion_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES public.productos(id),
   CONSTRAINT ordenes_produccion_receta_id_fkey FOREIGN KEY (receta_id) REFERENCES public.recetas(id),
@@ -365,6 +463,32 @@ CREATE TABLE public.recetas (
   CONSTRAINT recetas_pkey PRIMARY KEY (id),
   CONSTRAINT recetas_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES public.productos(id)
 );
+CREATE TABLE public.reclamo_mensajes (
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  reclamo_id integer NOT NULL,
+  usuario_id integer,
+  cliente_id integer,
+  mensaje text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT reclamo_mensajes_pkey PRIMARY KEY (id),
+  CONSTRAINT reclamo_mensajes_reclamo_id_fkey FOREIGN KEY (reclamo_id) REFERENCES public.reclamos(id),
+  CONSTRAINT reclamo_mensajes_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id),
+  CONSTRAINT reclamo_mensajes_cliente_id_fkey FOREIGN KEY (cliente_id) REFERENCES public.clientes(id)
+);
+CREATE TABLE public.reclamos (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  pedido_id integer,
+  cliente_id integer,
+  categoria character varying,
+  fecha_recepcion date,
+  comentarios text,
+  estado character varying DEFAULT 'pendiente'::character varying,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT reclamos_pkey PRIMARY KEY (id),
+  CONSTRAINT reclamos_pedido_id_fkey FOREIGN KEY (pedido_id) REFERENCES public.pedidos(id),
+  CONSTRAINT reclamos_cliente_id_fkey FOREIGN KEY (cliente_id) REFERENCES public.clientes(id)
+);
 CREATE TABLE public.registros_acceso (
   id integer NOT NULL DEFAULT nextval('registros_acceso_id_seq'::regclass),
   usuario_id integer,
@@ -431,6 +555,17 @@ CREATE TABLE public.token_blacklist (
   jti character varying NOT NULL,
   exp timestamp with time zone NOT NULL,
   CONSTRAINT token_blacklist_pkey PRIMARY KEY (jti)
+);
+CREATE TABLE public.totem_2fa_tokens (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  user_id integer NOT NULL,
+  token_hash text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  expires_at timestamp with time zone NOT NULL,
+  attempts integer NOT NULL DEFAULT 0,
+  used boolean NOT NULL DEFAULT false,
+  CONSTRAINT totem_2fa_tokens_pkey PRIMARY KEY (id),
+  CONSTRAINT totem_2fa_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.usuarios(id)
 );
 CREATE TABLE public.totem_sesiones (
   id integer NOT NULL DEFAULT nextval('totem_sesiones_id_seq'::regclass),
@@ -534,4 +669,63 @@ CREATE TABLE public.usuarios_turnos (
   hora_inicio time without time zone NOT NULL,
   hora_fin time without time zone NOT NULL,
   CONSTRAINT usuarios_turnos_pkey PRIMARY KEY (id)
+);
+
+
+
+
+
+// SCHEMA MES_KANBAN
+
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE mes_kanban.motivos_desperdicio (
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  descripcion character varying NOT NULL,
+  categoria character varying NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT motivos_desperdicio_pkey PRIMARY KEY (id)
+);
+CREATE TABLE mes_kanban.motivos_paro (
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  descripcion character varying NOT NULL,
+  categoria character varying NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT motivos_paro_pkey PRIMARY KEY (id)
+);
+CREATE TABLE mes_kanban.op_cronometro (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  op_id integer NOT NULL,
+  start_time timestamp with time zone NOT NULL,
+  end_time timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT op_cronometro_pkey PRIMARY KEY (id),
+  CONSTRAINT op_cronometro_op_id_fkey FOREIGN KEY (op_id) REFERENCES public.ordenes_produccion(id)
+);
+CREATE TABLE mes_kanban.registros_desperdicio (
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  orden_produccion_id integer NOT NULL,
+  motivo_desperdicio_id integer NOT NULL,
+  cantidad numeric NOT NULL,
+  usuario_id integer,
+  fecha_registro timestamp with time zone NOT NULL DEFAULT now(),
+  observaciones text,
+  CONSTRAINT registros_desperdicio_pkey PRIMARY KEY (id),
+  CONSTRAINT registros_desperdicio_orden_produccion_id_fkey FOREIGN KEY (orden_produccion_id) REFERENCES public.ordenes_produccion(id),
+  CONSTRAINT registros_desperdicio_motivo_desperdicio_id_fkey FOREIGN KEY (motivo_desperdicio_id) REFERENCES mes_kanban.motivos_desperdicio(id),
+  CONSTRAINT registros_desperdicio_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id)
+);
+CREATE TABLE mes_kanban.registros_paro (
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  orden_produccion_id integer NOT NULL,
+  motivo_paro_id integer NOT NULL,
+  fecha_inicio timestamp with time zone NOT NULL,
+  fecha_fin timestamp with time zone,
+  usuario_id integer,
+  observaciones text,
+  CONSTRAINT registros_paro_pkey PRIMARY KEY (id),
+  CONSTRAINT registros_paro_orden_produccion_id_fkey FOREIGN KEY (orden_produccion_id) REFERENCES public.ordenes_produccion(id),
+  CONSTRAINT registros_paro_motivo_paro_id_fkey FOREIGN KEY (motivo_paro_id) REFERENCES mes_kanban.motivos_paro(id),
+  CONSTRAINT registros_paro_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id)
 );
