@@ -37,7 +37,7 @@ class ControlCalidadInsumoModel(BaseModel):
         """
         try:
             # Asegurarse de que los campos requeridos estén presentes
-            required_fields = ['lote_insumo_id', 'orden_compra_id', 'usuario_supervisor_id', 'decision_final']
+            required_fields = ['lote_insumo_id', 'usuario_supervisor_id', 'decision_final']
             for field in required_fields:
                 if field not in data or data[field] is None:
                     raise ValueError(f"El campo '{field}' es obligatorio.")
@@ -45,7 +45,7 @@ class ControlCalidadInsumoModel(BaseModel):
             # Preparar datos para la inserción
             db_data = {
                 'lote_insumo_id': data['lote_insumo_id'],
-                'orden_compra_id': data['orden_compra_id'],
+                'orden_compra_id': data.get('orden_compra_id'),
                 'usuario_supervisor_id': data['usuario_supervisor_id'],
                 'decision_final': data['decision_final'],
                 'resultado_inspeccion': data.get('resultado_inspeccion'),
