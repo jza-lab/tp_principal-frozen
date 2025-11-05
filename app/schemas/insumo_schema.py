@@ -86,7 +86,6 @@ class InsumosCatalogoSchema(Schema):
         allow_none=True,
         load_default=None
     )
-    proveedor = fields.Nested(ProveedorSchema, allow_none=True)
     tiempo_entrega_dias = fields.Int(allow_none=True)
 
     @post_load

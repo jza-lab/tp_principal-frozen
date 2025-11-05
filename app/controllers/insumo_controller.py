@@ -137,8 +137,8 @@ class InsumoController(BaseController):
                 if not insumo_ids:
                     return self.success_response(data=[])
 
-                # 2. Consultar los datos completos del catálogo con el join de proveedor
-                query = self.insumo_model.db.table(self.insumo_model.get_table_name()).select("*, proveedor:id_proveedor(*)").in_('id_insumo', insumo_ids)
+                # 2. Consultar los datos completos del catálogo
+                query = self.insumo_model.db.table(self.insumo_model.get_table_name()).select("*").in_('id_insumo', insumo_ids)
 
                 # Aplicar filtros adicionales de búsqueda y categoría
                 if filtros.get('busqueda'):
@@ -218,6 +218,32 @@ class InsumoController(BaseController):
         except Exception as e:
             logger.error(f"Error obteniendo insumo por ID con lotes: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def obtener_stock_de_insumos_por_ids(self, ids_insumos: List[str]) -> tuple:
+        """
+        Obtiene el stock actual para una lista de IDs de insumos en una sola consulta.
+        Es una versión optimizada para operaciones masivas.
+        """
+        if not ids_insumos:
+            return self.success_response(data=[])
+
+        try:
+            # Seleccionar solo los campos necesarios para optimizar la consulta
+            result = self.insumo_model.find_all(
+                filters={'id_insumo': ids_insumos},
+                select_columns=['id_insumo', 'stock_actual', 'nombre']
+            )
+
+            if result.get('success'):
+                return self.success_response(data=result.get('data', []))
+            else:
+                logger.error(f"Error al obtener stock masivo de insumos: {result.get('error')}")
+                return self.error_response(f"Error en BD: {result.get('error')}", 500)
+
+        except Exception as e:
+            logger.error(f"Error crítico en obtener_stock_de_insumos_por_ids: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
 
     def actualizar_insumo(self, id_insumo: str, data: Dict) -> tuple:
         """Actualizar un insumo del catálogo"""

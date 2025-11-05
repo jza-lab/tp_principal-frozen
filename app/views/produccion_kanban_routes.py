@@ -1,6 +1,7 @@
 # app/views/produccion_kanban_routes.py
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
+from datetime import datetime
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.produccion_kanban_controller import ProduccionKanbanController
 from app.controllers.op_cronometro_controller import OpCronometroController
@@ -35,11 +36,20 @@ def tablero_produccion():
         contexto = {
             'ordenes_por_estado': {},
             'columnas': {},
-            'usuario_rol': usuario_rol
+            'usuario_rol': usuario_rol,
+            'metricas_dia': {
+                'completadas': 0,
+                'en_proceso': 0,
+                'pendientes': 0,
+                'oee_promedio': 0,
+                'desperdicio': 0.0,
+                'a_tiempo': 100
+            }
         }
     else:
         contexto = response.get('data', {})
 
+    contexto['now'] = datetime.now()
     return render_template('planificacion/kanban.html', **contexto) # Plantilla renombrada
 
 @produccion_kanban_bp.route('/foco/<int:op_id>')

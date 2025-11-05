@@ -79,7 +79,7 @@
                     <tr class="fila-producto-mps" data-bs-toggle="modal" data-bs-target="#modal-producto-{{ item_mps.producto_id }}" style="cursor: pointer;" title="Clic para planificar lote semanal">
                         <td><strong>{{ item_mps.producto_nombre }}</strong></td>
                         <td class="text-center fs-5"><b>{{ item_mps.cantidad_total }}</b></td>
-                        <td class="text-center text-danger"><strong>{{ item_mps.fecha_meta_mas_proxima }}</strong></td>
+                        <td class="text-center text-danger"><strong>{{ item_mps.fecha_meta_mas_proxima|format_datetime('%d %b %Y') if item_mps.fecha_meta_mas_proxima else 'N/D' }}</strong></td>
                         <td class="celda-sugerencia-agregada">
                              {% set plazo_total_agg = item_mps.sugerencia_t_prod_dias + item_mps.sugerencia_t_proc_dias %}
                              {% if plazo_total_agg > 0 %}
@@ -397,9 +397,9 @@
                     </div>
                 </div>
 
-                {% if carga_crp and capacidad_crp and inicio_semana_crp and fin_semana_crp %}
-                    {% set fecha_inicio = date.fromisoformat(inicio_semana_crp) %}
-                    {% set fecha_fin = date.fromisoformat(fin_semana_crp) %}
+                {% if carga_crp and capacidad_crp and inicio_semana and fin_semana %}
+                    {% set fecha_inicio = date.fromisoformat(inicio_semana) %}
+                    {% set fecha_fin = date.fromisoformat(fin_semana) %}
                     {% set num_dias = (fecha_fin - fecha_inicio).days + 1 %}
                     
                     {# --- CORRECCIÓN DE LOCALE: Mapa numérico (infalible) --- #}
@@ -591,7 +591,7 @@
           <div class="modal-body">
             <h6>Órdenes Individuales a Consolidar:</h6>
           {# --- MOSTRAR UNIDAD DE MEDIDA --- #}
-          <p>Total Requerido: <b>{{ item_mps.cantidad_total }} {{ item_mps.unidad_medida or 'unidades' }}</b> | Fecha Meta Próxima: <b>{{ item_mps.fecha_meta_mas_proxima }}</b></p>
+          <p>Total Requerido: <b>{{ item_mps.cantidad_total }} {{ item_mps.unidad_medida or 'unidades' }}</b> | Fecha Meta Próxima: <b>{{ item_mps.fecha_meta_mas_proxima|format_datetime('%d %b %Y') if item_mps.fecha_meta_mas_proxima else 'N/D' }}</b></p>
             <table class="table table-sm table-bordered tabla-detalle-op-revision mb-4">
                 <thead class="table-light"><tr><th style="width: 15%;">OP</th><th class="text-center" style="width: 15%;">Cantidad</th><th class="text-center" style="width: 15%;">Fecha Meta</th></thead>
                 <tbody>

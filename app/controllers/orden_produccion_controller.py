@@ -1486,4 +1486,33 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             logger.error(f"Error al obtener estado de producción para OP {op_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
+
+    def obtener_ordenes_para_planificacion(self, inicio_semana: date, fin_semana: date, horizonte_dias: int) -> tuple:
+        """
+        Realiza una consulta unificada para obtener todas las OPs necesarias para la
+        vista de planificación, abarcando las pendientes en el horizonte y las
+        planificadas en la semana.
+        """
+        try:
+            # Calcular fechas límite para los filtros
+            hoy = date.today()
+            fecha_fin_horizonte = hoy + timedelta(days=horizonte_dias)
+            dias_previos_margen = 14
+            fecha_inicio_filtro_semanal = inicio_semana - timedelta(days=dias_previos_margen)
+
+            # Llamar a un nuevo método en el modelo que combina las consultas
+            result = self.model.get_all_for_planificacion(
+                fecha_fin_horizonte=fecha_fin_horizonte,
+                fecha_inicio_semanal=fecha_inicio_filtro_semanal,
+                fecha_fin_semanal=fin_semana
+            )
+
+            if result.get('success'):
+                return self.success_response(data=result.get('data', []))
+            else:
+                return self.error_response(result.get('error', 'Error al obtener órdenes para planificación.'), 500)
+                
+        except Exception as e:
+            logger.error(f"Error crítico en obtener_ordenes_para_planificacion: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
     # endregion
