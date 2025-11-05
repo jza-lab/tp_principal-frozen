@@ -118,7 +118,7 @@
                 <h5 class="modal-title" id="modalCuarentenaLabel"><i class="bi bi-shield-lock me-2"></i>Poner Lote de Insumo en Cuarentena</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <form id="formCuarentena" method="POST">
+            <form id="formCuarentena" method="POST" enctype="multipart/form-data">
                 <div class="modal-body">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
                     <p>Lote: <strong id="loteNumeroCuarentena"></strong></p>
@@ -147,6 +147,11 @@
                     <div class="mb-3">
                         <label for="motivo_cuarentena" class="form-label">Comentarios:</label>
                         <textarea class="form-control" id="motivo_cuarentena" name="motivo_cuarentena" rows="3"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="foto_cuarentena" class="form-label">Foto (Opcional):</label>
+                        <input class="form-control" type="file" id="foto_cuarentena" name="foto">
                     </div>
                 </div>
                 <div class="modal-footer">

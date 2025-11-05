@@ -13,6 +13,7 @@ from app.models.orden_produccion import OrdenProduccionModel
 from app.models.pedido import PedidoModel, PedidoItemModel
 from app.models.reserva_producto import ReservaProductoModel
 from app.schemas.inventario_schema import InsumosInventarioSchema
+from app.models.control_calidad_insumo import ControlCalidadInsumoModel
 from typing import Dict, Optional
 import logging
 from decimal import Decimal
@@ -458,22 +459,35 @@ class InventarioController(BaseController):
 
 
     def obtener_lote_por_id(self, id_lote: str) -> tuple:
-        """Obtener un lote específico por su ID usando el método enriquecido."""
+        """
+        Obtener un lote específico por su ID, incluyendo su historial de control de calidad.
+        """
         try:
-            result = self.inventario_model.get_lote_detail_for_view(id_lote)
+            lote_result = self.inventario_model.get_lote_detail_for_view(id_lote)
 
-            if result['success']:
-                if result['data']:
-                    # El dato ya viene aplanado con insumo_nombre y proveedor_nombre
-                    serialized_data = self._serialize_data(result['data'])
-                    return self.success_response(data=serialized_data)
-                else:
-                    return self.error_response('Lote no encontrado', 404)
+            if not lote_result.get('success') or not lote_result.get('data'):
+                return self.error_response('Lote no encontrado', 404)
+            
+            lote_data = lote_result['data']
+
+            # Cargar el historial de control de calidad
+            cc_model = ControlCalidadInsumoModel()
+            historial_result = cc_model.find_all(
+                filters={'lote_insumo_id': id_lote},
+                order_by='created_at.desc'
+            )
+            
+            if historial_result.get('success'):
+                lote_data['historial_calidad'] = historial_result.get('data', [])
             else:
-                return self.error_response(result['error'])
+                lote_data['historial_calidad'] = []
+                logger.warning(f"No se pudo cargar el historial de calidad para el lote {id_lote}: {historial_result.get('error')}")
+
+            serialized_data = self._serialize_data(lote_data)
+            return self.success_response(data=serialized_data)
 
         except Exception as e:
-            logger.error(f"Error obteniendo lote por ID: {str(e)}")
+            logger.error(f"Error obteniendo el detalle del lote por ID: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def actualizar_lote_parcial(self, id_lote: str, data: Dict) -> tuple:
@@ -753,13 +767,14 @@ class InventarioController(BaseController):
             return 0
 
 
-    def poner_lote_en_cuarentena(self, lote_id: str, motivo: str, cantidad: float, usuario_id: int, resultado_inspeccion: str = None) -> tuple:
+    def poner_lote_en_cuarentena(self, lote_id: str, motivo: str, cantidad: float, usuario_id: int, resultado_inspeccion: str = None, foto_file=None) -> tuple:
         """
-        Mueve una cantidad de un lote a cuarentena. Si el lote está agotado y la cantidad es 0,
-        solo cambia el estado por trazabilidad.
+        Mueve una cantidad de un lote a cuarentena, con subida de foto opcional.
         """
         from app.controllers.usuario_controller import UsuarioController
         from app.models.notificacion import NotificacionModel
+        from app.controllers.control_calidad_insumo_controller import ControlCalidadInsumoController
+
         try:
             lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
             if not lote_res.get('success') or not lote_res.get('data'):
@@ -808,21 +823,23 @@ class InventarioController(BaseController):
                 if not result.get('success'):
                     return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
             
-            # Crear registro de control de calidad para ambas casuísticas
-            from app.controllers.control_calidad_insumo_controller import ControlCalidadInsumoController
             control_calidad_controller = ControlCalidadInsumoController()
+            foto_url = None
+            if foto_file:
+                foto_url = control_calidad_controller._subir_foto_y_obtener_url(foto_file, lote_id)
+
             registro_cc_result, _ = control_calidad_controller.crear_registro_control_calidad(
                 lote_id=lote_id,
                 usuario_id=usuario_id,
                 decision='EN_CUARENTENA',
                 comentarios=motivo,
                 orden_compra_id=None,
-                resultado_inspeccion=resultado_inspeccion
+                resultado_inspeccion=resultado_inspeccion,
+                foto_url=foto_url
             )
 
             if not registro_cc_result.get('success'):
                 logger.error(f"El lote {lote_id} se puso en cuarentena, pero falló la creación del registro de C.C.: {registro_cc_result.get('error')}")
-                # No retornamos error aquí para no confundir al usuario, solo logueamos.
             
             # Envío de notificación a gerentes
             try:
