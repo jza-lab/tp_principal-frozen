@@ -349,6 +349,8 @@ class OrdenProduccionController(BaseController):
         vinculado a un pedido, o 'DISPONIBLE' si es para stock general.
         """
         try:
+            from flask_jwt_extended import get_jwt_identity
+
             orden_result = self.obtener_orden_por_id(orden_id)
             if not orden_result.get('success'):
                 return self.error_response("Orden de producción no encontrada.", 404)
@@ -356,6 +358,8 @@ class OrdenProduccionController(BaseController):
             estado_actual = orden_produccion['estado']
 
             if nuevo_estado == 'COMPLETADA':
+                usuario_id_actual = get_jwt_identity()
+                self.model.update(orden_id, {'supervisor_calidad_id': usuario_id_actual}, 'id')
                 if not estado_actual or estado_actual.strip() != 'CONTROL_DE_CALIDAD':
                     return self.error_response("La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
 
@@ -738,24 +742,58 @@ class OrdenProduccionController(BaseController):
     def confirmar_inicio_y_aprobar(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
         """
         1. Guarda la fecha de inicio planificada confirmada.
-        2. Ejecuta la lógica de aprobación (verificar stock, reservar/crear OC, cambiar estado).
+        2. Asigna automáticamente un supervisor de producción.
+        3. Ejecuta la lógica de aprobación (verificar stock, reservar/crear OC, cambiar estado).
         """
         try:
+            from datetime import time, datetime
             fecha_inicio_confirmada = data.get('fecha_inicio_planificada')
             if not fecha_inicio_confirmada:
                 return self.error_response("Debe seleccionar una fecha de inicio.", 400)
 
-            # 1. Guardar la fecha de inicio confirmada
             update_data = {'fecha_inicio_planificada': fecha_inicio_confirmada}
+
+            # --- LÓGICA DE ASIGNACIÓN AUTOMÁTICA DE SUPERVISOR ---
+            supervisores_resp, _ = self.usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
+            supervisores = supervisores_resp.get('data', [])
+            
+            # TODO: Usar la hora real de la OP si está disponible. Por ahora, asumimos el inicio del turno de la mañana.
+            target_time = time(8, 0, 0) 
+            assigned_supervisor_id = None
+
+            for supervisor in supervisores:
+                in_produccion = any(s and s.get('codigo') == 'PRODUCCION' for s in supervisor.get('sectores', []))
+                if not in_produccion:
+                    continue
+
+                turno = supervisor.get('turno')
+                if turno and turno.get('hora_inicio') and turno.get('hora_fin'):
+                    try:
+                        hora_inicio = time.fromisoformat(turno['hora_inicio'])
+                        hora_fin = time.fromisoformat(turno['hora_fin'])
+                        
+                        if hora_inicio <= hora_fin:
+                            if hora_inicio <= target_time < hora_fin:
+                                assigned_supervisor_id = supervisor.get('id')
+                                break
+                        else:
+                            if target_time >= hora_inicio or target_time < hora_fin:
+                                assigned_supervisor_id = supervisor.get('id')
+                                break
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"No se pudo parsear el turno para supervisor {supervisor.get('id')}: {e}")
+
+            if assigned_supervisor_id:
+                update_data['supervisor_responsable_id'] = assigned_supervisor_id
+                logger.info(f"Supervisor {assigned_supervisor_id} asignado automáticamente a la OP {orden_id}.")
+            # --- FIN DE LA LÓGICA DE ASIGNACIÓN ---
+
             update_result = self.model.update(orden_id, update_data, 'id')
             if not update_result.get('success'):
-                return self.error_response(f"Error al guardar fecha de inicio: {update_result.get('error')}", 500)
+                return self.error_response(f"Error al guardar fecha y supervisor: {update_result.get('error')}", 500)
 
-            # 2. Ejecutar la lógica de aprobación que ya tenías
-            # Esta función devuelve (dict, status_code)
             aprobacion_dict, aprobacion_status_code = self.aprobar_orden(orden_id, usuario_id)
 
-            # Ajustar mensaje si fue exitoso
             if aprobacion_dict.get('success'):
                  aprobacion_dict['message'] = f"Inicio confirmado para {fecha_inicio_confirmada}. {aprobacion_dict.get('message', '')}"
 

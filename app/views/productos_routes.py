@@ -200,3 +200,17 @@ def habilitar_producto(id_producto):
     except Exception as e:
         logger.error(f"Error inesperado en habilitar_producto: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+@productos_bp.route("/api/catalogo/buscar", methods=["GET"])
+@permission_any_of('gestionar_orden_de_produccion', 'gestionar_inventario', 'produccion_consulta', 'almacen_consulta_stock')
+def buscar_productos_api():
+    try:
+        filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
+        response, status = producto_controller.obtener_todos_los_productos(filtros)
+        if status == 200:
+            return jsonify(response.get("data", [])), 200
+        else:
+            return jsonify({"error": response.get("error", "Error al buscar productos.")}), status
+    except Exception as e:
+        logger.error(f"Error inesperado en buscar_productos_api: {str(e)}")
+        return jsonify({"error": "Error interno del servidor"}), 500

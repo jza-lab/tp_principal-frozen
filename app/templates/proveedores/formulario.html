@@ -283,7 +283,7 @@ Agregar nuevo proveedor
     // Crea una variable global de JS con la URL generada por Flask/Jinja
     const proveedorS_LISTA_URL = "{{ url_for('clientes_proveedores.listar_proveedores') }}";
     const ID_proveedor = "{{ proveedor.id }}"
-    const isEditBoolean = {{ is_edit | tojson }};
+    const isEditBoolean = "{{ is_edit | tojson }}";
 </script>
 
 <script src="{{ url_for('static', filename='js/proveedores/formularioProveedor.js') }}"></script>

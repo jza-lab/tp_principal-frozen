@@ -106,6 +106,7 @@ class TrazabilidadController(BaseController):
                 },
                 'responsables': {
                     'supervisor': orden_produccion_data.get('supervisor_nombre', 'N/A'),
+                    'supervisor_calidad': orden_produccion_data.get('supervisor_calidad_nombre', 'N/A'),
                     'operario': orden_produccion_data.get('operario_nombre', 'N/A')
                 }
             }

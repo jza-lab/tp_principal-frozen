@@ -203,6 +203,18 @@ class OrdenProduccionModel(BaseModel):
             FORMATO_SALIDA = "%Y-%m-%d %H:%M"
 
             if item:
+                # --- Lógica para obtener supervisor de calidad por separado ---
+                if item.get('supervisor_calidad_id'):
+                    sv_calidad_res = self.db.table('usuarios').select('nombre, apellido').eq('id', item['supervisor_calidad_id']).single().execute()
+                    if sv_calidad_res.data:
+                        sv_info = sv_calidad_res.data
+                        item['supervisor_calidad_nombre'] = f"{sv_info.get('nombre', '')} {sv_info.get('apellido', '')}".strip()
+                    else:
+                        item['supervisor_calidad_nombre'] = 'No encontrado'
+                else:
+                    item['supervisor_calidad_nombre'] = 'No asignado'
+                # --- Fin de la nueva lógica ---
+
                 for key, value in item.items():
                     if key.startswith('fecha') and isinstance(value, str) and value:
                         try:

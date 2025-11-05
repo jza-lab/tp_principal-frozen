@@ -225,9 +225,23 @@ class TrazabilidadModel(BaseModel):
         Construye la trazabilidad completa para una Orden de Producción (OP).
         Incluye insumos utilizados (lotes insumo), lotes de producto generados y pedidos relacionados.
         """
-        op_res = self.db.table('ordenes_produccion').select('*, lotes_productos!orden_produccion_id(id_lote, numero_lote, cantidad_inicial)').eq('id', orden_id).single().execute()
+        op_res = self.db.table('ordenes_produccion').select(
+            '*, supervisor:supervisor_responsable_id(nombre, apellido), lotes_productos!orden_produccion_id(id_lote, numero_lote, cantidad_inicial)'
+        ).eq('id', orden_id).single().execute()
         op = op_res.data
         if not op: return None
+        
+        # --- Lógica para obtener supervisor de calidad por separado ---
+        if op.get('supervisor_calidad_id'):
+            sv_calidad_res = self.db.table('usuarios').select('nombre, apellido').eq('id', op['supervisor_calidad_id']).single().execute()
+            if sv_calidad_res.data:
+                sv_info = sv_calidad_res.data
+                op['supervisor_calidad_nombre'] = f"{sv_info.get('nombre', '')} {sv_info.get('apellido', '')}".strip()
+            else:
+                op['supervisor_calidad_nombre'] = 'No encontrado'
+        else:
+            op['supervisor_calidad_nombre'] = 'No asignado'
+        # --- Fin de la nueva lógica ---
 
         # Insumos reservados para la OP
         reservas_insumos = self.db.table('reservas_insumos').select(
@@ -253,7 +267,6 @@ class TrazabilidadModel(BaseModel):
                 } for r in reservas_insumos
             ]
         }
-
         resumen_destino = {
             'lotes': [{'id': lp.get('id_lote'), 'codigo': lp.get('numero_lote'), 'cantidad': lp.get('cantidad_inicial')} for lp in lotes_producto],
             'pedidos': [

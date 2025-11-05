@@ -58,7 +58,7 @@
 </div>
 
 <!-- Tarjetas de Insumos -->
-<div class="row">
+<div class="row" id="product-cards-container">
     {% for producto in productos %}
     <div class="col-lg-4 col-md-6 mb-4">
         <div class="card h-100 producto-card {% if not producto.activo %}insumo-inactivo{% endif %}">
@@ -68,7 +68,7 @@
                 <div class="card-secondary-details mb-3">
                     <span><i class="bi bi-tag-fill"></i> {{ producto.categoria }}</span>
                     <span><i class="bi bi-upc-scan"></i> <code>{{ producto.codigo }}</code></span>
-                    <span><i class="bi bi-rulers"></i>{{ producto.unidad_medida }}</span>
+                    <span><i class="bi bi-rulers"></i>{{ format_product_units(producto) }}</span>
                     <span><i class="bi bi-currency-dollar"></i> {{ producto.precio_unitario | formato_moneda }}</span>
                 </div>
 
@@ -132,14 +132,69 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const filterForm = document.getElementById('filter-form');
+        const searchInput = document.getElementById('busqueda');
+        const productContainer = document.getElementById('product-cards-container');
         const categoriaSelect = document.getElementById('categoria');
+        const filterForm = document.getElementById('filter-form');
 
-        if (categoriaSelect) {
-            categoriaSelect.addEventListener('change', function () {
-                filterForm.submit();
-            });
+        function fetchProducts() {
+            const searchValue = searchInput.value;
+            const categoriaValue = categoriaSelect.value;
+            const url = new URL("{{ url_for('productos.buscar_productos_api') }}", window.location.origin);
+            url.searchParams.append('busqueda', searchValue);
+            if (categoriaValue) {
+                url.searchParams.append('categoria', categoriaValue);
+            }
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    productContainer.innerHTML = ''; // Limpiar contenedor
+                    if (data.length > 0) {
+                        data.forEach(producto => {
+                            const card = `
+                                <div class="col-lg-4 col-md-6 mb-4">
+                                    <div class="card h-100 producto-card ${!producto.activo ? 'insumo-inactivo' : ''}">
+                                        <div class="card-body d-flex flex-column">
+                                            <h5 class="card-title">${producto.nombre} ${!producto.activo ? '<span class="badge bg-secondary">Inactivo</span>' : ''}</h5>
+                                            <div class="card-secondary-details mb-3">
+                                                <span><i class="bi bi-tag-fill"></i> ${producto.categoria}</span>
+                                                <span><i class="bi bi-upc-scan"></i> <code>${producto.codigo}</code></span>
+                                                <span><i class="bi bi-rulers"></i>${producto.unidad_medida}</span>
+                                                <span><i class="bi bi-currency-dollar"></i> ${producto.precio_unitario.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</span>
+                                            </div>
+                                            <div class="mt-auto">
+                                                <hr class="card-divider">
+                                                <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                                                    ${producto.activo ? `
+                                                        <a onClick="recargarPrecioProducto('${producto.id}')" class="btn btn-sm btn-outline-primary" title="Actualizar precio"><i class="bi bi-arrow-repeat"></i></a>
+                                                        <a href="/catalogo/actualizar/${producto.id}" class="btn btn-sm btn-outline-primary" title="Modificar producto"><i class="bi bi-pencil"></i></a>
+                                                        <a href="/catalogo/${producto.id}" class="btn btn-sm btn-outline-primary" title="Detalle"><i class="bi bi-eye"></i></a>
+                                                        <a class="btn btn-sm btn-outline-danger" title="Inhabilitar producto" onClick="eliminarProducto('${producto.id}')"><i class="bi bi-slash-circle"></i> Inhabilitar</a>
+                                                    ` : `
+                                                        <a class="btn btn-sm btn-outline-success" title="Habilitar producto" onClick="habilitarProducto('${producto.id}')"><i class="bi bi-check-circle"></i> Habilitar</a>
+                                                    `}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>`;
+                            productContainer.innerHTML += card;
+                        });
+                    } else {
+                        productContainer.innerHTML = '<div class="col-12"><div class="text-center text-muted py-5"><i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i><h4>No se encontraron productos</h4><p>Intenta con otros filtros.</p></div></div>';
+                    }
+                });
         }
+
+        searchInput.addEventListener('input', fetchProducts);
+        categoriaSelect.addEventListener('change', fetchProducts);
+
+        // Prevenir el envío tradicional del formulario
+        filterForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            fetchProducts();
+        });
     });
 </script>
 {% endblock %}

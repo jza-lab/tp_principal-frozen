@@ -173,7 +173,7 @@
 
 <script>
     // Inyecta la variable 'is_new' de Jinja2 a JavaScript
-    const IS_NEW = {{ is_new| tojson }};
+    const IS_NEW = "{{ is_new| tojson }}";
 </script>
 <script type="module" src="{{ url_for('static', filename='js/usuarios/formularioCrearUsuario.js') }}"></script>
 

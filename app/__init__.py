@@ -286,6 +286,9 @@ def create_app() -> Flask:
     # 3. Registrar la función decorada. No es necesario cambiar esta parte.
     app.jinja_env.globals['has_permission'] = _has_permission_filter # Se registra como global
     app.jinja_env.tests['has_permission'] = _has_permission_filter # Y como test
+    
+    from app.utils.template_helpers import setup_template_helpers
+    setup_template_helpers(app)
 
     with app.app_context():
         chatbot_model = ChatbotQA()
