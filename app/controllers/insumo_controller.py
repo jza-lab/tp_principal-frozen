@@ -110,9 +110,6 @@ class InsumoController(BaseController):
     def obtener_insumos(self, filtros: Optional[Dict] = None) -> tuple:
         """Obtener lista de insumos con filtros, incluyendo filtro por stock bajo."""
         try:
-            # Primero, actualizamos el stock de todos los insumos
-            self.inventario_model.calcular_y_actualizar_stock_general()
-            
             # --- INICIO: Disparador automático de OCs ---
             self._revisar_y_generar_ocs_automaticas()
             # --- FIN: Disparador automático de OCs ---

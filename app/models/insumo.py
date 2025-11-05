@@ -36,7 +36,7 @@ class InsumoModel(BaseModel):
             texto_busqueda = filters_copy.pop('busqueda', None)
 
             # Llamar a la implementación de BaseModel con los filtros restantes
-            result = super().find_all(filters=filters_copy, order_by=order_by, limit=limit, select_columns=select_columns)
+            result = super().find_all(filters=filters_copy, order_by=order_by, limit=limit, select_columns=['*', 'proveedor:id_proveedor(*)'])
             
             if texto_busqueda:
                  logger.warning("La búsqueda por texto no es compatible con el filtrado por lista en InsumoModel.find_all")
