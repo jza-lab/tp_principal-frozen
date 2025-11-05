@@ -100,6 +100,9 @@ class InsumoController(BaseController):
             else:
                 return self.error_response(result['error'])
 
+        except ValidationError as e:
+            logger.warning(f"Error de validación al crear insumo: {e.messages}")
+            return self.error_response(f"Datos inválidos: {e.messages}", 422)
         except Exception as e:
             logger.error(f"Error creando insumo: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
