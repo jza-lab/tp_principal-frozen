@@ -134,8 +134,8 @@ class InsumoController(BaseController):
                 if not insumo_ids:
                     return self.success_response(data=[])
 
-                # 2. Consultar los datos completos del catálogo con el join de proveedor
-                query = self.insumo_model.db.table(self.insumo_model.get_table_name()).select("*, proveedor:id_proveedor(*)").in_('id_insumo', insumo_ids)
+                # 2. Consultar los datos completos del catálogo
+                query = self.insumo_model.db.table(self.insumo_model.get_table_name()).select("*").in_('id_insumo', insumo_ids)
 
                 # Aplicar filtros adicionales de búsqueda y categoría
                 if filtros.get('busqueda'):

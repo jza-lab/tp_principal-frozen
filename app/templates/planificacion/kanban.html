@@ -194,7 +194,7 @@
                                     <span class="info-icon"><i class="bi bi-calendar-check"></i></span>
                                     <span class="info-label">Meta:</span>
                                     <span class="info-value {{ 'text-danger' if es_retrasada else ('text-warning' if tiempo_hasta_meta < 4 else 'text-success') }}">
-                                        {{ orden.fecha_meta or 'N/D' }}
+                                        {{ orden.fecha_meta|format_datetime('%d %b %Y') if orden.fecha_meta else 'N/D' }}
                                         {% if tiempo_hasta_meta %}
                                         <small>({{ tiempo_hasta_meta }}h)</small>
                                         {% endif %}

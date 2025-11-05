@@ -1468,3 +1468,74 @@ class PlanificacionController(BaseController):
                 return self.error_response(f"Error al eliminar: {result.get('error')}", 500)
         except Exception as e:
             return self.error_response(f"Error: {str(e)}", 500)
+
+    def obtener_datos_para_vista_planificacion(self, week_str: str, horizonte_dias: int, current_user_id: int, current_user_rol: str) -> tuple:
+        """
+        Método orquestador que obtiene y procesa todos los datos necesarios para la
+        vista de planificación de forma optimizada.
+        """
+        try:
+            # 1. Determinar rango de la semana
+            if week_str:
+                try:
+                    year, week_num = map(int, week_str.split('-W'))
+                    inicio_semana = date.fromisocalendar(year, week_num, 1)
+                except ValueError:
+                    return self.error_response("Formato de semana inválido.", 400)
+            else:
+                today = date.today()
+                inicio_semana = today - timedelta(days=today.weekday())
+
+            fin_semana = inicio_semana + timedelta(days=6)
+
+            # 2. Consulta Unificada y Optimizada de Órdenes de Producción
+            response_ops, _ = self.orden_produccion_controller.obtener_ordenes_para_planificacion(inicio_semana, fin_semana, horizonte_dias)
+            if not response_ops.get('success'):
+                return self.error_response("Error al obtener las órdenes de producción.", 500)
+            
+            todas_las_ops = response_ops.get('data', [])
+
+            # 3. Procesamiento en Memoria
+            # Filtrar OPs por estado para diferentes secciones de la UI
+            ops_pendientes = [op for op in todas_las_ops if op['estado'] == 'PENDIENTE']
+            ops_planificadas = [op for op in todas_las_ops if op['estado'] in ['EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD']]
+            
+            # --- MPS Data (usa una versión simplificada de la lógica original) ---
+            response_mps, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias)
+            mps_data = response_mps.get('data', {}) if response_mps.get('success') else {}
+
+
+            # --- Calendario Semanal (usa la lista ya filtrada) ---
+            response_semanal, _ = self.obtener_planificacion_semanal(week_str, ordenes_pre_cargadas=ops_planificadas)
+            data_semanal = response_semanal.get('data', {}) if response_semanal.get('success') else {}
+            ordenes_por_dia = data_semanal.get('ops_visibles_por_dia', {})
+
+            # --- CRP Data (usa la lista de OPs planificadas) ---
+            carga_calculada = self.calcular_carga_capacidad(ops_planificadas)
+            capacidad_disponible = self.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
+
+            # 4. Obtener Datos Auxiliares (Usuarios)
+            from app.controllers.usuario_controller import UsuarioController
+            usuario_controller = UsuarioController()
+            supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
+            operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
+            supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []
+            operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
+
+            # 5. Ensamblar el resultado final
+            datos_vista = {
+                'mps_data': mps_data,
+                'ordenes_por_dia': ordenes_por_dia,
+                'carga_crp': carga_calculada,
+                'capacidad_crp': capacidad_disponible,
+                'supervisores': supervisores,
+                'operarios': operarios,
+                'inicio_semana': inicio_semana.isoformat(),
+                'fin_semana': fin_semana.isoformat(),
+            }
+
+            return self.success_response(data=datos_vista)
+
+        except Exception as e:
+            logger.error(f"Error en obtener_datos_para_vista_planificacion: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)

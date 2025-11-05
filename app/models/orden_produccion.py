@@ -410,3 +410,45 @@ class OrdenProduccionModel(BaseModel):
         except Exception as e:
             logger.error(f"Error en get_for_kanban_hoy: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def get_all_for_planificacion(self, fecha_fin_horizonte, fecha_inicio_semanal, fecha_fin_semanal) -> Dict:
+        """
+        Obtiene todas las OPs para la vista de planificación usando una consulta OR.
+        """
+        try:
+            # Condición 1: OPs PENDIENTES dentro del horizonte del MPS
+            filtro_pendientes = f"and(estado.eq.PENDIENTE,fecha_meta.lte.{fecha_fin_horizonte.isoformat()})"
+
+            # Condición 2: OPs PLANIFICADAS que son visibles en el calendario semanal
+            estados_planificados = ['EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD']
+            filtro_planificadas = f"and(estado.in.({','.join(map(lambda s: f'\\"{s}\\"', estados_planificados))}),fecha_inicio_planificada.gte.{fecha_inicio_semanal.isoformat()},fecha_inicio_planificada.lte.{fecha_fin_semanal.isoformat()})"
+
+            # Combinar con OR
+            query_filter = f"or({filtro_pendientes},{filtro_planificadas})"
+            
+            response = self.db.table(self.get_table_name()).select(
+                "*, productos(nombre, unidad_medida), "
+                "creador:usuario_creador_id(nombre, apellido), "
+                "supervisor:supervisor_responsable_id(nombre, apellido), "
+                "operario:operario_asignado_id(nombre, apellido)"
+            ).or_(query_filter).execute()
+
+            if response.data:
+                # Reutilizar la lógica de aplanamiento de get_all_enriched
+                # (Esta parte se puede refactorizar a un helper si se repite mucho)
+                processed_data = []
+                for item in response.data:
+                    if item.get('productos'):
+                        item['producto_nombre'] = item.pop('productos').get('nombre', 'N/A')
+                    if item.get('creador'):
+                        creador = item.pop('creador')
+                        item['creador_nombre'] = f"{creador.get('nombre','')} {creador.get('apellido','')}".strip()
+                    # ... aplanar otros campos como supervisor, operario ...
+                    processed_data.append(item)
+                return {'success': True, 'data': processed_data}
+            
+            return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error en get_all_for_planificacion: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
