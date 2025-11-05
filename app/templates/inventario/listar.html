@@ -123,7 +123,7 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
                     <p>Lote: <strong id="loteNumeroCuarentena"></strong></p>
                     
-                    <div class="mb-3">
+                    <div class="mb-3" id="divCantidadCuarentena">
                         <label for="cantidad_cuarentena" class="form-label">Cantidad a poner en cuarentena:</label>
                         <input type="number" class="form-control" 
                                id="cantidad_cuarentena" 
@@ -170,7 +170,7 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
                     <p>Lote: <strong id="loteNumeroLiberar"></strong></p>
                     
-                    <div class="mb-3">
+                    <div class="mb-3" id="divCantidadLiberar">
                         <label for="cantidad_a_liberar" class="form-label">Cantidad a liberar:</label>
                         <input type="number" class="form-control" 
                                id="cantidad_a_liberar" 
@@ -179,8 +179,8 @@
                         <div class="form-text">
                             En cuarentena: <span id="loteCantidadEnCuarentena">0</span> unidades.
                         </div>
+                        <p class="text-muted small mt-1">Al liberar esta cantidad, volverá al stock DISPONIBLE.</p>
                     </div>
-                    <p class="text-muted small">Al liberar esta cantidad, volverá al stock DISPONIBLE.</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -216,21 +216,33 @@ document.addEventListener('DOMContentLoaded', function () {
             var button = event.relatedTarget;
             var loteId = button.getAttribute('data-lote-id');
             var loteNumero = button.getAttribute('data-lote-numero');
-            var loteCantidad = button.getAttribute('data-lote-cantidad'); // Cantidad DISPONIBLE
+            var loteCantidad = parseFloat(button.getAttribute('data-lote-cantidad'));
+            var loteCantidadCuarentena = parseFloat(button.getAttribute('data-lote-cantidad-cuarentena'));
             
             var form = modalCuarentena.querySelector('#formCuarentena');
-            // Construir la URL de la acción
             var actionUrl = `{{ url_for('inventario_view.listar_lotes') }}lote/${loteId}/cuarentena`;
             form.setAttribute('action', actionUrl);
             
             modalCuarentena.querySelector('#loteNumeroCuarentena').textContent = loteNumero;
 
+            var divCantidad = document.getElementById('divCantidadCuarentena');
             var inputCantidad = modalCuarentena.querySelector('#cantidad_cuarentena');
             var spanCantidad = modalCuarentena.querySelector('#loteCantidadDisponibleCuarentena');
             
-            inputCantidad.setAttribute('max', loteCantidad);
-            inputCantidad.setAttribute('placeholder', `Máx: ${loteCantidad}`);
-            spanCantidad.textContent = loteCantidad;
+            if (loteCantidad <= 0 && loteCantidadCuarentena <= 0) {
+                divCantidad.style.display = 'none';
+                inputCantidad.removeAttribute('required');
+                inputCantidad.removeAttribute('min');
+                inputCantidad.value = '0';
+            } else {
+                divCantidad.style.display = 'block';
+                inputCantidad.setAttribute('required', 'required');
+                inputCantidad.setAttribute('min', '0.01');
+                inputCantidad.setAttribute('max', loteCantidad);
+                inputCantidad.setAttribute('placeholder', `Máx: ${loteCantidad}`);
+                spanCantidad.textContent = loteCantidad;
+                inputCantidad.value = ''; 
+            }
         });
 
         // Lógica para validación condicional del campo de comentarios
@@ -246,6 +258,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 comentariosTextarea.previousElementSibling.textContent = 'Comentarios:';
             }
         });
+        
+        // Restaurar animación de carga en el botón de submit
+        var formCuarentena = document.getElementById('formCuarentena');
+        if (formCuarentena) {
+            formCuarentena.addEventListener('submit', function() {
+                var submitButton = formCuarentena.querySelector('button[type="submit"]');
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Confirmando...';
+            });
+        }
     }
 
     // --- Manejador para el modal LIBERAR DE CUARENTENA ---
@@ -255,23 +277,44 @@ document.addEventListener('DOMContentLoaded', function () {
             var button = event.relatedTarget;
             var loteId = button.getAttribute('data-lote-id');
             var loteNumero = button.getAttribute('data-lote-numero');
-            var loteCantidadCuarentena = button.getAttribute('data-lote-cantidad-cuarentena'); // Cantidad EN CUARENTENA
+            var loteCantidad = parseFloat(button.getAttribute('data-lote-cantidad'));
+            var loteCantidadCuarentena = parseFloat(button.getAttribute('data-lote-cantidad-cuarentena'));
             
             var form = modalLiberar.querySelector('#formLiberar');
-            // Construir la URL de la acción
             var actionUrl = `{{ url_for('inventario_view.listar_lotes') }}lote/${loteId}/liberar`;
             form.setAttribute('action', actionUrl);
             
             modalLiberar.querySelector('#loteNumeroLiberar').textContent = loteNumero;
 
+            var divCantidad = document.getElementById('divCantidadLiberar');
             var inputCantidad = modalLiberar.querySelector('#cantidad_a_liberar');
             var spanCantidad = modalLiberar.querySelector('#loteCantidadEnCuarentena');
             
-            inputCantidad.setAttribute('max', loteCantidadCuarentena);
-            inputCantidad.setAttribute('placeholder', `Máx: ${loteCantidadCuarentena}`);
-            inputCantidad.value = loteCantidadCuarentena;
-            spanCantidad.textContent = loteCantidadCuarentena;
+            // Si el lote está agotado Y en cuarentena, la única acción posible es devolverlo al estado 'Agotado'
+            if (loteCantidad <= 0 && loteCantidadCuarentena <= 0) {
+                 divCantidad.style.display = 'none';
+                 inputCantidad.removeAttribute('required');
+                 inputCantidad.removeAttribute('min');
+                 inputCantidad.value = '0';
+            } else {
+                divCantidad.style.display = 'block';
+                inputCantidad.setAttribute('required', 'required');
+                inputCantidad.setAttribute('min', '0.01');
+                inputCantidad.setAttribute('max', loteCantidadCuarentena);
+                inputCantidad.setAttribute('placeholder', `Máx: ${loteCantidadCuarentena}`);
+                spanCantidad.textContent = loteCantidadCuarentena;
+                inputCantidad.value = loteCantidadCuarentena; 
+            }
         });
+        
+        var formLiberar = document.getElementById('formLiberar');
+        if(formLiberar) {
+            formLiberar.addEventListener('submit', function() {
+                var submitButton = formLiberar.querySelector('button[type="submit"]');
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Confirmando...';
+            });
+        }
     }
     
     // --- Lógica para el botón de expandir/colapsar ---

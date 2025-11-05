@@ -26,12 +26,19 @@ def op_controller(mock_op_dependencies):
     return controller
 
 class TestOrdenProduccionController:
-    def test_crear_orden_produccion_exitoso(self, op_controller, mock_op_dependencies):
+    def test_crear_orden_produccion_exitoso(self, op_controller, mock_op_dependencies, monkeypatch):
         form_data = {'producto_id': 1, 'cantidad': 100, 'fecha_meta': '2025-12-31'}
         usuario_id = 1
-        mock_op_dependencies['receta_model'].find_all.return_value = {'success': True, 'data': [{'id': 1}]}
+
+        # Mock para evitar la llamada real a la base de datos en RecetaModel
+        def mock_find_all(*args, **kwargs):
+            return {'success': True, 'data': [{'id': 1}]}
+        monkeypatch.setattr("app.models.receta.RecetaModel.find_all", mock_find_all)
+
         mock_op_dependencies['op_model'].create.return_value = {'success': True, 'data': {'id': 1}}
+        
         response = op_controller.crear_orden(form_data, usuario_id)
+        
         assert response['success']
 
     @patch('app.controllers.orden_produccion_controller.InventarioController')
