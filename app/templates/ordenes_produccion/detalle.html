@@ -2,6 +2,10 @@
 
 {% block title %}Orden {{ orden.codigo }} - Sistema Frozen{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis-network.min.css" />
+{% endblock %}
+
 {% block app_content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
@@ -30,6 +34,25 @@
         {# --- BOTONES DE ACCIÓN (INICIAR/COMPLETAR) ELIMINADOS DE AQUÍ --- #}
     </div>
 </div>
+
+<ul class="nav nav-tabs-custom mb-3" id="loteDetailTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link-custom active" id="info-tab" data-bs-toggle="tab" data-bs-target="#info-content"
+            type="button" role="tab" aria-controls="info-content" aria-selected="true">
+            <i class="bi bi-info-circle me-1"></i>Información General
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link-custom" id="trazabilidad-tab" data-bs-toggle="tab" data-bs-target="#trazabilidad-content"
+            type="button" role="tab" aria-controls="trazabilidad-content" aria-selected="false">
+            <i class="bi bi-diagram-3 me-1"></i>Trazabilidad
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="loteDetailTabContent">
+    <div class="tab-pane fade show active" id="info-content" role="tabpanel" aria-labelledby="info-tab">
+
 
 <div class="row">
     <div class="col-lg-8">
@@ -324,12 +347,50 @@
                 </div>
                 
             </div>
-            <button class="btn btn-sm btn-outline-secondary w-100" disabled>Ver Trazabilidad Completa
-                    (Próximamente)</button>
         </div>
     </div>{# Fin col-lg-4 #}
+</div>
+
+<!-- Contenedor de la pestaña de trazabilidad (se muestra al hacer click en el botón) -->
+</div> <!-- Cerrar info-content -->
+
+    <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="bi bi-list-ul me-1"></i> Resumen Compacto (Trazabilidad)
+                    </div>
+                    <div class="card-body" id="resumen-trazabilidad">
+                        <div class="text-center p-3">
+                            <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <i class="bi bi-diagram-3 me-1"></i> Diagrama de Red
+                    </div>
+                    <div class="card-body">
+                        <div id="vis_trazabilidad" style="width:100%; min-height: 320px;">
+                            <div class="d-flex justify-content-center align-items-center h-100">
+                                <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<script>
+    window.ORDEN_ID = "{{ orden.id }}";
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+<script src="{{ url_for('static', filename='js/trazabilidadOrdenProduccion.js') }}?v=1.0"></script>
 {% endblock %}

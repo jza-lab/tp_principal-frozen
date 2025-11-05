@@ -17,6 +17,7 @@ from app.utils.date_utils import get_now_in_argentina
 from app.controllers.direccion_controller import GeorefController
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.direccion import DireccionModel
+from app.schemas.direccion_schema import DireccionSchema
 from flask import current_app
 from app.models.permisos import PermisosModel
 from app.utils.permission_map import CANONICAL_PERMISSION_MAP
@@ -56,10 +57,16 @@ class UsuarioController(BaseController):
             if self.model.find_by_email(validated_data['email']).get('data'):
                 return {'success': False, 'error': 'El correo electrónico ya está en uso.'}
 
+            if self.model.find_by_legajo(validated_data['legajo']).get('data'):
+                return {'success': False, 'error': 'El legajo ya está en uso.'}
+
             password = validated_data.pop('password')
             validated_data['password_hash'] = generate_password_hash(password)
 
             if any(direccion_data.values()):
+                # Validar explícitamente la dirección con su schema
+                DireccionSchema().load(direccion_data)
+                
                 direccion_normalizada = self._normalizar_y_preparar_direccion(direccion_data)
                 if direccion_normalizada:
                     # Asumo que _get_or_create_direccion existe en BaseController o similar
@@ -83,6 +90,7 @@ class UsuarioController(BaseController):
             return self.model.find_by_id(usuario_id, include_direccion=True)
 
         except ValidationError as e:
+            logger.warning(f"Error de validación al crear usuario: {e.messages}")
             return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
         except Exception as e:
             logger.error(f"Error al crear usuario: {str(e)}", exc_info=True)

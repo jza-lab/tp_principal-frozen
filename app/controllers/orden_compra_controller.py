@@ -77,8 +77,9 @@ class OrdenCompraController:
                     logger.warning(f"Error parseando item de orden de compra: {e}")
                     continue
 
-        # Calcular IVA y Total
-        iva_calculado = subtotal_calculado * 0.21
+        # Calcular IVA y Total, condicionado por un campo en el formulario
+        incluir_iva = form_data.get('incluir_iva', 'true').lower() in ['true', 'on', '1']
+        iva_calculado = subtotal_calculado * 0.21 if incluir_iva else 0.0
         total_calculado = subtotal_calculado + iva_calculado
 
         # Sobrescribir los valores en orden_data con los calculados en el backend

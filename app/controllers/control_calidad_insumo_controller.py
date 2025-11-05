@@ -8,6 +8,7 @@ from werkzeug.utils import secure_filename
 import logging
 from datetime import datetime
 import os
+from storage3.exceptions import StorageApiError
 
 logger = logging.getLogger(__name__)
 
@@ -42,19 +43,22 @@ class ControlCalidadInsumoController(BaseController):
                 file=file_content,
                 file_options={"content-type": file_storage.mimetype}
             )
-
-            if response.status_code != 200:
-                error_details = response.json()
-                logger.error(f"Error al subir foto a Supabase Storage: {error_details.get('message', 'Error desconocido')}")
-                return None
             
             url_response = db_client.storage.from_(bucket_name).get_public_url(unique_filename)
             logger.info(f"Foto subida con éxito para el lote {lote_id}. URL: {url_response}")
             return url_response
 
+        except StorageApiError as e:
+            if "Bucket not found" in str(e):
+                error_message = f"Error de configuración: El bucket de almacenamiento '{bucket_name}' no se encontró en Supabase. Por favor, créelo como público o verifique los permisos de la clave API (debe ser 'service_role')."
+                logger.error(error_message)
+                raise Exception(error_message)
+            else:
+                logger.error(f"Error de Supabase Storage al subir foto para el lote {lote_id}: {e}", exc_info=True)
+                raise e
         except Exception as e:
-            logger.error(f"Excepción al subir foto para el lote {lote_id}: {e}", exc_info=True)
-            return None
+            logger.error(f"Excepción general al subir foto para el lote {lote_id}: {e}", exc_info=True)
+            raise e
 
     def procesar_inspeccion(self, lote_id: str, decision: str, form_data: Dict, foto_file, usuario_id: int) -> tuple:
         """
@@ -120,13 +124,10 @@ class ControlCalidadInsumoController(BaseController):
                     'usuario_supervisor_id': usuario_id,
                     'decision_final': decision.upper().replace(' ', '_'),
                     'comentarios': form_data.get('comentarios'),
+                    'resultado_inspeccion': form_data.get('resultado_inspeccion'),
                     'foto_url': foto_url
                 }
                 self.model.create_registro(registro_data)
-
-                # Guardar la URL de la imagen en el lote de inventario
-                if foto_url:
-                    self.inventario_model.update(lote_id, {'url_imagen': foto_url}, 'id_lote')
 
             # Recalcular el stock del insumo afectado
             if insumo_id:
@@ -223,3 +224,26 @@ class ControlCalidadInsumoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error crítico al verificar y cerrar la OC {orden_compra_id}: {e}", exc_info=True)
+
+    def crear_registro_control_calidad(self, lote_id: str, usuario_id: int, decision: str, comentarios: str, orden_compra_id: int = None, foto_url: str = None, resultado_inspeccion: str = None) -> tuple:
+        """
+        Crea un registro en la tabla de control de calidad de insumos.
+        """
+        try:
+            registro_data = {
+                'lote_insumo_id': lote_id,
+                'orden_compra_id': orden_compra_id,
+                'usuario_supervisor_id': usuario_id,
+                'decision_final': decision.upper().replace(' ', '_'),
+                'comentarios': comentarios,
+                'resultado_inspeccion': resultado_inspeccion,
+                'foto_url': foto_url
+            }
+            resultado = self.model.create_registro(registro_data)
+            if resultado.get('success'):
+                return self.success_response(data=resultado.get('data'), message="Registro de control de calidad creado con éxito.")
+            else:
+                return self.error_response(resultado.get('error'), 500)
+        except Exception as e:
+            logger.error(f"Error crítico al crear registro de control de calidad para el lote {lote_id}: {e}", exc_info=True)
+            return self.error_response('Error interno del servidor.', 500)
