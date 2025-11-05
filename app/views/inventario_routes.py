@@ -6,6 +6,7 @@ from app.controllers.insumo_controller import InsumoController
 from app.controllers.proveedor_controller import ProveedorController
 from marshmallow import ValidationError
 from datetime import date
+from app.utils.estados import ESTADOS_INSPECCION
 
 
 inventario_view_bp = Blueprint('inventario_view', __name__, url_prefix='/inventario')
@@ -50,7 +51,8 @@ def listar_lotes():
     return render_template('inventario/listar.html',
                            insumos=insumos_agrupados,
                            insumos_stock=insumos_stock,
-                           insumos_full_data=insumos_full_data)
+                           insumos_full_data=insumos_full_data,
+                           estados_inspeccion=ESTADOS_INSPECCION)
 
 @inventario_view_bp.route('/lote/nuevo', methods=['GET', 'POST'])
 @jwt_required()
@@ -123,11 +125,12 @@ def poner_en_cuarentena(id_lote):
         motivo = request.form.get('motivo_cuarentena')
         cantidad = float(request.form.get('cantidad_cuarentena'))
         usuario_id = get_jwt_identity()
+        resultado_inspeccion = request.form.get('resultado_inspeccion')
     except (TypeError, ValueError):
         flash('La cantidad debe ser un número válido.', 'danger')
         return redirect(url_for('inventario_view.listar_lotes'))
 
-    response, status_code = controller.poner_lote_en_cuarentena(id_lote, motivo, cantidad, usuario_id)
+    response, status_code = controller.poner_lote_en_cuarentena(id_lote, motivo, cantidad, usuario_id, resultado_inspeccion)
 
     if response.get('success'):
         flash(response.get('message', 'Lote en cuarentena.'), 'success')

@@ -120,6 +120,7 @@ class ControlCalidadInsumoController(BaseController):
                     'usuario_supervisor_id': usuario_id,
                     'decision_final': decision.upper().replace(' ', '_'),
                     'comentarios': form_data.get('comentarios'),
+                    'resultado_inspeccion': form_data.get('resultado_inspeccion'),
                     'foto_url': foto_url
                 }
                 self.model.create_registro(registro_data)
@@ -224,7 +225,7 @@ class ControlCalidadInsumoController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico al verificar y cerrar la OC {orden_compra_id}: {e}", exc_info=True)
 
-    def crear_registro_control_calidad(self, lote_id: str, usuario_id: int, decision: str, comentarios: str, orden_compra_id: int = None, foto_url: str = None) -> tuple:
+    def crear_registro_control_calidad(self, lote_id: str, usuario_id: int, decision: str, comentarios: str, orden_compra_id: int = None, foto_url: str = None, resultado_inspeccion: str = None) -> tuple:
         """
         Crea un registro en la tabla de control de calidad de insumos.
         """
@@ -235,6 +236,7 @@ class ControlCalidadInsumoController(BaseController):
                 'usuario_supervisor_id': usuario_id,
                 'decision_final': decision.upper().replace(' ', '_'),
                 'comentarios': comentarios,
+                'resultado_inspeccion': resultado_inspeccion,
                 'foto_url': foto_url
             }
             resultado = self.model.create_registro(registro_data)

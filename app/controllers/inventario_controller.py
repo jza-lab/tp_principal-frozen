@@ -753,7 +753,7 @@ class InventarioController(BaseController):
             return 0
 
 
-    def poner_lote_en_cuarentena(self, lote_id: str, motivo: str, cantidad: float, usuario_id: int) -> tuple:
+    def poner_lote_en_cuarentena(self, lote_id: str, motivo: str, cantidad: float, usuario_id: int, resultado_inspeccion: str = None) -> tuple:
         """
         Mueve una cantidad específica de un lote de insumo al estado CUARENTENA.
         Usa estados en minúscula.
@@ -819,7 +819,8 @@ class InventarioController(BaseController):
                 usuario_id=usuario_id,
                 decision='EN_CUARENTENA',
                 comentarios=motivo,
-                orden_compra_id=None
+                orden_compra_id=None,
+                resultado_inspeccion=resultado_inspeccion
             )
 
             if not registro_cc_result.get('success'):

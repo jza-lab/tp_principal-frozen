@@ -135,16 +135,23 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="motivo_cuarentena" class="form-label">Motivo (Requerido):</label>
-                        <textarea class="form-control" id="motivo_cuarentena" name="motivo_cuarentena" rows="3" required></textarea>
+                        <label for="resultado_inspeccion_cuarentena" class="form-label">Motivo de la Cuarentena (Requerido):</label>
+                        <select class="form-select" id="resultado_inspeccion_cuarentena" name="resultado_inspeccion" required>
+                            <option value="" selected disabled>Seleccione un motivo...</option>
+                            {% for estado in estados_inspeccion %}
+                            <option value="{{ estado }}">{{ estado }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="motivo_cuarentena" class="form-label">Comentarios:</label>
+                        <textarea class="form-control" id="motivo_cuarentena" name="motivo_cuarentena" rows="3"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-warning">
-                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-                        Confirmar Cuarentena
-                    </button>
+                    <button type="submit" class="btn btn-warning">Confirmar Cuarentena</button>
                 </div>
             </form>
         </div>
@@ -177,10 +184,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">
-                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-                        Confirmar Liberación
-                    </button>
+                    <button type="submit" class="btn btn-success">Confirmar Liberación</button>
                 </div>
             </form>
         </div>
@@ -228,6 +232,20 @@ document.addEventListener('DOMContentLoaded', function () {
             inputCantidad.setAttribute('placeholder', `Máx: ${loteCantidad}`);
             spanCantidad.textContent = loteCantidad;
         });
+
+        // Lógica para validación condicional del campo de comentarios
+        const selectInspeccion = modalCuarentena.querySelector('#resultado_inspeccion_cuarentena');
+        const comentariosTextarea = modalCuarentena.querySelector('#motivo_cuarentena');
+
+        selectInspeccion.addEventListener('change', function() {
+            if (this.value === 'Otro') {
+                comentariosTextarea.required = true;
+                comentariosTextarea.previousElementSibling.textContent = 'Comentarios (Requerido):';
+            } else {
+                comentariosTextarea.required = false;
+                comentariosTextarea.previousElementSibling.textContent = 'Comentarios:';
+            }
+        });
     }
 
     // --- Manejador para el modal LIBERAR DE CUARENTENA ---
@@ -273,25 +291,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     });
-    // --- Lógica para mostrar spinner en el envío de formularios ---
-    function handleFormSubmit(formId) {
-        const form = document.getElementById(formId);
-        if (form) {
-            form.addEventListener('submit', function() {
-                const submitButton = form.querySelector('button[type="submit"]');
-                const spinner = submitButton.querySelector('.spinner-border');
 
-                // Deshabilitar botón y mostrar spinner
-                submitButton.disabled = true;
-                if (spinner) {
-                    spinner.classList.remove('d-none');
-                }
-            });
-        }
-    }
-
-    handleFormSubmit('formCuarentena');
-    handleFormSubmit('formLiberar');
 });
 </script>
 {% endblock %}

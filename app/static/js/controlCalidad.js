@@ -47,6 +47,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const modalBtnConfirmar = document.getElementById('modal-btn-confirmar');
         const modalCantidadInput = document.getElementById('modal-cantidad');
         const modalCantidadDisponible = document.getElementById('modal-cantidad-disponible');
+        const selectResultado = document.getElementById('modal-resultado-inspeccion');
+        const textareaComentarios = document.getElementById('modal-comentarios');
         
         document.getElementById('modal-lote-id').value = loteId;
         document.getElementById('modal-action').value = action;
@@ -56,6 +58,17 @@ document.addEventListener('DOMContentLoaded', function () {
         modalCantidadInput.value = cantidadDisponible;
         modalCantidadDisponible.textContent = cantidadDisponible;
         form.reset();
+
+        // Lógica de validación condicional
+        selectResultado.addEventListener('change', function() {
+            if (this.value === 'Otro') {
+                textareaComentarios.required = true;
+                textareaComentarios.previousElementSibling.textContent = 'Comentarios (Requerido):';
+            } else {
+                textareaComentarios.required = false;
+                textareaComentarios.previousElementSibling.textContent = 'Comentarios:';
+            }
+        });
 
         if (action === 'cuarentena') {
             modalTitle.textContent = 'Poner Lote en Cuarentena';
