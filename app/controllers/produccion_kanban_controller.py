@@ -42,7 +42,13 @@ class ProduccionKanbanController(BaseController):
             # 3. Realizar consultas masivas
             desperdicios_map = self._obtener_desperdicios_masivo(op_ids)
             recetas_map, insumos_necesarios_map = self._obtener_recetas_e_ingredientes_masivo(receta_ids)
-            stock_map = self._obtener_stock_masivo(list(insumos_necesarios_map.keys()))
+            
+            # Recopilar todos los IDs de insumos únicos de todas las recetas necesarias.
+            todos_los_insumo_ids = set()
+            for insumos_por_receta in insumos_necesarios_map.values():
+                todos_los_insumo_ids.update(insumos_por_receta.keys())
+            
+            stock_map = self._obtener_stock_masivo(list(todos_los_insumo_ids))
 
             # 4. Enriquecer y agrupar órdenes utilizando los datos precargados
             ordenes_enriquecidas = []
