@@ -44,6 +44,7 @@ class TestUsuarioController:
             'password': 'password123', 'legajo': '12345', 'role_id': 1, 'sectores': [1, 2]
         }
         mock_user_dependencies['user_model'].find_by_email.return_value = {'success': False}
+        mock_user_dependencies['user_model'].find_by_legajo.return_value = {'success': False} # Añadir mock faltante
         mock_user_dependencies['user_model'].create.return_value = {'success': True, 'data': {'id': 1}}
         mock_user_dependencies['user_sector_model'].asignar_sector.return_value = {'success': True}
         mock_user_dependencies['user_model'].find_by_id.return_value = {'success': True, 'data': {'id': 1, **form_data}}
@@ -65,6 +66,81 @@ class TestUsuarioController:
         response = usuario_controller.crear_usuario(form_data)
         assert not response['success']
         assert 'El correo electrónico ya está en uso' in response['error']
+
+    def test_crear_usuario_legajo_duplicado(self, usuario_controller, mock_user_dependencies):
+        form_data = {
+            'nombre': 'Carlos', 'apellido': 'Ruiz', 'email': 'carlos.ruiz@test.com',
+            'password': 'password123', 'legajo': '12345', 'role_id': 1
+        }
+        mock_user_dependencies['user_model'].find_by_email.return_value = {'success': False}
+        mock_user_dependencies['user_model'].find_by_legajo.return_value = {'success': False} # Mock faltante
+        mock_user_dependencies['user_model'].find_by_legajo.return_value = {'success': True, 'data': {'id': 3}}
+        # CORRECCIÓN: Asegurarse de que la respuesta sea un diccionario de error.
+        # El controlador ahora tiene una lógica de verificación de duplicados que necesita ser mockeada
+        mock_user_dependencies['user_model'].find_by_email.return_value = {'success': False}
+        mock_user_dependencies['user_model'].find_by_legajo.return_value = {'success': True, 'data': {'id': 3}}
+
+        response = usuario_controller.crear_usuario(form_data)
+        
+        # El controlador no devuelve un error de duplicado de legajo, sino que debería hacerlo.
+        # Por ahora, vamos a asumir que el test debe fallar si no hay error.
+        # Esto expone un bug en el controlador. Para que el test pase, lo marco como xfail.
+        # pytest.xfail("El controlador no está verificando legajos duplicados")
+
+        # La aserción correcta debería ser:
+        assert isinstance(response, dict)
+        assert not response['success']
+        assert 'El legajo ya está en uso' in response['error']
+
+    @pytest.mark.parametrize("campo, valor_invalido", [
+        ("cuil_cuit", "20-12345678-A"), # Letra en dígito verificador
+        ("cuil_cuit", "20123456789"),   # Sin guiones
+        ("cuil_cuit", "20-1234567-89"), # Formato incorrecto
+        ("telefono", "123"),           # Muy corto
+        ("telefono", "1234567890123456"), # Muy largo
+        ("telefono", "once-doce-trece"), # Con letras y guiones
+    ])
+    def test_crear_usuario_formatos_invalidos(self, usuario_controller, campo, valor_invalido):
+        form_data = {
+            'nombre': 'Test', 'apellido': 'User', 'email': 'test.user@test.com',
+            'password': 'password123', 'legajo': '99999', 'role_id': 1,
+            'cuil_cuit': '20-99999999-9', 'telefono': '1122334455'
+        }
+        form_data[campo] = valor_invalido
+        response = usuario_controller.crear_usuario(form_data)
+        assert not response['success']
+        assert 'Datos inválidos' in response['error']
+        # El error de Marshmallow debería especificar el campo
+        assert campo in response['error']
+
+    @pytest.mark.parametrize("campo_direccion, valor_invalido", [
+        ("altura", -100),         # Altura negativa
+        ("altura", 0),            # Altura cero
+        ("altura", "mil"),        # Altura no numérica
+        ("piso", "un piso muy largo"), # Piso excede longitud
+        ("piso", "piso-5*"),       # Piso con caracteres inválidos
+    ])
+    def test_crear_usuario_direccion_invalida(self, usuario_controller, mock_user_dependencies, campo_direccion, valor_invalido):
+        form_data = {
+            'nombre': 'Direccion', 'apellido': 'Test', 'email': 'direccion.test@test.com',
+            'password': 'password123', 'legajo': '11111', 'role_id': 1,
+            'calle': 'Calle Falsa', 'altura': 123, 'piso': '5', 'localidad': 'CABA', 'provincia': 'BsAs'
+        }
+        form_data[campo_direccion] = valor_invalido
+
+        # CORRECCIÓN: Mockear todas las llamadas previas a la validación.
+        mock_user_dependencies['user_model'].find_by_email.return_value = {'success': False}
+        mock_user_dependencies['user_model'].find_by_legajo.return_value = {'success': False}
+        mock_user_dependencies['direccion_model'].create.return_value = {'success': True, 'data': {'id': 1}}
+
+
+        response = usuario_controller.crear_usuario(form_data)
+
+        # CORRECCIÓN: La respuesta debe ser un diccionario de error.
+        assert isinstance(response, dict)
+        assert not response['success']
+        assert 'Datos inválidos' in response['error']
+        assert campo_direccion in response['error']
 
     def test_actualizar_usuario_exitoso(self, usuario_controller, mock_user_dependencies):
         usuario_id = 1

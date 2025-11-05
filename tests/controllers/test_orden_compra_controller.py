@@ -118,3 +118,104 @@ class TestOrdenCompraController:
             response = oc_controller.marcar_como_cerrada(orden_id)
             assert response['success']
 
+    def test_get_all_ordenes_con_filtro_estado(self, app: Flask, oc_controller, mock_oc_dependencies):
+        # Arrange
+        ordenes_aprobadas = [
+            {'id': 2, 'codigo_oc': 'OC-002', 'estado': 'APROBADA'},
+            {'id': 3, 'codigo_oc': 'OC-003', 'estado': 'APROBADA'}
+        ]
+        # Mock para que el modelo devuelva solo las órdenes aprobadas cuando se le pasa el filtro
+        mock_oc_dependencies['oc_model'].get_all.return_value = {
+            'success': True, 'data': ordenes_aprobadas
+        }
+        
+        # Act
+        # Usamos app.test_request_context para simular una petición con query params
+        with app.test_request_context('/?estado=APROBADA'):
+            response, status_code = oc_controller.get_all_ordenes()
+
+            # Assert
+            assert status_code == 200
+            assert response['success']
+            assert len(response['data']) == 2
+            assert all(item['estado'] == 'APROBADA' for item in response['data'])
+            
+            # Verificar que el modelo fue llamado con el filtro correcto
+            mock_oc_dependencies['oc_model'].get_all.assert_called_once_with({'estado': 'APROBADA'})
+
+    def test_parse_form_data_calculo_totales(self, oc_controller):
+        # Arrange
+        form_data = MockFormData({
+            'proveedor_id': '1',
+            'fecha_emision': '2024-01-01',
+            'insumo_id[]': ['101', '102'],
+            'cantidad_solicitada[]': ['10', '5'],
+            'precio_unitario[]': ['15.50', '10.00']
+        })
+        
+        # Act
+        orden_data, items_data = oc_controller._parse_form_data(form_data)
+        
+        # Assert
+        # Item 1: 10 * 15.50 = 155.00
+        # Item 2: 5 * 10.00 = 50.00
+        # Subtotal: 155.00 + 50.00 = 205.00
+        # IVA (21%): 205.00 * 0.21 = 43.05
+        # Total: 205.00 + 43.05 = 248.05
+        assert len(items_data) == 2
+        assert orden_data['subtotal'] == 205.00
+        assert orden_data['iva'] == 43.05
+        assert orden_data['total'] == 248.05
+
+    def test_parse_form_data_sin_iva(self, oc_controller):
+        # Arrange
+        form_data = MockFormData({
+            'proveedor_id': '1',
+            'fecha_emision': '2024-01-01',
+            'insumo_id[]': ['101'],
+            'cantidad_solicitada[]': ['10'],
+            'precio_unitario[]': ['10.00'],
+            'incluir_iva': 'false' # Indicar que no se incluya IVA
+        })
+        
+        # Act
+        orden_data, items_data = oc_controller._parse_form_data(form_data)
+        
+        # Assert
+        # Subtotal: 10 * 10.00 = 100.00
+        # IVA: 0
+        # Total: 100.00
+        assert orden_data['subtotal'] == 100.00
+        assert orden_data['iva'] == 0.0
+        assert orden_data['total'] == 100.00
+
+    @pytest.mark.parametrize("cantidad, precio", [
+        ("diez", "15.0"),      # Cantidad no numérica
+        ("10.0", "quince"),    # Precio no numérico
+        ("-10.0", "15.0"),     # Cantidad negativa (debería procesarse)
+        ("10.0", "-15.0"),     # Precio negativo (debería procesarse)
+    ])
+    def test_parse_form_data_valores_invalidos(self, oc_controller, cantidad, precio):
+        # Arrange
+        form_data = MockFormData({
+            'insumo_id[]': ['101'],
+            'cantidad_solicitada[]': [cantidad],
+            'precio_unitario[]': [precio]
+        })
+
+        # Act
+        orden_data, items_data = oc_controller._parse_form_data(form_data)
+        
+        # Assert
+        # El controlador actual convierte los valores inválidos a 0 y continúa.
+        # No hay un schema que valide los items, por lo que no se espera un error.
+        if cantidad.replace('.', '', 1).replace('-', '', 1).isdigit() and precio.replace('.', '', 1).replace('-', '', 1).isdigit():
+             # Caso de valores negativos
+             expected_subtotal = float(cantidad) * float(precio)
+             assert orden_data['subtotal'] == expected_subtotal
+        else:
+            # Caso de valores no numéricos
+            # El bucle 'continue' hará que el item se omita
+            assert len(items_data) == 0
+            assert orden_data['subtotal'] == 0.0
+
