@@ -12,7 +12,7 @@ class OrdenProduccionModel(BaseModel):
         """Devuelve el nombre de la tabla de la base de datos."""
         return 'ordenes_produccion'
 
-    def cambiar_estado(self, orden_id: int, nuevo_estado: str, observaciones: Optional[str] = None) -> Dict:
+    def cambiar_estado(self, orden_id: int, nuevo_estado: str, observaciones: Optional[str] = None, extra_data: Optional[Dict] = None) -> Dict:
         """
         Cambia el estado de una orden de producción y actualiza las fechas clave.
         La lógica de negocio compleja (como actualizar pedidos) se maneja en el controlador.
@@ -22,6 +22,9 @@ class OrdenProduccionModel(BaseModel):
             update_data = {'estado': nuevo_estado}
             if observaciones:
                 update_data['observaciones'] = observaciones
+
+            if extra_data:
+                update_data.update(extra_data)
 
             now_iso = datetime.now().isoformat()
 
@@ -61,7 +64,8 @@ class OrdenProduccionModel(BaseModel):
                 "*, productos(nombre, unidad_medida), "
                 "creador:usuario_creador_id(nombre, apellido), "
                 "supervisor:supervisor_responsable_id(nombre, apellido), "
-                "operario:operario_asignado_id(nombre, apellido)"
+                "operario:operario_asignado_id(nombre, apellido), "
+                "aprobador:aprobador_calidad_id(nombre, apellido)"
             )
 
             # Apply filters dynamically
@@ -149,6 +153,13 @@ class OrdenProduccionModel(BaseModel):
                     else:
                         item['operario_nombre'] = None # Explicitly None if not assigned
 
+                    # Flatten aprobador info
+                    if item.get('aprobador'):
+                        aprobador_info = item.pop('aprobador')
+                        item['aprobador_calidad_nombre'] = f"{aprobador_info.get('nombre', '')} {aprobador_info.get('apellido', '')}".strip()
+                    else:
+                        item['aprobador_calidad_nombre'] = None
+
                     processed_data.append(item)
 
                 op_ids = [op['id'] for op in processed_data]
@@ -196,7 +207,8 @@ class OrdenProduccionModel(BaseModel):
                 "*, productos(nombre, descripcion, unidad_medida), recetas(id, descripcion, rendimiento, activa), " # Añadido unidad_medida
                 "creador:usuario_creador_id(nombre, apellido), "
                 "supervisor:supervisor_responsable_id(nombre, apellido), "
-                "operario:operario_asignado_id(nombre, apellido)" # <-- Incluir operario
+                "operario:operario_asignado_id(nombre, apellido), " # <-- Incluir operario
+                "aprobador:aprobador_calidad_id(nombre, apellido)"
             ).eq("id", orden_id).maybe_single().execute()
 
             item = response.data
@@ -259,6 +271,12 @@ class OrdenProduccionModel(BaseModel):
                 else:
                     item['operario_nombre'] = 'No asignado'
                 # --- FIN DEL BLOQUE AÑADIDO ---
+
+                if item.get('aprobador'):
+                    aprobador_info = item.pop('aprobador')
+                    item['aprobador_calidad_nombre'] = f"{aprobador_info.get('nombre', '')} {aprobador_info.get('apellido', '')}".strip()
+                else:
+                    item['aprobador_calidad_nombre'] = None
 
                 return {'success': True, 'data': item}
             else:
@@ -324,7 +342,8 @@ class OrdenProduccionModel(BaseModel):
                 "*, productos(nombre, unidad_medida), "
                 "creador:usuario_creador_id(nombre, apellido), "
                 "supervisor:supervisor_responsable_id(nombre, apellido), "
-                "operario:operario_asignado_id(nombre, apellido)"
+                "operario:operario_asignado_id(nombre, apellido), "
+                "aprobador:aprobador_calidad_id(nombre, apellido)"
             )
 
             if filtros_operario and filtros_operario.get('rol') == 'OPERARIO':
@@ -379,6 +398,12 @@ class OrdenProduccionModel(BaseModel):
                         item['operario_nombre'] = f"{operario_info.get('nombre', '')} {operario_info.get('apellido', '')}".strip()
                     else:
                         item['operario_nombre'] = None
+
+                    if item.get('aprobador'):
+                        aprobador_info = item.pop('aprobador')
+                        item['aprobador_calidad_nombre'] = f"{aprobador_info.get('nombre', '')} {aprobador_info.get('apellido', '')}".strip()
+                    else:
+                        item['aprobador_calidad_nombre'] = None
 
                     processed_data.append(item)
 

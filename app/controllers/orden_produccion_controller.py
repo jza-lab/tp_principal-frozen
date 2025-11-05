@@ -342,7 +342,7 @@ class OrdenProduccionController(BaseController):
         """
         return self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=f"Rechazada: {motivo}")
 
-    def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str) -> tuple:
+    def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str, usuario_id: Optional[int] = None) -> tuple:
         """
         Cambia el estado de una orden.
         Si es 'COMPLETADA', crea el lote y lo deja 'RESERVADO' si está
@@ -355,9 +355,13 @@ class OrdenProduccionController(BaseController):
             orden_produccion = orden_result['data']
             estado_actual = orden_produccion['estado']
 
+            update_data = {}
             if nuevo_estado == 'COMPLETADA':
                 if not estado_actual or estado_actual.strip() != 'CONTROL_DE_CALIDAD':
                     return self.error_response("La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
+
+                if usuario_id:
+                    update_data['aprobador_calidad_id'] = usuario_id
 
                 # 1. Verificar si la OP está vinculada a ítems de pedido
                 items_a_surtir_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
@@ -402,7 +406,7 @@ class OrdenProduccionController(BaseController):
                     message_to_use += " y vinculado a los pedidos correspondientes."
 
             # 5. Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
-            result = self.model.cambiar_estado(orden_id, nuevo_estado)
+            result = self.model.cambiar_estado(orden_id, nuevo_estado, extra_data=update_data)
             if result.get('success'):
                 # La lógica del cronómetro se ha movido a otros métodos para evitar la doble detención.
                 # El cronómetro ahora se detiene cuando se reporta el 100% o cuando se pausa.

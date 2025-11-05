@@ -7,6 +7,7 @@ from app.controllers.orden_produccion_controller import OrdenProduccionControlle
 from app.controllers.receta_controller import RecetaController
 from app.controllers.insumo_controller import InsumoController
 from app.models.registro_desperdicio_model import RegistroDesperdicioModel
+from app.models.reserva_insumo import ReservaInsumoModel
 from app.utils.estados import OP_KANBAN_COLUMNAS
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ class ProduccionKanbanController(BaseController):
         self.receta_controller = RecetaController()
         self.insumo_controller = InsumoController()
         self.desperdicio_model = RegistroDesperdicioModel()
+        self.reserva_insumo_model = ReservaInsumoModel()
 
     def obtener_datos_para_tablero(self, usuario_id: int, usuario_rol: str) -> tuple:
         """
@@ -65,8 +67,20 @@ class ProduccionKanbanController(BaseController):
                 # Datos de materiales
                 receta_actual = recetas_map.get(receta_id)
                 insumos_receta = insumos_necesarios_map.get(receta_id, {})
-                orden['materiales_disponibles'] = self._verificar_materiales_disponibles(orden, insumos_receta, stock_map)
-
+                
+                # LÓGICA DE MATERIALES:
+                # - Para 'EN ESPERA', verificamos el stock actual para ver si ya se podría pasar a 'Lista'.
+                # - Para 'LISTA PARA PRODUCIR', verificamos si existen reservas. Si no existen, es un error de estado.
+                # - Para otros estados no es relevante.
+                estado_actual_normalizado = (orden.get('estado', '').strip().replace(' ', '_'))
+                if estado_actual_normalizado == 'LISTA_PARA_PRODUCIR':
+                    reservas_result = self.reserva_insumo_model.get_by_orden_produccion_id(op_id)
+                    orden['materiales_disponibles'] = reservas_result.get('success') and bool(reservas_result.get('data'))
+                elif estado_actual_normalizado == 'EN_ESPERA':
+                    orden['materiales_disponibles'] = self._verificar_materiales_disponibles(orden, insumos_receta, stock_map)
+                else:
+                    orden['materiales_disponibles'] = True # No es relevante para otros estados
+                
                 # Resto del enriquecimiento que no depende de BBDD en bucle
                 orden['lote'] = self._obtener_lote_de_orden(orden)
                 orden['prioridad'] = self._calcular_prioridad(orden)

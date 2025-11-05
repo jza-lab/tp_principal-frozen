@@ -159,11 +159,10 @@ def api_aprobar_calidad(op_id):
     """
     API endpoint para que un supervisor de calidad apruebe una orden y la mueva a 'COMPLETADA'.
     """
-    # En una implementación futura, se podría pasar un usuario_id si es relevante.
-    # usuario_id = get_jwt_identity()
+    usuario_id = get_jwt_identity()
     controller = OrdenProduccionController()
     # Usamos el método robusto que ya maneja la creación de lotes.
-    response, status_code = controller.cambiar_estado_orden(op_id, 'COMPLETADA')
+    response, status_code = controller.cambiar_estado_orden(op_id, 'COMPLETADA', usuario_id=usuario_id)
     return jsonify(response), status_code
 
 

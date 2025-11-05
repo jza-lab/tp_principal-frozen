@@ -145,6 +145,8 @@
     border: 2px solid #e5e7eb;
     height: 100%;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .column-header {
@@ -202,9 +204,8 @@
 
 .kanban-cards {
     padding: 15px;
-    min-height: 300px;
-    max-height: calc(100vh - 400px);
     overflow-y: auto;
+    flex-grow: 1;
 }
 
 /* ===== TARJETAS KANBAN ===== */
@@ -749,4 +750,7 @@
 
 .kanban-card {
     animation: slideIn 0.3s ease;
+}
+.kanban-board-container {
+    height: calc(100vh - 250px); /* Ajusta este valor según la altura de tu navbar y filtros */
 }

@@ -106,8 +106,8 @@
     </h3>
 </div>
 
-<div class="table-responsive">
-    <div class="row flex-nowrap g-3">
+<div class="table-responsive kanban-board-container">
+    <div class="row flex-nowrap g-3 h-100">
         {% for estado_key, titulo_columna in columnas.items() %}
         <div class="col mb-4 kanban-column-wrapper" data-estado="{{ estado_key }}" style="min-width: 380px;">
             <div class="kanban-column h-100" data-estado="{{ estado_key }}">
@@ -280,8 +280,14 @@
                                     <span class="resource-value">{{ orden.operario_nombre }}</span>
                                 </div>
                                 {% endif %}
-                                
-                                {% if orden.supervisor_nombre %}
+
+                                {% if estado_key == 'COMPLETADA' and orden.aprobador_calidad_nombre %}
+                                <div class="resource-item">
+                                    <i class="bi bi-patch-check-fill"></i>
+                                    <span class="resource-label">Aprobado por:</span>
+                                    <span class="resource-value">{{ orden.aprobador_calidad_nombre }}</span>
+                                </div>
+                                {% elif orden.supervisor_nombre %}
                                 <div class="resource-item">
                                     <i class="bi bi-person-badge"></i>
                                     <span class="resource-label">Supervisor:</span>
