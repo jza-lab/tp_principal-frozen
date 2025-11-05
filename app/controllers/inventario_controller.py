@@ -753,7 +753,7 @@ class InventarioController(BaseController):
             return 0
 
 
-    def poner_lote_en_cuarentena(self, lote_id: str, motivo: str, cantidad: float) -> tuple:
+    def poner_lote_en_cuarentena(self, lote_id: str, motivo: str, cantidad: float, usuario_id: int) -> tuple:
         """
         Mueve una cantidad específica de un lote de insumo al estado CUARENTENA.
         Usa estados en minúscula.
@@ -810,6 +810,23 @@ class InventarioController(BaseController):
             result = self.inventario_model.update(lote_id, update_data, 'id_lote')
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+            
+            from app.controllers.control_calidad_insumo_controller import ControlCalidadInsumoController
+            control_calidad_controller = ControlCalidadInsumoController()
+            # Crear registro de control de calidad
+            registro_cc_result, _ = control_calidad_controller.crear_registro_control_calidad(
+                lote_id=lote_id,
+                usuario_id=usuario_id,
+                decision='EN_CUARENTENA',
+                comentarios=motivo,
+                orden_compra_id=None
+            )
+
+            if not registro_cc_result.get('success'):
+                # Idealmente, aquí se revertiría la actualización del lote.
+                # Por ahora, devolvemos un error para notificar el fallo.
+                logger.error(f"El lote {lote_id} se puso en cuarentena, pero falló la creación del registro de C.C.: {registro_cc_result.get('error')}")
+                return self.error_response("El lote se actualizó, pero no se pudo crear el registro de control de calidad.", 500)
 
             # Actualizar el stock consolidado del insumo
             self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
@@ -837,9 +854,6 @@ class InventarioController(BaseController):
             cantidad_actual_disponible = float(lote.get('cantidad_actual') or 0)
             cantidad_actual_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
             # --- FIN DE LA CORRECCIÓN ---
-
-            if lote.get('estado') != 'cuarentena':
-                return self.error_response(f"El lote no está en 'cuarentena'.", 400)
 
             if cantidad_a_liberar <= 0:
                  return self.error_response("La cantidad a liberar debe ser un número positivo.", 400)

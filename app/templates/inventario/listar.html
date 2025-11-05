@@ -141,7 +141,10 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-warning">Confirmar Cuarentena</button>
+                    <button type="submit" class="btn btn-warning">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        Confirmar Cuarentena
+                    </button>
                 </div>
             </form>
         </div>
@@ -174,7 +177,10 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Confirmar Liberación</button>
+                    <button type="submit" class="btn btn-success">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        Confirmar Liberación
+                    </button>
                 </div>
             </form>
         </div>
@@ -267,7 +273,25 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     });
+    // --- Lógica para mostrar spinner en el envío de formularios ---
+    function handleFormSubmit(formId) {
+        const form = document.getElementById(formId);
+        if (form) {
+            form.addEventListener('submit', function() {
+                const submitButton = form.querySelector('button[type="submit"]');
+                const spinner = submitButton.querySelector('.spinner-border');
 
+                // Deshabilitar botón y mostrar spinner
+                submitButton.disabled = true;
+                if (spinner) {
+                    spinner.classList.remove('d-none');
+                }
+            });
+        }
+    }
+
+    handleFormSubmit('formCuarentena');
+    handleFormSubmit('formLiberar');
 });
 </script>
 {% endblock %}

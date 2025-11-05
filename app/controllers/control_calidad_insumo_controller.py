@@ -223,3 +223,25 @@ class ControlCalidadInsumoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error crítico al verificar y cerrar la OC {orden_compra_id}: {e}", exc_info=True)
+
+    def crear_registro_control_calidad(self, lote_id: str, usuario_id: int, decision: str, comentarios: str, orden_compra_id: int = None, foto_url: str = None) -> tuple:
+        """
+        Crea un registro en la tabla de control de calidad de insumos.
+        """
+        try:
+            registro_data = {
+                'lote_insumo_id': lote_id,
+                'orden_compra_id': orden_compra_id,
+                'usuario_supervisor_id': usuario_id,
+                'decision_final': decision.upper().replace(' ', '_'),
+                'comentarios': comentarios,
+                'foto_url': foto_url
+            }
+            resultado = self.model.create_registro(registro_data)
+            if resultado.get('success'):
+                return self.success_response(data=resultado.get('data'), message="Registro de control de calidad creado con éxito.")
+            else:
+                return self.error_response(resultado.get('error'), 500)
+        except Exception as e:
+            logger.error(f"Error crítico al crear registro de control de calidad para el lote {lote_id}: {e}", exc_info=True)
+            return self.error_response('Error interno del servidor.', 500)

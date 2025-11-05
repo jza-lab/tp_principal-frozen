@@ -1,3 +1,5 @@
+from app.controllers.base_controller import BaseController
+from app.models.trazabilidad import TrazabilidadModel
 from app.models.orden_produccion import OrdenProduccionModel
 from app.models.reserva_insumo import ReservaInsumoModel
 from app.models.inventario import InventarioModel
@@ -7,8 +9,14 @@ from app.models.cliente import ClienteModel
 from app.models.proveedor import ProveedorModel
 from app.models.reserva_producto import ReservaProductoModel
 
-class TrazabilidadController:
+import logging
+
+logger = logging.getLogger(__name__)
+
+class TrazabilidadController(BaseController):
     def __init__(self):
+        super().__init__()
+        self.trazabilidad_model = TrazabilidadModel()
         self.orden_produccion_model = OrdenProduccionModel()
         self.reserva_insumo_model = ReservaInsumoModel()
         self.inventario_model = InventarioModel()
@@ -17,7 +25,7 @@ class TrazabilidadController:
         self.pedido_model = PedidoModel()
         self.cliente_model = ClienteModel()
         self.proveedor_model = ProveedorModel()
-
+    
     def get_trazabilidad_orden_produccion(self, orden_produccion_id):
         try:
             # 1. Obtener la orden de producción principal
@@ -108,3 +116,28 @@ class TrazabilidadController:
             import logging
             logging.error(f"Error en get_trazabilidad_orden_produccion: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def obtener_datos_trazabilidad(self, tipo_entidad, id_entidad):
+        """
+        Endpoint unificado para obtener todos los datos de trazabilidad 
+        para una entidad específica (lote_insumo, lote_producto, etc.).
+        El modelo se encarga de construir toda la data necesaria.
+        """
+        try:
+            data = None
+            if tipo_entidad == 'lote_insumo':
+                data = self.trazabilidad_model.obtener_trazabilidad_completa_lote_insumo(id_entidad)
+            elif tipo_entidad == 'lote_producto':
+                data = self.trazabilidad_model.obtener_trazabilidad_completa_lote_producto(id_entidad)
+            elif tipo_entidad == 'orden_produccion':
+                data = self.trazabilidad_model.obtener_trazabilidad_completa_orden_produccion(id_entidad)
+            # Se pueden agregar más entidades en el futuro (pedido, orden_compra, etc.)
+
+            if data:
+                return {"success": True, "data": data}, 200
+            else:
+                return {"success": False, "error": f"No se encontraron datos de trazabilidad para {tipo_entidad} con ID {id_entidad}."}, 404
+
+        except Exception as e:
+            logger.error(f"Error en trazabilidad para {tipo_entidad} {id_entidad}: {e}", exc_info=True)
+            return {"success": False, "error": f"Error interno del servidor: {str(e)}"}, 500

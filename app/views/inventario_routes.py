@@ -115,18 +115,19 @@ def detalle_lote(id_lote):
 
 
 @inventario_view_bp.route('/lote/<id_lote>/cuarentena', methods=['POST'])
-##@jwt_required()
-##@permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
+@jwt_required()
+@permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
 def poner_en_cuarentena(id_lote):
     controller = InventarioController() # <-- AÑADIDO AQUÍ
     try:
         motivo = request.form.get('motivo_cuarentena')
         cantidad = float(request.form.get('cantidad_cuarentena'))
+        usuario_id = get_jwt_identity()
     except (TypeError, ValueError):
         flash('La cantidad debe ser un número válido.', 'danger')
         return redirect(url_for('inventario_view.listar_lotes'))
 
-    response, status_code = controller.poner_lote_en_cuarentena(id_lote, motivo, cantidad)
+    response, status_code = controller.poner_lote_en_cuarentena(id_lote, motivo, cantidad, usuario_id)
 
     if response.get('success'):
         flash(response.get('message', 'Lote en cuarentena.'), 'success')

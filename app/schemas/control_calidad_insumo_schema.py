@@ -6,7 +6,7 @@ class ControlCalidadInsumoSchema(Schema):
     """
     id = fields.Int(dump_only=True)
     lote_insumo_id = fields.UUID(required=True, error_messages={"required": "El ID del lote de insumo es obligatorio."})
-    orden_compra_id = fields.Int(required=True, error_messages={"required": "El ID de la orden de compra es obligatorio."})
+    orden_compra_id = fields.Int(required=False, allow_none=True)
     usuario_supervisor_id = fields.Int(required=True, error_messages={"required": "El ID del supervisor es obligatorio."})
     
     resultado_inspeccion = fields.Str(allow_none=True)
