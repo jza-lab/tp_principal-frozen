@@ -1495,7 +1495,15 @@ class PlanificacionController(BaseController):
             # 3. Procesamiento en Memoria
             # Filtrar OPs por estado para diferentes secciones de la UI
             ops_pendientes = [op for op in todas_las_ops if op['estado'] == 'PENDIENTE']
-            ops_planificadas = [op for op in todas_las_ops if op['estado'] in ['EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD']]
+            
+            estados_planificados_validos = {
+                'EN ESPERA', 'EN_ESPERA',
+                'LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR',
+                'EN_LINEA_1', 'EN_LINEA_2',
+                'EN_EMPAQUETADO',
+                'CONTROL_DE_CALIDAD'
+            }
+            ops_planificadas = [op for op in todas_las_ops if op.get('estado') in estados_planificados_validos]
             
             # --- MPS Data (usa una versión simplificada de la lógica original) ---
             response_mps, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias)
