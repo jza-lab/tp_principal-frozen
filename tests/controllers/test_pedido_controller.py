@@ -48,7 +48,7 @@ class TestPedidoController:
         assert status_code == 201
         assert response['success']
 
-    @patch('app.controllers.pedido_controller.OrdenProduccionController')
+    @patch('app.controllers.orden_produccion_controller.OrdenProduccionController')
     def test_crear_pedido_sin_stock_inicia_produccion(self, MockOPController, pedido_controller, mock_pedido_dependencies):
         usuario_id = 1
         form_data = {'id_cliente': 1, 'items': [{'producto_id': 100, 'cantidad': 30}]}
@@ -78,10 +78,11 @@ class TestPedidoController:
     def test_despachar_pedido(self, pedido_controller, mock_pedido_dependencies):
         pedido_id = 1
         form_data = {'conductor_nombre': 'Juan Perez', 'conductor_dni': '12345678', 'vehiculo_patente': 'AB123CD', 'conductor_telefono': '1122334455'}
-        mock_pedido_dependencies['pedido_model'].get_one_with_items_and_op_status.return_value = {'success': True, 'data': {'estado': 'LISTO_PARA_ENTREGA'}}
-        mock_pedido_dependencies['pedido_model'].find_by_id.return_value = {'success': True, 'data': {'id': 1}}
+        mock_pedido_dependencies['pedido_model'].get_one_with_items_and_op_status.return_value = {'success': True, 'data': {'estado': 'LISTO_PARA_ENTREGA', 'id_pedido': 1}}
+        mock_pedido_dependencies['pedido_model'].find_by_id.return_value = {'success': True, 'data': {'id_pedido': 1}}
         mock_pedido_dependencies['lote_controller'].despachar_stock_reservado_por_pedido.return_value = {'success': True}
         with patch('app.controllers.pedido_controller.DespachoModel') as MockDespachoModel:
+            pedido_controller.despacho = MockDespachoModel.return_value
             MockDespachoModel.return_value.create.return_value = {'success': True}
             mock_pedido_dependencies['pedido_model'].update.return_value = {'success': True}
             response, status_code = pedido_controller.despachar_pedido(pedido_id, form_data)

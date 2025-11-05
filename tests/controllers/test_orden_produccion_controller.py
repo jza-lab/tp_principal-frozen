@@ -70,7 +70,7 @@ class TestOrdenProduccionController:
         mock_op_dependencies['pedido_model'].find_all_items.return_value = {'success': True, 'data': []}
         mock_op_dependencies['lote_controller'].crear_lote_desde_formulario.return_value = ({'success': True, 'data': {'numero_lote': 'LOTE-50'}}, 201)
         mock_op_dependencies['op_model'].cambiar_estado.return_value = {'success': True}
-        with patch('app.controllers.orden_produccion_controller.PedidoController'):
+        with patch('app.controllers.pedido_controller.PedidoController'):
             response, status_code = op_controller.cambiar_estado_orden(orden_id, 'COMPLETADA')
             assert status_code == 200
             assert response['success']

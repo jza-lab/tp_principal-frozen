@@ -31,7 +31,7 @@ def producto_controller(mock_producto_dependencies):
 class TestProductoController:
 
     def test_crear_producto_exitoso(self, producto_controller, mock_producto_dependencies):
-        form_data = {'nombre': 'Torta', 'unidad_medida': 'un', 'categoria': 'Pasteleria', 'precio_unitario': 100, 'stock_min_produccion': 10, 'cantidad_maxima_x_pedido': 5}
+        form_data = {'nombre': 'Torta', 'codigo': 'PROD-TORT-0001', 'unidad_medida': 'un', 'categoria': 'Pasteleria', 'precio_unitario': 100, 'stock_min_produccion': 10, 'cantidad_maxima_x_pedido': 5, 'iva': True}
         mock_producto_dependencies['producto_model'].find_by_codigo.return_value = {'success': False}
         mock_producto_dependencies['producto_model'].create.return_value = {'success': True, 'data': {'id': 1, 'nombre': 'Torta'}}
         mock_producto_dependencies['receta_model'].create.return_value = {'success': True, 'data': {'id': 1}}
@@ -40,7 +40,7 @@ class TestProductoController:
         assert response['success']
 
     def test_crear_producto_codigo_duplicado(self, producto_controller, mock_producto_dependencies):
-        form_data = {'nombre': 'Muffin', 'codigo': 'PROD-MUFF-0001', 'unidad_medida': 'un', 'categoria': 'Pasteleria', 'precio_unitario': 50, 'stock_min_produccion': 20, 'cantidad_maxima_x_pedido': 10}
+        form_data = {'nombre': 'Muffin', 'codigo': 'PROD-MUFF-0001', 'unidad_medida': 'un', 'categoria': 'Pasteleria', 'precio_unitario': 50, 'stock_min_produccion': 20, 'cantidad_maxima_x_pedido': 10, 'iva': True}
         mock_producto_dependencies['producto_model'].find_by_codigo.return_value = {'success': True, 'data': {'id': 2}}
         response, status_code = producto_controller.crear_producto(form_data)
         assert status_code == 409

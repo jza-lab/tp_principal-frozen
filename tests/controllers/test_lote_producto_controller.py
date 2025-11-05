@@ -32,18 +32,22 @@ def lote_controller(mock_lote_dependencies):
 class TestLoteProductoController:
 
     def test_crear_lote_exitoso(self, lote_controller, mock_lote_dependencies):
-        # CORRECCIÓN: Añadir todos los campos requeridos por el schema, como fecha_produccion
+        from datetime import timedelta
+        fecha_produccion = date.today()
+        fecha_vencimiento = fecha_produccion + timedelta(days=90)
         form_data = {
             'producto_id': 1,
             'numero_lote': 'LOTE-001',
             'cantidad_inicial': 100,
-            'fecha_produccion': date.today().isoformat()
+            'cantidad_actual': 100,
+            'fecha_produccion': fecha_produccion.isoformat(),
+            'fecha_vencimiento': fecha_vencimiento.isoformat()
         }
         mock_lote_dependencies['producto_model'].find_by_id.return_value = {'success': True, 'data': {'id': 1}}
         mock_lote_dependencies['lote_model'].find_by_numero_lote.return_value = {'success': False}
         lote_creado_mock = {'id_lote': 1, **form_data}
         mock_lote_dependencies['lote_model'].create.return_value = {'success': True, 'data': lote_creado_mock}
-        response, status_code = lote_controller.crear_lote(form_data)
+        (response, _), status_code = lote_controller.crear_lote(form_data)
         assert status_code == 201
         assert response['success']
 

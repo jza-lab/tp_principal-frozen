@@ -63,11 +63,11 @@ class TestOrdenCompraController:
         orden_id = 1
         with app.test_request_context(json={'motivo': 'Test cancellation'}):
             oc_controller.model.find_by_id.return_value = {'success': True, 'data': {'id': orden_id, 'estado': 'PENDIENTE'}}
-            # CORRECCIÓN: Asegurarse de que el mock devuelva datos para get_json()
             oc_controller.model.update.return_value = {'success': True, 'data': {}}
-            response, status_code = oc_controller.cancelar_orden(orden_id)
-            assert status_code == 200
-            assert response.get_json()['success']
+            response = oc_controller.cancelar_orden(orden_id)
+            assert response.status_code == 200
+            json_data = response.get_json()
+            assert json_data['success']
 
     def test_cancelar_orden_completada_falla(self, app: Flask, oc_controller):
         orden_id = 1
