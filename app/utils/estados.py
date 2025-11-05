@@ -65,50 +65,61 @@ OV_FILTROS_UI = [
 # --- Definiciones de constantes (string) ---
 OP_PENDIENTE = 'PENDIENTE'
 OP_EN_ESPERA = 'EN_ESPERA'
-OP_APROBADA = 'APROBADA'
-OP_EN_PRODUCCION = 'EN_PRODUCCION'
+OP_LISTA_PARA_PRODUCIR = 'LISTA_PARA_PRODUCIR' # Estado nuevo para el Kanban
+OP_EN_PROCESO = 'EN_PROCESO'               # Estado nuevo para el Kanban
 OP_CONTROL_CALIDAD = 'CONTROL_DE_CALIDAD'
 OP_COMPLETADA = 'COMPLETADA'
 OP_CANCELADA = 'CANCELADA'
 OP_RECHAZADA = 'RECHAZADA'
 OP_CONSOLIDADA = 'CONSOLIDADA'
 OP_PLANIFICADA = 'PLANIFICADA'
+
 OP_EN_LINEA_1 = 'EN_LINEA_1'
 OP_EN_LINEA_2 = 'EN_LINEA_2'
 OP_EN_EMPAQUETADO = 'EN_EMPAQUETADO'
+OP_APROBADA = 'APROBADA' # Reemplazado por LISTA_PARA_PRODUCIR
+OP_EN_PRODUCCION = 'EN_PRODUCCION' # Reemplazado por EN_PROCESO
+
 
 # --- Mapeo de cadena a entero ---
 OP_MAP_STRING_TO_INT = {
     OP_PENDIENTE: 10,
     OP_EN_ESPERA: 20,
-    OP_APROBADA: 30,
-    OP_PLANIFICADA: 40,
-    OP_EN_PRODUCCION: 50,
+    OP_PLANIFICADA: 30,
+    OP_LISTA_PARA_PRODUCIR: 40,
+    OP_EN_PROCESO: 50,
     OP_CONTROL_CALIDAD: 60,
     OP_COMPLETADA: 70,
     OP_CANCELADA: -10,
     OP_RECHAZADA: -20,
     OP_CONSOLIDADA: -30,
-    OP_EN_LINEA_1: 80,
-    OP_EN_LINEA_2: 90,
-    OP_EN_EMPAQUETADO: 100,
+
+    # Deprecated mappings
+    OP_APROBADA: 40, # Mapea al mismo que LISTA_PARA_PRODUCIR por compatibilidad
+    OP_EN_PRODUCCION: 50, # Mapea al mismo que EN_PROCESO
+    OP_EN_LINEA_1: 51,
+    OP_EN_LINEA_2: 52,
+    OP_EN_EMPAQUETADO: 55,
 }
 
-# --- Lista para la UI de filtros (Orden y nombres corregidos según 1.png) ---
+# --- Diccionario para la UI de columnas del Kanban ---
+OP_KANBAN_COLUMNAS = {
+    OP_EN_ESPERA: 'En Espera',
+    OP_LISTA_PARA_PRODUCIR: 'Lista para Producir',
+    OP_EN_PROCESO: 'En Proceso',
+    OP_CONTROL_CALIDAD: 'Control de Calidad',
+    OP_COMPLETADA: 'Completada',
+}
+
+# --- Lista para la UI de filtros (GENERAL) ---
 OP_FILTROS_UI = [
     (OP_PENDIENTE, 'Pendiente'),
     (OP_EN_ESPERA, 'En Espera'),
-    (OP_APROBADA, 'Aprobada'),
-    (OP_EN_PRODUCCION, 'En Produccion'),
+    (OP_LISTA_PARA_PRODUCIR, 'Lista para Producir'),
+    (OP_EN_PROCESO, 'En Proceso'),
     (OP_CONTROL_CALIDAD, 'Control De Calidad'),
     (OP_COMPLETADA, 'Completada'),
     (OP_CANCELADA, 'Cancelada'),
-    (OP_RECHAZADA, 'Rechazada'),
-    (OP_CONSOLIDADA, 'Consolidada'),
-    (OP_PLANIFICADA, 'Planificada'),
-    (OP_EN_LINEA_1, 'En Linea 1'),
-    (OP_EN_LINEA_2, 'En Linea 2'),
-    (OP_EN_EMPAQUETADO, 'En Empaquetado')
 ]
 
 
@@ -180,3 +191,13 @@ def traducir_a_cadena(estado_int, tipo_orden):
         'OC': {v: k for k, v in OC_MAP_STRING_TO_INT.items()},
     }
     return REVERSE_MAPS.get(tipo_orden, {}).get(estado_int)
+
+ESTADOS_INSPECCION = [
+    "Paquete Roto",
+    "Paquete Dañado",
+    "Contaminación Visual",
+    "Olor Extraño",
+    "Textura Anómala",
+    "Error de Etiquetado",
+    "Otro"
+]

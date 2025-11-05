@@ -1,0 +1,147 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Detalle de Alerta de Riesgo {{ alerta.codigo }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="card">
+        <div class="card-header bg-danger text-white">
+            <h4 class="mb-0">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                Gestión de Alerta de Riesgo: {{ alerta.codigo }}
+            </h4>
+        </div>
+        <div class="card-body">
+            <p class="card-text">
+                <strong>Origen:</strong> {{ alerta.origen_tipo_entidad.replace('_', ' ').title() }} 
+                (ID: <a href="{{ url_for('inventario.detalle_lote', id=alerta.origen_id_entidad) if 'lote_insumo' in alerta.origen_tipo_entidad else url_for('lotes_productos.detalle_lote', id=alerta.origen_id_entidad) }}">{{ alerta.origen_id_entidad[:8] }}...</a>)
+            </p>
+            <p class="card-text"><strong>Estado:</strong> 
+                <span class="badge {% if alerta.estado == 'Borrador' %}bg-warning{% elif alerta.estado == 'Activa' %}bg-success{% else %}bg-secondary{% endif %}">{{ alerta.estado }}</span>
+            </p>
+            <hr>
+
+            {% if alerta.estado == 'Borrador' %}
+            <form id="form-gestion-riesgo" action="{{ url_for('admin_riesgos.ejecutar_accion_riesgo', codigo_alerta=alerta.codigo) }}" method="POST">
+                
+                <!-- Sección 1: Motivo y Comunicación -->
+                <div class="mb-4">
+                    <h5><i class="bi bi-journal-text me-2"></i>Motivo y Comunicación</h5>
+                    <div class="form-group mb-2">
+                        <label for="motivos"><strong>Motivo de la Alerta (obligatorio):</strong></label>
+                        <select id="motivos" name="motivos" class="form-select" required>
+                            <option value="Contaminación microbiológica">Contaminación microbiológica</option>
+                            <option value="Alérgeno no declarado">Alérgeno no declarado</option>
+                            <option value="Fallo de proveedor reportado">Fallo de proveedor reportado</option>
+                            <option value="Defecto de calidad interno">Defecto de calidad interno</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="detalle_motivo">Detalle adicional:</label>
+                        <textarea id="detalle_motivo" name="detalle_motivo" class="form-control" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <!-- Sección 2: Entidades Afectadas -->
+                <div class="mb-4">
+                    <h5><i class="bi bi-diagram-3 me-2"></i>Entidades Afectadas</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th><input type="checkbox" id="seleccionar-todos"></th>
+                                    <th>Pedido</th>
+                                    <th>Cliente</th>
+                                    <th>Fecha Despacho</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% set pedidos = alerta.afectados_detalle.pedidos %}
+                                {% if pedidos %}
+                                    {% for pedido in pedidos %}
+                                    <tr>
+                                        <td><input type="checkbox" name="pedido_ids" value="{{ pedido.id }}" class="pedido-checkbox"></td>
+                                        <td><a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}">{{ pedido.codigo }}</a></td>
+                                        <td>{{ pedido.cliente_razon_social }}</td>
+                                        <td>{{ pedido.fecha_despacho or 'N/A' }}</td>
+                                        <td><span class="badge bg-secondary">{{ pedido.estado }}</span></td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr><td colspan="5" class="text-center">No hay pedidos afectados directamente.</td></tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sección 3: Opciones de Respuesta -->
+                <div class="mb-4">
+                    <h5><i class="bi bi-lightning-charge me-2"></i>Acciones de Respuesta para Pedidos Seleccionados</h5>
+                    <p class="text-muted">Seleccione una acción a ejecutar sobre los pedidos marcados en la tabla de arriba.</p>
+                    <div class="d-grid gap-2 d-md-flex">
+                        <button type="submit" name="accion" value="nota_credito" class="btn btn-primary">
+                            <i class="bi bi-receipt me-1"></i> Enviar Nota de Crédito por Items Afectados
+                        </button>
+                        <!-- Otros botones de acción pueden ir aquí -->
+                    </div>
+                </div>
+
+            </form>
+            {% else %}
+            <!-- Sección 4: Resultado de la Acción -->
+            <div class="mt-4">
+                <h5><i class="bi bi-check-circle-fill me-2"></i>Alerta Procesada y Activa</h5>
+                <p><strong>Resolución seleccionada:</strong> <span class="badge bg-info">{{ alerta.resolucion_seleccionada.replace('_', ' ') | title }}</span></p>
+                {% if alerta.notas_de_credito %}
+                <h6>Notas de Crédito Generadas</h6>
+                <div class="list-group">
+                    {% for nc in alerta.notas_de_credito %}
+                    <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>NC-{{ nc.id }}</strong> para Pedido {{ nc.pedido_codigo }}
+                            <small class="d-block text-muted">{{ nc.motivo }}</small>
+                        </div>
+                        <span class="badge bg-success rounded-pill">$ {{ nc.monto }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-secondary">No se generaron documentos para esta alerta.</div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const seleccionarTodos = document.getElementById('seleccionar-todos');
+    const checkboxes = document.querySelectorAll('.pedido-checkbox');
+
+    if (seleccionarTodos) {
+        seleccionarTodos.addEventListener('change', function() {
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+        });
+    }
+
+    const form = document.getElementById('form-gestion-riesgo');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const checked = document.querySelectorAll('.pedido-checkbox:checked').length;
+            if (checked === 0) {
+                e.preventDefault();
+                alert('Debe seleccionar al menos un pedido para ejecutar una acción.');
+            }
+        });
+    }
+});
+</script>
+
+{% endblock %}

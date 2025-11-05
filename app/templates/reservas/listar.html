@@ -17,6 +17,14 @@
 
 <div class="card">
     <div class="card-body">
+        <div class="d-flex justify-content-end mb-3">
+            <div class="btn-group" role="group" aria-label="Filtros de tipo">
+                <button type="button" class="btn btn-sm btn-outline-secondary active" data-filter="todos">Todos</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-filter="PRODUCTO">Productos</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-filter="INSUMO">Insumos</button>
+            </div>
+        </div>
+
         <div class="table-responsive">
             <table class="table table-hover align-middle">
                 <thead class="table-light">
@@ -32,7 +40,7 @@
                 </thead>
                 <tbody>
                     {% for reserva in reservas %}
-                    <tr>
+                    <tr data-tipo="{{ reserva.tipo }}">
                         <td>
                             {% if reserva.tipo == 'PRODUCTO' %}
                                 <span class="badge bg-primary">Producto</span>
@@ -52,7 +60,7 @@
                         </td>
                     </tr>
                     {% else %}
-                    <tr>
+                    <tr id="no-results-row">
                         <td colspan="7" class="text-center text-muted py-4">No se encontraron registros de reservas.</td>
                     </tr>
                     {% endfor %}
@@ -61,4 +69,57 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const filterButtons = document.querySelectorAll('.btn-group[role="group"] .btn');
+    const tableBody = document.querySelector('table tbody');
+    const allRows = Array.from(tableBody.querySelectorAll('tr'));
+    const dataRows = allRows.filter(row => row.hasAttribute('data-tipo'));
+    const noResultsRow = document.getElementById('no-results-row');
+
+    function filterTable() {
+        const activeFilter = document.querySelector('.btn-group[role="group"] .btn.active').getAttribute('data-filter');
+        let visibleRowCount = 0;
+
+        dataRows.forEach(row => {
+            const rowType = row.getAttribute('data-tipo').toUpperCase();
+            if (activeFilter === 'todos' || rowType === activeFilter) {
+                row.style.display = '';
+                visibleRowCount++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+
+        if (noResultsRow) {
+            if (visibleRowCount === 0 && dataRows.length > 0) {
+                 // Si hay filas de datos pero ninguna coincide con el filtro, muestra un mensaje dinámico
+                noResultsRow.innerHTML = `<td colspan="7" class="text-center text-muted py-4">No se encontraron registros para el tipo '${activeFilter}'.</td>`;
+                noResultsRow.style.display = '';
+            } else if (dataRows.length === 0) {
+                // Si no hay datos desde el servidor, muestra el mensaje original
+                noResultsRow.innerHTML = `<td colspan="7" class="text-center text-muted py-4">No se encontraron registros de reservas.</td>`;
+                noResultsRow.style.display = '';
+            }
+            else {
+                noResultsRow.style.display = 'none';
+            }
+        }
+    }
+
+    filterButtons.forEach(button => {
+        button.addEventListener('click', function () {
+            filterButtons.forEach(btn => btn.classList.remove('active'));
+            this.classList.add('active');
+            filterTable();
+        });
+    });
+
+    // Initial filter call in case there are no results from the start
+    filterTable();
+});
+</script>
 {% endblock %}

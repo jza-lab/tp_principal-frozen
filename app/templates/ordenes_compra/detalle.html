@@ -263,7 +263,7 @@
         <div class="modal fade" id="modal-inspeccion-accion" tabindex="-1" aria-labelledby="modalInspeccionLabel" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
-                    <form id="form-inspeccion-accion" enctype="multipart/form-data">
+                    <form id="form-inspeccion-accion" method="POST" enctype="multipart/form-data">
                         <div class="modal-header">
                             <h5 class="modal-title" id="modalInspeccionLabel"></h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -281,8 +281,17 @@
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label for="modal-comentarios" class="form-label">Comentarios (Requerido)</label>
-                                <textarea class="form-control" id="modal-comentarios" name="comentarios" rows="3" required></textarea>
+                                <label for="modal-resultado-inspeccion" class="form-label">Resultado de Inspección (Requerido)</label>
+                                <select class="form-select" id="modal-resultado-inspeccion" name="resultado_inspeccion" required>
+                                    <option value="" selected disabled>Seleccione un resultado...</option>
+                                    {% for estado in estados_inspeccion %}
+                                    <option value="{{ estado }}">{{ estado }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="modal-comentarios" class="form-label">Comentarios</label>
+                                <textarea class="form-control" id="modal-comentarios" name="comentarios" rows="3"></textarea>
                             </div>
                             <div class="mb-3">
                                 <label for="modal-foto" class="form-label">Foto (Opcional)</label>

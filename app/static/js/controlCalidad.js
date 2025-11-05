@@ -18,13 +18,13 @@ document.addEventListener('DOMContentLoaded', function () {
         button.addEventListener('click', function (event) {
             const action = this.dataset.action;
             const loteId = this.dataset.loteId;
-            const loteNombre = this.dataset.loteNombre;
-            const loteCard = document.querySelector(`.lote-card[data-lote-id='${loteId}']`);
-            const cantidadInicial = loteCard.querySelector('small').textContent.split('| Cantidad: ')[1].split(' ')[0];
 
             if (action === 'aceptar') {
-                realizarAccion(loteId, action);
+                realizarAccion(loteId, action, null, this);
             } else {
+                const loteNombre = this.dataset.loteNombre;
+                const loteCard = document.querySelector(`.lote-card[data-lote-id='${loteId}']`);
+                const cantidadInicial = loteCard.querySelector('small').textContent.split('| Cantidad: ')[1].split(' ')[0];
                 configurarModal(loteId, action, loteNombre, cantidadInicial);
             }
         });
@@ -34,12 +34,13 @@ document.addEventListener('DOMContentLoaded', function () {
         event.preventDefault();
         const loteId = document.getElementById('modal-lote-id').value;
         const action = document.getElementById('modal-action').value;
-        realizarAccion(loteId, action, new FormData(form));
+        const submitButton = document.getElementById('modal-btn-confirmar');
+        realizarAccion(loteId, action, new FormData(form), submitButton);
         modal.hide();
     });
 
     btnFinalizar.addEventListener('click', function () {
-        finalizarInspeccion();
+        finalizarInspeccion(this);
     });
 
     function configurarModal(loteId, action, loteNombre, cantidadDisponible) {
@@ -47,6 +48,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const modalBtnConfirmar = document.getElementById('modal-btn-confirmar');
         const modalCantidadInput = document.getElementById('modal-cantidad');
         const modalCantidadDisponible = document.getElementById('modal-cantidad-disponible');
+        const selectResultado = document.getElementById('modal-resultado-inspeccion');
+        const textareaComentarios = document.getElementById('modal-comentarios');
         
         document.getElementById('modal-lote-id').value = loteId;
         document.getElementById('modal-action').value = action;
@@ -56,6 +59,17 @@ document.addEventListener('DOMContentLoaded', function () {
         modalCantidadInput.value = cantidadDisponible;
         modalCantidadDisponible.textContent = cantidadDisponible;
         form.reset();
+
+        // Lógica de validación condicional
+        selectResultado.addEventListener('change', function() {
+            if (this.value === 'Otro') {
+                textareaComentarios.required = true;
+                textareaComentarios.previousElementSibling.textContent = 'Comentarios (Requerido):';
+            } else {
+                textareaComentarios.required = false;
+                textareaComentarios.previousElementSibling.textContent = 'Comentarios:';
+            }
+        });
 
         if (action === 'cuarentena') {
             modalTitle.textContent = 'Poner Lote en Cuarentena';
@@ -68,7 +82,11 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function realizarAccion(loteId, action, formData = null) {
+    async function realizarAccion(loteId, action, formData = null, btnElement) {
+        const originalBtnHTML = btnElement.innerHTML;
+        btnElement.disabled = true;
+        btnElement.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...`;
+
         const url = `/control-calidad/api/lote/${loteId}/${action}`;
         const options = {
             method: 'POST',
@@ -90,10 +108,17 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (error) {
             showNotificationModal('Error de Conexión', 'No se pudo conectar con el servidor.', 'danger');
+        } finally {
+            btnElement.disabled = false;
+            btnElement.innerHTML = originalBtnHTML;
         }
     }
 
-    async function finalizarInspeccion() {
+    async function finalizarInspeccion(btnElement) {
+        const originalBtnHTML = btnElement.innerHTML;
+        btnElement.disabled = true;
+        btnElement.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Finalizando...`;
+
         const url = `/control-calidad/api/orden/${ordenId}/finalizar`;
         try {
             const response = await fetch(url, { method: 'POST' });
@@ -106,9 +131,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 }, 2000);
             } else {
                 showNotificationModal('Error', result.error || 'No se pudo finalizar la inspección.', 'danger');
+                btnElement.disabled = false;
+                btnElement.innerHTML = originalBtnHTML;
             }
         } catch (error) {
             showNotificationModal('Error de Conexión', 'No se pudo conectar con el servidor.', 'danger');
+            btnElement.disabled = false;
+            btnElement.innerHTML = originalBtnHTML;
         }
     }
 

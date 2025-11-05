@@ -6,6 +6,7 @@ class InsumosInventarioSchema(Schema):
 
     id_lote = fields.UUID(dump_only=True)
     id_insumo = fields.UUID(required=True, error_messages={'required': 'El ID del insumo es obligatorio'})
+    orden_produccion_id = fields.Int(allow_none=True)
     id_proveedor = fields.Int(allow_none=True)
     usuario_ingreso_id = fields.Int(allow_none=True)
 

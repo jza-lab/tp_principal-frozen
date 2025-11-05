@@ -31,46 +31,6 @@ class PlanificacionController(BaseController):
         self.insumo_model = InsumoModel() # Asegúrate que esté inicializado
         self.bloqueo_capacidad_model = BloqueoCapacidadModel() # <-- Añadir esto
 
-    def obtener_ops_para_tablero(self) -> tuple:
-        """
-        Obtiene todas las OPs activas y las agrupa por estado para el tablero Kanban.
-        """
-        try:
-            # --- CORRECCIÓN DEFINITIVA ---
-            # Usamos los nombres exactos de la base de datos y solo los que corresponden al tablero.
-            estados_activos = [
-                'EN ESPERA',
-                'LISTA PARA PRODUCIR',
-                'EN PROCESO',
-                'EN_LINEA_1',
-                'EN_LINEA_2',
-                'EN_EMPAQUETADO',      # <-- NUEVO
-                'CONTROL_DE_CALIDAD',  # <-- NUEVO
-                'COMPLETADA'
-                # Añade aquí otros estados si tienes columnas para ellos, ej: 'EN ESPERA'
-            ]
-            # ----------------------------
-
-            response, _ = self.orden_produccion_controller.obtener_ordenes(
-                filtros={'estado': ('in', estados_activos)}
-            )
-
-            if not response.get('success'):
-                return self.error_response("Error al cargar las órdenes de producción.")
-
-            ordenes = response.get('data', [])
-
-            # Agrupamos las órdenes por estado usando un defaultdict
-            ordenes_por_estado = defaultdict(list)
-            for orden in ordenes:
-                ordenes_por_estado[orden['estado']].append(orden)
-
-            return self.success_response(data=dict(ordenes_por_estado))
-
-        except Exception as e:
-            logger.error(f"Error preparando datos para el tablero: {e}", exc_info=True)
-            return self.error_response(f"Error interno: {str(e)}", 500)
-
     def consolidar_ops(self, op_ids: List[int], usuario_id: int) -> tuple:
         """
         Orquesta la consolidación de OPs llamando al controlador de órdenes de producción.
@@ -324,7 +284,6 @@ class PlanificacionController(BaseController):
             return error_dict, 500
             # ----------------------
 
-
     # --- NUEVO HELPER para obtener datos OP (MODIFICADO) ---
     def _obtener_datos_op_a_planificar(self, op_ids: List[int], usuario_id: int) -> tuple: # <-- AÑADIR usuario_id
         """ Obtiene los datos de la OP (consolidada o individual). Devuelve (id, data) o (None, error_msg). """
@@ -494,6 +453,24 @@ class PlanificacionController(BaseController):
                     )
 
 
+            # --- INICIO DE LA LÓGICA DE CONSUMO DE STOCK ---
+            estados_de_consumo = ['EN_LINEA_1', 'EN_LINEA_2']
+            if estado_actual == 'LISTA PARA PRODUCIR' and nuevo_estado in estados_de_consumo:
+                logger.info(f"OP {op_id} movida a producción. Consumiendo stock de insumos...")
+                
+                # Obtener el ID del usuario actual para registrar el consumo
+                # (Asumimos que está disponible en el contexto de la petición o se pasa como argumento)
+                # Aquí usamos un valor por defecto, pero debería ser el usuario autenticado.
+                usuario_id = 1 # OJO: Reemplazar con el ID del usuario real
+                
+                consumo_result = self.inventario_controller.consumir_stock_para_op(op_actual_res['data'], usuario_id)
+                
+                if not consumo_result.get('success'):
+                    error_msg = f"No se pudo iniciar la producción por falta de stock: {consumo_result.get('error')}"
+                    logger.error(error_msg)
+                    return self.error_response(error_msg, 409) # 409 Conflict es un buen código para esto
+            # --- FIN DE LA LÓGICA DE CONSUMO DE STOCK ---
+
             # --- Ejecución del cambio de estado ---
             resultado = {}
             # Lógica existente para manejar 'COMPLETADA' u otros estados
@@ -564,8 +541,11 @@ class PlanificacionController(BaseController):
                 # ... (lógica fecha_meta_mas_proxima sin cambios) ...
                 fecha_meta_mas_proxima_actual = mps_agrupado[clave_producto]['fecha_meta_mas_proxima']
                 if fecha_meta_op_str:
-                     fecha_meta_op = date.fromisoformat(fecha_meta_op_str)
-                     if fecha_meta_mas_proxima_actual is None or fecha_meta_op < date.fromisoformat(fecha_meta_mas_proxima_actual):
+                     # El string puede venir como 'YYYY-MM-DD' o 'YYYY-MM-DDTHH:MM:SS...'
+                     # Al hacer split('T'), nos aseguramos de tomar solo la parte de la fecha.
+                     fecha_solo_str = fecha_meta_op_str.split('T')[0]
+                     fecha_meta_op = date.fromisoformat(fecha_solo_str)
+                     if fecha_meta_mas_proxima_actual is None or fecha_meta_op < date.fromisoformat(fecha_meta_mas_proxima_actual.split('T')[0]):
                           mps_agrupado[clave_producto]['fecha_meta_mas_proxima'] = fecha_meta_op_str
 
 
@@ -655,7 +635,7 @@ class PlanificacionController(BaseController):
                     today = date.today()
                     t_prod_dias = data.get('sugerencia_t_prod_dias', 0)
                     t_proc_dias = data.get('sugerencia_t_proc_dias', 0)
-                    fecha_meta = date.fromisoformat(data['fecha_meta_mas_proxima'])
+                    fecha_meta = date.fromisoformat(data['fecha_meta_mas_proxima'].split('T')[0])
 
                     fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
                     fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
@@ -718,6 +698,7 @@ class PlanificacionController(BaseController):
                 ordenes_relevantes = ordenes_pre_cargadas
                 logger.debug("obtener_planificacion_semanal: Usando lista de OPs pre-cargada.")
             else:
+                ordenes_relevantes = []
                 # Bloque de fallback: si no se pasa lista, buscarla como antes
                 logger.debug("obtener_planificacion_semanal: No se pasó lista pre-cargada, buscando OPs...")
                 dias_previos_margen = 14 # Traer OPs que empezaron hasta 2 semanas antes
@@ -741,10 +722,6 @@ class PlanificacionController(BaseController):
 
                 ordenes_relevantes = response_ops.get('data', [])
 
-            if not response_ops.get('success'):
-                return self.error_response("Error al obtener OPs para cálculo semanal.", 500)
-
-            ordenes_relevantes = response_ops.get('data', [])
             if not ordenes_relevantes: # Si no hay OPs, devolver vacío
                  resultado_vacio = { 'ops_visibles_por_dia': {}, 'inicio_semana': start_of_week.isoformat(), 'fin_semana': end_of_week.isoformat(), 'semana_actual_str': week_str }
                  return self.success_response(data=resultado_vacio)
@@ -1104,7 +1081,7 @@ class PlanificacionController(BaseController):
                     ops_planificadas_exitosamente.extend(op_codigos)
 
                     # Verificar si se generó una OC (respuesta de aprobar_orden)
-                    if res_planif_dict.get('data', {}).get('oc_generada'):
+                    if res_planif_dict and res_planif_dict.get('data') and res_planif_dict['data'].get('oc_generada'):
                         oc_codigo = res_planif_dict['data'].get('oc_codigo', 'N/A')
                         logger.info(f"[AutoPlan] -> Se generó OC {oc_codigo} para OPs {op_codigos}.")
                         ops_con_oc_generada.append({'ops': op_codigos, 'oc': oc_codigo})
@@ -1142,7 +1119,7 @@ class PlanificacionController(BaseController):
 
                             # Re-chequear si esta aprobación generó una OC
                             # (La función aprobar_orden dentro de _ejecutar_aprobacion_final maneja esto)
-                            if res_aprob_dict.get('data', {}).get('oc_generada'):
+                            if res_aprob_dict and res_aprob_dict.get('data') and res_aprob_dict['data'].get('oc_generada'):
                                 oc_codigo = res_aprob_dict['data'].get('oc_codigo', 'N/A')
                                 logger.info(f"[AutoPlan] -> Se generó OC {oc_codigo} para OPs {op_codigos}.")
                                 ops_con_oc_generada.append({'ops': op_codigos, 'oc': oc_codigo})
@@ -1488,3 +1465,82 @@ class PlanificacionController(BaseController):
                 return self.error_response(f"Error al eliminar: {result.get('error')}", 500)
         except Exception as e:
             return self.error_response(f"Error: {str(e)}", 500)
+
+    def obtener_datos_para_vista_planificacion(self, week_str: str, horizonte_dias: int, current_user_id: int, current_user_rol: str) -> tuple:
+        """
+        Método orquestador que obtiene y procesa todos los datos necesarios para la
+        vista de planificación de forma optimizada.
+        """
+        try:
+            # 1. Determinar rango de la semana
+            if week_str:
+                try:
+                    year, week_num = map(int, week_str.split('-W'))
+                    inicio_semana = date.fromisocalendar(year, week_num, 1)
+                except ValueError:
+                    return self.error_response("Formato de semana inválido.", 400)
+            else:
+                today = date.today()
+                inicio_semana = today - timedelta(days=today.weekday())
+
+            fin_semana = inicio_semana + timedelta(days=6)
+
+            # 2. Consulta Unificada y Optimizada de Órdenes de Producción
+            response_ops, _ = self.orden_produccion_controller.obtener_ordenes_para_planificacion(inicio_semana, fin_semana, horizonte_dias)
+            if not response_ops.get('success'):
+                return self.error_response("Error al obtener las órdenes de producción.", 500)
+            
+            todas_las_ops = response_ops.get('data', [])
+
+            # 3. Procesamiento en Memoria
+            # Filtrar OPs por estado para diferentes secciones de la UI
+            ops_pendientes = [op for op in todas_las_ops if op['estado'] == 'PENDIENTE']
+            
+            estados_planificados_validos = {
+                'EN ESPERA', 'EN_ESPERA',
+                'LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR',
+                'EN_LINEA_1', 'EN_LINEA_2',
+                'EN_EMPAQUETADO',
+                'CONTROL_DE_CALIDAD'
+            }
+            ops_planificadas = [op for op in todas_las_ops if op.get('estado') in estados_planificados_validos]
+            
+            # --- MPS Data (usa una versión simplificada de la lógica original) ---
+            response_mps, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias)
+            mps_data = response_mps.get('data', {}) if response_mps.get('success') else {}
+
+
+            # --- Calendario Semanal (usa la lista ya filtrada) ---
+            response_semanal, _ = self.obtener_planificacion_semanal(week_str, ordenes_pre_cargadas=ops_planificadas)
+            data_semanal = response_semanal.get('data', {}) if response_semanal.get('success') else {}
+            ordenes_por_dia = data_semanal.get('ops_visibles_por_dia', {})
+
+            # --- CRP Data (usa la lista de OPs planificadas) ---
+            carga_calculada = self.calcular_carga_capacidad(ops_planificadas)
+            capacidad_disponible = self.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
+
+            # 4. Obtener Datos Auxiliares (Usuarios)
+            from app.controllers.usuario_controller import UsuarioController
+            usuario_controller = UsuarioController()
+            supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
+            operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
+            supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []
+            operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
+
+            # 5. Ensamblar el resultado final
+            datos_vista = {
+                'mps_data': mps_data,
+                'ordenes_por_dia': ordenes_por_dia,
+                'carga_crp': carga_calculada,
+                'capacidad_crp': capacidad_disponible,
+                'supervisores': supervisores,
+                'operarios': operarios,
+                'inicio_semana': inicio_semana.isoformat(),
+                'fin_semana': fin_semana.isoformat(),
+            }
+
+            return self.success_response(data=datos_vista)
+
+        except Exception as e:
+            logger.error(f"Error en obtener_datos_para_vista_planificacion: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)

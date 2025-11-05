@@ -123,7 +123,7 @@
                     {% endif %}
                     {% if orden.fecha_meta %}
                     <span class="text-danger fw-bold ms-3"><i class="bi bi-calendar-check-fill"></i> Meta: {{
-                        orden.fecha_meta }}</span>
+                        orden.fecha_meta|format_datetime('%d %b %Y') }}</span>
                     {% endif %}
                 </div>
 

@@ -77,8 +77,9 @@ class OrdenCompraController:
                     logger.warning(f"Error parseando item de orden de compra: {e}")
                     continue
 
-        # Calcular IVA y Total
-        iva_calculado = subtotal_calculado * 0.21
+        # Calcular IVA y Total, condicionado por un campo en el formulario
+        incluir_iva = form_data.get('incluir_iva', 'true').lower() in ['true', 'on', '1']
+        iva_calculado = subtotal_calculado * 0.21 if incluir_iva else 0.0
         total_calculado = subtotal_calculado + iva_calculado
 
         # Sobrescribir los valores en orden_data con los calculados en el backend
@@ -686,6 +687,37 @@ class OrdenCompraController:
 
             if result.get('success'):
                 logger.info(f"Orden de compra {orden_id} marcada como CERRADA.")
+
+                # --- INICIO DE LA NUEVA LÓGICA DE RESERVA DE LOTES ---
+                orden_produccion_id = orden_actual.get('orden_produccion_id')
+                codigo_oc = orden_actual.get('codigo_oc')
+
+                if orden_produccion_id and codigo_oc:
+                    logger.info(f"OC {orden_id} está vinculada a la OP {orden_produccion_id}. Procediendo a reservar lotes.")
+                    # El documento de ingreso puede tener o no el prefijo 'OC-'
+                    documento_ingreso_con_prefijo = f"OC-{codigo_oc}" if not codigo_oc.startswith('OC-') else codigo_oc
+                    documento_ingreso_sin_prefijo = codigo_oc.replace('OC-', '')
+
+                    # Buscamos lotes que coincidan con cualquiera de los dos formatos del código de OC
+                    lotes_a_reservar_res = self.inventario_controller.inventario_model.find_all(
+                        filters={'documento_ingreso': ('in', [documento_ingreso_con_prefijo, documento_ingreso_sin_prefijo])}
+                    )
+
+                    if lotes_a_reservar_res.get('success'):
+                        lotes_encontrados = lotes_a_reservar_res.get('data', [])
+                        logger.info(f"Se encontraron {len(lotes_encontrados)} lotes para reservar para la OP {orden_produccion_id}.")
+                        for lote in lotes_encontrados:
+                            update_data_lote = {
+                                'estado': 'reservado',
+                                'orden_produccion_id': orden_produccion_id
+                            }
+                            # Actualizamos cada lote individualmente
+                            self.inventario_controller.inventario_model.update(lote['id_lote'], update_data_lote, 'id_lote')
+                            logger.info(f"Lote {lote['id_lote']} reservado para la OP {orden_produccion_id}.")
+                    else:
+                        logger.error(f"Error al buscar lotes para la OC {codigo_oc}: {lotes_a_reservar_res.get('error')}")
+                # --- FIN DE LA NUEVA LÓGICA ---
+
                 # >>> PASO CRÍTICO CORREGIDO <<<
                 # Al cerrar la orden, después de que Control de Calidad ha finalizado,
                 # se reinicia la bandera para permitir nuevas OC automáticas.

@@ -13,6 +13,7 @@ from app.models.pedido import PedidoModel
 from app.models.despacho import DespachoModel
 from app.models.producto import ProductoModel
 from app.models.direccion import DireccionModel
+from app.models.nota_credito import NotaCreditoModel
 from app.schemas.direccion_schema import DireccionSchema
 from app.schemas.cliente_schema import ClienteSchema
 from app.schemas.pedido_schema import PedidoSchema
@@ -41,6 +42,7 @@ class PedidoController(BaseController):
         self.receta_model = RecetaModel()
         # --- INSTANCIAS NUEVAS ---
         self.lote_producto_controller = LoteProductoController()
+        self.nota_credito_model = NotaCreditoModel()
         # -----------------------
 
     def _consolidar_items(self, items_data: list) -> list:
@@ -100,12 +102,20 @@ class PedidoController(BaseController):
             result = self.model.get_one_with_items_and_op_status(pedido_id)
             # -----------------------------------------------
 
-            if result.get('success'):
-                return self.success_response(data=result.get('data'))
-            else:
+            if not result.get('success'):
                 error_msg = result.get('error', 'Error desconocido.')
                 status_code = 404 if "no encontrado" in str(error_msg).lower() else 500
                 return self.error_response(error_msg, status_code)
+            pedido_data = result.get('data')
+
+            # 2. Obtener y adjuntar notas de crédito
+            nc_result = self.nota_credito_model.find_all({'pedido_origen_id': pedido_id})
+            if nc_result.get('success'):
+                pedido_data['notas_credito'] = nc_result.get('data', [])
+            else:
+                pedido_data['notas_credito'] = [] # Asegurarse de que la lista exista
+
+            return self.success_response(data=pedido_data)
         except Exception as e:
             # Mantener el log de error
             logger.error(f"Error interno obteniendo detalle de pedido {pedido_id}: {e}", exc_info=True)

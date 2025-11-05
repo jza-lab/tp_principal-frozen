@@ -162,6 +162,41 @@
             </div>
         </div>
 
+        {% if pedido.notas_credito %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>Notas de Crédito Asociadas</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Código NC</th>
+                            <th>Motivo</th>
+                            <th>Monto</th>
+                            <th>Fecha</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for nc in pedido.notas_credito %}
+                        <tr>
+                            <td><strong>{{ nc.codigo_nc }}</strong></td>
+                            <td>{{ nc.motivo }}</td>
+                            <td>{{ nc.monto | formato_moneda }}</td>
+                            <td>{{ nc.fecha_emision | format_datetime }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary download-nc-pdf" data-nc-id="{{ nc.id }}">
+                                    <i class="bi bi-download"></i> PDF
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
         <div class="card mb-5">
             <div class="card-header">
                 <h5 class="mb-0">Productos en este Pedido</h5>
@@ -420,4 +455,43 @@
     }
 });
 </script>
+
+<!-- Contenido oculto para generar los PDFs de las Notas de Crédito -->
+{% if pedido.notas_credito %}
+<div style="display: none;">
+    {% for nc in pedido.notas_credito %}
+    <div id="nc-content-{{ nc.id }}" class="p-4">
+        <h3>Nota de Crédito #{{ nc.codigo_nc }}</h3>
+        <p><strong>Fecha:</strong> {{ nc.fecha_emision | format_datetime }}</p>
+        <p><strong>Cliente:</strong> {{ pedido.nombre_cliente }}</p>
+        <hr>
+        <p><strong>Motivo:</strong> {{ nc.motivo }}</p>
+        <hr>
+        <h4><strong>Monto:</strong> {{ nc.monto | formato_moneda }}</h4>
+    </div>
+    {% endfor %}
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+document.querySelectorAll('.download-nc-pdf').forEach(button => {
+    button.addEventListener('click', function() {
+        const ncId = this.getAttribute('data-nc-id');
+        const content = document.getElementById(`nc-content-${ncId}`);
+        const { jsPDF } = window.jspdf;
+
+        html2canvas(content).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+            
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`nota-credito-${ncId}.pdf`);
+        });
+    });
+});
+</script>
+{% endif %}
 {% endblock %}

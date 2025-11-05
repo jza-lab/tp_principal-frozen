@@ -7,7 +7,7 @@ from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
 from app.utils.decorators import permission_required, permission_any_of
 from datetime import datetime
-from app.utils.estados import OC_FILTROS_UI, OC_MAP_STRING_TO_INT
+from app.utils.estados import OC_FILTROS_UI, OC_MAP_STRING_TO_INT, ESTADOS_INSPECCION
 
 orden_compra_bp = Blueprint("orden_compra", __name__, url_prefix="/compras")
 
@@ -115,14 +115,11 @@ def detalle(id):
             else:
                 lotes = lotes_result.get('data', [])
 
-    # Estados estáticos para el desplegable de inspección
-    estados_inspeccion = ["Óptimo", "Paquete dañado", "Paquete roto", "Contaminación visual", "Olor extraño", "Tacto anómalo"]
-
     return render_template(
         "ordenes_compra/detalle.html", 
         orden=orden,
         lotes=lotes,
-        estados_inspeccion=estados_inspeccion,
+        estados_inspeccion=ESTADOS_INSPECCION,
         csrf_form=csrf_form
     )
 

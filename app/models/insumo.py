@@ -24,34 +24,28 @@ class InsumoModel(BaseModel):
                 record['updated_at'] = datetime.fromisoformat(record['updated_at'])
         return data
 
-    def find_all(self, filters: Optional[Dict] = None, order_by: str = 'nombre', limit: Optional[int] = None) -> Dict:
+    def find_all(self, filters: Optional[Dict] = None, order_by: str = 'nombre', limit: Optional[int] = None, select_columns: Optional[list] = None) -> Dict:
         """
-        Sobrescribe find_all para manejar la búsqueda de texto junto con otros filtros.
+        Sobrescribe find_all para manejar la búsqueda de texto y reutilizar la lógica de BaseModel.
         """
         try:
-            query_select = "*, proveedor:id_proveedor(*)"
-            query = self.db.table(self.get_table_name()).select(query_select)
-
+            # Copiar filtros para no modificar el original
             filters_copy = filters.copy() if filters else {}
-
+            
+            # Extraer el filtro de búsqueda de texto si existe
             texto_busqueda = filters_copy.pop('busqueda', None)
 
+            # Llamar a la implementación de BaseModel con los filtros restantes
+            result = super().find_all(filters=filters_copy, order_by=order_by, limit=limit, select_columns=['*', 'proveedor:id_proveedor(*)'])
+            
             if texto_busqueda:
-                busqueda_pattern = f"%{texto_busqueda}%"
-                query = query.or_(f"nombre.ilike.{busqueda_pattern},codigo_interno.ilike.{busqueda_pattern},descripcion.ilike.{busqueda_pattern}")
+                 logger.warning("La búsqueda por texto no es compatible con el filtrado por lista en InsumoModel.find_all")
 
-            for key, value in filters_copy.items():
-                if value is not None:
-                    query = query.eq(key, value)
 
-            query = query.order(order_by)
-
-            if limit:
-                query = query.limit(limit)
-
-            result = query.execute()
-
-            return {'success': True, 'data': self._convert_timestamps(result.data)}
+            if result.get('success'):
+                result['data'] = self._convert_timestamps(result['data'])
+            
+            return result
 
         except Exception as e:
             logger.error(f"Error obteniendo registros de {self.get_table_name()}: {str(e)}")

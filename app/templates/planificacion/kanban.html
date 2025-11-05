@@ -1,0 +1,389 @@
+{% extends "layouts/app_layout.html" %}
+
+{% block title %}Producción del Día{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/planificacion/kanban.css') }}">
+{% endblock %}
+
+{% block app_content %}
+
+
+<!----
+{# PANEL SUPERIOR: MÉTRICAS DEL DÍA      #}
+<div class="metrics-panel">
+    <div class="metrics-header">
+        <h5 class="metrics-title">
+            <i class="bi bi-bar-chart-fill"></i> Métricas del Día
+        </h5>
+        <span class="metrics-date">{{ now.strftime('%d/%m/%Y') }}</span>
+    </div>
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-icon" style="background: #dbeafe; color: #1e40af;">
+                <i class="bi bi-list-check"></i>
+            </div>
+            <div class="metric-content">
+                <div class="metric-value">{{ metricas_dia.completadas or 0 }}</div>
+                <div class="metric-label">Completadas</div>
+            </div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon" style="background: #fef3c7; color: #92400e;">
+                <i class="bi bi-hourglass-split"></i>
+            </div>
+            <div class="metric-content">
+                <div class="metric-value">{{ metricas_dia.en_proceso or 0 }}</div>
+                <div class="metric-label">En Proceso</div>
+            </div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon" style="background: #e0e7ff; color: #4338ca;">
+                <i class="bi bi-clock-history"></i>
+            </div>
+            <div class="metric-content">
+                <div class="metric-value">{{ metricas_dia.pendientes or 0 }}</div>
+                <div class="metric-label">Pendientes</div>
+            </div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon" style="background: #d1fae5; color: #065f46;">
+                <i class="bi bi-speedometer2"></i>
+            </div>
+            <div class="metric-content">
+                <div class="metric-value">{{ metricas_dia.oee_promedio or 0 }}%</div>
+                <div class="metric-label">OEE Promedio</div>
+            </div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon" style="background: #fee2e2; color: #991b1b;">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+            </div>
+            <div class="metric-content">
+                <div class="metric-value">{{ metricas_dia.desperdicio or 0 }}%</div>
+                <div class="metric-label">Desperdicio</div>
+            </div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-icon" style="background: #dcfce7; color: #166534;">
+                <i class="bi bi-check-circle-fill"></i>
+            </div>
+            <div class="metric-content">
+                <div class="metric-value">{{ metricas_dia.a_tiempo or 0 }}%</div>
+                <div class="metric-label">A Tiempo</div>
+            </div>
+        </div>
+    </div>
+</div> -->
+
+{# FILTROS RÁPIDOS                       #}
+<div class="quick-filters">
+    <span class="filter-label"><i class="bi bi-funnel"></i> Filtrar:</span>
+    <button class="filter-btn active" data-filter="todas">
+        <i class="bi bi-grid-3x3-gap"></i> Todas
+    </button>
+    <button class="filter-btn" data-filter="mis-ordenes">
+        <i class="bi bi-person-check"></i> Mis Órdenes
+    </button>
+    <button class="filter-btn" data-filter="linea-1">
+        <i class="bi bi-diagram-3"></i> Línea 1
+    </button>
+    <button class="filter-btn" data-filter="linea-2">
+        <i class="bi bi-diagram-3"></i> Línea 2
+    </button>
+    <button class="filter-btn" data-filter="alta-prioridad">
+        <i class="bi bi-exclamation-circle"></i> Alta Prioridad
+    </button>
+    <button class="filter-btn" data-filter="retrasadas">
+        <i class="bi bi-clock-history"></i> Retrasadas
+    </button>
+</div>
+
+{# TABLERO KANBAN                        #}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="h4 mb-0">
+        <i class="bi bi-kanban"></i> Tablero Kanban (Producción en Curso)
+    </h3>
+</div>
+
+<div class="table-responsive">
+    <div class="row flex-nowrap g-3">
+        {% for estado_key, titulo_columna in columnas.items() %}
+        <div class="col mb-4 kanban-column-wrapper" data-estado="{{ estado_key }}" style="min-width: 380px;">
+            <div class="kanban-column h-100" data-estado="{{ estado_key }}">
+                
+                {# ====== HEADER DE COLUMNA ====== #}
+                <div class="column-header">
+                    <div class="column-title-section">
+                        <span class="kanban-title-text">{{ titulo_columna }}</span>
+                        <span class="badge column-count-badge">
+                            {{ ordenes_por_estado.get(estado_key, [])|length }}
+                        </span>
+                    </div>
+                    
+                    {# Estado de la línea (solo para columnas de proceso) #}
+                    {% if estado_key.startswith('EN_LINEA') %}
+                    <div class="line-status-indicator">
+                        <span class="status-dot status-active"></span>
+                        <span class="status-text">Operando</span>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {# ====== TARJETAS ====== #}
+                <div class="kanban-cards" id="kanban-cards-{{ estado_key }}">
+                    {% set ordenes_en_columna = ordenes_por_estado.get(estado_key, []) %}
+                    
+                    {% if ordenes_en_columna %}
+                        {% for orden in ordenes_en_columna %}
+                        {% set prioridad = orden.get('prioridad', 'NORMAL') %}
+                        {% set es_retrasada = orden.get('es_retrasada', False) %}
+                        {% set tiempo_hasta_meta = orden.get('tiempo_hasta_meta_horas', 0) %}
+                        
+                        <div class="kanban-card {{ 'card-prioridad-alta' if prioridad == 'ALTA' else ('card-prioridad-media' if prioridad == 'MEDIA' else 'card-prioridad-baja') }} {{ 'card-retrasada' if es_retrasada else '' }}" 
+                             data-op-id="{{ orden.id }}"
+                             data-linea="{{ orden.linea_asignada or '' }}"
+                             data-prioridad="{{ prioridad }}"
+                             data-operario="{{ orden.operario_id or '' }}">
+                            
+                            {# ====== HEADER DE LA TARJETA ====== #}
+                            <div class="card-header-row">
+                                <div class="priority-indicator priority-{{ prioridad|lower }}">
+                                    {% if prioridad == 'ALTA' %}
+                                        <i class="bi bi-fire"></i> URGENTE
+                                    {% elif prioridad == 'MEDIA' %}
+                                        <i class="bi bi-exclamation-circle"></i> MEDIA
+                                    {% else %}
+                                        <i class="bi bi-check-circle"></i> NORMAL
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="card-badges">
+                                    {% if orden.linea_asignada %}
+                                    <span class="badge-line">L{{ orden.linea_asignada }}</span>
+                                    {% endif %}
+                                    
+                                    {% if es_retrasada %}
+                                    <span class="badge-late">
+                                        <i class="bi bi-clock-history"></i> ATRASADA
+                                    </span>
+                                    {% elif tiempo_hasta_meta is not none and tiempo_hasta_meta < 4 %}
+                                    <span class="badge-urgent">
+                                        <i class="bi bi-hourglass-top"></i> URGENTE
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            {# ====== NOMBRE DEL PRODUCTO ====== #}
+                            <div class="product-name-section">
+                                <h6 class="product-name">{{ orden.producto_nombre or 'N/A' }}</h6>
+                                <div class="product-code">
+                                    <i class="bi bi-upc-scan"></i> {{ orden.codigo }}
+                                </div>
+                                {% if orden.lote %}
+                                <div class="product-lote">
+                                    <i class="bi bi-tag"></i> Lote: {{ orden.lote }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            {# ====== INFORMACIÓN TEMPORAL ====== #}
+                            <div class="card-info-section">
+                                <div class="info-row">
+                                    <span class="info-icon"><i class="bi bi-calendar-check"></i></span>
+                                    <span class="info-label">Meta:</span>
+                                    <span class="info-value {{ 'text-danger' if es_retrasada else ('text-warning' if tiempo_hasta_meta < 4 else 'text-success') }}">
+                                        {{ orden.fecha_meta|format_datetime('%d %b %Y') if orden.fecha_meta else 'N/D' }}
+                                        {% if tiempo_hasta_meta %}
+                                        <small>({{ tiempo_hasta_meta }}h)</small>
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                
+                                {% if estado_key in ['EN_ESPERA', 'LISTA_PARA_PRODUCIR'] %}
+                                <div class="info-row">
+                                    <span class="info-icon"><i class="bi bi-clock"></i></span>
+                                    <span class="info-label">Tiempo Est.:</span>
+                                    <span class="info-value">
+                                        {{ orden.tiempo_estimado_horas or 'N/D' }}
+                                    </span>
+                                </div>
+                                {% endif %}
+                                
+                                {% if estado_key.startswith('EN_LINEA') and orden.tiempo_transcurrido %}
+                                <div class="info-row">
+                                    <span class="info-icon"><i class="bi bi-stopwatch"></i></span>
+                                    <span class="info-label">Transcurrido:</span>
+                                    <span class="info-value">{{ orden.tiempo_transcurrido }}</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            {# ====== CANTIDAD Y PROGRESO ====== #}
+                            <div class="quantity-section">
+                                {% if estado_key.startswith('EN_LINEA') and orden.cantidad_producida is not none %}
+                                    {# Órdenes en proceso: Mostrar progreso #}
+                                    <div class="progress-info">
+                                        <div class="progress-labels">
+                                            <span class="progress-produced">
+                                                <i class="bi bi-check-circle-fill"></i> 
+                                                {{ (orden.cantidad_producida|default(0))|round(1) }} kg
+                                            </span>
+                                            <span class="progress-percentage">
+                                                {% if orden.cantidad_planificada > 0 %}
+                                                    {{ (( (orden.cantidad_producida|default(0)) / orden.cantidad_planificada * 100)|round(0))|int }}%
+                                                {% else %}
+                                                    0%
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        <div class="progress-bar-custom">
+                                            <div class="progress-fill-custom" style="width: {% if orden.cantidad_planificada > 0 %}{{ ( (orden.cantidad_producida|default(0)) / orden.cantidad_planificada * 100)|round(0) }}{% else %}0{% endif %}%"></div>
+                                        </div>
+                                        <div class="progress-target">
+                                            <span>Objetivo: {{ orden.cantidad_planificada|default(0) }} kg</span>
+                                        </div>
+                                    </div>
+                                    
+                                    {# Ritmo actual #}
+                                    {% if orden.ritmo_actual %}
+                                    <div class="performance-indicator {{ 'perf-good' if orden.ritmo_actual >= orden.ritmo_objetivo else 'perf-low' }}">
+                                        <i class="bi bi-speedometer2"></i>
+                                        <span class="perf-label">Ritmo:</span>
+                                        <span class="perf-value">{{ orden.ritmo_actual|round(1) }} kg/h</span>
+                                        <span class="perf-target">(Obj: {{ orden.ritmo_objetivo|round(1) }})</span>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {# Timer activo #}
+                                    <div class="active-timer-badge">
+                                        <div class="timer-pulse"></div>
+                                        <span>⏱️ Trabajando desde hace {{ orden.tiempo_transcurrido or '0m' }}</span>
+                                    </div>
+                                {% else %}
+                                    {# Órdenes pendientes: Solo cantidad #}
+                                    <div class="quantity-display">
+                                        <i class="bi bi-box-seam"></i>
+                                        <span class="qty-value">{{ orden.cantidad_planificada }}</span>
+                                        <span class="qty-unit">kg</span>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            {# ====== RECURSOS ASIGNADOS ====== #}
+                            <div class="resources-section">
+                                {% if orden.operario_nombre %}
+                                <div class="resource-item">
+                                    <i class="bi bi-person-fill"></i>
+                                    <span class="resource-label">Operario:</span>
+                                    <span class="resource-value">{{ orden.operario_nombre }}</span>
+                                </div>
+                                {% endif %}
+                                
+                                {% if orden.supervisor_nombre %}
+                                <div class="resource-item">
+                                    <i class="bi bi-person-badge"></i>
+                                    <span class="resource-label">Supervisor:</span>
+                                    <span class="resource-value">{{ orden.supervisor_nombre }}</span>
+                                </div>
+                                {% endif %}
+                                
+                                {% if orden.turno %}
+                                <div class="resource-item">
+                                    <i class="bi bi-clock"></i>
+                                    <span class="resource-label">Turno:</span>
+                                    <span class="resource-value">{{ orden.turno }}</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            {# ====== ESTADO DE MATERIALES ====== #}
+                            {% if estado_key in ['EN_ESPERA', 'LISTA_PARA_PRODUCIR'] %}
+                            <div class="materials-status {{ 'materials-ok' if orden.materiales_disponibles else 'materials-pending' }}">
+                                {% if orden.materiales_disponibles %}
+                                    <i class="bi bi-check-circle-fill"></i>
+                                    <span>Materiales disponibles</span>
+                                {% else %}
+                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                    <span>Materiales pendientes</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            
+                            {# ====== MÉTRICAS ADICIONALES (SOLO EN PROCESO) ====== #}
+                            {% if estado_key.startswith('EN_LINEA') %}
+                            <div class="metrics-mini-section">
+                                <div class="mini-metric">
+                                    <span class="mini-label">OEE:</span>
+                                    <span class="mini-value {{ 'text-success' if (orden.oee_actual|default(0)) >= 85 else 'text-warning' }}">
+                                        {{ (orden.oee_actual|default(0))|round(0)|int }}%
+                                    </span>
+                                </div>
+                                
+                                <div class="mini-metric">
+                                    <span class="mini-label">Desperdicio:</span>
+                                    <span class="mini-value {{ 'text-danger' if (orden.desperdicio_porcentaje|default(0)) > 5 else 'text-success' }}">
+                                        {{ (orden.desperdicio_porcentaje|default(0))|round(1) }}%
+                                    </span>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {# ====== BOTONES DE ACCIÓN ====== #}
+                            <div class="card-actions">
+                                {% if estado_key == 'LISTA_PARA_PRODUCIR' %}
+                                    <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}" 
+                                       class="btn-action btn-action-primary">
+                                        <i class="bi bi-play-fill"></i>
+                                        <span>Iniciar Trabajo</span>
+                                    </a>
+                                {% elif estado_key == 'EN_PROCESO' %}
+                                    <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}"
+                                       class="btn-action btn-action-success">
+                                        <i class="bi bi-eye-fill"></i>
+                                        <span>Ver Foco</span>
+                                    </a>
+                                {% elif estado_key == 'CONTROL_DE_CALIDAD' %}
+                                    {% if 'aprobar_control_calidad' is has_permission %}
+                                    <button class="btn-action btn-action-approve btn-approve-quality" data-op-id="{{ orden.id }}">
+                                        <i class="bi bi-check2-circle"></i>
+                                        <span>Aprobar</span>
+                                    </button>
+                                    {% else %}
+                                    <button class="btn-action btn-action-secondary" disabled>
+                                        <i class="bi bi-hourglass-split"></i>
+                                        <span>Pend. Aprobación</span>
+                                    </button>
+                                    {% endif %}
+                                {% elif estado_key == 'EN_ESPERA' %}
+                                    <button class="btn-action btn-action-secondary" disabled>
+                                        <i class="bi bi-hourglass-split"></i>
+                                        <span>En Espera</span>
+                                    </button>
+                                {% endif %}
+                            </div>
+                            
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        {# Estado vacío #}
+                        <div class="empty-state">
+                            <i class="bi bi-inbox"></i>
+                            <p>Sin órdenes</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+    {# --- SCRIPT DE KANBAN --- #}
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="{{ url_for('static', filename='js/planificacion/kanban.js') }}"></script>
+{% endblock %}

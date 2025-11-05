@@ -20,7 +20,7 @@ class ReservaInsumoModel(BaseModel):
         try:
             # --- CONSULTA CORREGIDA ---
             result = self.db.table(self.get_table_name()).select(
-                '*, orden_produccion:ordenes_produccion(id, codigo), lote_inventario:lotes_inventario(numero_lote_proveedor, insumo:insumos_catalogo(nombre))'
+                '*, orden_produccion:ordenes_produccion(id, codigo), lote_inventario:lote_inventario_id(numero_lote_proveedor, insumo:insumos_catalogo(nombre))'
             ).order('created_at', desc=True).execute()
 
             flat_data = []
@@ -53,7 +53,7 @@ class ReservaInsumoModel(BaseModel):
         """Obtiene todas las reservas de insumos para una orden de producción específica."""
         try:
             result = self.db.table(self.get_table_name()).select(
-                '*, lote_inventario:insumos_inventario(*, insumo:insumos_catalogo(nombre), proveedor:proveedores(nombre))'
+                '*, lote_inventario:lote_inventario_id(*, insumo:insumos_catalogo(nombre), proveedor:id_proveedor(id, nombre))'
             ).eq('orden_produccion_id', orden_produccion_id).execute()
 
             return {'success': True, 'data': result.data}

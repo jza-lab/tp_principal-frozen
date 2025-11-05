@@ -97,12 +97,17 @@ def _register_blueprints(app: Flask):
     from app.views.admin_reclamo_routes import admin_reclamo_bp # <-- IMPORTACIÓN DE ADMIN RECLAMO
     from app.views.admin_consulta_routes import consulta_bp
     from app.views.receta_routes import receta_bp
+    from app.views.produccion_kanban_routes import produccion_kanban_bp
     from app.views.control_calidad_routes import control_calidad_bp
     from app.views.chatbot_routes import chatbot_bp
     from app.views.reportes_routes import reportes_bp
+    from app.views.proveedor_routes import proveedor_bp
+    from app.views.api_trazabilidad_routes import api_trazabilidad_bp
+    from app.views.admin_riesgo_routes import admin_riesgo_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
+    app.register_blueprint(proveedor_bp)
     app.register_blueprint(control_calidad_bp)
     app.register_blueprint(insumos_bp)
     app.register_blueprint(inventario_api_bp)
@@ -130,8 +135,11 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(admin_reclamo_bp)
     app.register_blueprint(consulta_bp)
     app.register_blueprint(receta_bp)
+    app.register_blueprint(produccion_kanban_bp)
     app.register_blueprint(chatbot_bp)
     app.register_blueprint(reportes_bp)
+    app.register_blueprint(api_trazabilidad_bp)
+    app.register_blueprint(admin_riesgo_bp)
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""
@@ -296,9 +304,11 @@ def create_app() -> Flask:
         """
         # Evitar la verificación de JWT para las rutas de archivos estáticos,
         # ya que es innecesario y causa consultas a la BD por cada CSS, JS, etc.
-        if request.endpoint and (request.endpoint.startswith('static') or request.blueprint == 'static'):
+        if request.path.startswith('/static'):
             return
 
+        # Para las demás rutas, intentar verificar el JWT de forma opcional.
+        # Esto permite que `current_user` esté disponible globalmente sin forzar un login.
         verify_jwt_in_request(optional=True)
 
     # --- INICIALIZAR SCHEDULER ---

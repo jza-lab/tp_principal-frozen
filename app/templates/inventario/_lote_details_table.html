@@ -37,16 +37,27 @@
             </td>
 
             <td>
-                {% if lote.estado == 'disponible' %}
-                <span class="badge bg-success">{{ lote.estado }}</span>
-                {% elif lote.estado == 'cuarentena' %}
-                <span class="badge bg-warning text-dark"
-                      title="Motivo: {{ lote.motivo_cuarentena or 'Sin motivo' }}"
-                      data-bs-toggle="tooltip"> <i class="bi bi-shield-lock me-1"></i>{{ lote.estado }}
+                {% set estado_config = {
+                    'disponible': {'icon': 'bi-check-circle-fill', 'color': 'success', 'title': 'Disponible'},
+                    'agotado': {'icon': 'bi-x-circle-fill', 'color': 'danger', 'title': 'Agotado'},
+                    'reservado': {'icon': 'bi-bookmark-fill', 'color': 'secondary', 'title': 'Reservado'},
+                    'vencido': {'icon': 'bi-calendar-x-fill', 'color': 'danger', 'title': 'Vencido'},
+                    'retirado': {'icon': 'bi-trash-fill', 'color': 'dark', 'title': 'Retirado'},
+                    'cuarentena': {'icon': 'bi-shield-lock-fill', 'color': 'warning', 'title': 'En Cuarentena'},
+                    'EN REVISION': {'icon': 'bi-search', 'color': 'info', 'title': 'En Revisión'},
+                    'RECHAZADO': {'icon': 'bi-slash-circle-fill', 'color': 'danger', 'title': 'Rechazado'}
+                } %}
+
+                {% set config = estado_config.get(lote.estado, {'icon': 'bi-question-circle', 'color': 'secondary', 'title': lote.estado}) %}
+                
+                <span class="badge bg-{{ config.color }}-subtle text-{{ config.color }} fs-6"
+                      data-bs-toggle="tooltip" 
+                      title="{{ config.title }}">
+                    <i class="bi {{ config.icon }}"></i>
+                    {% if lote.estado == 'cuarentena' and (lote.cantidad_actual | float) <= 0 and (lote.cantidad_en_cuarentena | float) <= 0 %}
+                        <i class="bi bi-exclamation-triangle-fill text-danger" title="Cuarentena por trazabilidad (lote agotado)"></i>
+                    {% endif %}
                 </span>
-                {% else %}
-                <span class="badge bg-danger">{{ lote.estado }}</span>
-                {% endif %}
             </td>
 
             <td>
@@ -54,31 +65,34 @@
                     <i class="bi bi-eye"></i>
                 </a>
 
-                {% if lote.estado not in ['agotado', 'retirado'] %}
+                {% if lote.estado not in ['agotado', 'retirado', 'cuarentena'] %}
                 <a href="{{ url_for('inventario_view.editar_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-secondary"
                     title="Editar Lote">
                     <i class="bi bi-pencil-square"></i>
                 </a>
                 {% endif %}
 
-                {% if (lote.estado == 'disponible' or lote.estado == 'cuarentena') and lote.cantidad_actual > 0 %}
-                <button type="button" class="btn btn-sm btn-outline-warning" 
+                {% if lote.estado != 'cuarentena' or lote.cantidad_en_cuarentena == 0 %}
+                <button type="button" class="btn btn-sm btn-outline-warning"
                         title="Poner en Cuarentena"
-                        data-bs-toggle="modal" 
+                        data-bs-toggle="modal"
                         data-bs-target="#modalCuarentena"
                         data-lote-id="{{ lote.id_lote }}"
                         data-lote-numero="{{ lote.numero_lote_proveedor }}"
-                        data-lote-cantidad="{{ lote.cantidad_actual }}">
+                        data-lote-cantidad="{{ lote.cantidad_actual }}"
+                        data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
                     <i class="bi bi-shield-lock"></i>
                 </button>
                 {% endif %}
-                {% if lote.cantidad_en_cuarentena > 0 %}
-                <button type="button" class="btn btn-sm btn-outline-success" 
+                
+                {% if lote.estado == 'cuarentena' or 0 < lote.cantidad_en_cuarentena %}
+                <button type="button" class="btn btn-sm btn-outline-success"
                         title="Liberar de Cuarentena"
                         data-bs-toggle="modal"
                         data-bs-target="#modalLiberar"
                         data-lote-id="{{ lote.id_lote }}"
                         data-lote-numero="{{ lote.numero_lote_proveedor }}"
+                        data-lote-cantidad="{{ lote.get('cantidad_actual', 0) }}"
                         data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
                     <i class="bi bi-shield-check"></i>
                 </button>

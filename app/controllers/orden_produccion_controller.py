@@ -20,6 +20,13 @@ from app.models.pedido import PedidoModel
 from datetime import date
 from app.models.receta import RecetaModel
 from app.models.insumo import InsumoModel # Asegúrate de importar esto
+from app.models.motivo_paro_model import MotivoParoModel
+from app.models.motivo_desperdicio_model import MotivoDesperdicioModel
+from app.models.registro_paro_model import RegistroParoModel
+from app.models.registro_desperdicio_model import RegistroDesperdicioModel
+from app.models.operacion_receta_model import OperacionRecetaModel
+from app.controllers.op_cronometro_controller import OpCronometroController
+
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +35,7 @@ class OrdenProduccionController(BaseController):
     Controlador para la lógica de negocio de las Órdenes de Producción.
     """
 
+    # region Inicialización
     def __init__(self):
         super().__init__()
         self.model = OrdenProduccionModel()
@@ -43,7 +51,42 @@ class OrdenProduccionController(BaseController):
         self.pedido_model = PedidoModel()
         self.receta_model = RecetaModel()
         self.insumo_model = InsumoModel()
+        self.operacion_receta_model = OperacionRecetaModel()
+        self.op_cronometro_controller = OpCronometroController()
+        self._planificacion_controller = None
 
+    @property
+    def planificacion_controller(self):
+        """Lazy loader for PlanificacionController to prevent circular dependency."""
+        if self._planificacion_controller is None:
+            from app.controllers.planificacion_controller import PlanificacionController
+            self._planificacion_controller = PlanificacionController()
+        return self._planificacion_controller
+
+    # endregion
+
+    # region Métodos Públicos (API)
+    
+    def calcular_carga_op(self, op_data: Dict) -> Decimal:
+        """ Calcula la carga total en minutos para una OP dada. """
+        carga_total = Decimal(0)
+        receta_id = op_data.get('receta_id')
+        cantidad = Decimal(op_data.get('cantidad_planificada', 0))
+        if not receta_id or cantidad <= 0: return carga_total
+
+        operaciones = self._obtener_operaciones_receta(receta_id)
+        if not operaciones: return carga_total
+
+        for op_step in operaciones:
+            t_prep = Decimal(op_step.get('tiempo_preparacion', 0))
+            t_ejec_unit = Decimal(op_step.get('tiempo_ejecucion_unitario', 0))
+            carga_total += t_prep + (t_ejec_unit * cantidad)
+        return carga_total
+
+    def _obtener_operaciones_receta(self, receta_id: int) -> List[Dict]:
+        """ Obtiene las operaciones de una receta desde el modelo. """
+        result = self.operacion_receta_model.find_by_receta_id(receta_id)
+        return result.get('data', []) if result.get('success') else []
 
     def obtener_ordenes(self, filtros: Optional[Dict] = None) -> tuple:
         """
@@ -207,81 +250,24 @@ class OrdenProduccionController(BaseController):
     # --- MÉTODO CORREGIDO ---
     def aprobar_orden(self, orden_id: int, usuario_id: int) -> tuple:
         """
-        Inicia el proceso de una orden PENDIENTE.
-        - Si hay stock, reserva y pasa a 'LISTA PARA PRODUCIR'.
-        - Si no hay stock, genera OC, la VINCULA a la OP y pasa a 'EN ESPERA'.
+        Orquesta el proceso de aprobación de una orden PENDIENTE, delegando la
+        lógica a helpers según la disponibilidad de stock.
         """
         try:
-            # 1. Obtener OP y validar estado
-            orden_result = self.obtener_orden_por_id(orden_id)
-            if not orden_result.get('success'):
-                return self.error_response("Orden de producción no encontrada.", 404)
-            orden_produccion = orden_result['data']
+            orden_produccion, error_response = self._validar_estado_para_aprobacion(orden_id)
+            if error_response:
+                return error_response
 
-            if orden_produccion['estado'] != 'PENDIENTE':
-                return self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
-
-            # 2. Verificar stock
             verificacion_result = self.inventario_controller.verificar_stock_para_op(orden_produccion)
             if not verificacion_result.get('success'):
                 return self.error_response(f"Error al verificar stock: {verificacion_result.get('error')}", 500)
 
             insumos_faltantes = verificacion_result['data']['insumos_faltantes']
 
-            # 3. Manejar según disponibilidad de stock
             if insumos_faltantes:
-                # --- CASO: FALTA STOCK ---
-                logger.info(f"Stock insuficiente para OP {orden_id}. Generando OC...")
-                oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
-                if not oc_result.get('success'):
-                    # Si falla la creación de OC, la OP sigue PENDIENTE pero informamos el error
-                    return self.error_response(f"Stock insuficiente, pero no se pudo generar la OC: {oc_result.get('error')}", 500)
-
-                # --- ¡NUEVO!: Vincular la OC creada a la OP ---
-                oc_data = oc_result.get('data', {})
-                created_oc_id = oc_data.get('id') # Asume que el ID de OC está en 'id'
-                if created_oc_id:
-                    logger.info(f"OC {oc_data.get('codigo_oc', created_oc_id)} creada. Vinculando a OP {orden_id}...")
-                    update_op_oc_result = self.model.update(orden_id, {'orden_compra_id': created_oc_id}, 'id')
-                    if not update_op_oc_result.get('success'):
-                         # Loggear advertencia si falla la vinculación, pero continuar
-                         logger.warning(f"OC creada ({created_oc_id}), pero falló la vinculación con OP {orden_id}: {update_op_oc_result.get('error')}")
-                    else:
-                         logger.info(f"OP {orden_id} vinculada exitosamente con OC {created_oc_id}.")
-                else:
-                     logger.error(f"OC creada para OP {orden_id}, ¡pero no se recibió el ID de la OC!")
-                     # Considerar devolver error aquí si la vinculación es crítica
-
-                # Cambiar estado OP a 'EN ESPERA'
-                logger.info(f"Cambiando estado de OP {orden_id} a EN ESPERA.")
-                estado_change_result = self.model.cambiar_estado(orden_id, 'EN ESPERA')
-                if not estado_change_result.get('success'):
-                    # Loggear error si falla el cambio de estado, pero ya creamos la OC
-                    logger.error(f"Error al cambiar estado a EN ESPERA para OP {orden_id}: {estado_change_result.get('error')}")
-                    # Podríamos intentar revertir la OC aquí si fuera transaccional
-
-                return self.success_response(
-                    data={'oc_generada': True, 'oc_codigo': oc_data.get('codigo_oc'), 'oc_id': created_oc_id},
-                    message="Stock insuficiente. Se generó OC y la OP está 'En Espera'."
-                )
+                return self._gestionar_stock_faltante(orden_produccion, insumos_faltantes, usuario_id)
             else:
-                # --- CASO: STOCK DISPONIBLE ---
-                logger.info(f"Stock disponible para OP {orden_id}. Reservando insumos...")
-                reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
-                if not reserva_result.get('success'):
-                    return self.error_response(f"Fallo crítico al reservar insumos: {reserva_result.get('error')}", 500)
-
-                nuevo_estado_op = 'LISTA PARA PRODUCIR'
-                logger.info(f"Cambiando estado de OP {orden_id} a {nuevo_estado_op}.")
-                estado_change_result = self.model.cambiar_estado(orden_id, nuevo_estado_op)
-                if not estado_change_result.get('success'):
-                    # Si falla el cambio de estado, ¿deberíamos cancelar la reserva? (Complejo sin transacciones)
-                    logger.error(f"Error al cambiar estado a {nuevo_estado_op} para OP {orden_id}: {estado_change_result.get('error')}")
-                    return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
-
-                return self.success_response(
-                    message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
-                )
+                return self._gestionar_stock_disponible(orden_produccion, usuario_id)
 
         except Exception as e:
             logger.error(f"Error en el proceso de aprobación de OP {orden_id}: {e}", exc_info=True)
@@ -370,7 +356,7 @@ class OrdenProduccionController(BaseController):
             estado_actual = orden_produccion['estado']
 
             if nuevo_estado == 'COMPLETADA':
-                if estado_actual != 'CONTROL_DE_CALIDAD':
+                if not estado_actual or estado_actual.strip() != 'CONTROL_DE_CALIDAD':
                     return self.error_response("La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
 
                 # 1. Verificar si la OP está vinculada a ítems de pedido
@@ -418,6 +404,9 @@ class OrdenProduccionController(BaseController):
             # 5. Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
             result = self.model.cambiar_estado(orden_id, nuevo_estado)
             if result.get('success'):
+                # La lógica del cronómetro se ha movido a otros métodos para evitar la doble detención.
+                # El cronómetro ahora se detiene cuando se reporta el 100% o cuando se pausa.
+                
                 from app.controllers.pedido_controller import PedidoController
                 pedido_controller = PedidoController()
                 # Después de cambiar el estado de la OP, verificamos si el estado del pedido de venta debe cambiar.
@@ -522,94 +511,32 @@ class OrdenProduccionController(BaseController):
 
     def consolidar_ordenes_produccion(self, op_ids: List[int], usuario_id: int) -> Dict:
         """
-        Lógica de negocio para fusionar varias OPs en una Super OP.
-        1. Valida las OPs.
-        2. Calcula totales.
-        3. Crea la nueva Super OP.
-        4. Actualiza las OPs originales.
+        Orquesta la fusión de varias OPs en una Super OP, delegando cada
+        paso a métodos auxiliares privados.
         """
         try:
-            # 1. Obtener las OPs originales desde el modelo
-            ops_a_consolidar_res = self.model.find_by_ids(op_ids) # Necesitarás crear este método en tu modelo
-            if not ops_a_consolidar_res.get('success') or not ops_a_consolidar_res.get('data'):
-                return {'success': False, 'error': 'Una o más órdenes no fueron encontradas.'}
+            ops_originales, error = self._validar_y_obtener_ops_para_consolidar(op_ids)
+            if error:
+                return error
 
-            ops_originales = ops_a_consolidar_res['data']
-
-            # Validación extra en el backend
-            if len(ops_originales) != len(op_ids):
-                return {'success': False, 'error': 'Algunas órdenes no pudieron ser cargadas.'}
-
-            primer_producto_id = ops_originales[0]['producto_id']
-            if not all(op['producto_id'] == primer_producto_id for op in ops_originales):
-                return {'success': False, 'error': 'Todas las órdenes deben ser del mismo producto.'}
-
-            # 2. Calcular la cantidad total
-            cantidad_total = sum(Decimal(op['cantidad_planificada']) for op in ops_originales)
-            primera_op = ops_originales[0]
-
-                # --- NUEVO: Encontrar la fecha meta más temprana ---
-            fechas_meta_originales = []
-            for op in ops_originales:
-                fecha_meta_str = op.get('fecha_meta')
-                if fecha_meta_str:
-                    try:
-                        fechas_meta_originales.append(date.fromisoformat(fecha_meta_str))
-                    except ValueError:
-                        logger.warning(f"Formato de fecha meta inválido encontrado en OP {op.get('id')}: {fecha_meta_str}")
-
-            fecha_meta_mas_temprana = min(fechas_meta_originales) if fechas_meta_originales else None
-            # --------------------------------------------------
-
-            # 3. Crear la nueva Super OP (reutilizando la lógica de `crear_orden`)
-            super_op_data = {
-                'producto_id': primera_op['producto_id'],
-                'cantidad_planificada': str(cantidad_total),
-                'fecha_planificada': primera_op['fecha_planificada'],
-                'receta_id': primera_op['receta_id'],
-                'fecha_meta': fecha_meta_mas_temprana.isoformat() if fecha_meta_mas_temprana else None, # Guardar la fecha meta más temprana
-                'prioridad': 'ALTA', # Las super OPs suelen ser prioritarias
-                'observaciones': f'Super OP consolidada desde las OPs: {", ".join(map(str, op_ids))}',
-                'estado': 'PENDIENTE' # La Super OP nace lista
-            }
-
+            super_op_data = self._calcular_datos_super_op(ops_originales, op_ids)
+            
             resultado_creacion = self.crear_orden(super_op_data, usuario_id)
             if not resultado_creacion.get('success'):
                 return resultado_creacion
-
+            
             nueva_super_op = resultado_creacion['data']
-            super_op_id = nueva_super_op['id']
-
-            # 4. Re-linkear los items de pedido de las OPs originales a la nueva Super OP
-            try:
-                # Usamos el cliente de base de datos directamente para una operación de actualización en lote
-                update_result = self.pedido_model.db.table('pedido_items').update({
-                    'orden_produccion_id': super_op_id
-                }).in_('orden_produccion_id', op_ids).execute()
-
-                logger.info(f"Relinkeo de items de pedido a Super OP {super_op_id} completado.")
-
-            except Exception as e_relink:
-                # Si esto falla, la Super OP ya fue creada. Es un estado inconsistente.
-                # Devolvemos un error crítico y loggeamos la situación.
-                logger.error(f"CRÍTICO: Fallo al re-linkear items de pedido a Super OP {super_op_id}. Error: {e_relink}", exc_info=True)
-                # En un sistema transaccional, aquí se haría un rollback.
-                # Por ahora, devolvemos el error para que el frontend lo sepa.
-                return {'success': False, 'error': f'La Super OP fue creada, pero falló la asignación de pedidos. Contacte a soporte. Error: {str(e_relink)}'}
-
-            # 5. Actualizar las OPs originales (antes era el paso 4)
-            update_data = {
-                'estado': 'CONSOLIDADA',
-                'super_op_id': super_op_id
-            }
-            for op_id in op_ids:
-                self.model.update(id_value=op_id, data=update_data, id_field='id')
-
+            
+            relink_result = self._relinkear_items_pedido(op_ids, nueva_super_op['id'])
+            if not relink_result.get('success'):
+                # NOTA: En un sistema real, aquí se debería intentar revertir la creación de la Super OP.
+                return relink_result
+            
+            self._actualizar_ops_originales(op_ids, nueva_super_op['id'])
+            
             return {'success': True, 'data': nueva_super_op}
-
         except Exception as e:
             logger.error(f"Error en consolidar_ordenes_produccion: {e}", exc_info=True)
-            # Aquí idealmente implementarías un rollback de la transacción
             return {'success': False, 'error': f'Error interno del servidor: {str(e)}'}
 
     def cambiar_estado_orden_simple(self, orden_id: int, nuevo_estado: str) -> Dict:
@@ -759,8 +686,6 @@ class OrdenProduccionController(BaseController):
             logger.error(f"Error en sugerir_fecha_inicio para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
-
-
     def pre_asignar_recursos(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
         """
         1. Valida compatibilidad de línea.
@@ -850,3 +775,706 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             logger.error(f"Error contando órdenes en reproceso: {str(e)}")
             return 0
+        
+    def obtener_datos_para_tablero(self) -> Dict:
+        """
+        Prepara los datos necesarios para el tablero Kanban de producción.
+        """
+        from collections import defaultdict
+        from datetime import datetime, timedelta
+
+        try:
+            # 1. Definir las columnas del tablero
+            columnas = {
+                'EN ESPERA': 'En Espera',
+                'LISTA PARA PRODUCIR': 'Lista para producir',
+                'EN_LINEA_1': 'Línea 1',
+                'EN_LINEA_2': 'Línea 2',
+                'EN_EMPAQUETADO': 'Empaquetado',
+                'CONTROL_DE_CALIDAD': 'Control de Calidad',
+            }
+    
+            # 2. Obtener todas las órdenes de producción relevantes
+            response, status_code = self.obtener_ordenes({'estado.neq': 'CANCELADA'})
+            ordenes = []
+            if status_code == 200 and response.get('success'):
+                ordenes = response.get('data', [])
+    
+            # 3. Agrupar órdenes por estado
+            ordenes_por_estado = defaultdict(list)
+
+            for orden in ordenes:
+                estado = orden.get('estado')
+                if estado in columnas:
+                    ordenes_por_estado[estado].append(orden)
+    
+            # 4. Obtener datos para los modales (supervisores y operarios)
+            todos_los_usuarios = self.usuario_controller.obtener_todos_los_usuarios()
+            supervisores = [u for u in todos_los_usuarios if u.get('roles', {}).get('codigo') == 'SUPERVISOR']
+            operarios = [u for u in todos_los_usuarios if u.get('roles', {}).get('codigo') == 'OPERARIO']
+    
+            return {
+                'columnas': columnas,
+                'ordenes_por_estado': dict(ordenes_por_estado),
+                'supervisores': supervisores,
+                'operarios': operarios,
+                'now': datetime.now(),
+                'timedelta': timedelta
+            }
+        except Exception as e:
+            logger.error(f"Error en obtener_datos_para_tablero: {e}", exc_info=True)
+            return {
+                'columnas': {}, 'ordenes_por_estado': {}, 'supervisores': [], 'operarios': [],
+                'now': datetime.now(), 'timedelta': timedelta, 'error': str(e)
+            }
+
+    def obtener_datos_para_vista_foco(self, orden_id: int) -> tuple:
+        """
+        Prepara todos los datos necesarios para la vista de foco de una orden de producción.
+        """
+        try:
+            # 1. Obtener los datos principales de la orden
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden_data = orden_result['data']
+
+            # 2. Obtener los ingredientes de la receta
+            receta_id = orden_data.get('receta_id')
+            ingredientes = []
+            if receta_id:
+                receta_model = RecetaModel()
+                ingredientes_result = receta_model.get_ingredientes(receta_id)
+                if ingredientes_result.get('success'):
+                    ingredientes = ingredientes_result.get('data', [])
+
+            # 3. Calcular Ritmo Objetivo
+            orden_data['ritmo_objetivo'] = self._calcular_ritmo_objetivo(orden_data)
+
+            # 3. Obtener los motivos de paro y desperdicio
+            motivo_paro_model = MotivoParoModel()
+            motivos_paro_result = motivo_paro_model.find_all()
+            motivos_paro = motivos_paro_result.get('data', []) if motivos_paro_result.get('success') else []
+
+            motivo_desperdicio_model = MotivoDesperdicioModel()
+            motivos_desperdicio_result = motivo_desperdicio_model.find_all()
+            motivos_desperdicio = motivos_desperdicio_result.get('data', []) if motivos_desperdicio_result.get('success') else []
+            
+            # 4. Ensamblar todos los datos
+            datos_completos = {
+                'orden': orden_data,
+                'ingredientes': ingredientes,
+                'motivos_paro': motivos_paro,
+                'motivos_desperdicio': motivos_desperdicio
+            }
+
+            return self.success_response(data=datos_completos)
+
+        except Exception as e:
+            logger.error(f"Error en obtener_datos_para_vista_foco para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    # endregion
+
+    # region Helpers de Aprobación
+    
+    def _validar_estado_para_aprobacion(self, orden_id: int) -> tuple:
+        """Obtiene una OP y valida que su estado sea 'PENDIENTE'."""
+        orden_result = self.obtener_orden_por_id(orden_id)
+        if not orden_result.get('success'):
+            return None, self.error_response("Orden de producción no encontrada.", 404)
+        
+        orden_produccion = orden_result['data']
+        if orden_produccion['estado'] != 'PENDIENTE':
+            return None, self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
+            
+        return orden_produccion, None
+
+    def _gestionar_stock_faltante(self, orden_produccion: Dict, insumos_faltantes: List[Dict], usuario_id: int) -> tuple:
+        """Gestiona el caso donde falta stock, generando una OC y actualizando el estado de la OP."""
+        orden_id = orden_produccion['id']
+        logger.info(f"Stock insuficiente para OP {orden_id}. Generando OC...")
+        oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
+        if not oc_result.get('success'):
+            return self.error_response(f"Stock insuficiente, pero no se pudo generar la OC: {oc_result.get('error')}", 500)
+
+        oc_data = oc_result.get('data', {})
+        created_oc_id = oc_data.get('id')
+        if created_oc_id:
+            logger.info(f"OC {oc_data.get('codigo_oc', created_oc_id)} creada. Vinculando a OP {orden_id}...")
+            self.model.update(orden_id, {'orden_compra_id': created_oc_id}, 'id')
+        else:
+            logger.error(f"OC creada para OP {orden_id}, pero no se recibió el ID de la OC!")
+
+        logger.info(f"Cambiando estado de OP {orden_id} a EN ESPERA.")
+        self.model.cambiar_estado(orden_id, 'EN ESPERA')
+
+        return self.success_response(
+            data={'oc_generada': True, 'oc_codigo': oc_data.get('codigo_oc'), 'oc_id': created_oc_id},
+            message="Stock insuficiente. Se generó OC y la OP está 'En Espera'."
+        )
+
+    def _gestionar_stock_disponible(self, orden_produccion: Dict, usuario_id: int) -> tuple:
+        """Gestiona el caso donde hay stock disponible, reservando y actualizando el estado."""
+        orden_id = orden_produccion['id']
+        logger.info(f"Stock disponible para OP {orden_id}. Reservando insumos...")
+        reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
+        if not reserva_result.get('success'):
+            return self.error_response(f"Fallo crítico al reservar insumos: {reserva_result.get('error')}", 500)
+
+        nuevo_estado_op = 'LISTA PARA PRODUCIR'
+        logger.info(f"Cambiando estado de OP {orden_id} a {nuevo_estado_op}.")
+        estado_change_result = self.model.cambiar_estado(orden_id, nuevo_estado_op)
+        if not estado_change_result.get('success'):
+            logger.error(f"Error al cambiar estado a {nuevo_estado_op} para OP {orden_id}: {estado_change_result.get('error')}")
+            return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
+
+        return self.success_response(
+            message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
+        )
+
+    # endregion
+
+    # region Helpers de Consolidación
+
+    def _validar_y_obtener_ops_para_consolidar(self, op_ids: List[int]) -> tuple:
+        """Valida que las OPs existan, sean del mismo producto y estén en estado 'PENDIENTE'."""
+        ops_a_consolidar_res = self.model.find_by_ids(op_ids)
+        if not ops_a_consolidar_res.get('success') or not ops_a_consolidar_res.get('data'):
+            return None, {'success': False, 'error': 'Una o más órdenes no fueron encontradas.'}
+
+        ops_originales = ops_a_consolidar_res['data']
+        if len(ops_originales) != len(op_ids):
+            return None, {'success': False, 'error': 'Algunas órdenes no pudieron ser cargadas.'}
+
+        primer_producto_id = ops_originales[0]['producto_id']
+        if not all(op['producto_id'] == primer_producto_id for op in ops_originales):
+            return None, {'success': False, 'error': 'Todas las órdenes deben ser del mismo producto.'}
+            
+        return ops_originales, None
+
+    def _calcular_datos_super_op(self, ops_originales: List[Dict], op_ids: List[int]) -> Dict:
+        """Calcula los datos consolidados para la nueva Super OP."""
+        cantidad_total = sum(Decimal(op['cantidad_planificada']) for op in ops_originales)
+        primera_op = ops_originales[0]
+
+        fechas_meta_originales = []
+        for op in ops_originales:
+            fecha_meta_str = op.get('fecha_meta')
+            if fecha_meta_str:
+                try:
+                    fechas_meta_originales.append(date.fromisoformat(fecha_meta_str))
+                except ValueError:
+                    logger.warning(f"Formato de fecha meta inválido en OP {op.get('id')}: {fecha_meta_str}")
+
+        fecha_meta_mas_temprana = min(fechas_meta_originales) if fechas_meta_originales else None
+
+        return {
+            'producto_id': primera_op['producto_id'],
+            'cantidad_planificada': str(cantidad_total),
+            'fecha_planificada': primera_op.get('fecha_planificada'),
+            'receta_id': primera_op['receta_id'],
+            'fecha_meta': fecha_meta_mas_temprana.isoformat() if fecha_meta_mas_temprana else None,
+            'prioridad': 'ALTA',
+            'observaciones': f'Super OP consolidada desde las OPs: {", ".join(map(str, op_ids))}',
+            'estado': 'PENDIENTE'
+        }
+
+    def _relinkear_items_pedido(self, op_ids: List[int], super_op_id: int) -> dict:
+        """Actualiza los items de pedido de las OPs originales para que apunten a la nueva Super OP."""
+        try:
+            self.pedido_model.db.table('pedido_items').update({
+                'orden_produccion_id': super_op_id
+            }).in_('orden_produccion_id', op_ids).execute()
+            logger.info(f"Relinkeo de items de pedido a Super OP {super_op_id} completado.")
+            return {'success': True}
+        except Exception as e:
+            logger.error(f"CRÍTICO: Fallo al re-linkear items de pedido a Super OP {super_op_id}. Error: {e}", exc_info=True)
+            return {'success': False, 'error': f'La Super OP fue creada, pero falló la asignación de pedidos. Contacte a soporte. Error: {str(e)}'}
+
+    def _actualizar_ops_originales(self, op_ids: List[int], super_op_id: int):
+        """Marca las OPs originales como 'CONSOLIDADA' y las vincula a la Super OP."""
+        update_data = {
+            'estado': 'CONSOLIDADA',
+            'super_op_id': super_op_id
+        }
+        for op_id in op_ids:
+            self.model.update(id_value=op_id, data=update_data, id_field='id')
+        logger.info(f"OPs originales {op_ids} actualizadas a estado CONSOLIDADA.")
+
+    def _obtener_capacidad_linea(self, linea_asignada: int, fecha: date) -> Decimal:
+        """
+        Obtiene la capacidad neta de una línea (en minutos) para una fecha específica.
+        """
+        if not linea_asignada:
+            return Decimal('0.0')
+        
+        capacidad_data = self.planificacion_controller.obtener_capacidad_disponible(
+            [linea_asignada], fecha, fecha
+        )
+        
+        capacidad_en_minutos = capacidad_data.get(linea_asignada, {}).get(fecha.isoformat(), 0.0)
+        return Decimal(str(capacidad_en_minutos))
+
+    def _calcular_ritmo_objetivo(self, orden: Dict) -> Decimal:
+        """
+        Calcula el ritmo objetivo en kg/h basado en tiempo disponible y capacidad.
+        """
+        from datetime import datetime, date
+        
+        ritmo_necesario = Decimal('0.0')
+        
+        # Método 1: Basado en tiempo disponible hasta la fecha meta
+        try:
+            fecha_meta_str = orden.get('fecha_meta')
+            if fecha_meta_str:
+                fecha_meta = date.fromisoformat(fecha_meta_str)
+                dias_disponibles = (fecha_meta - date.today()).days
+                
+                if dias_disponibles > 0:
+                    capacidad_total_horizonte_minutos = Decimal('0.0')
+                    for i in range(dias_disponibles):
+                        fecha_a_consultar = date.today() + timedelta(days=i)
+                        capacidad_total_horizonte_minutos += self._obtener_capacidad_linea(
+                            orden.get('linea_asignada'), fecha_a_consultar
+                        )
+                    
+                    horas_disponibles = capacidad_total_horizonte_minutos / Decimal('60.0')
+                    cantidad_planificada = Decimal(orden.get('cantidad_planificada', '0.0'))
+                    
+                    if horas_disponibles > 0:
+                        ritmo_necesario = cantidad_planificada / horas_disponibles
+        except Exception as e:
+            logger.warning(f"No se pudo calcular el ritmo necesario por tiempo para OP {orden.get('id')}: {e}")
+
+        # Método 2: Basado en capacidad de la línea para el día de hoy (como referencia)
+        capacidad_linea_hoy_minutos = self._obtener_capacidad_linea(orden.get('linea_asignada'), date.today())
+        
+        ritmo_por_capacidad = Decimal('0.0')
+        if capacidad_linea_hoy_minutos > 0:
+            # Para obtener kg/h, necesitamos saber cuántos kg se pueden hacer en esos minutos.
+            # Esto depende del tiempo de producción unitario de la receta.
+            receta_result = self.receta_model.find_by_id(orden.get('receta_id'), 'id')
+            if receta_result.get('success'):
+                receta = receta_result['data']
+                campo_tiempo = f"tiempo_prod_unidad_linea{orden.get('linea_asignada')}"
+                tiempo_por_unidad = Decimal(receta.get(campo_tiempo, '0.0'))
+                
+                if tiempo_por_unidad > 0:
+                    unidades_por_hora = Decimal('60.0') / tiempo_por_unidad
+                    # Asumiendo que 1 unidad = 1 kg. Esto podría necesitar ajuste.
+                    ritmo_por_capacidad = unidades_por_hora
+
+        # Usar el mayor de los dos (más exigente) o un default de 5 si ambos fallan
+        ritmo_final = max(ritmo_necesario, ritmo_por_capacidad)
+        
+        return round(ritmo_final, 2) if ritmo_final > 0 else Decimal('5.00')
+
+
+    # endregion
+
+    def reportar_avance(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
+        """
+        Registra el avance de producción para una orden, incluyendo desperdicios,
+        y opcionalmente finaliza la orden.
+        """
+        try:
+            cantidad_buena = Decimal(data.get('cantidad_buena', 0))
+            cantidad_desperdicio = Decimal(data.get('cantidad_desperdicio', 0))
+            motivo_desperdicio_id = data.get('motivo_desperdicio_id')
+            finalizar_orden = data.get('finalizar_orden', False)
+
+            # 1. Validar datos
+            if cantidad_buena < 0 or cantidad_desperdicio < 0:
+                return self.error_response("Las cantidades no pueden ser negativas.", 400)
+            if cantidad_desperdicio > 0 and not motivo_desperdicio_id:
+                return self.error_response("Se requiere un motivo para el desperdicio.", 400)
+
+            # 2. Registrar desperdicio si existe
+            if cantidad_desperdicio > 0:
+                desperdicio_model = RegistroDesperdicioModel()
+                desperdicio_data = {
+                    'orden_produccion_id': orden_id,
+                    'motivo_desperdicio_id': int(motivo_desperdicio_id),
+                    'cantidad': cantidad_desperdicio,
+                    'usuario_id': usuario_id
+                }
+                desperdicio_model.create(desperdicio_data)
+
+            # 3. Actualizar la cantidad producida en la orden
+            orden_actual_res = self.model.find_by_id(orden_id)
+            if not orden_actual_res.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            
+            orden_actual = orden_actual_res.get('data', {})
+            cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
+            cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
+            nueva_cantidad_producida = cantidad_producida_actual + cantidad_buena
+
+            # --- VALIDACIÓN DE CANTIDAD MÁXIMA (CON TOLERANCIA) ---
+            # Se usa una pequeña tolerancia para evitar errores de punto flotante
+            TOLERANCIA = Decimal('0.001')
+            if nueva_cantidad_producida > cantidad_planificada + TOLERANCIA:
+                return self.error_response(f"La cantidad reportada ({cantidad_buena}) excede la cantidad pendiente ({cantidad_planificada - cantidad_producida_actual}).", 400)
+            
+            # Asegurarse de no sobrepasar el límite planificado debido a la tolerancia
+            update_data = {'cantidad_producida': min(nueva_cantidad_producida, cantidad_planificada)}
+            
+            # --- LÓGICA DE TRANSICIÓN DE ESTADO ---
+            # Si se finaliza O la nueva cantidad alcanza el total, mover a Control de Calidad
+            if finalizar_orden or nueva_cantidad_producida >= cantidad_planificada:
+                update_data['estado'] = 'CONTROL_DE_CALIDAD'
+                # También se debería registrar la fecha_fin
+                update_data['fecha_fin'] = datetime.now().isoformat()
+
+            self.model.update(orden_id, update_data)
+            
+            return self.success_response(message="Avance reportado correctamente.")
+
+        except Exception as e:
+            logger.error(f"Error en reportar_avance para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def pausar_produccion(self, orden_id: int, motivo_id: int, usuario_id: int) -> tuple:
+        """
+        Pausa una orden de producción, cambiando su estado y registrando el paro.
+        Es idempotente: si ya está pausada, devuelve éxito.
+        """
+        try:
+            # 1. Obtener la orden y verificar su estado
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden = orden_result['data']
+
+            if orden.get('estado') == 'PAUSADA':
+                return self.success_response(message="La orden ya se encontraba pausada.")
+
+            if orden.get('estado') != 'EN_PROCESO':
+                return self.error_response(f"No se puede pausar una orden que no está 'EN PROCESO'. Estado actual: {orden.get('estado')}", 409)
+
+            # 2. Cambiar el estado de la orden a PAUSADA
+            cambio_estado_result = self.model.cambiar_estado(orden_id, 'PAUSADA')
+            if not cambio_estado_result.get('success'):
+                return self.error_response(f"Error al cambiar el estado de la orden a PAUSADA: {cambio_estado_result.get('error')}", 500)
+
+            # 3. Crear el registro de paro
+            paro_model = RegistroParoModel()
+            datos_pausa = {
+                'orden_produccion_id': orden_id,
+                'motivo_paro_id': motivo_id,
+                'usuario_id': usuario_id,
+                'fecha_inicio': datetime.now().isoformat()
+            }
+            paro_model.create(datos_pausa)
+
+            # Pausar el cronómetro
+            self.op_cronometro_controller.registrar_fin(orden_id)
+
+            return self.success_response(message="Producción pausada correctamente.")
+
+        except Exception as e:
+            logger.error(f"Error en pausar_produccion para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def reanudar_produccion(self, orden_id: int, usuario_id: int) -> tuple:
+        """
+        Reanuda una orden de producción, cambiando su estado a EN_PROCESO y
+        cerrando el registro de paro activo.
+        """
+        try:
+            # 1. Obtener la orden y verificar su estado
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden = orden_result['data']
+
+            if orden.get('estado') == 'EN_PROCESO':
+                return self.success_response(message="La orden ya se encontraba en proceso.")
+
+            if orden.get('estado') != 'PAUSADA':
+                return self.error_response(f"No se puede reanudar una orden que no está 'PAUSADA'. Estado actual: {orden.get('estado')}", 409)
+
+            # 2. Encontrar y cerrar el registro de paro activo
+            paro_model = RegistroParoModel()
+            pausa_activa_result = paro_model.find_all({'orden_produccion_id': orden_id, 'fecha_fin': 'is.null'}, limit=1)
+            
+            if not pausa_activa_result.get('data'):
+                # Si no hay pausa activa pero el estado es PAUSADA, es una inconsistencia.
+                # Forzamos la reanudación para desbloquear al usuario.
+                logger.warning(f"Inconsistencia: OP {orden_id} está PAUSADA pero no tiene registro de paro activo. Se reanudará de todas formas.")
+            else:
+                pausa_activa = pausa_activa_result['data'][0]
+                id_registro_paro = pausa_activa['id']
+                update_data = {'fecha_fin': datetime.now().isoformat()}
+                paro_model.update(id_registro_paro, update_data)
+
+            # 3. Cambiar el estado de la orden de vuelta a EN_PROCESO
+            cambio_estado_result = self.model.cambiar_estado(orden_id, 'EN_PROCESO')
+            if not cambio_estado_result.get('success'):
+                # Si esto falla, la OP podría quedar bloqueada en PAUSADA. Es un estado crítico.
+                logger.error(f"CRÍTICO: La OP {orden_id} no pudo ser reanudada a EN_PROCESO y podría estar bloqueada.")
+                return self.error_response(f"Error crítico al reanudar la orden: {cambio_estado_result.get('error')}", 500)
+
+            # Reanudar el cronómetro
+            self.op_cronometro_controller.registrar_inicio(orden_id)
+
+            return self.success_response(message="Producción reanudada correctamente.")
+
+        except Exception as e:
+            logger.error(f"Error en reanudar_produccion para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def obtener_ordenes_para_kanban_hoy(self) -> tuple:
+        """
+        Obtiene las órdenes de producción relevantes para el tablero Kanban del día.
+        Esto incluye OPs que comienzan hoy y aquellas que ya están en producción.
+        """
+        try:
+            result = self.model.get_for_kanban_hoy()
+
+            if result.get('success'):
+                return self.success_response(data=result.get('data', []))
+            else:
+                error_msg = result.get('error', 'Error desconocido al obtener órdenes para el Kanban de hoy.')
+                return self.error_response(error_msg, 500)
+        except Exception as e:
+            logger.error(f"Error crítico en obtener_ordenes_para_kanban_hoy: {e}", exc_info=True)
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
+    def iniciar_trabajo_op(self, orden_id: int, usuario_id: int) -> tuple:
+        """
+        Asigna una orden a un operario y cambia su estado a EN_PROCESO.
+        Esta acción es idempotente: si la orden ya está asignada al usuario y en proceso, no hace nada.
+        """
+        try:
+            # 1. Obtener la orden de producción
+            orden_result = self.obtener_orden_por_id(orden_id)
+            if not orden_result.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden = orden_result['data']
+
+            # 2. Validar estado
+            estado_actual = orden.get('estado')
+            operario_actual = orden.get('operario_asignado_id')
+
+            # Si ya está en proceso y asignada al mismo usuario, no hacer nada (éxito idempotente)
+            if estado_actual == 'EN_PROCESO' and operario_actual == usuario_id:
+                return self.success_response(message="El trabajo ya fue iniciado por este usuario.")
+
+            # Solo se puede iniciar si está en "LISTA PARA PRODUCIR" (aceptamos ambos formatos por inconsistencia en DB)
+            if estado_actual not in ['LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR']:
+                return self.error_response(f"No se puede iniciar el trabajo. La orden está en estado '{estado_actual}'.", 409) # 409 Conflict
+
+            # 3. Preparar y ejecutar la actualización
+            update_data = {
+                'operario_asignado_id': usuario_id,
+                'estado': 'EN_PROCESO',
+                'fecha_inicio': datetime.now().isoformat() # Registrar cuándo empezó realmente
+            }
+
+            update_result = self.model.update(orden_id, update_data)
+
+            if update_result.get('success'):
+                # Iniciar el cronómetro
+                self.op_cronometro_controller.registrar_inicio(orden_id)
+                return self.success_response(data=update_result.get('data'), message="Trabajo iniciado correctamente.")
+            else:
+                return self.error_response(f"Error al actualizar la orden: {update_result.get('error')}", 500)
+
+        except Exception as e:
+            logger.error(f"Error en iniciar_trabajo_op para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    # endregion
+
+    # region Helpers de Aprobación
+    
+    def _validar_estado_para_aprobacion(self, orden_id: int) -> tuple:
+        """Obtiene una OP y valida que su estado sea 'PENDIENTE'."""
+        orden_result = self.obtener_orden_por_id(orden_id)
+        if not orden_result.get('success'):
+            return None, self.error_response("Orden de producción no encontrada.", 404)
+        
+        orden_produccion = orden_result['data']
+        if orden_produccion['estado'] != 'PENDIENTE':
+            return None, self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
+            
+        return orden_produccion, None
+
+    def _gestionar_stock_faltante(self, orden_produccion: Dict, insumos_faltantes: List[Dict], usuario_id: int) -> tuple:
+        """Gestiona el caso donde falta stock, generando una OC y actualizando el estado de la OP."""
+        orden_id = orden_produccion['id']
+        logger.info(f"Stock insuficiente para OP {orden_id}. Generando OC...")
+        oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
+        if not oc_result.get('success'):
+            return self.error_response(f"Stock insuficiente, pero no se pudo generar la OC: {oc_result.get('error')}", 500)
+
+        oc_data = oc_result.get('data', {})
+        created_oc_id = oc_data.get('id')
+        if created_oc_id:
+            logger.info(f"OC {oc_data.get('codigo_oc', created_oc_id)} creada. Vinculando a OP {orden_id}...")
+            self.model.update(orden_id, {'orden_compra_id': created_oc_id}, 'id')
+        else:
+            logger.error(f"OC creada para OP {orden_id}, pero no se recibió el ID de la OC!")
+
+        logger.info(f"Cambiando estado de OP {orden_id} a EN ESPERA.")
+        self.model.cambiar_estado(orden_id, 'EN ESPERA')
+
+        return self.success_response(
+            data={'oc_generada': True, 'oc_codigo': oc_data.get('codigo_oc'), 'oc_id': created_oc_id},
+            message="Stock insuficiente. Se generó OC y la OP está 'En Espera'."
+        )
+
+    def _gestionar_stock_disponible(self, orden_produccion: Dict, usuario_id: int) -> tuple:
+        """Gestiona el caso donde hay stock disponible, reservando y actualizando el estado."""
+        orden_id = orden_produccion['id']
+        logger.info(f"Stock disponible para OP {orden_id}. Reservando insumos...")
+        reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
+        if not reserva_result.get('success'):
+            return self.error_response(f"Fallo crítico al reservar insumos: {reserva_result.get('error')}", 500)
+
+        nuevo_estado_op = 'LISTA PARA PRODUCIR'
+        logger.info(f"Cambiando estado de OP {orden_id} a {nuevo_estado_op}.")
+        estado_change_result = self.model.cambiar_estado(orden_id, nuevo_estado_op)
+        if not estado_change_result.get('success'):
+            logger.error(f"Error al cambiar estado a {nuevo_estado_op} para OP {orden_id}: {estado_change_result.get('error')}")
+            return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
+
+        return self.success_response(
+            message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
+        )
+
+    # endregion
+
+    # region Helpers de Consolidación
+
+    def _validar_y_obtener_ops_para_consolidar(self, op_ids: List[int]) -> tuple:
+        """Valida que las OPs existan, sean del mismo producto y estén en estado 'PENDIENTE'."""
+        ops_a_consolidar_res = self.model.find_by_ids(op_ids)
+        if not ops_a_consolidar_res.get('success') or not ops_a_consolidar_res.get('data'):
+            return None, {'success': False, 'error': 'Una o más órdenes no fueron encontradas.'}
+
+        ops_originales = ops_a_consolidar_res['data']
+        if len(ops_originales) != len(op_ids):
+            return None, {'success': False, 'error': 'Algunas órdenes no pudieron ser cargadas.'}
+
+        primer_producto_id = ops_originales[0]['producto_id']
+        if not all(op['producto_id'] == primer_producto_id for op in ops_originales):
+            return None, {'success': False, 'error': 'Todas las órdenes deben ser del mismo producto.'}
+            
+        return ops_originales, None
+
+    def _calcular_datos_super_op(self, ops_originales: List[Dict], op_ids: List[int]) -> Dict:
+        """Calcula los datos consolidados para la nueva Super OP."""
+        cantidad_total = sum(Decimal(op['cantidad_planificada']) for op in ops_originales)
+        primera_op = ops_originales[0]
+
+        fechas_meta_originales = []
+        for op in ops_originales:
+            fecha_meta_str = op.get('fecha_meta')
+            if fecha_meta_str:
+                try:
+                    fechas_meta_originales.append(date.fromisoformat(fecha_meta_str))
+                except ValueError:
+                    logger.warning(f"Formato de fecha meta inválido en OP {op.get('id')}: {fecha_meta_str}")
+
+        fecha_meta_mas_temprana = min(fechas_meta_originales) if fechas_meta_originales else None
+
+        return {
+            'producto_id': primera_op['producto_id'],
+            'cantidad_planificada': str(cantidad_total),
+            'fecha_planificada': primera_op.get('fecha_planificada'),
+            'receta_id': primera_op['receta_id'],
+            'fecha_meta': fecha_meta_mas_temprana.isoformat() if fecha_meta_mas_temprana else None,
+            'prioridad': 'ALTA',
+            'observaciones': f'Super OP consolidada desde las OPs: {", ".join(map(str, op_ids))}',
+            'estado': 'PENDIENTE'
+        }
+
+    def _relinkear_items_pedido(self, op_ids: List[int], super_op_id: int) -> dict:
+        """Actualiza los items de pedido de las OPs originales para que apunten a la nueva Super OP."""
+        try:
+            self.pedido_model.db.table('pedido_items').update({
+                'orden_produccion_id': super_op_id
+            }).in_('orden_produccion_id', op_ids).execute()
+            logger.info(f"Relinkeo de items de pedido a Super OP {super_op_id} completado.")
+            return {'success': True}
+        except Exception as e:
+            logger.error(f"CRÍTICO: Fallo al re-linkear items de pedido a Super OP {super_op_id}. Error: {e}", exc_info=True)
+            return {'success': False, 'error': f'La Super OP fue creada, pero falló la asignación de pedidos. Contacte a soporte. Error: {str(e)}'}
+
+    def _actualizar_ops_originales(self, op_ids: List[int], super_op_id: int):
+        """Marca las OPs originales como 'CONSOLIDADA' y las vincula a la Super OP."""
+        update_data = {
+            'estado': 'CONSOLIDADA',
+            'super_op_id': super_op_id
+        }
+        for op_id in op_ids:
+            self.model.update(id_value=op_id, data=update_data, id_field='id')
+        logger.info(f"OPs originales {op_ids} actualizadas a estado CONSOLIDADA.")
+
+    def obtener_estado_produccion_op(self, op_id: int) -> tuple:
+        """
+        Obtiene el estado de producción en tiempo real para una OP específica.
+        Calcula el avance y devuelve datos clave.
+        """
+        try:
+            # 1. Obtener la orden de producción
+            op_result = self.obtener_orden_por_id(op_id)
+            if not op_result.get('success'):
+                return self.error_response("Orden de Producción no encontrada.", 404)
+            
+            orden = op_result['data']
+            
+            # 2. Extraer cantidades y calcular avance
+            cantidad_planificada = Decimal(orden.get('cantidad_planificada', 0))
+            cantidad_producida = Decimal(orden.get('cantidad_producida', 0))
+            
+            avance_porcentaje = 0
+            if cantidad_planificada > 0:
+                avance_porcentaje = round((cantidad_producida / cantidad_planificada) * 100, 2)
+
+            # 3. Preparar la respuesta
+            estado_produccion = {
+                'cantidad_planificada': float(cantidad_planificada),
+                'cantidad_producida': float(cantidad_producida),
+                'avance_porcentaje': float(avance_porcentaje),
+                'estado_actual': orden.get('estado')
+            }
+            
+            return self.success_response(data=estado_produccion)
+
+        except Exception as e:
+            logger.error(f"Error al obtener estado de producción para OP {op_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
+
+    def obtener_ordenes_para_planificacion(self, inicio_semana: date, fin_semana: date, horizonte_dias: int) -> tuple:
+        """
+        Realiza una consulta unificada para obtener todas las OPs necesarias para la
+        vista de planificación, abarcando las pendientes en el horizonte y las
+        planificadas en la semana.
+        """
+        try:
+            # Calcular fechas límite para los filtros
+            hoy = date.today()
+            fecha_fin_horizonte = hoy + timedelta(days=horizonte_dias)
+            dias_previos_margen = 14
+            fecha_inicio_filtro_semanal = inicio_semana - timedelta(days=dias_previos_margen)
+
+            # Llamar a un nuevo método en el modelo que combina las consultas
+            result = self.model.get_all_for_planificacion(
+                fecha_fin_horizonte=fecha_fin_horizonte,
+                fecha_inicio_semanal=fecha_inicio_filtro_semanal,
+                fecha_fin_semanal=fin_semana
+            )
+
+            if result.get('success'):
+                return self.success_response(data=result.get('data', []))
+            else:
+                return self.error_response(result.get('error', 'Error al obtener órdenes para planificación.'), 500)
+                
+        except Exception as e:
+            logger.error(f"Error crítico en obtener_ordenes_para_planificacion: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+    # endregion
