@@ -433,7 +433,8 @@ class OrdenProduccionModel(BaseModel):
 
             # Condición 2: OPs PLANIFICADAS que son visibles en el calendario semanal
             estados_planificados = ['EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD']
-            filtro_planificadas = f"and(estado.in.({','.join(map(lambda s: f'\"{s}\"', estados_planificados))}),fecha_inicio_planificada.gte.{fecha_inicio_semanal.isoformat()},fecha_inicio_planificada.lte.{fecha_fin_semanal.isoformat()})"
+            estados_formateados = ','.join([f'"{estado}"' for estado in estados_planificados])
+            filtro_planificadas = f"and(estado.in.({estados_formateados}),fecha_inicio_planificada.gte.{fecha_inicio_semanal.isoformat()},fecha_inicio_planificada.lte.{fecha_fin_semanal.isoformat()})"
 
             # Combinar con OR
             query_filter = f"or({filtro_pendientes},{filtro_planificadas})"

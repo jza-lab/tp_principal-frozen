@@ -288,6 +288,34 @@ def eliminar_lote(id_insumo, id_lote):
         )
 
 
+@insumos_bp.route("/", methods=["GET"])
+def api_get_insumos():
+    """
+    Endpoint de API para obtener insumos en formato JSON, con búsqueda y filtro por proveedor.
+    """
+    try:
+        insumo_controller = InsumoController()
+        search_query = request.args.get('search', None)
+        proveedor_id = request.args.get('proveedor_id', None)
+        
+        filtros = {}
+        if search_query:
+            filtros['nombre'] = search_query
+        if proveedor_id:
+            filtros['id_proveedor'] = proveedor_id
+        
+        response, status = insumo_controller.obtener_insumos(filtros)
+        
+        if status == 200:
+            return jsonify(response.get("data", []))
+        else:
+            return jsonify(response), status
+            
+    except Exception as e:
+        logger.error(f"Error en api_get_insumos: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+
 @insumos_bp.route("/stock", methods=["GET"])
 @permission_required(accion='almacen_consulta_stock')
 def obtener_stock_consolidado():

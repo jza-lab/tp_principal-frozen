@@ -60,9 +60,14 @@ class TrazabilidadController(BaseController):
             pedidos_completos = {} # Usamos un dict para evitar duplicados y guardar info completa
 
             # Obtenemos los lotes producidos (esta parte estaba bien)
-            lotes_producidos_result = self.lote_producto_model.find_all(filters={'orden_produccion_id': orden_produccion_id})
-            if lotes_producidos_result.get('success'):
-                for lote in lotes_producidos_result['data']:
+            from app.database import Database
+            db = Database().client
+            lotes_producidos_result = db.table('lotes_productos').select(
+                'numero_lote, cantidad_inicial'
+            ).eq('orden_produccion_id', orden_produccion_id).execute()
+
+            if lotes_producidos_result.data:
+                for lote in lotes_producidos_result.data:
                     lotes_producidos.append({
                         'numero_lote': lote.get('numero_lote'),
                         'cantidad_producida': lote.get('cantidad_inicial')

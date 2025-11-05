@@ -32,7 +32,7 @@
                 <h5 class="mb-0">Información de la Orden</h5>
             </div>
             <div class="card-body">
-                <form id="formulario" method="POST">
+                <form id="ordenProduccionForm" method="POST" action="{{ url_for('orden_produccion.crear') }}">
                     {{ csrf_form.csrf_token }}
                     <div class="row g-3">
                         <div class="col-md-6">

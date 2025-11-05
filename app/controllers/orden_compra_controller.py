@@ -5,7 +5,6 @@ from marshmallow import ValidationError
 from app.models.orden_compra_model import OrdenCompraItemModel, OrdenCompraModel
 from app.models.orden_compra_model import OrdenCompra
 from app.controllers.inventario_controller import InventarioController
-from app.controllers.insumo_controller import InsumoController
 from app.controllers.usuario_controller import UsuarioController
 from datetime import datetime, date
 import logging
@@ -20,6 +19,7 @@ if TYPE_CHECKING:
 
 class OrdenCompraController:
     def __init__(self):
+        from app.controllers.insumo_controller import InsumoController
         self.model = OrdenCompraModel()
         self.inventario_controller = InventarioController()
         self.insumo_controller = InsumoController()

@@ -1,97 +1,125 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const searchInput = document.getElementById('insumo-search');
-    const insumoSelect = document.getElementById('insumo-select');
-    const options = Array.from(insumoSelect.options);
-    const addItemBtn = document.getElementById('addItemBtn');
-    const itemsContainer = document.getElementById('itemsContainer');
-    const subtotalInput = document.getElementById('subtotal');
-    const ivaCheckbox = document.getElementById('iva');
-    const totalInput = document.getElementById('total');
-
-    // --- 1. Filtrado del select de insumos ---
-    searchInput.addEventListener('input', function () {
-        const query = searchInput.value.toLowerCase();
-        options.forEach(option => {
-            const shouldShow = option.textContent.toLowerCase().includes(query);
-            option.style.display = shouldShow ? '' : 'none';
-        });
-    });
-
-    // --- 2. Añadir ítem seleccionado ---
-    addItemBtn.addEventListener('click', function() {
-        const selectedOption = insumoSelect.options[insumoSelect.selectedIndex];
-        if (!selectedOption || selectedOption.value === "") {
-            // Opcional: mostrar una alerta si no hay nada seleccionado
-            alert("Por favor, seleccione un insumo de la lista.");
-            return;
-        }
-
-        const insumoId = selectedOption.value;
-        const insumoNombre = selectedOption.getAttribute('data-nombre');
-        const insumoPrecio = selectedOption.getAttribute('data-precio');
-
-        // Evitar añadir duplicados
-        if (document.querySelector(`.item-row input[name="insumo_id[]"][value="${insumoId}"]`)) {
-            alert("Este insumo ya ha sido añadido.");
-            return;
-        }
-
-        const newRow = document.createElement('div');
-        newRow.className = 'row g-3 align-items-center item-row mb-3 p-2 border rounded';
-        newRow.innerHTML = `
-            <input type="hidden" name="insumo_id[]" value="${insumoId}">
-            <input type="hidden" class="precio_unitario" name="precio_unitario[]" value="${insumoPrecio}">
-            
-            <div class="col-md-6">
-                <label class="form-label small">Insumo</label>
-                <input type="text" class="form-control form-control-sm" value="${insumoNombre}" readonly>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label small">Cantidad</label>
-                <input type="number" step="0.1" min="1" max="5000" class="form-control form-control-sm cantidad" name="cantidad_solicitada[]" value="1">
-            </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="button" class="btn btn-sm btn-outline-danger removeItemBtn w-100">X</button>
-            </div>
-        `;
-        itemsContainer.appendChild(newRow);
-        calcularSubtotales();
-    });
-
-    // --- 3. Eliminar ítem ---
-    itemsContainer.addEventListener('click', function(e) {
-        if (e.target.classList.contains('removeItemBtn')) {
-            e.target.closest('.item-row').remove();
-            calcularSubtotales();
-        }
-    });
-
-    // --- 4. Recalcular totales al cambiar cantidad o IVA ---
-    itemsContainer.addEventListener('input', function(e) {
-        if (e.target.classList.contains('cantidad')) {
-            calcularSubtotales();
-        }
-    });
-    ivaCheckbox.addEventListener('change', calcularSubtotales);
-
-    // --- 5. Función de cálculo ---
-    function calcularSubtotales() {
-        let subtotalTotal = 0;
-        document.querySelectorAll('.item-row').forEach(row => {
-            const cantidad = parseFloat(row.querySelector('.cantidad').value) || 0;
-            const precio = parseFloat(row.querySelector('.precio_unitario').value) || 0;
-            subtotalTotal += cantidad * precio;
-        });
-
-        subtotalInput.value = subtotalTotal.toFixed(2);
-        
-        let total = subtotalTotal;
-        if (ivaCheckbox.checked) {
-            total += subtotalTotal * 0.21;
-        }
-        totalInput.value = total.toFixed(2);
+    const form = document.getElementById('ordenProduccionForm');
+    if (!form) {
+        console.error('El formulario #ordenProduccionForm no se encontró en el DOM.');
+        return;
     }
+
+    const addItemBtn = document.getElementById('addIngredienteBtn');
+    const ingredientesContainer = document.getElementById('ingredientes-container');
+    const ingredienteTemplate = document.getElementById('ingrediente-template');
     
-    // Cálculo inicial por si hay ítems precargados
-    calcularSubtotales();
+    let ingredienteIndex = ingredientesContainer.querySelectorAll('.ingrediente-row').length;
+
+    // --- 1. Añadir Ingrediente ---
+    if (addItemBtn) {
+        addItemBtn.addEventListener('click', function() {
+            if (!ingredienteTemplate) {
+                console.error('El template #ingrediente-template no existe.');
+                return;
+            }
+
+            const templateContent = ingredienteTemplate.content.cloneNode(true);
+            const newRow = templateContent.querySelector('.ingrediente-row');
+            
+            // Actualizar el prefijo del nombre para los campos del nuevo ítem
+            newRow.querySelectorAll('[name]').forEach(el => {
+                el.name = el.name.replace('__prefix__', ingredienteIndex);
+            });
+
+            ingredientesContainer.appendChild(newRow);
+            ingredienteIndex++;
+            updateUI();
+        });
+    }
+
+    // --- 2. Eliminar Ingrediente ---
+    ingredientesContainer.addEventListener('click', function(e) {
+        if (e.target.closest('.remove-ingrediente-btn')) {
+            e.preventDefault();
+            e.target.closest('.ingrediente-row').remove();
+            updateIngredienteIndices();
+            updateUI();
+        }
+    });
+
+    // --- 3. Envío del Formulario con Fetch ---
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(form);
+        const submitButton = form.querySelector('button[type="submit"]');
+        const originalButtonText = submitButton.innerHTML;
+        
+        // Deshabilitar botón y mostrar spinner
+        submitButton.disabled = true;
+        submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...`;
+
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRF-TOKEN': form.querySelector('[name=csrf_token]').value
+                }
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Éxito!',
+                    text: result.message || 'La operación se completó correctamente.',
+                    timer: 2000,
+                    showConfirmButton: false
+                }).then(() => {
+                    if (result.redirect_url) {
+                        window.location.href = result.redirect_url;
+                    } else {
+                        // Si no hay redirección, podría ser útil recargar o resetear el form
+                        location.reload(); 
+                    }
+                });
+            } else {
+                throw new Error(result.error || 'Ocurrió un error desconocido.');
+            }
+
+        } catch (error) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Error',
+                text: error.message
+            });
+        } finally {
+            // Restaurar botón
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
+        }
+    });
+    
+    // --- 4. Funciones auxiliares ---
+    function updateUI() {
+        const noItemsMsg = document.getElementById('no-ingredientes-msg');
+        if (noItemsMsg) {
+            noItemsMsg.style.display = ingredientesContainer.children.length > 0 ? 'none' : 'block';
+        }
+    }
+
+    function updateIngredienteIndices() {
+        let index = 0;
+        ingredientesContainer.querySelectorAll('.ingrediente-row').forEach(row => {
+            row.querySelectorAll('[name]').forEach(el => {
+                const name = el.getAttribute('name');
+                if (name) {
+                    el.setAttribute('name', name.replace(/items\[\d+\]/, `items[${index}]`));
+                }
+            });
+            index++;
+        });
+        ingredienteIndex = index;
+    }
+
+    // --- Inicialización ---
+    updateUI();
 });

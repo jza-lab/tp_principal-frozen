@@ -31,6 +31,62 @@
     <div class="row">
         <div class="col-lg-8">
             <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Ítems de la Orden</h5>
+                    <button type="button" class="btn btn-sm btn-primary" id="addItemBtn">
+                        <i class="bi bi-plus-circle me-1"></i> Añadir Ítem
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="input-group mb-3">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" id="insumo-search" class="form-control" placeholder="Buscar insumo por nombre o código...">
+                            </div>
+                            <div id="insumo-results" class="list-group" style="max-height: 200px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm align-middle">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th style="width: 40%;">Insumo</th>
+                                    <th style="width: 25%;">Cantidad</th>
+                                    <th style="width: 25%;">Precio Unitario</th>
+                                    <th style="width: 10%;" class="text-center">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="itemsContainer">
+                                {% if orden and orden.items %}
+                                    {% for item in orden.items %}
+                                        <tr class="item-row">
+                                            <td>
+                                                <input type="hidden" name="items[{{ loop.index0 }}][insumo_id]" value="{{ item.insumo_id }}">
+                                                <input type="text" class="form-control form-control-sm" value="{{ item.insumo.nombre }}" readonly>
+                                            </td>
+                                            <td>
+                                                <input type="number" step="0.01" min="0.01" max="99999.99" class="form-control form-control-sm cantidad" name="items[{{ loop.index0 }}][cantidad_solicitada]" value="{{ item.cantidad_solicitada }}">
+                                            </td>
+                                            <td>
+                                                <input type="text" class="form-control form-control-sm precio_unitario" name="items[{{ loop.index0 }}][precio_unitario]" value="${{ '%.2f'|format(item.precio_unitario|float) }}" readonly>
+                                            </td>
+                                            <td class="text-center">
+                                                <button type="button" class="btn btn-sm btn-outline-danger removeItemBtn" title="Eliminar ítem"><i class="bi bi-trash"></i></button>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="no-items-msg" class="text-center text-muted py-3 border-top" style="display: {% if not (orden and orden.items) %}block{% else %}none{% endif %};">
+                        <i class="bi bi-box-seam fs-3"></i>
+                        <p class="mt-2">Añada ítems a la orden.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="card mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">Información de la Orden</h5>
                 </div>
@@ -82,68 +138,41 @@
                     </div>
                 </div>
             </div>
+            
+            <template id="item-template">
+                <tr class="item-row">
+                    <td>
+                        <input type="hidden" name="items[__prefix__][insumo_id]" class="insumo-id">
+                        <input type="text" class="form-control form-control-sm insumo-nombre" readonly>
+                    </td>
+                    <td>
+                        <input type="number" step="0.01" min="0.01" max="99999.99" class="form-control form-control-sm cantidad" name="items[__prefix__][cantidad_solicitada]" required>
+                    </td>
+                    <td>
+                         <input type="text" class="form-control form-control-sm precio_unitario" name="items[__prefix__][precio_unitario]" readonly>
+                    </td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger removeItemBtn" title="Eliminar ítem"><i class="bi bi-trash"></i></button>
+                    </td>
+                </tr>
+            </template>
 
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Ítems de la Orden</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <label for="insumo-search" class="form-label">Buscar Insumo</label>
-                            <div class="input-group mb-2">
-                                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                                <input type="text" id="insumo-search" class="form-control" placeholder="Escriba para filtrar insumos...">
-                            </div>
-                            <select id="insumo-select" class="form-select" size="5">
-                                {% for insumo in insumos %}
-                                <option value="{{ insumo.id }}" data-nombre="{{ insumo.nombre }}" data-precio="{{ insumo.precio_unitario }}">{{ insumo.nombre }}</option>
-                                {% endfor %}
-                            </select>
-                             <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="addItemBtn">Añadir Ítem Seleccionado</button>
-                        </div>
-                        <div class="col-md-6">
-                             <div id="itemsContainer">
-                                {% if orden and orden['items'] %}
-                                {% for item in orden['items'] %}
-                                <div class="row g-3 align-items-end item-row mb-2">
-                                    <input type="hidden" name="insumo_id[]" value="{{ item.insumo_id }}">
-                                    <div class="col-md-6">
-                                        <label class="form-label">Insumo</label>
-                                        <input type="text" class="form-control" value="{{ item.insumo.nombre }}" readonly>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label">Cantidad</label>
-                                        <input type="number" step="0.1" min="1" max="5000" class="form-control cantidad" name="cantidad_solicitada[]" value="{{ item.cantidad_solicitada }}">
-                                    </div>
-                                    <div class="col-md-2">
-                                        <button type="button" class="btn btn-outline-danger removeItemBtn">X</button>
-                                    </div>
-                                    <input type="hidden" class="precio_unitario" name="precio_unitario[]" value="{{ item.precio_unitario }}">
-                                </div>
-                                {% endfor %}
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <div class="card mb-4">
                 <div class="card-body d-flex justify-content-end gap-3">
                     <div class="w-25">
                         <label class="form-label">Subtotal</label>
-                        <input type="number" step="0.01" class="form-control" id="subtotal" name="subtotal" value="{{ orden.subtotal if orden else 0 }}" readonly>
+                        <input type="text" class="form-control" id="subtotal" name="subtotal" value="${{ '%.2f'|format(orden.subtotal|float) if orden else '0.00' }}" readonly>
                     </div>
                     <div class="w-25 d-flex flex-column justify-content-center">
                         <div class="form-check mt-4">
-                            <input class="form-check-input" type="checkbox" id="iva" name="iva" value="1" {% if orden and orden.iva > 0 %}checked{% endif %}>
+                            <input class="form-check-input" type="checkbox" id="iva" name="incluir_iva" value="true" {% if orden and orden.iva > 0 %}checked{% endif %}>
                             <label class="form-check-label" for="iva">Aplicar IVA 21%</label>
                         </div>
                     </div>
                     <div class="w-25">
                         <label class="form-label">Total</label>
-                        <input type="number" step="0.01" class="form-control" id="total" name="total" value="{{ orden.total if orden else 0 }}" readonly>
+                        <input type="text" class="form-control" id="total" name="total" value="${{ '%.2f'|format(orden.total|float) if orden else '0.00' }}" readonly>
                     </div>
                 </div>
             </div>
@@ -161,5 +190,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/ordenes_compra/formularioCompra.js') }}?v=2"></script>
+<script>
+    const INSUMOS_API_URL = "{{ url_for('insumos_api.api_get_insumos') }}";
+</script>
+<script src="{{ url_for('static', filename='js/ordenes_compra/formularioCompra.js') }}?v=3"></script>
 {% endblock extra_js %}
