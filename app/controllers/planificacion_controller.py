@@ -635,7 +635,7 @@ class PlanificacionController(BaseController):
                     today = date.today()
                     t_prod_dias = data.get('sugerencia_t_prod_dias', 0)
                     t_proc_dias = data.get('sugerencia_t_proc_dias', 0)
-                    fecha_meta = date.fromisoformat(data['fecha_meta_mas_proxima'])
+                    fecha_meta = date.fromisoformat(data['fecha_meta_mas_proxima'].split('T')[0])
 
                     fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
                     fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
@@ -698,6 +698,7 @@ class PlanificacionController(BaseController):
                 ordenes_relevantes = ordenes_pre_cargadas
                 logger.debug("obtener_planificacion_semanal: Usando lista de OPs pre-cargada.")
             else:
+                ordenes_relevantes = []
                 # Bloque de fallback: si no se pasa lista, buscarla como antes
                 logger.debug("obtener_planificacion_semanal: No se pasó lista pre-cargada, buscando OPs...")
                 dias_previos_margen = 14 # Traer OPs que empezaron hasta 2 semanas antes
@@ -721,10 +722,6 @@ class PlanificacionController(BaseController):
 
                 ordenes_relevantes = response_ops.get('data', [])
 
-            if not response_ops.get('success'):
-                return self.error_response("Error al obtener OPs para cálculo semanal.", 500)
-
-            ordenes_relevantes = response_ops.get('data', [])
             if not ordenes_relevantes: # Si no hay OPs, devolver vacío
                  resultado_vacio = { 'ops_visibles_por_dia': {}, 'inicio_semana': start_of_week.isoformat(), 'fin_semana': end_of_week.isoformat(), 'semana_actual_str': week_str }
                  return self.success_response(data=resultado_vacio)
@@ -1084,7 +1081,7 @@ class PlanificacionController(BaseController):
                     ops_planificadas_exitosamente.extend(op_codigos)
 
                     # Verificar si se generó una OC (respuesta de aprobar_orden)
-                    if res_planif_dict.get('data', {}).get('oc_generada'):
+                    if res_planif_dict and res_planif_dict.get('data') and res_planif_dict['data'].get('oc_generada'):
                         oc_codigo = res_planif_dict['data'].get('oc_codigo', 'N/A')
                         logger.info(f"[AutoPlan] -> Se generó OC {oc_codigo} para OPs {op_codigos}.")
                         ops_con_oc_generada.append({'ops': op_codigos, 'oc': oc_codigo})
@@ -1122,7 +1119,7 @@ class PlanificacionController(BaseController):
 
                             # Re-chequear si esta aprobación generó una OC
                             # (La función aprobar_orden dentro de _ejecutar_aprobacion_final maneja esto)
-                            if res_aprob_dict.get('data', {}).get('oc_generada'):
+                            if res_aprob_dict and res_aprob_dict.get('data') and res_aprob_dict['data'].get('oc_generada'):
                                 oc_codigo = res_aprob_dict['data'].get('oc_codigo', 'N/A')
                                 logger.info(f"[AutoPlan] -> Se generó OC {oc_codigo} para OPs {op_codigos}.")
                                 ops_con_oc_generada.append({'ops': op_codigos, 'oc': oc_codigo})
