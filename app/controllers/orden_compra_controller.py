@@ -110,6 +110,11 @@ class OrdenCompraController:
             if not orden_data.get('proveedor_id') or not orden_data.get('fecha_emision'):
                 return {'success': False, 'error': 'El proveedor y la fecha de emisión son obligatorios.'}
 
+            # --- CORRECCIÓN: Generar código único si no se provee ---
+            if 'codigo_oc' not in orden_data or not orden_data['codigo_oc']:
+                orden_data['codigo_oc'] = f"OC-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+            # ----------------------------------------------------
+
             # Asignar datos clave
             orden_data['usuario_creador_id'] = usuario_id
             if not orden_data.get('estado'):
