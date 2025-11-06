@@ -192,6 +192,9 @@ class PlanificacionController(BaseController):
 
                 logger.info(f"[consolidar_lote] Calculando carga actual basada en {len(ops_actuales)} OPs (excluyendo {op_a_planificar_id})...")
                 carga_actual_map = self.calcular_carga_capacidad(ops_actuales)
+                # --- DEBUG LOG ---
+                logger.debug(f"[DEBUG JIT] Mapa de carga actual para {op_a_planificar_id}: {carga_actual_map}")
+                # --- FIN DEBUG ---
 
                 # 2. Llamar al simulador pasándole el mapa de carga
                 simulacion_result = self._simular_asignacion_carga(
@@ -213,19 +216,30 @@ class PlanificacionController(BaseController):
                 fecha_fin_estimada = simulacion_result['fecha_fin_estimada']
                 dias_necesarios = simulacion_result['dias_necesarios']
 
+                # --- DEBUG LOG ---
+                logger.debug(f"[DEBUG JIT] Simulación para {op_a_planificar_id} OK. Resultado: {simulacion_result}")
+                # --- FIN DEBUG ---
+
                 # --- ¡NUEVA VALIDACIÓN DE FECHA META! ---
                 fecha_meta_str = op_data.get('fecha_meta')
                 va_a_terminar_tarde = False
                 fecha_meta = None
                 if fecha_meta_str:
                     try:
-                        fecha_meta = date.fromisoformat(fecha_meta_str)
+                        # --- ¡CORRECCIÓN ROBUSTA! ---
+                        # Maneja '2025-11-05T00:00...' Y '2025-11-05 00:00'
+                        fecha_meta_solo_str = fecha_meta_str.split('T')[0].split(' ')[0]
+                        fecha_meta = date.fromisoformat(fecha_meta_solo_str)
+                        # --- FIN CORRECCIÓN ---
+
                         if fecha_fin_estimada > fecha_meta:
                             va_a_terminar_tarde = True
                             logger.warning(f"Validación OP {op_a_planificar_id}: Terminará tarde (Fin: {fecha_fin_estimada}, Meta: {fecha_meta})")
+                            # --- DEBUG LOG ---
+                            logger.debug(f"[DEBUG JIT] Comparación: va_a_terminar_tarde = ({fecha_fin_estimada} > {fecha_meta}) -> {va_a_terminar_tarde}")
+                            # --- FIN DEBUG ---
                     except ValueError:
                         logger.warning(f"OP {op_a_planificar_id} tiene fecha meta inválida: {fecha_meta_str}")
-                # --- FIN VALIDACIÓN ---
 
                 # ¡IMPORTANTE! Actualizar la fecha de inicio en 'asignaciones' a la real encontrada
                 asignaciones['fecha_inicio'] = primer_dia_asignado.isoformat()
@@ -457,14 +471,14 @@ class PlanificacionController(BaseController):
             estados_de_consumo = ['EN_LINEA_1', 'EN_LINEA_2']
             if estado_actual == 'LISTA PARA PRODUCIR' and nuevo_estado in estados_de_consumo:
                 logger.info(f"OP {op_id} movida a producción. Consumiendo stock de insumos...")
-                
+
                 # Obtener el ID del usuario actual para registrar el consumo
                 # (Asumimos que está disponible en el contexto de la petición o se pasa como argumento)
                 # Aquí usamos un valor por defecto, pero debería ser el usuario autenticado.
                 usuario_id = 1 # OJO: Reemplazar con el ID del usuario real
-                
+
                 consumo_result = self.inventario_controller.consumir_stock_para_op(op_actual_res['data'], usuario_id)
-                
+
                 if not consumo_result.get('success'):
                     error_msg = f"No se pudo iniciar la producción por falta de stock: {consumo_result.get('error')}"
                     logger.error(error_msg)
@@ -635,7 +649,10 @@ class PlanificacionController(BaseController):
                     today = date.today()
                     t_prod_dias = data.get('sugerencia_t_prod_dias', 0)
                     t_proc_dias = data.get('sugerencia_t_proc_dias', 0)
-                    fecha_meta = date.fromisoformat(data['fecha_meta_mas_proxima'].split('T')[0])
+                    # --- ¡CORRECCIÓN ROBUSTA! ---
+                    fecha_meta_solo_str = data['fecha_meta_mas_proxima'].split('T')[0].split(' ')[0]
+                    fecha_meta = date.fromisoformat(fecha_meta_solo_str)
+                    # --- FIN CORRECCIÓN ---
 
                     fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
                     fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
@@ -1044,7 +1061,10 @@ class PlanificacionController(BaseController):
                     today = date.today()
                     t_prod_dias = grupo.get('sugerencia_t_prod_dias', 0)
                     t_proc_dias = grupo.get('sugerencia_t_proc_dias', 0)
-                    fecha_meta = date.fromisoformat(grupo['fecha_meta_mas_proxima'])
+                    # --- ¡CORRECCIÓN ROBUSTA! ---
+                    fecha_meta_solo_str = grupo['fecha_meta_mas_proxima'].split('T')[0].split(' ')[0]
+                    fecha_meta = date.fromisoformat(fecha_meta_solo_str)
+                    # --- FIN CORRECCIÓN ---
 
                     fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
                     fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
@@ -1073,6 +1093,9 @@ class PlanificacionController(BaseController):
                 res_planif_dict, res_planif_status = self.consolidar_y_aprobar_lote(
                     op_ids, asignaciones_auto, usuario_id
                 )
+                # --- DEBUG LOG ---
+                logger.debug(f"[DEBUG JIT] Resultado para {op_codigos}: Status={res_planif_status}, Error='{res_planif_dict.get('error')}'")
+                # --- FIN DEBUG ---
 
                 # 6. Interpretar la respuesta
                 if res_planif_status == 200 and res_planif_dict.get('success'):
@@ -1485,30 +1508,29 @@ class PlanificacionController(BaseController):
 
             fin_semana = inicio_semana + timedelta(days=6)
 
-            # 2. Consulta Unificada y Optimizada de Órdenes de Producción
-            response_ops, _ = self.orden_produccion_controller.obtener_ordenes_para_planificacion(inicio_semana, fin_semana, horizonte_dias)
-            if not response_ops.get('success'):
-                return self.error_response("Error al obtener las órdenes de producción.", 500)
-            
-            todas_las_ops = response_ops.get('data', [])
+            # 2. Consulta de Órdenes de Producción (LÓGICA RESTAURADA)
 
-            # 3. Procesamiento en Memoria
-            # Filtrar OPs por estado para diferentes secciones de la UI
-            ops_pendientes = [op for op in todas_las_ops if op['estado'] == 'PENDIENTE']
-            
-            estados_planificados_validos = {
+            estados_planificados_validos = [
                 'EN ESPERA', 'EN_ESPERA',
                 'LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR',
                 'EN_LINEA_1', 'EN_LINEA_2',
                 'EN_EMPAQUETADO',
                 'CONTROL_DE_CALIDAD'
+            ]
+            filtros_planificadas = {
+                'estado': ('in', estados_planificados_validos)
             }
-            ops_planificadas = [op for op in todas_las_ops if op.get('estado') in estados_planificados_validos]
-            
+            response_ops_planificadas, _ = self.orden_produccion_controller.obtener_ordenes(filtros_planificadas)
+            if not response_ops_planificadas.get('success'):
+                 return self.error_response("Error al obtener las órdenes planificadas.", 500)
+
+            ops_planificadas = response_ops_planificadas.get('data', []) # <-- Esta es la variable correcta
+
+            # 3. Procesamiento en Memoria
+
             # --- MPS Data (usa una versión simplificada de la lógica original) ---
             response_mps, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias)
             mps_data = response_mps.get('data', {}) if response_mps.get('success') else {}
-
 
             # --- Calendario Semanal (usa la lista ya filtrada) ---
             response_semanal, _ = self.obtener_planificacion_semanal(week_str, ordenes_pre_cargadas=ops_planificadas)
