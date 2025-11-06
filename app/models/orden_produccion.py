@@ -215,6 +215,18 @@ class OrdenProduccionModel(BaseModel):
             FORMATO_SALIDA = "%Y-%m-%d %H:%M"
 
             if item:
+                # --- Lógica para obtener supervisor de calidad por separado ---
+                if item.get('supervisor_calidad_id'):
+                    sv_calidad_res = self.db.table('usuarios').select('nombre, apellido').eq('id', item['supervisor_calidad_id']).single().execute()
+                    if sv_calidad_res.data:
+                        sv_info = sv_calidad_res.data
+                        item['supervisor_calidad_nombre'] = f"{sv_info.get('nombre', '')} {sv_info.get('apellido', '')}".strip()
+                    else:
+                        item['supervisor_calidad_nombre'] = 'No encontrado'
+                else:
+                    item['supervisor_calidad_nombre'] = 'No asignado'
+                # --- Fin de la nueva lógica ---
+
                 for key, value in item.items():
                     if key.startswith('fecha') and isinstance(value, str) and value:
                         try:
@@ -446,7 +458,8 @@ class OrdenProduccionModel(BaseModel):
 
             # Condición 2: OPs PLANIFICADAS que son visibles en el calendario semanal
             estados_planificados = ['EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD']
-            filtro_planificadas = f"and(estado.in.({','.join(map(lambda s: f'\"{s}\"', estados_planificados))}),fecha_inicio_planificada.gte.{fecha_inicio_semanal.isoformat()},fecha_inicio_planificada.lte.{fecha_fin_semanal.isoformat()})"
+            estados_formateados = ','.join([f'"{estado}"' for estado in estados_planificados])
+            filtro_planificadas = f"and(estado.in.({estados_formateados}),fecha_inicio_planificada.gte.{fecha_inicio_semanal.isoformat()},fecha_inicio_planificada.lte.{fecha_fin_semanal.isoformat()})"
 
             # Combinar con OR
             query_filter = f"or({filtro_pendientes},{filtro_planificadas})"

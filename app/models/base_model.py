@@ -109,34 +109,37 @@ class BaseModel(ABC):
                 for key, value in filters.items():
                     if value is None:
                         continue
-                    
-                    # Si el valor es una lista, usar el operador 'in'
-                    if isinstance(value, list):
-                        query = query.in_(key, value)
-                    # --- LÓGICA CORREGIDA PARA OPERADORES (ej. 'fecha_gte') ---
-                    elif '_' in key:
-                        parts = key.split('_')
-                        operator = parts[-1]
-                        column_name = '_'.join(parts[:-1]) # Reconstruir el nombre de la columna
 
-                        op_map = {
-                            'eq': query.eq, 'gt': query.gt, 'gte': query.gte,
-                            'lt': query.lt, 'lte': query.lte, 'in': query.in_
-                        }
+                    # --- INICIO DE LA CORRECCIÓN ---
+                    # Mapa de operadores conocidos
+                    op_map = {
+                        'eq': query.eq, 'gt': query.gt, 'gte': query.gte,
+                        'lt': query.lt, 'lte': query.lte, 'in': query.in_,
+                        'ilike': query.ilike
+                    }
 
-                        if operator in op_map:
-                            query = op_map[operator](column_name, value)
-                            continue # Importante: saltar al siguiente filtro
+                    # Dividir solo si la ÚLTIMA parte es un operador conocido
+                    parts = key.split('_')
+                    operator = parts[-1]
+
+                    if len(parts) > 1 and operator in op_map:
+                        # Es un operador (ej. 'fecha_gte')
+                        column_name = '_'.join(parts[:-1]) # 'fecha'
+                        query = op_map[operator](column_name, value)
+                        continue # Importante: saltar al siguiente filtro
                     # --- FIN DE LA CORRECCIÓN ---
+
+                    # Lógica original para filtros simples (ej. 'receta_id') y tuplas
                     elif isinstance(value, tuple) and len(value) == 2:
                         operator, filter_value = value
-                        op_map = {
-                            'eq': query.eq, 'gt': query.gt, 'gte': query.gte,
-                            'lt': query.lt, 'lte': query.lte, 'in': query.in_,
-                            'ilike': query.ilike
-                        }
                         if operator.lower() in op_map:
                             query = op_map[operator.lower()](key, filter_value)
+
+                    # Lógica para listas (siempre es 'in')
+                    elif isinstance(value, list):
+                        query = query.in_(key, value)
+
+                    # Filtro de igualdad simple (ahora maneja 'receta_id' correctamente)
                     else:
                         query = query.eq(key, value)
 
