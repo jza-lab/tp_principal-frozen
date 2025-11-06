@@ -28,7 +28,9 @@ class ProduccionKanbanController(BaseController):
         """
         try:
             # 1. Obtener las OPs base
-            response_ops, _ = self.orden_produccion_controller.obtener_ordenes_para_kanban_hoy()
+            filtros = {'rol': usuario_rol, 'usuario_id': usuario_id}
+            response_ops, _ = self.orden_produccion_controller.obtener_ordenes_para_kanban_hoy(filtros=filtros)
+
             if not response_ops.get('success'):
                 return self.error_response("Error al cargar las órdenes para el tablero.")
             ordenes = response_ops.get('data', [])
@@ -97,13 +99,23 @@ class ProduccionKanbanController(BaseController):
 
             # 5. Agrupar por estado
             ordenes_por_estado = defaultdict(list)
+            columnas_de_proceso = {'EN_PROCESO', 'CONTROL_DE_CALIDAD', 'COMPLETADA'}
+
             for orden in ordenes_enriquecidas:
                 estado_db = orden.get('estado', '').strip()
                 estado_constante = estado_db.replace(' ', '_')
+
+                # Normalizar estados intermedios a 'EN_PROCESO'
                 if estado_constante in ['EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'EN_PRODUCCION']:
                     estado_constante = 'EN_PROCESO'
-                if estado_constante in OP_KANBAN_COLUMNAS:
+
+                # Asignar a la columna correspondiente o a "Lista para Producir" por defecto
+                if estado_constante in columnas_de_proceso:
                     ordenes_por_estado[estado_constante].append(orden)
+                else:
+                    # Todos los demás estados (LISTA_PARA_PRODUCIR, EN_ESPERA, PAUSADA, etc.)
+                    # van a la primera columna.
+                    ordenes_por_estado['LISTA_PARA_PRODUCIR'].append(orden)
 
             # 3. Calculate daily metrics
             hoy_inicio = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)

@@ -32,6 +32,10 @@ from app.controllers.configuracion_controller import (
     TOLERANCIA_SOBREPRODUCCION_PORCENTAJE,
     DEFAULT_TOLERANCIA_SOBREPRODUCCION
 )
+# --- NUEVAS IMPORTACIONES PARA TRASPASO ---
+from app.models.traspaso_turno_model import TraspasoTurnoModel
+from app.schemas.traspaso_turno_schema import TraspasoTurnoSchema
+
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +64,9 @@ class OrdenProduccionController(BaseController):
         self.operacion_receta_model = OperacionRecetaModel()
         self.op_cronometro_controller = OpCronometroController()
         self.configuracion_controller = ConfiguracionController()
+        # --- NUEVOS MODELOS Y SCHEMAS PARA TRASPASO ---
+        self.traspaso_turno_model = TraspasoTurnoModel()
+        self.traspaso_turno_schema = TraspasoTurnoSchema()
         self._planificacion_controller = None
 
     @property
@@ -104,7 +111,18 @@ class OrdenProduccionController(BaseController):
             result = self.model.get_all_enriched(filtros)
 
             if result.get('success'):
-                return self.success_response(data=result.get('data', []))
+                # --- INICIO LÓGICA DE ENRIQUECIMIENTO PARA MATERIALES ---
+                ordenes = result.get('data', [])
+                for orden in ordenes:
+                    estado = orden.get('estado')
+                    # El estado 'LISTA PARA PRODUCIR' implica que el stock fue verificado y reservado.
+                    # El estado 'EN ESPERA' implica que se está esperando la llegada de insumos via OC.
+                    if estado in ['LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR']:
+                        orden['materiales_disponibles'] = True
+                    elif estado == 'EN_ESPERA':
+                        orden['materiales_disponibles'] = False
+                # --- FIN LÓGICA DE ENRIQUECIMIENTO ---
+                return self.success_response(data=ordenes)
             else:
                 error_msg = result.get('error', 'Error desconocido al obtener órdenes.')
                 status_code = 404 if "no encontradas" in str(error_msg).lower() else 500
@@ -871,12 +889,17 @@ class OrdenProduccionController(BaseController):
             motivos_desperdicio_result = motivo_desperdicio_model.find_all()
             motivos_desperdicio = motivos_desperdicio_result.get('data', []) if motivos_desperdicio_result.get('success') else []
 
+            # --- NUEVO: OBTENER TRASPASO PENDIENTE ---
+            traspaso_pendiente_result = self.traspaso_turno_model.find_latest_pending_by_op_id(orden_id)
+            traspaso_pendiente = traspaso_pendiente_result.get('data') if traspaso_pendiente_result.get('success') else None
+
             # 4. Ensamblar todos los datos
             datos_completos = {
                 'orden': orden_data,
                 'ingredientes': ingredientes,
                 'motivos_paro': motivos_paro,
-                'motivos_desperdicio': motivos_desperdicio
+                'motivos_desperdicio': motivos_desperdicio,
+                'traspaso_pendiente': traspaso_pendiente # <-- Añadir al contexto
             }
 
             return self.success_response(data=datos_completos)
@@ -884,6 +907,61 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             logger.error(f"Error en obtener_datos_para_vista_foco para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    # endregion
+
+    # region Lógica de Traspaso de Turno
+
+    def crear_traspaso_de_turno(self, orden_id: int, data: Dict, usuario_saliente_id: int) -> tuple:
+        """
+        Crea un registro de traspaso de turno cuando un operario pausa por "Cambio de Turno".
+        """
+        try:
+            # 1. Preparar y validar los datos para el traspaso
+            datos_traspaso = {
+                "orden_produccion_id": orden_id,
+                "usuario_saliente_id": usuario_saliente_id,
+                "fecha_traspaso": datetime.now().isoformat(),
+                "notas_novedades": data.get("notas_novedades"),
+                "notas_insumos": data.get("notas_insumos"),
+                "resumen_produccion": data.get("resumen_produccion", {})
+            }
+            validated_data = self.traspaso_turno_schema.load(datos_traspaso)
+
+            # 2. Crear el registro en la base de datos
+            result = self.traspaso_turno_model.create(validated_data)
+
+            if result.get('success'):
+                return self.success_response(data=result.get('data'), message="Traspaso de turno registrado.")
+            else:
+                return self.error_response(f"No se pudo crear el traspaso: {result.get('error')}", 500)
+
+        except ValidationError as e:
+            return self.error_response(f"Datos de traspaso inválidos: {e.messages}", 400)
+        except Exception as e:
+            logger.error(f"Error al crear traspaso para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
+
+    def aceptar_traspaso_de_turno(self, orden_id: int, traspaso_id: int, usuario_entrante_id: int) -> tuple:
+        """
+        Marca un traspaso como recibido por el operario entrante y reanuda la producción.
+        """
+        try:
+            # 1. Actualizar el registro de traspaso con el usuario entrante
+            update_data = {
+                "usuario_entrante_id": usuario_entrante_id,
+                "fecha_recepcion": datetime.now().isoformat()
+            }
+            update_result = self.traspaso_turno_model.update(traspaso_id, update_data)
+            if not update_result.get('success'):
+                return self.error_response(f"Error al confirmar el traspaso: {update_result.get('error')}", 500)
+
+            # 2. Reanudar la producción (esto ya cambia el estado de la OP a EN_PROCESO)
+            return self.reanudar_produccion(orden_id, usuario_entrante_id)
+
+        except Exception as e:
+            logger.error(f"Error al aceptar traspaso {traspaso_id} para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
 
     # endregion
 
@@ -1104,9 +1182,6 @@ class OrdenProduccionController(BaseController):
                 return self.error_response(f"Valor numérico inválido: {e}", 400)
 
             motivo_desperdicio_id = data.get('motivo_desperdicio_id')
-            # El frontend ahora envía 'final' o 'parcial'
-            tipo_reporte = data.get('tipo_reporte', 'parcial')
-            finalizar_orden = (tipo_reporte == 'final')
 
             if cantidad_buena < 0 or cantidad_desperdicio < 0:
                 return self.error_response("Las cantidades no pueden ser negativas.", 400)
@@ -1160,7 +1235,7 @@ class OrdenProduccionController(BaseController):
             
             # --- LÓGICA DE TRANSICIÓN DE ESTADO ---
             # La orden se mueve al siguiente estado si la cantidad producida alcanza o supera la cantidad PLANIFICADA (no la máxima).
-            if finalizar_orden or nueva_cantidad_producida >= cantidad_planificada:
+            if nueva_cantidad_producida >= cantidad_planificada:
                 update_data['estado'] = 'CONTROL_DE_CALIDAD'
                 # También se debería registrar la fecha_fin
                 update_data['fecha_fin'] = datetime.now().isoformat()
@@ -1176,7 +1251,7 @@ class OrdenProduccionController(BaseController):
     def pausar_produccion(self, orden_id: int, motivo_id: int, usuario_id: int) -> tuple:
         """
         Pausa una orden de producción, cambiando su estado y registrando el paro.
-        Es idempotente: si ya está pausada, devuelve éxito.
+        Si el motivo es "Cambio de Turno", solo pausa, no crea registro de paro.
         """
         try:
             # 1. Obtener la orden y verificar su estado
@@ -1191,25 +1266,36 @@ class OrdenProduccionController(BaseController):
             if orden.get('estado') != 'EN_PROCESO':
                 return self.error_response(f"No se puede pausar una orden que no está 'EN PROCESO'. Estado actual: {orden.get('estado')}", 409)
 
-            # 2. Cambiar el estado de la orden a PAUSADA
+            # --- LÓGICA DE PAUSA DIFERENCIADA ---
+            motivo_paro_model = MotivoParoModel()
+            motivo_result = motivo_paro_model.find_by_id(motivo_id)
+            motivo_descripcion = motivo_result.get('data', {}).get('descripcion', '').lower()
+
+            # 2. Cambiar el estado de la orden a PAUSADA (siempre)
             cambio_estado_result = self.model.cambiar_estado(orden_id, 'PAUSADA')
             if not cambio_estado_result.get('success'):
                 return self.error_response(f"Error al cambiar el estado de la orden a PAUSADA: {cambio_estado_result.get('error')}", 500)
 
-            # 3. Crear el registro de paro
-            paro_model = RegistroParoModel()
-            datos_pausa = {
-                'orden_produccion_id': orden_id,
-                'motivo_paro_id': motivo_id,
-                'usuario_id': usuario_id,
-                'fecha_inicio': datetime.now().isoformat()
-            }
-            paro_model.create(datos_pausa)
-
-            # Pausar el cronómetro
+            # 3. Pausar el cronómetro (siempre)
             self.op_cronometro_controller.registrar_fin(orden_id)
 
-            return self.success_response(message="Producción pausada correctamente.")
+            # 4. Crear registro de paro SOLO si NO es por cambio de turno
+            if "cambio de turno" not in motivo_descripcion:
+                paro_model = RegistroParoModel()
+                datos_pausa = {
+                    'orden_produccion_id': orden_id,
+                    'motivo_paro_id': motivo_id,
+                    'usuario_id': usuario_id,
+                    'fecha_inicio': datetime.now().isoformat()
+                }
+                paro_model.create(datos_pausa)
+                message = "Producción pausada correctamente."
+            else:
+                # Si es por cambio de turno, no se crea registro de paro aquí.
+                # El flujo de traspaso se encargará de la lógica.
+                message = "Orden lista para traspaso de turno."
+
+            return self.success_response(message=message)
 
         except Exception as e:
             logger.error(f"Error en pausar_produccion para OP {orden_id}: {e}", exc_info=True)
@@ -1263,13 +1349,13 @@ class OrdenProduccionController(BaseController):
             logger.error(f"Error en reanudar_produccion para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
 
-    def obtener_ordenes_para_kanban_hoy(self) -> tuple:
+    def obtener_ordenes_para_kanban_hoy(self, filtros: Optional[Dict] = None) -> tuple:
         """
         Obtiene las órdenes de producción relevantes para el tablero Kanban del día.
         Esto incluye OPs que comienzan hoy y aquellas que ya están en producción.
         """
         try:
-            result = self.model.get_for_kanban_hoy()
+            result = self.model.get_for_kanban_hoy(filtros_operario=filtros)
 
             if result.get('success'):
                 return self.success_response(data=result.get('data', []))
