@@ -1,8 +1,10 @@
 from datetime import datetime
 import re
 from app.controllers.base_controller import BaseController
+from app.controllers.registro_controller import RegistroController
 from app.models.insumo import InsumoModel
 from app.models.inventario import InventarioModel
+from flask_jwt_extended import get_current_user
 from app.schemas.insumo_schema import InsumosCatalogoSchema
 from typing import Dict, Optional, List
 import logging
@@ -24,6 +26,7 @@ class InsumoController(BaseController):
         self.inventario_model = InventarioModel()
         #self.alertas_service = AlertasService()
         self.schema = InsumosCatalogoSchema()
+        self.registro_controller = RegistroController()
 
 
     def _abrev(self, texto, length=3):
@@ -90,10 +93,13 @@ class InsumoController(BaseController):
             result = self.insumo_model.create(validated_data)
 
             if result['success']:
-                logger.info(f"Insumo creado exitosamente: {result['data']['id_insumo']}")
+                insumo_data = result['data']
+                detalle = f"Se creó el insumo '{insumo_data['nombre']}' (ID: {insumo_data['id_insumo']})."
+                self.registro_controller.crear_registro(get_current_user(), 'Insumos', 'Creación', detalle)
+                logger.info(f"Insumo creado exitosamente: {insumo_data['id_insumo']}")
 
                 return self.success_response(
-                    data=result['data'],  # Marshmallow se encarga
+                    data=insumo_data,
                     message='Insumo creado exitosamente',
                     status_code=201
                 )
@@ -258,10 +264,12 @@ class InsumoController(BaseController):
             result = self.insumo_model.update(id_insumo, validated_data, 'id_insumo')
 
             if result['success']:
-
+                insumo_data = result['data']
+                detalle = f"Se actualizó el insumo '{insumo_data['nombre']}' (ID: {id_insumo})."
+                self.registro_controller.crear_registro(get_current_user(), 'Insumos', 'Actualización', detalle)
                 logger.info(f"Insumo actualizado exitosamente: {id_insumo}")
                 return self.success_response(
-                    data=result['data'],
+                    data=insumo_data,
                     message='Insumo actualizado exitosamente'
                 )
             else:
@@ -296,6 +304,9 @@ class InsumoController(BaseController):
             result = self.insumo_model.update(id_insumo, data, 'id_insumo')
 
             if result['success']:
+                insumo_data = result['data']
+                detalle = f"Se eliminó lógicamente el insumo '{insumo_data['nombre']}' (ID: {id_insumo})."
+                self.registro_controller.crear_registro(get_current_user(), 'Insumos', 'Eliminación Lógica', detalle)
                 logger.info(f"Insumo eliminado: {id_insumo}")
                 return self.success_response(message="Insumo desactivado correctamente.")
             else:

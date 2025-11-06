@@ -2,7 +2,9 @@ import logging
 from datetime import datetime, date, timedelta
 
 from flask import jsonify
+from flask_jwt_extended import get_current_user
 from app.controllers.base_controller import BaseController
+from app.controllers.registro_controller import RegistroController
 # --- IMPORTACIONES NUEVAS ---
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.models.receta import RecetaModel
@@ -44,6 +46,7 @@ class PedidoController(BaseController):
         self.lote_producto_controller = LoteProductoController()
         self.nota_credito_model = NotaCreditoModel()
         # -----------------------
+        self.registro_controller = RegistroController()
 
     def _consolidar_items(self, items_data: list) -> list:
         """
@@ -278,6 +281,9 @@ class PedidoController(BaseController):
                 num_pedidos = len(pedidos_validos)
                 if num_pedidos == 1: self.cliente_model.update(id_cliente, {'condicion_venta': 2})
                 elif num_pedidos == 2: self.cliente_model.update(id_cliente, {'condicion_venta': 3})
+            
+            detalle = f"Se creó el pedido de venta {nuevo_pedido.get('codigo_ov')}."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Creación', detalle)
 
             return self.success_response(data=nuevo_pedido, message=mensaje_final, status_code=201)
 
@@ -554,6 +560,9 @@ class PedidoController(BaseController):
             # Actualizar el estado general del pedido después de los cambios
             self.model.actualizar_estado_agregado(pedido_id)
 
+            detalle = f"Se actualizó el pedido de venta {pedido_actual.get('codigo_ov')}."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Actualización', detalle)
+
             return self.success_response(data=result.get('data'), message="Pedido actualizado con éxito.")
 
         except ValidationError as e:
@@ -587,6 +596,9 @@ class PedidoController(BaseController):
             # Por ahora, simplemente cambiamos el estado.
             result = self.model.cambiar_estado(pedido_id, nuevo_estado)
             if result.get('success'):
+                pedido = pedido_existente_resp.get('data')
+                detalle = f"El pedido de venta {pedido.get('codigo_ov')} cambió de estado a {nuevo_estado}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Cambio de Estado', detalle)
                 logger.info(f"Pedido {pedido_id} cambiado a estado '{nuevo_estado}' con éxito.")
                 return self.success_response(message=f"Pedido actualizado al estado '{nuevo_estado}'.")
             else:
@@ -713,6 +725,8 @@ class PedidoController(BaseController):
             # 3. Cambiar el estado del pedido a 'CANCELADO'
             result = self.model.cambiar_estado(pedido_id, 'CANCELADO')
             if result.get('success'):
+                detalle = f"Se canceló el pedido de venta {pedido_actual.get('codigo_ov')}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Cancelación', detalle)
                 return self.success_response(message="Pedido cancelado con éxito y stock liberado.")
             else:
                 return self.error_response(result.get('error', 'El stock fue liberado, pero no se pudo cambiar el estado del pedido.'), 500)

@@ -1,7 +1,8 @@
 from typing import Dict, TYPE_CHECKING
 from flask import request, jsonify
-from flask_jwt_extended import get_jwt
+from flask_jwt_extended import get_jwt, get_current_user
 from marshmallow import ValidationError
+from app.controllers.registro_controller import RegistroController
 from app.models.orden_compra_model import OrdenCompraItemModel, OrdenCompraModel
 from app.models.orden_compra_model import OrdenCompra
 from app.controllers.inventario_controller import InventarioController
@@ -25,6 +26,7 @@ class OrdenCompraController:
         self.inventario_controller = InventarioController()
         self.insumo_controller = InsumoController()
         self.usuario_controller = UsuarioController()
+        self.registro_controller = RegistroController()
 
 
     def _parse_form_data(self, form_data):
@@ -122,6 +124,10 @@ class OrdenCompraController:
 
             # Crear la orden
             result = self.model.create_with_items(orden_data, items_data)
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"Se creó la orden de compra {oc.get('codigo_oc')}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Creación', detalle)
             return result
         except Exception as e:
             logger.error(f"Error en el controlador al crear la orden: {e}")
@@ -257,6 +263,11 @@ class OrdenCompraController:
                 return {'success': False, 'error': 'El proveedor y la fecha de emisión son obligatorios.'}
 
             result = self.model.update_with_items(orden_id, orden_data, items_data)
+
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"Se actualizó la orden de compra {oc.get('codigo_oc')}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Actualización', detalle)
 
             return result
 
@@ -404,6 +415,9 @@ class OrdenCompraController:
             result = self.model.update(orden_id, cancelacion_data)
 
             if result['success']:
+                oc = result.get('data')
+                detalle = f"Se canceló la orden de compra {oc.get('codigo_oc')}. Motivo: {motivo}"
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cancelación', detalle)
                 return jsonify({
                     'success': True,
                     'data': result['data'],
@@ -428,6 +442,10 @@ class OrdenCompraController:
                 'updated_at': datetime.now().isoformat()
             }
             result = self.model.update(orden_id, update_data)
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"Se aprobó la orden de compra {oc.get('codigo_oc')}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
             return result
         except Exception as e:
             logger.error(f"Error aprobando orden {orden_id}: {e}")
@@ -443,6 +461,10 @@ class OrdenCompraController:
                 'updated_at': datetime.now().isoformat()
             }
             result = self.model.update(orden_id, update_data)
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"La orden de compra {oc.get('codigo_oc')} se marcó como EN TRANSITO."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
             return result
         except Exception as e:
             logger.error(f"Error marcando la orden {orden_id} como EN TRANSITO: {e}")
@@ -474,6 +496,10 @@ class OrdenCompraController:
                 'updated_at': datetime.now().isoformat()
             }
             result = self.model.update(orden_id, update_data)
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"Se rechazó la orden de compra {oc.get('codigo_oc')}. Motivo: {motivo}"
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
             return result
         except Exception as e:
             logger.error(f"Error rechazando orden {orden_id}: {e}")
@@ -715,6 +741,8 @@ class OrdenCompraController:
                         'iva': round(iva_padre, 2),
                         'total': round(total_padre, 2)
                     })
+                    detalle = f"Se procesó una recepción parcial para la OC {orden_data.get('codigo_oc')}. Se generó la OC complementaria {nueva_orden_result['data']['codigo_oc']}."
+                    self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
                     # --- FIN DE LA CORRECCIÓN ---
 
                     return {'success': True, 'message': f'Recepción parcial registrada. Se creó la orden {nueva_orden_result["data"]["codigo_oc"]} para los insumos restantes.'}
@@ -727,7 +755,11 @@ class OrdenCompraController:
                         'fecha_real_entrega': date.today().isoformat(),
                         'observaciones': f"{observaciones}\nRecepción completada. Pendiente de Control de Calidad."
                     }
-                    self.model.update(orden_id, update_data)
+                    result = self.model.update(orden_id, update_data)
+                    if result.get('success'):
+                        oc = result.get('data')
+                        detalle = f"Se procesó la recepción completa de la OC {oc.get('codigo_oc')}."
+                        self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
 
                     # 2. Mensaje de éxito (ya NO se mueve a calidad)
                     final_message = f'Recepción completada. {lotes_creados} lotes creados.'
@@ -845,6 +877,11 @@ class OrdenCompraController:
                 # Al cerrar la orden, después de que Control de Calidad ha finalizado,
                 # se reinicia la bandera para permitir nuevas OC automáticas.
                 self._reiniciar_bandera_stock_recibido(orden_id)
+
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"La orden de compra {oc.get('codigo_oc')} se marcó como CERRADA."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
             
             return result
 
@@ -880,6 +917,9 @@ class OrdenCompraController:
                 #
                 self._marcar_cadena_como_en_control_calidad(orden_id)
                 
+                detalle = f"La OC {orden_actual.get('codigo_oc')} pasó a EN CONTROL DE CALIDAD."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
+
                 logger.info(f"Usuario {usuario_id} movió la OC {orden_id} a EN_CONTROL_CALIDAD.")
                 
                 return {'success': True, 'message': 'La orden ha sido movida a Control de Calidad.'}

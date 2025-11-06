@@ -53,6 +53,11 @@ def user_lookup_callback(_jwt_header, jwt_data):
         # Cargamos la lista de permisos que guardamos en el token durante el login
         'permisos': jwt_data.get('permisos', [])
     }
+
+    if rol_codigo == 'DEV':
+        from app.utils.permission_map import CANONICAL_PERMISSION_MAP
+        user_data['permisos'] = list(CANONICAL_PERMISSION_MAP.keys())
+
     return SimpleNamespace(**user_data)
 
 
@@ -104,6 +109,7 @@ def _register_blueprints(app: Flask):
     from app.views.proveedor_routes import proveedor_bp
     from app.views.api_trazabilidad_routes import api_trazabilidad_bp
     from app.views.admin_riesgo_routes import admin_riesgo_bp
+    from app.views.registro_routes import registros_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
@@ -140,6 +146,7 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(reportes_bp)
     app.register_blueprint(api_trazabilidad_bp)
     app.register_blueprint(admin_riesgo_bp)
+    app.register_blueprint(registros_bp)
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""

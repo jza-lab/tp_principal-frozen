@@ -1,6 +1,8 @@
 from app.controllers.base_controller import BaseController
+from app.controllers.registro_controller import RegistroController
 from app.models.orden_produccion import OrdenProduccionModel
 from app.schemas.orden_produccion_schema import OrdenProduccionSchema
+from flask_jwt_extended import get_current_user
 from typing import Dict, Optional, List
 from decimal import Decimal
 from marshmallow import ValidationError
@@ -61,6 +63,7 @@ class OrdenProduccionController(BaseController):
         self.op_cronometro_controller = OpCronometroController()
         self.configuracion_controller = ConfiguracionController()
         self._planificacion_controller = None
+        self.registro_controller = RegistroController()
 
     @property
     def planificacion_controller(self):
@@ -203,7 +206,12 @@ class OrdenProduccionController(BaseController):
             validated_data['usuario_creador_id'] = usuario_id
 
             # Crear en la base de datos
-            return self.model.create(validated_data)
+            result = self.model.create(validated_data)
+            if result.get('success'):
+                op = result.get('data')
+                detalle = f"Se creó la orden de producción {op.get('codigo')}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Creación', detalle)
+            return result
 
         except ValidationError as e:
             logger.error(f"Error de validación al crear orden: {e.messages}")
@@ -359,7 +367,12 @@ class OrdenProduccionController(BaseController):
         """
         Rechaza una orden, cambiando su estado a CANCELADA.
         """
-        return self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=f"Rechazada: {motivo}")
+        result = self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=f"Rechazada: {motivo}")
+        if result.get('success'):
+            op = result.get('data')
+            detalle = f"Se canceló la orden de producción {op.get('codigo')}. Motivo: {motivo}"
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Cancelación', detalle)
+        return result
 
     def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str, usuario_id: Optional[int] = None) -> tuple:
         """
@@ -431,6 +444,9 @@ class OrdenProduccionController(BaseController):
             # 5. Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
             result = self.model.cambiar_estado(orden_id, nuevo_estado, extra_data=update_data)
             if result.get('success'):
+                op = result.get('data')
+                detalle = f"La orden de producción {op.get('codigo')} cambió de estado a {nuevo_estado}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Cambio de Estado', detalle)
                 # La lógica del cronómetro se ha movido a otros métodos para evitar la doble detención.
                 # El cronómetro ahora se detiene cuando se reporta el 100% o cuando se pausa.
 

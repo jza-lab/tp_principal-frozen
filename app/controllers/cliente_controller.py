@@ -1,6 +1,8 @@
 from app.controllers.base_controller import BaseController
+from app.controllers.registro_controller import RegistroController
 from app.models.cliente import ClienteModel
 from app.schemas.cliente_schema import ClienteSchema
+from flask_jwt_extended import get_current_user
 from app.controllers.pedido_controller import PedidoController
 from werkzeug.security import generate_password_hash, check_password_hash
 from typing import Dict, Optional
@@ -17,6 +19,7 @@ class ClienteController(BaseController):
         self.model = ClienteModel()
         self.schema = ClienteSchema()
         self.pedido_controller=PedidoController()
+        self.registro_controller = RegistroController()
 
     def obtener_clientes_activos(self) -> tuple:
         """Obtener lista de Clientes activos"""
@@ -86,6 +89,10 @@ class ClienteController(BaseController):
             resultado_actualizar = self.model.update(cliente_id, {'activo': False}, 'id')
             if not resultado_actualizar.get('success'):
                 return self.error_response(resultado_actualizar.get('error', 'Error al desactivar el Cliente'))
+            
+            cliente = existing.get('data')
+            detalle = f"Se eliminó lógicamente al cliente '{cliente.get('razon_social') or cliente.get('nombre')}' (CUIT: {cliente.get('cuit')})."
+            self.registro_controller.crear_registro(get_current_user(), 'Clientes', 'Eliminación Lógica', detalle)
             return self.success_response(message='Cliente desactivado exitosamente')
         except Exception as e:
             logger.error(f"Error eliminando Cliente {cliente_id}: {str(e)}")
@@ -183,7 +190,10 @@ class ClienteController(BaseController):
             result = self.model.create(data)
 
             if result['success']:
-                return self.success_response(data=result['data'], message='Cliente creado exitosamente', status_code=201)
+                cliente = result.get('data')
+                detalle = f"Se creó el cliente '{cliente.get('razon_social') or cliente.get('nombre')}' (CUIT: {cliente.get('cuit')})."
+                self.registro_controller.crear_registro(get_current_user(), 'Clientes', 'Creación', detalle)
+                return self.success_response(data=cliente, message='Cliente creado exitosamente', status_code=201)
             else:
                 return self.error_response(result.get('error', 'Error al crear el cliente'), 500)
 
@@ -235,7 +245,10 @@ class ClienteController(BaseController):
 
             result = self.model.find_by_id(cliente_id, include_direccion=True)
             if result.get('success'):
-                serialized_data = self.schema.dump(result['data'])
+                cliente = result.get('data')
+                detalle = f"Se actualizó el cliente '{cliente.get('razon_social') or cliente.get('nombre')}' (CUIT: {cliente.get('cuit')})."
+                self.registro_controller.crear_registro(get_current_user(), 'Clientes', 'Actualización', detalle)
+                serialized_data = self.schema.dump(cliente)
                 return self.success_response(data=serialized_data, message='Cliente actualizado exitosamente')
             else:
                 return self.error_response('Error al obtener el Cliente actualizado', 500)

@@ -19,6 +19,7 @@
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
 
                             {% set is_operario = current_user and current_user.roles and current_user.roles.codigo == 'OPERARIO' %}
+                            {% set is_dev = current_user and current_user.roles and current_user.roles.codigo == 'IT' %}
 
                             {# Lógica de permisos para el menú de Logística #}
                             {% set can_ver_insumos = 'almacen_ver_insumos' is has_permission %}
@@ -180,6 +181,14 @@
                                     <li>
                                         <a class="dropdown-item {% if request.endpoint == 'chatbot.gestion_chatbot_page' %}active{% endif %}" href="{{ url_for('chatbot.gestion_chatbot_page') }}">
                                             <i class="bi bi-robot me-2"></i> Configuración de Chatbot
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                    {% if is_dev %}
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <a class="dropdown-item {% if request.endpoint == 'registros.listar_registros' %}active{% endif %}" href="{{ url_for('registros.listar_registros') }}">
+                                            <i class="bi bi-archive-fill me-2"></i> Registros
                                         </a>
                                     </li>
                                     {% endif %}
