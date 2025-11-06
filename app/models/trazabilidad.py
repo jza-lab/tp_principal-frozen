@@ -78,8 +78,14 @@ class TrazabilidadModel(BaseModel):
         orden_compra = None
         codigo_oc = lote_insumo.get('documento_ingreso')
         if codigo_oc:
-            oc_res = self.db.table('ordenes_compra').select('id, codigo_oc').eq('codigo_oc', codigo_oc).single().execute()
-            orden_compra = oc_res.data
+            try:
+                oc_res = self.db.table('ordenes_compra').select('id, codigo_oc').eq('codigo_oc', codigo_oc).single().execute()
+                orden_compra = oc_res.data
+            except APIError as e:
+                if e.code == 'PGRST116': # No rows found
+                    orden_compra = None
+                else:
+                    raise e # Re-raise other API errors
 
         reservas = self.db.table('reservas_insumos').select(
             # evitar columnas inexistentes: usar numero_lote y cantidad_inicial en lotes_productos
@@ -121,6 +127,11 @@ class TrazabilidadModel(BaseModel):
             # Ajustar URL a la ruta real: /compras/detalle/<id>
             nodes.append({"id": oc_id_node, "label": f"OC: {oc_codigo}", "group": "orden_compra", "url": f"/compras/detalle/{oc_id}"})
             edges.append({"from": oc_id_node, "to": li_id_node, "label": lote_insumo.get('cantidad_ingresada', 1)})
+        else:
+            # Si no hay OC, crear un nodo genérico para el ingreso
+            ingreso_id_node = f"ingreso_{lote_insumo['id_lote']}"
+            nodes.append({"id": ingreso_id_node, "label": "Ingreso Lote", "group": "ingreso_manual"})
+            edges.append({"from": ingreso_id_node, "to": li_id_node, "label": lote_insumo.get('cantidad_ingresada', 1)})
 
         for op in ops_usadas:
             op_id_node = f"op_{op['id']}"

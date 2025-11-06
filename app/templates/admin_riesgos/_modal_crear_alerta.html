@@ -1,0 +1,55 @@
+<!-- Modal Crear Alerta de Riesgo -->
+<div class="modal fade" id="modalCrearAlerta" tabindex="-1" aria-labelledby="modalCrearAlertaLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalCrearAlertaLabel">Crear Alerta de Riesgo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formCrearAlerta">
+          <input type="hidden" id="origen-tipo-entidad" name="tipo_entidad">
+          <input type="hidden" id="origen-id-entidad" name="id_entidad">
+
+          <div class="mb-3">
+              <label for="motivo-alerta" class="form-label">Motivo</label>
+              <select class="form-select" id="motivo-alerta" name="motivo" required>
+                  <option value="" disabled selected>Seleccione un motivo...</option>
+                  <option value="Contaminacion microbiologica">Contaminación microbiológica</option>
+                  <option value="Alergeno no declarado">Alérgeno no declarado</option>
+                  <option value="Fallo de proveedor reportado">Fallo de proveedor reportado</option>
+                  <option value="Defecto de calidad interno">Defecto de calidad interno</option>
+                  <option value="Otro">Otro</option>
+              </select>
+          </div>
+
+          <div class="mb-3">
+              <label for="comentarios-alerta" class="form-label">Comentarios Adicionales</label>
+              <textarea class="form-control" id="comentarios-alerta" name="comentarios" rows="3"></textarea>
+          </div>
+
+          <div class="mb-3">
+              <label for="evidencia-alerta" class="form-label">Evidencia Gráfica (Opcional)</label>
+              <input class="form-control" type="file" id="evidencia-alerta" name="evidencia" accept="image/*,application/pdf">
+          </div>
+        </form>
+
+        <p>Se creará una alerta de riesgo originada por: <strong><span id="origen-entidad-nombre"></span></strong>.</p>
+        <p>Esto ha afectado a las siguientes entidades y pedidos:</p>
+        
+        <div id="previsualizacion-contenido">
+          <!-- El contenido se cargará aquí vía AJAX -->
+          <div class="text-center">
+            <div class="spinner-border" role="status">
+              <span class="visually-hidden">Cargando...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="btnConfirmarCrearAlerta">Crear Alerta</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -103,7 +103,7 @@ def _register_blueprints(app: Flask):
     from app.views.reportes_routes import reportes_bp
     from app.views.proveedor_routes import proveedor_bp
     from app.views.api_trazabilidad_routes import api_trazabilidad_bp
-    from app.views.admin_riesgo_routes import admin_riesgo_bp
+    from app.views.riesgos_routes import admin_riesgos_bp, riesgos_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
@@ -139,7 +139,8 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(chatbot_bp)
     app.register_blueprint(reportes_bp)
     app.register_blueprint(api_trazabilidad_bp)
-    app.register_blueprint(admin_riesgo_bp)
+    app.register_blueprint(admin_riesgos_bp)
+    app.register_blueprint(riesgos_bp)
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""

@@ -10,6 +10,13 @@
         border-radius: 4px;
     }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/listarUsuarios.css') }}">
+<style>
+    #sankey_trazabilidad svg g {
+        cursor: pointer;
+    }
+</style>
+
 {% endblock %}
 {% block app_content %}
 
@@ -19,6 +26,12 @@
         <p class="text-muted mb-0">Lote N°: <code class="text-muted">{{ lote.numero_lote or 'N/A' }}</code></p>
     </div>
     <div class="btn-toolbar">
+        <button class="btn btn-danger me-2 btn-crear-alerta" 
+                data-tipo-entidad="lote_producto" 
+                data-id-entidad="{{ lote.id_lote }}"
+                data-nombre-entidad="Lote {{ lote.numero_lote }}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo
+        </button>
         <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2"
             title="Volver a la página anterior">
             <i class="bi bi-arrow-left"></i> Volver
@@ -171,6 +184,7 @@
 
     </div>
 </div>
+{% include "admin_riesgos/_modal_crear_alerta.html" %}
 {% endblock %}
 
 {% block extra_js %}
@@ -179,4 +193,6 @@
     window.LOTE_ID = "{{ lote.id_lote | safe }}";
 </script>
 <script src="{{ url_for('static', filename='js/trazabilidadProducto.js') }}?v=1.1"></script>
+
+<script src="{{ url_for('static', filename='js/gestorAlertas.js') }}?v=1.1"></script>
 {% endblock %}

@@ -12,6 +12,10 @@
         <p class="text-muted mb-0">Cliente: <strong>{{ pedido.nombre_cliente }}</strong></p>
     </div>
     <div class="btn-toolbar">
+        <button class="btn btn-danger me-2 btn-crear-alerta" data-tipo-entidad="pedido"
+            data-id-entidad="{{ pedido.id }}" data-nombre-entidad="Pedido PED-{{ pedido.id }}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo
+        </button>
         <a href="{{ url_for('orden_venta.listar') }}" class="btn btn-outline-secondary me-2">
             <i class="bi bi-arrow-left me-1"></i>Lista de Órdenes de Venta
         </a>
@@ -329,9 +333,11 @@
         </div>
     </div>
 </div>
+{% include "admin_riesgos/_modal_crear_alerta.html" %}
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/gestorAlertas.js') }}?v=1.1"></script>
 <script>
     // URL de la API para obtener el HTML de la factura
     const FACTURA_API_URL = "{{ url_for('orden_venta.generar_factura_html', id=pedido.id) }}";
@@ -404,7 +410,8 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const pedidoId = {{ pedido.id }};
+        const pedidoId = {{ pedido.id }}
+    };
     const btnConfirmarEntrega = document.getElementById('btn-confirmar-entrega');
 
     // Función reutilizable para cambiar el estado del pedido
@@ -475,23 +482,23 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
-document.querySelectorAll('.download-nc-pdf').forEach(button => {
-    button.addEventListener('click', function() {
-        const ncId = this.getAttribute('data-nc-id');
-        const content = document.getElementById(`nc-content-${ncId}`);
-        const { jsPDF } = window.jspdf;
+    document.querySelectorAll('.download-nc-pdf').forEach(button => {
+        button.addEventListener('click', function () {
+            const ncId = this.getAttribute('data-nc-id');
+            const content = document.getElementById(`nc-content-${ncId}`);
+            const { jsPDF } = window.jspdf;
 
-        html2canvas(content).then(canvas => {
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-            
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save(`nota-credito-${ncId}.pdf`);
+            html2canvas(content).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                pdf.save(`nota-credito-${ncId}.pdf`);
+            });
         });
     });
-});
 </script>
 {% endif %}
 {% endblock %}
