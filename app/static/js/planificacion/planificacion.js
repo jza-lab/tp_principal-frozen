@@ -496,6 +496,24 @@ document.addEventListener('click', async function(e) {
 
         e.stopPropagation(); // Evita que el clic cierre el popover (trigger='click')
 
+        // 1. Encontrar el elemento flotante del popover
+        const popoverElement = replanBtn.closest('.popover');
+        if (popoverElement) {
+            // 2. Obtener la instancia del Popover
+            const popoverInstance = bootstrap.Popover.getInstance(popoverElement.previousElementSibling); // El activador está justo antes
+            // O de forma más segura si el activador no es el hermano:
+            // const popoverInstance = bootstrap.Popover.getInstance(document.querySelector(`[aria-describedby="${popoverElement.id}"]`));
+            
+            // Dado que el 'closest' en el original usa el activador: 
+            const trigger = document.querySelector(`[aria-describedby="${popoverElement.id}"]`);
+            if (trigger) {
+                const popoverInstance = bootstrap.Popover.getInstance(trigger);
+                if (popoverInstance) {
+                    popoverInstance.hide(); // Cierra el popover
+                }
+            }
+        }
+
         // Cerrar el popover activo
         const popoverEl = bootstrap.Popover.getInstance(replanBtn.closest('[data-bs-toggle="popover"]'));
         if (popoverEl) popoverEl.hide();
