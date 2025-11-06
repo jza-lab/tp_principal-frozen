@@ -24,7 +24,7 @@ def crear_alerta_riesgo_route():
 @permission_required(accion='gestionar_reclamos')
 def detalle_alerta_riesgo(codigo_alerta):
     controller = RiesgoController()
-    response, status_code = controller.obtener_detalle_alerta(codigo_alerta)
+    response, status_code = controller.obtener_detalle_alerta_completo(codigo_alerta)
     
     if status_code != 200:
         flash(response.get('error', 'No se pudo cargar la alerta.'), 'danger')
@@ -38,20 +38,13 @@ def detalle_alerta_riesgo(codigo_alerta):
 @permission_required(accion='gestionar_reclamos')
 def ejecutar_accion_riesgo(codigo_alerta):
     form_data = request.form
-    accion = form_data.get('accion')
     
     controller = RiesgoController()
-    response, status_code = controller.ejecutar_accion_riesgo(codigo_alerta, accion, form_data)
+      # El controlador ahora devuelve una tupla (dict, status_code)
+    response, status_code = controller.ejecutar_accion_riesgo(codigo_alerta, form_data)
 
-    if status_code >= 400:
-        flash(response.get('error', 'Ocurrió un error al procesar la acción.'), 'danger')
-        return redirect(url_for('admin_riesgo.detalle_alerta_riesgo', codigo_alerta=codigo_alerta))
-    
-    flash(response.get('message', 'Acción ejecutada con éxito.'), 'success')
-    if response.get('redirect_url'):
-        return redirect(response['redirect_url'])
-    
-    return redirect(url_for('admin_riesgo.detalle_alerta_riesgo', codigo_alerta=codigo_alerta))
+    # La respuesta se devuelve directamente como JSON
+    return jsonify(response), status_code
 
 @admin_riesgo_bp.route('/accion-resultado')
 @jwt_required()
@@ -68,3 +61,68 @@ def accion_resultado():
             notas_credito.append(resp['data'])
             
     return render_template('admin_riesgos/accion_resultado.html', notas_credito=notas_credito)
+
+
+riesgos_bp = Blueprint('riesgos', __name__, url_prefix='/riesgos')
+
+@riesgos_bp.route('/', methods=['GET'])
+@permission_required('consultar_alertas_riesgo')
+def listar_alertas_page():
+    controller = RiesgoController()
+    resultado = controller.alerta_riesgo_model.find_all()
+    alertas = resultado.get('data', []) if resultado.get('success') else []
+    return render_template('admin_riesgos/listado.html', alertas=alertas)
+
+@riesgos_bp.route('/<codigo_alerta>', methods=['GET'])
+@permission_required('consultar_alertas_riesgo')
+def detalle_alerta_public_page(codigo_alerta):
+    controller = RiesgoController()
+    resultado,_ = controller.obtener_detalle_alerta_completo(codigo_alerta)
+    if not resultado.get('success'):
+        flash(resultado.get('error', 'Error desconocido'), 'danger')
+        return redirect(url_for('riesgos.listar_alertas_page'))
+    return render_template('admin_riesgos/detalle_publico.html', alerta=resultado.get('data'))
+
+# API Endpoints
+@riesgos_bp.route('/api/previsualizar', methods=['GET'])
+@permission_required('crear_alerta_riesgo')
+def api_previsualizar_riesgo():
+    tipo_entidad = request.args.get('tipo_entidad')
+    id_entidad = request.args.get('id_entidad')
+    if not tipo_entidad or not id_entidad:
+        return jsonify(success=False, error="tipo_entidad y id_entidad son requeridos."), 400
+    
+    controller = RiesgoController()
+    resultado, status_code = controller.previsualizar_riesgo(tipo_entidad, id_entidad)
+    return jsonify(resultado), status_code
+
+@riesgos_bp.route('/api/crear', methods=['POST'])
+@permission_required('crear_alerta_riesgo')
+def api_crear_alerta_riesgo():
+    controller = RiesgoController()
+    resultado, status_code = controller.crear_alerta_riesgo(request.json)
+    return jsonify(resultado), status_code
+
+@riesgos_bp.route('/api/subir_evidencia', methods=['POST'])
+@permission_required('crear_alerta_riesgo')
+def api_subir_evidencia():
+    from app.controllers.storage_controller import StorageController
+    import uuid
+    
+
+    if 'evidencia' not in request.files:
+        return jsonify(success=False, error="No se encontró el archivo de evidencia."), 400
+    
+    file = request.files['evidencia']
+    if file.filename == '':
+        return jsonify(success=False, error="No se seleccionó ningún archivo."), 400
+
+    # Crear un nombre de archivo único
+    file_extension = file.filename.rsplit('.', 1)[1].lower()
+    unique_filename = f"evidencia_{uuid.uuid4()}.{file_extension}"
+
+    
+    controller = StorageController()
+    resultado, status_code = controller.upload_file(file, 'evidencias_riesgos', unique_filename)
+
+    return jsonify(resultado), status_code

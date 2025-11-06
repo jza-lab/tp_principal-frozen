@@ -1,11 +1,9 @@
+from decimal import ROUND_HALF_UP, Decimal
 from app.controllers.base_controller import BaseController
 from app.models.nota_credito import NotaCreditoModel
-from app.models.alerta_riesgo import AlertaRiesgoModel
 from app.models.pedido import PedidoModel
 from app.schemas.nota_credito_schema import NotaCreditoSchema
-from marshmallow import ValidationError
 import logging
-from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +21,8 @@ class NotaCreditoController(BaseController):
 
         notas_creadas = []
         errors = []
-        avisos = []
-
+        TWO_PLACES = Decimal('0.01')
+        
         for pedido_id in pedidos_ids:
             try:
                 pedido_res = self.pedido_model.get_one_with_items(int(pedido_id))
@@ -41,43 +39,50 @@ class NotaCreditoController(BaseController):
                 items_afectados_para_nc = []
 
                 for item in items_pedido:
-                    precio_unitario = Decimal(item.get('precio_unitario', '0.0'))
-
+                    producto = item.get('producto_nombre')
+                    precio_unitario = Decimal(producto.get('precio_unitario', '0.0'))
                     reservas_item = self.pedido_model.get_reservas_for_item(item['id'])
+                    
                     for reserva in reservas_item:
                         if reserva['lote_producto_id'] in lotes_producto_afectados_ids:
-                            cantidad_afectada = Decimal(reserva.get('cantidad_reservada', '0.0'))
+                            cantidad_afectada = Decimal(reserva.get('cantidad_reservada'))
                             subtotal = precio_unitario * cantidad_afectada
                             monto_total_afectado += subtotal
                             items_afectados_para_nc.append({
                                 'producto_id': item['producto_id'],
                                 'lote_producto_id': reserva['lote_producto_id'],
-                                'cantidad': cantidad_afectada,
-                                'precio_unitario': precio_unitario,
-                                'subtotal': subtotal
+                                'cantidad': str(cantidad_afectada),
+                                'precio_unitario': str(precio_unitario),
+                                'subtotal': str(subtotal.quantize(TWO_PLACES, rounding=ROUND_HALF_UP))
                             })
-                
+                            print(items_afectados_para_nc)
                 if monto_total_afectado <= 0:
-                    errors.append(f"Pedido ID {pedido['codigo']} no tiene items para acreditar.")
+                    errors.append(f"Pedido ID {pedido['id']} no tiene items para acreditar.")
                     continue
 
+                count_res = self.model.db.table(self.model.get_table_name()).select('count', count='exact').execute()
+                count = count_res.count
+                codigo_nc = f"NC-{count + 1}"
+
+                monto_final_redondeado = monto_total_afectado.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
 
                 nc_data = {
+                    'codigo_nc': codigo_nc,
                     'pedido_origen_id': pedido['id'],
                     'cliente_id': pedido['id_cliente'],
                     'monto': str(monto_total_afectado),
-                    'motivo': f"Alerta de Riesgo: {motivo}",
-                    'detalle': detalle,
-                    'alerta_riesgo_id': alerta_id
+                    'motivo': f"{motivo}: {detalle}",
+                    'alerta_origen_id': alerta_id
                 }
 
                 validated_data = self.schema.load(nc_data)
+                validated_data['monto'] = str(validated_data['monto'])
                 create_res = self.model.create_with_items(validated_data, items_afectados_para_nc)
                 if create_res.get('success'):
                     notas_creadas.append(create_res.get('data'))
 
                 else:
-                    errors.append(f"Error al guardar NC para pedido {pedido['codigo']}.")
+                    errors.append(f"Error al guardar NC para pedido {pedido['id']}.")
 
             except Exception as e:
                 logger.error(f"Error procesando NC para Pedido ID {pedido_id}: {e}", exc_info=True)

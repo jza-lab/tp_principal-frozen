@@ -20,7 +20,7 @@ class NotaCreditoModel(BaseModel):
         Obtiene los items detallados de una nota de crédito específica.
         """
         try:
-            res = self.db.table('nota_credito_items').select(
+            res = self.db.table('notas_credito_items').select(
                 '*, productos:producto_id(nombre), lotes_productos:lote_producto_id(numero_lote)'
             ).eq('nota_credito_id', nc_id).execute()
             
@@ -44,7 +44,7 @@ class NotaCreditoModel(BaseModel):
             for item in items_data:
                 item['nota_credito_id'] = nueva_nc['id']
             
-            items_res = self.db.table('nota_credito_items').insert(items_data).execute()
+            items_res = self.db.table('notas_credito_items').insert(items_data).execute()
             if not items_res.data:
                 # Opcional: rollback o marcar la NC como inválida si los items fallan
                 return {'success': False, 'error': 'NC creada pero fallaron los items.'}

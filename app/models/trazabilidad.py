@@ -324,26 +324,26 @@ class TrazabilidadModel(BaseModel):
 
     def obtener_lista_afectados(self, tipo_entidad, id_entidad):
         afectados = []
-        pid = str(id_entidad)
+        pid = id_entidad
 
         if tipo_entidad == 'lote_insumo':
             afectados.append({'tipo_entidad': 'lote_insumo', 'id_entidad': pid})
             res_ops = self.db.table('reservas_insumos').select('orden_produccion_id').eq('lote_inventario_id', pid).execute().data or []
-            op_ids = list({str(r.get('orden_produccion_id')) for r in res_ops if r.get('orden_produccion_id')})
+            op_ids = list({r.get('orden_produccion_id') for r in res_ops if r.get('orden_produccion_id')})
             for oid in op_ids:
                 afectados.extend(self.obtener_lista_afectados('orden_produccion', oid))
 
         elif tipo_entidad == 'orden_produccion':
             afectados.append({'tipo_entidad': 'orden_produccion', 'id_entidad': pid})
             res_lps = self.db.table('lotes_productos').select('id_lote').eq('orden_produccion_id', pid).execute().data or []
-            lp_ids = list({str(r.get('id_lote')) for r in res_lps if r.get('id_lote')})
+            lp_ids = list({r.get('id_lote') for r in res_lps if r.get('id_lote')})
             for lid in lp_ids:
                 afectados.extend(self.obtener_lista_afectados('lote_producto', lid))
 
         elif tipo_entidad == 'lote_producto':
             afectados.append({'tipo_entidad': 'lote_producto', 'id_entidad': pid})
             res_ped = self.db.table('reservas_productos').select('pedido_id').eq('lote_producto_id', pid).execute().data or []
-            ped_ids = list({str(r.get('pedido_id')) for r in res_ped if r.get('pedido_id')})
+            ped_ids = list({r.get('pedido_id') for r in res_ped if r.get('pedido_id')})
             for ped_id in ped_ids:
                 afectados.append({'tipo_entidad': 'pedido', 'id_entidad': ped_id})
         

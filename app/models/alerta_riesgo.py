@@ -88,10 +88,15 @@ class AlertaRiesgoModel(BaseModel):
     def asociar_afectados(self, alerta_id, afectados):
         if not afectados:
             return None # No hacer nada si no hay afectados
-        records = [{'alerta_id': alerta_id, 'tipo_entidad': a['tipo_entidad'], 'id_entidad': str(a['id_entidad'])} for a in afectados]
+        records = [{
+            'alerta_id': alerta_id, 
+            'tipo_entidad': a['tipo_entidad'], 
+            'id_entidad': str(a['id_entidad']),
+            'estado': 'pendiente'  # Añadir estado inicial por defecto
+        } for a in afectados]
         return self.db.table('alerta_riesgo_afectados').insert(records).execute()
     
-    def actualizar_estado_afectados(self, alerta_id, pedidos_ids, resolucion, documento_id=None):
+    def actualizar_estado_afectados(self, alerta_id, entidad_ids, resolucion, tipo_entidad, documento_id=None):
         update_data = {
             'estado': 'resuelto',
             'resolucion_aplicada': resolucion,
@@ -103,9 +108,9 @@ class AlertaRiesgoModel(BaseModel):
         
         # PostgREST no soporta `in` con múltiples valores en un `update` directamente sobre una lista.
         # Se debe iterar o usar una función RPC. Iterar es más simple aquí.
-        for pedido_id in pedidos_ids:
-            self.db.table('alerta_riesgo_afectados').update(update_data).eq('alerta_id', alerta_id).eq('id_entidad', pedido_id).eq('tipo_entidad', 'pedido').execute()
-        
+        for entidad_id in entidad_ids:
+            self.db.table('alerta_riesgo_afectados').update(update_data).eq('alerta_id', alerta_id).eq('id_entidad', entidad_id).eq('tipo_entidad', tipo_entidad).execute()
+          
         return self.verificar_y_cerrar_alerta(alerta_id)
 
     def verificar_y_cerrar_alerta(self, alerta_id):

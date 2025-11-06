@@ -63,9 +63,8 @@ class RiesgoController(BaseController):
 
             nueva_alerta = resultado_alerta.get("data")
             if afectados:
-                records = [{'alerta_id': nueva_alerta['id'], 'tipo_entidad': a['tipo_entidad'], 'id_entidad': str(a['id_entidad'])} for a in afectados]
-                self.alerta_riesgo_model.create(records)
-
+                                # Corregido: Usar el método correcto para asociar afectados y añadir estado inicial
+                self.alerta_riesgo_model.asociar_afectados(nueva_alerta['id'], afectados)
 
             return {"success": True, "data": nueva_alerta}, 201
 
@@ -119,74 +118,90 @@ class RiesgoController(BaseController):
 
     def ejecutar_accion_riesgo(self, codigo_alerta, form_data):
         accion = form_data.get("accion")
-        if accion == "nota_credito":
-            return self._ejecutar_nota_de_credito(codigo_alerta, form_data)
-        elif accion == "cancelar_pedidos":
-            return self._ejecutar_cancelar_pedidos(codigo_alerta, form_data)
-        return {"success": False, "error": "Acción no válida."}, 400
+          # Mapeo de acciones a métodos
+        acciones = {
+            "nota_credito": self._ejecutar_nota_de_credito,
+            "inhabilitar_pedido": self._ejecutar_inhabilitar_pedidos,
+            "cuarentena_lotes": self._ejecutar_cuarentena_lotes,
+            "pausar_ops": self._ejecutar_pausar_ops,
+            "cancelar_pedidos": self._ejecutar_inhabilitar_pedidos # Alias deprecado
+        }
+
+        if accion in acciones:
+            # Todas las funciones de ejecución ahora devuelven un tuple (dict, status_code)
+            return acciones[accion](codigo_alerta, form_data)
+        
+        return ({"success": False, "error": "Acción no válida."}, 400)
+        
 
     def _ejecutar_nota_de_credito(self, codigo_alerta, form_data):
         pedidos_seleccionados = form_data.getlist("pedido_ids")
         recrear_pedido = form_data.get("recrear_pedido") == "on"
         if not pedidos_seleccionados:
-            return {"success": False, "error": "No se seleccionaron pedidos para la acción."}, 400
+            return ({"success": False, "error": "No se seleccionaron pedidos."}, 400)
 
         try:
             alerta_res = self.alerta_riesgo_model.find_all({'codigo': codigo_alerta}, limit=1)
-            if not alerta_res.get('data'): return {"success": False, "error": "Alerta no encontrada."}, 404
+            if not alerta_res.get('data'): return ({"success": False, "error": "Alerta no encontrada."}, 404)
             alerta = alerta_res.get('data')[0]
 
-            afectados = self.alerta_riesgo_model.obtener_afectados(alerta['id'])
-            lotes_producto_afectados_ids = [a['id_entidad'] for a in afectados if a['tipo_entidad'] == 'lote_producto']
-
+            afectados_completo = self.trazabilidad_model.obtener_lista_afectados(
+                alerta['origen_tipo_entidad'], 
+                alerta['origen_id_entidad']
+            )
+            lotes_producto_afectados_ids = [
+                a['id_entidad'] for a in afectados_completo if a['tipo_entidad'] == 'lote_producto'
+            ]
+            print(lotes_producto_afectados_ids)
             resultados_nc = self.nota_credito_controller.crear_notas_credito_para_pedidos_afectados(
                 alerta_id=alerta['id'],
                 pedidos_ids=pedidos_seleccionados,
-                motivo=form_data.get('motivos'),
-                detalle=form_data.get('detalle_motivo'),
+                motivo=f"Alerta de Riesgo {codigo_alerta}",
+                detalle=alerta.get('motivo'),
                 lotes_producto_afectados_ids=lotes_producto_afectados_ids
             )
+            print(resultados_nc)
             if not resultados_nc['success']:
-                return {"success": False, "error": "No se pudo crear ninguna Nota de Crédito.", "details": resultados_nc.get('errors')}, 500
+                logger.error(f"Error al crear notas de crédito para alerta {codigo_alerta}: {resultados_nc.get('errors')}")
+                return ({"success": False, "error": "No se pudo crear Nota de Crédito.", "details": resultados_nc.get('errors')}, 500)
             
             notas_creadas = resultados_nc.get('data', [])
             for nc in notas_creadas:
                 pedido_id_resuelto = nc['pedido_origen_id']
-                self.alerta_riesgo_model.actualizar_estado_afectados(alerta['id'], [pedido_id_resuelto], 'nota_credito', nc['id'])
+                self.alerta_riesgo_model.actualizar_estado_afectados(alerta['id'], [pedido_id_resuelto], 'nota_credito', 'pedido', nc['id'])
+
 
             # Lógica para recrear pedidos
             if recrear_pedido:
                 for pedido_id in pedidos_seleccionados:
                     self._recrear_pedido_sin_lotes_afectados(pedido_id, lotes_producto_afectados_ids)
             
-            redirect_url = url_for('admin_riesgos.detalle_riesgo_page', codigo_alerta=codigo_alerta)
-
-            return {"success": True, "message": f"Se procesaron {resultados_nc['count']} notas de crédito.", "redirect_url": redirect_url}, 200
+            return ({"success": True, "message": f"Se procesaron {resultados_nc['count']} notas de crédito."}, 200)
 
         except Exception as e:
             logger.error(f"Error al ejecutar nota de crédito: {e}", exc_info=True)
-            return {"success": False, "error": f"Error interno: {str(e)}"}, 500
+            return ({"success": False, "error": f"Error interno: {str(e)}"}, 500)
 
-    def _ejecutar_cancelar_pedidos(self, codigo_alerta, form_data):
+    def _ejecutar_inhabilitar_pedidos(self, codigo_alerta, form_data):
         pedidos_seleccionados = form_data.getlist("pedido_ids")
         recrear_pedido = form_data.get("recrear_pedido") == "on"
         if not pedidos_seleccionados:
-            return {"success": False, "error": "No se seleccionaron pedidos para la acción."}, 400
+            return ({"success": False, "error": "No se seleccionaron pedidos."}, 400)
         
         try:
             alerta_res = self.alerta_riesgo_model.obtener_por_codigo(codigo_alerta)
-            if not alerta_res.get('data'): return {"success": False, "error": "Alerta no encontrada."}, 404
+            if not alerta_res.get('data'): return ({"success": False, "error": "Alerta no encontrada."}, 404)
             alerta = alerta_res.get('data')[0]
             
             from app.controllers.pedido_controller import PedidoController
             pedido_controller = PedidoController()
             
-            cancelados_count = 0
+            inhabilitados_count = 0
             for pedido_id in pedidos_seleccionados:
                 res, _ = pedido_controller.cancelar_pedido(int(pedido_id))
                 if res.get('success'):
-                    self.alerta_riesgo_model.actualizar_estado_afectados(alerta['id'], [pedido_id], 'cancelacion')
-                    cancelados_count += 1
+                    self.alerta_riesgo_model.actualizar_estado_afectados(alerta['id'], [pedido_id], 'inhabilitado', 'pedido')
+                    inhabilitados_count += 1
 
             if recrear_pedido:
                 afectados = self.alerta_riesgo_model.obtener_afectados(alerta['id'])
@@ -195,12 +210,14 @@ class RiesgoController(BaseController):
                 for pedido_id in pedidos_seleccionados:
                     self._recrear_pedido_sin_lotes_afectados(pedido_id, lotes_producto_afectados_ids)
 
-            redirect_url = url_for('admin_riesgos.detalle_riesgo_page', codigo_alerta=codigo_alerta)
-            return {"success": True, "message": f"Se cancelaron {cancelados_count} pedidos.", "redirect_url": redirect_url}, 200
+            if inhabilitados_count == 0:
+                return ({"success": False, "error": "Ningún pedido pudo ser inhabilitado."}, 500)
+
+            return ({"success": True, "message": f"Se inhabilitaron {inhabilitados_count} pedidos."}, 200)
 
         except Exception as e:
             logger.error(f"Error al cancelar pedidos: {e}", exc_info=True)
-            return {"success": False, "error": f"Error interno: {str(e)}"}, 500
+            return ({"success": False, "error": f"Error interno: {str(e)}"}, 500)
 
     def _recrear_pedido_sin_lotes_afectados(self, pedido_id_original, lotes_afectados_ids):
         from app.controllers.pedido_controller import PedidoController
@@ -245,3 +262,64 @@ class RiesgoController(BaseController):
 
         pedido_controller.crear_pedido_con_items(nuevo_pedido_data, usuario_id=usuario_id)
         logger.info(f"Pedido {pedido_id_original} recreado como un nuevo pedido.")
+    
+    def _ejecutar_cuarentena_lotes(self, codigo_alerta, form_data):
+        lote_insumo_ids = form_data.getlist("lote_insumo_ids")
+        lote_producto_ids = form_data.getlist("lote_producto_ids")
+        
+        if not lote_insumo_ids and not lote_producto_ids:
+            return ({"success": False, "error": "No se seleccionaron lotes."}, 400)
+
+        from app.controllers.inventario_controller import InventarioController
+        from app.controllers.lote_producto_controller import LoteProductoController
+        from flask_jwt_extended import get_jwt_identity
+
+        inventario_controller = InventarioController()
+        lote_producto_controller = LoteProductoController()
+        usuario_id = get_jwt_identity()
+        
+        count = 0
+        alerta_res = self.alerta_riesgo_model.find_all({'codigo': codigo_alerta}, limit=1)
+        if not alerta_res.get('data'): return ({"success": False, "error": "Alerta no encontrada."}, 404)
+        alerta = alerta_res.get('data')[0]
+
+        for lote_id in lote_insumo_ids:
+            res, _ = inventario_controller.poner_lote_en_cuarentena(lote_id, f"Alerta {codigo_alerta}", 999999, usuario_id)
+            if res.get('success'):
+                self.alerta_riesgo_model.actualizar_estado_afectados(alerta['id'], [lote_id], 'cuarentena', 'lote_insumo')
+                count += 1
+        
+        for lote_id in lote_producto_ids:
+            res, _ = lote_producto_controller.poner_lote_en_cuarentena(lote_id, f"Alerta {codigo_alerta}", 999999)
+            if res.get('success'):
+                self.alerta_riesgo_model.actualizar_estado_afectados(alerta['id'], [lote_id], 'cuarentena', 'lote_producto')
+                count += 1
+
+        if count == 0:
+             return ({"success": False, "error": "Ningún lote pudo ser puesto en cuarentena."}, 500)
+
+        return ({"success": True, "message": f"Se pusieron {count} lotes en cuarentena."}, 200)
+
+    def _ejecutar_pausar_ops(self, codigo_alerta, form_data):
+        op_ids = form_data.getlist("op_ids")
+        if not op_ids:
+            return ({"success": False, "error": "No se seleccionaron Órdenes de Producción."}, 400)
+
+        from app.controllers.orden_produccion_controller import OrdenProduccionController
+        op_controller = OrdenProduccionController()
+        
+        alerta_res = self.alerta_riesgo_model.find_all({'codigo': codigo_alerta}, limit=1)
+        if not alerta_res.get('data'): return ({"success": False, "error": "Alerta no encontrada."}, 404)
+        alerta = alerta_res.get('data')[0]
+
+        count = 0
+        for op_id in op_ids:
+            res, _ = op_controller.cambiar_estado_orden(int(op_id), "PAUSADA")
+            if res.get('success'):
+                self.alerta_riesgo_model.actualizar_estado_afectados(alerta['id'], [op_id], 'pausada', 'orden_produccion')
+                count += 1
+        
+        if count == 0:
+            return ({"success": False, "error": "Ninguna OP pudo ser pausada."}, 500)
+
+        return ({"success": True, "message": f"Se pausaron {count} Órdenes de Producción."}, 200)
