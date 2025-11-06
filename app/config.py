@@ -15,8 +15,8 @@ class Config:
     BYPASS_LOGIN_CHECKS = os.getenv('BYPASS_LOGIN_CHECKS', 'False').lower() in ('true', '1', 't')
 
     # Configuraciones para desarrollo con PyScripter
-    DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1', 't')
-    TESTING = os.getenv('FLASK_TESTING', 'False').lower() in ('true', '1', 't')
+    DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() in ('true', '1', 't')
+    TESTING = os.getenv('FLASK_TESTING', 'True').lower() in ('true', '1', 't')
 
     # Evitar problemas de puertos
     USE_RELOADER = DEBUG
