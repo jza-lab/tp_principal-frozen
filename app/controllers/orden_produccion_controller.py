@@ -766,7 +766,19 @@ class OrdenProduccionController(BaseController):
             update_data = {'fecha_inicio_planificada': fecha_inicio_confirmada}
 
             # --- LÓGICA DE ASIGNACIÓN AUTOMÁTICA DE SUPERVISOR ---
-            supervisores_resp, _ = self.usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
+            supervisores_resp, status_code = self.usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
+
+            if status_code != 200:
+                # Si falla, la respuesta (`supervisores_resp`) puede ser un str o un dict.
+                # Lo registramos de forma segura y devolvemos un error 500.
+                if isinstance(supervisores_resp, dict):
+                    error_message = supervisores_resp.get('error', 'Error desconocido')
+                else:
+                    error_message = str(supervisores_resp)
+                
+                logger.error(f"No se pudieron obtener supervisores para asignación automática: {error_message}")
+                return self.error_response("Error interno: No se pudo verificar la asignación de supervisor.", 500)
+
             supervisores = supervisores_resp.get('data', [])
             
             # TODO: Usar la hora real de la OP si está disponible. Por ahora, asumimos el inicio del turno de la mañana.
@@ -1048,8 +1060,8 @@ class OrdenProduccionController(BaseController):
     def _actualizar_ops_originales(self, op_ids: List[int], super_op_id: int):
         """Marca las OPs originales como 'CONSOLIDADA' y las vincula a la Super OP."""
         update_data = {
-            'estado': 'CONSOLIDADA',
-            'super_op_id': super_op_id
+            'estado': 'CONSOLIDADA'
+            # 'super_op_id': super_op_id # <-- Columna no existe, comentado
         }
         for op_id in op_ids:
             self.model.update(id_value=op_id, data=update_data, id_field='id')
@@ -1460,8 +1472,8 @@ class OrdenProduccionController(BaseController):
     def _actualizar_ops_originales(self, op_ids: List[int], super_op_id: int):
         """Marca las OPs originales como 'CONSOLIDADA' y las vincula a la Super OP."""
         update_data = {
-            'estado': 'CONSOLIDADA',
-            'super_op_id': super_op_id
+            'estado': 'CONSOLIDADA'
+            # 'super_op_id': super_op_id
         }
         for op_id in op_ids:
             self.model.update(id_value=op_id, data=update_data, id_field='id')

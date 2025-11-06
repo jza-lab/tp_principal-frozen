@@ -25,7 +25,7 @@
     </div>
 </div>
 
-<form method="POST">
+<form method="POST" id="ordenCompraForm">
     {{ csrf_form.csrf_token }}
 
     <div class="row">
@@ -195,7 +195,7 @@
 
             <div class="d-flex justify-content-end gap-2 mb-4">
                 <a href="{{ url_for('orden_compra.listar') }}" class="btn btn-outline-secondary">Cancelar</a>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" id="submitBtn" class="btn btn-primary">
                     <i class="bi bi-check-circle me-1"></i>
                     {% if orden %}Actualizar{% else %}Crear{% endif %} Orden
                 </button>
@@ -210,83 +210,93 @@
 document.addEventListener('DOMContentLoaded', function () {
     const searchFilter = document.getElementById('insumo-search-filter');
     const insumoSelect = document.getElementById('insumo-select');
-    const options = Array.from(insumoSelect.options);
-
-    searchFilter.addEventListener('input', function () {
-        const searchTerm = this.value.toLowerCase();
-        insumoSelect.innerHTML = ''; // Clear current options
-        
-        options.forEach(option => {
-            if (option.text.toLowerCase().includes(searchTerm)) {
-                insumoSelect.appendChild(option);
-            }
-        });
-    });
-
     const itemsContainer = document.getElementById('itemsContainer');
     const itemTemplate = document.getElementById('item-template');
     const subtotalInput = document.getElementById('subtotal');
     const ivaCheckbox = document.getElementById('iva');
     const totalInput = document.getElementById('total');
-    const submitButton = document.querySelector('button[type="submit"]');
+    const form = document.getElementById('ordenCompraForm');
+    const submitButton = document.getElementById('submitBtn');
 
-    insumoSelect.addEventListener('dblclick', function () {
-        const selectedOption = this.options[this.selectedIndex];
-        if (!selectedOption || !selectedOption.value) return;
+    // Funcionalidad de búsqueda de insumos (solo para el modo de creación)
+    if (searchFilter && insumoSelect) {
+        const options = Array.from(insumoSelect.options);
+        searchFilter.addEventListener('input', function () {
+            const searchTerm = this.value.toLowerCase();
+            insumoSelect.innerHTML = ''; 
+            
+            options.forEach(option => {
+                if (option.text.toLowerCase().includes(searchTerm)) {
+                    insumoSelect.appendChild(option);
+                }
+            });
+        });
 
-        const insumoId = selectedOption.value;
-        
-        const templateContent = itemTemplate.content.cloneNode(true);
-        const newRow = templateContent.querySelector('.item-row');
-        
-        // Guardar datos de stock en la fila para validaciones posteriores
-        newRow.dataset.stockActual = selectedOption.dataset.stockActual;
-        newRow.dataset.stockMax = selectedOption.dataset.stockMax;
+        insumoSelect.addEventListener('dblclick', function () {
+            const selectedOption = this.options[this.selectedIndex];
+            if (!selectedOption || !selectedOption.value) return;
 
-        newRow.querySelector('.insumo-id').value = insumoId;
-        newRow.querySelector('.insumo-nombre').value = selectedOption.dataset.nombre;
-        newRow.querySelector('.proveedor-nombre').value = selectedOption.dataset.proveedorNombre;
-        newRow.querySelector('.precio_unitario').value = `$${parseFloat(selectedOption.dataset.precio).toFixed(2)}`;
-        
-        itemsContainer.appendChild(newRow);
-        updateUI();
-        calcularSubtotales();
-    });
-
-    itemsContainer.addEventListener('click', function (e) {
-        if (e.target.closest('.removeItemBtn')) {
-            e.target.closest('.item-row').remove();
+            const insumoId = selectedOption.value;
+            
+            const templateContent = itemTemplate.content.cloneNode(true);
+            const newRow = templateContent.querySelector('.item-row');
+            
+            newRow.dataset.stockActual = selectedOption.dataset.stockActual;
+            newRow.dataset.stockMax = selectedOption.dataset.stockMax;
+            newRow.querySelector('.insumo-id').value = insumoId;
+            newRow.querySelector('.insumo-nombre').value = selectedOption.dataset.nombre;
+            newRow.querySelector('.proveedor-nombre').value = selectedOption.dataset.proveedorNombre;
+            newRow.querySelector('.precio_unitario').value = `$${parseFloat(selectedOption.dataset.precio).toFixed(2)}`;
+            
+            itemsContainer.appendChild(newRow);
             updateUI();
             calcularSubtotales();
-        }
-    });
+        });
+    }
 
-    itemsContainer.addEventListener('input', function (e) {
-        if (e.target.classList.contains('cantidad')) {
-            const currentRow = e.target.closest('.item-row');
-            const cantidadInput = e.target;
-            const stockActual = parseFloat(currentRow.dataset.stockActual);
-            const stockMax = parseFloat(currentRow.dataset.stockMax);
-            const cantidadComprar = parseFloat(cantidadInput.value);
-
-            if (isNaN(cantidadComprar) || cantidadComprar <= 0) {
-                 cantidadInput.classList.add('is-invalid');
-            } else if (stockActual + cantidadComprar > stockMax) {
-                cantidadInput.classList.add('is-invalid');
-                const insumoNombre = currentRow.querySelector('.insumo-nombre').value;
-                showNotificationModal(
-                    "Error de Stock",
-                    `La cantidad para "${insumoNombre}" supera el stock máximo permitido (${stockMax} unidades).`
-                );
-            } else {
-                cantidadInput.classList.remove('is-invalid');
+    // Eventos para el contenedor de ítems (eliminar, cambiar cantidad)
+    if (itemsContainer) {
+        itemsContainer.addEventListener('click', function (e) {
+            if (e.target.closest('.removeItemBtn')) {
+                e.target.closest('.item-row').remove();
+                updateUI();
+                calcularSubtotales();
             }
-            
-            validarTodasLasFilas();
-            calcularSubtotales();
-        }
-    });
+        });
 
+        itemsContainer.addEventListener('input', function (e) {
+            if (e.target.classList.contains('cantidad')) {
+                const currentRow = e.target.closest('.item-row');
+                const cantidadInput = e.target;
+                const stockActual = parseFloat(currentRow.dataset.stockActual);
+                const stockMax = parseFloat(currentRow.dataset.stockMax);
+                const cantidadComprar = parseFloat(cantidadInput.value);
+
+                if (isNaN(cantidadComprar) || cantidadComprar <= 0) {
+                     cantidadInput.classList.add('is-invalid');
+                } else if (stockActual + cantidadComprar > stockMax) {
+                    cantidadInput.classList.add('is-invalid');
+                    const insumoNombre = currentRow.querySelector('.insumo-nombre').value;
+                    showNotificationModal(
+                        "Error de Stock",
+                        `La cantidad para "${insumoNombre}" supera el stock máximo permitido (${stockMax} unidades).`
+                    );
+                } else {
+                    cantidadInput.classList.remove('is-invalid');
+                }
+                
+                validarTodasLasFilas();
+                calcularSubtotales();
+            }
+        });
+    }
+
+    // Evento de cambio de IVA
+    if (ivaCheckbox) {
+        ivaCheckbox.addEventListener('change', calcularSubtotales);
+    }
+    
+    // Función para validar todas las filas
     function validarTodasLasFilas() {
         let todasValidas = true;
         document.querySelectorAll('.item-row .cantidad').forEach(input => {
@@ -294,11 +304,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 todasValidas = false;
             }
         });
-        submitButton.disabled = !todasValidas;
+        if (submitButton) {
+            submitButton.disabled = !todasValidas;
+        }
     }
 
-    ivaCheckbox.addEventListener('change', calcularSubtotales);
-
+    // Función para calcular subtotales
     function calcularSubtotales() {
         let subtotal = 0;
         document.querySelectorAll('.item-row').forEach(row => {
@@ -308,26 +319,48 @@ document.addEventListener('DOMContentLoaded', function () {
             subtotal += cantidad * precio;
         });
 
-        subtotalInput.value = `$${subtotal.toFixed(2)}`;
+        if (subtotalInput) {
+            subtotalInput.value = `$${subtotal.toFixed(2)}`;
+        }
 
         let total = subtotal;
-        if (ivaCheckbox.checked) {
+        if (ivaCheckbox && ivaCheckbox.checked) {
             total += subtotal * 0.21;
         }
-        totalInput.value = `$${total.toFixed(2)}`;
+        if (totalInput) {
+            totalInput.value = `$${total.toFixed(2)}`;
+        }
     }
 
+    // Función para actualizar la UI (mensaje de "sin ítems")
     function updateUI() {
         const noItemsMsg = document.getElementById('no-items-msg');
-        noItemsMsg.style.display = itemsContainer.children.length > 0 ? 'none' : 'block';
+        if (noItemsMsg) {
+            noItemsMsg.style.display = itemsContainer.children.length > 0 ? 'none' : 'block';
+        }
     }
 
-    const form = document.querySelector('form');
-    form.addEventListener('submit', function() {
-        const submitButton = form.querySelector('button[type="submit"]');
-        submitButton.disabled = true;
-        submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...`;
-    });
+    // Adjuntar el event listener para el envío del formulario
+    if (form && submitButton) {
+        form.addEventListener('submit', function(event) {
+            // Deshabilitar el botón inmediatamente para evitar clics múltiples
+            submitButton.disabled = true;
+            submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...`;
+
+            // Prevenir el envío si no hay ítems
+            if (itemsContainer.children.length === 0) {
+                event.preventDefault(); 
+                showNotificationModal('Error', 'Debe añadir al menos un ítem a la orden.', 'error');
+                // Rehabilitar el botón si el envío se cancela
+                submitButton.disabled = false;
+                submitButton.innerHTML = `<i class="bi bi-check-circle me-1"></i> Crear Orden`;
+            }
+        });
+    }
+
+    // Llamadas iniciales al cargar la página
+    updateUI();
+    calcularSubtotales();
 });
 </script>
 {% endblock extra_js %}
