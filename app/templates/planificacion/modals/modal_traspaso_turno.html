@@ -32,10 +32,8 @@
                     <div class="mb-3">
                         <label for="traspaso-novedades" class="form-label">
                             <strong>Novedades o Problemas Relevantes</strong>
-                            <span class="text-danger">*</span>
                         </label>
-                        <textarea class="form-control" id="traspaso-novedades" rows="4" placeholder="Ej: La máquina X hizo un ruido extraño a las 14:30. Se revisó y parece estar bien, pero mantener vigilada." required></textarea>
-                        <div class="invalid-feedback">Este campo es obligatorio.</div>
+                        <textarea class="form-control" id="traspaso-novedades" rows="4" placeholder="Ej: La máquina X hizo un ruido extraño a las 14:30. Se revisó y parece estar bien, pero mantener vigilada."></textarea>
                     </div>
 
                     <div class="mb-3">
@@ -47,6 +45,7 @@
 
                 </div>
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary" id="btn-confirmar-traspaso">
                         <i class="bi bi-check-circle-fill"></i> Confirmar y Pausar
                     </button>

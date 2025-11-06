@@ -5,16 +5,17 @@ class TraspasoTurnoModel(BaseModel):
     """
     Modelo para gestionar los registros de traspasos de turno en la base de datos.
     """
-    def __init__(self):
-        self.schema = 'mes_kanban'
-        self.table_name = 'traspasos_turno'
-        super().__init__()
-
     def get_table_name(self) -> str:
+        return 'traspasos_turno'
+
+    def get_schema_name(self) -> str:
+        return 'mes_kanban'
+
+    def _get_query_builder(self):
         """
-        Devuelve el nombre completo de la tabla, incluyendo el esquema.
+        Sobrescribe el método base para especificar el esquema 'mes_kanban'.
         """
-        return f'{self.schema}.{self.table_name}'
+        return self.db.schema(self.get_schema_name()).table(self.get_table_name())
 
     def find_latest_pending_by_op_id(self, orden_produccion_id: int) -> Dict:
         """

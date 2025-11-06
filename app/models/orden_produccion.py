@@ -346,10 +346,17 @@ class OrdenProduccionModel(BaseModel):
 
     def get_for_kanban_hoy(self, filtros_operario: Optional[Dict] = None) -> Dict:
         """
-        Obtiene las OPs para el Kanban. Si se proveen filtros de operario,
-        la consulta se ajusta para mostrar solo OPs relevantes para ese usuario.
+        Obtiene las OPs para el Kanban. Incluye OPs en estados estándar
+        y aquellas pausadas que tienen un traspaso de turno pendiente.
         """
         try:
+            # 1. Obtener IDs de OPs con traspasos de turno pendientes
+            traspasos_pendientes_res = self.db.table('traspasos_turno').select('orden_produccion_id').eq('estado', 'PENDIENTE').execute()
+            op_ids_con_traspaso = []
+            if traspasos_pendientes_res.data:
+                op_ids_con_traspaso = [item['orden_produccion_id'] for item in traspasos_pendientes_res.data]
+
+            # 2. Construir la consulta base
             query = self.db.table(self.get_table_name()).select(
                 "*, productos(nombre, unidad_medida), "
                 "creador:usuario_creador_id(nombre, apellido), "
@@ -358,66 +365,80 @@ class OrdenProduccionModel(BaseModel):
                 "aprobador:aprobador_calidad_id(nombre, apellido)"
             )
 
+            # 3. Aplicar filtros dinámicos según el rol
             if filtros_operario and filtros_operario.get('rol') == 'OPERARIO':
                 usuario_id = filtros_operario.get('usuario_id')
                 if not usuario_id:
                     return {'success': True, 'data': []}
 
-                # Filtro para un operario:
-                # 1. Órdenes en 'LISTA PARA PRODUCIR' (visibles para todos los operarios).
-                # 2. Órdenes en 'EN PROCESO' que él mismo haya iniciado.
-                # 3. Órdenes en 'CONTROL DE CALIDAD' o 'COMPLETADA' (visibles para todos).
-                filtro_lista_para_producir = "estado.in.(\"LISTA PARA PRODUCIR\",\"LISTA_PARA_PRODUCIR\")"
-                filtro_en_proceso_asignada = f"and(estado.eq.EN_PROCESO,operario_asignado_id.eq.{usuario_id})"
-                filtro_control_calidad = "estado.eq.CONTROL_DE_CALIDAD"
-                filtro_completada = "estado.eq.COMPLETADA"
+                # Un operario ve:
+                # - Órdenes 'LISTA PARA PRODUCIR'
+                # - Órdenes 'EN PROCESO' asignadas a él
+                # - Órdenes en 'CONTROL DE CALIDAD' o 'COMPLETADA'
+                # - Órdenes con un traspaso de turno pendiente (PAUSADA)
+                filtros_or = [
+                    "estado.in.(\"LISTA PARA PRODUCIR\",\"LISTA_PARA_PRODUCIR\")",
+                    f"and(estado.eq.EN_PROCESO,operario_asignado_id.eq.{usuario_id})",
+                    "estado.eq.CONTROL_DE_CALIDAD",
+                    "estado.eq.COMPLETADA"
+                ]
+                if op_ids_con_traspaso:
+                    ids_str = ','.join(map(str, op_ids_con_traspaso))
+                    filtros_or.append(f"id.in.({ids_str})")
 
-                # Combinar todos los filtros en una sola cadena para el método or_()
-                filtro_or_completo = f"or({filtro_lista_para_producir},{filtro_en_proceso_asignada},{filtro_control_calidad},{filtro_completada})"
+                filtro_or_completo = f"or({','.join(filtros_or)})"
                 query = query.or_(filtro_or_completo)
 
             else:
-                # Filtro para supervisores/gerentes: mostrar todas las OPs en estados relevantes.
+                # Un supervisor/gerente ve todos los estados relevantes del Kanban,
+                # y además las órdenes con traspasos pendientes.
                 estados_kanban_python = [
                     'EN_ESPERA', 'LISTA_PARA_PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'EN_PROCESO', 'CONTROL_DE_CALIDAD', 'COMPLETADA'
                 ]
-                # Manejar la inconsistencia de formato en la base de datos
                 estados_kanban_db = [estado.replace('_', ' ') for estado in estados_kanban_python]
-                if 'EN PROCESO' in estados_kanban_db:
-                    estados_kanban_db.remove('EN PROCESO')
+                if 'EN PROCESO' in estados_kanban_db: estados_kanban_db.remove('EN PROCESO')
                 estados_kanban_db.append('EN_PROCESO')
-                # AÑADIR TAMBIÉN LA VERSIÓN CON GUION BAJO PARA CONTROL DE CALIDAD, YA QUE SE GUARDA ASÍ
                 estados_kanban_db.append('CONTROL_DE_CALIDAD')
-                
-                query = query.in_('estado', estados_kanban_db)
 
+                if op_ids_con_traspaso:
+                    estados_str = ','.join([f'"{s}"' for s in estados_kanban_db])
+                    filtro_estados = f"estado.in.({estados_str})"
+                    ids_str = ','.join(map(str, op_ids_con_traspaso))
+                    filtro_ids = f"id.in.({ids_str})"
+                    
+                    filtro_or_completo = f"or({filtro_estados},{filtro_ids})"
+                    query = query.or_(filtro_or_completo)
+                else:
+                    query = query.in_('estado', estados_kanban_db)
+
+            # 4. Ejecutar la consulta
             result = query.execute()
 
+            # 5. Procesar y enriquecer los resultados
             if result.data:
-                # Procesar y aplanar los resultados como en get_all_enriched
                 processed_data = []
                 for item in result.data:
+                    # Aplanar datos de relaciones (producto, operario, etc.)
                     if item.get('productos'):
-                        producto_info = item.pop('productos')
-                        item['producto_nombre'] = producto_info.get('nombre', 'N/A')
+                        item['producto_nombre'] = item.pop('productos').get('nombre', 'N/A')
                     else:
                         item['producto_nombre'] = 'N/A'
 
                     if item.get('operario'):
-                        operario_info = item.pop('operario')
-                        item['operario_nombre'] = f"{operario_info.get('nombre', '')} {operario_info.get('apellido', '')}".strip()
+                        operario = item.pop('operario')
+                        item['operario_nombre'] = f"{operario.get('nombre', '')} {operario.get('apellido', '')}".strip()
                     else:
                         item['operario_nombre'] = None
 
                     if item.get('aprobador'):
-                        aprobador_info = item.pop('aprobador')
-                        item['aprobador_calidad_nombre'] = f"{aprobador_info.get('nombre', '')} {aprobador_info.get('apellido', '')}".strip()
+                        aprobador = item.pop('aprobador')
+                        item['aprobador_calidad_nombre'] = f"{aprobador.get('nombre', '')} {aprobador.get('apellido', '')}".strip()
                     else:
                         item['aprobador_calidad_nombre'] = None
 
                     processed_data.append(item)
 
-                # Obtener pedidos asociados
+                # Enriquecer con pedidos asociados
                 op_ids = [op['id'] for op in processed_data]
                 pedidos_por_op = {}
                 if op_ids:

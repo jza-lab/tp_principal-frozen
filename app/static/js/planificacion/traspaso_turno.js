@@ -65,8 +65,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (response.ok && data.success) {
                     if (modalTraspaso) modalTraspaso.hide();
                     showNotification('Traspaso registrado. La orden está en pausa.', 'success');
-                    // Forzamos una recarga de la página para que el estado de pausa se refleje correctamente
-                    window.location.reload();
+                    // Redirigir al tablero kanban para que el operario pueda ver el estado general
+                    window.location.href = '/produccion/kanban';
                 } else {
                     showNotification(`Error al registrar el traspaso: ${data.error || 'Error desconocido'}`, 'error');
                 }
