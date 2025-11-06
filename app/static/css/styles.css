@@ -1333,3 +1333,8 @@ h1.h2 {
 .form-control.is-valid {
     padding-right: 0.75rem !important;
 }
+
+.btn-text-white,
+.btn-text-white:hover {
+    color: white !important;
+}

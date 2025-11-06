@@ -164,22 +164,37 @@ def validar_fecha_requerida_api():
     return jsonify(response), status_code
 
 @planificacion_bp.route('/configuracion', methods=['GET'])
-##@jwt_required()
-# @permission_required(accion='configurar_planificacion') # <-- Asegura esto
+#@jwt_required()
+#@permission_required(accion='configurar_planificacion')
 def configuracion_lineas():
-    """Muestra la página de configuración de líneas y bloqueos."""
-    controller = PlanificacionController()
-    response, status_code = controller.obtener_datos_configuracion()
-    if status_code != 200:
-        flash(response.get('error', 'No se pudieron cargar los datos de configuración.'), 'error')
-        return redirect(url_for('planificacion.index'))
+    """Muestra la página de configuración de líneas, bloqueos y parámetros generales."""
+    from app.controllers.configuracion_controller import ConfiguracionController, TOLERANCIA_SOBREPRODUCCION_PORCENTAJE, DEFAULT_TOLERANCIA_SOBREPRODUCCION
+    
+    plan_controller = PlanificacionController()
+    config_controller = ConfiguracionController()
 
-    return render_template(
-        'planificacion/configuracion.html',
-        lineas=response.get('data', {}).get('lineas', []),
-        bloqueos=response.get('data', {}).get('bloqueos', []),
-        now=datetime.utcnow()  # <-- ¡AÑADIR ESTA LÍNEA!
+    # Cargar datos de líneas y bloqueos
+    response, status_code = plan_controller.obtener_datos_configuracion()
+    if status_code != 200:
+        flash(response.get('error', 'No se pudieron cargar los datos de configuración de líneas.'), 'error')
+        # Aún así, intentamos renderizar la página con lo que tengamos
+        contexto = {'lineas': [], 'bloqueos': [], 'now': datetime.utcnow(), 'configuracion': {}}
+    else:
+        contexto = response.get('data', {})
+        contexto['now'] = datetime.utcnow()
+
+    # Cargar parámetros generales de producción
+    tolerancia = config_controller.obtener_valor_configuracion(
+        TOLERANCIA_SOBREPRODUCCION_PORCENTAJE,
+        DEFAULT_TOLERANCIA_SOBREPRODUCCION
     )
+    
+    # Añadir al contexto en un diccionario anidado para Jinja2
+    contexto['configuracion'] = {
+        'TOLERANCIA_SOBREPRODUCCION_PORCENTAJE': tolerancia
+    }
+
+    return render_template('planificacion/configuracion.html', **contexto)
 
 @planificacion_bp.route('/configuracion/guardar-linea', methods=['POST'])
 ##@jwt_required()
@@ -227,4 +242,36 @@ def eliminar_bloqueo_capacidad(bloqueo_id):
     else:
         flash(response.get('error', 'Error al eliminar.'), 'error')
 
+    return redirect(url_for('planificacion.configuracion_lineas'))
+
+@planificacion_bp.route('/configuracion/guardar-produccion', methods=['POST'])
+#@jwt_required()
+#@permission_required(accion='configurar_planificacion')
+def guardar_configuracion_produccion():
+    """
+    Guarda los parámetros generales de producción, como la tolerancia de sobreproducción.
+    """
+    from app.controllers.configuracion_controller import ConfiguracionController, TOLERANCIA_SOBREPRODUCCION_PORCENTAJE
+    
+    controller = ConfiguracionController()
+    
+    try:
+        tolerancia_str = request.form.get(TOLERANCIA_SOBREPRODUCCION_PORCENTAJE, '0')
+        tolerancia_val = int(float(tolerancia_str)) # Convertir a float primero para manejar decimales, luego a int
+        
+        if not (0 <= tolerancia_val <= 100):
+            flash('El valor de tolerancia debe ser un número entero entre 0 y 100.', 'warning')
+        else:
+            response, status_code = controller.actualizar_valor_configuracion(
+                TOLERANCIA_SOBREPRODUCCION_PORCENTAJE, 
+                tolerancia_val
+            )
+            if status_code == 200:
+                flash(response.get('message', 'Parámetros guardados.'), 'success')
+            else:
+                flash(response.get('error', 'Error al guardar los parámetros.'), 'error')
+                
+    except (ValueError, TypeError):
+        flash('Valor de tolerancia inválido. Debe ser un número.', 'warning')
+    
     return redirect(url_for('planificacion.configuracion_lineas'))

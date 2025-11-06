@@ -47,3 +47,4 @@ class OrdenProduccionSchema(Schema):
     sugerencia_t_aprovisionamiento_dias = fields.Int(allow_none=True)
     sugerencia_linea = fields.Int(allow_none=True)
     fecha_inicio_planificada = fields.Date(allow_none=True)
+    aprobador_calidad_id = fields.Int(required=False, allow_none=True)

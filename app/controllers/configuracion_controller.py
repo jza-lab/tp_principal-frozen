@@ -1,20 +1,67 @@
 import logging
 from app.controllers.base_controller import BaseController
-from app.models.configuracion import ConfiguracionModel 
-from typing import Tuple
+from app.models.configuracion import ConfiguracionModel
+from typing import Tuple, Any
 
 logger = logging.getLogger(__name__)
 
 DIAS_ALERTA_VENCIMIENTO_LOTE = 'dias_alerta_vencimiento_lote'
-DEFAULT_DIAS_ALERTA = 7 
+DEFAULT_DIAS_ALERTA = 7
+TOLERANCIA_SOBREPRODUCCION_PORCENTAJE = 'tolerancia_sobreproduccion_porcentaje'
+DEFAULT_TOLERANCIA_SOBREPRODUCCION = 0.0
+
 
 class ConfiguracionController(BaseController):
     """
     Controlador para la gestión de valores de configuración persistentes.
     """
+
     def __init__(self):
         super().__init__()
         self.model = ConfiguracionModel()
+
+    def obtener_valor_configuracion(self, clave: str, default: Any) -> Any:
+        """
+        Obtiene un valor de configuración genérico de la base de datos.
+        """
+        try:
+            valor_str = self.model.obtener_valor(clave, str(default))
+            # Intenta convertir al tipo del default para mantener consistencia
+            if valor_str is None:
+                return default
+            # Handle float conversion specifically for safety
+            if isinstance(default, float):
+                return float(valor_str)
+            return type(default)(valor_str)
+        except (ValueError, TypeError) as e:
+            logger.error(f"Error convirtiendo valor para clave '{clave}', usando default '{default}': {str(e)}")
+            return default
+        except Exception as e:
+            logger.error(f"Error obteniendo configuración para clave '{clave}', usando default '{default}': {str(e)}")
+            return default
+
+    def actualizar_valor_configuracion(self, clave: str, valor: Any) -> Tuple[dict, int]:
+        """
+        Guarda un valor de configuración genérico en la base de datos.
+        """
+        try:
+            # Validación simple
+            if not clave or valor is None:
+                return self.error_response('La clave y el valor son requeridos.', 400)
+
+            result = self.model.guardar_valor(clave, str(valor))
+
+            if result.get('success'):
+                return self.success_response(
+                    message=f"Configuración '{clave}' actualizada correctamente.",
+                    data={'clave': clave, 'valor': valor}
+                )
+            else:
+                return self.error_response(result.get('error', f"Error al guardar la configuración '{clave}'."), 500)
+
+        except Exception as e:
+            logger.error(f"Error en actualizar_valor_configuracion para clave '{clave}': {str(e)}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
 
     def obtener_dias_vencimiento(self) -> int:
         """Obtiene el umbral de días para la alerta de vencimiento de lotes."""

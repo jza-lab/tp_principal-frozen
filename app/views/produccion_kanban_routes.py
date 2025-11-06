@@ -85,8 +85,19 @@ def foco_produccion(op_id):
     if status_vista >= 400:
         flash(response_vista.get('error', 'Error al cargar datos de la orden.'), 'danger')
         return redirect(url_for('produccion_kanban.tablero_produccion'))
+
+    # 4. Obtener configuración de tolerancia y añadirla a los datos de la vista
+    from app.controllers.configuracion_controller import ConfiguracionController, TOLERANCIA_SOBREPRODUCCION_PORCENTAJE, DEFAULT_TOLERANCIA_SOBREPRODUCCION
+    config_controller = ConfiguracionController()
+    tolerancia = config_controller.obtener_valor_configuracion(
+        TOLERANCIA_SOBREPRODUCCION_PORCENTAJE,
+        DEFAULT_TOLERANCIA_SOBREPRODUCCION
+    )
+    
+    datos_para_vista = response_vista.get('data', {})
+    datos_para_vista['tolerancia_sobreproduccion'] = tolerancia
         
-    return render_template('planificacion/foco_produccion.html', **response_vista.get('data', {}))
+    return render_template('planificacion/foco_produccion.html', **datos_para_vista)
 
 @produccion_kanban_bp.route('/api/mover-op/<int:op_id>', methods=['POST'])
 @jwt_required()
@@ -159,11 +170,10 @@ def api_aprobar_calidad(op_id):
     """
     API endpoint para que un supervisor de calidad apruebe una orden y la mueva a 'COMPLETADA'.
     """
-    # En una implementación futura, se podría pasar un usuario_id si es relevante.
-    # usuario_id = get_jwt_identity()
+    usuario_id = get_jwt_identity()
     controller = OrdenProduccionController()
     # Usamos el método robusto que ya maneja la creación de lotes.
-    response, status_code = controller.cambiar_estado_orden(op_id, 'COMPLETADA')
+    response, status_code = controller.cambiar_estado_orden(op_id, 'COMPLETADA', usuario_id=usuario_id)
     return jsonify(response), status_code
 
 

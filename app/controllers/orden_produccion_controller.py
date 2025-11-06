@@ -26,9 +26,15 @@ from app.models.registro_paro_model import RegistroParoModel
 from app.models.registro_desperdicio_model import RegistroDesperdicioModel
 from app.models.operacion_receta_model import OperacionRecetaModel
 from app.controllers.op_cronometro_controller import OpCronometroController
-
+# Importar el controlador de configuración para usar la nueva lógica
+from app.controllers.configuracion_controller import (
+    ConfiguracionController,
+    TOLERANCIA_SOBREPRODUCCION_PORCENTAJE,
+    DEFAULT_TOLERANCIA_SOBREPRODUCCION
+)
 
 logger = logging.getLogger(__name__)
+
 
 class OrdenProduccionController(BaseController):
     """
@@ -53,6 +59,7 @@ class OrdenProduccionController(BaseController):
         self.insumo_model = InsumoModel()
         self.operacion_receta_model = OperacionRecetaModel()
         self.op_cronometro_controller = OpCronometroController()
+        self.configuracion_controller = ConfiguracionController()
         self._planificacion_controller = None
 
     @property
@@ -354,7 +361,7 @@ class OrdenProduccionController(BaseController):
         """
         return self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=f"Rechazada: {motivo}")
 
-    def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str) -> tuple:
+    def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str, usuario_id: Optional[int] = None) -> tuple:
         """
         Cambia el estado de una orden.
         Si es 'COMPLETADA', crea el lote y lo deja 'RESERVADO' si está
@@ -369,11 +376,15 @@ class OrdenProduccionController(BaseController):
             orden_produccion = orden_result['data']
             estado_actual = orden_produccion['estado']
 
+            update_data = {}
             if nuevo_estado == 'COMPLETADA':
                 usuario_id_actual = get_jwt_identity()
                 self.model.update(orden_id, {'supervisor_calidad_id': usuario_id_actual}, 'id')
                 if not estado_actual or estado_actual.strip() != 'CONTROL_DE_CALIDAD':
                     return self.error_response("La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
+
+                if usuario_id:
+                    update_data['aprobador_calidad_id'] = usuario_id
 
                 # 1. Verificar si la OP está vinculada a ítems de pedido
                 items_a_surtir_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
@@ -418,7 +429,7 @@ class OrdenProduccionController(BaseController):
                     message_to_use += " y vinculado a los pedidos correspondientes."
 
             # 5. Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
-            result = self.model.cambiar_estado(orden_id, nuevo_estado)
+            result = self.model.cambiar_estado(orden_id, nuevo_estado, extra_data=update_data)
             if result.get('success'):
                 # La lógica del cronómetro se ha movido a otros métodos para evitar la doble detención.
                 # El cronómetro ahora se detiene cuando se reporta el 100% o cuando se pausa.
@@ -1159,16 +1170,27 @@ class OrdenProduccionController(BaseController):
         y opcionalmente finaliza la orden.
         """
         try:
-            cantidad_buena = Decimal(data.get('cantidad_buena', 0))
-            cantidad_desperdicio = Decimal(data.get('cantidad_desperdicio', 0))
-            motivo_desperdicio_id = data.get('motivo_desperdicio_id')
-            finalizar_orden = data.get('finalizar_orden', False)
+            # --- CONVERSIÓN Y VALIDACIÓN MEJORADA ---
+            try:
+                cantidad_buena = Decimal(data.get('cantidad_buena', '0'))
+                # Usar '0' si el campo viene vacío o nulo
+                cantidad_desperdicio_str = data.get('cantidad_desperdicio')
+                cantidad_desperdicio = Decimal(cantidad_desperdicio_str) if cantidad_desperdicio_str else Decimal('0')
 
-            # 1. Validar datos
+            except (TypeError, ValueError) as e:
+                return self.error_response(f"Valor numérico inválido: {e}", 400)
+
+            motivo_desperdicio_id = data.get('motivo_desperdicio_id')
+            # El frontend ahora envía 'final' o 'parcial'
+            tipo_reporte = data.get('tipo_reporte', 'parcial')
+            finalizar_orden = (tipo_reporte == 'final')
+
             if cantidad_buena < 0 or cantidad_desperdicio < 0:
                 return self.error_response("Las cantidades no pueden ser negativas.", 400)
+            
+            # Solo requerir motivo si hay desperdicio
             if cantidad_desperdicio > 0 and not motivo_desperdicio_id:
-                return self.error_response("Se requiere un motivo para el desperdicio.", 400)
+                return self.error_response("Se requiere un motivo para el desperdicio reportado.", 400)
 
             # 2. Registrar desperdicio si existe
             if cantidad_desperdicio > 0:
@@ -1191,17 +1213,30 @@ class OrdenProduccionController(BaseController):
             cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
             nueva_cantidad_producida = cantidad_producida_actual + cantidad_buena
 
-            # --- VALIDACIÓN DE CANTIDAD MÁXIMA (CON TOLERANCIA) ---
-            # Se usa una pequeña tolerancia para evitar errores de punto flotante
-            TOLERANCIA = Decimal('0.001')
-            if nueva_cantidad_producida > cantidad_planificada + TOLERANCIA:
-                return self.error_response(f"La cantidad reportada ({cantidad_buena}) excede la cantidad pendiente ({cantidad_planificada - cantidad_producida_actual}).", 400)
+            # --- NUEVA VALIDACIÓN DE SOBREPRODUCCIÓN CON TOLERANCIA CONFIGURABLE ---
+            tolerancia_porcentaje = self.configuracion_controller.obtener_valor_configuracion(
+                TOLERANCIA_SOBREPRODUCCION_PORCENTAJE,
+                DEFAULT_TOLERANCIA_SOBREPRODUCCION
+            )
+            
+            tolerancia_decimal = Decimal(tolerancia_porcentaje) / Decimal(100)
+            cantidad_maxima_permitida = cantidad_planificada * (Decimal(1) + tolerancia_decimal)
+            
+            # Se usa una pequeña tolerancia adicional para evitar errores de punto flotante
+            TOLERANCIA_CALCULO = Decimal('0.001')
 
-            # Asegurarse de no sobrepasar el límite planificado debido a la tolerancia
-            update_data = {'cantidad_producida': min(nueva_cantidad_producida, cantidad_planificada)}
-
+            if nueva_cantidad_producida > cantidad_maxima_permitida + TOLERANCIA_CALCULO:
+                excedente = nueva_cantidad_producida - cantidad_planificada
+                return self.error_response(
+                    f"La cantidad reportada excede el límite de sobreproducción permitido ({tolerancia_porcentaje}%). "
+                    f"Excedente: {excedente:.2f} kg.", 400
+                )
+            
+            # La cantidad a guardar sí puede ser mayor que la planificada (si está dentro de la tolerancia)
+            update_data = {'cantidad_producida': nueva_cantidad_producida}
+            
             # --- LÓGICA DE TRANSICIÓN DE ESTADO ---
-            # Si se finaliza O la nueva cantidad alcanza el total, mover a Control de Calidad
+            # La orden se mueve al siguiente estado si la cantidad producida alcanza o supera la cantidad PLANIFICADA (no la máxima).
             if finalizar_orden or nueva_cantidad_producida >= cantidad_planificada:
                 update_data['estado'] = 'CONTROL_DE_CALIDAD'
                 # También se debería registrar la fecha_fin
