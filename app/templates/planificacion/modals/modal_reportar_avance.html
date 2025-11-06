@@ -9,7 +9,10 @@
       <div class="modal-body">
         <form id="form-reportar">
           <div class="mb-3">
-            <label for="cantidad-buena" class="form-label">Cantidad Producida (Buena) <span class="text-danger">*</span></label>
+            <div class="d-flex justify-content-between">
+                <label for="cantidad-buena" class="form-label">Cantidad Producida (Buena) <span class="text-danger">*</span></label>
+                <small class="text-muted fw-bold" id="cantidad-restante-info">Restante: 0.00 kg</small>
+            </div>
             <input type="number" class="form-control" id="cantidad-buena" name="cantidad_buena" step="0.01" required>
           </div>
           <div class="mb-3">

@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const motivoDesperdicioContainer = document.getElementById('motivo-desperdicio-container');
     const motivoDesperdicioSelect = document.getElementById('motivo-desperdicio');
     const motivoParoSelect = document.getElementById('motivo-paro');
+    const cantidadRestanteInfo = document.getElementById('cantidad-restante-info');
 
     
     // ===== ESTADO DE LA APLICACIÓN =====
@@ -256,6 +257,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ===== REPORTAR AVANCE =====
+    btnReportarAvance.addEventListener('click', () => {
+        const restante = estado.cantidadPlanificada - estado.cantidadProducida;
+        cantidadRestanteInfo.textContent = `Restante: ${formatNumber(restante, 2)} kg`;
+    });
+
     cantidadMalaInput.addEventListener('input', () => {
         const cantidadMala = parseFloat(cantidadMalaInput.value) || 0;
         if (cantidadMala > 0) {
@@ -333,7 +339,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     
         const nuevaCantidadProducida = estado.cantidadProducida + cantidadBuena;
-        const cantidadMaximaPermitida = estado.cantidadPlanificada * 1.10;
+        const toleranciaDecimal = TOLERANCIA_SOBREPRODUCCION / 100;
+        const cantidadMaximaPermitida = estado.cantidadPlanificada * (1 + toleranciaDecimal);
     
         const payload = {
             cantidad_buena: cantidadBuena,
@@ -341,15 +348,17 @@ document.addEventListener('DOMContentLoaded', function () {
             motivo_desperdicio_id: motivoDesperdicio,
         };
 
-        // Lógica de Sobreproducción
-        if (nuevaCantidadProducida > cantidadMaximaPermitida) {
+        // Lógica de Sobreproducción con Tolerancia Configurable
+        if (nuevaCantidadProducida > cantidadMaximaPermitida + 0.001) { // 0.001 para errores de flotante
             const excedente = formatNumber(nuevaCantidadProducida - cantidadMaximaPermitida, 2);
-            showNotification(`❌ Límite de sobreproducción (10%) excedido por ${excedente} kg.`, 'error');
+            showNotification(`❌ Límite de sobreproducción (${TOLERANCIA_SOBREPRODUCCION}%) excedido por ${excedente} kg.`, 'error');
             return;
         } else if (nuevaCantidadProducida > estado.cantidadPlanificada) {
             const sobreproduccion = formatNumber(nuevaCantidadProducida - estado.cantidadPlanificada, 2);
+            const porcentaje = (sobreproduccion / estado.cantidadPlanificada) * 100;
             const confirmacion = confirm(
-                `Estás a punto de reportar una sobreproducción de ${sobreproduccion} kg.\n\n¿Deseas continuar?`
+                `⚠️ ¡Atención! Estás reportando una sobreproducción de ${sobreproduccion} kg (${porcentaje.toFixed(1)}%).\n\n` +
+                `Esto está dentro de la tolerancia permitida del ${TOLERANCIA_SOBREPRODUCCION}%. ¿Deseas continuar?`
             );
             
             if (confirmacion) {

@@ -26,9 +26,14 @@ from app.models.registro_paro_model import RegistroParoModel
 from app.models.registro_desperdicio_model import RegistroDesperdicioModel
 from app.models.operacion_receta_model import OperacionRecetaModel
 from app.controllers.op_cronometro_controller import OpCronometroController
-
+from app.controllers.configuracion_controller import (
+    ConfiguracionController,
+    TOLERANCIA_SOBREPRODUCCION_PORCENTAJE,
+    DEFAULT_TOLERANCIA_SOBREPRODUCCION
+)
 
 logger = logging.getLogger(__name__)
+
 
 class OrdenProduccionController(BaseController):
     """
@@ -53,6 +58,7 @@ class OrdenProduccionController(BaseController):
         self.insumo_model = InsumoModel()
         self.operacion_receta_model = OperacionRecetaModel()
         self.op_cronometro_controller = OpCronometroController()
+        self.configuracion_controller = ConfiguracionController()
         self._planificacion_controller = None
 
     @property
@@ -1115,17 +1121,30 @@ class OrdenProduccionController(BaseController):
             cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
             nueva_cantidad_producida = cantidad_producida_actual + cantidad_buena
 
-            # --- VALIDACIÓN DE CANTIDAD MÁXIMA (CON TOLERANCIA) ---
-            # Se usa una pequeña tolerancia para evitar errores de punto flotante
-            TOLERANCIA = Decimal('0.001')
-            if nueva_cantidad_producida > cantidad_planificada + TOLERANCIA:
-                return self.error_response(f"La cantidad reportada ({cantidad_buena}) excede la cantidad pendiente ({cantidad_planificada - cantidad_producida_actual}).", 400)
+            # --- NUEVA VALIDACIÓN DE SOBREPRODUCCIÓN CON TOLERANCIA CONFIGURABLE ---
+            tolerancia_porcentaje = self.configuracion_controller.obtener_valor_configuracion(
+                TOLERANCIA_SOBREPRODUCCION_PORCENTAJE,
+                DEFAULT_TOLERANCIA_SOBREPRODUCCION
+            )
             
-            # Asegurarse de no sobrepasar el límite planificado debido a la tolerancia
-            update_data = {'cantidad_producida': min(nueva_cantidad_producida, cantidad_planificada)}
+            tolerancia_decimal = Decimal(tolerancia_porcentaje) / Decimal(100)
+            cantidad_maxima_permitida = cantidad_planificada * (Decimal(1) + tolerancia_decimal)
+            
+            # Se usa una pequeña tolerancia adicional para evitar errores de punto flotante
+            TOLERANCIA_CALCULO = Decimal('0.001')
+
+            if nueva_cantidad_producida > cantidad_maxima_permitida + TOLERANCIA_CALCULO:
+                excedente = nueva_cantidad_producida - cantidad_planificada
+                return self.error_response(
+                    f"La cantidad reportada excede el límite de sobreproducción permitido ({tolerancia_porcentaje}%). "
+                    f"Excedente: {excedente:.2f} kg.", 400
+                )
+            
+            # La cantidad a guardar sí puede ser mayor que la planificada (si está dentro de la tolerancia)
+            update_data = {'cantidad_producida': nueva_cantidad_producida}
             
             # --- LÓGICA DE TRANSICIÓN DE ESTADO ---
-            # Si se finaliza O la nueva cantidad alcanza el total, mover a Control de Calidad
+            # La orden se mueve al siguiente estado si la cantidad producida alcanza o supera la cantidad PLANIFICADA (no la máxima).
             if finalizar_orden or nueva_cantidad_producida >= cantidad_planificada:
                 update_data['estado'] = 'CONTROL_DE_CALIDAD'
                 # También se debería registrar la fecha_fin

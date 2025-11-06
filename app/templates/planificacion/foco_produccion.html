@@ -319,6 +319,7 @@
         const ORDEN_RITMO_OBJETIVO = {{ orden.ritmo_objetivo or 5 | tojson }};
         const MOTIVOS_PARO = {{ motivos_paro | tojson }};
         const MOTIVOS_DESPERDICIO = {{ motivos_desperdicio | tojson }};
+        const TOLERANCIA_SOBREPRODUCCION = {{ tolerancia_sobreproduccion | tojson }};
     </script>
-    <script src="{{ url_for('static', filename='js/planificacion/foco_produccion.js', v='1.1') }}"></script>
+    <script src="{{ url_for('static', filename='js/planificacion/foco_produccion.js', v='1.2') }}"></script>
 {% endblock %}
