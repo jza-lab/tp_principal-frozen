@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const opData = data.orden_produccion || (resumen.origen ? resumen.origen.op : {});
         const upstreamData = data.upstream || (resumen.origen ? { insumos: resumen.origen.insumos } : { insumos: [] });
         const downstreamData = data.downstream || (resumen.destino ? { lotes_producidos: resumen.destino.lotes, pedidos: resumen.destino.pedidos } : { lotes_producidos: [], pedidos: [] });
-        const ocsPendientesData = resumen.ordenes_compra_pendientes || [];
+        const ocsAsociadasData = resumen.ordenes_compra_asociadas || [];
         const responsablesData = data.responsables || {};
 
 
@@ -61,8 +61,8 @@ document.addEventListener('DOMContentLoaded', function() {
             </tr>
         `).join('') : '<tr><td colspan="4" class="text-center text-muted">No se utilizaron insumos directos.</td></tr>';
 
-        // --- HTML para Órdenes de Compra Pendientes ---
-        const ocsPendientesHtml = ocsPendientesData.length > 0 ? ocsPendientesData.map(oc => `
+        // --- HTML para Órdenes de Compra Asociadas ---
+        const ocsAsociadasHtml = ocsAsociadasData.length > 0 ? ocsAsociadasData.map(oc => `
             <div class="card mb-2 shadow-sm">
                 <div class="card-body p-2">
                     <div class="d-flex justify-content-between align-items-center">
@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </ul>
                 </div>
             </div>
-        `).join('') : '<p class="text-center text-muted">No hay órdenes de compra pendientes.</p>';
+        `).join('') : '<p class="text-center text-muted">No hay órdenes de compra asociadas.</p>';
 
 
         // --- HTML para Lotes Producidos ---
@@ -128,8 +128,8 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </table>
                             </div>
                             <hr>
-                            <h6 class="card-subtitle mb-2 text-muted">Insumos Pendientes de Llegada</h6>
-                            ${ocsPendientesHtml}
+                            <h6 class="card-subtitle mb-2 text-muted">Órdenes de Compra Asociadas</h6>
+                            ${ocsAsociadasHtml}
                         </div>
                     </div>
                 </div>
