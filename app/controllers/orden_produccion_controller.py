@@ -111,7 +111,18 @@ class OrdenProduccionController(BaseController):
             result = self.model.get_all_enriched(filtros)
 
             if result.get('success'):
-                return self.success_response(data=result.get('data', []))
+                # --- INICIO LÓGICA DE ENRIQUECIMIENTO PARA MATERIALES ---
+                ordenes = result.get('data', [])
+                for orden in ordenes:
+                    estado = orden.get('estado')
+                    # El estado 'LISTA PARA PRODUCIR' implica que el stock fue verificado y reservado.
+                    # El estado 'EN ESPERA' implica que se está esperando la llegada de insumos via OC.
+                    if estado in ['LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR']:
+                        orden['materiales_disponibles'] = True
+                    elif estado == 'EN_ESPERA':
+                        orden['materiales_disponibles'] = False
+                # --- FIN LÓGICA DE ENRIQUECIMIENTO ---
+                return self.success_response(data=ordenes)
             else:
                 error_msg = result.get('error', 'Error desconocido al obtener órdenes.')
                 status_code = 404 if "no encontradas" in str(error_msg).lower() else 500
@@ -1171,9 +1182,6 @@ class OrdenProduccionController(BaseController):
                 return self.error_response(f"Valor numérico inválido: {e}", 400)
 
             motivo_desperdicio_id = data.get('motivo_desperdicio_id')
-            # El frontend ahora envía 'final' o 'parcial'
-            tipo_reporte = data.get('tipo_reporte', 'parcial')
-            finalizar_orden = (tipo_reporte == 'final')
 
             if cantidad_buena < 0 or cantidad_desperdicio < 0:
                 return self.error_response("Las cantidades no pueden ser negativas.", 400)
@@ -1227,7 +1235,7 @@ class OrdenProduccionController(BaseController):
             
             # --- LÓGICA DE TRANSICIÓN DE ESTADO ---
             # La orden se mueve al siguiente estado si la cantidad producida alcanza o supera la cantidad PLANIFICADA (no la máxima).
-            if finalizar_orden or nueva_cantidad_producida >= cantidad_planificada:
+            if nueva_cantidad_producida >= cantidad_planificada:
                 update_data['estado'] = 'CONTROL_DE_CALIDAD'
                 # También se debería registrar la fecha_fin
                 update_data['fecha_fin'] = datetime.now().isoformat()
