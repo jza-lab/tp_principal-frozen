@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const insumoPrecio = parseFloat(selectedInsumo.dataset.precio).toFixed(2);
 
             if (document.querySelector(`input.insumo-id[value="${insumoId}"]`)) {
-                alert("Este insumo ya ha sido añadido.");
+                showNotificationModal("Error de validación", "Este insumo ya ha sido añadido.");
                 return;
             }
 

@@ -372,7 +372,8 @@ async function handleSubmit(event) {
 
 async function enviarDatos(payload, csrfToken) {
     const submitButton = form.querySelector('button[type="submit"]');
-    const url = isEditing ? `/orden-venta/${pedidoId}/editar` : '/orden-venta/nueva';
+    // Usar la URL definida en la plantilla, que es la fuente de verdad.
+    const url = isEditing ? `/orden-venta/${pedidoId}/editar` : (typeof CREAR_URL !== 'undefined' ? CREAR_URL : '/orden-venta/nueva');
     const method = isEditing ? 'PUT' : 'POST';
 
     let response;

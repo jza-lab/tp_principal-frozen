@@ -14,7 +14,7 @@
             {% if orden %}
             Modificar orden {{ orden.codigo_oc }}
             {% else %}
-            Crear nueva orden de compra para un proveedor
+            Crear una o más órdenes de compra seleccionando insumos
             {% endif %}
         </p>
     </div>
@@ -31,56 +31,74 @@
     <div class="row">
         <div class="col-lg-8">
             <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="card-header">
                     <h5 class="mb-0">Ítems de la Orden</h5>
-                    <button type="button" class="btn btn-sm btn-primary" id="addItemBtn">
-                        <i class="bi bi-plus-circle me-1"></i> Añadir Ítem
-                    </button>
                 </div>
                 <div class="card-body">
+                    {% if not orden %}
                     <div class="row">
                         <div class="col-md-12">
                             <div class="input-group mb-3">
                                 <span class="input-group-text"><i class="bi bi-search"></i></span>
-                                <input type="text" id="insumo-search" class="form-control" placeholder="Buscar insumo por nombre o código...">
+                                <input type="text" id="insumo-search-filter" class="form-control" placeholder="Buscar insumo...">
                             </div>
-                            <div id="insumo-results" class="list-group" style="max-height: 200px; overflow-y: auto;"></div>
+                            <select id="insumo-select" class="form-select" size="8">
+                                <option value="">Seleccione un insumo...</option>
+                                {% for insumo in insumos %}
+                                <option value="{{ insumo.id_insumo }}" 
+                                        data-nombre="{{ insumo.nombre }}" 
+                                        data-precio="{{ insumo.precio_unitario }}" 
+                                        data-proveedor-id="{{ insumo.proveedor.id }}" 
+                                        data-proveedor-nombre="{{ insumo.proveedor.nombre }}"
+                                        data-stock-actual="{{ insumo.stock_actual|default(0) }}"
+                                        data-stock-max="{{ insumo.stock_max|default(999999) }}">
+                                    {{ insumo.nombre }} - {{ insumo.proveedor.nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
+                    {% endif %}
                     <div class="table-responsive mt-3">
                         <table class="table table-sm align-middle">
                             <thead class="bg-light">
                                 <tr>
-                                    <th style="width: 40%;">Insumo</th>
-                                    <th style="width: 25%;">Cantidad</th>
-                                    <th style="width: 25%;">Precio Unitario</th>
+                                    <th style="width: 35%;">Insumo</th>
+                                    <th style="width: 25%;">Proveedor</th>
+                                    <th style="width: 15%;">Cantidad</th>
+                                    <th style="width: 15%;">Precio Unitario</th>
                                     <th style="width: 10%;" class="text-center">Acción</th>
                                 </tr>
                             </thead>
                             <tbody id="itemsContainer">
-                                {% if orden and orden.items %}
+                                {% if orden %}
                                     {% for item in orden.items %}
-                                        <tr class="item-row">
-                                            <td>
-                                                <input type="hidden" name="items[{{ loop.index0 }}][insumo_id]" value="{{ item.insumo_id }}">
-                                                <input type="text" class="form-control form-control-sm" value="{{ item.insumo.nombre }}" readonly>
-                                            </td>
-                                            <td>
-                                                <input type="number" step="0.01" min="0.01" max="99999.99" class="form-control form-control-sm cantidad" name="items[{{ loop.index0 }}][cantidad_solicitada]" value="{{ item.cantidad_solicitada }}">
-                                            </td>
-                                            <td>
-                                                <input type="text" class="form-control form-control-sm precio_unitario" name="items[{{ loop.index0 }}][precio_unitario]" value="${{ '%.2f'|format(item.precio_unitario|float) }}" readonly>
-                                            </td>
-                                            <td class="text-center">
-                                                <button type="button" class="btn btn-sm btn-outline-danger removeItemBtn" title="Eliminar ítem"><i class="bi bi-trash"></i></button>
-                                            </td>
-                                        </tr>
+                                    <tr class="item-row">
+                                        <td>
+                                            <input type="hidden" name="insumo_id[]" class="insumo-id" value="{{ item.insumo_id }}">
+                                            <input type="text" class="form-control form-control-sm insumo-nombre" value="{{ item.insumo.nombre }}" readonly>
+                                        </td>
+                                        <td>
+                                            <input type="text" class="form-control form-control-sm proveedor-nombre" value="{{ orden.proveedor.nombre }}" readonly>
+                                        </td>
+                                        <td>
+                                            <input type="number" step="0.01" min="0.01" max="99999.99" class="form-control form-control-sm cantidad" name="cantidad_solicitada[]" value="{{ item.cantidad_solicitada }}" required {% if orden.estado != 'PENDIENTE' %}readonly{% endif %}>
+                                        </td>
+                                        <td>
+                                            <input type="text" class="form-control form-control-sm precio_unitario" name="precio_unitario[]" value="${{ '%.2f'|format(item.precio_unitario|float) }}" readonly>
+                                        </td>
+                                        <td class="text-center">
+                                            {% if orden.estado == 'PENDIENTE' %}
+                                            <button type="button" class="btn btn-sm btn-outline-danger removeItemBtn" title="Eliminar ítem"><i class="bi bi-trash"></i></button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
                                     {% endfor %}
                                 {% endif %}
                             </tbody>
                         </table>
                     </div>
-                    <div id="no-items-msg" class="text-center text-muted py-3 border-top" style="display: {% if not (orden and orden.items) %}block{% else %}none{% endif %};">
+                    <div id="no-items-msg" class="text-center text-muted py-3 border-top">
                         <i class="bi bi-box-seam fs-3"></i>
                         <p class="mt-2">Añada ítems a la orden.</p>
                     </div>
@@ -92,22 +110,17 @@
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="proveedor_id" class="form-label">Proveedor <span class="text-danger">*</span></label>
+                        {% if orden %}
+                        <div class="col-md-12">
+                            <label for="proveedor_nombre" class="form-label">Proveedor</label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-truck-flatbed"></i></span>
-                                <select class="form-select" id="proveedor_id" name="proveedor_id" required>
-                                    <option value="">Seleccione un proveedor...</option>
-                                    {% for proveedor in proveedores %}
-                                    <option value="{{ proveedor.id }}" {% if orden and orden.proveedor_id==proveedor.id %}selected{% endif %}>
-                                        {{ proveedor.nombre }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
+                                <input type="text" class="form-control" id="proveedor_nombre" name="proveedor_nombre" value="{{ orden.proveedor.nombre }}" readonly>
+                                <input type="hidden" id="proveedor_id" name="proveedor_id" value="{{ orden.proveedor_id }}">
                             </div>
                         </div>
-
-                        <div class="col-md-3">
+                        {% endif %}
+                        <div class="col-md-6">
                             <label for="fecha_emision" class="form-label">Fecha Emisión <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
@@ -117,7 +130,7 @@
                             </div>
                         </div>
 
-                        <div class="col-md-3">
+                        <div class="col-md-6">
                             <label for="fecha_estimada_entrega" class="form-label">Fecha Estimada Entrega <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-calendar-range"></i></span>
@@ -142,14 +155,17 @@
             <template id="item-template">
                 <tr class="item-row">
                     <td>
-                        <input type="hidden" name="items[__prefix__][insumo_id]" class="insumo-id">
+                        <input type="hidden" name="insumo_id[]" class="insumo-id">
                         <input type="text" class="form-control form-control-sm insumo-nombre" readonly>
                     </td>
                     <td>
-                        <input type="number" step="0.01" min="0.01" max="99999.99" class="form-control form-control-sm cantidad" name="items[__prefix__][cantidad_solicitada]" required>
+                        <input type="text" class="form-control form-control-sm proveedor-nombre" readonly>
                     </td>
                     <td>
-                         <input type="text" class="form-control form-control-sm precio_unitario" name="items[__prefix__][precio_unitario]" readonly>
+                        <input type="number" step="0.01" min="0.01" max="99999.99" class="form-control form-control-sm cantidad" name="cantidad_solicitada[]" value="1" required>
+                    </td>
+                    <td>
+                         <input type="text" class="form-control form-control-sm precio_unitario" name="precio_unitario[]" readonly>
                     </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-sm btn-outline-danger removeItemBtn" title="Eliminar ítem"><i class="bi bi-trash"></i></button>
@@ -191,7 +207,120 @@
 
 {% block extra_js %}
 <script>
-    const INSUMOS_API_URL = "{{ url_for('insumos_api.api_get_insumos') }}";
+document.addEventListener('DOMContentLoaded', function () {
+    const searchFilter = document.getElementById('insumo-search-filter');
+    const insumoSelect = document.getElementById('insumo-select');
+    const options = Array.from(insumoSelect.options);
+
+    searchFilter.addEventListener('input', function () {
+        const searchTerm = this.value.toLowerCase();
+        insumoSelect.innerHTML = ''; // Clear current options
+        
+        options.forEach(option => {
+            if (option.text.toLowerCase().includes(searchTerm)) {
+                insumoSelect.appendChild(option);
+            }
+        });
+    });
+
+    const itemsContainer = document.getElementById('itemsContainer');
+    const itemTemplate = document.getElementById('item-template');
+    const subtotalInput = document.getElementById('subtotal');
+    const ivaCheckbox = document.getElementById('iva');
+    const totalInput = document.getElementById('total');
+    const submitButton = document.querySelector('button[type="submit"]');
+
+    insumoSelect.addEventListener('dblclick', function () {
+        const selectedOption = this.options[this.selectedIndex];
+        if (!selectedOption || !selectedOption.value) return;
+
+        const insumoId = selectedOption.value;
+        
+        const templateContent = itemTemplate.content.cloneNode(true);
+        const newRow = templateContent.querySelector('.item-row');
+        
+        // Guardar datos de stock en la fila para validaciones posteriores
+        newRow.dataset.stockActual = selectedOption.dataset.stockActual;
+        newRow.dataset.stockMax = selectedOption.dataset.stockMax;
+
+        newRow.querySelector('.insumo-id').value = insumoId;
+        newRow.querySelector('.insumo-nombre').value = selectedOption.dataset.nombre;
+        newRow.querySelector('.proveedor-nombre').value = selectedOption.dataset.proveedorNombre;
+        newRow.querySelector('.precio_unitario').value = `$${parseFloat(selectedOption.dataset.precio).toFixed(2)}`;
+        
+        itemsContainer.appendChild(newRow);
+        updateUI();
+        calcularSubtotales();
+    });
+
+    itemsContainer.addEventListener('click', function (e) {
+        if (e.target.closest('.removeItemBtn')) {
+            e.target.closest('.item-row').remove();
+            updateUI();
+            calcularSubtotales();
+        }
+    });
+
+    itemsContainer.addEventListener('input', function (e) {
+        if (e.target.classList.contains('cantidad')) {
+            const currentRow = e.target.closest('.item-row');
+            const cantidadInput = e.target;
+            const stockActual = parseFloat(currentRow.dataset.stockActual);
+            const stockMax = parseFloat(currentRow.dataset.stockMax);
+            const cantidadComprar = parseFloat(cantidadInput.value);
+
+            if (isNaN(cantidadComprar) || cantidadComprar <= 0) {
+                 cantidadInput.classList.add('is-invalid');
+            } else if (stockActual + cantidadComprar > stockMax) {
+                cantidadInput.classList.add('is-invalid');
+                const insumoNombre = currentRow.querySelector('.insumo-nombre').value;
+                showNotificationModal(
+                    "Error de Stock",
+                    `La cantidad para "${insumoNombre}" supera el stock máximo permitido (${stockMax} unidades).`
+                );
+            } else {
+                cantidadInput.classList.remove('is-invalid');
+            }
+            
+            validarTodasLasFilas();
+            calcularSubtotales();
+        }
+    });
+
+    function validarTodasLasFilas() {
+        let todasValidas = true;
+        document.querySelectorAll('.item-row .cantidad').forEach(input => {
+            if (input.classList.contains('is-invalid') || input.value.trim() === '' || parseFloat(input.value) <= 0) {
+                todasValidas = false;
+            }
+        });
+        submitButton.disabled = !todasValidas;
+    }
+
+    ivaCheckbox.addEventListener('change', calcularSubtotales);
+
+    function calcularSubtotales() {
+        let subtotal = 0;
+        document.querySelectorAll('.item-row').forEach(row => {
+            const cantidad = parseFloat(row.querySelector('.cantidad').value) || 0;
+            const precioStr = row.querySelector('.precio_unitario').value.replace('$', '').trim();
+            const precio = parseFloat(precioStr) || 0;
+            subtotal += cantidad * precio;
+        });
+
+        subtotalInput.value = `$${subtotal.toFixed(2)}`;
+
+        let total = subtotal;
+        if (ivaCheckbox.checked) {
+            total += subtotal * 0.21;
+        }
+        totalInput.value = `$${total.toFixed(2)}`;
+    }
+
+    function updateUI() {
+        const noItemsMsg = document.getElementById('no-items-msg');
+        noItemsMsg.style.display = itemsContainer.children.length > 0 ? 'none' : 'block';
+    }
+});
 </script>
-<script src="{{ url_for('static', filename='js/ordenes_compra/formularioCompra.js') }}?v=3"></script>
 {% endblock extra_js %}

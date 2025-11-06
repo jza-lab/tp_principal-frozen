@@ -8,6 +8,7 @@ from app.controllers.inventario_controller import InventarioController
 from app.controllers.usuario_controller import UsuarioController
 from datetime import datetime, date
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -31,19 +32,8 @@ class OrdenCompraController:
         Parsea los datos del formulario web o de un diccionario, calcula los totales
         y prepara los datos para la creación/actualización de la orden.
         """
-        orden_data = {
-            'proveedor_id': form_data.get('proveedor_id'),
-            'fecha_emision': form_data.get('fecha_emision'),
-            'fecha_estimada_entrega': form_data.get('fecha_estimada_entrega'),
-            'prioridad': form_data.get('prioridad'),
-            'observaciones': form_data.get('observaciones'),
-            # >>> AÑADE ESTA LÍNEA CRÍTICA <<<
-            'orden_produccion_id': form_data.get('orden_produccion_id'),
-        }
-
-        items_data = []
-        subtotal_calculado = 0.0
-
+        from app.controllers.insumo_controller import InsumoController
+        insumo_controller = InsumoController()
         # Determinar si los datos vienen de un form de Flask o de un dict (ej. JSON)
         if hasattr(form_data, 'getlist'):
             insumo_ids = form_data.getlist('insumo_id[]')
@@ -58,6 +48,29 @@ class OrdenCompraController:
             if not cantidades:
                 cantidades = form_data.get('cantidad_faltante[]', [])
             precios = form_data.get('precio_unitario[]', [])
+
+        primer_insumo_id = insumo_ids[0] if insumo_ids else None
+        if not primer_insumo_id:
+            raise ValueError("No se proporcionaron insumos para la orden.")
+
+        # Obtener el proveedor del primer insumo
+        primer_insumo_data, _ = insumo_controller.obtener_insumo_por_id(primer_insumo_id)
+        proveedor_id = primer_insumo_data.get('data', {}).get('id_proveedor')
+        if not proveedor_id:
+            raise ValueError(f"El insumo {primer_insumo_id} no tiene un proveedor asociado.")
+
+        orden_data = {
+            'proveedor_id': proveedor_id,
+            'fecha_emision': form_data.get('fecha_emision'),
+            'fecha_estimada_entrega': form_data.get('fecha_estimada_entrega'),
+            'prioridad': form_data.get('prioridad'),
+            'observaciones': form_data.get('observaciones'),
+            # >>> AÑADE ESTA LÍNEA CRÍTICA <<<
+            'orden_produccion_id': form_data.get('orden_produccion_id'),
+        }
+
+        items_data = []
+        subtotal_calculado = 0.0
 
         for i in range(len(insumo_ids)):
             if insumo_ids[i]:
@@ -99,8 +112,6 @@ class OrdenCompraController:
 
             # Asignar datos clave
             orden_data['usuario_creador_id'] = usuario_id
-            if not orden_data.get('codigo_oc'):
-                orden_data['codigo_oc'] = f"OC-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
             if not orden_data.get('estado'):
                 orden_data['estado'] = 'PENDIENTE'
 
@@ -113,15 +124,122 @@ class OrdenCompraController:
 
     def crear_orden_desde_form(self, form_data, usuario_id):
         """
-        Wrapper para crear una orden desde un formulario web.
-        Parsea los datos y luego llama al método principal de creación.
+        Wrapper para crear una o más órdenes desde un formulario web.
+        Agrupa los insumos por proveedor y genera una OC para cada uno.
         """
+        from collections import defaultdict
+        from app.controllers.insumo_controller import InsumoController
+        insumo_controller = InsumoController()
+        
         try:
-            orden_data, items_data = self._parse_form_data(form_data)
-            return self.crear_orden(orden_data, items_data, usuario_id)
+            # 1. Pre-procesar todos los items del formulario para obtener datos fiables de la BD
+            if hasattr(form_data, 'getlist'):
+                insumo_ids = form_data.getlist('insumo_id[]')
+                cantidades = form_data.getlist('cantidad_solicitada[]')
+            else: # Soporte para datos tipo JSON/dict
+                insumo_ids = form_data.get('insumo_id[]', [])
+                cantidades = form_data.get('cantidad_solicitada[]', [])
+            
+            if not insumo_ids:
+                raise ValueError("No se proporcionaron insumos para la orden.")
+                
+            items_procesados = []
+            for i in range(len(insumo_ids)):
+                insumo_id = insumo_ids[i]
+                cantidad = float(cantidades[i] or 0)
+                
+                if not insumo_id or cantidad <= 0:
+                    continue
+                    
+                # Obtener datos completos del insumo para asegurar proveedor y precio correctos
+                insumo_data_res, _ = insumo_controller.obtener_insumo_por_id(insumo_id)
+                if not insumo_data_res.get('success'):
+                    raise ValueError(f"El insumo con ID {insumo_id} no fue encontrado.")
+                
+                insumo_data = insumo_data_res['data']
+                proveedor_id = insumo_data.get('id_proveedor')
+                precio_unitario = float(insumo_data.get('precio_unitario', 0))
+                
+                if not proveedor_id:
+                    raise ValueError(f"El insumo '{insumo_data.get('nombre')}' no tiene un proveedor asociado.")
+                    
+                items_procesados.append({
+                    'insumo_id': insumo_id,
+                    'cantidad_solicitada': cantidad,
+                    'precio_unitario': precio_unitario,
+                    'proveedor_id': proveedor_id
+                })
+            
+            # 2. Agrupar items por proveedor
+            items_por_proveedor = defaultdict(list)
+            for item in items_procesados:
+                items_por_proveedor[item['proveedor_id']].append(item)
+                
+            if not items_por_proveedor:
+                 return {'success': False, 'error': 'No se procesaron items válidos para crear órdenes.'}
+
+            # 3. Iterar sobre cada grupo de proveedor y crear una orden de compra
+            resultados_creacion = []
+            ordenes_creadas_count = 0
+            
+            for proveedor_id, items_del_proveedor in items_por_proveedor.items():
+                # Generar código único para cada orden
+                codigo_oc = f"OC-{datetime.now().strftime('%Y%m%d-%H%M%S%f')}"
+                time.sleep(0.01) # Pausa mínima para asegurar timestamps diferentes
+
+                # a. Calcular totales para esta orden específica
+                subtotal = sum(item['cantidad_solicitada'] * item['precio_unitario'] for item in items_del_proveedor)
+                incluir_iva = form_data.get('incluir_iva', 'true').lower() in ['true', 'on', '1']
+                iva = subtotal * 0.21 if incluir_iva else 0.0
+                total = subtotal + iva
+                
+                # b. Construir los datos de la orden
+                orden_data = {
+                    'codigo_oc': codigo_oc,
+                    'proveedor_id': proveedor_id,
+                    'fecha_emision': form_data.get('fecha_emision'),
+                    'fecha_estimada_entrega': form_data.get('fecha_estimada_entrega'),
+                    'observaciones': form_data.get('observaciones'),
+                    'subtotal': round(subtotal, 2),
+                    'iva': round(iva, 2),
+                    'total': round(total, 2)
+                }
+                
+                # c. Limpiar el proveedor_id de los items antes de pasarlos a la creación
+                items_para_crear = [{k: v for k, v in item.items() if k != 'proveedor_id'} for item in items_del_proveedor]
+
+                # d. Crear la orden usando el método existente
+                resultado = self.crear_orden(orden_data, items_para_crear, usuario_id)
+                resultados_creacion.append(resultado)
+                if resultado.get('success'):
+                    ordenes_creadas_count += 1
+            
+            # 4. Formatear la respuesta final para el usuario
+            if ordenes_creadas_count == len(items_por_proveedor):
+                return {
+                    'success': True,
+                    'message': f'Se crearon {ordenes_creadas_count} órdenes de compra exitosamente.',
+                    'data': [res['data'] for res in resultados_creacion if res.get('success')]
+                }
+            elif ordenes_creadas_count > 0:
+                 return {
+                    'success': True, # Éxito parcial
+                    'message': f'Se crearon {ordenes_creadas_count} de {len(items_por_proveedor)} órdenes de compra. Algunas fallaron.',
+                    'data': resultados_creacion
+                }
+            else:
+                 return {
+                    'success': False,
+                    'error': 'No se pudo crear ninguna orden de compra.',
+                    'data': [res.get('error', 'Error desconocido') for res in resultados_creacion]
+                }
+
+        except ValueError as ve:
+            logger.error(f"Error de validación procesando formulario para crear órdenes: {ve}")
+            return {'success': False, 'error': str(ve)}
         except Exception as e:
-            logger.error(f"Error procesando formulario para crear orden: {e}")
-            return {'success': False, 'error': str(e)}
+            logger.error(f"Error procesando formulario para crear órdenes: {e}", exc_info=True)
+            return {'success': False, 'error': 'Ocurrió un error inesperado al procesar la solicitud.'}
 
     def actualizar_orden(self, orden_id, form_data):
         """
