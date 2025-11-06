@@ -818,6 +818,10 @@
         const listaOperarios = {{ operarios | tojson }};
         const IS_OPERARIO = {{ is_operario | tojson | safe }};
         const IS_SUPERVISOR_CALIDAD = {{ is_supervisor_calidad | tojson | safe }};
+        // --- ¡AÑADIR ESTAS LÍNEAS! ---
+        window.API_CONSOLIDAR_URL = "{{ url_for('planificacion.consolidar_y_aprobar_api') }}";
+        window.CSRF_TOKEN = "{{ csrf_token() }}";
+        // -----------------------------
     </script>
     
     {# --- SCRIPT DE PLANIFICACIÓN (AHORA CONTIENE EL INICIALIZADOR DE POPOVER) --- #}
