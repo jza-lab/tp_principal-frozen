@@ -151,6 +151,16 @@ class PedidoController(BaseController):
             if not items_data:
                  return self.error_response("El pedido debe contener al menos un producto.", 400)
 
+            # --- OPTIMIZACIÓN: OBTENER TODO EL STOCK EN UNA SOLA CONSULTA ---
+            producto_ids_pedido = [item['producto_id'] for item in items_data]
+            stock_global_resp, _ = self.lote_producto_controller.obtener_stock_disponible_real_para_productos(producto_ids_pedido)
+            
+            if not stock_global_resp.get('success'):
+                return self.error_response("No se pudo verificar el stock para los productos del pedido.", 500)
+            
+            stock_global_map = stock_global_resp.get('data', {})
+            # --- FIN OPTIMIZACIÓN ---
+
             for item in items_data:
                 producto_id = item['producto_id']
                 cantidad_solicitada = item['cantidad']
@@ -164,13 +174,10 @@ class PedidoController(BaseController):
                 stock_min = float(producto_data.get('stock_min_produccion', 0))
                 cantidad_max = float (producto_data.get('cantidad_maxima_x_pedido',0))
 
-                stock_response, _ = self.lote_producto_controller.obtener_stock_disponible_real(producto_id)
-                if not stock_response.get('success'):
-                    logger.error(f"Fallo al verificar stock real para '{nombre_producto}'. Asumiendo insuficiente.")
-                    all_in_stock = False; produccion_requerida = True; continue
-
-                stock_disponible = stock_response['data']['stock_disponible_real']
-
+                # --- OPTIMIZACIÓN: USAR EL MAPA DE STOCK EN LUGAR DE LLAMADA INDIVIDUAL ---
+                stock_disponible = stock_global_map.get(producto_id, 0)
+                # --- FIN OPTIMIZACIÓN ---
+                
                 if stock_disponible < cantidad_solicitada:
                     all_in_stock = False; produccion_requerida = True
                     logger.warning(f"STOCK INSUFICIENTE para '{nombre_producto}': Sol: {cantidad_solicitada}, Disp: {stock_disponible}")

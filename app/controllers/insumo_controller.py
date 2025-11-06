@@ -650,11 +650,7 @@ class InsumoController(BaseController):
                 'estado': 'APROBADA',
                 'fecha_emision': date.today().isoformat(),
                 'prioridad': 'ALTA',
-                'observaciones': f"Orden de compra generada automáticamente por bajo stock. Proveedor: {proveedor_nombre_logging}. Creada por: {username_log}.",
-                # === SOLUCIÓN PROBLEMA 1: Añadir totales al dict ===
-                'subtotal': round(subtotal_calculado, 2),
-                'iva': round(iva_calculado, 2),
-                'total': round(total_calculado, 2)
+                'observaciones': f"Orden de compra generada automáticamente por bajo stock. Proveedor: {proveedor_nombre_logging}. Creada por: {username_log}."
             }
 
             resultado_oc = orden_compra_controller.crear_orden(datos_oc, items_para_oc, id_usuario_creador)
