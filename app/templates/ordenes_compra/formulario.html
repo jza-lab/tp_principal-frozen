@@ -321,6 +321,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const noItemsMsg = document.getElementById('no-items-msg');
         noItemsMsg.style.display = itemsContainer.children.length > 0 ? 'none' : 'block';
     }
+
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function() {
+        const submitButton = form.querySelector('button[type="submit"]');
+        submitButton.disabled = true;
+        submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...`;
+    });
 });
 </script>
 {% endblock extra_js %}

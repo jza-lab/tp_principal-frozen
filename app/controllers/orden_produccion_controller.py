@@ -145,6 +145,10 @@ class OrdenProduccionController(BaseController):
         receta_model = RecetaModel()
 
         try:
+            # --- FIX: Convertir a mutable para poder modificarlo ---
+            form_data = form_data.copy()
+            # ----------------------------------------------------
+
             # Limpiar supervisor si viene vacío
             if 'supervisor_responsable_id' in form_data and not form_data['supervisor_responsable_id']:
                 form_data.pop('supervisor_responsable_id')
@@ -181,6 +185,10 @@ class OrdenProduccionController(BaseController):
             # Estado por defecto PENDIENTE (sin cambios)
             if 'estado' not in form_data or not form_data['estado']:
                 form_data['estado'] = 'PENDIENTE'
+
+            # --- FIX: Eliminar csrf_token antes de validar ---
+            form_data.pop('csrf_token', None)
+            # -----------------------------------------------
 
             # Validar con el Schema (Asegúrate que tu schema acepte 'fecha_meta')
             validated_data = self.schema.load(form_data)
@@ -274,62 +282,66 @@ class OrdenProduccionController(BaseController):
             return self.error_response(f"Error interno: {str(e)}", 500)
 
     def _generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int, orden_produccion_id: int) -> Dict:
-        """
-        Helper para crear una OC a partir de una lista de insumos faltantes.
-        """
-        proveedor_id_por_defecto = 1
-        items_oc_para_datos = [] # Renombrar para claridad
-
-        # Preparar lista de items para la OC (sin cambios)
+        from collections import defaultdict
+        
+        items_por_proveedor = defaultdict(list)
+        
+        # 1. Agrupar insumos por proveedor
         for insumo in insumos_faltantes:
-            cantidad_redondeada = math.ceil(insumo['cantidad_faltante'])
-            if cantidad_redondeada <= 0: continue
-
-            precio = 0
             try:
-                response_data, status_code = self.insumo_controller.obtener_insumo_por_id(insumo['insumo_id'])
-                if status_code < 400 and response_data.get('success'):
-                    precio = response_data['data'].get('precio_unitario', 0)
-                else: logger.warning(f"No se pudo obtener precio para insumo {insumo.get('insumo_id')}. Usando 0.")
-            except Exception as e: logger.error(f"Error obteniendo precio para insumo {insumo.get('insumo_id')}: {e}")
+                insumo_id = insumo['insumo_id']
+                insumo_data_res, _ = self.insumo_controller.obtener_insumo_por_id(insumo_id)
+                if not insumo_data_res.get('success'):
+                    return {'success': False, 'error': f"No se encontró el insumo con ID {insumo_id}."}
+                
+                insumo_data = insumo_data_res['data']
+                proveedor_id = insumo_data.get('id_proveedor')
+                if not proveedor_id:
+                    return {'success': False, 'error': f"El insumo '{insumo_data.get('nombre')}' no tiene un proveedor asociado."}
 
-            items_oc_para_datos.append({ # Añadir a la lista correcta
-                'insumo_id': insumo['insumo_id'],
-                'cantidad_solicitada': cantidad_redondeada, # Usar cantidad_solicitada como espera crear_orden
-                'precio_unitario': precio,
-                'cantidad_recibida': 0.0 # Inicializar cantidad recibida
-            })
+                cantidad_redondeada = math.ceil(insumo['cantidad_faltante'])
+                if cantidad_redondeada <= 0: continue
 
-        if not items_oc_para_datos:
-             logger.warning(f"No se generó OC para OP {orden_produccion_id} (sin items válidos).")
-             return {'success': False, 'error': 'No hay insumos válidos para generar la OC.'}
+                items_por_proveedor[proveedor_id].append({
+                    'insumo_id': insumo_id,
+                    'cantidad_solicitada': cantidad_redondeada,
+                    'precio_unitario': float(insumo_data.get('precio_unitario', 0))
+                })
+            except Exception as e:
+                logger.error(f"Error procesando insumo faltante {insumo.get('insumo_id')}: {e}")
+                return {'success': False, 'error': f"Error al procesar insumo {insumo.get('insumo_id')}: {e}"}
 
-        # Preparar datos principales de la OC (sin cambios)
-        datos_oc_principales = {
-            'proveedor_id': proveedor_id_por_defecto,
-            'fecha_emision': date.today().isoformat(),
-            'prioridad': 'ALTA',
-            'observaciones': f"Generada automáticamente para OP ID: {orden_produccion_id}",
-            'orden_produccion_id': orden_produccion_id
-        }
+        if not items_por_proveedor:
+            return {'success': False, 'error': 'No hay insumos válidos para generar órdenes de compra.'}
 
-        # Calcular totales (subtotal, iva, total) - Necesario para crear_orden
-        subtotal_calculado = sum(float(item.get('cantidad_solicitada', 0)) * float(item.get('precio_unitario', 0)) for item in items_oc_para_datos)
-        iva_calculado = subtotal_calculado * 0.21 # Asumiendo 21%
-        total_calculado = subtotal_calculado + iva_calculado
+        # 2. Crear una OC por cada proveedor
+        resultados_creacion = []
+        for proveedor_id, items in items_por_proveedor.items():
+            subtotal = sum(item['cantidad_solicitada'] * item['precio_unitario'] for item in items)
+            iva = subtotal * 0.21
+            total = subtotal + iva
 
-        datos_oc_principales['subtotal'] = round(subtotal_calculado, 2)
-        datos_oc_principales['iva'] = round(iva_calculado, 2)
-        datos_oc_principales['total'] = round(total_calculado, 2)
+            datos_oc = {
+                'proveedor_id': proveedor_id,
+                'fecha_emision': date.today().isoformat(),
+                'prioridad': 'ALTA',
+                'observaciones': f"Generada automáticamente para OP ID: {orden_produccion_id}",
+                'orden_produccion_id': orden_produccion_id,
+                'subtotal': round(subtotal, 2),
+                'iva': round(iva, 2),
+                'total': round(total, 2)
+            }
+            
+            items_para_crear = [{'insumo_id': i['insumo_id'], 'cantidad_solicitada': i['cantidad_solicitada'], 'precio_unitario': i['precio_unitario'], 'cantidad_recibida': 0.0} for i in items]
 
-        # --- CORRECCIÓN EN LA LLAMADA ---
-        # Llamar a crear_orden pasando orden_data, items_data y usuario_id
-        return self.orden_compra_controller.crear_orden(
-            orden_data=datos_oc_principales,
-            items_data=items_oc_para_datos,
-            usuario_id=usuario_id
-        )
-        # --------------------------------
+            resultado = self.orden_compra_controller.crear_orden(datos_oc, items_para_crear, usuario_id)
+            if resultado.get('success'):
+                resultados_creacion.append(resultado['data'])
+            else:
+                # Si una falla, se retorna el error de esa OC. En un sistema más complejo, se podría implementar un rollback.
+                return {'success': False, 'error': f"Fallo al crear OC para proveedor {proveedor_id}: {resultado.get('error')}"}
+
+        return {'success': True, 'data': resultados_creacion, 'message': f'Se crearon {len(resultados_creacion)} órdenes de compra.'}
 
     def generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int, orden_produccion_id: int) -> Dict:
         """Wrapper publico para el helper privado _generar_orden_de_compra_automatica."""

@@ -603,9 +603,9 @@
 
 <script>
     window.CLIENTE_API_URL_BASE = "{{ url_for('clientes_proveedores.buscar_por_cuil', cliente_cuil='0') }}";
-    const pedidoId = "{{ pedido.id }}"
-    const isEditing = "{{ is_edit | tojson }}";
-
+    const pedidoId = "{{ pedido.id if pedido else '' }}";
+    const isEditing = {{ is_edit | tojson }};
+    const CREAR_URL = "{{ url_for('orden_venta.nueva') }}";
 </script>
 
 <script>

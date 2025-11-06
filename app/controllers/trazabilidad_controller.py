@@ -42,15 +42,20 @@ class TrazabilidadController(BaseController):
                 for reserva in reservas_result['data']:
                     lote_inventario = reserva.get('lote_inventario', {})
                     if lote_inventario:
-                        proveedor_info = lote_inventario.get('proveedor', {})
-                        proveedor_nombre = proveedor_info.get('nombre', 'N/A') if proveedor_info else 'N/A'
+                        proveedor_info = lote_inventario.get('proveedor') # Puede ser None
                         
+                        proveedor_id = None
+                        proveedor_nombre = 'Proveedor no asignado'
+                        if proveedor_info:
+                            proveedor_id = proveedor_info.get('id')
+                            proveedor_nombre = proveedor_info.get('nombre', 'Proveedor sin nombre')
+
                         insumos_usados.append({
                             'id_lote_insumo': lote_inventario.get('id_lote'),
                             'lote_insumo': lote_inventario.get('numero_lote_proveedor', 'N/A'),
                             'nombre_insumo': lote_inventario.get('insumo',{}).get('nombre', 'N/A'),
                             'cantidad_usada': reserva.get('cantidad_reservada'),
-                            'id_proveedor': proveedor_info.get('id'),
+                            'id_proveedor': proveedor_id,
                             'proveedor': proveedor_nombre
                         })
 
