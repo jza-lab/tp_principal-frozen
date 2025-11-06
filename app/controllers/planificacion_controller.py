@@ -3,7 +3,7 @@ from collections import defaultdict
 from app.controllers.base_controller import BaseController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from typing import List, Optional, Dict
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from collections import defaultdict
 import locale
 from app.models.receta import RecetaModel
@@ -17,6 +17,8 @@ import os # <-- Añadir
 from datetime import date # <-- Asegúrate que esté
 from flask import jsonify # <-- Añadir (o usar desde tu BaseController si ya lo tienes)
 from app.models.bloqueo_capacidad_model import BloqueoCapacidadModel # (Debes crear este modelo simple)
+from app.models.issue_planificacion_model import IssuePlanificacionModel
+
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,7 @@ class PlanificacionController(BaseController):
         self.receta_model = RecetaModel() # Asegúrate que esté inicializado
         self.insumo_model = InsumoModel() # Asegúrate que esté inicializado
         self.bloqueo_capacidad_model = BloqueoCapacidadModel() # <-- Añadir esto
+        self.issue_planificacion_model = IssuePlanificacionModel()
 
     def consolidar_ops(self, op_ids: List[int], usuario_id: int) -> tuple:
         """
@@ -55,6 +58,9 @@ class PlanificacionController(BaseController):
     def _ejecutar_aprobacion_final(self, op_id: int, asignaciones: dict, usuario_id: int) -> tuple:
         """ Ejecuta los pasos de pre-asignación y confirmación/aprobación. """
         try:
+            # --- ¡AÑADIR ESTA LÍNEA! ---
+            self._resolver_issue_por_op(op_id) # Borra el issue
+            # ---------------------------
             # PASO Pre-Asignar: Asegúrate de pasar todos los datos relevantes
             datos_pre_asignar = {
                 'linea_asignada': asignaciones.get('linea_asignada'),
@@ -89,6 +95,9 @@ class PlanificacionController(BaseController):
         """
         logger.info(f"[RePlan] Ejecutando re-planificación simple para OP {op_id}...")
         try:
+            # --- ¡AÑADIR ESTA LÍNEA! ---
+            self._resolver_issue_por_op(op_id) # Borra el issue
+            # ---------------------------
             # Preparamos los datos a actualizar
             update_data = {
                 'fecha_inicio_planificada': asignaciones.get('fecha_inicio'),
@@ -1163,6 +1172,9 @@ class PlanificacionController(BaseController):
                     msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) NO SE PLANIFICÓ: Terminaría después de su Fecha Meta. Requiere revisión manual."
                     logger.warning(f"[AutoPlan] {msg}")
                     errores_encontrados.append(msg)
+                    self._crear_o_actualizar_issue(
+                        op_ids[0], 'LATE_CONFIRM', msg, res_planif_dict
+                        )
                 # --- FIN NUEVO BLOQUE ---
 
                 elif res_planif_dict.get('error') == 'SOBRECARGA_CAPACIDAD':
@@ -1170,6 +1182,9 @@ class PlanificacionController(BaseController):
                     msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló por SOBRECARGA de capacidad."
                     logger.warning(f"[AutoPlan] {msg}")
                     errores_encontrados.append(f"{msg} - {res_planif_dict.get('message', '')}")
+                    self._crear_o_actualizar_issue(
+                        op_ids[0], 'SOBRECARGA_CAPACIDAD', msg, res_planif_dict
+                    )
 
                 else:
                     # Otro error (ej. fallo al reservar stock, etc.)
@@ -1541,6 +1556,12 @@ class PlanificacionController(BaseController):
             carga_calculada = self.calcular_carga_capacidad(ops_planificadas)
             capacidad_disponible = self.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
 
+            # --- ¡BLOQUE MODIFICADO! ---
+            # --- Obtener Issues de Planificación ---
+            response_issues = self.issue_planificacion_model.get_all_with_op_details()
+            planning_issues = response_issues.get('data', []) if response_issues.get('success') else []
+            # --- FIN --
+
             # 4. Obtener Datos Auxiliares (Usuarios)
             from app.controllers.usuario_controller import UsuarioController
             usuario_controller = UsuarioController()
@@ -1559,6 +1580,7 @@ class PlanificacionController(BaseController):
                 'operarios': operarios,
                 'inicio_semana': inicio_semana.isoformat(),
                 'fin_semana': fin_semana.isoformat(),
+                'planning_issues': planning_issues
             }
 
             return self.success_response(data=datos_vista)
@@ -1566,3 +1588,29 @@ class PlanificacionController(BaseController):
         except Exception as e:
             logger.error(f"Error en obtener_datos_para_vista_planificacion: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+
+    # --- AÑADIR ESTE NUEVO HELPER ---
+    def _crear_o_actualizar_issue(self, op_id: int, tipo_error: str, mensaje: str, datos_snapshot: Dict):
+        """ Guarda el issue de planificación en la nueva tabla. """
+        try:
+            issue_data = {
+                'tipo_error': tipo_error,
+                'mensaje': mensaje,
+                'datos_snapshot': datos_snapshot,
+                'estado': 'PENDIENTE',
+                'updated_at': datetime.now().isoformat() # Asegurarse de actualizar la fecha
+            }
+            self.issue_planificacion_model.create_or_update_by_op_id(op_id, issue_data)
+            logger.info(f"Registrado Issue '{tipo_error}' para OP: {op_id}")
+        except Exception as e:
+            logger.error(f"Error al guardar issue de planificación para OP {op_id}: {e}", exc_info=True)
+
+    # --- AÑADIR ESTE OTRO HELPER ---
+    def _resolver_issue_por_op(self, op_id: int):
+        """ Elimina un issue de la tabla cuando se planifica manualmente. """
+        try:
+            self.issue_planificacion_model.delete_by_op_id(op_id)
+            logger.info(f"Issue para OP {op_id} resuelto y eliminado.")
+        except Exception as e:
+            logger.error(f"Error al resolver/eliminar issue para OP {op_id}: {e}", exc_info=True)

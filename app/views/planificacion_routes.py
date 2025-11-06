@@ -84,6 +84,7 @@ def index():
         operarios=datos.get('operarios', []),
         inicio_semana=datos.get('inicio_semana'),
         fin_semana=datos.get('fin_semana'),
+        planning_issues=datos.get('planning_issues', []), # <-- ¡AÑADIR ESTA LÍNEA!
         semana_actual_str=week_str,
         semana_anterior_str=prev_week_str,
         semana_siguiente_str=next_week_str,
