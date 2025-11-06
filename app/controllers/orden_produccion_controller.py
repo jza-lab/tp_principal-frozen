@@ -26,6 +26,7 @@ from app.models.registro_paro_model import RegistroParoModel
 from app.models.registro_desperdicio_model import RegistroDesperdicioModel
 from app.models.operacion_receta_model import OperacionRecetaModel
 from app.controllers.op_cronometro_controller import OpCronometroController
+# Importar el controlador de configuración para usar la nueva lógica
 from app.controllers.configuracion_controller import (
     ConfiguracionController,
     TOLERANCIA_SOBREPRODUCCION_PORCENTAJE,
@@ -1089,16 +1090,27 @@ class OrdenProduccionController(BaseController):
         y opcionalmente finaliza la orden.
         """
         try:
-            cantidad_buena = Decimal(data.get('cantidad_buena', 0))
-            cantidad_desperdicio = Decimal(data.get('cantidad_desperdicio', 0))
-            motivo_desperdicio_id = data.get('motivo_desperdicio_id')
-            finalizar_orden = data.get('finalizar_orden', False)
+            # --- CONVERSIÓN Y VALIDACIÓN MEJORADA ---
+            try:
+                cantidad_buena = Decimal(data.get('cantidad_buena', '0'))
+                # Usar '0' si el campo viene vacío o nulo
+                cantidad_desperdicio_str = data.get('cantidad_desperdicio')
+                cantidad_desperdicio = Decimal(cantidad_desperdicio_str) if cantidad_desperdicio_str else Decimal('0')
 
-            # 1. Validar datos
+            except (TypeError, ValueError) as e:
+                return self.error_response(f"Valor numérico inválido: {e}", 400)
+
+            motivo_desperdicio_id = data.get('motivo_desperdicio_id')
+            # El frontend ahora envía 'final' o 'parcial'
+            tipo_reporte = data.get('tipo_reporte', 'parcial')
+            finalizar_orden = (tipo_reporte == 'final')
+
             if cantidad_buena < 0 or cantidad_desperdicio < 0:
                 return self.error_response("Las cantidades no pueden ser negativas.", 400)
+            
+            # Solo requerir motivo si hay desperdicio
             if cantidad_desperdicio > 0 and not motivo_desperdicio_id:
-                return self.error_response("Se requiere un motivo para el desperdicio.", 400)
+                return self.error_response("Se requiere un motivo para el desperdicio reportado.", 400)
 
             # 2. Registrar desperdicio si existe
             if cantidad_desperdicio > 0:

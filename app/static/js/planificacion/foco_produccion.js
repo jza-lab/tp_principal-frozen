@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const cantidadMalaInput = document.getElementById('cantidad-mala');
     const motivoDesperdicioContainer = document.getElementById('motivo-desperdicio-container');
     const motivoDesperdicioSelect = document.getElementById('motivo-desperdicio');
+    const motivoDesperdicioLabel = document.querySelector('label[for="motivo-desperdicio"]');
     const motivoParoSelect = document.getElementById('motivo-paro');
     const cantidadRestanteInfo = document.getElementById('cantidad-restante-info');
 
@@ -264,12 +265,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
     cantidadMalaInput.addEventListener('input', () => {
         const cantidadMala = parseFloat(cantidadMalaInput.value) || 0;
-        if (cantidadMala > 0) {
-            motivoDesperdicioContainer.style.display = 'block';
-            motivoDesperdicioSelect.required = true;
-        } else {
-            motivoDesperdicioContainer.style.display = 'none';
-            motivoDesperdicioSelect.required = false;
+        const esRequerido = cantidadMala > 0;
+
+        // 1. Controlar visibilidad del contenedor
+        motivoDesperdicioContainer.style.display = esRequerido ? 'block' : 'none';
+        
+        // 2. Asignar/quitar el atributo 'required'
+        motivoDesperdicioSelect.required = esRequerido;
+        
+        // 3. Añadir/quitar el asterisco rojo dinámicamente
+        const asterisco = ' <span class="text-danger">*</span>';
+        if (esRequerido && !motivoDesperdicioLabel.innerHTML.includes('*')) {
+            motivoDesperdicioLabel.innerHTML += asterisco;
+        } else if (!esRequerido) {
+            motivoDesperdicioLabel.innerHTML = 'Motivo del Desperdicio';
+        }
+
+        // 4. Resetear el valor si se oculta para evitar enviar datos inválidos
+        if (!esRequerido) {
+            motivoDesperdicioSelect.value = '';
         }
     });
 
@@ -319,23 +333,38 @@ document.addEventListener('DOMContentLoaded', function () {
         e.preventDefault();
         
         const form = document.getElementById('form-reportar');
-        if (!form.checkValidity()) {
-            form.reportValidity();
-            return;
-        }
-    
-        const cantidadBuena = parseFloat(document.getElementById('cantidad-buena').value) || 0;
-        const cantidadMala = parseFloat(document.getElementById('cantidad-mala').value) || 0;
+        const cantidadBuenaInput = document.getElementById('cantidad-buena');
+        const cantidadMalaInput = document.getElementById('cantidad-mala');
+        
+        const cantidadBuena = parseFloat(cantidadBuenaInput.value) || 0;
+        const cantidadMala = parseFloat(cantidadMalaInput.value) || 0;
         const motivoDesperdicio = motivoDesperdicioSelect.value;
     
-        // Validaciones básicas
-        if (cantidadBuena <= 0) {
-            showNotification('⚠️ Debe ingresar una cantidad producida válida', 'warning');
-            return;
+        // --- VALIDACIÓN MEJORADA ---
+        let esValido = true;
+        
+        // 1. Limpiar validaciones previas
+        cantidadBuenaInput.classList.remove('is-invalid');
+        cantidadMalaInput.classList.remove('is-invalid');
+        motivoDesperdicioSelect.classList.remove('is-invalid');
+
+        // 2. Al menos una de las cantidades debe ser mayor a cero
+        if (cantidadBuena <= 0 && cantidadMala <= 0) {
+            showNotification('⚠️ Debe reportar una cantidad (producida o desperdicio) mayor a cero.', 'warning');
+            cantidadBuenaInput.classList.add('is-invalid');
+            cantidadMalaInput.classList.add('is-invalid');
+            esValido = false;
         }
+
+        // 3. Si hay desperdicio, el motivo es obligatorio
         if (cantidadMala > 0 && !motivoDesperdicio) {
-            showNotification('⚠️ Debe seleccionar un motivo de desperdicio', 'warning');
-            return;
+            showNotification('⚠️ Debe seleccionar un motivo para el desperdicio.', 'warning');
+            motivoDesperdicioSelect.classList.add('is-invalid');
+            esValido = false;
+        }
+
+        if (!esValido) {
+            return; // Detener si alguna validación falló
         }
     
         const nuevaCantidadProducida = estado.cantidadProducida + cantidadBuena;

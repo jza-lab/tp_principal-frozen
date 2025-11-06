@@ -10,19 +10,19 @@
         <form id="form-reportar">
           <div class="mb-3">
             <div class="d-flex justify-content-between">
-                <label for="cantidad-buena" class="form-label">Cantidad Producida (Buena) <span class="text-danger">*</span></label>
+                <label for="cantidad-buena" class="form-label">Cantidad Producida (Buena)</label>
                 <small class="text-muted fw-bold" id="cantidad-restante-info">Restante: 0.00 kg</small>
             </div>
-            <input type="number" class="form-control" id="cantidad-buena" name="cantidad_buena" step="0.01" required>
+            <input type="number" class="form-control" id="cantidad-buena" name="cantidad_buena" step="1" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
           </div>
           <div class="mb-3">
             <label for="cantidad-mala" class="form-label">Cantidad Desperdicio (Mala)</label>
-            <input type="number" class="form-control" id="cantidad-mala" name="cantidad_desperdicio" value="0" step="0.01">
+            <input type="number" class="form-control" id="cantidad-mala" name="cantidad_desperdicio" value="0" step="1" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
           </div>
           <div class="mb-3" id="motivo-desperdicio-container" style="display: none;">
-            <label for="motivo-desperdicio" class="form-label">Motivo del Desperdicio <span class="text-danger">*</span></label>
+            <label for="motivo-desperdicio" class="form-label">Motivo del Desperdicio</label>
             <select class="form-select" id="motivo-desperdicio" name="motivo_desperdicio_id">
-              <option value="" disabled selected>-- Elegir un motivo --</option>
+              <option value="">-- Elegir un motivo --</option>
               {% for motivo in motivos_desperdicio %}
               <option value="{{ motivo.id }}">{{ motivo.descripcion }}</option>
               {% endfor %}

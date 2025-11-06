@@ -141,22 +141,23 @@
             <div class="card-body">
                 <form action="{{ url_for('planificacion.guardar_configuracion_produccion') }}" method="POST">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <div class="row g-3 align-items-end">
+                    <div class="row g-3">
                         <div class="col-md-8">
                             <label for="tolerancia_sobreproduccion" class="form-label">Tolerancia de Sobreproducción (%)</label>
                             <div class="input-group">
                                 <input type="number" class="form-control" id="tolerancia_sobreproduccion" 
                                        name="tolerancia_sobreproduccion_porcentaje" 
                                        value="{{ configuracion.TOLERANCIA_SOBREPRODUCCION_PORCENTAJE | default(0) }}" 
-                                       min="0" max="100" step="0.1">
+                                       min="0" max="100" step="1"
+                                       oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                                 <span class="input-group-text">%</span>
                             </div>
                             <small class="form-text text-muted">
                                 Porcentaje máximo que un operario puede reportar por encima de la cantidad planificada.
                             </small>
                         </div>
-                        <div class="col-md-4">
-                            <button type="submit" class="btn btn-primary w-100">Guardar Parámetros</button>
+                        <div class="col-md-4 d-flex align-items-center">
+                            <button type="submit" class="btn btn-primary w-100 btn-text-white">Guardar Parámetros</button>
                         </div>
                     </div>
                 </form>

@@ -256,10 +256,10 @@ def guardar_configuracion_produccion():
     
     try:
         tolerancia_str = request.form.get(TOLERANCIA_SOBREPRODUCCION_PORCENTAJE, '0')
-        tolerancia_val = float(tolerancia_str)
+        tolerancia_val = int(float(tolerancia_str)) # Convertir a float primero para manejar decimales, luego a int
         
         if not (0 <= tolerancia_val <= 100):
-            flash('El valor de tolerancia debe estar entre 0 y 100.', 'warning')
+            flash('El valor de tolerancia debe ser un número entero entre 0 y 100.', 'warning')
         else:
             response, status_code = controller.actualizar_valor_configuracion(
                 TOLERANCIA_SOBREPRODUCCION_PORCENTAJE, 
