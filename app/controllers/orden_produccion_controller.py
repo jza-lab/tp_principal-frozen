@@ -769,17 +769,13 @@ class OrdenProduccionController(BaseController):
             supervisores_resp, status_code = self.usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
 
             if status_code != 200:
-                # Si falla, la respuesta (`supervisores_resp`) puede ser un str o un dict.
-                # Lo registramos de forma segura y devolvemos un error 500.
-                if isinstance(supervisores_resp, dict):
-                    error_message = supervisores_resp.get('error', 'Error desconocido')
-                else:
-                    error_message = str(supervisores_resp)
-                
-                logger.error(f"No se pudieron obtener supervisores para asignación automática: {error_message}")
-                return self.error_response("Error interno: No se pudo verificar la asignación de supervisor.", 500)
-
-            supervisores = supervisores_resp.get('data', [])
+                # Si falla la obtención de supervisores, no es un error fatal.
+                # Se registra una advertencia y se procede sin asignar supervisor.
+                error_message = supervisores_resp.get('error', 'Error desconocido') if isinstance(supervisores_resp, dict) else str(supervisores_resp)
+                logger.warning(f"No se pudieron obtener supervisores para asignación automática: {error_message}. La orden se aprobará sin supervisor.")
+                supervisores = [] # Asegurarse de que la lista esté vacía para continuar
+            else:
+                supervisores = supervisores_resp.get('data', [])
             
             # TODO: Usar la hora real de la OP si está disponible. Por ahora, asumimos el inicio del turno de la mañana.
             target_time = time(8, 0, 0) 

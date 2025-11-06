@@ -130,15 +130,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="card-body">
                             <div class="d-flex justify-content-around text-center">
                                 <div>
-                                    <p class="mb-0 text-muted">Vendedor</p>
-                                    <strong>${responsables.vendedor || 'N/A'}</strong>
-                                </div>
-                                <div>
-                                    <p class="mb-0 text-muted">Supervisor</p>
+                                    <p class="mb-0 text-muted">Supervisor/es</p>
                                     <strong>${responsables.supervisor || 'N/A'}</strong>
                                 </div>
                                 <div>
-                                    <p class="mb-0 text-muted">Operario</p>
+                                    <p class="mb-0 text-muted">Supervisor/es de calidad</p>
+                                    <strong>${responsables.supervisor_calidad || 'N/A'}</strong>
+                                </div>
+                                <div>
+                                    <p class="mb-0 text-muted">Operario/s</p>
                                     <strong>${responsables.operario || 'N/A'}</strong>
                                 </div>
                             </div>
