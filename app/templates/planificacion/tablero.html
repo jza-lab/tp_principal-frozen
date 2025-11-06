@@ -346,7 +346,7 @@
                                         <div class="op-card-mini-wrapper d-block mb-2" 
                                              tabindex="0" 
                                              data-bs-toggle="popover" 
-                                             data-bs-trigger="click" 
+                                             
                                              data-bs-html="true" 
                                              title="<i class='bi bi-info-circle me-2'></i>Detalle Rápido: {{ op.codigo }}"
                                              data-bs-content="{{ popover_content | e }}"
@@ -818,6 +818,10 @@
         const listaOperarios = {{ operarios | tojson }};
         const IS_OPERARIO = {{ is_operario | tojson | safe }};
         const IS_SUPERVISOR_CALIDAD = {{ is_supervisor_calidad | tojson | safe }};
+        // --- ¡AÑADIR ESTAS LÍNEAS! ---
+        window.API_CONSOLIDAR_URL = "{{ url_for('planificacion.consolidar_y_aprobar_api') }}";
+        window.CSRF_TOKEN = "{{ csrf_token() }}";
+        // -----------------------------
     </script>
     
     {# --- SCRIPT DE PLANIFICACIÓN (AHORA CONTIENE EL INICIALIZADOR DE POPOVER) --- #}
