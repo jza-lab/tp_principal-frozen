@@ -3,7 +3,7 @@ from collections import defaultdict
 from app.controllers.base_controller import BaseController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from typing import List, Optional, Dict
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from collections import defaultdict
 import locale
 from app.models.receta import RecetaModel
@@ -17,6 +17,8 @@ import os # <-- Añadir
 from datetime import date # <-- Asegúrate que esté
 from flask import jsonify # <-- Añadir (o usar desde tu BaseController si ya lo tienes)
 from app.models.bloqueo_capacidad_model import BloqueoCapacidadModel # (Debes crear este modelo simple)
+from app.models.issue_planificacion_model import IssuePlanificacionModel
+
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,7 @@ class PlanificacionController(BaseController):
         self.receta_model = RecetaModel() # Asegúrate que esté inicializado
         self.insumo_model = InsumoModel() # Asegúrate que esté inicializado
         self.bloqueo_capacidad_model = BloqueoCapacidadModel() # <-- Añadir esto
+        self.issue_planificacion_model = IssuePlanificacionModel()
 
     def consolidar_ops(self, op_ids: List[int], usuario_id: int) -> tuple:
         """
@@ -55,6 +58,9 @@ class PlanificacionController(BaseController):
     def _ejecutar_aprobacion_final(self, op_id: int, asignaciones: dict, usuario_id: int) -> tuple:
         """ Ejecuta los pasos de pre-asignación y confirmación/aprobación. """
         try:
+            # --- ¡AÑADIR ESTA LÍNEA! ---
+            self._resolver_issue_por_op(op_id) # Borra el issue
+            # ---------------------------
             # PASO Pre-Asignar: Asegúrate de pasar todos los datos relevantes
             datos_pre_asignar = {
                 'linea_asignada': asignaciones.get('linea_asignada'),
@@ -89,6 +95,9 @@ class PlanificacionController(BaseController):
         """
         logger.info(f"[RePlan] Ejecutando re-planificación simple para OP {op_id}...")
         try:
+            # --- ¡AÑADIR ESTA LÍNEA! ---
+            self._resolver_issue_por_op(op_id) # Borra el issue
+            # ---------------------------
             # Preparamos los datos a actualizar
             update_data = {
                 'fecha_inicio_planificada': asignaciones.get('fecha_inicio'),
@@ -192,6 +201,9 @@ class PlanificacionController(BaseController):
 
                 logger.info(f"[consolidar_lote] Calculando carga actual basada en {len(ops_actuales)} OPs (excluyendo {op_a_planificar_id})...")
                 carga_actual_map = self.calcular_carga_capacidad(ops_actuales)
+                # --- DEBUG LOG ---
+                logger.debug(f"[DEBUG JIT] Mapa de carga actual para {op_a_planificar_id}: {carga_actual_map}")
+                # --- FIN DEBUG ---
 
                 # 2. Llamar al simulador pasándole el mapa de carga
                 simulacion_result = self._simular_asignacion_carga(
@@ -213,19 +225,30 @@ class PlanificacionController(BaseController):
                 fecha_fin_estimada = simulacion_result['fecha_fin_estimada']
                 dias_necesarios = simulacion_result['dias_necesarios']
 
+                # --- DEBUG LOG ---
+                logger.debug(f"[DEBUG JIT] Simulación para {op_a_planificar_id} OK. Resultado: {simulacion_result}")
+                # --- FIN DEBUG ---
+
                 # --- ¡NUEVA VALIDACIÓN DE FECHA META! ---
                 fecha_meta_str = op_data.get('fecha_meta')
                 va_a_terminar_tarde = False
                 fecha_meta = None
                 if fecha_meta_str:
                     try:
-                        fecha_meta = date.fromisoformat(fecha_meta_str)
+                        # --- ¡CORRECCIÓN ROBUSTA! ---
+                        # Maneja '2025-11-05T00:00...' Y '2025-11-05 00:00'
+                        fecha_meta_solo_str = fecha_meta_str.split('T')[0].split(' ')[0]
+                        fecha_meta = date.fromisoformat(fecha_meta_solo_str)
+                        # --- FIN CORRECCIÓN ---
+
                         if fecha_fin_estimada > fecha_meta:
                             va_a_terminar_tarde = True
                             logger.warning(f"Validación OP {op_a_planificar_id}: Terminará tarde (Fin: {fecha_fin_estimada}, Meta: {fecha_meta})")
+                            # --- DEBUG LOG ---
+                            logger.debug(f"[DEBUG JIT] Comparación: va_a_terminar_tarde = ({fecha_fin_estimada} > {fecha_meta}) -> {va_a_terminar_tarde}")
+                            # --- FIN DEBUG ---
                     except ValueError:
                         logger.warning(f"OP {op_a_planificar_id} tiene fecha meta inválida: {fecha_meta_str}")
-                # --- FIN VALIDACIÓN ---
 
                 # ¡IMPORTANTE! Actualizar la fecha de inicio en 'asignaciones' a la real encontrada
                 asignaciones['fecha_inicio'] = primer_dia_asignado.isoformat()
@@ -457,14 +480,14 @@ class PlanificacionController(BaseController):
             estados_de_consumo = ['EN_LINEA_1', 'EN_LINEA_2']
             if estado_actual == 'LISTA PARA PRODUCIR' and nuevo_estado in estados_de_consumo:
                 logger.info(f"OP {op_id} movida a producción. Consumiendo stock de insumos...")
-                
+
                 # Obtener el ID del usuario actual para registrar el consumo
                 # (Asumimos que está disponible en el contexto de la petición o se pasa como argumento)
                 # Aquí usamos un valor por defecto, pero debería ser el usuario autenticado.
                 usuario_id = 1 # OJO: Reemplazar con el ID del usuario real
-                
+
                 consumo_result = self.inventario_controller.consumir_stock_para_op(op_actual_res['data'], usuario_id)
-                
+
                 if not consumo_result.get('success'):
                     error_msg = f"No se pudo iniciar la producción por falta de stock: {consumo_result.get('error')}"
                     logger.error(error_msg)
@@ -635,7 +658,10 @@ class PlanificacionController(BaseController):
                     today = date.today()
                     t_prod_dias = data.get('sugerencia_t_prod_dias', 0)
                     t_proc_dias = data.get('sugerencia_t_proc_dias', 0)
-                    fecha_meta = date.fromisoformat(data['fecha_meta_mas_proxima'].split('T')[0])
+                    # --- ¡CORRECCIÓN ROBUSTA! ---
+                    fecha_meta_solo_str = data['fecha_meta_mas_proxima'].split('T')[0].split(' ')[0]
+                    fecha_meta = date.fromisoformat(fecha_meta_solo_str)
+                    # --- FIN CORRECCIÓN ---
 
                     fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
                     fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
@@ -1044,7 +1070,10 @@ class PlanificacionController(BaseController):
                     today = date.today()
                     t_prod_dias = grupo.get('sugerencia_t_prod_dias', 0)
                     t_proc_dias = grupo.get('sugerencia_t_proc_dias', 0)
-                    fecha_meta = date.fromisoformat(grupo['fecha_meta_mas_proxima'])
+                    # --- ¡CORRECCIÓN ROBUSTA! ---
+                    fecha_meta_solo_str = grupo['fecha_meta_mas_proxima'].split('T')[0].split(' ')[0]
+                    fecha_meta = date.fromisoformat(fecha_meta_solo_str)
+                    # --- FIN CORRECCIÓN ---
 
                     fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
                     fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
@@ -1073,6 +1102,9 @@ class PlanificacionController(BaseController):
                 res_planif_dict, res_planif_status = self.consolidar_y_aprobar_lote(
                     op_ids, asignaciones_auto, usuario_id
                 )
+                # --- DEBUG LOG ---
+                logger.debug(f"[DEBUG JIT] Resultado para {op_codigos}: Status={res_planif_status}, Error='{res_planif_dict.get('error')}'")
+                # --- FIN DEBUG ---
 
                 # 6. Interpretar la respuesta
                 if res_planif_status == 200 and res_planif_dict.get('success'):
@@ -1146,6 +1178,9 @@ class PlanificacionController(BaseController):
                     msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) NO SE PLANIFICÓ: Terminaría después de su Fecha Meta. Requiere revisión manual."
                     logger.warning(f"[AutoPlan] {msg}")
                     errores_encontrados.append(msg)
+                    self._crear_o_actualizar_issue(
+                        op_ids[0], 'LATE_CONFIRM', msg, res_planif_dict
+                        )
                 # --- FIN NUEVO BLOQUE ---
 
                 elif res_planif_dict.get('error') == 'SOBRECARGA_CAPACIDAD':
@@ -1153,6 +1188,9 @@ class PlanificacionController(BaseController):
                     msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló por SOBRECARGA de capacidad."
                     logger.warning(f"[AutoPlan] {msg}")
                     errores_encontrados.append(f"{msg} - {res_planif_dict.get('message', '')}")
+                    self._crear_o_actualizar_issue(
+                        op_ids[0], 'SOBRECARGA_CAPACIDAD', msg, res_planif_dict
+                    )
 
                 else:
                     # Otro error (ej. fallo al reservar stock, etc.)
@@ -1491,30 +1529,29 @@ class PlanificacionController(BaseController):
 
             fin_semana = inicio_semana + timedelta(days=6)
 
-            # 2. Consulta Unificada y Optimizada de Órdenes de Producción
-            response_ops, _ = self.orden_produccion_controller.obtener_ordenes_para_planificacion(inicio_semana, fin_semana, horizonte_dias)
-            if not response_ops.get('success'):
-                return self.error_response("Error al obtener las órdenes de producción.", 500)
-            
-            todas_las_ops = response_ops.get('data', [])
+            # 2. Consulta de Órdenes de Producción (LÓGICA RESTAURADA)
 
-            # 3. Procesamiento en Memoria
-            # Filtrar OPs por estado para diferentes secciones de la UI
-            ops_pendientes = [op for op in todas_las_ops if op['estado'] == 'PENDIENTE']
-            
-            estados_planificados_validos = {
+            estados_planificados_validos = [
                 'EN ESPERA', 'EN_ESPERA',
                 'LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR',
                 'EN_LINEA_1', 'EN_LINEA_2',
                 'EN_EMPAQUETADO',
                 'CONTROL_DE_CALIDAD'
+            ]
+            filtros_planificadas = {
+                'estado': ('in', estados_planificados_validos)
             }
-            ops_planificadas = [op for op in todas_las_ops if op.get('estado') in estados_planificados_validos]
-            
+            response_ops_planificadas, _ = self.orden_produccion_controller.obtener_ordenes(filtros_planificadas)
+            if not response_ops_planificadas.get('success'):
+                 return self.error_response("Error al obtener las órdenes planificadas.", 500)
+
+            ops_planificadas = response_ops_planificadas.get('data', []) # <-- Esta es la variable correcta
+
+            # 3. Procesamiento en Memoria
+
             # --- MPS Data (usa una versión simplificada de la lógica original) ---
             response_mps, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias)
             mps_data = response_mps.get('data', {}) if response_mps.get('success') else {}
-
 
             # --- Calendario Semanal (usa la lista ya filtrada) ---
             response_semanal, _ = self.obtener_planificacion_semanal(week_str, ordenes_pre_cargadas=ops_planificadas)
@@ -1524,6 +1561,12 @@ class PlanificacionController(BaseController):
             # --- CRP Data (usa la lista de OPs planificadas) ---
             carga_calculada = self.calcular_carga_capacidad(ops_planificadas)
             capacidad_disponible = self.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
+
+            # --- ¡BLOQUE MODIFICADO! ---
+            # --- Obtener Issues de Planificación ---
+            response_issues = self.issue_planificacion_model.get_all_with_op_details()
+            planning_issues = response_issues.get('data', []) if response_issues.get('success') else []
+            # --- FIN --
 
             # 4. Obtener Datos Auxiliares (Usuarios)
             from app.controllers.usuario_controller import UsuarioController
@@ -1543,6 +1586,7 @@ class PlanificacionController(BaseController):
                 'operarios': operarios,
                 'inicio_semana': inicio_semana.isoformat(),
                 'fin_semana': fin_semana.isoformat(),
+                'planning_issues': planning_issues
             }
 
             return self.success_response(data=datos_vista)
@@ -1550,3 +1594,29 @@ class PlanificacionController(BaseController):
         except Exception as e:
             logger.error(f"Error en obtener_datos_para_vista_planificacion: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+
+    # --- AÑADIR ESTE NUEVO HELPER ---
+    def _crear_o_actualizar_issue(self, op_id: int, tipo_error: str, mensaje: str, datos_snapshot: Dict):
+        """ Guarda el issue de planificación en la nueva tabla. """
+        try:
+            issue_data = {
+                'tipo_error': tipo_error,
+                'mensaje': mensaje,
+                'datos_snapshot': datos_snapshot,
+                'estado': 'PENDIENTE',
+                'updated_at': datetime.now().isoformat() # Asegurarse de actualizar la fecha
+            }
+            self.issue_planificacion_model.create_or_update_by_op_id(op_id, issue_data)
+            logger.info(f"Registrado Issue '{tipo_error}' para OP: {op_id}")
+        except Exception as e:
+            logger.error(f"Error al guardar issue de planificación para OP {op_id}: {e}", exc_info=True)
+
+    # --- AÑADIR ESTE OTRO HELPER ---
+    def _resolver_issue_por_op(self, op_id: int):
+        """ Elimina un issue de la tabla cuando se planifica manualmente. """
+        try:
+            self.issue_planificacion_model.delete_by_op_id(op_id)
+            logger.info(f"Issue para OP {op_id} resuelto y eliminado.")
+        except Exception as e:
+            logger.error(f"Error al resolver/eliminar issue para OP {op_id}: {e}", exc_info=True)

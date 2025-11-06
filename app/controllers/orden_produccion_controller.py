@@ -66,7 +66,7 @@ class OrdenProduccionController(BaseController):
     # endregion
 
     # region Métodos Públicos (API)
-    
+
     def calcular_carga_op(self, op_data: Dict) -> Decimal:
         """ Calcula la carga total en minutos para una OP dada. """
         carga_total = Decimal(0)
@@ -422,7 +422,7 @@ class OrdenProduccionController(BaseController):
             if result.get('success'):
                 # La lógica del cronómetro se ha movido a otros métodos para evitar la doble detención.
                 # El cronómetro ahora se detiene cuando se reporta el 100% o cuando se pausa.
-                
+
                 from app.controllers.pedido_controller import PedidoController
                 pedido_controller = PedidoController()
                 # Después de cambiar el estado de la OP, verificamos si el estado del pedido de venta debe cambiar.
@@ -536,20 +536,20 @@ class OrdenProduccionController(BaseController):
                 return error
 
             super_op_data = self._calcular_datos_super_op(ops_originales, op_ids)
-            
+
             resultado_creacion = self.crear_orden(super_op_data, usuario_id)
             if not resultado_creacion.get('success'):
                 return resultado_creacion
-            
+
             nueva_super_op = resultado_creacion['data']
-            
+
             relink_result = self._relinkear_items_pedido(op_ids, nueva_super_op['id'])
             if not relink_result.get('success'):
                 # NOTA: En un sistema real, aquí se debería intentar revertir la creación de la Super OP.
                 return relink_result
-            
+
             self._actualizar_ops_originales(op_ids, nueva_super_op['id'])
-            
+
             return {'success': True, 'data': nueva_super_op}
         except Exception as e:
             logger.error(f"Error en consolidar_ordenes_produccion: {e}", exc_info=True)
@@ -825,7 +825,7 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             logger.error(f"Error contando órdenes en reproceso: {str(e)}")
             return 0
-        
+
     def obtener_datos_para_tablero(self) -> Dict:
         """
         Prepara los datos necesarios para el tablero Kanban de producción.
@@ -843,13 +843,13 @@ class OrdenProduccionController(BaseController):
                 'EN_EMPAQUETADO': 'Empaquetado',
                 'CONTROL_DE_CALIDAD': 'Control de Calidad',
             }
-    
+
             # 2. Obtener todas las órdenes de producción relevantes
             response, status_code = self.obtener_ordenes({'estado.neq': 'CANCELADA'})
             ordenes = []
             if status_code == 200 and response.get('success'):
                 ordenes = response.get('data', [])
-    
+
             # 3. Agrupar órdenes por estado
             ordenes_por_estado = defaultdict(list)
 
@@ -857,12 +857,12 @@ class OrdenProduccionController(BaseController):
                 estado = orden.get('estado')
                 if estado in columnas:
                     ordenes_por_estado[estado].append(orden)
-    
+
             # 4. Obtener datos para los modales (supervisores y operarios)
             todos_los_usuarios = self.usuario_controller.obtener_todos_los_usuarios()
             supervisores = [u for u in todos_los_usuarios if u.get('roles', {}).get('codigo') == 'SUPERVISOR']
             operarios = [u for u in todos_los_usuarios if u.get('roles', {}).get('codigo') == 'OPERARIO']
-    
+
             return {
                 'columnas': columnas,
                 'ordenes_por_estado': dict(ordenes_por_estado),
@@ -909,7 +909,7 @@ class OrdenProduccionController(BaseController):
             motivo_desperdicio_model = MotivoDesperdicioModel()
             motivos_desperdicio_result = motivo_desperdicio_model.find_all()
             motivos_desperdicio = motivos_desperdicio_result.get('data', []) if motivos_desperdicio_result.get('success') else []
-            
+
             # 4. Ensamblar todos los datos
             datos_completos = {
                 'orden': orden_data,
@@ -927,17 +927,17 @@ class OrdenProduccionController(BaseController):
     # endregion
 
     # region Helpers de Aprobación
-    
+
     def _validar_estado_para_aprobacion(self, orden_id: int) -> tuple:
         """Obtiene una OP y valida que su estado sea 'PENDIENTE'."""
         orden_result = self.obtener_orden_por_id(orden_id)
         if not orden_result.get('success'):
             return None, self.error_response("Orden de producción no encontrada.", 404)
-        
+
         orden_produccion = orden_result['data']
         if orden_produccion['estado'] != 'PENDIENTE':
             return None, self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
-            
+
         return orden_produccion, None
 
     def _gestionar_stock_faltante(self, orden_produccion: Dict, insumos_faltantes: List[Dict], usuario_id: int) -> tuple:
@@ -1000,7 +1000,7 @@ class OrdenProduccionController(BaseController):
         primer_producto_id = ops_originales[0]['producto_id']
         if not all(op['producto_id'] == primer_producto_id for op in ops_originales):
             return None, {'success': False, 'error': 'Todas las órdenes deben ser del mismo producto.'}
-            
+
         return ops_originales, None
 
     def _calcular_datos_super_op(self, ops_originales: List[Dict], op_ids: List[int]) -> Dict:
@@ -1013,7 +1013,10 @@ class OrdenProduccionController(BaseController):
             fecha_meta_str = op.get('fecha_meta')
             if fecha_meta_str:
                 try:
-                    fechas_meta_originales.append(date.fromisoformat(fecha_meta_str))
+                    # --- ¡CORRECCIÓN ROBUSTA! ---
+                    fecha_meta_solo_str = fecha_meta_str.split('T')[0].split(' ')[0]
+                    fechas_meta_originales.append(date.fromisoformat(fecha_meta_solo_str))
+                    # --- FIN CORRECCIÓN ---
                 except ValueError:
                     logger.warning(f"Formato de fecha meta inválido en OP {op.get('id')}: {fecha_meta_str}")
 
@@ -1058,11 +1061,11 @@ class OrdenProduccionController(BaseController):
         """
         if not linea_asignada:
             return Decimal('0.0')
-        
+
         capacidad_data = self.planificacion_controller.obtener_capacidad_disponible(
             [linea_asignada], fecha, fecha
         )
-        
+
         capacidad_en_minutos = capacidad_data.get(linea_asignada, {}).get(fecha.isoformat(), 0.0)
         return Decimal(str(capacidad_en_minutos))
 
@@ -1071,16 +1074,16 @@ class OrdenProduccionController(BaseController):
         Calcula el ritmo objetivo en kg/h basado en tiempo disponible y capacidad.
         """
         from datetime import datetime, date
-        
+
         ritmo_necesario = Decimal('0.0')
-        
+
         # Método 1: Basado en tiempo disponible hasta la fecha meta
         try:
             fecha_meta_str = orden.get('fecha_meta')
             if fecha_meta_str:
                 fecha_meta = date.fromisoformat(fecha_meta_str)
                 dias_disponibles = (fecha_meta - date.today()).days
-                
+
                 if dias_disponibles > 0:
                     capacidad_total_horizonte_minutos = Decimal('0.0')
                     for i in range(dias_disponibles):
@@ -1088,10 +1091,10 @@ class OrdenProduccionController(BaseController):
                         capacidad_total_horizonte_minutos += self._obtener_capacidad_linea(
                             orden.get('linea_asignada'), fecha_a_consultar
                         )
-                    
+
                     horas_disponibles = capacidad_total_horizonte_minutos / Decimal('60.0')
                     cantidad_planificada = Decimal(orden.get('cantidad_planificada', '0.0'))
-                    
+
                     if horas_disponibles > 0:
                         ritmo_necesario = cantidad_planificada / horas_disponibles
         except Exception as e:
@@ -1099,7 +1102,7 @@ class OrdenProduccionController(BaseController):
 
         # Método 2: Basado en capacidad de la línea para el día de hoy (como referencia)
         capacidad_linea_hoy_minutos = self._obtener_capacidad_linea(orden.get('linea_asignada'), date.today())
-        
+
         ritmo_por_capacidad = Decimal('0.0')
         if capacidad_linea_hoy_minutos > 0:
             # Para obtener kg/h, necesitamos saber cuántos kg se pueden hacer en esos minutos.
@@ -1109,7 +1112,7 @@ class OrdenProduccionController(BaseController):
                 receta = receta_result['data']
                 campo_tiempo = f"tiempo_prod_unidad_linea{orden.get('linea_asignada')}"
                 tiempo_por_unidad = Decimal(receta.get(campo_tiempo, '0.0'))
-                
+
                 if tiempo_por_unidad > 0:
                     unidades_por_hora = Decimal('60.0') / tiempo_por_unidad
                     # Asumiendo que 1 unidad = 1 kg. Esto podría necesitar ajuste.
@@ -1117,7 +1120,7 @@ class OrdenProduccionController(BaseController):
 
         # Usar el mayor de los dos (más exigente) o un default de 5 si ambos fallan
         ritmo_final = max(ritmo_necesario, ritmo_por_capacidad)
-        
+
         return round(ritmo_final, 2) if ritmo_final > 0 else Decimal('5.00')
 
 
@@ -1155,7 +1158,7 @@ class OrdenProduccionController(BaseController):
             orden_actual_res = self.model.find_by_id(orden_id)
             if not orden_actual_res.get('success'):
                 return self.error_response("Orden de producción no encontrada.", 404)
-            
+
             orden_actual = orden_actual_res.get('data', {})
             cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
             cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
@@ -1166,10 +1169,10 @@ class OrdenProduccionController(BaseController):
             TOLERANCIA = Decimal('0.001')
             if nueva_cantidad_producida > cantidad_planificada + TOLERANCIA:
                 return self.error_response(f"La cantidad reportada ({cantidad_buena}) excede la cantidad pendiente ({cantidad_planificada - cantidad_producida_actual}).", 400)
-            
+
             # Asegurarse de no sobrepasar el límite planificado debido a la tolerancia
             update_data = {'cantidad_producida': min(nueva_cantidad_producida, cantidad_planificada)}
-            
+
             # --- LÓGICA DE TRANSICIÓN DE ESTADO ---
             # Si se finaliza O la nueva cantidad alcanza el total, mover a Control de Calidad
             if finalizar_orden or nueva_cantidad_producida >= cantidad_planificada:
@@ -1178,7 +1181,7 @@ class OrdenProduccionController(BaseController):
                 update_data['fecha_fin'] = datetime.now().isoformat()
 
             self.model.update(orden_id, update_data)
-            
+
             return self.success_response(message="Avance reportado correctamente.")
 
         except Exception as e:
@@ -1248,7 +1251,7 @@ class OrdenProduccionController(BaseController):
             # 2. Encontrar y cerrar el registro de paro activo
             paro_model = RegistroParoModel()
             pausa_activa_result = paro_model.find_all({'orden_produccion_id': orden_id, 'fecha_fin': 'is.null'}, limit=1)
-            
+
             if not pausa_activa_result.get('data'):
                 # Si no hay pausa activa pero el estado es PAUSADA, es una inconsistencia.
                 # Forzamos la reanudación para desbloquear al usuario.
@@ -1339,17 +1342,17 @@ class OrdenProduccionController(BaseController):
     # endregion
 
     # region Helpers de Aprobación
-    
+
     def _validar_estado_para_aprobacion(self, orden_id: int) -> tuple:
         """Obtiene una OP y valida que su estado sea 'PENDIENTE'."""
         orden_result = self.obtener_orden_por_id(orden_id)
         if not orden_result.get('success'):
             return None, self.error_response("Orden de producción no encontrada.", 404)
-        
+
         orden_produccion = orden_result['data']
         if orden_produccion['estado'] != 'PENDIENTE':
             return None, self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
-            
+
         return orden_produccion, None
 
     def _gestionar_stock_faltante(self, orden_produccion: Dict, insumos_faltantes: List[Dict], usuario_id: int) -> tuple:
@@ -1412,7 +1415,7 @@ class OrdenProduccionController(BaseController):
         primer_producto_id = ops_originales[0]['producto_id']
         if not all(op['producto_id'] == primer_producto_id for op in ops_originales):
             return None, {'success': False, 'error': 'Todas las órdenes deben ser del mismo producto.'}
-            
+
         return ops_originales, None
 
     def _calcular_datos_super_op(self, ops_originales: List[Dict], op_ids: List[int]) -> Dict:
@@ -1474,13 +1477,13 @@ class OrdenProduccionController(BaseController):
             op_result = self.obtener_orden_por_id(op_id)
             if not op_result.get('success'):
                 return self.error_response("Orden de Producción no encontrada.", 404)
-            
+
             orden = op_result['data']
-            
+
             # 2. Extraer cantidades y calcular avance
             cantidad_planificada = Decimal(orden.get('cantidad_planificada', 0))
             cantidad_producida = Decimal(orden.get('cantidad_producida', 0))
-            
+
             avance_porcentaje = 0
             if cantidad_planificada > 0:
                 avance_porcentaje = round((cantidad_producida / cantidad_planificada) * 100, 2)
@@ -1492,7 +1495,7 @@ class OrdenProduccionController(BaseController):
                 'avance_porcentaje': float(avance_porcentaje),
                 'estado_actual': orden.get('estado')
             }
-            
+
             return self.success_response(data=estado_produccion)
 
         except Exception as e:
@@ -1523,7 +1526,7 @@ class OrdenProduccionController(BaseController):
                 return self.success_response(data=result.get('data', []))
             else:
                 return self.error_response(result.get('error', 'Error al obtener órdenes para planificación.'), 500)
-                
+
         except Exception as e:
             logger.error(f"Error crítico en obtener_ordenes_para_planificacion: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
