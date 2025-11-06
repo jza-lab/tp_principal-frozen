@@ -7,7 +7,9 @@ class RegistroController:
 
     def crear_registro(self, usuario, categoria, accion, detalle):
         try:
+            from app.utils.date_utils import get_now_in_argentina
             registro_data = {
+                'fecha': get_now_in_argentina().isoformat(),
                 'usuario_nombre': f"{usuario.nombre} {usuario.apellido}",
                 'usuario_rol': usuario.roles[0] if hasattr(usuario, 'roles') and usuario.roles else 'Sin rol',
                 'categoria': categoria,

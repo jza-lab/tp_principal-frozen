@@ -1013,6 +1013,8 @@ class OrdenProduccionController(BaseController):
         else:
             message = f"Stock insuficiente. Se generó la OC {primer_oc_codigo} y la OP está 'En Espera'."
 
+        detalle = f"Se aprobó la orden de producción {orden_produccion.get('codigo')}. {message}"
+        self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Aprobación', detalle)
         return self.success_response(
             data={'oc_generada': True, 'ocs_creadas': ocs_creadas},
             message=message
@@ -1032,9 +1034,12 @@ class OrdenProduccionController(BaseController):
         if not estado_change_result.get('success'):
             logger.error(f"Error al cambiar estado a {nuevo_estado_op} para OP {orden_id}: {estado_change_result.get('error')}")
             return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
-
+        
+        message = f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
+        detalle = f"Se aprobó la orden de producción {orden_produccion.get('codigo')}. {message}"
+        self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Aprobación', detalle)
         return self.success_response(
-            message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
+            message=message
         )
 
     # endregion
@@ -1260,6 +1265,9 @@ class OrdenProduccionController(BaseController):
 
             self.model.update(orden_id, update_data)
 
+            detalle = f"Se reportó un avance en la OP {orden_actual.get('codigo')}. Cantidad Buena: {cantidad_buena}, Desperdicio: {cantidad_desperdicio}."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Reporte de Avance', detalle)
+
             return self.success_response(message="Avance reportado correctamente.")
 
         except Exception as e:
@@ -1301,6 +1309,9 @@ class OrdenProduccionController(BaseController):
 
             # Pausar el cronómetro
             self.op_cronometro_controller.registrar_fin(orden_id)
+
+            detalle = f"Se pausó la producción de la OP {orden.get('codigo')}."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Pausa de Producción', detalle)
 
             return self.success_response(message="Producción pausada correctamente.")
 
@@ -1349,6 +1360,9 @@ class OrdenProduccionController(BaseController):
 
             # Reanudar el cronómetro
             self.op_cronometro_controller.registrar_inicio(orden_id)
+            
+            detalle = f"Se reanudó la producción de la OP {orden.get('codigo')}."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Reanudación de Producción', detalle)
 
             return self.success_response(message="Producción reanudada correctamente.")
 

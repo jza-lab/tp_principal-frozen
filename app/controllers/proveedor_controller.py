@@ -99,6 +99,10 @@ class ProveedorController(BaseController):
             resultado_actualizar = self.model.update(proveedor_id, {'activo': True}, 'id')
             if not resultado_actualizar.get('success'):
                 return self.error_response(resultado_actualizar.get('error', 'Error al activar el proveedor'))
+            
+            proveedor = existing.get('data')
+            detalle = f"Se habilitó al proveedor '{proveedor.get('nombre')}' (CUIT: {proveedor.get('cuit')})."
+            self.registro_controller.crear_registro(get_current_user(), 'Proveedores', 'Habilitación', detalle)
             return self.success_response(message='Proveedor activado exitosamente')
         except Exception as e:
             logger.error(f"Error habilitando proveedor {proveedor_id}: {str(e)}")

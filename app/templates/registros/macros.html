@@ -1,0 +1,30 @@
+{% macro render_registros_table(registros) %}
+<div class="table-responsive mt-3">
+    <table class="table table-striped table-hover">
+        <thead class="thead-dark">
+            <tr>
+                <th>Fecha</th>
+                <th>Usuario</th>
+                <th>Rol</th>
+                <th>Acción</th>
+                <th>Detalle</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for registro in registros %}
+            <tr>
+                <td>{{ registro.fecha|format_datetime if registro.fecha else 'N/A' }}</td>
+                <td>{{ registro.usuario_nombre }}</td>
+                <td>{{ registro.usuario_rol }}</td>
+                <td>{{ registro.accion }}</td>
+                <td>{{ registro.detalle }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" class="text-center">No hay registros en esta categoría.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endmacro %}

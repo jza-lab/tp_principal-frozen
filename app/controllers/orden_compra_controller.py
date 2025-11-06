@@ -355,6 +355,9 @@ class OrdenCompraController:
 
             result = self.model.update(orden_id, data)
             if result['success']:
+                oc = result.get('data')
+                detalle = f"Se actualizó la orden de compra {oc.get('codigo_oc')} (vía API)."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Actualización', detalle)
                 return jsonify({
                     'success': True,
                     'data': result['data'],

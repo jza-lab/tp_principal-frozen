@@ -383,6 +383,8 @@ class PedidoController(BaseController):
             self.model.actualizar_estado_agregado(pedido_id) # Esto lo pasará a EN_PROCESO si se creó alguna OP
 
             msg = f"Pedido enviado a producción. Se generaron {len(ordenes_creadas)} Órdenes de Producción."
+            detalle = f"Se inició el proceso para el pedido de venta {pedido_actual.get('codigo_ov')}. Se generaron {len(ordenes_creadas)} OPs."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Inicio de Proceso', detalle)
             return self.success_response(data={'ordenes_creadas': ordenes_creadas}, message=msg)
 
         except Exception as e:
@@ -658,6 +660,9 @@ class PedidoController(BaseController):
             self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
             self.model.update_items_by_pedido_id(pedido_id, {'estado': 'COMPLETADO'})
             logger.info(f"Pedido {pedido_id} marcado como LISTO_PARA_ENTREGA.")
+            
+            detalle = f"El pedido de venta {pedido_data.get('codigo_ov')} fue preparado para entrega."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Preparado para Entrega', detalle)
 
             return self.success_response(message="Pedido preparado para entrega.")
 
@@ -691,6 +696,8 @@ class PedidoController(BaseController):
 
             if resultado_update.get('success'):
                 logger.info(f"[Controlador] Pedido {pedido_id} marcado como COMPLETADO con éxito.")
+                detalle = f"El pedido de venta {pedido_actual_res.get('data', {}).get('codigo_ov')} fue marcado como COMPLETADO."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Completado', detalle)
                 return self.success_response(message="Pedido marcado como completado exitosamente.")
             else:
                 logger.error(f"[Controlador] El modelo falló al actualizar el estado del pedido {pedido_id}.")
@@ -856,6 +863,8 @@ class PedidoController(BaseController):
             result = self.model.cambiar_estado(pedido_id, 'PLANIFICADA')
             if result.get('success'):
                 logger.info(f"Pedido {pedido_id} cambiado a estado 'PLANIFICADA' con éxito.")
+                detalle = f"El pedido de venta {pedido_actual.get('codigo_ov')} fue planificado."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Planificación', detalle)
                 return self.success_response(message="Pedido planificado con éxito.")
             else:
                 logger.error(f"Error al planificar pedido {pedido_id}: {result.get('error')}")
@@ -927,6 +936,8 @@ class PedidoController(BaseController):
 
             if result.get('success'):
                 logger.info(f"Pedido {pedido_id} cambiado a estado 'EN_TRANSITO' con éxito.")
+                detalle = f"El pedido de venta {pedido_actual.get('codigo_ov')} fue despachado."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Despacho', detalle)
                 return self.success_response(message="Pedido despachado con éxito.")
             else:
                 # En un caso real, aquí se debería considerar revertir la creación del despacho (transacción)

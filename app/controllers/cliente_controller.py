@@ -107,6 +107,10 @@ class ClienteController(BaseController):
             resultado_actualizar = self.model.update(cliente_id, {'activo': True}, 'id')
             if not resultado_actualizar.get('success'):
                 return self.error_response(resultado_actualizar.get('error', 'Error al activar el cliente'))
+            
+            cliente = existing.get('data')
+            detalle = f"Se habilitó al cliente '{cliente.get('razon_social') or cliente.get('nombre')}' (CUIT: {cliente.get('cuit')})."
+            self.registro_controller.crear_registro(get_current_user(), 'Clientes', 'Habilitación', detalle)
             return self.success_response(message='Cliente activado exitosamente')
         except Exception as e:
             logger.error(f"Error habilitando cliente {cliente_id}: {str(e)}")
@@ -372,7 +376,10 @@ class ClienteController(BaseController):
 
             if not resultado_actualizar.get('success'):
                 return self.error_response(resultado_actualizar.get('error', 'Error al actualizar el estado del cliente'))
-
+            
+            cliente = existing.get('data')
+            detalle = f"El estado de aprobación del cliente '{cliente.get('razon_social') or cliente.get('nombre')}' cambió a {nuevo_estado}."
+            self.registro_controller.crear_registro(get_current_user(), 'Clientes', 'Cambio de Estado', detalle)
             return self.success_response(message='Estado del cliente actualizado exitosamente')
 
         except Exception as e:

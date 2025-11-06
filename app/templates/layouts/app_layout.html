@@ -129,13 +129,16 @@
                             </li>
                             {% endif %}
 
-                            {% set can_gestionar_empleados = is_dev or 'admin_gestion_personal' is has_permission or 'admin_gestion_sistema' is has_permission or 'consultar_empleados' is has_permission %}
-                            {% set can_gestionar_clientes = is_dev or 'gestionar_clientes' is has_permission %}
-                            {% set can_gestionar_proveedores = is_dev or 'gestionar_proveedores' is has_permission %}
-                            {% set can_gestionar_reclamos = is_dev or 'calidad_gestion_completa' or 'gestionar_reclamos' is has_permission %}
-                            {% set can_gestionar_consultas = is_dev or 'admin_acceder_consultas' or 'gestionar_consultas' is has_permission %}
-                            {% set can_access_admin_dropdown = is_dev or can_gestionar_empleados or can_gestionar_clientes or can_gestionar_proveedores or can_gestionar_reclamos or can_gestionar_consultas or 'consultar_empleados' is has_permission %}
-
+                            {% set can_gestionar_empleados = 'admin_gestion_personal' is has_permission %}
+                            {% set can_gestionar_clientes = 'gestionar_clientes' is has_permission %}
+                            {% set can_gestionar_proveedores = 'gestionar_proveedores' is has_permission %}
+                            {% set can_gestionar_reclamos = 'gestionar_reclamos' is has_permission %}
+                            {% set can_gestionar_consultas = 'gestionar_consultas' is has_permission %}
+                            {% set can_configurar_chatbot = 'admin_gestion_sistema' is has_permission %}
+                            {% set can_ver_registros = 'ver_registros' is has_permission %}
+                            {% set can_consultar_logs_o_auditoria = 'consultar_logs_o_auditoria' is has_permission %}
+                            {% set can_access_admin_dropdown = can_gestionar_empleados or can_gestionar_clientes or can_gestionar_proveedores or can_gestionar_reclamos or can_gestionar_consultas or can_configurar_chatbot or can_ver_registros %}
+                            
                             {% if can_access_admin_dropdown and not is_operario %}
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle {% if is_admin_section or request.endpoint.startswith('admin_reclamo') %}active{% endif %}"
@@ -143,10 +146,10 @@
                                     <i class="bi bi-gear-fill me-1"></i> Administración
                                 </a>
                                 <ul class="dropdown-menu" aria-labelledby="navbarDropdownAdmin">
-                                    {% if can_gestionar_empleados %}
+                                    {% if can_gestionar_empleados and not is_dev %}
                                     <li><a class="dropdown-item {% if 'admin_usuario' in request.endpoint %}active{% endif %}" href="{{ url_for('admin_usuario.listar_usuarios') }}"><i class="bi bi-people-fill me-2"></i> Gestión de Empleados</a></li>
                                     {% endif %}
-                                    {% if can_gestionar_clientes %}
+                                    {% if can_gestionar_clientes and not is_dev %}
                                     <li>
                                         <a class="dropdown-item {% if 'solicitudes' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_solicitudes_clientes') }}">
                                             <i class="bi bi-person-plus-fill me-2"></i> Solicitudes de Clientes
@@ -157,10 +160,10 @@
                                     </li>
                                     <li><a class="dropdown-item {% if 'listar_clientes' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_clientes') }}"><i class="bi bi-person-rolodex me-2"></i> Gestión de Clientes</a></li>
                                     {% endif %}
-                                    {% if can_gestionar_proveedores %}
+                                    {% if can_gestionar_proveedores and not is_dev %}
                                     <li><a class="dropdown-item {% if 'listar_proveedores' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_proveedores') }}"><i class="bi bi-briefcase-fill me-2"></i> Gestión de Proveedores</a></li>
                                     {% endif %}
-                                    {% if can_gestionar_reclamos %}
+                                    {% if can_gestionar_reclamos and not is_dev %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <a class="dropdown-item {% if request.endpoint.startswith('admin_reclamo') %}active{% endif %}" href="{{ url_for('admin_reclamo.listar_reclamos') }}">
@@ -168,7 +171,7 @@
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if can_gestionar_consultas %}
+                                    {% if can_gestionar_consultas and not is_dev %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <a class="dropdown-item {% if request.endpoint.startswith('consulta_admin') %}active{% endif %}" href="{{ url_for('consulta_admin.listar_consultas') }}">
@@ -176,7 +179,7 @@
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if 'ADMIN' in current_user.roles.codigo %}
+                                    {% if can_configurar_chatbot %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <a class="dropdown-item {% if request.endpoint == 'chatbot.gestion_chatbot_page' %}active{% endif %}" href="{{ url_for('chatbot.gestion_chatbot_page') }}">
@@ -184,7 +187,7 @@
                                         </a>
                                     </li>
                                     {% endif %}
-                                    {% if is_dev %}
+                                    {% if can_ver_registros or can_consultar_logs_o_auditoria %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <a class="dropdown-item {% if request.endpoint == 'registros.listar_registros' %}active{% endif %}" href="{{ url_for('registros.listar_registros') }}">

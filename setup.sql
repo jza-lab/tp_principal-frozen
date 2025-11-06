@@ -503,6 +503,17 @@ CREATE TABLE public.registros_acceso (
   CONSTRAINT registros_acceso_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id),
   CONSTRAINT registros_acceso_sesion_totem_id_fkey FOREIGN KEY (sesion_totem_id) REFERENCES public.totem_sesiones(id)
 );
+
+CREATE TABLE public.registros_sistema (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  fecha timestamp with time zone DEFAULT now(),
+  usuario_nombre character varying,
+  usuario_rol character varying,
+  categoria character varying,
+  accion character varying,
+  detalle text,
+  CONSTRAINT registros_sistema_pkey PRIMARY KEY (id)
+);
 CREATE TABLE public.reservas_insumos (
   id integer NOT NULL DEFAULT nextval('reservas_insumos_id_seq'::regclass),
   orden_produccion_id integer NOT NULL,

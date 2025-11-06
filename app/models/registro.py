@@ -4,7 +4,7 @@ from typing import Dict, List
 class RegistroModel(BaseModel):
     
     def get_table_name(self) -> str:
-        return "registros"
+        return "registros_sistema"
 
     def create(self, data: Dict) -> Dict:
         """

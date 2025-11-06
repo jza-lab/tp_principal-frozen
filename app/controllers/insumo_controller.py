@@ -323,6 +323,9 @@ class InsumoController(BaseController):
             result = self.insumo_model.update(id_insumo, data, 'id_insumo')
 
             if result.get('success'):
+                insumo_data = result['data']
+                detalle = f"Se habilitó el insumo '{insumo_data['nombre']}' (ID: {id_insumo})."
+                self.registro_controller.crear_registro(get_current_user(), 'Insumos', 'Habilitación', detalle)
                 logger.info(f"Insumo habilitado: {id_insumo}")
                 return self.success_response(message='Insumo habilitado exitosamente.')
             else:
