@@ -1,6 +1,8 @@
 from app.controllers.base_controller import BaseController
+from app.controllers.registro_controller import RegistroController
 from app.models.orden_produccion import OrdenProduccionModel
 from app.schemas.orden_produccion_schema import OrdenProduccionSchema
+from flask_jwt_extended import get_current_user
 from typing import Dict, Optional, List
 from decimal import Decimal
 from marshmallow import ValidationError
@@ -61,6 +63,7 @@ class OrdenProduccionController(BaseController):
         self.op_cronometro_controller = OpCronometroController()
         self.configuracion_controller = ConfiguracionController()
         self._planificacion_controller = None
+        self.registro_controller = RegistroController()
 
     @property
     def planificacion_controller(self):
@@ -152,6 +155,10 @@ class OrdenProduccionController(BaseController):
         receta_model = RecetaModel()
 
         try:
+            # --- FIX: Convertir a mutable para poder modificarlo ---
+            form_data = form_data.copy()
+            # ----------------------------------------------------
+
             # Limpiar supervisor si viene vacío
             if 'supervisor_responsable_id' in form_data and not form_data['supervisor_responsable_id']:
                 form_data.pop('supervisor_responsable_id')
@@ -189,13 +196,22 @@ class OrdenProduccionController(BaseController):
             if 'estado' not in form_data or not form_data['estado']:
                 form_data['estado'] = 'PENDIENTE'
 
+            # --- FIX: Eliminar csrf_token antes de validar ---
+            form_data.pop('csrf_token', None)
+            # -----------------------------------------------
+
             # Validar con el Schema (Asegúrate que tu schema acepte 'fecha_meta')
             validated_data = self.schema.load(form_data)
             validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
             validated_data['usuario_creador_id'] = usuario_id
 
             # Crear en la base de datos
-            return self.model.create(validated_data)
+            result = self.model.create(validated_data)
+            if result.get('success'):
+                op = result.get('data')
+                detalle = f"Se creó la orden de producción {op.get('codigo')}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Creación', detalle)
+            return result
 
         except ValidationError as e:
             logger.error(f"Error de validación al crear orden: {e.messages}")
@@ -281,62 +297,66 @@ class OrdenProduccionController(BaseController):
             return self.error_response(f"Error interno: {str(e)}", 500)
 
     def _generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int, orden_produccion_id: int) -> Dict:
-        """
-        Helper para crear una OC a partir de una lista de insumos faltantes.
-        """
-        proveedor_id_por_defecto = 1
-        items_oc_para_datos = [] # Renombrar para claridad
-
-        # Preparar lista de items para la OC (sin cambios)
+        from collections import defaultdict
+        
+        items_por_proveedor = defaultdict(list)
+        
+        # 1. Agrupar insumos por proveedor
         for insumo in insumos_faltantes:
-            cantidad_redondeada = math.ceil(insumo['cantidad_faltante'])
-            if cantidad_redondeada <= 0: continue
-
-            precio = 0
             try:
-                response_data, status_code = self.insumo_controller.obtener_insumo_por_id(insumo['insumo_id'])
-                if status_code < 400 and response_data.get('success'):
-                    precio = response_data['data'].get('precio_unitario', 0)
-                else: logger.warning(f"No se pudo obtener precio para insumo {insumo.get('insumo_id')}. Usando 0.")
-            except Exception as e: logger.error(f"Error obteniendo precio para insumo {insumo.get('insumo_id')}: {e}")
+                insumo_id = insumo['insumo_id']
+                insumo_data_res, _ = self.insumo_controller.obtener_insumo_por_id(insumo_id)
+                if not insumo_data_res.get('success'):
+                    return {'success': False, 'error': f"No se encontró el insumo con ID {insumo_id}."}
+                
+                insumo_data = insumo_data_res['data']
+                proveedor_id = insumo_data.get('id_proveedor')
+                if not proveedor_id:
+                    return {'success': False, 'error': f"El insumo '{insumo_data.get('nombre')}' no tiene un proveedor asociado."}
 
-            items_oc_para_datos.append({ # Añadir a la lista correcta
-                'insumo_id': insumo['insumo_id'],
-                'cantidad_solicitada': cantidad_redondeada, # Usar cantidad_solicitada como espera crear_orden
-                'precio_unitario': precio,
-                'cantidad_recibida': 0.0 # Inicializar cantidad recibida
-            })
+                cantidad_redondeada = math.ceil(insumo['cantidad_faltante'])
+                if cantidad_redondeada <= 0: continue
 
-        if not items_oc_para_datos:
-             logger.warning(f"No se generó OC para OP {orden_produccion_id} (sin items válidos).")
-             return {'success': False, 'error': 'No hay insumos válidos para generar la OC.'}
+                items_por_proveedor[proveedor_id].append({
+                    'insumo_id': insumo_id,
+                    'cantidad_solicitada': cantidad_redondeada,
+                    'precio_unitario': float(insumo_data.get('precio_unitario', 0))
+                })
+            except Exception as e:
+                logger.error(f"Error procesando insumo faltante {insumo.get('insumo_id')}: {e}")
+                return {'success': False, 'error': f"Error al procesar insumo {insumo.get('insumo_id')}: {e}"}
 
-        # Preparar datos principales de la OC (sin cambios)
-        datos_oc_principales = {
-            'proveedor_id': proveedor_id_por_defecto,
-            'fecha_emision': date.today().isoformat(),
-            'prioridad': 'ALTA',
-            'observaciones': f"Generada automáticamente para OP ID: {orden_produccion_id}",
-            'orden_produccion_id': orden_produccion_id
-        }
+        if not items_por_proveedor:
+            return {'success': False, 'error': 'No hay insumos válidos para generar órdenes de compra.'}
 
-        # Calcular totales (subtotal, iva, total) - Necesario para crear_orden
-        subtotal_calculado = sum(float(item.get('cantidad_solicitada', 0)) * float(item.get('precio_unitario', 0)) for item in items_oc_para_datos)
-        iva_calculado = subtotal_calculado * 0.21 # Asumiendo 21%
-        total_calculado = subtotal_calculado + iva_calculado
+        # 2. Crear una OC por cada proveedor
+        resultados_creacion = []
+        for proveedor_id, items in items_por_proveedor.items():
+            subtotal = sum(item['cantidad_solicitada'] * item['precio_unitario'] for item in items)
+            iva = subtotal * 0.21
+            total = subtotal + iva
 
-        datos_oc_principales['subtotal'] = round(subtotal_calculado, 2)
-        datos_oc_principales['iva'] = round(iva_calculado, 2)
-        datos_oc_principales['total'] = round(total_calculado, 2)
+            datos_oc = {
+                'proveedor_id': proveedor_id,
+                'fecha_emision': date.today().isoformat(),
+                'prioridad': 'ALTA',
+                'observaciones': f"Generada automáticamente para OP ID: {orden_produccion_id}",
+                'orden_produccion_id': orden_produccion_id,
+                'subtotal': round(subtotal, 2),
+                'iva': round(iva, 2),
+                'total': round(total, 2)
+            }
+            
+            items_para_crear = [{'insumo_id': i['insumo_id'], 'cantidad_solicitada': i['cantidad_solicitada'], 'precio_unitario': i['precio_unitario'], 'cantidad_recibida': 0.0} for i in items]
 
-        # --- CORRECCIÓN EN LA LLAMADA ---
-        # Llamar a crear_orden pasando orden_data, items_data y usuario_id
-        return self.orden_compra_controller.crear_orden(
-            orden_data=datos_oc_principales,
-            items_data=items_oc_para_datos,
-            usuario_id=usuario_id
-        )
-        # --------------------------------
+            resultado = self.orden_compra_controller.crear_orden(datos_oc, items_para_crear, usuario_id)
+            if resultado.get('success'):
+                resultados_creacion.append(resultado['data'])
+            else:
+                # Si una falla, se retorna el error de esa OC. En un sistema más complejo, se podría implementar un rollback.
+                return {'success': False, 'error': f"Fallo al crear OC para proveedor {proveedor_id}: {resultado.get('error')}"}
+
+        return {'success': True, 'data': resultados_creacion, 'message': f'Se crearon {len(resultados_creacion)} órdenes de compra.'}
 
     def generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int, orden_produccion_id: int) -> Dict:
         """Wrapper publico para el helper privado _generar_orden_de_compra_automatica."""
@@ -347,7 +367,12 @@ class OrdenProduccionController(BaseController):
         """
         Rechaza una orden, cambiando su estado a CANCELADA.
         """
-        return self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=f"Rechazada: {motivo}")
+        result = self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=f"Rechazada: {motivo}")
+        if result.get('success'):
+            op = result.get('data')
+            detalle = f"Se canceló la orden de producción {op.get('codigo')}. Motivo: {motivo}"
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Cancelación', detalle)
+        return result
 
     def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str, usuario_id: Optional[int] = None) -> tuple:
         """
@@ -356,6 +381,8 @@ class OrdenProduccionController(BaseController):
         vinculado a un pedido, o 'DISPONIBLE' si es para stock general.
         """
         try:
+            from flask_jwt_extended import get_jwt_identity
+
             orden_result = self.obtener_orden_por_id(orden_id)
             if not orden_result.get('success'):
                 return self.error_response("Orden de producción no encontrada.", 404)
@@ -364,6 +391,8 @@ class OrdenProduccionController(BaseController):
 
             update_data = {}
             if nuevo_estado == 'COMPLETADA':
+                usuario_id_actual = get_jwt_identity()
+                self.model.update(orden_id, {'supervisor_calidad_id': usuario_id_actual}, 'id')
                 if not estado_actual or estado_actual.strip() != 'CONTROL_DE_CALIDAD':
                     return self.error_response("La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
 
@@ -415,6 +444,9 @@ class OrdenProduccionController(BaseController):
             # 5. Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
             result = self.model.cambiar_estado(orden_id, nuevo_estado, extra_data=update_data)
             if result.get('success'):
+                op = result.get('data')
+                detalle = f"La orden de producción {op.get('codigo')} cambió de estado a {nuevo_estado}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Cambio de Estado', detalle)
                 # La lógica del cronómetro se ha movido a otros métodos para evitar la doble detención.
                 # El cronómetro ahora se detiene cuando se reporta el 100% o cuando se pausa.
 
@@ -749,24 +781,66 @@ class OrdenProduccionController(BaseController):
     def confirmar_inicio_y_aprobar(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
         """
         1. Guarda la fecha de inicio planificada confirmada.
-        2. Ejecuta la lógica de aprobación (verificar stock, reservar/crear OC, cambiar estado).
+        2. Asigna automáticamente un supervisor de producción.
+        3. Ejecuta la lógica de aprobación (verificar stock, reservar/crear OC, cambiar estado).
         """
         try:
+            from datetime import time, datetime
             fecha_inicio_confirmada = data.get('fecha_inicio_planificada')
             if not fecha_inicio_confirmada:
                 return self.error_response("Debe seleccionar una fecha de inicio.", 400)
 
-            # 1. Guardar la fecha de inicio confirmada
             update_data = {'fecha_inicio_planificada': fecha_inicio_confirmada}
+
+            # --- LÓGICA DE ASIGNACIÓN AUTOMÁTICA DE SUPERVISOR ---
+            supervisores_resp, status_code = self.usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
+
+            if status_code != 200:
+                # Si falla la obtención de supervisores, no es un error fatal.
+                # Se registra una advertencia y se procede sin asignar supervisor.
+                error_message = supervisores_resp.get('error', 'Error desconocido') if isinstance(supervisores_resp, dict) else str(supervisores_resp)
+                logger.warning(f"No se pudieron obtener supervisores para asignación automática: {error_message}. La orden se aprobará sin supervisor.")
+                supervisores = [] # Asegurarse de que la lista esté vacía para continuar
+            else:
+                supervisores = supervisores_resp.get('data', [])
+            
+            # TODO: Usar la hora real de la OP si está disponible. Por ahora, asumimos el inicio del turno de la mañana.
+            target_time = time(8, 0, 0) 
+            assigned_supervisor_id = None
+
+            for supervisor in supervisores:
+                in_produccion = any(s and s.get('codigo') == 'PRODUCCION' for s in supervisor.get('sectores', []))
+                if not in_produccion:
+                    continue
+
+                turno = supervisor.get('turno')
+                if turno and turno.get('hora_inicio') and turno.get('hora_fin'):
+                    try:
+                        hora_inicio = time.fromisoformat(turno['hora_inicio'])
+                        hora_fin = time.fromisoformat(turno['hora_fin'])
+                        
+                        if hora_inicio <= hora_fin:
+                            if hora_inicio <= target_time < hora_fin:
+                                assigned_supervisor_id = supervisor.get('id')
+                                break
+                        else:
+                            if target_time >= hora_inicio or target_time < hora_fin:
+                                assigned_supervisor_id = supervisor.get('id')
+                                break
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"No se pudo parsear el turno para supervisor {supervisor.get('id')}: {e}")
+
+            if assigned_supervisor_id:
+                update_data['supervisor_responsable_id'] = assigned_supervisor_id
+                logger.info(f"Supervisor {assigned_supervisor_id} asignado automáticamente a la OP {orden_id}.")
+            # --- FIN DE LA LÓGICA DE ASIGNACIÓN ---
+
             update_result = self.model.update(orden_id, update_data, 'id')
             if not update_result.get('success'):
-                return self.error_response(f"Error al guardar fecha de inicio: {update_result.get('error')}", 500)
+                return self.error_response(f"Error al guardar fecha y supervisor: {update_result.get('error')}", 500)
 
-            # 2. Ejecutar la lógica de aprobación que ya tenías
-            # Esta función devuelve (dict, status_code)
             aprobacion_dict, aprobacion_status_code = self.aprobar_orden(orden_id, usuario_id)
 
-            # Ajustar mensaje si fue exitoso
             if aprobacion_dict.get('success'):
                  aprobacion_dict['message'] = f"Inicio confirmado para {fecha_inicio_confirmada}. {aprobacion_dict.get('message', '')}"
 
@@ -902,27 +976,48 @@ class OrdenProduccionController(BaseController):
         return orden_produccion, None
 
     def _gestionar_stock_faltante(self, orden_produccion: Dict, insumos_faltantes: List[Dict], usuario_id: int) -> tuple:
-        """Gestiona el caso donde falta stock, generando una OC y actualizando el estado de la OP."""
+        """
+        Gestiona el caso donde falta stock, generando una o más OCs (una por proveedor)
+        y actualizando el estado de la OP.
+        """
         orden_id = orden_produccion['id']
-        logger.info(f"Stock insuficiente para OP {orden_id}. Generando OC...")
+        logger.info(f"Stock insuficiente para OP {orden_id}. Generando OC(s)...")
+        
         oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
+        
         if not oc_result.get('success'):
             return self.error_response(f"Stock insuficiente, pero no se pudo generar la OC: {oc_result.get('error')}", 500)
 
-        oc_data = oc_result.get('data', {})
-        created_oc_id = oc_data.get('id')
-        if created_oc_id:
-            logger.info(f"OC {oc_data.get('codigo_oc', created_oc_id)} creada. Vinculando a OP {orden_id}...")
-            self.model.update(orden_id, {'orden_compra_id': created_oc_id}, 'id')
+        ocs_creadas = oc_result.get('data', [])
+        if not ocs_creadas:
+            return self.error_response("Se reportó éxito en la creación de OCs, pero no se devolvieron datos.", 500)
+
+        # Vincular la OP con la PRIMERA OC creada para mantener una referencia de trazabilidad simple.
+        primera_oc = ocs_creadas[0]
+        primer_oc_id = primera_oc.get('id')
+        primer_oc_codigo = primera_oc.get('codigo_oc', f"ID {primer_oc_id}")
+
+        if primer_oc_id:
+            logger.info(f"Vinculando OP {orden_id} con la primera OC generada: {primer_oc_codigo}...")
+            self.model.update(orden_id, {'orden_compra_id': primer_oc_id}, 'id')
         else:
-            logger.error(f"OC creada para OP {orden_id}, pero no se recibió el ID de la OC!")
+            logger.error(f"Se crearon OCs para la OP {orden_id}, pero la primera OC no tiene un ID para vincular.")
 
         logger.info(f"Cambiando estado de OP {orden_id} a EN ESPERA.")
         self.model.cambiar_estado(orden_id, 'EN ESPERA')
 
+        # Construir un mensaje claro para el usuario
+        if len(ocs_creadas) > 1:
+            codigos_ocs = [oc.get('codigo_oc', f"ID {oc.get('id')}") for oc in ocs_creadas]
+            message = f"Stock insuficiente. Se generaron {len(ocs_creadas)} OCs ({', '.join(codigos_ocs)}) y la OP está 'En Espera'."
+        else:
+            message = f"Stock insuficiente. Se generó la OC {primer_oc_codigo} y la OP está 'En Espera'."
+
+        detalle = f"Se aprobó la orden de producción {orden_produccion.get('codigo')}. {message}"
+        self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Aprobación', detalle)
         return self.success_response(
-            data={'oc_generada': True, 'oc_codigo': oc_data.get('codigo_oc'), 'oc_id': created_oc_id},
-            message="Stock insuficiente. Se generó OC y la OP está 'En Espera'."
+            data={'oc_generada': True, 'ocs_creadas': ocs_creadas},
+            message=message
         )
 
     def _gestionar_stock_disponible(self, orden_produccion: Dict, usuario_id: int) -> tuple:
@@ -939,9 +1034,12 @@ class OrdenProduccionController(BaseController):
         if not estado_change_result.get('success'):
             logger.error(f"Error al cambiar estado a {nuevo_estado_op} para OP {orden_id}: {estado_change_result.get('error')}")
             return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
-
+        
+        message = f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
+        detalle = f"Se aprobó la orden de producción {orden_produccion.get('codigo')}. {message}"
+        self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Aprobación', detalle)
         return self.success_response(
-            message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
+            message=message
         )
 
     # endregion
@@ -1009,8 +1107,8 @@ class OrdenProduccionController(BaseController):
     def _actualizar_ops_originales(self, op_ids: List[int], super_op_id: int):
         """Marca las OPs originales como 'CONSOLIDADA' y las vincula a la Super OP."""
         update_data = {
-            'estado': 'CONSOLIDADA',
-            'super_op_id': super_op_id
+            'estado': 'CONSOLIDADA'
+            # 'super_op_id': super_op_id # <-- Columna no existe, comentado
         }
         for op_id in op_ids:
             self.model.update(id_value=op_id, data=update_data, id_field='id')
@@ -1167,6 +1265,9 @@ class OrdenProduccionController(BaseController):
 
             self.model.update(orden_id, update_data)
 
+            detalle = f"Se reportó un avance en la OP {orden_actual.get('codigo')}. Cantidad Buena: {cantidad_buena}, Desperdicio: {cantidad_desperdicio}."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Reporte de Avance', detalle)
+
             return self.success_response(message="Avance reportado correctamente.")
 
         except Exception as e:
@@ -1208,6 +1309,9 @@ class OrdenProduccionController(BaseController):
 
             # Pausar el cronómetro
             self.op_cronometro_controller.registrar_fin(orden_id)
+
+            detalle = f"Se pausó la producción de la OP {orden.get('codigo')}."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Pausa de Producción', detalle)
 
             return self.success_response(message="Producción pausada correctamente.")
 
@@ -1256,6 +1360,9 @@ class OrdenProduccionController(BaseController):
 
             # Reanudar el cronómetro
             self.op_cronometro_controller.registrar_inicio(orden_id)
+            
+            detalle = f"Se reanudó la producción de la OP {orden.get('codigo')}."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Reanudación de Producción', detalle)
 
             return self.success_response(message="Producción reanudada correctamente.")
 
@@ -1326,65 +1433,6 @@ class OrdenProduccionController(BaseController):
 
     # endregion
 
-    # region Helpers de Aprobación
-
-    def _validar_estado_para_aprobacion(self, orden_id: int) -> tuple:
-        """Obtiene una OP y valida que su estado sea 'PENDIENTE'."""
-        orden_result = self.obtener_orden_por_id(orden_id)
-        if not orden_result.get('success'):
-            return None, self.error_response("Orden de producción no encontrada.", 404)
-
-        orden_produccion = orden_result['data']
-        if orden_produccion['estado'] != 'PENDIENTE':
-            return None, self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
-
-        return orden_produccion, None
-
-    def _gestionar_stock_faltante(self, orden_produccion: Dict, insumos_faltantes: List[Dict], usuario_id: int) -> tuple:
-        """Gestiona el caso donde falta stock, generando una OC y actualizando el estado de la OP."""
-        orden_id = orden_produccion['id']
-        logger.info(f"Stock insuficiente para OP {orden_id}. Generando OC...")
-        oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
-        if not oc_result.get('success'):
-            return self.error_response(f"Stock insuficiente, pero no se pudo generar la OC: {oc_result.get('error')}", 500)
-
-        oc_data = oc_result.get('data', {})
-        created_oc_id = oc_data.get('id')
-        if created_oc_id:
-            logger.info(f"OC {oc_data.get('codigo_oc', created_oc_id)} creada. Vinculando a OP {orden_id}...")
-            self.model.update(orden_id, {'orden_compra_id': created_oc_id}, 'id')
-        else:
-            logger.error(f"OC creada para OP {orden_id}, pero no se recibió el ID de la OC!")
-
-        logger.info(f"Cambiando estado de OP {orden_id} a EN ESPERA.")
-        self.model.cambiar_estado(orden_id, 'EN ESPERA')
-
-        return self.success_response(
-            data={'oc_generada': True, 'oc_codigo': oc_data.get('codigo_oc'), 'oc_id': created_oc_id},
-            message="Stock insuficiente. Se generó OC y la OP está 'En Espera'."
-        )
-
-    def _gestionar_stock_disponible(self, orden_produccion: Dict, usuario_id: int) -> tuple:
-        """Gestiona el caso donde hay stock disponible, reservando y actualizando el estado."""
-        orden_id = orden_produccion['id']
-        logger.info(f"Stock disponible para OP {orden_id}. Reservando insumos...")
-        reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
-        if not reserva_result.get('success'):
-            return self.error_response(f"Fallo crítico al reservar insumos: {reserva_result.get('error')}", 500)
-
-        nuevo_estado_op = 'LISTA PARA PRODUCIR'
-        logger.info(f"Cambiando estado de OP {orden_id} a {nuevo_estado_op}.")
-        estado_change_result = self.model.cambiar_estado(orden_id, nuevo_estado_op)
-        if not estado_change_result.get('success'):
-            logger.error(f"Error al cambiar estado a {nuevo_estado_op} para OP {orden_id}: {estado_change_result.get('error')}")
-            return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
-
-        return self.success_response(
-            message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
-        )
-
-    # endregion
-
     # region Helpers de Consolidación
 
     def _validar_y_obtener_ops_para_consolidar(self, op_ids: List[int]) -> tuple:
@@ -1445,8 +1493,8 @@ class OrdenProduccionController(BaseController):
     def _actualizar_ops_originales(self, op_ids: List[int], super_op_id: int):
         """Marca las OPs originales como 'CONSOLIDADA' y las vincula a la Super OP."""
         update_data = {
-            'estado': 'CONSOLIDADA',
-            'super_op_id': super_op_id
+            'estado': 'CONSOLIDADA'
+            # 'super_op_id': super_op_id
         }
         for op_id in op_ids:
             self.model.update(id_value=op_id, data=update_data, id_field='id')

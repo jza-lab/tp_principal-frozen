@@ -201,6 +201,64 @@ class LoteProductoController(BaseController):
             logger.error(f"Error calculando stock real para producto {producto_id}: {e}", exc_info=True)
             return self.error_response('Error interno al calcular stock real', 500)
 
+    def obtener_stock_disponible_real_para_productos(self, producto_ids: list) -> tuple:
+        """
+        Calcula el stock real disponible para una lista de productos en batch.
+        Devuelve un diccionario mapeando producto_id a su stock disponible.
+        """
+        if not producto_ids:
+            return self.success_response(data={})
+
+        try:
+            # 1. Obtener todos los lotes físicos disponibles para los productos solicitados
+            lotes_result = self.model.find_all(filters={
+                'producto_id': ('in', producto_ids),
+                'estado': 'DISPONIBLE'
+            })
+            if not lotes_result.get('success'):
+                return self.error_response(lotes_result.get('error'), 500)
+
+            # 2. Calcular stock físico y mapear lote_id -> producto_id
+            stock_fisico_map = {pid: 0 for pid in producto_ids}
+            lote_a_producto_map = {}
+            lotes_disponibles = lotes_result.get('data', [])
+            
+            for lote in lotes_disponibles:
+                pid = lote['producto_id']
+                lote_id = lote['id_lote']
+                stock_fisico_map[pid] += lote.get('cantidad_actual', 0)
+                lote_a_producto_map[lote_id] = pid
+
+            # 3. Calcular stock reservado si hay lotes
+            stock_reservado_map = {pid: 0 for pid in producto_ids}
+            lote_ids = list(lote_a_producto_map.keys())
+
+            if lote_ids:
+                reservas_result = self.reserva_model.find_all(filters={
+                    'lote_producto_id': ('in', lote_ids),
+                    'estado': 'RESERVADO'
+                })
+                if not reservas_result.get('success'):
+                    return self.error_response(reservas_result.get('error'), 500)
+                
+                for reserva in reservas_result.get('data', []):
+                    lote_id = reserva['lote_producto_id']
+                    pid = lote_a_producto_map.get(lote_id)
+                    if pid:
+                        stock_reservado_map[pid] += reserva.get('cantidad_reservada', 0)
+            
+            # 4. Calcular el stock final disponible
+            stock_disponible_map = {
+                pid: stock_fisico_map.get(pid, 0) - stock_reservado_map.get(pid, 0)
+                for pid in producto_ids
+            }
+            
+            return self.success_response(data=stock_disponible_map)
+
+        except Exception as e:
+            logger.error(f"Error calculando stock real para productos {producto_ids}: {e}", exc_info=True)
+            return self.error_response('Error interno al calcular stock real en batch', 500)
+
 
     # === NUEVA FUNCIÓN AÑADIDA PARA SOPORTE DE LA LÓGICA DE COMPLETAR PEDIDO ===
     def obtener_lotes_producto_disponibles(self, producto_id: int) -> dict:

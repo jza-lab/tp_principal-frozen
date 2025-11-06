@@ -428,14 +428,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (data.success && data.redirect_url) {
                     window.location.href = data.redirect_url;
                 } else {
-                    alert('Error al crear la alerta: ' + (data.error || 'Error desconocido'));
+                    showNotificationModal('Error', 'Error al crear la alerta: ' + (data.error || 'Error desconocido'));
                     this.disabled = false;
                     this.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo`;
                 }
             })
             .catch(error => {
                 console.error('Error en fetch:', error);
-                alert('Error de red al crear la alerta.');
+                showNotificationModal('Error de red', 'Error de red al crear la alerta.');
                 this.disabled = false;
                 this.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo`;
             });

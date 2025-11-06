@@ -5,6 +5,8 @@ from app.schemas.reclamo_mensaje_schema import ReclamoMensajeSchema # Importar n
 from marshmallow import ValidationError
 from flask_wtf import FlaskForm
 import logging
+from flask_jwt_extended import get_current_user
+from app.controllers.registro_controller import RegistroController
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +19,7 @@ class ReclamoController:
         self.schema = ReclamoSchema()
         self.mensaje_model = ReclamoMensajeModel() # Nuevo
         self.mensaje_schema = ReclamoMensajeSchema() # Nuevo
+        self.registro_controller = RegistroController()
 
     def crear_reclamo(self, datos_json, cliente_id):
             """
@@ -56,6 +59,12 @@ class ReclamoController:
                     "mensaje": comentario_inicial
                 }
                 self.mensaje_model.create_mensaje(datos_mensaje)
+
+                # Crear un usuario 'ficticio' para el registro
+                from types import SimpleNamespace
+                usuario_sistema = SimpleNamespace(nombre='Cliente', apellido='Externo', roles=['CLIENTE'])
+                detalle = f"Se creó el reclamo N° {nuevo_reclamo['id']}."
+                self.registro_controller.crear_registro(usuario_sistema, 'Reclamos', 'Creación', detalle)
 
                 return resultado, 201  # 201 Creado
 
@@ -118,6 +127,9 @@ class ReclamoController:
             estado_result = self.model.update_estado(reclamo_id, "respondida")
             if not estado_result.get("success"):
                 return estado_result, 400
+            
+            detalle = f"El reclamo N° {reclamo_id} fue respondido por un administrador y cambió de estado a 'Respondida'."
+            self.registro_controller.crear_registro(get_current_user(), 'Reclamos', 'Cambio de Estado', detalle)
                 
             return {"success": True, "message": "Respuesta enviada."}, 201
 
@@ -145,6 +157,11 @@ class ReclamoController:
             estado_result = self.model.update_estado(reclamo_id, "pendiente")
             if not estado_result.get("success"):
                 return estado_result, 400
+            
+            from types import SimpleNamespace
+            usuario_sistema = SimpleNamespace(nombre='Cliente', apellido='Externo', roles=['CLIENTE'])
+            detalle = f"El reclamo N° {reclamo_id} fue respondido por el cliente y cambió de estado a 'Pendiente'."
+            self.registro_controller.crear_registro(usuario_sistema, 'Reclamos', 'Cambio de Estado', detalle)
                 
             return {"success": True, "message": "Respuesta enviada."}, 201
 
@@ -160,6 +177,11 @@ class ReclamoController:
             estado_result = self.model.update_estado(reclamo_id, "solucionada")
             if not estado_result.get("success"):
                 return estado_result, 400
+            
+            from types import SimpleNamespace
+            usuario_sistema = SimpleNamespace(nombre='Cliente', apellido='Externo', roles=['CLIENTE'])
+            detalle = f"El reclamo N° {reclamo_id} fue cerrado por el cliente y cambió de estado a 'Solucionada'."
+            self.registro_controller.crear_registro(usuario_sistema, 'Reclamos', 'Cambio de Estado', detalle)
                 
             return {"success": True, "message": "Reclamo marcado como solucionado."}, 200
         except Exception as e:
@@ -174,6 +196,9 @@ class ReclamoController:
             estado_result = self.model.update_estado(reclamo_id, "cancelado")
             if not estado_result.get("success"):
                 return estado_result, 400
+            
+            detalle = f"El reclamo N° {reclamo_id} fue cancelado por un administrador."
+            self.registro_controller.crear_registro(get_current_user(), 'Reclamos', 'Cancelación', detalle)
                 
             return {"success": True, "message": "Reclamo cancelado por administración."}, 200
         except Exception as e:

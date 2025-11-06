@@ -1,6 +1,8 @@
 from app.controllers.base_controller import BaseController
+from app.controllers.registro_controller import RegistroController
 from app.models.usuario import UsuarioModel
 from app.models.totem_sesion import TotemSesionModel
+from flask_jwt_extended import get_current_user
 from app.models.sector import SectorModel
 from app.models.usuario_sector import UsuarioSectorModel
 from app.models.rol import RoleModel
@@ -41,6 +43,7 @@ class UsuarioController(BaseController):
         self.schema = UsuarioSchema()
         self.usuario_direccion_controller = GeorefController()
         self.direccion_model = DireccionModel()
+        self.registro_controller = RegistroController()
 
     # region Gestión de Usuarios (CRUD)
 
@@ -87,6 +90,8 @@ class UsuarioController(BaseController):
                     self.model.db.table("usuarios").delete().eq("id", usuario_id).execute()
                     return resultado_sectores
 
+            detalle = f"Se creó el usuario '{usuario_creado['nombre']} {usuario_creado['apellido']}' (Legajo: {usuario_creado['legajo']})."
+            self.registro_controller.crear_registro(get_current_user(), 'Empleados', 'Creación', detalle)
             return self.model.find_by_id(usuario_id, include_direccion=True)
 
         except ValidationError as e:
@@ -145,6 +150,9 @@ class UsuarioController(BaseController):
             if not user_result.get('success'):
                 return user_result
 
+            usuario_actualizado = user_result.get('data')
+            detalle = f"Se actualizó el usuario '{usuario_actualizado['nombre']} {usuario_actualizado['apellido']}' (Legajo: {usuario_actualizado['legajo']})."
+            self.registro_controller.crear_registro(get_current_user(), 'Empleados', 'Actualización', detalle)
             return self.model.find_by_id(usuario_id, include_direccion=True)
 
         except Exception as e:
@@ -188,11 +196,21 @@ class UsuarioController(BaseController):
 
     def eliminar_usuario(self, usuario_id: int) -> Dict:
         """Realiza una eliminación lógica de un usuario (lo desactiva)."""
-        return self.model.update(usuario_id, {'activo': False})
+        usuario = self.obtener_usuario_por_id(usuario_id)
+        result = self.model.update(usuario_id, {'activo': False})
+        if result.get('success') and usuario:
+            detalle = f"Se eliminó lógicamente al usuario '{usuario['nombre']} {usuario['apellido']}' (Legajo: {usuario['legajo']})."
+            self.registro_controller.crear_registro(get_current_user(), 'Empleados', 'Eliminación Lógica', detalle)
+        return result
 
     def habilitar_usuario(self, usuario_id: int) -> Dict:
         """Reactiva un usuario que fue desactivado lógicamente."""
-        return self.model.update(usuario_id, {'activo': True})
+        usuario = self.obtener_usuario_por_id(usuario_id)
+        result = self.model.update(usuario_id, {'activo': True})
+        if result.get('success') and usuario:
+            detalle = f"Se habilitó al usuario '{usuario['nombre']} {usuario['apellido']}' (Legajo: {usuario['legajo']})."
+            self.registro_controller.crear_registro(get_current_user(), 'Empleados', 'Habilitación', detalle)
+        return result
 
     def obtener_datos_para_vista_perfil(self, usuario_id: int) -> dict:
         """
@@ -350,6 +368,19 @@ class UsuarioController(BaseController):
                 dispositivo_totem='TOTEM_PRINCIPAL'
             )
             if resultado.get('success'):
+                usuario = self.obtener_usuario_por_id(usuario_id)
+                if usuario:
+                    # Crear un objeto simple para el registro
+                    class SimpleUser:
+                        pass
+                    user_obj = SimpleUser()
+                    user_obj.nombre = usuario.get('nombre')
+                    user_obj.apellido = usuario.get('apellido')
+                    user_obj.roles = [usuario.get('roles', {}).get('nombre', 'Sin rol')]
+
+                    detalle = f"Ingreso al sistema por tótem con método '{metodo_acceso}'."
+                    self.registro_controller.crear_registro(user_obj, 'Accesos', 'Ingreso Totem', detalle)
+
                 return {'success': True, 'session_id': resultado['data']['session_id'], 'message': 'Acceso registrado correctamente'}
 
             return {'success': False, 'error': 'Error registrando acceso en tótem'}
@@ -363,6 +394,16 @@ class UsuarioController(BaseController):
         try:
             resultado = self.totem_sesion.cerrar_sesion(usuario_id)
             if resultado.get('success'):
+                usuario = self.obtener_usuario_por_id(usuario_id)
+                if usuario:
+                    class SimpleUser:
+                        pass
+                    user_obj = SimpleUser()
+                    user_obj.nombre = usuario.get('nombre')
+                    user_obj.apellido = usuario.get('apellido')
+                    user_obj.roles = [usuario.get('roles', {}).get('nombre', 'Sin rol')]
+                    detalle = "Salida del sistema por tótem."
+                    self.registro_controller.crear_registro(user_obj, 'Accesos', 'Salida Totem', detalle)
                 return {'success': True, 'message': 'Salida registrada correctamente'}
 
             return {'success': True, 'message': 'No había una sesión activa para cerrar.'}

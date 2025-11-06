@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 showNotificationModal(modalTitle, message, modalType);
             } else {
                 // Fallback por si la función no está definida (aunque debería estarlo)
-                alert(`${modalTitle}: ${message}`);
+                showNotificationModal(modalTitle, message);
             }
         }
     }

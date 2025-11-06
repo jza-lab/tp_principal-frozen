@@ -3,6 +3,8 @@ import logging
 import re
 from app.controllers.base_controller import BaseController
 from app.controllers.receta_controller import RecetaController
+from app.controllers.registro_controller import RegistroController
+from flask_jwt_extended import get_current_user
 from app.models.producto import ProductoModel
 from app.models.receta import RecetaModel
 from app.schemas.producto_schema import ProductoSchema
@@ -23,6 +25,7 @@ class ProductoController(BaseController):
         self.schema = ProductoSchema()
         self.receta_controller = RecetaController()
         self.receta_model = RecetaModel()
+        self.registro_controller = RegistroController()
 
     def _abrev(self, texto, length=4):
         """Devuelve una abreviación de la cadena, solo letras, en mayúsculas."""
@@ -108,6 +111,9 @@ class ProductoController(BaseController):
                     self.model.delete(producto_id, 'id')
                     return self.error_response(gestion_result.get('error', 'Error al crear los ingredientes.'), 500)
 
+            detalle = f"Se creó el producto '{producto_creado['nombre']}' (ID: {producto_id})."
+            self.registro_controller.crear_registro(get_current_user(), 'Productos', 'Creación', detalle)
+
             return self.success_response(producto_creado, "Producto creado con éxito", 201)
 
         except ValidationError as e:
@@ -150,8 +156,12 @@ class ProductoController(BaseController):
                 gestion_result = self.receta_controller.gestionar_ingredientes_para_receta(receta_id, receta_items)
                 if not gestion_result.get('success'):
                     return self.error_response(gestion_result.get('error', 'Error al actualizar la receta.'), 500)
+
+            producto_actualizado = result_producto.get('data')
+            detalle = f"Se actualizó el producto '{producto_actualizado['nombre']}' (ID: {producto_id})."
+            self.registro_controller.crear_registro(get_current_user(), 'Productos', 'Actualización', detalle)
             
-            return self.success_response(result_producto.get('data'), "Producto actualizado con éxito")
+            return self.success_response(producto_actualizado, "Producto actualizado con éxito")
 
         except ValidationError as e:
             return self.error_response(f"Datos inválidos: {e.messages}", 422)
@@ -264,6 +274,9 @@ class ProductoController(BaseController):
             data = {'activo': False}
             result = self.model.update(producto_id, data, 'id')
             if result['success']:
+                producto_eliminado = result.get('data')
+                detalle = f"Se eliminó lógicamente el producto '{producto_eliminado['nombre']}' (ID: {producto_id})."
+                self.registro_controller.crear_registro(get_current_user(), 'Productos', 'Eliminación Lógica', detalle)
                 return self.success_response(message="Producto desactivado correctamente.")
             else:
                 return self.error_response(result['error'])
