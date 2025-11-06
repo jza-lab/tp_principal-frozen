@@ -949,27 +949,46 @@ class OrdenProduccionController(BaseController):
         return orden_produccion, None
 
     def _gestionar_stock_faltante(self, orden_produccion: Dict, insumos_faltantes: List[Dict], usuario_id: int) -> tuple:
-        """Gestiona el caso donde falta stock, generando una OC y actualizando el estado de la OP."""
+        """
+        Gestiona el caso donde falta stock, generando una o más OCs (una por proveedor)
+        y actualizando el estado de la OP.
+        """
         orden_id = orden_produccion['id']
-        logger.info(f"Stock insuficiente para OP {orden_id}. Generando OC...")
+        logger.info(f"Stock insuficiente para OP {orden_id}. Generando OC(s)...")
+        
         oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
+        
         if not oc_result.get('success'):
             return self.error_response(f"Stock insuficiente, pero no se pudo generar la OC: {oc_result.get('error')}", 500)
 
-        oc_data = oc_result.get('data', {})
-        created_oc_id = oc_data.get('id')
-        if created_oc_id:
-            logger.info(f"OC {oc_data.get('codigo_oc', created_oc_id)} creada. Vinculando a OP {orden_id}...")
-            self.model.update(orden_id, {'orden_compra_id': created_oc_id}, 'id')
+        ocs_creadas = oc_result.get('data', [])
+        if not ocs_creadas:
+            return self.error_response("Se reportó éxito en la creación de OCs, pero no se devolvieron datos.", 500)
+
+        # Vincular la OP con la PRIMERA OC creada para mantener una referencia de trazabilidad simple.
+        primera_oc = ocs_creadas[0]
+        primer_oc_id = primera_oc.get('id')
+        primer_oc_codigo = primera_oc.get('codigo_oc', f"ID {primer_oc_id}")
+
+        if primer_oc_id:
+            logger.info(f"Vinculando OP {orden_id} con la primera OC generada: {primer_oc_codigo}...")
+            self.model.update(orden_id, {'orden_compra_id': primer_oc_id}, 'id')
         else:
-            logger.error(f"OC creada para OP {orden_id}, pero no se recibió el ID de la OC!")
+            logger.error(f"Se crearon OCs para la OP {orden_id}, pero la primera OC no tiene un ID para vincular.")
 
         logger.info(f"Cambiando estado de OP {orden_id} a EN ESPERA.")
         self.model.cambiar_estado(orden_id, 'EN ESPERA')
 
+        # Construir un mensaje claro para el usuario
+        if len(ocs_creadas) > 1:
+            codigos_ocs = [oc.get('codigo_oc', f"ID {oc.get('id')}") for oc in ocs_creadas]
+            message = f"Stock insuficiente. Se generaron {len(ocs_creadas)} OCs ({', '.join(codigos_ocs)}) y la OP está 'En Espera'."
+        else:
+            message = f"Stock insuficiente. Se generó la OC {primer_oc_codigo} y la OP está 'En Espera'."
+
         return self.success_response(
-            data={'oc_generada': True, 'oc_codigo': oc_data.get('codigo_oc'), 'oc_id': created_oc_id},
-            message="Stock insuficiente. Se generó OC y la OP está 'En Espera'."
+            data={'oc_generada': True, 'ocs_creadas': ocs_creadas},
+            message=message
         )
 
     def _gestionar_stock_disponible(self, orden_produccion: Dict, usuario_id: int) -> tuple:
@@ -1346,65 +1365,6 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             logger.error(f"Error en iniciar_trabajo_op para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
-
-    # endregion
-
-    # region Helpers de Aprobación
-
-    def _validar_estado_para_aprobacion(self, orden_id: int) -> tuple:
-        """Obtiene una OP y valida que su estado sea 'PENDIENTE'."""
-        orden_result = self.obtener_orden_por_id(orden_id)
-        if not orden_result.get('success'):
-            return None, self.error_response("Orden de producción no encontrada.", 404)
-
-        orden_produccion = orden_result['data']
-        if orden_produccion['estado'] != 'PENDIENTE':
-            return None, self.error_response(f"La orden ya está en estado '{orden_produccion['estado']}'.", 400)
-
-        return orden_produccion, None
-
-    def _gestionar_stock_faltante(self, orden_produccion: Dict, insumos_faltantes: List[Dict], usuario_id: int) -> tuple:
-        """Gestiona el caso donde falta stock, generando una OC y actualizando el estado de la OP."""
-        orden_id = orden_produccion['id']
-        logger.info(f"Stock insuficiente para OP {orden_id}. Generando OC...")
-        oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
-        if not oc_result.get('success'):
-            return self.error_response(f"Stock insuficiente, pero no se pudo generar la OC: {oc_result.get('error')}", 500)
-
-        oc_data = oc_result.get('data', {})
-        created_oc_id = oc_data.get('id')
-        if created_oc_id:
-            logger.info(f"OC {oc_data.get('codigo_oc', created_oc_id)} creada. Vinculando a OP {orden_id}...")
-            self.model.update(orden_id, {'orden_compra_id': created_oc_id}, 'id')
-        else:
-            logger.error(f"OC creada para OP {orden_id}, pero no se recibió el ID de la OC!")
-
-        logger.info(f"Cambiando estado de OP {orden_id} a EN ESPERA.")
-        self.model.cambiar_estado(orden_id, 'EN ESPERA')
-
-        return self.success_response(
-            data={'oc_generada': True, 'oc_codigo': oc_data.get('codigo_oc'), 'oc_id': created_oc_id},
-            message="Stock insuficiente. Se generó OC y la OP está 'En Espera'."
-        )
-
-    def _gestionar_stock_disponible(self, orden_produccion: Dict, usuario_id: int) -> tuple:
-        """Gestiona el caso donde hay stock disponible, reservando y actualizando el estado."""
-        orden_id = orden_produccion['id']
-        logger.info(f"Stock disponible para OP {orden_id}. Reservando insumos...")
-        reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
-        if not reserva_result.get('success'):
-            return self.error_response(f"Fallo crítico al reservar insumos: {reserva_result.get('error')}", 500)
-
-        nuevo_estado_op = 'LISTA PARA PRODUCIR'
-        logger.info(f"Cambiando estado de OP {orden_id} a {nuevo_estado_op}.")
-        estado_change_result = self.model.cambiar_estado(orden_id, nuevo_estado_op)
-        if not estado_change_result.get('success'):
-            logger.error(f"Error al cambiar estado a {nuevo_estado_op} para OP {orden_id}: {estado_change_result.get('error')}")
-            return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
-
-        return self.success_response(
-            message=f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
-        )
 
     # endregion
 
