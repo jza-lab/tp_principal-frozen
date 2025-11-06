@@ -96,6 +96,11 @@ def foco_produccion(op_id):
     
     datos_para_vista = response_vista.get('data', {})
     datos_para_vista['tolerancia_sobreproduccion'] = tolerancia
+    
+    # --- AÑADIR TRASPASO PENDIENTE AL CONTEXTO FINAL ---
+    # El controlador ya lo añade a 'data', aquí lo pasamos explícitamente
+    # para que esté disponible en el nivel superior de la plantilla.
+    datos_para_vista['traspaso_pendiente'] = datos_para_vista.get('traspaso_pendiente')
         
     return render_template('planificacion/foco_produccion.html', **datos_para_vista)
 
@@ -149,6 +154,29 @@ def api_reanudar_produccion(op_id):
     usuario_id = get_jwt_identity()
     controller = OrdenProduccionController()
     response, status_code = controller.reanudar_produccion(op_id, usuario_id)
+    return jsonify(response), status_code
+
+# --- Rutas para Traspaso de Turno ---
+
+@produccion_kanban_bp.route('/api/op/<int:op_id>/traspaso', methods=['POST'])
+@jwt_required()
+@permission_required(accion='produccion_ejecucion')
+def api_crear_traspaso(op_id):
+    """ API endpoint para crear un registro de traspaso de turno. """
+    data = request.get_json()
+    usuario_id = get_jwt_identity()
+    controller = OrdenProduccionController()
+    response, status_code = controller.crear_traspaso_de_turno(op_id, data, usuario_id)
+    return jsonify(response), status_code
+
+@produccion_kanban_bp.route('/api/op/<int:op_id>/traspaso/<int:traspaso_id>/aceptar', methods=['POST'])
+@jwt_required()
+@permission_required(accion='produccion_ejecucion')
+def api_aceptar_traspaso(op_id, traspaso_id):
+    """ API endpoint para que un operario entrante acepte un traspaso. """
+    usuario_id = get_jwt_identity()
+    controller = OrdenProduccionController()
+    response, status_code = controller.aceptar_traspaso_de_turno(op_id, traspaso_id, usuario_id)
     return jsonify(response), status_code
 
 @produccion_kanban_bp.route('/api/op/<int:op_id>/estado', methods=['GET'])

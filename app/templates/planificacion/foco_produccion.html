@@ -8,6 +8,30 @@
 
 {% block app_content %}
 <div class="foco-container" id="foco-container" data-op-id="{{ orden.id }}">
+
+    <!-- Banner de Traspaso Pendiente (colocado aquí) -->
+    {% if traspaso_pendiente %}
+    <div class="traspaso-banner" id="traspaso-banner">
+        <div class="traspaso-banner-icon">
+            <i class="bi bi-info-circle-fill"></i>
+        </div>
+        <div class="traspaso-banner-content">
+            <h5 class="traspaso-banner-title">Traspaso de Turno Pendiente</h5>
+            <p class="traspaso-banner-text">
+                El operario <strong>{{ traspaso_pendiente.usuario_saliente.nombre }} {{ traspaso_pendiente.usuario_saliente.apellido }}</strong> ha dejado el siguiente reporte del turno anterior. Por favor, revísalo antes de continuar.
+            </p>
+            <div class="traspaso-detalles">
+                <p><strong>Novedades/Problemas:</strong> {{ traspaso_pendiente.notas_novedades }}</p>
+                <p><strong>Estado de Insumos:</strong> {{ traspaso_pendiente.notas_insumos or 'Sin notas.' }}</p>
+            </div>
+        </div>
+        <div class="traspaso-banner-action">
+            <button class="btn btn-success btn-lg" id="btn-aceptar-traspaso" data-traspaso-id="{{ traspaso_pendiente.id }}">
+                <i class="bi bi-check-lg"></i> Aceptar Traspaso y Reanudar
+            </button>
+        </div>
+    </div>
+    {% endif %}
     
     <div class="pause-overlay" id="pause-overlay" style="display: none;">
         <div class="pause-overlay-content">
@@ -307,6 +331,7 @@
 
 {% include 'planificacion/modals/modal_reportar_avance.html' %}
 {% include 'planificacion/modals/modal_pausar_produccion.html' %}
+{% include 'planificacion/modals/modal_traspaso_turno.html' %}
 
 {% endblock %}
 

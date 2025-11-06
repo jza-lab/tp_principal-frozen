@@ -363,21 +363,19 @@ class OrdenProduccionModel(BaseModel):
                 if not usuario_id:
                     return {'success': True, 'data': []}
 
-                # Obtener la línea de producción asignada al operario
-                user_response = self.db.table('usuarios').select('linea_produccion_id').eq('id', usuario_id).single().execute()
-                linea_operario = user_response.data.get('linea_produccion_id') if user_response.data else None
-                
-                if not linea_operario:
-                    # Si el operario no tiene línea, solo puede ver las que ya tiene asignadas
-                    query = query.eq('operario_asignado_id', usuario_id).eq('estado', 'EN_PROCESO')
-                else:
-                    # Filtro para un operario:
-                    # 1. Órdenes en 'LISTA_PARA_PRODUCIR' que pertenecen a su línea.
-                    # 2. Órdenes en 'EN_PROCESO' que él mismo haya iniciado.
-                    query = query.or_(
-                        f"and(estado.eq.LISTA_PARA_PRODUCIR,linea_asignada.eq.{linea_operario})",
-                        f"and(estado.eq.EN_PROCESO,operario_asignado_id.eq.{usuario_id})"
-                    )
+                # Filtro para un operario:
+                # 1. Órdenes en 'LISTA PARA PRODUCIR' (visibles para todos los operarios).
+                # 2. Órdenes en 'EN PROCESO' que él mismo haya iniciado.
+                # 3. Órdenes en 'CONTROL DE CALIDAD' o 'COMPLETADA' (visibles para todos).
+                filtro_lista_para_producir = "estado.in.(\"LISTA PARA PRODUCIR\",\"LISTA_PARA_PRODUCIR\")"
+                filtro_en_proceso_asignada = f"and(estado.eq.EN_PROCESO,operario_asignado_id.eq.{usuario_id})"
+                filtro_control_calidad = "estado.eq.CONTROL_DE_CALIDAD"
+                filtro_completada = "estado.eq.COMPLETADA"
+
+                # Combinar todos los filtros en una sola cadena para el método or_()
+                filtro_or_completo = f"or({filtro_lista_para_producir},{filtro_en_proceso_asignada},{filtro_control_calidad},{filtro_completada})"
+                query = query.or_(filtro_or_completo)
+
             else:
                 # Filtro para supervisores/gerentes: mostrar todas las OPs en estados relevantes.
                 estados_kanban_python = [

@@ -134,20 +134,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 const card = buttonElement.closest('.kanban-card');
                 const completedColumn = document.getElementById('kanban-cards-COMPLETADA');
                 if (card && completedColumn) {
-                    card.remove();
-                    completedColumn.prepend(card); // Añadir al principio
+                    completedColumn.prepend(card); // Mover la tarjeta a la nueva columna.
+                    
+                    // Actualizar el botón para reflejar el estado completado.
+                    buttonElement.innerHTML = '<i class="bi bi-check-circle-fill"></i> Aprobado';
+                    buttonElement.disabled = true;
+
                     updateColumnCounts();
                 }
             } else {
                 showNotification(`Error: ${result.error || 'No se pudo aprobar la orden.'}`, 'error');
-                button.disabled = false;
-                button.innerHTML = '<i class="bi bi-check2-circle"></i> Aprobar';
+                buttonElement.disabled = false;
+                buttonElement.innerHTML = '<i class="bi bi-check2-circle"></i> Aprobar';
             }
         } catch (error) {
             console.error('Error en la llamada API para aprobar calidad:', error);
             showNotification('Error de conexión al intentar aprobar.', 'error');
-            button.disabled = false;
-            button.innerHTML = '<i class="bi bi-check2-circle"></i> Aprobar';
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = '<i class="bi bi-check2-circle"></i> Aprobar';
         }
     }
 

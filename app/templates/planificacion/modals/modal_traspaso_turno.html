@@ -1,0 +1,57 @@
+<!-- app/templates/planificacion/modals/modal_traspaso_turno.html -->
+<div class="modal fade" id="modalTraspasoTurno" tabindex="-1" aria-labelledby="modalTraspasoTurnoLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <form id="form-traspaso-turno">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTraspasoTurnoLabel">
+                        <i class="bi bi-people-fill"></i> Registrar Traspaso de Turno
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted">Estás pausando la producción para un cambio de turno. Completa el siguiente reporte para el operario entrante.</p>
+                    
+                    <div class="traspaso-resumen-produccion mb-4">
+                        <h6><i class="bi bi-bar-chart-line-fill"></i> Resumen de tu Turno</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="stat-card">
+                                    <div class="stat-label">Unidades Producidas (OK)</div>
+                                    <div class="stat-value" id="traspaso-unidades-ok">0 kg</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="stat-card">
+                                    <div class="stat-label">Desperdicio Generado</div>
+                                    <div class="stat-value" id="traspaso-unidades-malas">0 kg</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="traspaso-novedades" class="form-label">
+                            <strong>Novedades o Problemas Relevantes</strong>
+                            <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control" id="traspaso-novedades" rows="4" placeholder="Ej: La máquina X hizo un ruido extraño a las 14:30. Se revisó y parece estar bien, pero mantener vigilada." required></textarea>
+                        <div class="invalid-feedback">Este campo es obligatorio.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="traspaso-insumos" class="form-label">
+                            <strong>Estado de Insumos y Materiales</strong>
+                        </label>
+                        <textarea class="form-control" id="traspaso-insumos" rows="3" placeholder="Ej: Queda poco del insumo Y. Se notificó al almacén."></textarea>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary" id="btn-confirmar-traspaso">
+                        <i class="bi bi-check-circle-fill"></i> Confirmar y Pausar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -28,7 +28,9 @@ class ProduccionKanbanController(BaseController):
         """
         try:
             # 1. Obtener las OPs base
-            response_ops, _ = self.orden_produccion_controller.obtener_ordenes_para_kanban_hoy()
+            filtros = {'rol': usuario_rol, 'usuario_id': usuario_id}
+            response_ops, _ = self.orden_produccion_controller.obtener_ordenes_para_kanban_hoy(filtros=filtros)
+
             if not response_ops.get('success'):
                 return self.error_response("Error al cargar las órdenes para el tablero.")
             ordenes = response_ops.get('data', [])
