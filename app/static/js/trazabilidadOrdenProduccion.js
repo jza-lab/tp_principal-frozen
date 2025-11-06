@@ -42,26 +42,102 @@ document.addEventListener('DOMContentLoaded', function () {
         if(element) element.innerHTML = `<div class="text-center p-3"><div class="spinner-border text-secondary" role="status"></div></div>`;
     }
 
-    function renderResumen(resumen) {
+    function renderResumen(data) {
         const container = document.getElementById('resumen-trazabilidad');
-        if (!resumen || !resumen.origen) {
-            container.innerHTML = '<p>No se encontró resumen.</p>';
-            return;
-        }
-        const origen = resumen.origen;
-        // resumen.origen contiene 'op' y 'insumos'
-        const op = origen.get('op') || origen.op || {};
-        const opId = op.id || op.op_id || '';
-        const opCodigo = op.codigo || op.op_codigo || op.codigo_op || `OP-${opId}`;
+        if (!container) return;
 
+        // Adaptador para la estructura de datos que viene de /api/trazabilidad
+        const resumen = data.resumen || {};
+        const opData = resumen.origen ? resumen.origen.op : {};
+        const upstreamData = resumen.origen ? { insumos: resumen.origen.insumos } : { insumos: [] };
+        const downstreamData = resumen.destino ? { lotes_producidos: resumen.destino.lotes, pedidos: resumen.destino.pedidos } : { lotes_producidos: [], pedidos: [] };
+        const ocsPendientesData = resumen.ordenes_compra_pendientes || [];
+        
+        // --- HTML para Insumos Utilizados ---
+        const upstreamHtml = upstreamData.insumos.length > 0 ? upstreamData.insumos.map(insumo => `
+            <tr>
+                <td>${insumo.nombre_insumo || insumo.nombre}</td>
+                <td><a href="/inventario/lote/${insumo.id}" target="_blank">Lote #${insumo.id}</a></td>
+                <td>${insumo.cantidad}</td>
+            </tr>
+        `).join('') : '<tr><td colspan="3" class="text-center text-muted">No se consumieron insumos de lotes específicos.</td></tr>';
+
+        // --- HTML para Órdenes de Compra Pendientes ---
+        const ocsPendientesHtml = ocsPendientesData.length > 0 ? ocsPendientesData.map(oc => `
+            <div class="card mb-2 shadow-sm">
+                <div class="card-body p-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <a href="/compras/detalle/${oc.id}" class="fw-bold" target="_blank">${oc.codigo_oc}</a>
+                            <span class="badge bg-warning text-dark ms-2">${oc.estado}</span>
+                        </div>
+                        <small class="text-muted">Entrega: ${oc.fecha_estimada_entrega || 'N/D'}</small>
+                    </div>
+                    <p class="mb-1 small">
+                        Proveedor: <a href="/proveedores/${oc.proveedor_id}/ordenes_compra" target="_blank">${oc.proveedor_nombre}</a>
+                    </p>
+                    <ul class="list-unstyled mb-0 small">
+                        ${oc.items.map(item => `<li>- ${item.cantidad_solicitada} x ${item.nombre_insumo}</li>`).join('')}
+                    </ul>
+                </div>
+            </div>
+        `).join('') : '<p class="text-center text-muted">No hay órdenes de compra pendientes.</p>';
+
+        // --- HTML para Lotes Producidos ---
+        const downstreamLotesHtml = downstreamData.lotes_producidos.length > 0 ? downstreamData.lotes_producidos.map(lote => `
+            <tr>
+                <td><a href="/lotes-productos/${lote.id}/detalle" target="_blank">${lote.codigo}</a></td>
+                <td>${lote.cantidad}</td>
+            </tr>
+        `).join('') : '<tr><td colspan="2" class="text-center text-muted">No se generaron lotes.</td></tr>';
+
+        // --- HTML para Pedidos Asociados ---
+        const downstreamPedidosHtml = downstreamData.pedidos.length > 0 ? downstreamData.pedidos.map(pedido => `
+            <tr>
+                <td><a href="/orden-venta/${pedido.id}/detalle" target="_blank">PED-${pedido.id}</a></td>
+                <td>${pedido.cantidad}</td>
+                <td>${pedido.lote_producto_id ? `<a href="/lotes-productos/${pedido.lote_producto_id}/detalle">Lote #${pedido.lote_producto_id}</a>` : 'N/A'}</td>
+            </tr>
+        `).join('') : '<tr><td colspan="3" class="text-center text-muted">No se encontraron pedidos asociados.</td></tr>';
+
+        // --- Renderizado Final ---
         container.innerHTML = `
-            <h6>Origen (Hacia Atrás)</h6>
-            <ul class="list-group list-group-flush">
-                <li class="list-group-item">
-                    <strong>Orden de Producción:</strong>
-                    <a href="/ordenes/${opId}/detalle">${opCodigo}</a>
-                </li>
-            </ul>`;
+            <div class="row">
+                <!-- Upstream -->
+                <div class="col-12 mb-3">
+                    <h5 class="text-primary"><i class="bi bi-arrow-up-circle-fill"></i> Origen (Upstream)</h5>
+                    <h6 class="card-subtitle mt-3 mb-2 text-muted">Insumos Utilizados</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead><tr><th>Insumo</th><th>Lote</th><th>Cantidad</th></tr></thead>
+                            <tbody>${upstreamHtml}</tbody>
+                        </table>
+                    </div>
+                    <hr>
+                    <h6 class="card-subtitle mb-2 text-muted">Insumos Pendientes de Llegada</h6>
+                    ${ocsPendientesHtml}
+                </div>
+
+                <!-- Downstream -->
+                <div class="col-12">
+                    <h5 class="text-success"><i class="bi bi-arrow-down-circle-fill"></i> Destino (Downstream)</h5>
+                    <h6 class="card-subtitle mt-3 mb-2 text-muted">Lotes de Producto Generados</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead><tr><th>N° Lote</th><th>Cantidad</th></tr></thead>
+                            <tbody>${downstreamLotesHtml}</tbody>
+                        </table>
+                    </div>
+                    <hr>
+                    <h6 class="card-subtitle mb-2 text-muted">Pedidos de Cliente Asociados</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead><tr><th>Pedido</th><th>Cantidad</th><th>Desde Lote</th></tr></thead>
+                            <tbody>${downstreamPedidosHtml}</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>`;
     }
 
     function drawVisNetwork(diagrama) {

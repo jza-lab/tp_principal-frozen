@@ -314,7 +314,41 @@ class TrazabilidadModel(BaseModel):
                 else:
                     edges.append({'from': op_node, 'to': ped_node, 'label': r.get('cantidad')})
 
-        return {'resumen': {'origen': resumen_origen, 'destino': resumen_destino}, 'diagrama': {'nodes': nodes, 'edges': edges}}
+        # --- Lógica para OCs pendientes ---
+        from app.utils.estados import OC_RECEPCION_COMPLETA, OC_CERRADA, OC_RECHAZADA, OC_CANCELADA
+        estados_terminales_oc = [OC_RECEPCION_COMPLETA, OC_CERRADA, OC_RECHAZADA, OC_CANCELADA]
+
+        ocs_pendientes_res = self.db.table('ordenes_compra').select(
+            '*, '
+            'proveedores:proveedor_id(id, nombre), '
+            'orden_compra_items!inner(*, insumos_catalogo:insumo_id(nombre))'
+        ).eq('orden_produccion_id', orden_id).execute()
+
+        ocs_pendientes = ocs_pendientes_res.data if ocs_pendientes_res.data else []
+        
+        resumen_ocs_pendientes = []
+        if ocs_pendientes:
+            for oc in ocs_pendientes:
+                items = []
+                if oc.get('orden_compra_items'):
+                    for item in oc['orden_compra_items']:
+                        items.append({
+                            'nombre_insumo': item.get('insumos_catalogo', {}).get('nombre', 'N/A'),
+                            'cantidad_solicitada': item.get('cantidad_solicitada')
+                        })
+                
+                resumen_ocs_pendientes.append({
+                    'id': oc.get('id'),
+                    'codigo_oc': oc.get('codigo_oc'),
+                    'proveedor_id': oc.get('proveedores', {}).get('id'),
+                    'proveedor_nombre': oc.get('proveedores', {}).get('nombre', 'N/A'),
+                    'estado': oc.get('estado'),
+                    'fecha_estimada_entrega': oc.get('fecha_estimada_entrega'),
+                    'items': items
+                })
+
+
+        return {'resumen': {'origen': resumen_origen, 'destino': resumen_destino, 'ordenes_compra_pendientes': resumen_ocs_pendientes}, 'diagrama': {'nodes': nodes, 'edges': edges}}
 
     @classmethod
     def get_table_name(cls):
