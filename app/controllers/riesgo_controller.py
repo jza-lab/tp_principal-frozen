@@ -19,7 +19,7 @@ class RiesgoController(BaseController):
 
     def previsualizar_riesgo(self, tipo_entidad, id_entidad):
         try:
-            afectados = self.alerta_riesgo_model.get_trazabilidad_afectados(tipo_entidad, id_entidad)
+            afectados = self.trazabilidad_model.obtener_lista_afectados(tipo_entidad, id_entidad)
             
             if not afectados:
                 return {"success": True, "data": {"afectados_detalle": {}}}, 200
@@ -43,7 +43,9 @@ class RiesgoController(BaseController):
 
             if not tipo_entidad or not id_entidad or not motivo:
                 return {"success": False, "error": "tipo_entidad, id_entidad y motivo son requeridos."}, 400
-            afectados = self.alerta_riesgo_model.get_trazabilidad_afectados(tipo_entidad, id_entidad)
+            
+            afectados = self.trazabilidad_model.obtener_lista_afectados(tipo_entidad, id_entidad)
+            
             count_res = self.alerta_riesgo_model.db.table(self.alerta_riesgo_model.get_table_name()).select('count').execute()
             count = count_res.data[0]['count'] if count_res and count_res.data else 0
 

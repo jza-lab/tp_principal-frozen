@@ -30,3 +30,28 @@ class NotaCreditoModel(BaseModel):
             logger = logging.getLogger(__name__)
             logger.error(f"Error al obtener items de NC {nc_id}: {e}", exc_info=True)
             return []
+    
+    def create_with_items(self, nc_data, items_data):
+        try:
+            # Crear la nota de crédito principal
+            nc_res = self.db.table(self.get_table_name()).insert(nc_data).execute()
+            if not nc_res.data:
+                return {'success': False, 'error': 'No se pudo crear la Nota de Crédito.'}
+            
+            nueva_nc = nc_res.data[0]
+            
+            # Preparar y crear los items asociados
+            for item in items_data:
+                item['nota_credito_id'] = nueva_nc['id']
+            
+            items_res = self.db.table('nota_credito_items').insert(items_data).execute()
+            if not items_res.data:
+                # Opcional: rollback o marcar la NC como inválida si los items fallan
+                return {'success': False, 'error': 'NC creada pero fallaron los items.'}
+
+            return {'success': True, 'data': nueva_nc}
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error en create_with_items: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}

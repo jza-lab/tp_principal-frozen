@@ -21,7 +21,7 @@ class NotaCreditoController(BaseController):
         Lógica de negocio para crear una o más notas de crédito a partir de una alerta.
         """
 
-        nc_creadas_count = 0
+        notas_creadas = []
         errors = []
         avisos = []
 
@@ -38,54 +38,55 @@ class NotaCreditoController(BaseController):
                 # Calcular el monto a acreditar
                 monto_total_afectado = Decimal(0.0)
                 pedido_total = Decimal(pedido_res['data'].get('monto_total', '0.0'))
-                items_afectados_detalle = []
+                items_afectados_para_nc = []
 
                 for item in items_pedido:
                     precio_unitario = Decimal(item.get('precio_unitario', '0.0'))
-                    cantidad_item = Decimal(item.get('cantidad', '0.0'))
-                    pedido_total += precio_unitario * cantidad_item
 
                     reservas_item = self.pedido_model.get_reservas_for_item(item['id'])
                     for reserva in reservas_item:
                         if reserva['lote_producto_id'] in lotes_producto_afectados_ids:
                             cantidad_afectada = Decimal(reserva.get('cantidad_reservada', '0.0'))
-                            monto_total_afectado += precio_unitario * cantidad_afectada
-                            items_afectados_detalle.append(f"Producto ID {item['producto_id']} (Lote ID {reserva['lote_producto_id']})")
+                            subtotal = precio_unitario * cantidad_afectada
+                            monto_total_afectado += subtotal
+                            items_afectados_para_nc.append({
+                                'producto_id': item['producto_id'],
+                                'lote_producto_id': reserva['lote_producto_id'],
+                                'cantidad': cantidad_afectada,
+                                'precio_unitario': precio_unitario,
+                                'subtotal': subtotal
+                            })
                 
                 if monto_total_afectado <= 0:
-                    errors.append(f"Pedido ID {pedido['codigo']} no tiene items visiblemente afectados para acreditar.")
+                    errors.append(f"Pedido ID {pedido['codigo']} no tiene items para acreditar.")
                     continue
 
-                # Comprobar si la NC cubre el total
-                # Usar una pequeña tolerancia para la comparación de decimales
-                if monto_total_afectado >= pedido_total - Decimal('0.01'):
-                    avisos.append(f"La Nota de Crédito para el Pedido {pedido['codigo']} cubre el monto total.")
 
                 nc_data = {
                     'pedido_origen_id': pedido['id'],
                     'cliente_id': pedido['id_cliente'],
                     'monto': str(monto_total_afectado),
                     'motivo': f"Alerta de Riesgo: {motivo}",
-                    'detalle': f"Afectación por alerta. Detalles: {detalle}. Items afectados: {', '.join(items_afectados_detalle)}",
+                    'detalle': detalle,
                     'alerta_riesgo_id': alerta_id
                 }
 
                 validated_data = self.schema.load(nc_data)
-                create_res = self.model.create(validated_data)
+                create_res = self.model.create_with_items(validated_data, items_afectados_para_nc)
                 if create_res.get('success'):
-                    nc_creadas_count += 1
-                else:
-                    errors.append(f"No se pudo guardar la NC para el pedido {pedido['codigo']}.")
+                    notas_creadas.append(create_res.get('data'))
 
+                else:
+                    errors.append(f"Error al guardar NC para pedido {pedido['codigo']}.")
 
             except Exception as e:
                 logger.error(f"Error procesando NC para Pedido ID {pedido_id}: {e}", exc_info=True)
                 errors.append(f"Error interno al procesar Pedido ID {pedido_id}.")
 
-        if nc_creadas_count > 0:
-            return {"success": True, "count": nc_creadas_count, "errors": errors, "avisos": avisos}
+        if notas_creadas:
+            return {"success": True, "data": notas_creadas, "count": len(notas_creadas), "errors": errors}
         else:
-            return {"success": False, "errors": errors, "avisos": avisos}
+            return {"success": False, "errors": errors}
 
     def obtener_detalle_nc_por_alerta(self, alerta_id):
         """
