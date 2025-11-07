@@ -501,151 +501,221 @@
                                             <strong>{{ nombre_centro }}</strong>
                                         </div>
                                         <div class="col-sm-9">
-                                            {# --- NUEVA LÓGICA DE SUMA DIRECTA --- #}
+                                            {# --- INICIO: CORRECCIÓN DE CÁLCULO DE TOTALES --- #}
                                             {# 1. Obtener los diccionarios de capacidad y carga para esta línea #}
                                             {% set centro_capacidad_dict = capacidad_crp.get(centro_id, {}) %}
                                             {% set centro_carga_dict = carga_crp.get(centro_id, {}) %}
-
-                                            {# 2. Sumar todos los valores numéricos usando filtros Jinja #}
-                                            {#    select('number') es una salvaguarda por si llega algo no numérico #}
-                                            {% set total_capacidad = centro_capacidad_dict.values() | select('number') | sum %}
+                                
+                                            {# 2. Sumar los valores 'neta' y 'carga' #}
+                                            {% set total_capacidad = centro_capacidad_dict.values() | map(attribute='neta') | sum %}
                                             {% set total_carga = centro_carga_dict.values() | select('number') | sum %}
-
+                                
                                             {# 3. Calcular utilización (sin cambios) #}
                                             {% set utilizacion_promedio = (total_carga / total_capacidad * 100) if total_capacidad > 0 else 0 %}
-                                            {# --- FIN NUEVA LÓGICA DE SUMA --- #}
-
-                                            <div class="progress" style="height: 20px;" title="Carga: {{ total_carga | round(0) }}min / Cap: {{ total_capacidad | round(0) }}min"> {# Añadido title #}
-                                                {% set bg_class = 'bg-danger' if utilizacion_promedio > 100 else ('bg-warning' if utilizacion_promedio > 85 else ('bg-success' if utilizacion_promedio > 0 else 'bg-secondary')) %} {# Añadido bg-secondary para 0% #}
-
-                                                <div class="progress-bar {{ bg_class }}"
-                                                     role="progressbar"
-                                                     style="width: {% if utilizacion_promedio > 100 %}100{% else %}{{ utilizacion_promedio }}{% endif %}%"
-                                                     aria-valuenow="{{ utilizacion_promedio | round(1) }}"
-                                                     aria-valuemin="0"
-                                                     aria-valuemax="100">
+                                            {# --- FIN CORRECCIÓN --- #}
+                                
+                                            <div class="progress" style="height: 20px;"
+                                                title="Carga: {{ total_carga | round(0) }}min / Cap. Neta: {{ total_capacidad | round(0) }}min"> {#
+                                                Title corregido #}
+                                                {% set bg_class = 'bg-danger' if utilizacion_promedio > 100 else ('bg-warning' if utilizacion_promedio >
+                                                85 else ('bg-success' if utilizacion_promedio > 0 else 'bg-secondary')) %} {# Añadido bg-secondary para
+                                                0% #}
+                                
+                                                <div class="progress-bar {{ bg_class }}" role="progressbar"
+                                                    style="width: {% if utilizacion_promedio > 100 %}100{% else %}{{ utilizacion_promedio }}{% endif %}%"
+                                                    aria-valuenow="{{ utilizacion_promedio | round(1) }}" aria-valuemin="0" aria-valuemax="100">
                                                     {{ utilizacion_promedio | round(1) }}%
                                                 </div>
                                             </div>
                                             {# Mostrar totales debajo de la barra #}
-                                            <small class="text-muted d-block mt-1"> {# Añadido d-block y mt-1 #}
-                                                Carga: {{ total_carga | round(0) }}min / Capacidad: {{ total_capacidad | round(0) }}min
+                                            <small class="text-muted d-block mt-1"> {# Texto corregido #}
+                                                Carga: {{ total_carga | round(0) }}min / Cap. Neta: {{ total_capacidad | round(0) }}min
                                             </small>
                                         </div>
                                     </div>
-                                    {% if not loop.last %}<hr class="my-1">{% endif %} {# Separador entre líneas #}
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {# --- TABLA DETALLADA CRP (NUEVO DISEÑO) --- #}
-                    <div class="table-responsive">
-                        <table class="table table-sm text-center crp-tabla">
-                            <thead>
-                                <tr>
-                                    <th class="text-start" style="width: 12%;">Centro / Métrica</th> {# Título ajustado #}
-                                    {% for i in range(num_dias) %}
-                                    {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
-
-                                    {% set dia_num = fecha_dia.weekday() %}
-
-                                    <th class="{% if fecha_dia.weekday() >= 5 %}weekend-header text-center{% endif %}">
-                                        {# Usar la lista numérica para obtener la abreviatura #}
-                                        {{ dias_lista[dia_num] }}<br>
-                                        <small class="text-muted">{{ fecha_dia.strftime('%d/%m') }}</small>
-                                    </th>
-                                    {% endfor %}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for centro_id, nombre_centro in {1: 'Línea 1', 2: 'Línea 2'}.items() %}
-                                    {# Fila Capacidad #}
-                                    <tr class="crp-capacidad">
-                                        <td class="text-start fw-bold metric-label">
-                                            <div>{{ nombre_centro }}</div>
-                                            <span class="text-muted fw-normal">Capacidad</span>
-                                        </td>
-                                        {% for i in range(num_dias) %}
-                                            {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
-                                            {% set fecha_iso = fecha_dia.isoformat() %}
-                                            {% set cap = capacidad_crp.get(centro_id, {}).get(fecha_iso, 0) %}
-                                            <td class="{% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %}">
-                                                <span class="fw-bold text-primary">{{ cap | round(0) }}</span>
-                                                <small class="text-muted d-block">min</small>
-                                            </td>
-                                        {% endfor %}
-                                    </tr>
-                                    {# Fila Carga #}
-                                    <tr class="crp-carga">
-                                        <td class="text-start metric-label">
-                                            <span class="text-muted">Carga Planif.</span>
-                                        </td>
-                                        {% for i in range(num_dias) %}
-                                            {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
-                                            {% set fecha_iso = fecha_dia.isoformat() %}
-                                            {# Obtener el dato de la carga #}
-                                            {% set carga = carga_crp.get(centro_id, {}).get(fecha_iso, 0) %}
-                                            
-                                            {# Esta es la celda de DATOS correcta (td) #}
-                                            <td class="{% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %}">
-                                                <span class="fw-bold text-danger">{{ carga | round(0) }}</span>
-                                                <small class="text-muted d-block">min</small>
-                                            </td>
-                                        {% endfor %}
-                                    </tr>
-                                    {# Fila Utilización #}
-                                    <tr class="crp-utilizacion">
-                                        <td class="text-start metric-label">
-                                            <span class="text-muted">Utilización</span>
-                                        </td>
-                                        {% for i in range(num_dias) %}
-                                            {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
-                                            {% set fecha_iso = fecha_dia.isoformat() %}
-                                            {% set cap = capacidad_crp.get(centro_id, {}).get(fecha_iso, 0) %}
-                                            {% set carga = carga_crp.get(centro_id, {}).get(fecha_iso, 0) %}
-                                            {% set utilizacion = (carga / cap * 100) if cap > 0 else 0 %}
-                                            {# Colores y clases #}
-                                            {% set bg_color = 'bg-danger-soft text-danger' if utilizacion > 100 else ('bg-warning-soft text-warning' if utilizacion > 85 else ('bg-success-soft text-success' if utilizacion > 0 else 'bg-light text-muted')) %}
-                                            <td class="{{ bg_color }} {% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %}">
-                                                <span class="fw-bold fs-6">{{ utilizacion | round(0) }}%</span>
-                                                {# Iconos #}
-                                                {% if utilizacion > 100 %}<i class="bi bi-exclamation-triangle-fill small ms-1" title="Sobrecarga"></i>
-                                                {% elif utilizacion > 85 %}<i class="bi bi-exclamation-circle-fill small ms-1" title="Alta utilización"></i>
-                                                {% elif utilizacion > 0 %}<i class="bi bi-check-circle-fill small ms-1" title="Óptimo"></i>
-                                                {% endif %}
-                                            </td>
-                                        {% endfor %}
-                                    </tr>
-                                    {# Espaciador visual si no es la última línea #}
                                     {% if not loop.last %}
-                                    <tr class="row-spacer"><td colspan="{{ num_dias + 1 }}"></td></tr>
-                                    {% endif %}
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {# --- FIN TABLA DETALLADA --- #}
-                    
-                    {# Explicación de métricas #}
-                    <div class="mt-3">
-                        <div class="card bg-light">
-                            <div class="card-body">
-                                <h6 class="card-title"><i class="bi bi-info-circle me-1"></i>¿Cómo interpretar esta tabla?</h6>
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <strong>Capacidad:</strong> Tiempo disponible de la línea (minutos)
-                                    </div>
-                                    <div class="col-md-4">
-                                        <strong>Carga Planificada:</strong> Tiempo asignado a OPs (minutos)
-                                    </div>
-                                    <div class="col-md-4">
-                                        <strong>Utilización:</strong> Porcentaje de uso (Carga/Capacidad)
+                                    <hr class="my-1">{% endif %} {# Separador entre líneas #}
+                                    {% endfor %}
+                                </div>
+                                </div>
+                                </div>
+                                </div>
+                                {# --- TABLA DETALLADA CRP (NUEVO DISEÑO) --- #}
+                                <div class="table-responsive">
+                                    <table class="table table-sm text-center crp-tabla">
+                                        <thead>
+                                            <tr>
+                                                <th class="text-start" style="width: 12%;">Centro / Métrica</th> {# Título ajustado #}
+                                                {% for i in range(num_dias) %}
+                                                {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
+                                
+                                                {% set dia_num = fecha_dia.weekday() %}
+                                
+                                                <th class="{% if fecha_dia.weekday() >= 5 %}weekend-header text-center{% endif %}">
+                                                    {# Usar la lista numérica para obtener la abreviatura #}
+                                                    {{ dias_lista[dia_num] }}<br>
+                                                    <small class="text-muted">{{ fecha_dia.strftime('%d/%m') }}</small>
+                                                </th>
+                                                {% endfor %}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for centro_id, nombre_centro in {1: 'Línea 1', 2: 'Línea 2'}.items() %}
+                                            {# Fila Capacidad Neta #}
+                                            <tr class="crp-capacidad">
+                                                <td class="text-start fw-bold metric-label">
+                                                    <div>{{ nombre_centro }}</div>
+                                                    {# --- CORRECCIÓN DE TEXTO --- #}
+                                                    <span class="text-muted fw-normal">Cap. Neta</span>
+                                                </td>
+                                                {% for i in range(num_dias) %}
+                                                {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
+                                                {% set fecha_iso = fecha_dia.isoformat() %}
+                                                {# --- CORRECCIÓN: Obtener el diccionario de capacidad --- #}
+                                                {% set cap_data = capacidad_crp.get(centro_id, {}).get(fecha_iso, {'neta': 0}) %}
+                                                <td class="{% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %}">
+                                                    {# --- CORRECCIÓN: Usar cap_data.neta --- #}
+                                                    <span class="fw-bold text-primary">{{ cap_data.neta | round(0) }}</span>
+                                                    <small class="text-muted d-block">min</small>
+                                                </td>
+                                                {% endfor %}
+                                            </tr>
+                                
+                                            {# --- INICIO: NUEVA FILA DE BLOQUEOS (CON COLORES) --- #}
+                                            <tr class="crp-bloqueo">
+                                                <td class="text-start metric-label">
+                                                    <span class="text-muted">Bloqueos</span>
+                                                </td>
+                                                {% for i in range(num_dias) %}
+                                                    {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
+                                                    {% set fecha_iso = fecha_dia.isoformat() %}
+                                                    
+                                                    {# --- MODIFICADO: Añadir horas al default dict --- #}
+                                                    {% set cap_data = capacidad_crp.get(centro_id, {}).get(fecha_iso, {'bloqueado': 0, 'motivo_bloqueo': None, 'hora_inicio': None, 'hora_fin': None}) %}
+                                                    {% set bloqueo = cap_data.bloqueado %}
+                                                    {% set motivo = cap_data.motivo_bloqueo %}
+                                                    {% set hora_inicio = cap_data.hora_inicio %}
+                                                    {% set hora_fin = cap_data.hora_fin %}
+
+                                                    {# Lógica de color (sin cambios) #}
+                                                    {% set bloqueo_class = '' %}
+                                                    {% if bloqueo >= 240 %} {# 4+ horas (Crítico) #}
+                                                        {% set bloqueo_class = 'bg-danger-soft text-danger-emphasis' %}
+                                                    {% elif bloqueo > 60 %} {# 1-4 horas (Alerta) #}
+                                                        {% set bloqueo_class = 'bg-warning-soft text-warning-emphasis' %}
+                                                    {% elif bloqueo > 0 %} {# Menos de 1 hora #}
+                                                        {% set bloqueo_class = 'bg-light text-muted-emphasis' %}
+                                                    {% endif %}
+
+                                                    {# --- MODIFICADO: Construir el 'title' dinámicamente --- #}
+                                                    {% set tooltip_text = motivo or 'Bloqueo' %}
+                                                    {% if hora_inicio and hora_fin %}
+                                                        {# Concatenamos el rango de horas al motivo #}
+                                                        {% set tooltip_text = tooltip_text + ' (' + hora_inicio + ' - ' + hora_fin + ')' %}
+                                                    {% endif %}
+
+                                                    <td
+                                                        class="{% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %} {{ bloqueo_class }}"
+                                                        {% if bloqueo > 0 %}
+                                                            title="{{ tooltip_text | e }}"
+                                                            data-bs-toggle="tooltip" 
+                                                            data-bs-placement="top"
+                                                        {% endif %}
+                                                    >
+                                                        {% if bloqueo > 0 %}
+                                                        <span class="fw-bold">{{ bloqueo | round(0) }}</span> 
+                                                        <small class="text-muted d-block">min</small>
+                                                        {% else %}
+                                                        <span class="text-muted">-</span>
+                                                        {% endif %}
+                                                    </td>
+                                                {% endfor %}
+                                            </tr>
+                                            {# --- FIN: NUEVA FILA DE BLOQUEOS --- #}
+                                
+                                            {# Fila Carga #}
+                                            <tr class="crp-carga">
+                                                <td class="text-start metric-label">
+                                                    <span class="text-muted">Carga Planif.</span>
+                                                </td>
+                                                {% for i in range(num_dias) %}
+                                                {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
+                                                {% set fecha_iso = fecha_dia.isoformat() %}
+                                                {# Obtener el dato de la carga #}
+                                                {% set carga = carga_crp.get(centro_id, {}).get(fecha_iso, 0) %}
+                                
+                                                {# Esta es la celda de DATOS correcta (td) #}
+                                                <td class="{% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %}">
+                                                    <span class="fw-bold text-danger">{{ carga | round(0) }}</span>
+                                                    <small class="text-muted d-block">min</small>
+                                                </td>
+                                                {% endfor %}
+                                            </tr>
+                                            {# Fila Utilización #}
+                                            <tr class="crp-utilizacion">
+                                                <td class="text-start metric-label">
+                                                    <span class="text-muted">Utilización</span>
+                                                </td>
+                                                {% for i in range(num_dias) %}
+                                                {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
+                                                {% set fecha_iso = fecha_dia.isoformat() %}
+                                                {# --- CORRECCIÓN: Obtener cap_data y carga --- #}
+                                                {% set cap_data = capacidad_crp.get(centro_id, {}).get(fecha_iso, {'neta': 0}) %}
+                                                {% set carga = carga_crp.get(centro_id, {}).get(fecha_iso, 0) %}
+                                                {# --- CORRECCIÓN: Calcular sobre cap_data.neta --- #}
+                                                {% set utilizacion = (carga / cap_data.neta * 100) if cap_data.neta > 0 else 0 %}
+                                                {# Colores y clases #}
+                                                {% set bg_color = 'bg-danger-soft text-danger' if utilizacion > 100 else ('bg-warning-soft text-warning'
+                                                if utilizacion > 85 else ('bg-success-soft text-success' if utilizacion > 0 else 'bg-light text-muted'))
+                                                %}
+                                                <td class="{{ bg_color }} {% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %}">
+                                                    <span class="fw-bold fs-6">{{ utilizacion | round(0) }}%</span>
+                                                    {# Iconos #}
+                                                    {% if utilizacion > 100 %}<i class="bi bi-exclamation-triangle-fill small ms-1"
+                                                        title="Sobrecarga"></i>
+                                                    {% elif utilizacion > 85 %}<i class="bi bi-exclamation-circle-fill small ms-1"
+                                                        title="Alta utilización"></i>
+                                                    {% elif utilizacion > 0 %}<i class="bi bi-check-circle-fill small ms-1" title="Óptimo"></i>
+                                                    {% endif %}
+                                                </td>
+                                                {% endfor %}
+                                            </tr>
+                                            {# Espaciador visual si no es la última línea #}
+                                            {% if not loop.last %}
+                                            <tr class="row-spacer">
+                                                <td colspan="{{ num_dias + 1 }}"></td>
+                                            </tr>
+                                            {% endif %}
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                {# --- FIN TABLA DETALLADA --- #}
+                                
+                                {# Explicación de métricas #}
+                                <div class="mt-3">
+                                    <div class="card bg-light">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="bi bi-info-circle me-1"></i>¿Cómo interpretar esta tabla?</h6>
+                                            {# --- INICIO: CORRECCIÓN DE EXPLICACIÓN --- #}
+                                            <div class="row">
+                                                <div class="col-md-4">
+                                                    <strong>Cap. Neta:</strong> Capacidad Neta (minutos)
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <strong>Bloqueos:</strong> Minutos no disponibles (Mantenimiento, etc.)
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <strong>Carga Planificada:</strong> Trabajo asignado (minutos)
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <strong>Utilización:</strong> Porcentaje de uso (Carga / Cap. Neta)
+                                                </div>
+                                            </div>
+                                            {# --- FIN: CORRECCIÓN DE EXPLICACIÓN --- #}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
                     
                 {% else %}
                     <div class="text-center py-4">
@@ -836,6 +906,19 @@
         window.CSRF_TOKEN = "{{ csrf_token() }}";
         // -----------------------------
     </script>
+
+    {# --- INICIO: AÑADIR INICIALIZADOR DE TOOLTIP --- #}
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Inicializar los nuevos tooltips de bloqueo
+            // Es necesario para que data-bs-toggle="tooltip" funcione
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
+    {# --- FIN: INICIALIZADOR DE TOOLTIP --- #}
     
     {# --- SCRIPT DE PLANIFICACIÓN (AHORA CONTIENE EL INICIALIZADOR DE POPOVER) --- #}
     <script src="{{ url_for('static', filename='js/planificacion/planificacion.js') }}"></script>

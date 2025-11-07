@@ -854,7 +854,12 @@ class PlanificacionController(BaseController):
 
                     while carga_restante_sim > 0.01 and dias_simulados < max_dias_op_sim:
                         fecha_actual_sim_str = fecha_actual_sim.isoformat()
-                        cap_dia = capacidad_rango.get(linea_asignada, {}).get(fecha_actual_sim_str, 0.0)
+
+                        # --- ¡CAMBIO! Usar .get('neta') ---
+                        cap_dia_dict = capacidad_rango.get(linea_asignada, {}).get(fecha_actual_sim_str, {})
+                        cap_dia = cap_dia_dict.get('neta', 0.0)
+                        # --- FIN CAMBIO ---
+
                         carga_existente_sim = carga_acumulada_simulacion[linea_asignada].get(fecha_actual_sim_str, 0.0)
                         cap_restante_sim = max(0.0, cap_dia - carga_existente_sim)
 
@@ -928,10 +933,13 @@ class PlanificacionController(BaseController):
             logger.error(f"Error obteniendo planificación semanal (v2): {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
+    # --- MÉTODO MODIFICADO ---
     def obtener_capacidad_disponible(self, centro_trabajo_ids: List[int], fecha_inicio: date, fecha_fin: date) -> Dict:
         """
         Calcula la capacidad disponible (en minutos) para centros de trabajo dados,
         entre dos fechas (inclusive). Considera estándar, eficiencia, utilización Y BLOQUEOS.
+
+        DEVUELVE: { centro_id: { fecha_iso: {..., 'motivo_bloqueo': str, 'hora_inicio': str, 'hora_fin': str} } }
         """
         capacidad_por_centro_y_fecha = defaultdict(dict)
         num_dias = (fecha_fin - fecha_inicio).days + 1
@@ -945,7 +953,7 @@ class PlanificacionController(BaseController):
                 return {}
             centros_trabajo = {ct['id']: ct for ct in ct_result.get('data', [])}
 
-            # --- ¡NUEVO! 2. Obtener Bloqueos para este rango ---
+            # 2. Obtener Bloqueos para este rango (Sin cambios desde la última vez)
             filtros_bloqueo = {
                 'centro_trabajo_id': ('in', tuple(centro_trabajo_ids)),
                 'fecha_gte': fecha_inicio.isoformat(),
@@ -955,8 +963,8 @@ class PlanificacionController(BaseController):
             bloqueos_map = defaultdict(dict)
             if bloqueos_resp.get('success'):
                 for bloqueo in bloqueos_resp.get('data', []):
-                    bloqueos_map[bloqueo['centro_trabajo_id']][bloqueo['fecha']] = Decimal(bloqueo['minutos_bloqueados'])
-            # --- FIN NUEVO BLOQUEO ---
+                    # Guardamos el diccionario completo
+                    bloqueos_map[bloqueo['centro_trabajo_id']][bloqueo['fecha']] = bloqueo
 
             # 3. Calcular capacidad día por día
             for dia_offset in range(num_dias):
@@ -964,30 +972,62 @@ class PlanificacionController(BaseController):
                 fecha_iso = fecha_actual.isoformat()
                 for ct_id in centro_trabajo_ids:
                     centro = centros_trabajo.get(ct_id)
-                    if not centro:
-                        capacidad_por_centro_y_fecha[ct_id][fecha_iso] = 0
-                        continue
 
-                    # Calcular capacidad estándar
-                    capacidad_std = Decimal(centro.get('tiempo_disponible_std_dia', 0))
-                    eficiencia = Decimal(centro.get('eficiencia', 1.0))
-                    utilizacion = Decimal(centro.get('utilizacion', 1.0))
-                    num_maquinas = int(centro.get('numero_maquinas', 1))
-                    capacidad_neta_dia = capacidad_std * eficiencia * utilizacion * num_maquinas
+                    # --- ¡CAMBIO! Añadir horas al dict default ---
+                    cap_data = {
+                        'bruta': Decimal(0),
+                        'bloqueado': Decimal(0),
+                        'neta': Decimal(0),
+                        'motivo_bloqueo': None,
+                        'hora_inicio': None, # <-- AÑADIDO
+                        'hora_fin': None       # <-- AÑADIDO
+                    }
 
-                    # --- ¡NUEVO! Restar bloqueos ---
-                    minutos_bloqueados = bloqueos_map.get(ct_id, {}).get(fecha_iso, 0)
-                    capacidad_final_dia = max(0, capacidad_neta_dia - minutos_bloqueados)
-                    # ----------------------------
+                    if centro:
+                        # Calcular capacidad estándar (sin cambios)
+                        capacidad_std = Decimal(centro.get('tiempo_disponible_std_dia', 0))
+                        eficiencia = Decimal(centro.get('eficiencia', 1.0))
+                        utilizacion = Decimal(centro.get('utilizacion', 1.0))
+                        num_maquinas = int(centro.get('numero_maquinas', 1))
 
-                    capacidad_por_centro_y_fecha[ct_id][fecha_iso] = round(capacidad_final_dia, 2)
+                        capacidad_bruta_dia = capacidad_std * eficiencia * utilizacion * num_maquinas
 
-            # ... (conversión a float, sin cambios) ...
-            resultado_final_float = {}
+                        # --- Restar bloqueos (MODIFICADO) ---
+                        bloqueo_data = bloqueos_map.get(ct_id, {}).get(fecha_iso, {})
+                        minutos_bloqueados_dec = Decimal(bloqueo_data.get('minutos_bloqueados', 0))
+                        motivo_bloqueo_str = bloqueo_data.get('motivo')
+                        hora_inicio_str = bloqueo_data.get('hora_inicio') # <-- AÑADIDO
+                        hora_fin_str = bloqueo_data.get('hora_fin')     # <-- AÑADIDO
+
+                        capacidad_neta_dia = max(Decimal(0), capacidad_bruta_dia - minutos_bloqueados_dec)
+                        # ----------------------------
+
+                        cap_data = {
+                            'bruta': round(capacidad_bruta_dia, 2),
+                            'bloqueado': round(minutos_bloqueados_dec, 2),
+                            'neta': round(capacidad_neta_dia, 2),
+                            'motivo_bloqueo': motivo_bloqueo_str,
+                            'hora_inicio': hora_inicio_str, # <-- AÑADIDO
+                            'hora_fin': hora_fin_str      # <-- AÑADIDO
+                        }
+
+                    capacidad_por_centro_y_fecha[ct_id][fecha_iso] = cap_data
+
+            # 4. Convertir Decimals a floats para JSON y JS
+            resultado_final_float_dict = {}
             for centro_id, cap_fecha in capacidad_por_centro_y_fecha.items():
-                resultado_final_float[centro_id] = {fecha: float(cap) for fecha, cap in cap_fecha.items()}
+                resultado_final_float_dict[centro_id] = {}
+                for fecha, cap_dict in cap_fecha.items():
+                    resultado_final_float_dict[centro_id][fecha] = {
+                        'bruta': float(cap_dict['bruta']),
+                        'bloqueado': float(cap_dict['bloqueado']),
+                        'neta': float(cap_dict['neta']),
+                        'motivo_bloqueo': cap_dict['motivo_bloqueo'],
+                        'hora_inicio': cap_dict['hora_inicio'], # <-- AÑADIDO
+                        'hora_fin': cap_dict['hora_fin']        # <-- AÑADIDO
+                    }
 
-            return resultado_final_float
+            return resultado_final_float_dict
 
         except Exception as e:
             logger.error(f"Error calculando capacidad disponible: {e}", exc_info=True)
@@ -1051,8 +1091,11 @@ class PlanificacionController(BaseController):
                 while carga_restante_op > 0.01 and dias_procesados < max_dias_op: # Usar > 0.01 por precisión float
                     fecha_actual_str = fecha_actual_sim.isoformat()
 
+                    # --- ¡CAMBIO! Usar .get('neta') ---
                     # Capacidad NETA del día (considerando eficiencia, etc.)
-                    capacidad_dia = capacidad_disponible_rango.get(linea_asignada, {}).get(fecha_actual_str, 0.0)
+                    cap_dia_dict = capacidad_disponible_rango.get(linea_asignada, {}).get(fecha_actual_str, {})
+                    capacidad_dia = cap_dia_dict.get('neta', 0.0)
+                    # --- FIN CAMBIO ---
 
                     # Carga YA ASIGNADA a este día por OPs anteriores en este cálculo
                     carga_ya_asignada_este_dia = carga_distribuida[linea_asignada].get(fecha_actual_str, 0.0)
@@ -1299,7 +1342,7 @@ class PlanificacionController(BaseController):
                                         if status_aprob_ind < 400 and res_aprob_ind_dict.get('success'):
                                             logger.info(f"[AutoPlan/Fallback] ÉXITO (Multi-Día): OP {op_codigo_individual} planificada.")
                                             ops_planificadas_exitosamente.append(op_codigo_individual)
-                                            if res_aprob_ind_dict and res_aprob_ind_dict['data'] and res_aprob_ind_dict.get('oc_generada'):
+                                            if res_aprob_ind_dict and res_aprob_ind_dict.get('data') and res_aprob_ind_dict.get('oc_generada'):
                                                 oc_codigo = res_aprob_ind_dict['data'].get('oc_codigo', 'N/A')
                                                 ops_con_oc_generada.append({'ops': [op_codigo_individual], 'oc': oc_codigo})
                                         else:
@@ -1456,7 +1499,11 @@ class PlanificacionController(BaseController):
             fecha_actual_str = fecha_actual_simulacion.isoformat()
 
             capacidad_dict_dia = self.obtener_capacidad_disponible([linea_propuesta], fecha_actual_simulacion, fecha_actual_simulacion)
-            capacidad_dia_actual = capacidad_dict_dia.get(linea_propuesta, {}).get(fecha_actual_str, 0.0)
+
+            # --- ¡CAMBIO! Usar .get('neta') ---
+            cap_dia_dict = capacidad_dict_dia.get(linea_propuesta, {}).get(fecha_actual_str, {})
+            capacidad_dia_actual = cap_dia_dict.get('neta', 0.0)
+            # --- FIN CAMBIO ---
 
             if capacidad_dia_actual <= 0:
                 fecha_actual_simulacion += timedelta(days=1)
@@ -1633,17 +1680,50 @@ class PlanificacionController(BaseController):
             return self.error_response(f"Error: {str(e)}", 500)
 
     def agregar_bloqueo(self, data: dict) -> tuple:
-        """Agrega un nuevo bloqueo de capacidad."""
+        """Agrega un nuevo bloqueo de capacidad, calculando minutos desde las horas."""
         try:
+            hora_inicio_str = data.get('hora_inicio') # Ej: "08:00"
+            hora_fin_str = data.get('hora_fin')       # Ej: "10:30"
+            fecha_str = data.get('fecha_bloqueo')
+
+            if not hora_inicio_str or not hora_fin_str or not fecha_str:
+                return self.error_response("Fecha, hora de inicio y hora de fin son requeridas.", 400)
+
+            # 1. Calcular minutos
+            try:
+                FMT = '%H:%M'
+                t_inicio = datetime.strptime(hora_inicio_str, FMT).time()
+                t_fin = datetime.strptime(hora_fin_str, FMT).time()
+
+                if t_fin <= t_inicio:
+                    return self.error_response("La hora de fin debe ser mayor que la hora de inicio.", 400)
+
+                # Usamos una fecha dummy (como 'hoy' o 'date.min') para poder restar
+                dummy_date = date.today()
+                dt_inicio = datetime.combine(dummy_date, t_inicio)
+                dt_fin = datetime.combine(dummy_date, t_fin)
+
+                minutos_calculados = (dt_fin - dt_inicio).total_seconds() / 60
+
+            except ValueError:
+                return self.error_response("Formato de hora inválido. Use HH:MM.", 400)
+            except Exception as e_calc:
+                 logger.error(f"Error calculando minutos de bloqueo: {e_calc}")
+                 return self.error_response(f"Error interno al calcular minutos: {e_calc}", 500)
+
+
             nuevo_bloqueo = {
                 'centro_trabajo_id': int(data.get('centro_trabajo_id')),
-                'fecha': data.get('fecha_bloqueo'),
-                'minutos_bloqueados': Decimal(data.get('minutos_bloqueados', 0)),
+                'fecha': fecha_str,
+                'hora_inicio': hora_inicio_str, # Guardamos el string
+                'hora_fin': hora_fin_str,     # Guardamos el string
+                'minutos_bloqueados': Decimal(minutos_calculados), # Guardamos lo calculado
                 'motivo': data.get('motivo_bloqueo')
             }
 
             if nuevo_bloqueo['minutos_bloqueados'] <= 0:
-                return self.error_response("Los minutos a bloquear deben ser mayores a 0.", 400)
+                # Esta validación ahora es redundante si t_fin > t_inicio, pero la dejamos por seguridad
+                return self.error_response("El rango de horas resulta en 0 minutos.", 400)
 
             result = self.bloqueo_capacidad_model.create(nuevo_bloqueo)
             if result.get('success'):
@@ -1739,6 +1819,7 @@ class PlanificacionController(BaseController):
                 'ordenes_por_dia': ordenes_por_dia,
                 'carga_crp': carga_calculada,
                 'capacidad_crp': capacidad_disponible,
+                # 'bloqueos_crp' no es necesario, ya está dentro de 'capacidad_crp'
                 'supervisores': supervisores,
                 'operarios': operarios,
                 'inicio_semana': inicio_semana.isoformat(),
