@@ -265,8 +265,20 @@ class InsumoController(BaseController):
 
             if result['success']:
                 insumo_data = result['data']
-                detalle = f"Se actualizó el insumo '{insumo_data['nombre']}' (ID: {id_insumo})."
-                self.registro_controller.crear_registro(get_current_user(), 'Insumos', 'Actualización', detalle)
+                
+                # Registro general de actualización
+                detalle_general = f"Se actualizó el insumo '{insumo_data['nombre']}' (ID: {id_insumo})."
+                self.registro_controller.crear_registro(get_current_user(), 'Insumos', 'Actualización', detalle_general)
+
+                # Registros específicos para umbrales de stock
+                if 'stock_min' in validated_data:
+                    detalle_stock_min = f"Se actualizó el stock mínimo para el insumo '{insumo_data['nombre']}' a {validated_data['stock_min']}."
+                    self.registro_controller.crear_registro(get_current_user(), 'Alertas Insumos', 'Configuración', detalle_stock_min)
+                
+                if 'stock_max' in validated_data:
+                    detalle_stock_max = f"Se actualizó el stock máximo para el insumo '{insumo_data['nombre']}' a {validated_data['stock_max']}."
+                    self.registro_controller.crear_registro(get_current_user(), 'Alertas Insumos', 'Configuración', detalle_stock_max)
+
                 logger.info(f"Insumo actualizado exitosamente: {id_insumo}")
                 return self.success_response(
                     data=insumo_data,

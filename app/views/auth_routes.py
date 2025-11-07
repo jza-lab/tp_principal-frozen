@@ -66,9 +66,9 @@ def login():
 
             from types import SimpleNamespace
             usuario_log = SimpleNamespace(nombre=usuario_data['nombre'], apellido=usuario_data['apellido'], roles=[rol_codigo])
-            detalle = f"El usuario '{usuario_data['nombre']} {usuario_data['apellido']}' inició sesión con credenciales."
+            detalle = "Acceso al Sistema."
             registro_controller = RegistroController()
-            registro_controller.crear_registro(usuario_log, 'Accesos', 'Ingreso', detalle)
+            registro_controller.crear_registro(usuario_log, 'Accesos Sistema', 'Ingreso por Credenciales', detalle)
 
             return response
         else:
@@ -130,9 +130,9 @@ def identificar_rostro():
 
         from types import SimpleNamespace
         usuario_log = SimpleNamespace(nombre=usuario_data['nombre'], apellido=usuario_data['apellido'], roles=[rol_codigo])
-        detalle = f"El usuario '{usuario_data['nombre']} {usuario_data['apellido']}' inició sesión con reconocimiento facial."
+        detalle = "Acceso al Sistema."
         registro_controller = RegistroController()
-        registro_controller.crear_registro(usuario_log, 'Accesos', 'Ingreso', detalle)
+        registro_controller.crear_registro(usuario_log, 'Accesos Sistema', 'Ingreso por Rostro', detalle)
 
         return response, 200
     else:
@@ -150,9 +150,9 @@ def logout():
 
         from types import SimpleNamespace
         usuario_log = SimpleNamespace(nombre=jwt_payload['nombre'], apellido=jwt_payload['apellido'], roles=[jwt_payload['rol']])
-        detalle = f"El usuario '{jwt_payload['nombre']} {jwt_payload['apellido']}' cerró sesión."
+        detalle = "Cierre de sesión en el Sistema."
         registro_controller = RegistroController()
-        registro_controller.crear_registro(usuario_log, 'Accesos', 'Egreso', detalle)
+        registro_controller.crear_registro(usuario_log, 'Accesos Sistema', 'Egreso', detalle)
 
         TokenBlacklistModel.add_to_blacklist(jti, exp)
         response = redirect(url_for('auth.login'))
