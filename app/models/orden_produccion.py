@@ -351,7 +351,7 @@ class OrdenProduccionModel(BaseModel):
         """
         try:
             # 1. Obtener IDs de OPs con traspasos de turno pendientes
-            traspasos_pendientes_res = self.db.table('traspasos_turno').select('orden_produccion_id').eq('estado', 'PENDIENTE').execute()
+            traspasos_pendientes_res = self.db.schema('mes_kanban').table('traspasos_turno').select('orden_produccion_id').eq('estado', 'PENDIENTE').execute()
             op_ids_con_traspaso = []
             if traspasos_pendientes_res.data:
                 op_ids_con_traspaso = [item['orden_produccion_id'] for item in traspasos_pendientes_res.data]
