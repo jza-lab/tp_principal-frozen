@@ -21,7 +21,10 @@ def listar_registros():
         "Insumos": None, "Productos": None, "Ordenes de compra": None,
         "Ordenes de venta": None, "Ordenes de produccion": None,
         "Gestion de Empleados": {"Empleados": "Empleados", "Autorizaciones": "Autorizaciones"},
-        "Clientes": None, "Proveedores": None, "Reclamos": None, "Accesos": None,
+        "Clientes": None, "Proveedores": None, "Reclamos": None, 
+        "Accesos": {
+            "Sistema": "Accesos Sistema", "Totem": "Accesos Totem"
+        },
         "Alertas": {
             "Insumos": "Alertas Insumos", "Lotes": "Alertas Lotes", "Productos": "Alertas Productos"
         }
