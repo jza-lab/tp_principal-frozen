@@ -2,6 +2,8 @@ import logging
 from app.controllers.base_controller import BaseController
 from app.models.configuracion import ConfiguracionModel
 from typing import Tuple, Any
+from app.controllers.registro_controller import RegistroController
+from flask_jwt_extended import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,7 @@ class ConfiguracionController(BaseController):
     def __init__(self):
         super().__init__()
         self.model = ConfiguracionModel()
+        self.registro_controller = RegistroController()
 
     def obtener_valor_configuracion(self, clave: str, default: Any) -> Any:
         """
@@ -85,6 +88,8 @@ class ConfiguracionController(BaseController):
                 result = self.model.guardar_valor(DIAS_ALERTA_VENCIMIENTO_LOTE, str(dias))
                 
                 if result.get('success'):
+                    detalle = f"Se cambió el umbral de alerta de vencimiento de lotes a {dias} días."
+                    self.registro_controller.crear_registro(get_current_user(), 'Alertas Lotes', 'Configuración', detalle)
                     # CORRECCIÓN AQUÍ: self.success_response ya retorna (dict, 200).
                     return self.success_response(message="Días de alerta de vencimiento guardados correctamente.", data={'dias': dias})
                 else:

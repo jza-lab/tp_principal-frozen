@@ -15,6 +15,7 @@ from app.controllers.usuario_controller import UsuarioController
 from app.utils.date_utils import get_now_in_argentina
 from app.models.totem_2fa_token import Totem2FATokenModel
 from app.services.email_service import send_email
+from app.controllers.registro_controller import RegistroController
 
 try:
     import face_recognition
@@ -38,6 +39,7 @@ class FacialController:
         self.totem_sesion_model = TotemSesionModel()
         self.usuario_controller = UsuarioController()
         self.token_2fa_model = Totem2FATokenModel()
+        self.registro_controller = RegistroController()
         
         # Inicialización del caché para perfiles faciales
         self._cached_encodings = []
@@ -339,11 +341,23 @@ class FacialController:
                 return {'success': False, 'message': 'Error al registrar la sesión de entrada.'}
 
             self._registrar_evento_acceso("ingreso", usuario_id, metodo, resultado_sesion['data']['id'])
+            
+            from types import SimpleNamespace
+            usuario_log = SimpleNamespace(nombre=usuario.get('nombre'), apellido=usuario.get('apellido'), roles=[usuario.get('roles', {}).get('codigo')])
+            detalle = "Acceso al Tótem."
+            self.registro_controller.crear_registro(usuario_log, 'Accesos Totem', f"Ingreso por {metodo}", detalle)
+
             return {'success': True, 'tipo_acceso': 'ENTRADA', 'message': f"¡Bienvenido, {usuario_nombre}!"}
         else:
             # Lógica de SALIDA
             self.totem_sesion_model.cerrar_sesion(usuario_id)
             self._registrar_evento_acceso("egreso", usuario_id, metodo)
+            
+            from types import SimpleNamespace
+            usuario_log = SimpleNamespace(nombre=usuario.get('nombre'), apellido=usuario.get('apellido'), roles=[usuario.get('roles', {}).get('codigo')])
+            detalle = "Cierre de sesión en el Tótem."
+            self.registro_controller.crear_registro(usuario_log, 'Accesos Totem', 'Egreso', detalle)
+
             return {'success': True, 'tipo_acceso': 'SALIDA', 'message': f"¡Hasta luego, {usuario_nombre}!"}
 
     def _registrar_evento_acceso(self, tipo: str, usuario_id: int, metodo: str, sesion_id: Optional[int] = None):

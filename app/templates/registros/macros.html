@@ -13,7 +13,7 @@
         <tbody>
             {% for registro in registros %}
             <tr>
-                <td>{{ registro.fecha|format_datetime if registro.fecha else 'N/A' }}</td>
+                <td>{{ registro.fecha|format_datetime_art if registro.fecha else 'N/A' }}</td>
                 <td>{{ registro.usuario_nombre }}</td>
                 <td>{{ registro.usuario_rol }}</td>
                 <td>{{ registro.accion }}</td>

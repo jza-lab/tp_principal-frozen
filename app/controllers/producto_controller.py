@@ -290,6 +290,9 @@ class ProductoController(BaseController):
             data = {'activo': True}
             result = self.model.update(producto_id, data, 'id')
             if result['success']:
+                producto_habilitado = result.get('data')
+                detalle = f"Se habilitó el producto '{producto_habilitado['nombre']}' (ID: {producto_id})."
+                self.registro_controller.crear_registro(get_current_user(), 'Productos', 'Habilitación', detalle)
                 return self.success_response(message="Producto activado correctamente.")
             else:
                 return self.error_response(result['error'])
@@ -313,6 +316,9 @@ class ProductoController(BaseController):
             result = self.model.update(producto_id, update_data, 'id')
 
             if result.get('success'):
+                producto_actualizado = result.get('data')
+                detalle = f"Se actualizó el stock mínimo de producción para el producto '{producto_actualizado['nombre']}' a {stock_min}."
+                self.registro_controller.crear_registro(get_current_user(), 'Alertas Productos', 'Configuración', detalle)
                 return self.success_response(result.get('data'), "Stock mínimo actualizado correctamente.", 200)
             else:
                 return self.error_response(result.get('error', 'Error desconocido al actualizar.'), 500)
@@ -334,6 +340,9 @@ class ProductoController(BaseController):
             result = self.model.update(producto_id, update_data, 'id')
 
             if result.get('success'):
+                producto_actualizado = result.get('data')
+                detalle = f"Se actualizó la cantidad máxima por pedido para el producto '{producto_actualizado['nombre']}' a {cantidad_maxima}."
+                self.registro_controller.crear_registro(get_current_user(), 'Alertas Productos', 'Configuración', detalle)
                 return self.success_response(result.get('data'), "Cantidad máxima por pedido actualizada correctamente.", 200)
             else:
                 return self.error_response(result.get('error', 'Error desconocido al actualizar.'), 500)

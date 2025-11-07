@@ -50,7 +50,7 @@
 
     <div class="row" id="client-cards-container">
         {% for cliente in clientes %}
-        <div class="col-md-4 mb-4 client-card-wrapper" data-nombre="{{ cliente.nombre.lower() }}"
+        <div class="col-md-4 mb-4 client-card-wrapper" data-nombre="{{ (cliente.razon_social or cliente.nombre)|lower }}"
             data-codigo="{{ cliente.codigo.lower() or '' }}" data-cuit="{{ cliente.cuit.lower() or '' }}"
             data-status="{{ 'active' if cliente.activo else 'inactive' }}">
             <div class="card h-100 cliente-card {% if not cliente.activo %}insumo-inactivo{% endif %}">
@@ -58,7 +58,7 @@
 
                     <div class="d-flex justify-content-between align-items-start mb-3">
                         <div>
-                            <h5 class="card-title mb-0">{{ cliente.nombre }}</h5>
+                            <h5 class="card-title mb-0">{{ cliente.razon_social or cliente.nombre }}</h5>
                             <p class="text-muted small mb-0">CUIT: <code>{{ cliente.cuit }}</code></p>
                         </div>
                         {% if cliente.activo %}
