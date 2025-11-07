@@ -270,85 +270,74 @@ class InventarioModel(BaseModel):
 
     def calcular_y_actualizar_stock_general(self) -> Dict:
         """
-        Dispara el recálculo de stock para todos los insumos activos.
+        Calcula y actualiza el stock 'disponible' (actual) para todos los insumos,
+        considerando las reservas.
         """
         try:
-            # 1. Obtener todos los IDs de insumos activos del catálogo
-            catalogo_resp = self.db.table('insumos_catalogo').select('id_insumo').eq('activo', True).execute()
-            if not hasattr(catalogo_resp, 'data'):
-                raise Exception("No se pudo obtener el catálogo de insumos.")
-            
-            insumo_ids = [item['id_insumo'] for item in catalogo_resp.data]
+            logger.info("Iniciando recálculo de stock general para todos los insumos.")
+            # 1. Obtener el stock físico total por insumo desde la tabla de lotes (inventario)
+            stock_fisico_res = self.db.table(self.get_table_name()).select("id_insumo, cantidad_actual").execute()
+            if not hasattr(stock_fisico_res, 'data'):
+                raise Exception("No se pudo obtener el stock físico de los lotes.")
 
-            # 2. Iterar y llamar a la función de recálculo individual para cada uno
-            for insumo_id in insumo_ids:
-                # Se ignora el resultado, ya que la función interna maneja los errores.
-                self.recalcular_stock_para_insumo(insumo_id)
-            
-            logger.info(f"Recálculo de stock general completado para {len(insumo_ids)} insumos.")
-            return {'success': True}
+            stock_fisico_map = {}
+            for lote in stock_fisico_res.data:
+                insumo_id = lote.get('id_insumo')
+                if insumo_id:
+                    stock_fisico_map[insumo_id] = stock_fisico_map.get(insumo_id, 0.0) + float(lote.get('cantidad_actual', 0))
 
-        except Exception as e:
-            logger.error(f"Error al ejecutar el recálculo de stock general: {str(e)}")
-            return {'success': False, 'error': str(e)}
+            # 2. Obtener el total de reservas activas por insumo
+            reservas_res = self.db.table('reservas_insumos').select("insumo_id, cantidad_reservada").execute()
+            if not hasattr(reservas_res, 'data'):
+                raise Exception("No se pudo obtener las reservas de insumos.")
 
-    def recalcular_stock_para_insumo(self, insumo_id: str) -> Dict:
-        """
-        Calcula y actualiza el stock_actual y stock_total para un único insumo.
-        Esta es la fuente de verdad para los totales de stock.
-        """
-        try:
-            # 1. Obtener todos los lotes para el insumo que no estén en un estado terminal (agotado, rechazado).
-            lotes_resp = self.db.table(self.get_table_name()) \
-                .select('cantidad_actual', 'cantidad_en_cuarentena', 'estado') \
-                .eq('id_insumo', insumo_id) \
-                .not_.in_('estado', ['agotado', 'rechazado', 'retirado']) \
-                .execute()
+            reservas_map = {}
+            for reserva in reservas_res.data:
+                insumo_id = reserva.get('insumo_id')
+                if insumo_id:
+                    reservas_map[insumo_id] = reservas_map.get(insumo_id, 0.0) + float(reserva.get('cantidad_reservada', 0))
 
-            if not hasattr(lotes_resp, 'data'):
-                error_msg = f"Respuesta inesperada de la DB al buscar lotes para el insumo {insumo_id}."
-                logger.error(error_msg)
-                return {'success': False, 'error': error_msg}
+            # 3. Preparar la actualización masiva (upsert)
+            updates = []
+            todos_los_insumos_ids = set(stock_fisico_map.keys()) | set(reservas_map.keys())
 
-            # 2. Calcular los nuevos stocks con lógica refinada final.
-            nuevo_stock_actual = 0  # Usable: 'disponible' + porción disponible de 'en cuarentena'.
-            nuevo_stock_total = 0   # Físico: disponible + cuarentena + en revisión.
-
-            for lote in lotes_resp.data:
-                estado_lote = (lote.get('estado') or '').strip().lower()
-                cantidad_actual = float(lote.get('cantidad_actual') or 0)
-                cantidad_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
-
-                # El stock total es la suma de todo lo físico que existe y no está en estado terminal.
-                nuevo_stock_total += (cantidad_actual + cantidad_cuarentena)
+            for insumo_id in todos_los_insumos_ids:
+                fisico = stock_fisico_map.get(insumo_id, 0.0)
+                reservado = reservas_map.get(insumo_id, 0.0)
+                disponible = fisico - reservado
                 
-                # El stock disponible NO debe sumar la cantidad de lotes 'en revision'.
-                if estado_lote != 'en revision':
-                    nuevo_stock_actual += cantidad_actual
+                updates.append({
+                    'id_insumo': insumo_id,
+                    'stock_actual': disponible,
+                    'stock_total': fisico # stock_total representa el físico
+                })
+            
+            # 4. Ejecutar la actualización masiva si hay algo que actualizar
+            if updates:
+                (self.db.table('insumos_catalogo')
+                    .upsert(updates, on_conflict='id_insumo')
+                    .execute())
+                logger.info(f"Stock general actualizado para {len(updates)} insumos.")
 
-            # 3. Preparar el payload de actualización
-            update_payload = {
-                'stock_actual': nuevo_stock_actual,
-                'stock_total': nuevo_stock_total
-            }
+            # 5. Poner en cero el stock de insumos que NO tienen lotes ni reservas
+            insumos_en_catalogo_res = self.db.table('insumos_catalogo').select('id_insumo').execute()
+            insumos_en_catalogo_ids = {item['id_insumo'] for item in insumos_en_catalogo_res.data}
+            
+            insumos_a_cero = list(insumos_en_catalogo_ids - todos_los_insumos_ids)
+            
+            if insumos_a_cero:
+                (self.db.table('insumos_catalogo')
+                    .update({'stock_actual': 0, 'stock_total': 0})
+                    .in_('id_insumo', insumos_a_cero)
+                    .execute())
+                logger.info(f"{len(insumos_a_cero)} insumos sin lotes ni reservas fueron puestos a cero.")
 
-            # 4. Actualizar ambos stocks en la tabla 'insumos_catalogo'
-            update_resp = (self.db.table('insumos_catalogo')
-                           .update(update_payload)
-                           .eq('id_insumo', insumo_id)
-                           .execute())
-
-            if not hasattr(update_resp, 'data'):
-                 error_msg = f"Respuesta inesperada de la base de datos al actualizar el stock para el insumo {insumo_id}."
-                 logger.error(error_msg)
-                 return {'success': False, 'error': error_msg}
-
-            logger.info(f"Stock para el insumo {insumo_id} recalculado. Actual: {nuevo_stock_actual}, Total: {nuevo_stock_total}")
-            return {'success': True}
+            return {'success': True, 'message': 'Stock general recalculado exitosamente.'}
 
         except Exception as e:
-            logger.error(f"Error al recalcular el stock para el insumo {insumo_id}: {str(e)}")
+            logger.error(f"Error masivo al recalcular stock general: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
     def get_trazabilidad_ascendente(self, id_lote_insumo) -> Dict:
         """
         Obtiene la trazabilidad ascendente de un lote de insumo.

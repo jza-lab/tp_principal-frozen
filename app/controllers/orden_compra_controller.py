@@ -677,6 +677,14 @@ class OrdenCompraController:
 
                 lotes_creados, lotes_error = self._crear_lotes_para_items_recibidos(items_para_lote, orden_data, usuario_id)
 
+                # Si se crearon lotes, verificamos si alguna OP 'EN ESPERA' puede pasar a 'LISTA'.
+                if lotes_creados > 0:
+                    try:
+                        logger.info("Recepción de OC completada, iniciando verificación proactiva de Órdenes de Producción en espera.")
+                        orden_produccion_controller.verificar_y_actualizar_ordenes_en_espera()
+                    except Exception as e_op:
+                        logger.error(f"Error al ejecutar la verificación proactiva de OPs tras recibir la OC {orden_id}: {e_op}", exc_info=True)
+
                 if items_faltantes:
                     # --- INICIO DE LA CORRECCIÓN (Versión Robusta) ---
                     # 1. Crear un mapa con las cantidades recibidas directamente del formulario.
