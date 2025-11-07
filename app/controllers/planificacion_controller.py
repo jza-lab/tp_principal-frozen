@@ -258,6 +258,7 @@ class PlanificacionController(BaseController):
                 return {
                     'success': False,
                     'error': 'LATE_CONFIRM',
+                    'title': '⚠️ CONFIRMAR RETRASO:', # <-- TÍTULO AÑADIDO
                     'message': (f"⚠️ ¡Atención! La OP terminará el <b>{fecha_fin_estimada.isoformat()}</b>, "
                                 f"que es <b>después</b> de su Fecha Meta (<b>{fecha_meta_str}</b>).\n\n"
                                 f"¿Desea confirmar esta planificación de todos modos?"),
@@ -273,6 +274,7 @@ class PlanificacionController(BaseController):
                 return {
                     'success': False,
                     'error': 'MULTI_DIA_CONFIRM',
+                    'title': 'CONFIRMAR LOTE MULTI-DÍA:',
                     'message': (f"Esta OP requiere aproximadamente {dias_necesarios} días para completarse "
                                 f"(hasta {fecha_fin_estimada.isoformat()}). "
                                 f"¿Desea confirmar la planificación?"),
@@ -1090,16 +1092,13 @@ class PlanificacionController(BaseController):
     def _ejecutar_planificacion_automatica(self, usuario_id: int, dias_horizonte: int = 1) -> dict:
         """
         Lógica central para la planificación automática.
-        Intenta planificar OPs PENDIENTES en el horizonte dado.
-
-        --- CORREGIDO (Lógica de Fallback JIT Individual) ---
-        Si un grupo falla, el sistema ahora RE-CALCULA el JIT para cada
-        OP individual antes de intentar planificarla.
+        --- CORREGIDO ---
+        Mensajes de error generados en español para el modal de resumen.
         """
         dias_horizonte = 30
         logger.info(f"[AutoPlan] Iniciando ejecución para {dias_horizonte} día(s). Usuario: {usuario_id}")
 
-        # 1. Buscar OPs que ya tengan un Issue PENDIENTE
+        # ... (Lógica de exclusión de issues, sin cambios) ...
         ops_con_issue_ids = []
         try:
             response_issues = self.issue_planificacion_model.find_all({'estado': 'PENDIENTE'})
@@ -1113,7 +1112,7 @@ class PlanificacionController(BaseController):
         except Exception as e_issue:
             logger.error(f"[AutoPlan] Error al buscar issues pendientes, no se excluirá nada: {e_issue}")
 
-        # 2. Obtener OPs agrupadas
+        # ... (Lógica de 'obtener_ops_pendientes_planificacion', sin cambios) ...
         res_ops_pendientes, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte)
         if not res_ops_pendientes.get('success'):
             logger.error("[AutoPlan] Fallo al obtener OPs pendientes.")
@@ -1121,7 +1120,7 @@ class PlanificacionController(BaseController):
 
         grupos_a_planificar_raw = res_ops_pendientes.get('data', {}).get('mps_agrupado', [])
 
-        # 3. Filtrar grupos que contienen OPs con issues
+        # ... (Lógica de filtrado de grupos con issues, sin cambios) ...
         grupos_a_planificar = []
         ids_excluidos = set(ops_con_issue_ids)
         for grupo in grupos_a_planificar_raw:
@@ -1129,61 +1128,52 @@ class PlanificacionController(BaseController):
             if not ops_limpias_en_grupo:
                 logger.warning(f"[AutoPlan] Grupo de {grupo.get('producto_nombre')} omitido. Todas sus OPs tienen issues pendientes.")
                 continue
-
             if len(ops_limpias_en_grupo) < len(grupo['ordenes']):
                 logger.info(f"[AutoPlan] Re-calculando grupo de {grupo.get('producto_nombre')} (algunas OPs tenían issues).")
                 grupo['ordenes'] = ops_limpias_en_grupo
                 grupo['cantidad_total'] = sum(float(op.get('cantidad_planificada', 0)) for op in ops_limpias_en_grupo)
-
             grupos_a_planificar.append(grupo)
 
         if not grupos_a_planificar:
             logger.info("[AutoPlan] No se encontraron OPs pendientes (limpias de issues) en el horizonte.")
             return {'ops_planificadas': [], 'ops_con_oc': [], 'errores': []}
 
-        # 4. Definir contadores y fecha
+        # ... (Contadores y bucle 'for', sin cambios) ...
         ops_planificadas_exitosamente = []
         ops_con_oc_generada = []
         errores_encontrados = []
         fecha_planificacion_str = date.today().isoformat()
 
-        # 5. Iterar sobre cada grupo de producto
         for grupo in grupos_a_planificar:
             op_ids = [op['id'] for op in grupo['ordenes']]
             op_codigos = [op['codigo'] for op in grupo['ordenes']]
             producto_nombre = grupo.get('producto_nombre', 'N/A')
 
             try:
-                # 6. Determinar asignaciones para el GRUPO
+                # ... (Lógica de asignaciones_auto_grupo, sin cambios) ...
                 linea_sugerida_grupo = grupo.get('sugerencia_linea')
                 if not linea_sugerida_grupo:
                     msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) omitido: No hay línea sugerida."
                     logger.warning(f"[AutoPlan] {msg}")
                     errores_encontrados.append(msg)
                     continue
-
                 fecha_inicio_busqueda_grupo = grupo.get('sugerencia_fecha_inicio_jit', fecha_planificacion_str)
-
                 asignaciones_auto_grupo = {
                     'linea_asignada': linea_sugerida_grupo,
                     'fecha_inicio': fecha_inicio_busqueda_grupo,
-                    'supervisor_id': None,
-                    'operario_id': None
+                    'supervisor_id': None, 'operario_id': None
                 }
 
                 logger.info(f"[AutoPlan] Intentando planificar GRUPO {op_codigos} en Línea {linea_sugerida_grupo} (JIT Start: {fecha_inicio_busqueda_grupo})...")
 
-                # 7. Llamar a la SIMULACIÓN (no destructiva) para el GRUPO
                 res_planif_dict, res_planif_status = self.consolidar_y_aprobar_lote(
                     op_ids, asignaciones_auto_grupo, usuario_id
                 )
                 logger.debug(f"[DEBUG JIT] Resultado para GRUPO {op_codigos}: Status={res_planif_status}, Error='{res_planif_dict.get('error')}'")
 
-                # 8. Interpretar la respuesta
+                # ... (Lógica de 'if res_planif_status == 200 and res_planif_dict.get('success')', sin cambios) ...
                 if res_planif_status == 200 and res_planif_dict.get('success'):
-                    # ¡Éxito! El GRUPO se planificó
                     logger.info(f"[AutoPlan] ÉXITO: GRUPO {op_codigos} planificado.")
-                    # (Llamada a aprobación final para el grupo)
                     op_id_para_confirmar = res_planif_dict.get('op_id_confirmar')
                     asignaciones_para_confirmar = res_planif_dict.get('asignaciones_confirmar')
                     res_aprob_dict, status_aprob = self._ejecutar_aprobacion_final(
@@ -1199,8 +1189,8 @@ class PlanificacionController(BaseController):
                     else:
                         errores_encontrados.append(f"Grupo {op_codigos} simuló OK pero falló aprobación: {res_aprob_dict.get('error')}")
 
+                # ... (Lógica de 'elif res_planif_dict.get('error') == 'MULTI_DIA_CONFIRM'', sin cambios) ...
                 elif res_planif_dict.get('error') == 'MULTI_DIA_CONFIRM':
-                    # El GRUPO es multi-día y está a tiempo. Auto-aprobar el GRUPO.
                     logger.info(f"[AutoPlan] GRUPO {op_codigos} requiere {res_planif_dict.get('dias_necesarios')} días. Aprobando automáticamente...")
                     op_id_para_confirmar = res_planif_dict.get('op_id_confirmar')
                     asignaciones_para_confirmar = res_planif_dict.get('asignaciones_confirmar')
@@ -1214,7 +1204,7 @@ class PlanificacionController(BaseController):
                         if status_aprob < 400 and res_aprob_dict.get('success'):
                             logger.info(f"[AutoPlan] ÉXITO (Multi-Día): GRUPO {op_codigos} planificado.")
                             ops_planificadas_exitosamente.extend(op_codigos)
-                            if res_aprob_dict and res_aprob_dict.get('data') and res_aprob_dict['data'].get('oc_generada'):
+                            if res_aprob_dict and res_aprob_dict['data'] and res_aprob_dict['data'].get('oc_generada'):
                                 oc_codigo = res_aprob_dict['data'].get('oc_codigo', 'N/A')
                                 ops_con_oc_generada.append({'ops': op_codigos, 'oc': oc_codigo})
                         else:
@@ -1223,75 +1213,63 @@ class PlanificacionController(BaseController):
                     except Exception as e_aprob:
                          errores_encontrados.append(f"Excepción al auto-aprobar GRUPO {op_codigos}: {str(e_aprob)}")
 
-                # --- INICIO DE LA MODIFICACIÓN (LÓGICA DE FALLBACK) ---
                 elif res_planif_dict.get('error') in ['LATE_CONFIRM', 'SOBRECARGA_CAPACIDAD']:
-                    # El GRUPO falló (LATE o SOBRECARGA).
                     error_tipo_grupo = res_planif_dict.get('error')
+                    # --- INICIO DE LA CORRECCIÓN DE MENSAJE ---
+                    if error_tipo_grupo == 'LATE_CONFIRM':
+                        error_msg_grupo_es = f"el grupo consolidado terminaría TARDE (después de su Fecha Meta)."
+                    else:
+                        error_msg_grupo_es = f"el grupo consolidado genera SOBRECARGA de capacidad."
+                    # --- FIN DE LA CORRECCIÓN DE MENSAJE ---
 
                     if len(op_ids) > 1:
-                        # Si era un grupo de más de una OP, activamos el FALLBACK INDIVIDUAL.
                         logger.warning(f"[AutoPlan] GRUPO {op_codigos} falló ({error_tipo_grupo}). Intentando OPs individuales...")
-                        errores_encontrados.append(f"Grupo {op_codigos} falló como consolidado ({error_tipo_grupo}). Intentando OPs individuales...")
+                        errores_encontrados.append(f"Grupo {op_codigos} falló porque {error_msg_grupo_es} Intentando OPs individuales...")
 
-                        # Iteramos sobre cada OP original que estaba en el grupo
                         for op_individual in grupo['ordenes']:
                             op_id_individual = op_individual['id']
                             op_codigo_individual = op_individual['codigo']
 
                             logger.info(f"[AutoPlan/Fallback] Intentando OP individual: {op_codigo_individual} (ID: {op_id_individual})")
 
-                            # --- INICIO NUEVO CÁLCULO JIT INDIVIDUAL ---
+                            # ... (Lógica de Recálculo JIT Individual, sin cambios) ...
                             try:
                                 op_meta_str = op_individual.get('fecha_meta')
                                 op_meta_date = date.fromisoformat(op_meta_str.split('T')[0].split(' ')[0])
-
-                                # Llamamos al helper que calcula T_Prod, T_Proc y la fecha JIT
                                 jit_data_ind = self._calcular_tiempos_jit_op(
                                     cantidad=float(op_individual.get('cantidad_planificada', 0)),
                                     receta_id=op_individual.get('receta_id'),
                                     fecha_meta=op_meta_date,
                                     linea_compatible=op_individual.get('linea_compatible')
                                 )
-
                                 fecha_inicio_busqueda_ind = jit_data_ind['sugerencia_fecha_inicio_jit']
                                 linea_sugerida_ind = jit_data_ind['sugerencia_linea']
-
                                 if not linea_sugerida_ind:
                                     msg = f"OP {op_codigo_individual} (fallback) omitida: No hay línea sugerida individual."
                                     logger.warning(f"[AutoPlan/Fallback] {msg}")
                                     errores_encontrados.append(msg)
                                     continue
-
                                 logger.info(f"[AutoPlan/Fallback] JIT para {op_codigo_individual}: T_Proc={jit_data_ind['sugerencia_t_proc_dias']}d, T_Prod={jit_data_ind['sugerencia_t_prod_dias']}d -> Iniciar búsqueda en {fecha_inicio_busqueda_ind}")
-
                             except Exception as e_jit_ind:
                                 logger.warning(f"No se pudo calcular JIT para fallback {op_codigo_individual}. Usando 'hoy'. Error: {e_jit_ind}")
                                 fecha_inicio_busqueda_ind = fecha_planificacion_str
-                                linea_sugerida_ind = linea_sugerida_grupo # Fallback a la línea del grupo
-
+                                linea_sugerida_ind = linea_sugerida_grupo
                             asignaciones_individual = {
                                 'linea_asignada': linea_sugerida_ind,
                                 'fecha_inicio': fecha_inicio_busqueda_ind,
-                                'supervisor_id': None,
-                                'operario_id': None
+                                'supervisor_id': None, 'operario_id': None
                             }
-                            # --- FIN NUEVO CÁLCULO JIT INDIVIDUAL ---
 
                             try:
-                                # Llamamos a la simulación con UNA SOLA OP y su JIT INDIVIDUAL
                                 res_ind_dict, res_ind_status = self.consolidar_y_aprobar_lote(
-                                    [op_id_individual],
-                                    asignaciones_individual,
-                                    usuario_id
+                                    [op_id_individual], asignaciones_individual, usuario_id
                                 )
 
-                                # Re-evaluamos el resultado para esta OP individual
+                                # ... (Lógica de 'if res_ind_status == 200 and res_ind_dict.get('success')', sin cambios) ...
                                 if res_ind_status == 200 and res_ind_dict.get('success'):
-                                    # ÉXITO INDIVIDUAL (Caso OP "B" - 1 unidad)
                                     logger.info(f"[AutoPlan/Fallback] ÉXITO (1-día): OP {op_codigo_individual} simulada OK. Aprobando...")
                                     op_id_conf_ind = res_ind_dict.get('op_id_confirmar')
                                     asig_conf_ind = res_ind_dict.get('asignaciones_confirmar')
-
                                     res_aprob_ind_dict, status_aprob_ind = self._ejecutar_aprobacion_final(
                                         op_id_conf_ind, asig_conf_ind, usuario_id
                                     )
@@ -1306,9 +1284,8 @@ class PlanificacionController(BaseController):
                                     else:
                                         errores_encontrados.append(f"OP {op_codigo_individual} simuló OK pero falló aprobación: {res_aprob_ind_dict.get('error')}")
 
-
+                                # ... (Lógica de 'elif res_ind_dict.get('error') == 'MULTI_DIA_CONFIRM'', sin cambios) ...
                                 elif res_ind_dict.get('error') == 'MULTI_DIA_CONFIRM':
-                                    # ÉXITO INDIVIDUAL (MULTI-DÍA)
                                     logger.info(f"[AutoPlan/Fallback] OP {op_codigo_individual} es multi-día. Aprobando...")
                                     op_id_conf_ind = res_ind_dict.get('op_id_confirmar')
                                     asig_conf_ind = res_ind_dict.get('asignaciones_confirmar')
@@ -1332,9 +1309,16 @@ class PlanificacionController(BaseController):
                                         errores_encontrados.append(f"Excepción al auto-aprobar OP {op_codigo_individual} (fallback): {str(e_aprob_ind)}")
 
                                 elif res_ind_dict.get('error') in ['LATE_CONFIRM', 'SOBRECARGA_CAPACIDAD']:
-                                    # FALLA INDIVIDUAL (Caso OP "A" - 300 unidades)
+                                    # --- INICIO DE LA CORRECCIÓN DE MENSAJE ---
                                     error_tipo_ind = res_ind_dict.get('error')
-                                    msg = f"OP {op_codigo_individual} NO SE PLANIFICÓ (falla individual): {error_tipo_ind}. Requiere revisión manual."
+                                    if error_tipo_ind == 'LATE_CONFIRM':
+                                        error_msg_ind_es = "terminaría TARDE"
+                                    else:
+                                        error_msg_ind_es = "genera SOBRECARGA"
+
+                                    msg = f"OP {op_codigo_individual} NO SE PLANIFICÓ (falla individual): {error_msg_ind_es}. Requiere revisión manual."
+                                    # --- FIN DE LA CORRECCIÓN DE MENSAJE ---
+
                                     logger.warning(f"[AutoPlan/Fallback] {msg}")
                                     errores_encontrados.append(msg)
                                     self._crear_o_actualizar_issue(
@@ -1352,13 +1336,19 @@ class PlanificacionController(BaseController):
 
                     else:
                         # El GRUPO falló, pero solo tenía 1 OP.
-                        msg = f"Grupo {producto_nombre} (OP: {op_codigos[0]}) NO SE PLANIFICÓ: {error_tipo_grupo}. Requiere revisión manual."
+                        # --- INICIO DE LA CORRECCIÓN DE MENSAJE ---
+                        if error_tipo_grupo == 'LATE_CONFIRM':
+                            error_msg_es = "terminaría TARDE"
+                        else:
+                            error_msg_es = "genera SOBRECARGA"
+                        msg = f"Grupo {producto_nombre} (OP: {op_codigos[0]}) NO SE PLANIFICÓ: {error_msg_es}. Requiere revisión manual."
+                        # --- FIN DE LA CORRECCIÓN DE MENSAJE ---
+
                         logger.warning(f"[AutoPlan] {msg}")
                         errores_encontrados.append(msg)
                         self._crear_o_actualizar_issue(
                             op_ids[0], error_tipo_grupo, msg, res_planif_dict
                         )
-                # --- FIN DE LA MODIFICACIÓN ---
 
                 else:
                     msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló: {res_planif_dict.get('error', 'Desconocido')}"
@@ -1370,7 +1360,7 @@ class PlanificacionController(BaseController):
                 logger.error(f"[AutoPlan] {msg}", exc_info=True)
                 errores_encontrados.append(msg)
 
-        # 9. Devolver el resumen
+        # ... (Resumen final, sin cambios) ...
         resumen = {
             'ops_planificadas': ops_planificadas_exitosamente,
             'ops_con_oc': ops_con_oc_generada,

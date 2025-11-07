@@ -89,7 +89,20 @@
                             </td>
                             <td class="text-warning-emphasis">
                                 <i class="bi bi-exclamation-triangle me-1"></i>
-                                <strong>{{ issue.tipo_error.replace('_', ' ') }}:</strong>
+                                
+                                {# --- INICIO DE LA CORRECCIÓN --- #}
+                                {# Traducimos la clave de error al español #}
+                                {% set error_key = issue.tipo_error %}
+                                {% if error_key == 'LATE_CONFIRM' %}
+                                    <strong>RETRASO CONFIRMADO:</strong>
+                                {% elif error_key == 'SOBRECARGA_CAPACIDAD' %}
+                                    <strong>SOBRECARGA DE CAPACIDAD:</strong>
+                                {% else %}
+                                    {# Fallback por si hay otros errores #}
+                                    <strong>{{ error_key.replace('_', ' ') }}:</strong>
+                                {% endif %}
+                                {# --- FIN DE LA CORRECCIÓN --- #}
+                                
                                 <span class="text-muted">{{ issue.mensaje }}</span>
                             </td>
                             <td class="text-center">
