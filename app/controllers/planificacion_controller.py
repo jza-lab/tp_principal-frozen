@@ -55,37 +55,72 @@ class PlanificacionController(BaseController):
             return self.error_response(f"Error interno: {str(e)}", 500)
 
     # --- HELPER: Ejecuta la aprobación final ---
-    def _ejecutar_aprobacion_final(self, op_id: int, asignaciones: dict, usuario_id: int) -> tuple:
-        """ Ejecuta los pasos de pre-asignación y confirmación/aprobación. """
+    def _ejecutar_aprobacion_final(self, op_id: any, asignaciones: dict, usuario_id: int) -> tuple:
+        """
+        Ejecuta los pasos de pre-asignación y confirmación/aprobación.
+        --- CORREGIDO ---
+        'op_id' ahora puede ser un INT (una OP) o una LIST (grupo de OPs).
+        Si es una LISTA, primero ejecuta la consolidación.
+        """
         try:
-            # --- ¡AÑADIR ESTA LÍNEA! ---
-            self._resolver_issue_por_op(op_id) # Borra el issue
-            # ---------------------------
-            # PASO Pre-Asignar: Asegúrate de pasar todos los datos relevantes
+            op_id_real_a_planificar = None
+
+            if isinstance(op_id, list):
+                # Es un grupo, debemos consolidarlo AHORA
+                if len(op_id) > 1:
+                    logger.info(f"[Aprobación] Consolidando grupo de OPs: {op_id}")
+                    # 1. Llamar al controlador de OP para crear la "Super OP"
+                    resultado_consol = self.orden_produccion_controller.consolidar_ordenes_produccion(op_id, usuario_id)
+                    if not resultado_consol.get('success'):
+                        logger.error(f"Fallo al consolidar el grupo {op_id} durante la aprobación final: {resultado_consol.get('error')}")
+                        return self.error_response(f"Error al consolidar grupo: {resultado_consol.get('error')}", 500)
+
+                    op_id_real_a_planificar = resultado_consol.get('data', {}).get('id')
+                    if not op_id_real_a_planificar:
+                         return self.error_response("La consolidación fue exitosa pero no devolvió un ID.", 500)
+                    logger.info(f"[Aprobación] Grupo consolidado en nueva Super OP: {op_id_real_a_planificar}")
+
+                elif len(op_id) == 1:
+                    # Es una lista con un solo ID (del fallback)
+                    op_id_real_a_planificar = op_id[0]
+                else:
+                    return self.error_response("Se intentó aprobar un grupo vacío.", 400)
+
+            elif isinstance(op_id, int):
+                # Es una OP individual
+                op_id_real_a_planificar = op_id
+
+            if not op_id_real_a_planificar:
+                 return self.error_response("ID de OP inválido para aprobación final.", 400)
+
+            # --- A partir de aquí, el flujo es el mismo, pero usa op_id_real_a_planificar ---
+
+            self._resolver_issue_por_op(op_id_real_a_planificar)
+
+            if isinstance(op_id, list):
+                for op_hija_id in op_id:
+                    self._resolver_issue_por_op(op_hija_id) # Resolver issues de las OPs hijas
+
             datos_pre_asignar = {
                 'linea_asignada': asignaciones.get('linea_asignada'),
                 'supervisor_responsable_id': asignaciones.get('supervisor_id'),
                 'operario_asignado_id': asignaciones.get('operario_id')
             }
-            datos_pre_asignar = {k: v for k, v in datos_pre_asignar.items() if v is not None} # Limpiar Nones
+            datos_pre_asignar = {k: v for k, v in datos_pre_asignar.items() if v is not None}
 
             res_pre_asig_dict, res_pre_asig_status = self.orden_produccion_controller.pre_asignar_recursos(
-                op_id, datos_pre_asignar, usuario_id
+                op_id_real_a_planificar, datos_pre_asignar, usuario_id
             )
             if res_pre_asig_status >= 400: return res_pre_asig_dict, res_pre_asig_status
 
-            # PASO Confirmar Inicio y Aprobar
             res_conf_dict, res_conf_status = self.orden_produccion_controller.confirmar_inicio_y_aprobar(
-                op_id, {'fecha_inicio_planificada': asignaciones.get('fecha_inicio')}, usuario_id
+                op_id_real_a_planificar, {'fecha_inicio_planificada': asignaciones.get('fecha_inicio')}, usuario_id
             )
             return res_conf_dict, res_conf_status
+
         except Exception as e:
-            logger.error(f"Error en _ejecutar_aprobacion_final para OP {op_id}: {e}", exc_info=True)
-            # --- CORRECCIÓN AQUÍ ---
-            # Devolver tupla explícitamente
-            error_dict = self.error_response(f"Error interno al ejecutar aprobación final: {str(e)}", 500)
-            return error_dict, 500
-        # ----------------------
+            logger.error(f"Error en _ejecutar_aprobacion_final para OP(s) {op_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno al ejecutar aprobación final: {str(e)}", 500)
 
     def _ejecutar_replanificacion_simple(self, op_id: int, asignaciones: dict, usuario_id: int) -> tuple:
         """
@@ -123,155 +158,115 @@ class PlanificacionController(BaseController):
     # --- MÉTODO PRINCIPAL MODIFICADO ---
     def consolidar_y_aprobar_lote(self, op_ids: List[int], asignaciones: dict, usuario_id: int) -> tuple:
         """
-        Orquesta: Consolida, VERIFICA CAPACIDAD MULTI-DÍA,
-        SI CABE EN 1 DÍA -> Aprueba.
-        SI CABE EN >1 DÍA -> Devuelve CONFIRMACIÓN.
-        SI NO CABE -> Devuelve SOBRECARGA.
+        Orquesta: SIMULA la consolidación, VERIFICA CAPACIDAD MULTI-DÍA,
+        y devuelve el resultado de la simulación (OK, LATE, MULTI_DIA, SOBRECARGA).
+        DEVUELVE TUPLA (dict, status_code)
         """
         try:
             op_a_planificar_id, op_data = self._obtener_datos_op_a_planificar(op_ids, usuario_id)
 
-            # --- CORRECCIÓN AQUÍ ---
-            if not op_a_planificar_id:
-                error_dict = self.error_response(op_data, 500) # op_data tiene el mensaje de error
-                return error_dict, 500
-            # ----------------------
+            if not op_data:
+                return self.error_response(op_a_planificar_id, 500) # op_a_planificar_id tiene el msg de error
 
-            # --- ¡VALIDACIÓN AÑADIDA! ---
             op_estado_actual = op_data.get('estado')
             estados_permitidos = ['PENDIENTE', 'EN ESPERA', 'LISTA PARA PRODUCIR']
 
             if op_estado_actual not in estados_permitidos:
                 msg = f"La OP {op_a_planificar_id} en estado '{op_estado_actual}' no puede ser (re)planificada."
                 logger.warning(msg)
-                return self.error_response(msg, 400), 400
+                return self.error_response(msg, 400)
 
-            # Si es una consolidación (len > 1), DEBE estar en PENDIENTE
-            if len(op_ids) > 1 and op_estado_actual != 'PENDIENTE':
-                msg = "La consolidación solo es posible para OPs en estado PENDIENTE."
-                logger.warning(msg)
-                return self.error_response(msg, 400), 400
-            # --- FIN VALIDACIÓN AÑADIDA ---
+            if isinstance(op_a_planificar_id, list) and len(op_a_planificar_id) > 1 and op_estado_actual != 'PENDIENTE':
+                 msg = "La consolidación solo es posible para OPs en estado PENDIENTE."
+                 logger.warning(msg)
+                 return self.error_response(msg, 400)
 
             linea_propuesta = asignaciones.get('linea_asignada')
             fecha_inicio_propuesta_str = asignaciones.get('fecha_inicio')
             if not linea_propuesta or not fecha_inicio_propuesta_str:
-             error_dict = self.error_response("Faltan línea o fecha.", 400)
-             return error_dict, 400
+                 return self.error_response("Faltan línea o fecha.", 400)
             try: fecha_inicio_propuesta = date.fromisoformat(fecha_inicio_propuesta_str)
             except ValueError:
-                 # --- CORRECCIÓN AQUÍ ---
-                 error_dict = self.error_response("Formato fecha inválido.", 400)
-                 return error_dict, 400
-                 # ----------------------
+                 return self.error_response("Formato fecha inválido.", 400)
 
-            logger.info(f"Verificando capacidad multi-día para OP {op_a_planificar_id} en Línea {linea_propuesta} desde {fecha_inicio_propuesta_str}...")
+            id_a_excluir_en_sim = op_a_planificar_id if isinstance(op_a_planificar_id, int) else None
+
+            logger.info(f"Verificando capacidad multi-día para OP(s) {op_a_planificar_id} en Línea {linea_propuesta} desde {fecha_inicio_propuesta_str}...")
 
             carga_adicional_total = float(self._calcular_carga_op(op_data))
-            dias_necesarios = 0
-            fecha_fin_estimada = fecha_inicio_propuesta
 
             if carga_adicional_total <= 0:
-                 logger.warning(f"OP {op_a_planificar_id} con carga 0. Saltando verificación CRP.")
+                 logger.warning(f"OP(s) {op_a_planificar_id} con carga 0. Saltando verificación CRP.")
                  dias_necesarios = 1
                  fecha_fin_estimada = fecha_inicio_propuesta
+                 primer_dia_asignado = fecha_inicio_propuesta
             else:
-                carga_restante_op = carga_adicional_total
-                fecha_actual_simulacion = fecha_inicio_propuesta
-                dia_actual_offset = 0
-                max_dias_simulacion = 30
-
-                # --- MODIFICADO: Nuevas variables para rastrear el inicio real ---
-                primer_dia_asignado = None
-                fecha_fin_estimada = fecha_inicio_propuesta # Se actualizará al último día USADO
-                # ----------------------------------------------------------------
-
-                # --- ¡NUEVA LLAMADA AL HELPER DE SIMULACIÓN! ---
-
-                # 1. Obtener el mapa de carga actual de TODAS las OPs EXCEPTO la que estamos planificando
                 filtros_ops = {
                     'estado': ('in', [
                         'EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1',
                         'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD'
                     ]),
-                    'id': ('not.in', [op_a_planificar_id]) # <-- Excluir la OP actual
                 }
+                if id_a_excluir_en_sim:
+                    filtros_ops['id'] = ('not.in', [id_a_excluir_en_sim])
+
                 ops_resp, _ = self.orden_produccion_controller.obtener_ordenes(filtros_ops)
                 ops_actuales = ops_resp.get('data', []) if ops_resp.get('success') else []
-
-                logger.info(f"[consolidar_lote] Calculando carga actual basada en {len(ops_actuales)} OPs (excluyendo {op_a_planificar_id})...")
+                logger.info(f"[consolidar_lote] Calculando carga actual basada en {len(ops_actuales)} OPs (excluyendo {id_a_excluir_en_sim})...")
                 carga_actual_map = self.calcular_carga_capacidad(ops_actuales)
-                # --- DEBUG LOG ---
-                logger.debug(f"[DEBUG JIT] Mapa de carga actual para {op_a_planificar_id}: {carga_actual_map}")
-                # --- FIN DEBUG ---
 
-                # 2. Llamar al simulador pasándole el mapa de carga
                 simulacion_result = self._simular_asignacion_carga(
                     carga_total_op=carga_adicional_total,
                     linea_propuesta=linea_propuesta,
                     fecha_inicio_busqueda=fecha_inicio_propuesta,
-                    op_id_a_excluir=op_a_planificar_id, # (Este ya no es necesario, pero no hace daño)
-                    carga_actual_map=carga_actual_map # <-- ¡PASAR EL MAPA DE CARGA REAL!
+                    op_id_a_excluir=id_a_excluir_en_sim,
+                    carga_actual_map=carga_actual_map
                 )
 
                 if not simulacion_result['success']:
-                    # La simulación falló (Sobrecarga)
-                    logger.warning(f"SOBRECARGA para OP {op_a_planificar_id}: {simulacion_result['error_data'].get('message')}")
+                    logger.warning(f"SOBRECARGA para OP(s) {op_a_planificar_id}: {simulacion_result['error_data'].get('message')}")
                     # Devolvemos el diccionario de error y el status 409
                     return simulacion_result['error_data'], 409
 
-                # Si la simulación fue exitosa, extraemos los datos
                 primer_dia_asignado = simulacion_result['fecha_inicio_real']
                 fecha_fin_estimada = simulacion_result['fecha_fin_estimada']
                 dias_necesarios = simulacion_result['dias_necesarios']
 
-                # --- DEBUG LOG ---
-                logger.debug(f"[DEBUG JIT] Simulación para {op_a_planificar_id} OK. Resultado: {simulacion_result}")
-                # --- FIN DEBUG ---
-
-                # --- ¡NUEVA VALIDACIÓN DE FECHA META! ---
                 fecha_meta_str = op_data.get('fecha_meta')
                 va_a_terminar_tarde = False
                 fecha_meta = None
                 if fecha_meta_str:
                     try:
-                        # --- ¡CORRECCIÓN ROBUSTA! ---
-                        # Maneja '2025-11-05T00:00...' Y '2025-11-05 00:00'
                         fecha_meta_solo_str = fecha_meta_str.split('T')[0].split(' ')[0]
                         fecha_meta = date.fromisoformat(fecha_meta_solo_str)
-                        # --- FIN CORRECCIÓN ---
-
                         if fecha_fin_estimada > fecha_meta:
                             va_a_terminar_tarde = True
                             logger.warning(f"Validación OP {op_a_planificar_id}: Terminará tarde (Fin: {fecha_fin_estimada}, Meta: {fecha_meta})")
-                            # --- DEBUG LOG ---
-                            logger.debug(f"[DEBUG JIT] Comparación: va_a_terminar_tarde = ({fecha_fin_estimada} > {fecha_meta}) -> {va_a_terminar_tarde}")
-                            # --- FIN DEBUG ---
                     except ValueError:
-                        logger.warning(f"OP {op_a_planificar_id} tiene fecha meta inválida: {fecha_meta_str}")
+                         logger.warning(f"OP {op_a_planificar_id} tiene fecha meta inválida: {fecha_meta_str}")
 
-                # ¡IMPORTANTE! Actualizar la fecha de inicio en 'asignaciones' a la real encontrada
-                asignaciones['fecha_inicio'] = primer_dia_asignado.isoformat()
+            asignaciones['fecha_inicio'] = primer_dia_asignado.isoformat()
 
-                logger.info(f"Verificación CRP OK. OP {op_a_planificar_id} requiere ~{dias_necesarios} día(s).")
-                logger.info(f"Inicio real: {primer_dia_asignado.isoformat()}, Fin aprox: {fecha_fin_estimada.isoformat()}.")
+            id_para_confirmar = op_a_planificar_id
 
-            # --- LÓGICA DE DECISIÓN MODIFICADA ---
+            logger.info(f"Verificación CRP OK. OP(s) {op_a_planificar_id} requiere ~{dias_necesarios} día(s).")
+            logger.info(f"Inicio real: {primer_dia_asignado.isoformat()}, Fin aprox: {fecha_fin_estimada.isoformat()}.")
+
             if va_a_terminar_tarde:
-                # 1. Si va a terminar tarde, FORZAR confirmación (incluso si es 1 día)
+                # 1. Si va a terminar tarde
+                # (Devolver 200 OK para que el frontend/auto-planner lo maneje)
                 return {
                     'success': False,
-                    'error': 'LATE_CONFIRM', # <-- Nuevo tipo de error
+                    'error': 'LATE_CONFIRM',
                     'message': (f"⚠️ ¡Atención! La OP terminará el <b>{fecha_fin_estimada.isoformat()}</b>, "
                                 f"que es <b>después</b> de su Fecha Meta (<b>{fecha_meta_str}</b>).\n\n"
-                                f"Esto se debe a la falta de capacidad en la Línea {linea_propuesta}.\n\n"
                                 f"¿Desea confirmar esta planificación de todos modos?"),
                     'fecha_fin_estimada': fecha_fin_estimada.isoformat(),
                     'fecha_meta': fecha_meta_str,
-                    'op_id_confirmar': op_a_planificar_id,
+                    'op_id_confirmar': id_para_confirmar,
                     'asignaciones_confirmar': asignaciones,
                     'estado_actual': op_estado_actual
-                }, 200 # Usar 200 OK para que el frontend lo maneje como confirmación
+                }, 200
 
             elif dias_necesarios > 1:
                 # 2. Si es multi-día PERO está a tiempo
@@ -279,55 +274,102 @@ class PlanificacionController(BaseController):
                     'success': False,
                     'error': 'MULTI_DIA_CONFIRM',
                     'message': (f"Esta OP requiere aproximadamente {dias_necesarios} días para completarse "
-                                f"(hasta {fecha_fin_estimada.isoformat()}) debido a la capacidad de la línea. "
+                                f"(hasta {fecha_fin_estimada.isoformat()}). "
                                 f"¿Desea confirmar la planificación?"),
                     'dias_necesarios': dias_necesarios,
                     'fecha_fin_estimada': fecha_fin_estimada.isoformat(),
-                    'op_id_confirmar': op_a_planificar_id,
+                    'op_id_confirmar': id_para_confirmar,
                     'asignaciones_confirmar': asignaciones,
                     'estado_actual': op_estado_actual
                 }, 200
             else:
                 # 3. Cabe en un día y está a tiempo
-                logger.info(f"OP cabe en un día. Decidiendo flujo por estado '{op_estado_actual}'...")
-                if op_estado_actual == 'PENDIENTE':
-                    # ... (lógica 'PENDIENTE' sin cambios) ...
-                    logger.info("Estado es PENDIENTE. Ejecutando aprobación final...")
-                    return self._ejecutar_aprobacion_final(op_a_planificar_id, asignaciones, usuario_id)
-                else:
-                    # ... (lógica 're-planificación' sin cambios) ...
-                    logger.info(f"Estado es {op_estado_actual}. Ejecutando re-planificación simple...")
-                    return self._ejecutar_replanificacion_simple(op_a_planificar_id, asignaciones, usuario_id)
-            # --- FIN LÓGICA DE DECISIÓN ---
+                logger.info(f"OP(s) {op_a_planificar_id} cabe en un día y está a tiempo. Simulación OK.")
+                return {
+                   'success': True,
+                   'error': None,
+                   'message': "Simulación OK. Lista para aprobación final.",
+                   'op_id_confirmar': id_para_confirmar,
+                   'asignaciones_confirmar': asignaciones,
+                   'estado_actual': op_estado_actual
+                }, 200
 
         except Exception as e:
             logger.error(f"Error crítico en consolidar_y_aprobar_lote: {e}", exc_info=True)
-            # --- CORRECCIÓN AQUÍ ---
-            error_dict = self.error_response(f"Error interno: {str(e)}", 500)
-            return error_dict, 500
-            # ----------------------
+            return self.error_response(f"Error interno: {str(e)}", 500)
 
     # --- NUEVO HELPER para obtener datos OP (MODIFICADO) ---
-    def _obtener_datos_op_a_planificar(self, op_ids: List[int], usuario_id: int) -> tuple: # <-- AÑADIR usuario_id
-        """ Obtiene los datos de la OP (consolidada o individual). Devuelve (id, data) o (None, error_msg). """
-        op_a_planificar_id = None
-        op_data = None
-        if len(op_ids) > 1:
-            # --- PASAR usuario_id ---
-            resultado_consol = self.orden_produccion_controller.consolidar_ordenes_produccion(op_ids, usuario_id) # <-- USAR el usuario_id recibido
-            # ------------------------
-            if not resultado_consol.get('success'): return None, f"Error al consolidar: {resultado_consol.get('error')}"
-            op_a_planificar_id = resultado_consol.get('data', {}).get('id')
-            op_data = resultado_consol.get('data')
-        else:
+    def _obtener_datos_op_a_planificar(self, op_ids: List[int], usuario_id: int) -> tuple:
+        """
+        Obtiene los datos de la OP.
+        --- CORREGIDO ---
+        Si es un grupo (op_ids > 1), SIMULA la consolidación en memoria
+        en lugar de crear la "Super OP" en la base de datos.
+        Devuelve (id, data) o (None, error_msg).
+        El 'id' será el id real si es 1 OP, o una lista de IDs si es un grupo.
+        """
+        if len(op_ids) == 1:
+            # Flujo para una sola OP
             op_a_planificar_id = op_ids[0]
             op_result = self.orden_produccion_controller.obtener_orden_por_id(op_a_planificar_id)
-            if not op_result.get('success'): return None, f"No se encontró la OP ID {op_a_planificar_id}."
+            if not op_result.get('success'):
+                return None, f"No se encontró la OP ID {op_a_planificar_id}."
             op_data = op_result.get('data')
+            return op_a_planificar_id, op_data
 
-        if not op_a_planificar_id or not op_data: return None, "No se pudieron obtener los datos de la OP."
-        return op_a_planificar_id, op_data
+        elif len(op_ids) > 1:
+            # Flujo para un GRUPO: Simular la consolidación en memoria
+            try:
+                # 1. Obtener los datos de las OPs originales
+                ops_res = self.orden_produccion_controller.model.find_by_ids(op_ids)
+                if not ops_res.get('success') or not ops_res.get('data'):
+                    return None, "No se pudieron encontrar las OPs para simular la consolidación."
 
+                ops_originales = ops_res['data']
+
+                # 2. Validar que no estén ya consolidadas (importante para el fallback)
+                for op in ops_originales:
+                    if op.get('estado') != 'PENDIENTE':
+                        msg = f"La OP {op.get('codigo')} (ID: {op.get('id')}) está en estado '{op.get('estado')}' y no puede ser consolidada."
+                        logger.warning(f"[Simulación] {msg}")
+                        return None, msg
+
+                # 3. Calcular los datos consolidados (lógica copiada de _calcular_datos_super_op)
+                cantidad_total = sum(Decimal(op['cantidad_planificada']) for op in ops_originales)
+                primera_op = ops_originales[0]
+                fechas_meta_originales = []
+
+                for op in ops_originales:
+                    fecha_meta_str = op.get('fecha_meta')
+                    if fecha_meta_str:
+                        try:
+                            fecha_meta_solo_str = fecha_meta_str.split('T')[0].split(' ')[0]
+                            fechas_meta_originales.append(date.fromisoformat(fecha_meta_solo_str))
+                        except ValueError:
+                            logger.warning(f"Formato de fecha meta inválido en OP {op.get('id')}: {fecha_meta_str}")
+
+                fecha_meta_mas_temprana = min(fechas_meta_originales) if fechas_meta_originales else None
+
+                # 4. Crear el diccionario de "Super OP" simulada
+                op_data_simulada = {
+                    'id': None, # No tiene ID real todavía
+                    'op_ids_originales': op_ids, # Guardamos los IDs originales
+                    'producto_id': primera_op['producto_id'],
+                    'cantidad_planificada': str(cantidad_total),
+                    'receta_id': primera_op['receta_id'],
+                    'fecha_meta': fecha_meta_mas_temprana.isoformat() if fecha_meta_mas_temprana else None,
+                    'estado': 'PENDIENTE'
+                }
+
+                # Usamos la lista de IDs como 'ID' para la simulación
+                return op_ids, op_data_simulada
+
+            except Exception as e:
+                logger.error(f"Error simulando consolidación para {op_ids}: {e}", exc_info=True)
+                return None, f"Error interno al simular consolidación: {str(e)}"
+
+        else:
+            return None, "No se proporcionaron IDs de OP."
     # --- NUEVO HELPER para calcular carga de una OP ---
     def _calcular_carga_op(self, op_data: Dict) -> Decimal:
         """ Calcula la carga total en minutos para una OP dada. """
@@ -517,9 +559,13 @@ class PlanificacionController(BaseController):
     def obtener_ops_pendientes_planificacion(self, dias_horizonte: int = 7) -> tuple:
         """
         Obtiene OPs PENDIENTES, agrupa, calcula sugerencias Y AÑADE unidad_medida y linea_compatible.
+
+        --- CORREGIDO ---
+        Agrupa las OPs no solo por producto, sino por [Producto + Semana de Entrega (Fecha Meta)]
+        para evitar que la planificación automática consolide lotes con fechas incompatibles.
         """
         try:
-            # 1. Calcular rango y filtrar OPs (sin cambios)
+            # 1. Calcular rango y filtrar OPs
             hoy = date.today()
             dias_horizonte_int = int(dias_horizonte)
             fecha_fin_horizonte = hoy + timedelta(days=dias_horizonte_int)
@@ -528,54 +574,70 @@ class PlanificacionController(BaseController):
                 'fecha_meta_desde': hoy.isoformat(),
                 'fecha_meta_hasta': fecha_fin_horizonte.isoformat()
             }
-            # Asume que obtener_ordenes trae 'producto_unidad_medida' gracias a get_all_enriched
             response, _ = self.orden_produccion_controller.obtener_ordenes(filtros)
             if not response.get('success'):
                 logger.error(f"Error al obtener OPs pendientes para MPS: {response.get('error')}")
                 return self.error_response("Error al cargar órdenes pendientes.")
             ordenes_en_horizonte = response.get('data', [])
 
-            # 2. Agrupar por Producto y calcular totales
+            # 2. Agrupar por Producto y SEMANA
             mps_agrupado = defaultdict(lambda: {
+                'producto_id': 0,
+                'producto_nombre': '',
                 'cantidad_total': 0,
                 'ordenes': [],
                 'fecha_meta_mas_proxima': None,
                 'receta_id': None,
-                'unidad_medida': None # <-- Inicializar unidad_medida
+                'unidad_medida': None
             })
+
             for op in ordenes_en_horizonte:
                 producto_id = op.get('producto_id')
-                producto_nombre = op.get('producto_nombre', 'Desconocido')
-                cantidad = op.get('cantidad_planificada', 0)
-                fecha_meta_op_str = op.get('fecha_meta')
-                receta_id_op = op.get('receta_id')
-                unidad_medida_op = op.get('producto_unidad_medida') # <-- Obtener unidad de medida
+                if not producto_id: continue
 
-                if not producto_id or cantidad <= 0 or not receta_id_op: continue
+                # --- INICIO DE LA MODIFICACIÓN DE AGRUPACIÓN ---
+                op_fecha_meta_str = op.get('fecha_meta')
+                grupo_key = ""
+                op_fecha_meta = None
 
-                clave_producto = (producto_id, producto_nombre)
-                mps_agrupado[clave_producto]['cantidad_total'] += float(cantidad)
-                mps_agrupado[clave_producto]['ordenes'].append(op)
-                if mps_agrupado[clave_producto]['receta_id'] is None:
-                    mps_agrupado[clave_producto]['receta_id'] = receta_id_op
-                if mps_agrupado[clave_producto]['unidad_medida'] is None and unidad_medida_op: # <-- Guardar unidad de medida
-                    mps_agrupado[clave_producto]['unidad_medida'] = unidad_medida_op
+                if op_fecha_meta_str:
+                    try:
+                        op_fecha_meta = date.fromisoformat(op_fecha_meta_str.split('T')[0].split(' ')[0])
+                        year, week, _ = op_fecha_meta.isocalendar()
+                        # Crear clave compuesta: "ProductID-Year-Week"
+                        grupo_key = f"{producto_id}-{year}-{week}"
+                    except ValueError:
+                        logger.warning(f"OP {op.get('id')} tiene fecha meta inválida: {op_fecha_meta_str}. Agrupando sin semana.")
+                        grupo_key = f"{producto_id}-FECHA_INVALIDA"
+                else:
+                    grupo_key = f"{producto_id}-NO_META"
 
-                # ... (lógica fecha_meta_mas_proxima sin cambios) ...
-                fecha_meta_mas_proxima_actual = mps_agrupado[clave_producto]['fecha_meta_mas_proxima']
-                if fecha_meta_op_str:
-                     # El string puede venir como 'YYYY-MM-DD' o 'YYYY-MM-DDTHH:MM:SS...'
-                     # Al hacer split('T'), nos aseguramos de tomar solo la parte de la fecha.
-                     fecha_solo_str = fecha_meta_op_str.split('T')[0]
-                     fecha_meta_op = date.fromisoformat(fecha_solo_str)
-                     if fecha_meta_mas_proxima_actual is None or fecha_meta_op < date.fromisoformat(fecha_meta_mas_proxima_actual.split('T')[0]):
-                          mps_agrupado[clave_producto]['fecha_meta_mas_proxima'] = fecha_meta_op_str
+                item = mps_agrupado[grupo_key]
+                # --- FIN DE LA MODIFICACIÓN DE AGRUPACIÓN ---
+
+                item['producto_id'] = producto_id
+                item['producto_nombre'] = op.get('producto_nombre', 'Desconocido')
+                item['cantidad_total'] += float(op.get('cantidad_planificada', 0))
+                item['ordenes'].append(op)
+
+                if item['receta_id'] is None:
+                    item['receta_id'] = op.get('receta_id')
+                if item['unidad_medida'] is None:
+                    item['unidad_medida'] = op.get('producto_unidad_medida')
+
+                # Encontrar la fecha meta más próxima DENTRO de este grupo
+                if op_fecha_meta:
+                    fecha_meta_mas_proxima_actual_str = item.get('fecha_meta_mas_proxima')
+                    if fecha_meta_mas_proxima_actual_str:
+                        fecha_meta_actual = date.fromisoformat(fecha_meta_mas_proxima_actual_str.split('T')[0].split(' ')[0])
+                        if op_fecha_meta < fecha_meta_actual:
+                            item['fecha_meta_mas_proxima'] = op_fecha_meta_str
+                    else:
+                        item['fecha_meta_mas_proxima'] = op_fecha_meta_str
 
 
             # 3. Calcular sugerencia agregada (T_Prod, Línea, T_Proc, Stock)
-            # Ya tienes receta_model e insumo_model inicializados en __init__
-
-            for clave_producto, data in mps_agrupado.items():
+            for grupo_key, data in mps_agrupado.items():
                 cantidad_total_agrupada = data['cantidad_total']
                 receta_id_agrupada = data['receta_id']
 
@@ -585,35 +647,29 @@ class PlanificacionController(BaseController):
                 data['sugerencia_t_proc_dias'] = 0
                 data['sugerencia_stock_ok'] = False
                 data['sugerencia_insumos_faltantes'] = []
-                data['linea_compatible'] = None # <-- Inicializar linea_compatible
+                data['linea_compatible'] = None
 
                 if not receta_id_agrupada: continue
 
                 # a) Calcular Tiempo de Producción y Línea Sugerida
-                # 1. Crear una "OP simulada" con la cantidad total
                 op_simulada = {
                     'receta_id': receta_id_agrupada,
                     'cantidad_planificada': cantidad_total_agrupada
                 }
-
-                # 2. Calcular la carga total en minutos usando el helper de la planificación real
-                carga_total_minutos_agg = float(self._calcular_carga_op(op_simulada)) #
+                carga_total_minutos_agg = float(self._calcular_carga_op(op_simulada))
 
                 if carga_total_minutos_agg > 0:
-                    data['sugerencia_t_prod_dias'] = math.ceil(carga_total_minutos_agg / 480) # Asumiendo 480 min/día
+                    data['sugerencia_t_prod_dias'] = math.ceil(carga_total_minutos_agg / 480)
                 else:
                     data['sugerencia_t_prod_dias'] = 0
 
-                # 3. Obtener compatibilidad de línea y sugerir (Lógica de sugerencia de línea separada)
                 receta_res = self.receta_model.find_by_id(receta_id_agrupada, 'id')
                 if receta_res.get('success'):
+                    # ... (Lógica de sugerencia de línea y compatibilidad, sin cambios) ...
                     receta = receta_res['data']
                     linea_compatible_str = receta.get('linea_compatible', '2')
                     data['linea_compatible'] = linea_compatible_str
-
-                    # Lógica de sugerencia de línea (esto puede permanecer igual)
                     linea_compatible_list = linea_compatible_str.split(',')
-                    # Los campos de tiempo L1/L2 ahora solo se usan para decidir la línea, no para calcular el tiempo
                     tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
                     tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
                     UMBRAL_CANTIDAD_LINEA_1 = 50
@@ -624,12 +680,11 @@ class PlanificacionController(BaseController):
                         linea_sug_agg = 1 if cantidad_total_agrupada >= UMBRAL_CANTIDAD_LINEA_1 else 2
                     elif puede_l1: linea_sug_agg = 1
                     elif puede_l2: linea_sug_agg = 2
-
                     data['sugerencia_linea'] = linea_sug_agg if linea_sug_agg > 0 else None
 
-                # b) Verificar Stock Agregado (sin cambios funcionales)
+                # b) Verificar Stock Agregado
+                # ... (lógica de stock y t_proc_dias sin cambios) ...
                 ingredientes_result = self.receta_model.get_ingredientes(receta_id_agrupada)
-                # ... (resto de lógica de stock y t_proc_dias sin cambios) ...
                 insumos_faltantes_agg = []
                 stock_ok_agg = True
                 if ingredientes_result.get('success'):
@@ -645,7 +700,6 @@ class PlanificacionController(BaseController):
                 else: stock_ok_agg = False
                 data['sugerencia_stock_ok'] = stock_ok_agg
                 data['sugerencia_insumos_faltantes'] = insumos_faltantes_agg
-
                 if not stock_ok_agg:
                     tiempos_entrega_agg = []
                     for insumo_f in insumos_faltantes_agg:
@@ -653,34 +707,44 @@ class PlanificacionController(BaseController):
                         if insumo_data_res.get('success'): tiempos_entrega_agg.append(insumo_data_res['data'].get('tiempo_entrega_dias', 0))
                     data['sugerencia_t_proc_dias'] = max(tiempos_entrega_agg) if tiempos_entrega_agg else 0
 
-            # --- ¡NUEVA LÓGICA JIT PARA EL MODAL! ---
+                # c) Calcular JIT
                 try:
                     today = date.today()
                     t_prod_dias = data.get('sugerencia_t_prod_dias', 0)
                     t_proc_dias = data.get('sugerencia_t_proc_dias', 0)
-                    # --- ¡CORRECCIÓN ROBUSTA! ---
-                    fecha_meta_solo_str = data['fecha_meta_mas_proxima'].split('T')[0].split(' ')[0]
+
+                    # Asegurarse de que fecha_meta_mas_proxima no sea None
+                    fecha_meta_str_jit = data.get('fecha_meta_mas_proxima')
+                    if not fecha_meta_str_jit:
+                        logger.warning(f"Grupo {grupo_key} sin fecha meta, usando 'hoy' + 7 días para JIT.")
+                        fecha_meta_str_jit = (today + timedelta(days=7)).isoformat()
+
+                    fecha_meta_solo_str = fecha_meta_str_jit.split('T')[0].split(' ')[0]
                     fecha_meta = date.fromisoformat(fecha_meta_solo_str)
-                    # --- FIN CORRECCIÓN ---
 
                     fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
                     fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
-
                     fecha_inicio_base = max(fecha_inicio_ideal, fecha_disponibilidad_material)
-                    fecha_inicio_sugerida_jit = max(fecha_inicio_base, today) # No planificar en el pasado
-
+                    fecha_inicio_sugerida_jit = max(fecha_inicio_base, today)
                     data['sugerencia_fecha_inicio_jit'] = fecha_inicio_sugerida_jit.isoformat()
                 except Exception as e_jit_modal:
-                    logger.warning(f"No se pudo calcular JIT para modal (Producto: {clave_producto}): {e_jit_modal}")
+                    logger.warning(f"No se pudo calcular JIT para modal (Grupo: {grupo_key}): {e_jit_modal}")
                     data['sugerencia_fecha_inicio_jit'] = date.today().isoformat()
-                # --- FIN NUEVA LÓGICA JIT ---
 
-            # 4. Convertir a lista ordenada (sin cambios)
-            mps_lista_ordenada = sorted(
-                [ { 'producto_id': pid, 'producto_nombre': pname, **data }
-                  for (pid, pname), data in mps_agrupado.items() ],
-                key=lambda x: x.get('fecha_meta_mas_proxima') or '9999-12-31'
-            )
+            # 4. Convertir a lista ordenada
+            mps_lista_ordenada = []
+            for grupo_key, data in mps_agrupado.items():
+                producto_id_str = grupo_key.split('-')[0]
+                # Encontrar el nombre del producto de la primera OP en el grupo
+                producto_nombre = data['ordenes'][0].get('producto_nombre', 'Desconocido') if data['ordenes'] else 'Desconocido'
+
+                mps_lista_ordenada.append({
+                    'producto_id': int(producto_id_str) if producto_id_str.isdigit() else None,
+                    'producto_nombre': producto_nombre,
+                    **data
+                })
+
+            mps_lista_ordenada.sort(key=lambda x: x.get('fecha_meta_mas_proxima') or '9999-12-31')
 
             resultado_final = {
                  'mps_agrupado': mps_lista_ordenada,
@@ -1027,182 +1091,276 @@ class PlanificacionController(BaseController):
         """
         Lógica central para la planificación automática.
         Intenta planificar OPs PENDIENTES en el horizonte dado.
+
+        --- CORREGIDO (Lógica de Fallback JIT Individual) ---
+        Si un grupo falla, el sistema ahora RE-CALCULA el JIT para cada
+        OP individual antes de intentar planificarla.
         """
         dias_horizonte = 30
-
         logger.info(f"[AutoPlan] Iniciando ejecución para {dias_horizonte} día(s). Usuario: {usuario_id}")
 
-        # 1. Obtener OPs agrupadas (las que están 'PENDIENTE')
+        # 1. Buscar OPs que ya tengan un Issue PENDIENTE
+        ops_con_issue_ids = []
+        try:
+            response_issues = self.issue_planificacion_model.find_all({'estado': 'PENDIENTE'})
+            if response_issues.get('success'):
+                issues_pendientes = response_issues.get('data', [])
+                ops_con_issue_ids = [
+                    issue['orden_produccion_id'] for issue in issues_pendientes if 'orden_produccion_id' in issue
+                ]
+                if ops_con_issue_ids:
+                    logger.info(f"[AutoPlan] Excluyendo {len(ops_con_issue_ids)} OPs con issues PENDIENTES (ej: {ops_con_issue_ids[0]}).")
+        except Exception as e_issue:
+            logger.error(f"[AutoPlan] Error al buscar issues pendientes, no se excluirá nada: {e_issue}")
+
+        # 2. Obtener OPs agrupadas
         res_ops_pendientes, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte)
         if not res_ops_pendientes.get('success'):
             logger.error("[AutoPlan] Fallo al obtener OPs pendientes.")
             return {'errores': ['No se pudieron obtener OPs pendientes.']}
 
-        grupos_a_planificar = res_ops_pendientes.get('data', {}).get('mps_agrupado', [])
+        grupos_a_planificar_raw = res_ops_pendientes.get('data', {}).get('mps_agrupado', [])
+
+        # 3. Filtrar grupos que contienen OPs con issues
+        grupos_a_planificar = []
+        ids_excluidos = set(ops_con_issue_ids)
+        for grupo in grupos_a_planificar_raw:
+            ops_limpias_en_grupo = [op for op in grupo['ordenes'] if op['id'] not in ids_excluidos]
+            if not ops_limpias_en_grupo:
+                logger.warning(f"[AutoPlan] Grupo de {grupo.get('producto_nombre')} omitido. Todas sus OPs tienen issues pendientes.")
+                continue
+
+            if len(ops_limpias_en_grupo) < len(grupo['ordenes']):
+                logger.info(f"[AutoPlan] Re-calculando grupo de {grupo.get('producto_nombre')} (algunas OPs tenían issues).")
+                grupo['ordenes'] = ops_limpias_en_grupo
+                grupo['cantidad_total'] = sum(float(op.get('cantidad_planificada', 0)) for op in ops_limpias_en_grupo)
+
+            grupos_a_planificar.append(grupo)
+
         if not grupos_a_planificar:
-            logger.info("[AutoPlan] No se encontraron OPs pendientes en el horizonte.")
+            logger.info("[AutoPlan] No se encontraron OPs pendientes (limpias de issues) en el horizonte.")
             return {'ops_planificadas': [], 'ops_con_oc': [], 'errores': []}
 
-        # 2. Definir contadores para el resumen
+        # 4. Definir contadores y fecha
         ops_planificadas_exitosamente = []
         ops_con_oc_generada = []
         errores_encontrados = []
-
         fecha_planificacion_str = date.today().isoformat()
 
-        # 3. Iterar sobre cada grupo de producto
+        # 5. Iterar sobre cada grupo de producto
         for grupo in grupos_a_planificar:
             op_ids = [op['id'] for op in grupo['ordenes']]
             op_codigos = [op['codigo'] for op in grupo['ordenes']]
             producto_nombre = grupo.get('producto_nombre', 'N/A')
 
             try:
-                # 4. Determinar asignaciones automáticas
-                linea_sugerida = grupo.get('sugerencia_linea')
-                if not linea_sugerida:
+                # 6. Determinar asignaciones para el GRUPO
+                linea_sugerida_grupo = grupo.get('sugerencia_linea')
+                if not linea_sugerida_grupo:
                     msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) omitido: No hay línea sugerida."
                     logger.warning(f"[AutoPlan] {msg}")
                     errores_encontrados.append(msg)
                     continue
 
-                # --- ¡NUEVA LÓGICA JIT PARA AUTO-PLANIFICACIÓN! ---
-                try:
-                    today = date.today()
-                    t_prod_dias = grupo.get('sugerencia_t_prod_dias', 0)
-                    t_proc_dias = grupo.get('sugerencia_t_proc_dias', 0)
-                    # --- ¡CORRECCIÓN ROBUSTA! ---
-                    fecha_meta_solo_str = grupo['fecha_meta_mas_proxima'].split('T')[0].split(' ')[0]
-                    fecha_meta = date.fromisoformat(fecha_meta_solo_str)
-                    # --- FIN CORRECCIÓN ---
+                fecha_inicio_busqueda_grupo = grupo.get('sugerencia_fecha_inicio_jit', fecha_planificacion_str)
 
-                    fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
-                    fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
-
-                    fecha_inicio_base = max(fecha_inicio_ideal, fecha_disponibilidad_material)
-                    fecha_inicio_planificada_jit = max(fecha_inicio_base, today) # No planificar en el pasado
-
-                    fecha_inicio_busqueda = fecha_inicio_planificada_jit.isoformat()
-                except Exception as e_jit_auto:
-                    logger.warning(f"No se pudo calcular JIT para {op_codigos}. Usando 'hoy'. Error: {e_jit_auto}")
-                    fecha_inicio_busqueda = fecha_planificacion_str # Fallback a "hoy"
-                # --- FIN NUEVA LÓGICA JIT ---
-
-                asignaciones_auto = {
-                    'linea_asignada': linea_sugerida,
-                    'fecha_inicio': fecha_inicio_busqueda,
-                    'supervisor_id': None, # El supervisor asignará esto manualmente
+                asignaciones_auto_grupo = {
+                    'linea_asignada': linea_sugerida_grupo,
+                    'fecha_inicio': fecha_inicio_busqueda_grupo,
+                    'supervisor_id': None,
                     'operario_id': None
                 }
 
-                logger.info(f"[AutoPlan] Intentando planificar OPs {op_codigos} en Línea {linea_sugerida} (JIT Start: {fecha_inicio_busqueda})...")
+                logger.info(f"[AutoPlan] Intentando planificar GRUPO {op_codigos} en Línea {linea_sugerida_grupo} (JIT Start: {fecha_inicio_busqueda_grupo})...")
 
-                # 5. Llamar a la lógica de consolidación y aprobación existente
-                # Esta función ya maneja la consolidación, verificación de CAPACIDAD
-                # y (si pasa) la aprobación (que a su vez verifica STOCK y crea OC)
+                # 7. Llamar a la SIMULACIÓN (no destructiva) para el GRUPO
                 res_planif_dict, res_planif_status = self.consolidar_y_aprobar_lote(
-                    op_ids, asignaciones_auto, usuario_id
+                    op_ids, asignaciones_auto_grupo, usuario_id
                 )
-                # --- DEBUG LOG ---
-                logger.debug(f"[DEBUG JIT] Resultado para {op_codigos}: Status={res_planif_status}, Error='{res_planif_dict.get('error')}'")
-                # --- FIN DEBUG ---
+                logger.debug(f"[DEBUG JIT] Resultado para GRUPO {op_codigos}: Status={res_planif_status}, Error='{res_planif_dict.get('error')}'")
 
-                # 6. Interpretar la respuesta
+                # 8. Interpretar la respuesta
                 if res_planif_status == 200 and res_planif_dict.get('success'):
-                    # ¡Éxito! La OP se planificó
-                    logger.info(f"[AutoPlan] ÉXITO: OPs {op_codigos} planificadas.")
-                    ops_planificadas_exitosamente.extend(op_codigos)
-
-                    # --- INICIO CORRECCIÓN ---
-                    # Verificar si se generó una o más OCs
-                    if res_planif_dict and res_planif_dict.get('data') and res_planif_dict['data'].get('oc_generada'):
-                        ocs_creadas = res_planif_dict['data'].get('ocs_creadas', [])
-                        if ocs_creadas:
-                            # Tomar el código de la primera OC para el log
-                            primer_oc_codigo = ocs_creadas[0].get('codigo_oc', 'N/A')
-                            if len(ocs_creadas) > 1:
-                                logger.info(f"[AutoPlan] -> Se generaron {len(ocs_creadas)} OCs (empezando con {primer_oc_codigo}) para OPs {op_codigos}.")
-                                ops_con_oc_generada.append({'ops': op_codigos, 'oc': f"{len(ocs_creadas)} OCs ({primer_oc_codigo}, ...)"})
-                            else:
-                                logger.info(f"[AutoPlan] -> Se generó OC {primer_oc_codigo} para OPs {op_codigos}.")
-                                ops_con_oc_generada.append({'ops': op_codigos, 'oc': primer_oc_codigo})
-                    # --- FIN CORRECCIÓN ---
-                
-                elif res_planif_dict.get('error') == 'MULTI_DIA_CONFIRM':
-                    # --- ¡NUEVA LÓGICA DE APROBACIÓN AUTOMÁTICA MULTI-DÍA! ---
-                    dias_nec = res_planif_dict.get('dias_necesarios', 'varios')
-                    logger.info(f"[AutoPlan] OP {op_codigos} requiere {dias_nec} días. Aprobando automáticamente...")
-
-                    # Extraer los datos necesarios que la función de confirmación nos devolvió
+                    # ¡Éxito! El GRUPO se planificó
+                    logger.info(f"[AutoPlan] ÉXITO: GRUPO {op_codigos} planificado.")
+                    # (Llamada a aprobación final para el grupo)
                     op_id_para_confirmar = res_planif_dict.get('op_id_confirmar')
                     asignaciones_para_confirmar = res_planif_dict.get('asignaciones_confirmar')
-
-                    if not op_id_para_confirmar or not asignaciones_para_confirmar:
-                        msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) es multi-día pero faltan datos para auto-confirmar."
-                        logger.error(f"[AutoPlan] {msg}")
-                        errores_encontrados.append(msg)
-                        continue # Saltar al siguiente grupo
-
-                    try:
-                        # Llamar a la misma función que usaría el flujo manual al confirmar
-                        # Esta función ya existe: _ejecutar_aprobacion_final
-                        res_aprob_dict, status_aprob = self._ejecutar_aprobacion_final(
-                            op_id_para_confirmar,
-                            asignaciones_para_confirmar,
-                            usuario_id
-                        )
-
-                        try:
-                            # Interpretar la respuesta de la aprobación final
-                            if status_aprob < 400 and res_aprob_dict.get('success'):
-                                logger.info(f"[AutoPlan] ÉXITO (Multi-Día): OPs {op_codigos} planificadas.")
-                                # Usamos op_codigos que son los códigos de las OPs originales
-                                # que se consolidaron en op_id_para_confirmar
-                                ops_planificadas_exitosamente.extend(op_codigos)
-
-                                # Re-chequear si esta aprobación generó una OC
-                                if res_aprob_dict and res_aprob_dict.get('data') and res_aprob_dict['data'].get('oc_generada'):
-                                    oc_codigo = res_aprob_dict['data'].get('oc_codigo', 'N/A')
-                                    logger.info(f"[AutoPlan] -> Se generó OC {oc_codigo} para OPs {op_codigos}.")
-                                    ops_con_oc_generada.append({'ops': op_codigos, 'oc': oc_codigo})
-                            else:
-                                # La aprobación final falló
-                                error_msg = res_aprob_dict.get('error', 'Error desconocido') if isinstance(res_aprob_dict, dict) else str(res_aprob_dict)
-                                msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló en la aprobación final multi-día: {error_msg}"
-                                logger.error(f"[AutoPlan] {msg}")
-                                errores_encontrados.append(msg)
-                        except AttributeError:
-                            # Captura el error si res_aprob_dict no es un diccionario
-                            msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló en la aprobación final multi-día con una respuesta inesperada: {str(res_aprob_dict)}"
-                            logger.error(f"[AutoPlan] {msg}")
-                            errores_encontrados.append(msg)
-
-                    except Exception as e_aprob:
-                        msg = f"Excepción crítica al auto-aprobar OPs {op_codigos}: {str(e_aprob)}"
-                        logger.error(f"[AutoPlan] {msg}", exc_info=True)
-                        errores_encontrados.append(msg)
-                    # --- FIN NUEVA LÓGICA ---
-                # --- ¡NUEVO BLOQUE AÑADIDO! ---
-                elif res_planif_dict.get('error') == 'LATE_CONFIRM':
-                    # La auto-planificación NO debe aprobar OPs que terminan tarde.
-                    msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) NO SE PLANIFICÓ: Terminaría después de su Fecha Meta. Requiere revisión manual."
-                    logger.warning(f"[AutoPlan] {msg}")
-                    errores_encontrados.append(msg)
-                    self._crear_o_actualizar_issue(
-                        op_ids[0], 'LATE_CONFIRM', msg, res_planif_dict
-                        )
-                # --- FIN NUEVO BLOQUE ---
-
-                elif res_planif_dict.get('error') == 'SOBRECARGA_CAPACIDAD':
-                    # Error de capacidad
-                    msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló por SOBRECARGA de capacidad."
-                    logger.warning(f"[AutoPlan] {msg}")
-                    errores_encontrados.append(f"{msg} - {res_planif_dict.get('message', '')}")
-                    self._crear_o_actualizar_issue(
-                        op_ids[0], 'SOBRECARGA_CAPACIDAD', msg, res_planif_dict
+                    res_aprob_dict, status_aprob = self._ejecutar_aprobacion_final(
+                        op_id_para_confirmar, asignaciones_para_confirmar, usuario_id
                     )
+                    if status_aprob < 400 and res_aprob_dict.get('success'):
+                        ops_planificadas_exitosamente.extend(op_codigos)
+                        if res_aprob_dict and res_aprob_dict.get('data') and res_aprob_dict['data'].get('oc_generada'):
+                            ocs_creadas = res_aprob_dict['data'].get('ocs_creadas', [])
+                            if ocs_creadas:
+                                primer_oc_codigo = ocs_creadas[0].get('codigo_oc', 'N/A')
+                                ops_con_oc_generada.append({'ops': op_codigos, 'oc': primer_oc_codigo})
+                    else:
+                        errores_encontrados.append(f"Grupo {op_codigos} simuló OK pero falló aprobación: {res_aprob_dict.get('error')}")
+
+                elif res_planif_dict.get('error') == 'MULTI_DIA_CONFIRM':
+                    # El GRUPO es multi-día y está a tiempo. Auto-aprobar el GRUPO.
+                    logger.info(f"[AutoPlan] GRUPO {op_codigos} requiere {res_planif_dict.get('dias_necesarios')} días. Aprobando automáticamente...")
+                    op_id_para_confirmar = res_planif_dict.get('op_id_confirmar')
+                    asignaciones_para_confirmar = res_planif_dict.get('asignaciones_confirmar')
+                    if not op_id_para_confirmar or not asignaciones_para_confirmar:
+                         errores_encontrados.append(f"Grupo {op_codigos} multi-día pero faltan datos.")
+                         continue
+                    try:
+                        res_aprob_dict, status_aprob = self._ejecutar_aprobacion_final(
+                            op_id_para_confirmar, asignaciones_para_confirmar, usuario_id
+                        )
+                        if status_aprob < 400 and res_aprob_dict.get('success'):
+                            logger.info(f"[AutoPlan] ÉXITO (Multi-Día): GRUPO {op_codigos} planificado.")
+                            ops_planificadas_exitosamente.extend(op_codigos)
+                            if res_aprob_dict and res_aprob_dict.get('data') and res_aprob_dict['data'].get('oc_generada'):
+                                oc_codigo = res_aprob_dict['data'].get('oc_codigo', 'N/A')
+                                ops_con_oc_generada.append({'ops': op_codigos, 'oc': oc_codigo})
+                        else:
+                            error_msg = res_aprob_dict.get('error', 'Error') if isinstance(res_aprob_dict, dict) else str(res_aprob_dict)
+                            errores_encontrados.append(f"Grupo {op_codigos} falló aprobación multi-día: {error_msg}")
+                    except Exception as e_aprob:
+                         errores_encontrados.append(f"Excepción al auto-aprobar GRUPO {op_codigos}: {str(e_aprob)}")
+
+                # --- INICIO DE LA MODIFICACIÓN (LÓGICA DE FALLBACK) ---
+                elif res_planif_dict.get('error') in ['LATE_CONFIRM', 'SOBRECARGA_CAPACIDAD']:
+                    # El GRUPO falló (LATE o SOBRECARGA).
+                    error_tipo_grupo = res_planif_dict.get('error')
+
+                    if len(op_ids) > 1:
+                        # Si era un grupo de más de una OP, activamos el FALLBACK INDIVIDUAL.
+                        logger.warning(f"[AutoPlan] GRUPO {op_codigos} falló ({error_tipo_grupo}). Intentando OPs individuales...")
+                        errores_encontrados.append(f"Grupo {op_codigos} falló como consolidado ({error_tipo_grupo}). Intentando OPs individuales...")
+
+                        # Iteramos sobre cada OP original que estaba en el grupo
+                        for op_individual in grupo['ordenes']:
+                            op_id_individual = op_individual['id']
+                            op_codigo_individual = op_individual['codigo']
+
+                            logger.info(f"[AutoPlan/Fallback] Intentando OP individual: {op_codigo_individual} (ID: {op_id_individual})")
+
+                            # --- INICIO NUEVO CÁLCULO JIT INDIVIDUAL ---
+                            try:
+                                op_meta_str = op_individual.get('fecha_meta')
+                                op_meta_date = date.fromisoformat(op_meta_str.split('T')[0].split(' ')[0])
+
+                                # Llamamos al helper que calcula T_Prod, T_Proc y la fecha JIT
+                                jit_data_ind = self._calcular_tiempos_jit_op(
+                                    cantidad=float(op_individual.get('cantidad_planificada', 0)),
+                                    receta_id=op_individual.get('receta_id'),
+                                    fecha_meta=op_meta_date,
+                                    linea_compatible=op_individual.get('linea_compatible')
+                                )
+
+                                fecha_inicio_busqueda_ind = jit_data_ind['sugerencia_fecha_inicio_jit']
+                                linea_sugerida_ind = jit_data_ind['sugerencia_linea']
+
+                                if not linea_sugerida_ind:
+                                    msg = f"OP {op_codigo_individual} (fallback) omitida: No hay línea sugerida individual."
+                                    logger.warning(f"[AutoPlan/Fallback] {msg}")
+                                    errores_encontrados.append(msg)
+                                    continue
+
+                                logger.info(f"[AutoPlan/Fallback] JIT para {op_codigo_individual}: T_Proc={jit_data_ind['sugerencia_t_proc_dias']}d, T_Prod={jit_data_ind['sugerencia_t_prod_dias']}d -> Iniciar búsqueda en {fecha_inicio_busqueda_ind}")
+
+                            except Exception as e_jit_ind:
+                                logger.warning(f"No se pudo calcular JIT para fallback {op_codigo_individual}. Usando 'hoy'. Error: {e_jit_ind}")
+                                fecha_inicio_busqueda_ind = fecha_planificacion_str
+                                linea_sugerida_ind = linea_sugerida_grupo # Fallback a la línea del grupo
+
+                            asignaciones_individual = {
+                                'linea_asignada': linea_sugerida_ind,
+                                'fecha_inicio': fecha_inicio_busqueda_ind,
+                                'supervisor_id': None,
+                                'operario_id': None
+                            }
+                            # --- FIN NUEVO CÁLCULO JIT INDIVIDUAL ---
+
+                            try:
+                                # Llamamos a la simulación con UNA SOLA OP y su JIT INDIVIDUAL
+                                res_ind_dict, res_ind_status = self.consolidar_y_aprobar_lote(
+                                    [op_id_individual],
+                                    asignaciones_individual,
+                                    usuario_id
+                                )
+
+                                # Re-evaluamos el resultado para esta OP individual
+                                if res_ind_status == 200 and res_ind_dict.get('success'):
+                                    # ÉXITO INDIVIDUAL (Caso OP "B" - 1 unidad)
+                                    logger.info(f"[AutoPlan/Fallback] ÉXITO (1-día): OP {op_codigo_individual} simulada OK. Aprobando...")
+                                    op_id_conf_ind = res_ind_dict.get('op_id_confirmar')
+                                    asig_conf_ind = res_ind_dict.get('asignaciones_confirmar')
+
+                                    res_aprob_ind_dict, status_aprob_ind = self._ejecutar_aprobacion_final(
+                                        op_id_conf_ind, asig_conf_ind, usuario_id
+                                    )
+                                    if status_aprob_ind < 400 and res_aprob_ind_dict.get('success'):
+                                        logger.info(f"[AutoPlan/Fallback] ÉXITO: OP {op_codigo_individual} planificada individualmente.")
+                                        ops_planificadas_exitosamente.append(op_codigo_individual)
+                                        if res_aprob_ind_dict and res_aprob_ind_dict.get('data') and res_aprob_ind_dict['data'].get('oc_generada'):
+                                            ocs_creadas = res_aprob_ind_dict['data'].get('ocs_creadas', [])
+                                            if ocs_creadas:
+                                                primer_oc_codigo = ocs_creadas[0].get('codigo_oc', 'N/A')
+                                                ops_con_oc_generada.append({'ops': [op_codigo_individual], 'oc': primer_oc_codigo})
+                                    else:
+                                        errores_encontrados.append(f"OP {op_codigo_individual} simuló OK pero falló aprobación: {res_aprob_ind_dict.get('error')}")
+
+
+                                elif res_ind_dict.get('error') == 'MULTI_DIA_CONFIRM':
+                                    # ÉXITO INDIVIDUAL (MULTI-DÍA)
+                                    logger.info(f"[AutoPlan/Fallback] OP {op_codigo_individual} es multi-día. Aprobando...")
+                                    op_id_conf_ind = res_ind_dict.get('op_id_confirmar')
+                                    asig_conf_ind = res_ind_dict.get('asignaciones_confirmar')
+                                    if not op_id_conf_ind or not asig_conf_ind:
+                                        errores_encontrados.append(f"OP {op_codigo_individual} (fallback) multi-día faltan datos.")
+                                        continue
+                                    try:
+                                        res_aprob_ind_dict, status_aprob_ind = self._ejecutar_aprobacion_final(
+                                            op_id_conf_ind, asig_conf_ind, usuario_id
+                                        )
+                                        if status_aprob_ind < 400 and res_aprob_ind_dict.get('success'):
+                                            logger.info(f"[AutoPlan/Fallback] ÉXITO (Multi-Día): OP {op_codigo_individual} planificada.")
+                                            ops_planificadas_exitosamente.append(op_codigo_individual)
+                                            if res_aprob_ind_dict and res_aprob_ind_dict['data'] and res_aprob_ind_dict.get('oc_generada'):
+                                                oc_codigo = res_aprob_ind_dict['data'].get('oc_codigo', 'N/A')
+                                                ops_con_oc_generada.append({'ops': [op_codigo_individual], 'oc': oc_codigo})
+                                        else:
+                                            error_msg_ind = res_aprob_ind_dict.get('error', 'Error') if isinstance(res_aprob_ind_dict, dict) else str(res_aprob_ind_dict)
+                                            errores_encontrados.append(f"OP {op_codigo_individual} (fallback) falló aprobación multi-día: {error_msg_ind}")
+                                    except Exception as e_aprob_ind:
+                                        errores_encontrados.append(f"Excepción al auto-aprobar OP {op_codigo_individual} (fallback): {str(e_aprob_ind)}")
+
+                                elif res_ind_dict.get('error') in ['LATE_CONFIRM', 'SOBRECARGA_CAPACIDAD']:
+                                    # FALLA INDIVIDUAL (Caso OP "A" - 300 unidades)
+                                    error_tipo_ind = res_ind_dict.get('error')
+                                    msg = f"OP {op_codigo_individual} NO SE PLANIFICÓ (falla individual): {error_tipo_ind}. Requiere revisión manual."
+                                    logger.warning(f"[AutoPlan/Fallback] {msg}")
+                                    errores_encontrados.append(msg)
+                                    self._crear_o_actualizar_issue(
+                                        op_id_individual, error_tipo_ind, msg, res_ind_dict
+                                    )
+                                else:
+                                    msg = f"OP {op_codigo_individual} (fallback) falló: {res_ind_dict.get('error', 'Desconocido')}"
+                                    logger.error(f"[AutoPlan/Fallback] {msg}")
+                                    errores_encontrados.append(msg)
+
+                            except Exception as e_fallback:
+                                msg = f"Excepción crítica al procesar fallback para OP {op_codigo_individual}: {str(e_fallback)}"
+                                logger.error(f"[AutoPlan/Fallback] {msg}", exc_info=True)
+                                errores_encontrados.append(msg)
+
+                    else:
+                        # El GRUPO falló, pero solo tenía 1 OP.
+                        msg = f"Grupo {producto_nombre} (OP: {op_codigos[0]}) NO SE PLANIFICÓ: {error_tipo_grupo}. Requiere revisión manual."
+                        logger.warning(f"[AutoPlan] {msg}")
+                        errores_encontrados.append(msg)
+                        self._crear_o_actualizar_issue(
+                            op_ids[0], error_tipo_grupo, msg, res_planif_dict
+                        )
+                # --- FIN DE LA MODIFICACIÓN ---
 
                 else:
-                    # Otro error (ej. fallo al reservar stock, etc.)
                     msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló: {res_planif_dict.get('error', 'Desconocido')}"
                     logger.error(f"[AutoPlan] {msg}")
                     errores_encontrados.append(msg)
@@ -1212,7 +1370,7 @@ class PlanificacionController(BaseController):
                 logger.error(f"[AutoPlan] {msg}", exc_info=True)
                 errores_encontrados.append(msg)
 
-        # 7. Devolver el resumen
+        # 9. Devolver el resumen
         resumen = {
             'ops_planificadas': ops_planificadas_exitosamente,
             'ops_con_oc': ops_con_oc_generada,
