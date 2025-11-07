@@ -59,32 +59,6 @@
     <div class="tab-pane fade show active" id="info-content" role="tabpanel" aria-labelledby="info-tab">
 
 
-<<<<<<< HEAD
-        <div class="row">
-            <div class="col-lg-8">
-                {# --- Tarjeta de Información General --- #}
-                <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Información General</h5>
-                        <div>
-                            {# Badge de Estado #}
-                            {% set estado_config = {
-                            'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'calendar-check'},
-                            'EN ESPERA': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
-                            'LISTA PARA PRODUCIR': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
-                            'EN_LINEA_1': {'class': 'bg-primary-soft text-primary', 'icon': 'diagram-3'},
-                            'EN_LINEA_2': {'class': 'bg-primary-soft text-primary', 'icon': 'diagram-3-fill'},
-                            'EN_EMPAQUETADO': {'class': 'bg-purple-soft text-purple', 'icon': 'box-seam'},
-                            'CONTROL_DE_CALIDAD': {'class': 'bg-cyan-soft text-cyan', 'icon': 'clipboard-check'},
-                            'CONSOLIDADA': {'class': 'bg-light text-muted', 'icon': 'link-45deg'},
-                            'COMPLETADA': {'class': 'bg-success-soft text-success', 'icon': 'check-circle-fill'},
-                            'CANCELADA': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
-                            } %}
-                            {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark',
-                            'icon':'question-circle'}) %}
-                            <span class="badge {{ config.class }} fs-6 me-2">
-                                <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado.replace('_',' ') }}
-=======
 <div class="row">
     <div class="col-lg-8">
         {# --- Tarjeta de Información General --- #}
@@ -252,7 +226,6 @@
                             <span> {# Texto a la izquierda #}
                                 <i class="bi bi-hourglass-split me-2"></i> Esta orden está <strong>EN ESPERA</strong> de
                                 insumos. Se generó automáticamente una Orden de Compra.
->>>>>>> develop
                             </span>
                             {# Badge de Prioridad #}
                             {% if orden.prioridad and orden.prioridad != 'NORMAL' %}
