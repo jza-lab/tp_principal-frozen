@@ -99,7 +99,6 @@ class ProduccionKanbanController(BaseController):
 
             # 5. Agrupar por estado
             ordenes_por_estado = defaultdict(list)
-            columnas_de_proceso = {'EN_PROCESO', 'CONTROL_DE_CALIDAD', 'COMPLETADA'}
 
             for orden in ordenes_enriquecidas:
                 estado_db = orden.get('estado', '').strip()
@@ -109,12 +108,16 @@ class ProduccionKanbanController(BaseController):
                 if estado_constante in ['EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'EN_PRODUCCION']:
                     estado_constante = 'EN_PROCESO'
 
-                # Asignar a la columna correspondiente o a "Lista para Producir" por defecto
-                if estado_constante in columnas_de_proceso:
+                # Lógica de asignación a columnas del Kanban
+                if estado_constante == 'EN_ESPERA':
+                    ordenes_por_estado['EN_ESPERA'].append(orden)
+                elif estado_constante in ['LISTA_PARA_PRODUCIR', 'PAUSADA']:
+                    ordenes_por_estado['LISTA_PARA_PRODUCIR'].append(orden)
+                elif estado_constante in ['EN_PROCESO', 'CONTROL_DE_CALIDAD', 'COMPLETADA']:
                     ordenes_por_estado[estado_constante].append(orden)
                 else:
-                    # Todos los demás estados (LISTA_PARA_PRODUCIR, EN_ESPERA, PAUSADA, etc.)
-                    # van a la primera columna.
+                    # Fallback para estados no mapeados explícitamente (como PENDIENTE)
+                    # Se asignan a 'Lista para Producir' para que no se pierdan de vista.
                     ordenes_por_estado['LISTA_PARA_PRODUCIR'].append(orden)
 
             # 3. Calculate daily metrics
