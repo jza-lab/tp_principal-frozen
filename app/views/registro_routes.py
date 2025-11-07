@@ -2,6 +2,7 @@ from flask import Blueprint, render_template
 from flask_jwt_extended import jwt_required
 from app.utils.decorators import permission_required
 from app.controllers.registro_controller import RegistroController
+from datetime import datetime
 
 registros_bp = Blueprint('registros', __name__, url_prefix='/registros')
 
@@ -59,5 +60,6 @@ def listar_registros():
                 registros_agrupados[grupo_principal][subgrupo].append(registro)
             else:
                 registros_agrupados[grupo_principal].append(registro)
-
-    return render_template('registros/listar.html', registros_agrupados=registros_agrupados, categorias=categorias)
+    
+    fecha_actualizacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    return render_template('registros/listar.html', registros_agrupados=registros_agrupados, categorias=categorias, fecha_actualizacion=fecha_actualizacion)

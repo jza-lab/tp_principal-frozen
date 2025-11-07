@@ -284,11 +284,23 @@ class InsumoController(BaseController):
     def eliminar_insumo(self, id_insumo: str, forzar_eliminacion: bool = False) -> tuple:
         """Eliminar un insumo del catálogo"""
         try:
+            # Obtener datos del insumo para el log ANTES de eliminarlo
+            insumo_para_log = self.insumo_model.find_by_id(id_insumo, 'id_insumo')
+            
             result = self.insumo_model.delete(id_insumo, 'id_insumo', soft_delete=not forzar_eliminacion)
 
             if result['success']:
+                # Crear el registro si la eliminación fue exitosa
+                if insumo_para_log.get('success') and insumo_para_log.get('data'):
+                    insumo_data = insumo_para_log['data']
+                    accion = 'Eliminación Lógica' if not forzar_eliminacion else 'Eliminación Física'
+                    detalle = f"Se eliminó ({'lógica' if not forzar_eliminacion else 'física'}mente) el insumo '{insumo_data['nombre']}' (ID: {id_insumo})."
+                    self.registro_controller.crear_registro(get_current_user(), 'Insumos', accion, detalle)
+
                 logger.info(f"Insumo eliminado: {id_insumo}")
-                return self.success_response(message="Insumo desactivado correctamente.")
+                
+                message = "Insumo desactivado correctamente." if not forzar_eliminacion else "Insumo eliminado físicamente."
+                return self.success_response(message=message)
             else:
                 return self.error_response(result['error'])
 

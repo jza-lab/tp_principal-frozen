@@ -596,6 +596,20 @@ class InventarioController(BaseController):
             }
 
             total_alertas = len(alertas['stock_bajo']) + len(alertas['proximos_vencimientos'])
+            
+            if total_alertas > 0:
+                from app.controllers.registro_controller import RegistroController
+                registro_controller = RegistroController()
+                from types import SimpleNamespace
+                usuario_sistema = SimpleNamespace(nombre='Sistema', apellido='', roles=['SISTEMA'])
+                
+                if alertas['stock_bajo']:
+                    detalle = f"Se detectaron {len(alertas['stock_bajo'])} insumos con bajo stock."
+                    registro_controller.crear_registro(usuario_sistema, 'Alertas', 'Insumos', detalle)
+                
+                if alertas['proximos_vencimientos']:
+                    detalle = f"Se detectaron {len(alertas['proximos_vencimientos'])} lotes próximos a vencer."
+                    registro_controller.crear_registro(usuario_sistema, 'Alertas', 'Lotes', detalle)
 
             return self.success_response(
                 data=alertas,

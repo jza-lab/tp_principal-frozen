@@ -226,6 +226,11 @@ class OrdenCompraController:
                     ordenes_creadas_count += 1
             
             # 4. Formatear la respuesta final para el usuario
+            if ordenes_creadas_count > 0:
+                codigos_ocs = [res['data']['codigo_oc'] for res in resultados_creacion if res.get('success')]
+                detalle = f"Se crearon {ordenes_creadas_count} órdenes de compra desde el formulario: {', '.join(codigos_ocs)}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Creación Múltiple', detalle)
+
             if ordenes_creadas_count == len(items_por_proveedor):
                 return {
                     'success': True,
