@@ -1,59 +1,186 @@
 {% extends "layouts/app_layout.html" %}
-{% import 'registros/macros.html' as macros %}
+{% from 'registros/macros.html' import render_registros_table %}
+
+{% block styles %}
+{{ super() }}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        --warning-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        --info-gradient: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+        --dark-gradient: linear-gradient(135deg, #434343 0%, #000000 100%);
+    }
+    .registros-header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:2rem;border-radius:1rem;margin-bottom:2rem;box-shadow:0 10px 40px rgba(102,126,234,.3);position:relative;overflow:hidden}.registros-header::before{content:'';position:absolute;top:-50%;right:-50%;width:200%;height:200%;background:radial-gradient(circle,rgba(255,255,255,.1) 0%,transparent 70%);animation:pulse 15s ease-in-out infinite}@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}.registros-header h1{color:#fff;font-weight:700;margin:0;position:relative;z-index:1;font-size:2.5rem;text-shadow:0 2px 10px rgba(0,0,0,.2)}.fecha-actualizacion{background:rgba(255,255,255,.2);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);padding:.5rem 1rem;border-radius:2rem;color:#fff;font-weight:500;display:inline-block}.tabs-container{background:rgba(255,255,255,.7);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border-radius:1.5rem;padding:1.5rem;box-shadow:0 8px 32px rgba(0,0,0,.1);border:1px solid rgba(255,255,255,.18)}#mainRegistrosTab{border:none;display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:2rem;background:0 0;padding:0}#mainRegistrosTab .nav-item{flex:1;min-width:150px}#mainRegistrosTab .nav-link{background:#fff;border:none;border-radius:1rem;padding:1.5rem 1rem;text-align:center;color:#6c757d;font-weight:600;font-size:.95rem;transition:all .4s cubic-bezier(.4,0,.2,1);box-shadow:0 4px 15px rgba(0,0,0,.08);display:flex;flex-direction:column;align-items:center;gap:.75rem}#mainRegistrosTab .nav-link.active{background:var(--primary-gradient);color:#fff;transform:translateY(-5px) scale(1.02);box-shadow:0 15px 40px rgba(102,126,234,.4)}.nav-pills .nav-link.active{background:var(--success-gradient);color:#fff}.tab-content{background:#fff;border-radius:1rem;padding:2rem;box-shadow:0 4px 20px rgba(0,0,0,.05);min-height:400px;position:relative}
+</style>
+{% endblock %}
 
 {% block app_content %}
-<div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Registros del Sistema</h1>
-        <div>
-            <span class="text-muted me-3">Última actualización: {{ fecha_actualizacion }}</span>
-            <a href="{{ url_for('registros.listar_registros') }}" class="btn btn-primary">
-                <i class="fas fa-sync-alt"></i> Actualizar Registros
-            </a>
+<div class="container-fluid" style="padding-top: 1rem;">
+    <div class="registros-header">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <h1><i class="fas fa-database me-3"></i>Registros del Sistema</h1>
+            <div class="header-info d-flex align-items-center gap-3 flex-wrap">
+                <span class="fecha-actualizacion">
+                    <i class="fas fa-clock me-2"></i><span id="fecha-actualizacion-texto">{{ fecha_actualizacion }}</span>
+                </span>
+                <button id="btnActualizarRegistros" class="btn btn-primary" style="background: white; color: #667eea; border: none; padding: 0.75rem 2rem; font-weight: 600; border-radius: 2rem; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>Actualizar Registros</span>
+                </button>
+            </div>
         </div>
     </div>
 
-    <!-- Pestañas Principales -->
-    <ul class="nav nav-tabs" id="mainRegistrosTab" role="tablist">
-        {% for categoria_nombre, subcategorias in categorias.items() %}
-        <li class="nav-item" role="presentation">
-            <button class="nav-link {% if loop.first %}active{% endif %}" id="tab-{{ categoria_nombre|replace(' ', '_') }}" data-bs-toggle="tab" data-bs-target="#content-{{ categoria_nombre|replace(' ', '_') }}" type="button" role="tab">{{ categoria_nombre }}</button>
-        </li>
-        {% endfor %}
-    </ul>
+    <div class="tabs-container">
+        <ul class="nav nav-tabs" id="mainRegistrosTab" role="tablist">
+            {% set iconos = {
+                'Insumos': 'fas fa-boxes', 'Productos': 'fas fa-shopping-cart',
+                'Personal': 'fas fa-users', 'Clientes': 'fas fa-user-tie',
+                'Proveedores': 'fas fa-truck'
+            } %}
+            {% for categoria_nombre, subcategorias in categorias.items() %}
+            {% set tab_id = 'tab-' ~ categoria_nombre|replace(' ', '_') %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if tab_id == active_main_tab %}active{% endif %}" 
+                        id="{{ tab_id }}" 
+                        data-bs-toggle="tab" 
+                        data-bs-target="#content-{{ categoria_nombre|replace(' ', '_') }}" 
+                        type="button" role="tab">
+                    <i class="tab-icon {{ iconos.get(categoria_nombre, 'fas fa-layer-group') }}"></i>
+                    <span>{{ categoria_nombre }}</span>
+                </button>
+            </li>
+            {% endfor %}
+        </ul>
 
-    <!-- Contenido de las Pestañas Principales -->
-    <div class="tab-content" id="mainRegistrosTabContent">
-        {% for categoria_nombre, subcategorias in categorias.items() %}
-        <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="content-{{ categoria_nombre|replace(' ', '_') }}" role="tabpanel">
-            
-            {% if subcategorias %}
-                <!-- Si hay subcategorías, crear pestañas anidadas -->
-                <div class="mt-3">
-                    <ul class="nav nav-pills" id="subTab-{{ categoria_nombre|replace(' ', '_') }}" role="tablist">
-                        {% for sub_nombre in subcategorias.keys() %}
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link {% if loop.first %}active{% endif %}" id="subtab-{{ categoria_nombre|replace(' ', '_') }}-{{ sub_nombre|replace(' ', '_') }}" data-bs-toggle="tab" data-bs-target="#subcontent-{{ categoria_nombre|replace(' ', '_') }}-{{ sub_nombre|replace(' ', '_') }}" type="button" role="tab">{{ sub_nombre }}</button>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    <div class="tab-content" id="subTabContent-{{ categoria_nombre|replace(' ', '_') }}">
-                        {% for sub_nombre, sub_db in subcategorias.items() %}
-                        <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="subcontent-{{ categoria_nombre|replace(' ', '_') }}-{{ sub_nombre|replace(' ', '_') }}" role="tabpanel">
-                            {% set registros = registros_agrupados[categoria_nombre][sub_nombre] %}
-                            {{ macros.render_registros_table(registros) }}
+        <div class="tab-content" id="mainRegistrosTabContent">
+            {% for categoria_nombre, subcategorias in categorias.items() %}
+            {% set tab_id = 'tab-' ~ categoria_nombre|replace(' ', '_') %}
+            <div class="tab-pane fade {% if tab_id == active_main_tab %}show active{% endif %}" 
+                 id="content-{{ categoria_nombre|replace(' ', '_') }}" 
+                 role="tabpanel">
+                
+                {% if subcategorias %}
+                    <div class="mt-3">
+                        <ul class="nav nav-pills" id="subTab-{{ categoria_nombre|replace(' ', '_') }}">
+                            {% for sub_nombre in subcategorias.keys() %}
+                            {% set subtab_id = 'subtab-' ~ categoria_nombre|replace(' ', '_') ~ '-' ~ sub_nombre|replace(' ', '_') %}
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link {% if subtab_id == active_sub_tab or (not active_sub_tab and loop.first and tab_id == active_main_tab) %}active{% endif %}" 
+                                        id="{{ subtab_id }}" 
+                                        data-bs-toggle="tab" 
+                                        data-bs-target="#subcontent-{{ categoria_nombre|replace(' ', '_') }}-{{ sub_nombre|replace(' ', '_') }}" 
+                                        type="button" role="tab">
+                                    {{ sub_nombre }}
+                                </button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        <div class="tab-content" id="subTabContent-{{ categoria_nombre|replace(' ', '_') }}">
+                            {% for sub_nombre, sub_db in subcategorias.items() %}
+                            {% set subtab_id = 'subtab-' ~ categoria_nombre|replace(' ', '_') ~ '-' ~ sub_nombre|replace(' ', '_') %}
+                            <div class="tab-pane fade {% if subtab_id == active_sub_tab or (not active_sub_tab and loop.first and tab_id == active_main_tab) %}show active{% endif %}" 
+                                 id="subcontent-{{ categoria_nombre|replace(' ', '_') }}-{{ sub_nombre|replace(' ', '_') }}" 
+                                 role="tabpanel">
+                                {{ render_registros_table(registros_agrupados[categoria_nombre][sub_nombre]) }}
+                            </div>
+                            {% endfor %}
                         </div>
-                        {% endfor %}
                     </div>
-                </div>
-            {% else %}
-                <!-- Si no hay subcategorías, mostrar la tabla directamente -->
-                {% set registros = registros_agrupados[categoria_nombre] %}
-                {{ macros.render_registros_table(registros) }}
-            {% endif %}
-
+                {% else %}
+                    {{ render_registros_table(registros_agrupados[categoria_nombre]) }}
+                {% endif %}
+            </div>
+            {% endfor %}
         </div>
-        {% endfor %}
     </div>
 </div>
+
+<script>
+(function() {
+    console.log('=== SCRIPT CARGADO ===');
+    
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log('DOM listo');
+        
+        const updateButton = document.getElementById('btnActualizarRegistros');
+        
+        if (!updateButton) {
+            console.error('ERROR: No se encontró el botón');
+            return;
+        }
+        
+        console.log('Botón encontrado');
+
+        updateButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('¡CLICK EN ACTUALIZAR!');
+            
+            const activeMainTab = document.querySelector('#mainRegistrosTab .nav-link.active');
+            
+            if (!activeMainTab) {
+                console.log('No hay tab activo, redirigiendo a base');
+                window.location.href = "{{ url_for('registros.listar_registros') }}";
+                return;
+            }
+
+            let url = "{{ url_for('registros.listar_registros') }}" + '?tab=' + encodeURIComponent(activeMainTab.id);
+            console.log('Tab principal activo:', activeMainTab.id);
+            
+            const mainPane = document.querySelector(activeMainTab.getAttribute('data-bs-target'));
+            if (mainPane) {
+                const activeSubTab = mainPane.querySelector('.nav-link.active');
+                if (activeSubTab) {
+                    console.log('Subtab activo:', activeSubTab.id);
+                    url += '&subtab=' + encodeURIComponent(activeSubTab.id);
+                }
+            }
+            
+            console.log('Redirigiendo a:', url);
+            window.location.href = url;
+        });
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const mainTabId = urlParams.get('tab');
+        const subTabId = urlParams.get('subtab');
+        
+        console.log('Parámetros URL - tab:', mainTabId, 'subtab:', subTabId);
+
+        if (mainTabId) {
+            const mainTabNode = document.getElementById(mainTabId);
+            console.log('Buscando tab:', mainTabId, 'encontrado:', !!mainTabNode);
+            
+            if (mainTabNode) {
+                const showTab = function() {
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Tab) {
+                        if (subTabId) {
+                            mainTabNode.addEventListener('shown.bs.tab', function() {
+                                const subTabNode = document.getElementById(subTabId);
+                                console.log('Buscando subtab:', subTabId, 'encontrado:', !!subTabNode);
+                                if (subTabNode) {
+                                    new bootstrap.Tab(subTabNode).show();
+                                }
+                            }, { once: true });
+                        }
+                        new bootstrap.Tab(mainTabNode).show();
+                        console.log('Tab activado:', mainTabId);
+                    } else {
+                        console.error('Bootstrap no disponible');
+                    }
+                };
+                
+                if (typeof bootstrap !== 'undefined') {
+                    showTab();
+                } else {
+                    setTimeout(showTab, 100);
+                }
+            }
+        }
+        
+        console.log('=== SCRIPT INICIALIZADO ===');
+    });
+})();
+</script>
 {% endblock %}

@@ -289,8 +289,9 @@ class PedidoController(BaseController):
                 if num_pedidos == 1: self.cliente_model.update(id_cliente, {'condicion_venta': 2})
                 elif num_pedidos == 2: self.cliente_model.update(id_cliente, {'condicion_venta': 3})
             
-            detalle = f"Se creó el pedido de venta {nuevo_pedido.get('codigo_ov')}."
+            detalle = f"Se creó el pedido de venta con ID: {pedido_id_creado}."
             self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Creación', detalle)
+
 
             return self.success_response(data=nuevo_pedido, message=mensaje_final, status_code=201)
 
@@ -390,7 +391,7 @@ class PedidoController(BaseController):
             self.model.actualizar_estado_agregado(pedido_id) # Esto lo pasará a EN_PROCESO si se creó alguna OP
 
             msg = f"Pedido enviado a producción. Se generaron {len(ordenes_creadas)} Órdenes de Producción."
-            detalle = f"Se inició el proceso para el pedido de venta {pedido_actual.get('codigo_ov')}. Se generaron {len(ordenes_creadas)} OPs."
+            detalle = f"Se inició el proceso para el pedido de venta con ID: {pedido_id}. Se generaron {len(ordenes_creadas)} OPs."
             self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Inicio de Proceso', detalle)
             return self.success_response(data={'ordenes_creadas': ordenes_creadas}, message=msg)
 
@@ -569,7 +570,7 @@ class PedidoController(BaseController):
             # Actualizar el estado general del pedido después de los cambios
             self.model.actualizar_estado_agregado(pedido_id)
 
-            detalle = f"Se actualizó el pedido de venta {pedido_actual.get('codigo_ov')}."
+            detalle = f"Se actualizó el pedido de venta con ID: {pedido_id}."
             self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Actualización', detalle)
 
             return self.success_response(data=result.get('data'), message="Pedido actualizado con éxito.")
@@ -605,8 +606,7 @@ class PedidoController(BaseController):
             # Por ahora, simplemente cambiamos el estado.
             result = self.model.cambiar_estado(pedido_id, nuevo_estado)
             if result.get('success'):
-                pedido = pedido_existente_resp.get('data')
-                detalle = f"El pedido de venta {pedido.get('codigo_ov')} cambió de estado a {nuevo_estado}."
+                detalle = f"El pedido de venta con ID: {pedido_id} cambió de estado a {nuevo_estado}."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Cambio de Estado', detalle)
                 logger.info(f"Pedido {pedido_id} cambiado a estado '{nuevo_estado}' con éxito.")
                 return self.success_response(message=f"Pedido actualizado al estado '{nuevo_estado}'.")
@@ -667,8 +667,8 @@ class PedidoController(BaseController):
             self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
             self.model.update_items_by_pedido_id(pedido_id, {'estado': 'COMPLETADO'})
             logger.info(f"Pedido {pedido_id} marcado como LISTO_PARA_ENTREGA.")
-            
-            detalle = f"El pedido de venta {pedido_data.get('codigo_ov')} fue preparado para entrega."
+
+            detalle = f"El pedido de venta con ID: {pedido_id} fue preparado para entrega."
             self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Preparado para Entrega', detalle)
 
             return self.success_response(message="Pedido preparado para entrega.")
@@ -703,7 +703,7 @@ class PedidoController(BaseController):
 
             if resultado_update.get('success'):
                 logger.info(f"[Controlador] Pedido {pedido_id} marcado como COMPLETADO con éxito.")
-                detalle = f"El pedido de venta {pedido_actual_res.get('data', {}).get('codigo_ov')} fue marcado como COMPLETADO."
+                detalle = f"El pedido de venta con ID: {pedido_id} fue marcado como COMPLETADO."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Completado', detalle)
                 return self.success_response(message="Pedido marcado como completado exitosamente.")
             else:
@@ -739,7 +739,7 @@ class PedidoController(BaseController):
             # 3. Cambiar el estado del pedido a 'CANCELADO'
             result = self.model.cambiar_estado(pedido_id, 'CANCELADO')
             if result.get('success'):
-                detalle = f"Se canceló el pedido de venta {pedido_actual.get('codigo_ov')}."
+                detalle = f"Se canceló el pedido de venta con ID: {pedido_id}."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Cancelación', detalle)
                 return self.success_response(message="Pedido cancelado con éxito y stock liberado.")
             else:
@@ -870,7 +870,7 @@ class PedidoController(BaseController):
             result = self.model.cambiar_estado(pedido_id, 'PLANIFICADA')
             if result.get('success'):
                 logger.info(f"Pedido {pedido_id} cambiado a estado 'PLANIFICADA' con éxito.")
-                detalle = f"El pedido de venta {pedido_actual.get('codigo_ov')} fue planificado."
+                detalle = f"El pedido de venta con ID: {pedido_id} fue planificado."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Planificación', detalle)
                 return self.success_response(message="Pedido planificado con éxito.")
             else:
