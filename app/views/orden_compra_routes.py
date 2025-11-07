@@ -34,7 +34,22 @@ def listar():
     ordenes = []
     if response.get("success"):
         ordenes_data = response.get("data", [])
-        ordenes = sorted(ordenes_data, key=lambda x: OC_MAP_STRING_TO_INT.get(x.get("estado"), 999))
+        
+        # Lógica de ordenación especial
+        filtro_activo = bool(estado)
+        if not filtro_activo:
+            # Si no hay filtro, mover las cerradas/rechazadas/canceladas al final
+            estados_finales = {'CERRADA', 'RECHAZADA', 'CANCELADA'}
+            ordenes = sorted(
+                ordenes_data,
+                key=lambda x: (
+                    1 if x.get("estado") in estados_finales else 0,
+                    OC_MAP_STRING_TO_INT.get(x.get("estado"), 999)
+                )
+            )
+        else:
+            # Con un filtro activo, usar la ordenación normal
+            ordenes = sorted(ordenes_data, key=lambda x: OC_MAP_STRING_TO_INT.get(x.get("estado"), 999))
     else:
         flash(response.get("error", "Error al cargar las órdenes de compra."), "error")
     

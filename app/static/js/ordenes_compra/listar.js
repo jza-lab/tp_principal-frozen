@@ -11,7 +11,7 @@
         const noResultsMessage = document.getElementById('noResultsMessage');
 
         // Usuario actual (deberías obtenerlo del backend)
-        const currentUser = "{{ current_user.username if current_user else '' }}";
+        const currentUser = "{{ current_user.nombre if current_user else '' }}";
 
         let activeFilters = {
             estado: '',
@@ -52,7 +52,9 @@
 
                     switch (activeFilters.quickFilter) {
                         case 'mis-ordenes':
-                            if (card.dataset.creador !== currentUser) {
+                            const esCreador = card.dataset.creador === currentUser;
+                            const esAprobador = card.dataset.aprobador === currentUser;
+                            if (!esCreador && !esAprobador) {
                                 show = false;
                             }
                             break;
@@ -136,20 +138,49 @@
         quickActionBtns.forEach(btn => {
             btn.addEventListener('click', function () {
                 const filter = this.dataset.quickFilter;
-                
-                // Toggle active
-                if (this.classList.contains('active')) {
-                    this.classList.remove('active');
-                    activeFilters.quickFilter = '';
-                } else {
-                    quickActionBtns.forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
-                    activeFilters.quickFilter = filter;
+                const currentUrl = new URL(window.location.href);
+
+                // Manejo de 'mis-ordenes' como filtro de cliente
+                if (filter === 'mis-ordenes') {
+                    // Este filtro sigue siendo del lado del cliente, ya que no tenemos un ID de usuario en la URL
+                    if (this.classList.contains('active')) {
+                        this.classList.remove('active');
+                        activeFilters.quickFilter = '';
+                    } else {
+                        quickActionBtns.forEach(b => b.classList.remove('active'));
+                        this.classList.add('active');
+                        activeFilters.quickFilter = filter;
+                    }
+                    applyFilters();
+                    return; // Importante para no recargar la página
                 }
-                
-                applyFilters();
+
+                // Para filtros de fecha, modificamos la URL y recargamos
+                const isActive = this.classList.contains('active');
+
+                if (isActive) {
+                    // Si el botón ya está activo, lo desactivamos y quitamos el parámetro
+                    currentUrl.searchParams.delete('rango_fecha');
+                } else {
+                    // Si no, lo activamos y establecemos el parámetro
+                    currentUrl.searchParams.set('rango_fecha', filter);
+                }
+
+                // Forzamos la recarga de la página con la nueva URL
+                window.location.href = currentUrl.toString();
             });
         });
+
+        // Al cargar la página, marcar como activo el botón de filtro de fecha si el parámetro está en la URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const fechaFilter = urlParams.get('rango_fecha');
+        if (fechaFilter) {
+            quickActionBtns.forEach(btn => {
+                if (btn.dataset.quickFilter === fechaFilter) {
+                    btn.classList.add('active');
+                }
+            });
+        }
 
         // Limpiar todos los filtros
         btnClearAll.addEventListener('click', function () {

@@ -271,10 +271,19 @@ class InventarioModel(BaseModel):
     def calcular_y_actualizar_stock_general(self) -> Dict:
         """
         Calcula y actualiza el stock 'disponible' (actual) para todos los insumos,
-        considerando las reservas.
+        considerando las reservas. Es robusto frente a lotes "huérfanos".
         """
         try:
             logger.info("Iniciando recálculo de stock general para todos los insumos.")
+
+            # 0. Obtener IDs de insumos que SÍ existen en el catálogo. Esto es CRÍTICO
+            # para evitar que un lote "huérfano" (de un insumo borrado) intente
+            # crear un nuevo registro de insumo incompleto, causando un error de not-null.
+            insumos_existentes_res = self.db.table('insumos_catalogo').select("id_insumo").execute()
+            if not hasattr(insumos_existentes_res, 'data'):
+                raise Exception("No se pudo obtener la lista de insumos existentes del catálogo.")
+            insumos_existentes_ids = {item['id_insumo'] for item in insumos_existentes_res.data}
+
             # 1. Obtener el stock físico total por insumo desde la tabla de lotes (inventario)
             stock_fisico_res = self.db.table(self.get_table_name()).select("id_insumo, cantidad_actual").execute()
             if not hasattr(stock_fisico_res, 'data'):
@@ -283,7 +292,8 @@ class InventarioModel(BaseModel):
             stock_fisico_map = {}
             for lote in stock_fisico_res.data:
                 insumo_id = lote.get('id_insumo')
-                if insumo_id:
+                # Solo procesar lotes de insumos que sabemos que existen
+                if insumo_id and insumo_id in insumos_existentes_ids:
                     stock_fisico_map[insumo_id] = stock_fisico_map.get(insumo_id, 0.0) + float(lote.get('cantidad_actual', 0))
 
             # 2. Obtener el total de reservas activas por insumo
@@ -294,14 +304,15 @@ class InventarioModel(BaseModel):
             reservas_map = {}
             for reserva in reservas_res.data:
                 insumo_id = reserva.get('insumo_id')
-                if insumo_id:
+                # Solo procesar reservas de insumos que sabemos que existen
+                if insumo_id and insumo_id in insumos_existentes_ids:
                     reservas_map[insumo_id] = reservas_map.get(insumo_id, 0.0) + float(reserva.get('cantidad_reservada', 0))
 
-            # 3. Preparar la actualización masiva (upsert)
+            # 3. Preparar la actualización masiva (ahora solo con insumos válidos)
             updates = []
-            todos_los_insumos_ids = set(stock_fisico_map.keys()) | set(reservas_map.keys())
+            todos_los_insumos_con_movimiento = set(stock_fisico_map.keys()) | set(reservas_map.keys())
 
-            for insumo_id in todos_los_insumos_ids:
+            for insumo_id in todos_los_insumos_con_movimiento:
                 fisico = stock_fisico_map.get(insumo_id, 0.0)
                 reservado = reservas_map.get(insumo_id, 0.0)
                 disponible = fisico - reservado
@@ -312,18 +323,29 @@ class InventarioModel(BaseModel):
                     'stock_total': fisico # stock_total representa el físico
                 })
             
-            # 4. Ejecutar la actualización masiva si hay algo que actualizar
+            # 4. Ejecutar las actualizaciones de forma individual para máxima seguridad.
+            # Este enfoque es más lento pero evita el comportamiento impredecible de `upsert`
+            # que estaba causando el error de 'not-null constraint'. La estabilidad es prioritaria.
             if updates:
-                (self.db.table('insumos_catalogo')
-                    .upsert(updates, on_conflict='id_insumo')
-                    .execute())
-                logger.info(f"Stock general actualizado para {len(updates)} insumos.")
+                updated_count = 0
+                for update_data in updates:
+                    try:
+                        insumo_id = update_data.pop('id_insumo')
+                        payload = {
+                            'stock_actual': update_data['stock_actual'],
+                            'stock_total': update_data['stock_total']
+                        }
+                        (self.db.table('insumos_catalogo')
+                            .update(payload)
+                            .eq('id_insumo', insumo_id)
+                            .execute())
+                        updated_count += 1
+                    except Exception as e:
+                        logger.error(f"Error actualizando stock individualmente para el insumo {insumo_id}: {e}")
+                logger.info(f"Stock general actualizado para {updated_count} insumos.")
 
-            # 5. Poner en cero el stock de insumos que NO tienen lotes ni reservas
-            insumos_en_catalogo_res = self.db.table('insumos_catalogo').select('id_insumo').execute()
-            insumos_en_catalogo_ids = {item['id_insumo'] for item in insumos_en_catalogo_res.data}
-            
-            insumos_a_cero = list(insumos_en_catalogo_ids - todos_los_insumos_ids)
+            # 5. Poner en cero el stock de insumos que existen pero NO tienen lotes ni reservas
+            insumos_a_cero = list(insumos_existentes_ids - todos_los_insumos_con_movimiento)
             
             if insumos_a_cero:
                 (self.db.table('insumos_catalogo')

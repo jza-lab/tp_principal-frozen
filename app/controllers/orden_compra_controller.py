@@ -343,6 +343,8 @@ class OrdenCompraController:
                 filters['proveedor_id'] = int(request.args.get('proveedor_id'))
             if 'prioridad' not in filters and request.args.get('prioridad'):
                 filters['prioridad'] = request.args.get('prioridad')
+            if 'rango_fecha' not in filters and request.args.get('rango_fecha'):
+                filters['rango_fecha'] = request.args.get('rango_fecha')
 
             result = self.model.get_all(filters)
 
