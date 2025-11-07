@@ -106,7 +106,9 @@
                             <div class="col-md-4 mb-4">
                                 <div class="card h-100">
                                     <div class="card-header">
-                                        <h6>Lotes de Insumo</h6>
+                                        <h6 class="mb-0 fw-bold">Lotes de Insumo Afectados</h6>
+                                        <span class="fw-bold text-uppercase text-black badge bg-warning "><i
+                                                class="bi bi-shield-lock-fill me-1 "></i>En Cuarentena</span>
                                     </div>
                                     <div class="card-body">
                                         {% set lotes_insumo = alerta.afectados_detalle.lotes_insumo %}
@@ -114,9 +116,6 @@
                                         <ul class="list-group list-group-flush">
                                             {% for lote in lotes_insumo %}
                                             <li class="list-group-item">
-                                                <input type="checkbox" name="lote_insumo_ids" value="{{ lote.id_lote }}"
-                                                    class="form-check-input me-2" {% if
-                                                    lote.estado_resolucion=='resuelto' %}disabled{% endif %}>
                                                 <a
                                                     href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}">{{
                                                     lote.numero_lote_proveedor }}</a>
@@ -135,7 +134,10 @@
                             <div class="col-md-4 mb-4">
                                 <div class="card h-100">
                                     <div class="card-header">
-                                        <h6>Órdenes de Producción</h6>
+                                        <h6 class="mb-0 fw-bold" >Órdenes de Producción</h6>
+                                        
+                                        <span class="fw-bold text-uppercase text-black badge bg-warning "><i
+                                                class="bi bi-shield-lock-fill me-1 "></i>En Cuarentena</span>
                                     </div>
                                     <div class="card-body">
                                         {% set ordenes = alerta.afectados_detalle.ordenes_produccion %}
@@ -143,9 +145,6 @@
                                         <ul class="list-group list-group-flush">
                                             {% for op in ordenes %}
                                             <li class="list-group-item">
-                                                <input type="checkbox" name="op_ids" value="{{ op.id }}"
-                                                    class="form-check-input me-2" {% if op.estado_resolucion=='resuelto'
-                                                    %}disabled{% endif %}>
                                                 <a href="{{ url_for('orden_produccion.detalle', id=op.id) }}">{{
                                                     op.codigo }}</a>
                                             </li>
@@ -162,7 +161,11 @@
                             <div class="col-md-4 mb-4">
                                 <div class="card h-100">
                                     <div class="card-header">
-                                        <h6>Lotes de Producto</h6>
+                                        <h6 class="mb-0 fw-bold">Lotes de Producto</h6>
+                                
+                                        <span class="fw-bold text-uppercase text-black badge bg-warning "><i
+                                                class="bi bi-shield-lock-fill me-1 "></i>En Cuarentena</span>
+                                        
                                     </div>
                                     <div class="card-body">
                                         {% set lotes_producto = alerta.afectados_detalle.lotes_producto %}
@@ -170,9 +173,6 @@
                                         <ul class="list-group list-group-flush">
                                             {% for lote in lotes_producto %}
                                             <li class="list-group-item">
-                                                <input type="checkbox" name="lote_producto_ids"
-                                                    value="{{ lote.id_lote }}" class="form-check-input me-2" {% if
-                                                    lote.estado_resolucion=='resuelto' %}disabled{% endif %}>
                                                 <a
                                                     href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}">{{
                                                     lote.numero_lote }}</a>

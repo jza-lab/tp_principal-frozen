@@ -178,6 +178,7 @@ class RiesgoController(BaseController):
 
             alerta['afectados_detalle'] = afectados_detalle
 
+            # --- INICIO: Calcular porcentajes de afectación para pedidos ---
             if 'pedidos' in afectados_detalle:
                 from app.controllers.pedido_controller import PedidoController
                 pedido_controller = PedidoController()
@@ -185,7 +186,6 @@ class RiesgoController(BaseController):
                     alerta['origen_tipo_entidad'], 
                     alerta['origen_id_entidad']
                 )
-                # Obtener la lista de IDs de lotes de producto afectados
                 lotes_producto_afectados_ids = [
                     str(afectado['id_entidad']) 
                     for afectado in afectados_trazabilidad_completa 
@@ -207,24 +207,32 @@ class RiesgoController(BaseController):
                             pedido['afectacion_items_str'] = "0 de 0"
                             pedido['afectacion_valor_str'] = "0%"
                             continue
-
-                        total_items_count = len(items_pedido)
                         
+                        total_items_count = len(items_pedido)
                         total_valor = 0
                         for item in items_pedido:
                             try:
+                                # Acceder al precio unitario anidado
                                 precio = float(item.get('producto_nombre', {}).get('precio_unitario', 0))
                                 cantidad = float(item.get('cantidad', 0))
                                 total_valor += cantidad * precio
                             except (ValueError, TypeError):
                                 continue
 
-
                         items_afectados_count = 0
                         valor_afectado = 0.0
+                        
+                        from app.models.pedido import PedidoModel
+                        pedido_model = PedidoModel()
 
                         for item in items_pedido:
-                            if item.get('id_lote_producto') and str(item.get('id_lote_producto')) in lotes_producto_afectados_ids:
+                            reservas_del_item = pedido_model.get_reservas_for_item(item['id'])
+                            item_es_afectado = any(
+                                str(reserva.get('lote_producto_id')) in lotes_producto_afectados_ids 
+                                for reserva in reservas_del_item
+                            )
+
+                            if item_es_afectado:
                                 items_afectados_count += 1
                                 try:
                                     precio = float(item.get('producto_nombre', {}).get('precio_unitario', 0))
@@ -245,6 +253,7 @@ class RiesgoController(BaseController):
                         logger.error(f"Error al calcular afectación para pedido {pedido['id']}: {e}", exc_info=True)
                         pedido['afectacion_items_str'] = "Error"
                         pedido['afectacion_valor_str'] = "Error"
+            # --- FIN: Calcular porcentajes de afectación para pedidos ---
 
             if alerta['estado'] in ['Resuelta', 'Cerrada']:
                 ncs_asociadas_res = self.nota_credito_controller.obtener_detalle_nc_por_alerta(alerta['id'])
