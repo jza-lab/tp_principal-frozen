@@ -290,6 +290,9 @@ class ProductoController(BaseController):
             data = {'activo': True}
             result = self.model.update(producto_id, data, 'id')
             if result['success']:
+                producto_habilitado = result.get('data')
+                detalle = f"Se habilitó el producto '{producto_habilitado['nombre']}' (ID: {producto_id})."
+                self.registro_controller.crear_registro(get_current_user(), 'Productos', 'Habilitación', detalle)
                 return self.success_response(message="Producto activado correctamente.")
             else:
                 return self.error_response(result['error'])
