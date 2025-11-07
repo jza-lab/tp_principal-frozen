@@ -1117,19 +1117,40 @@ class OrdenProduccionController(BaseController):
             self.model.update(id_value=op_id, data=update_data, id_field='id')
         logger.info(f"OPs originales {op_ids} actualizadas a estado CONSOLIDADA.")
 
-    def _obtener_capacidad_linea(self, linea_asignada: int, fecha: date) -> Decimal:
+    def _obtener_capacidad_linea(self, linea_id: int, fecha: date) -> Decimal:
         """
-        Obtiene la capacidad neta de una línea (en minutos) para una fecha específica.
+        Obtiene la capacidad neta de una línea para una fecha específica.
+        --- CORREGIDO ---
+        Ahora extrae el valor 'neta' del diccionario devuelto
+        por el planificacion_controller.
         """
-        if not linea_asignada:
-            return Decimal('0.0')
+        try:
+            if not linea_id or not fecha:
+                return Decimal(0)
 
-        capacidad_data = self.planificacion_controller.obtener_capacidad_disponible(
-            [linea_asignada], fecha, fecha
-        )
+            if not self.planificacion_controller:
+                 self.planificacion_controller = PlanificacionController()
 
-        capacidad_en_minutos = capacidad_data.get(linea_asignada, {}).get(fecha.isoformat(), 0.0)
-        return Decimal(str(capacidad_en_minutos))
+            # 1. Llamar a la función que devuelve el mapa
+            capacidad_map = self.planificacion_controller.obtener_capacidad_disponible(
+                [linea_id], fecha, fecha
+            )
+
+            fecha_iso = fecha.isoformat()
+
+            # 2. Extraer el diccionario de capacidad para ese día
+            # (Ej: {'neta': 480.0, 'bloqueado': 0.0, ...})
+            capacidad_dict_dia = capacidad_map.get(linea_id, {}).get(fecha_iso, {})
+
+            # 3. Obtener el valor 'neta' (¡Esta es la corrección!)
+            capacidad_en_minutos = capacidad_dict_dia.get('neta', 0.0)
+
+            # El resto de la función (línea 1132 del traceback) ahora funcionará
+            return Decimal(str(capacidad_en_minutos))
+
+        except Exception as e:
+            logger.error(f"Error en _obtener_capacidad_linea para {linea_id} en {fecha}: {e}", exc_info=True)
+            return Decimal(0)
 
     def _calcular_ritmo_objetivo(self, orden: Dict) -> Decimal:
         """

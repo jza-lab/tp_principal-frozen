@@ -211,28 +211,36 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        try {
-            // Primero, pausar la OP. Esto detendrá el cronómetro en el backend.
-            const responsePausa = await fetch(`/produccion/kanban/api/op/${ordenId}/pausar`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ motivo_id: motivoId })
-            });
-
-            const dataPausa = await responsePausa.json();
-            
-            if (responsePausa.ok && dataPausa.success) {
-                pausarProduccion(motivoTexto);
-                bootstrap.Modal.getInstance(document.getElementById('modalPausarProduccion')).hide();
-                showNotification('⏸️ Producción pausada correctamente', 'warning');
+        // --- LÓGICA DE BIFURCACIÓN ---
+        if (motivoTexto.toLowerCase().includes('cambio de turno')) {
+            // Delegar al nuevo módulo de traspaso
+            bootstrap.Modal.getInstance(document.getElementById('modalPausarProduccion')).hide();
+            if (window.abrirModalTraspaso) {
+                window.abrirModalTraspaso();
             } else {
-                const errorMessage = data.error || 'Error desconocido del servidor.';
-                console.error('Error al intentar pausar la producción:', errorMessage);
-                showNotification('❌ Error al pausar: ' + errorMessage, 'error');
+                showNotification('Error: Módulo de traspaso no cargado.', 'error');
             }
-        } catch (error) {
-            console.error('Error de red al pausar:', error);
-            showNotification('❌ Error de red al pausar la orden', 'error');
+        } else {
+            // Proceder con la pausa normal
+            try {
+                const responsePausa = await fetch(`/produccion/kanban/api/op/${ordenId}/pausar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ motivo_id: motivoId })
+                });
+
+                const dataPausa = await responsePausa.json();
+                
+                if (responsePausa.ok && dataPausa.success) {
+                    pausarProduccion(motivoTexto);
+                    bootstrap.Modal.getInstance(document.getElementById('modalPausarProduccion')).hide();
+                    showNotification('⏸️ Producción pausada correctamente', 'warning');
+                } else {
+                    showNotification(`❌ Error al pausar: ${dataPausa.error || 'Error desconocido'}`, 'error');
+                }
+            } catch (error) {
+                showNotification('❌ Error de red al pausar la orden', 'error');
+            }
         }
     });
 
