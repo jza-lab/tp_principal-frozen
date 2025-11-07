@@ -1583,6 +1583,15 @@ class OrdenProduccionController(BaseController):
             if update_result.get('success'):
                 # Iniciar el cronómetro
                 self.op_cronometro_controller.registrar_inicio(orden_id)
+
+                logger.info(f"Iniciando consumo de stock físico para la OP {orden_id}...")
+                consumo_result = self.inventario_controller.consumir_stock_reservado_para_op(orden_id)
+                if not consumo_result.get('success'):
+                    # Esto es un estado crítico. La OP está en proceso pero el stock no se pudo descontar.
+                    # Se loggea como un error grave para revisión manual.
+                    logger.error(f"CRÍTICO: La OP {orden_id} se inició pero falló el consumo de stock: {consumo_result.get('error')}")
+                    # A pesar del fallo, se continúa para no bloquear al operario. El log es la alerta.
+
                 return self.success_response(data=update_result.get('data'), message="Trabajo iniciado correctamente.")
             else:
                 return self.error_response(f"Error al actualizar la orden: {update_result.get('error')}", 500)
