@@ -373,6 +373,8 @@
                                             <td>
                                                 <input type="hidden" name="items-{{ loop.index0 }}-id"
                                                     value="{{ item.id if item.id else '' }}">
+                                                <input type="text" class="form-control form-control-sm mb-1 producto-search" 
+                                                       placeholder="Buscar producto..." {% if pedido and pedido.estado !='PENDIENTE' %}disabled{% endif %}>
                                                 <select class="form-select form-select-sm producto-selector"
                                                     name="items-{{ loop.index0 }}-producto_id" required {% if pedido and
                                                     pedido.estado !='PENDIENTE' %}disabled{% endif %}>
@@ -448,6 +450,7 @@
                             <tr class="item-row">
                                 <td>
                                     <input type="hidden" name="items-__prefix__-id" value="">
+                                    <input type="text" class="form-control form-control-sm mb-1 producto-search" placeholder="Buscar producto...">
                                     <select class="form-select form-select-sm producto-selector"
                                         name="items-__prefix__-producto_id" required
                                         data-id-base="items-__prefix__-producto_id">
@@ -627,14 +630,42 @@
         // Variables globales inyectadas por Jinja2 para el formulario PÚBLICO
         const CREAR_URL = "{{ url_for('public.crear_pedido_api') }}"; // Apunta al nuevo endpoint público
         const PROFORMA_GENERATION_URL = "{{ url_for('public.generar_proforma_api') }}";
-        const PRODUCTOS_DATA = {{ productos | tojson | safe }};
+        const PRODUCTOS_DATA = "{{ productos | tojson | safe }}";
         const LISTAR_URL = "{{ url_for('public.index') }}"; // A dónde ir si se cancela
         const isEditing = false;
         const pedidoId = 0;
-        const cliente = {{ clienteJs | tojson | safe }};
+        const cliente = "{{ clienteJs | tojson | safe }}";
     </script>
 
     <script src="{{ url_for('static', filename='js/orden_venta/gestionCalculos.js') }}"></script>
     <script src="{{ url_for('static', filename='js/orden_venta/formularioVenta.js') }}"></script>
     <script src="{{ url_for('static', filename='js/orden_venta/formularioClientePasos.js') }}"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Event delegation for product search/filter
+            document.getElementById('items-container').addEventListener('input', function(e) {
+                if (e.target && e.target.classList.contains('producto-search')) {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const productSelect = e.target.closest('td').querySelector('.producto-selector');
+                    
+                    if (productSelect) {
+                        const options = productSelect.options;
+                        let firstVisible = -1;
+                        for (let i = 1; i < options.length; i++) { // Start from 1 to skip "Seleccione..."
+                            const optionText = options[i].text.toLowerCase();
+                            if (optionText.includes(searchTerm)) {
+                                options[i].style.display = '';
+                                if (firstVisible === -1) {
+                                    firstVisible = i;
+                                }
+                            } else {
+                                options[i].style.display = 'none';
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
     {% endblock %}

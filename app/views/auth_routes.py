@@ -1,6 +1,7 @@
-from flask import Blueprint, jsonify, request, redirect, url_for, flash, render_template, make_response
+from flask import Blueprint, jsonify, request, redirect, url_for, flash, render_template, make_response, g
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt, unset_jwt_cookies, set_access_cookies, get_jwt_identity, verify_jwt_in_request
 from app.controllers.usuario_controller import UsuarioController
+from app.controllers.registro_controller import RegistroController
 from app.utils.roles import get_redirect_url_by_role
 from app.models.totem_sesion import TotemSesionModel
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
@@ -62,7 +63,13 @@ def login():
             response = redirect(redirect_url)
             unset_jwt_cookies(response)
             set_access_cookies(response, access_token)
-            flash(f"Bienvenido {usuario_data['nombre']}", 'success')
+
+            from types import SimpleNamespace
+            usuario_log = SimpleNamespace(nombre=usuario_data['nombre'], apellido=usuario_data['apellido'], roles=[rol_codigo])
+            detalle = f"El usuario '{usuario_data['nombre']} {usuario_data['apellido']}' inició sesión con credenciales."
+            registro_controller = RegistroController()
+            registro_controller.crear_registro(usuario_log, 'Accesos', 'Ingreso', detalle)
+
             return response
         else:
             # ... (la lógica de 'else' se mantiene igual)
@@ -121,6 +128,12 @@ def identificar_rostro():
         unset_jwt_cookies(response)
         set_access_cookies(response, access_token)
 
+        from types import SimpleNamespace
+        usuario_log = SimpleNamespace(nombre=usuario_data['nombre'], apellido=usuario_data['apellido'], roles=[rol_codigo])
+        detalle = f"El usuario '{usuario_data['nombre']} {usuario_data['apellido']}' inició sesión con reconocimiento facial."
+        registro_controller = RegistroController()
+        registro_controller.crear_registro(usuario_log, 'Accesos', 'Ingreso', detalle)
+
         return response, 200
     else:
         error_message = respuesta.get('error', 'Rostro no reconocido o usuario inactivo.')
@@ -134,6 +147,13 @@ def logout():
         jwt_payload = get_jwt()
         jti = jwt_payload['jti']
         exp = jwt_payload['exp']
+
+        from types import SimpleNamespace
+        usuario_log = SimpleNamespace(nombre=jwt_payload['nombre'], apellido=jwt_payload['apellido'], roles=[jwt_payload['rol']])
+        detalle = f"El usuario '{jwt_payload['nombre']} {jwt_payload['apellido']}' cerró sesión."
+        registro_controller = RegistroController()
+        registro_controller.crear_registro(usuario_log, 'Accesos', 'Egreso', detalle)
+
         TokenBlacklistModel.add_to_blacklist(jti, exp)
         response = redirect(url_for('auth.login'))
         unset_jwt_cookies(response)

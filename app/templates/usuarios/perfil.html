@@ -186,15 +186,15 @@
 
 <script>
 // Inyectar datos para el JavaScript
-const USER_ID = {{ usuario.id|tojson }};
+const USER_ID = "{{ usuario.id|tojson }}";
 const IS_NEW = false;
-const USER_ROLE_ID = {{ usuario.role_id|tojson }};
-const USER_TURNO_ID = {{ usuario.turno_id|tojson }};
+const USER_ROLE_ID = "{{ usuario.role_id|tojson }}";
+const USER_TURNO_ID = "{{ usuario.turno_id|tojson }}";
 
-window.ROLES_DISPONIBLES = {{ roles|tojson }};
-window.TURNOS_DISPONIBLES = {{ turnos|tojson }};
-window.SECTORES_DISPONIBLES = {{ sectores|tojson }};
-window.USUARIO_SECTORES_IDS = {{ usuario_sectores_ids|tojson }};
+window.ROLES_DISPONIBLES = "{{ roles|tojson }}";
+window.TURNOS_DISPONIBLES = "{{ turnos|tojson }}";
+window.SECTORES_DISPONIBLES = "{{ sectores|tojson }}";
+window.USUARIO_SECTORES_IDS = "{{ usuario_sectores_ids|tojson }}";
 
 </script>
 

@@ -32,24 +32,23 @@
                 <h5 class="mb-0">Información de la Orden</h5>
             </div>
             <div class="card-body">
-                <form id="formulario" method="POST">
+                <form id="ordenProduccionForm" method="POST" action="{{ url_for('orden_produccion.crear') }}">
                     {{ csrf_form.csrf_token }}
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label for="producto_id" class="form-label">Producto <span
-                                    class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-box-seam-fill"></i></span>
-                                <select class="form-select" id="producto_id" name="producto_id" required>
-                                    <option value="">Seleccione un producto...</option>
-                                    {% for producto in productos %}
-                                    <option value="{{ producto.id }}" {% if orden and orden.producto_id==producto.id
-                                        %}selected{% endif %}>
-                                        {{ producto.nombre }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
+                            <label for="product-search" class="form-label">Buscar Producto <span class="text-danger">*</span></label>
+                            <div class="input-group mb-2">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" id="product-search" class="form-control" placeholder="Escriba para filtrar productos...">
                             </div>
+                            <select class="form-select" id="producto_id" name="producto_id" required size="5">
+                                <option value="">Seleccione un producto...</option>
+                                {% for producto in productos %}
+                                <option value="{{ producto.id }}" {% if orden and orden.producto_id==producto.id %}selected{% endif %}>
+                                    {{ producto.nombre }} ({{ format_product_units(producto) }})
+                                </option>
+                                {% endfor %}
+                            </select>
                         </div>
 
                         <div class="col-md-6">
@@ -74,47 +73,7 @@
                             </div>
                         </div>
 
-                        <div class="col-md-6">
-                            <label for="prioridad" class="form-label">Prioridad</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-arrow-up-right-square"></i></span>
-                                <select class="form-select" id="prioridad" name="prioridad">
-                                    <option value="NORMAL" {% if not orden or orden.prioridad=='NORMAL' %}selected{% endif
-                                        %}>
-                                        Normal
-                                    </option>
-                                    <option value="BAJA" {% if orden and orden.prioridad=='BAJA' %}selected{% endif %}>
-                                        Baja
-                                    </option>
-                                    <option value="ALTA" {% if orden and orden.prioridad=='ALTA' %}selected{% endif %}>
-                                        Alta
-                                    </option>
-                                    <option value="URGENTE" {% if orden and orden.prioridad=='URGENTE' %}selected{% endif
-                                        %}>
-                                        Urgente
-                                    </option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label for="supervisor_responsable_id" class="form-label">Supervisor Asignado</label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-person-badge"></i></span>
-                                <select class="form-select" id="supervisor_responsable_id" name="supervisor_responsable_id">
-                                    <option value="">Sin asignar</option>
-                                    {% for supervisor in supervisores %}
-                                    <option value="{{ supervisor.id }}"
-                                        {% if orden and orden.supervisor_responsable_id == supervisor.id %}selected{% endif %}>
-                                        {{ supervisor.nombre }} {{ supervisor.apellido }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="form-text">Opcional - Puede asignar un supervisor más tarde.</div>
-                        </div>
-
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <label for="observaciones" class="form-label">Observaciones</label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-chat-dots"></i></span>
@@ -198,4 +157,21 @@
 </script>
 <script src="{{ url_for('static', filename='js/ordenes_produccion/formularioOrdenProduccion.js') }}"></script>
 <script src="{{ url_for('static', filename='js/ordenes_produccion/orden_produccion_form.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.getElementById('product-search');
+    const productSelect = document.getElementById('producto_id');
+    const options = Array.from(productSelect.options);
+
+    searchInput.addEventListener('input', function () {
+        const query = searchInput.value.toLowerCase();
+        
+        // Muestra u oculta las opciones del select
+        options.forEach(option => {
+            const shouldShow = option.value === "" || option.textContent.toLowerCase().includes(query);
+            option.style.display = shouldShow ? '' : 'none';
+        });
+    });
+});
+</script>
 {% endblock extra_js %}

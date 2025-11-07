@@ -51,7 +51,6 @@ def listar():
 @permission_required(accion='crear_orden_de_compra')
 def nueva():
     controller = OrdenCompraController()
-    proveedor_controller = ProveedorController()
     insumo_controller = InsumoController()
     if request.method == "POST":
         usuario_id = get_jwt_identity()
@@ -66,13 +65,10 @@ def nueva():
             )
 
     today = datetime.now().strftime("%Y-%m-%d")
-    proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
     insumos_resp, _ = insumo_controller.obtener_insumos()
-    proveedores = proveedores_resp.get("data", [])
     insumos = insumos_resp.get("data", [])
     return render_template(
         "ordenes_compra/formulario.html",
-        proveedores=proveedores,
         insumos=insumos,
         today=today,
     )
@@ -153,7 +149,6 @@ def aprobar(id):
 @permission_required(accion='editar_orden_de_compra')
 def editar(id):
     controller = OrdenCompraController()
-    proveedor_controller = ProveedorController()
     insumo_controller = InsumoController()
     if request.method == "POST":
         resultado = controller.actualizar_orden(id, request.form)
@@ -172,14 +167,11 @@ def editar(id):
         flash("Error al cargar la orden para editar.", "error")
         return redirect(url_for("orden_compra.listar"))
     orden = response_data.get("data")
-    proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
     insumos_resp, _ = insumo_controller.obtener_insumos()
-    proveedores = proveedores_resp.get("data", [])
     insumos = insumos_resp.get("data", [])
     return render_template(
         "ordenes_compra/formulario.html",
         orden=orden,
-        proveedores=proveedores,
         insumos=insumos,
     )
 

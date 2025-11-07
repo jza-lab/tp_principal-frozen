@@ -14,3 +14,10 @@
         return originalFetch(url, options);
     };
 })();
+
+function showNotificationModal(title, message) {
+    const modal = new bootstrap.Modal(document.getElementById('notificationModal'));
+    document.getElementById('notificationModalTitle').textContent = title;
+    document.getElementById('notificationModalBody').textContent = message;
+    modal.show();
+}

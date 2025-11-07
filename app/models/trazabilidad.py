@@ -236,9 +236,23 @@ class TrazabilidadModel(BaseModel):
         Construye la trazabilidad completa para una Orden de Producción (OP).
         Incluye insumos utilizados (lotes insumo), lotes de producto generados y pedidos relacionados.
         """
-        op_res = self.db.table('ordenes_produccion').select('*, lotes_productos!orden_produccion_id(id_lote, numero_lote, cantidad_inicial)').eq('id', orden_id).single().execute()
+        op_res = self.db.table('ordenes_produccion').select(
+            '*, supervisor:supervisor_responsable_id(nombre, apellido), lotes_productos!orden_produccion_id(id_lote, numero_lote, cantidad_inicial)'
+        ).eq('id', orden_id).single().execute()
         op = op_res.data
         if not op: return None
+        
+        # --- Lógica para obtener supervisor de calidad por separado ---
+        if op.get('supervisor_calidad_id'):
+            sv_calidad_res = self.db.table('usuarios').select('nombre, apellido').eq('id', op['supervisor_calidad_id']).single().execute()
+            if sv_calidad_res.data:
+                sv_info = sv_calidad_res.data
+                op['supervisor_calidad_nombre'] = f"{sv_info.get('nombre', '')} {sv_info.get('apellido', '')}".strip()
+            else:
+                op['supervisor_calidad_nombre'] = 'No encontrado'
+        else:
+            op['supervisor_calidad_nombre'] = 'No asignado'
+        # --- Fin de la nueva lógica ---
 
         # Insumos reservados para la OP
         reservas_insumos = self.db.table('reservas_insumos').select(
@@ -264,7 +278,6 @@ class TrazabilidadModel(BaseModel):
                 } for r in reservas_insumos
             ]
         }
-
         resumen_destino = {
             'lotes': [{'id': lp.get('id_lote'), 'codigo': lp.get('numero_lote'), 'cantidad': lp.get('cantidad_inicial')} for lp in lotes_producto],
             'pedidos': [
@@ -312,7 +325,38 @@ class TrazabilidadModel(BaseModel):
                 else:
                     edges.append({'from': op_node, 'to': ped_node, 'label': r.get('cantidad')})
 
-        return {'resumen': {'origen': resumen_origen, 'destino': resumen_destino}, 'diagrama': {'nodes': nodes, 'edges': edges}}
+        # --- Lógica para OCs asociadas ---
+        ocs_asociadas_res = self.db.table('ordenes_compra').select(
+            '*, '
+            'proveedores:proveedor_id(id, nombre), '
+            'orden_compra_items(*, insumos_catalogo:insumo_id(nombre))'
+        ).eq('orden_produccion_id', orden_id).execute()
+
+        ocs_asociadas = ocs_asociadas_res.data if ocs_asociadas_res.data else []
+        
+        resumen_ocs_asociadas = []
+        if ocs_asociadas:
+            for oc in ocs_asociadas:
+                items = []
+                if oc.get('orden_compra_items'):
+                    for item in oc['orden_compra_items']:
+                        items.append({
+                            'nombre_insumo': item.get('insumos_catalogo', {}).get('nombre', 'N/A'),
+                            'cantidad_solicitada': item.get('cantidad_solicitada')
+                        })
+                
+                resumen_ocs_asociadas.append({
+                    'id': oc.get('id'),
+                    'codigo_oc': oc.get('codigo_oc'),
+                    'proveedor_id': oc.get('proveedores', {}).get('id'),
+                    'proveedor_nombre': oc.get('proveedores', {}).get('nombre', 'N/A'),
+                    'estado': oc.get('estado'),
+                    'fecha_estimada_entrega': oc.get('fecha_estimada_entrega'),
+                    'items': items
+                })
+
+
+        return {'resumen': {'origen': resumen_origen, 'destino': resumen_destino, 'ordenes_compra_asociadas': resumen_ocs_asociadas}, 'diagrama': {'nodes': nodes, 'edges': edges}}
 
     @classmethod
     def get_table_name(cls):

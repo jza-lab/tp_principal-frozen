@@ -53,6 +53,11 @@ def user_lookup_callback(_jwt_header, jwt_data):
         # Cargamos la lista de permisos que guardamos en el token durante el login
         'permisos': jwt_data.get('permisos', [])
     }
+
+    if rol_codigo == 'DEV':
+        from app.utils.permission_map import CANONICAL_PERMISSION_MAP
+        user_data['permisos'] = list(CANONICAL_PERMISSION_MAP.keys())
+
     return SimpleNamespace(**user_data)
 
 
@@ -103,7 +108,12 @@ def _register_blueprints(app: Flask):
     from app.views.reportes_routes import reportes_bp
     from app.views.proveedor_routes import proveedor_bp
     from app.views.api_trazabilidad_routes import api_trazabilidad_bp
+<<<<<<< HEAD
     from app.views.admin_riesgo_routes import admin_riesgo_bp, riesgos_bp
+=======
+    from app.views.admin_riesgo_routes import admin_riesgo_bp
+    from app.views.registro_routes import registros_bp
+>>>>>>> develop
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
@@ -140,7 +150,11 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(reportes_bp)
     app.register_blueprint(api_trazabilidad_bp)
     app.register_blueprint(admin_riesgo_bp)
+<<<<<<< HEAD
     app.register_blueprint(riesgos_bp)
+=======
+    app.register_blueprint(registros_bp)
+>>>>>>> develop
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""
@@ -287,6 +301,9 @@ def create_app() -> Flask:
     # 3. Registrar la función decorada. No es necesario cambiar esta parte.
     app.jinja_env.globals['has_permission'] = _has_permission_filter # Se registra como global
     app.jinja_env.tests['has_permission'] = _has_permission_filter # Y como test
+    
+    from app.utils.template_helpers import setup_template_helpers
+    setup_template_helpers(app)
 
     with app.app_context():
         chatbot_model = ChatbotQA()

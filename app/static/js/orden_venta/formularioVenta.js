@@ -372,7 +372,8 @@ async function handleSubmit(event) {
 
 async function enviarDatos(payload, csrfToken) {
     const submitButton = form.querySelector('button[type="submit"]');
-    const url = isEditing ? `/orden-venta/${pedidoId}/editar` : '/orden-venta/nueva';
+    // Usar la URL definida en la plantilla, que es la fuente de verdad.
+    const url = isEditing ? `/orden-venta/${pedidoId}/editar` : (typeof CREAR_URL !== 'undefined' ? CREAR_URL : '/orden-venta/nueva');
     const method = isEditing ? 'PUT' : 'POST';
 
     let response;
@@ -396,12 +397,11 @@ async function enviarDatos(payload, csrfToken) {
             const titleToShow = result.data && result.data.estado_completado_inmediato ? '¡STOCK DISPONIBLE! Pedido Completado' : 'Éxito';
 
             // 2. Disparar el modal con el mensaje específico
-            showNotificationModal(titleToShow, messageToShow, 'success');
+            showNotificationModal(titleToShow, messageToShow, 'success', () => {
+                window.location.href = result.redirect_url || "{{ url_for('orden_venta.listar') }}";
+            });
             // ===============================
 
-            setTimeout(() => {
-                window.location.href = result.redirect_url || "{{ url_for('orden_venta.listar') }}";
-            }, 2500);
         } else {
             showNotificationModal('Error al Guardar', 'No se pudo guardar el pedido. Por favor, revise los errores.', 'error');
         }

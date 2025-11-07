@@ -1,45 +1,128 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const formulario = document.getElementById("formulario");
+    const form = document.getElementById('ordenProduccionForm');
+    if (!form) {
+        console.error('El formulario #ordenProduccionForm no se encontró en el DOM.');
+        return;
+    }
+
+    const addItemBtn = document.getElementById('addIngredienteBtn');
+    const ingredientesContainer = document.getElementById('ingredientes-container');
+    const ingredienteTemplate = document.getElementById('ingrediente-template');
     
-    formulario.addEventListener('submit', function (event) {
-        event.preventDefault();
+    let ingredienteIndex = 0;
+    if (ingredientesContainer) {
+        ingredienteIndex = ingredientesContainer.querySelectorAll('.ingrediente-row').length;
+    }
+    
 
-   
-        const data = {
-            producto_id: parseInt(document.getElementById('producto_id').value),
-            cantidad: parseFloat(document.getElementById('cantidad').value),
-            fecha_meta: document.getElementById('fecha_meta').value, // <-- Usar 'fecha_meta'
-            prioridad: document.getElementById('prioridad').value,
-            observaciones: document.getElementById('observaciones').value,
-            supervisor_responsable_id: document.getElementById('supervisor_responsable_id').value
-        };
-
-        let url = CREAR_URL;
-        let method = 'POST';
-
-        fetch(url, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // La redirección mostrará el mensaje flash de éxito en el nuevo modal
-                showNotificationModal(data.message || 'Operación exitosa', 'Se creó exitosamente la orden de producción.');
-                setTimeout(() => {window.location.href = LISTA_URL}, 1500);
-            } else {
-                // Mostrar error de validación en el modal
-                showNotificationModal('Error de Validación', data.error, 'error');
+    // --- 1. Añadir Ingrediente ---
+    if (addItemBtn) {
+        addItemBtn.addEventListener('click', function() {
+            if (!ingredienteTemplate) {
+                console.error('El template #ingrediente-template no existe.');
+                return;
             }
-        })
-        .catch(error => {
-            console.error('Error en la petición:', error);
-            showNotificationModal('Error de Conexión', 'No se pudo procesar la solicitud. Verifique su conexión e intente nuevamente.', 'error');
-        });
 
-        return false;
+            const templateContent = ingredienteTemplate.content.cloneNode(true);
+            const newRow = templateContent.querySelector('.ingrediente-row');
+            
+            // Actualizar el prefijo del nombre para los campos del nuevo ítem
+            newRow.querySelectorAll('[name]').forEach(el => {
+                el.name = el.name.replace('__prefix__', ingredienteIndex);
+            });
+
+            ingredientesContainer.appendChild(newRow);
+            ingredienteIndex++;
+            updateUI();
+        });
+    }
+
+    // --- 2. Eliminar Ingrediente ---
+    if (ingredientesContainer) {
+        ingredientesContainer.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-ingrediente-btn')) {
+                e.preventDefault();
+                e.target.closest('.ingrediente-row').remove();
+                updateIngredienteIndices();
+                updateUI();
+            }
+        });
+    }
+
+    // --- 3. Envío del Formulario con Fetch ---
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(form);
+        const submitButton = form.querySelector('button[type="submit"]');
+        const originalButtonText = submitButton.innerHTML;
+        
+        // Deshabilitar botón y mostrar spinner
+        submitButton.disabled = true;
+        submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...`;
+
+        try {
+            // Usar la variable global definida en el template
+            const response = await fetch(CREAR_URL, {
+                method: 'POST',
+                body: new URLSearchParams(formData).toString(), // Enviar como x-www-form-urlencoded
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-TOKEN': formData.get('csrf_token')
+                }
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                // Usar la variable global LISTA_URL para la redirección
+                showNotificationModal('¡Éxito!', 'Orden de producción creada correctamente.', 'success', () => {
+                    window.location.href = LISTA_URL;
+                });
+            } else {
+                throw new Error(result.error || 'Ocurrió un error desconocido.');
+            }
+
+        } catch (error) {
+            let errorMessage = 'No se pudo conectar con el servidor. Intente de nuevo más tarde.';
+            if (error instanceof Error) {
+                errorMessage = error.message;
+            }
+            showNotificationModal('Error', errorMessage, 'error');
+
+        } finally {
+            // Restaurar botón solo en caso de error. En caso de éxito, se redirige.
+             if (!response.ok) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+             }
+        }
     });
+    
+    // --- 4. Funciones auxiliares ---
+    function updateUI() {
+        if (!ingredientesContainer) return;
+        const noItemsMsg = document.getElementById('no-ingredientes-msg');
+        if (noItemsMsg) {
+            noItemsMsg.style.display = ingredientesContainer.children.length > 0 ? 'none' : 'block';
+        }
+    }
+
+    function updateIngredienteIndices() {
+        if (!ingredientesContainer) return;
+        let index = 0;
+        ingredientesContainer.querySelectorAll('.ingrediente-row').forEach(row => {
+            row.querySelectorAll('[name]').forEach(el => {
+                const name = el.getAttribute('name');
+                if (name) {
+                    el.setAttribute('name', name.replace(/items\[\d+\]/, `items[${index}]`));
+                }
+            });
+            index++;
+        });
+        ingredienteIndex = index;
+    }
+
+    // --- Inicialización ---
+    updateUI();
 });

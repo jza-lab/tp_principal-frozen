@@ -93,7 +93,7 @@
                     <span><i class="bi bi-upc-scan"></i> <code>{{ insumo['codigo_interno'] }}</code></span>
                     <span><i class="bi bi-rulers"></i> {{ insumo['unidad_medida'] }}</span>
                     <span><i class="bi bi-currency-dollar"></i> {{ insumo['precio_unitario'] | formato_moneda }}</span>
-                    <span><i class="bi bi-box"></i> {{ insumo.proveedor.nombre }}</span>
+                    <span><i class="bi bi-box"></i> {{ insumo['proveedor']['nombre'] if insumo['proveedor'] else 'N/A' }}</span>
                 </div>
 
                 <div class="mt-auto">

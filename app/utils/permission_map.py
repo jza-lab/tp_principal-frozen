@@ -89,6 +89,7 @@ CANONICAL_PERMISSION_MAP = {
     'aprobar_orden_de_venta': ['GERENTE'],
     'inactivar_entidad': ['GERENTE'],
     'consultar_logs_o_auditoria': ['IT', 'GERENTE', 'RRHH'],
+    'ver_registros': ['IT'],
     'consultar_trazabilidad_completa': ['GERENTE', 'SUPERVISOR_CALIDAD'],
 
     # Módulo: Alertas y Reclamos

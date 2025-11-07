@@ -1112,12 +1112,21 @@ class PlanificacionController(BaseController):
                     logger.info(f"[AutoPlan] ÉXITO: OPs {op_codigos} planificadas.")
                     ops_planificadas_exitosamente.extend(op_codigos)
 
-                    # Verificar si se generó una OC (respuesta de aprobar_orden)
+                    # --- INICIO CORRECCIÓN ---
+                    # Verificar si se generó una o más OCs
                     if res_planif_dict and res_planif_dict.get('data') and res_planif_dict['data'].get('oc_generada'):
-                        oc_codigo = res_planif_dict['data'].get('oc_codigo', 'N/A')
-                        logger.info(f"[AutoPlan] -> Se generó OC {oc_codigo} para OPs {op_codigos}.")
-                        ops_con_oc_generada.append({'ops': op_codigos, 'oc': oc_codigo})
-
+                        ocs_creadas = res_planif_dict['data'].get('ocs_creadas', [])
+                        if ocs_creadas:
+                            # Tomar el código de la primera OC para el log
+                            primer_oc_codigo = ocs_creadas[0].get('codigo_oc', 'N/A')
+                            if len(ocs_creadas) > 1:
+                                logger.info(f"[AutoPlan] -> Se generaron {len(ocs_creadas)} OCs (empezando con {primer_oc_codigo}) para OPs {op_codigos}.")
+                                ops_con_oc_generada.append({'ops': op_codigos, 'oc': f"{len(ocs_creadas)} OCs ({primer_oc_codigo}, ...)"})
+                            else:
+                                logger.info(f"[AutoPlan] -> Se generó OC {primer_oc_codigo} para OPs {op_codigos}.")
+                                ops_con_oc_generada.append({'ops': op_codigos, 'oc': primer_oc_codigo})
+                    # --- FIN CORRECCIÓN ---
+                
                 elif res_planif_dict.get('error') == 'MULTI_DIA_CONFIRM':
                     # --- ¡NUEVA LÓGICA DE APROBACIÓN AUTOMÁTICA MULTI-DÍA! ---
                     dias_nec = res_planif_dict.get('dias_necesarios', 'varios')
@@ -1142,22 +1151,28 @@ class PlanificacionController(BaseController):
                             usuario_id
                         )
 
-                        # Interpretar la respuesta de la aprobación final
-                        if status_aprob < 400 and res_aprob_dict.get('success'):
-                            logger.info(f"[AutoPlan] ÉXITO (Multi-Día): OPs {op_codigos} planificadas.")
-                            # Usamos op_codigos que son los códigos de las OPs originales
-                            # que se consolidaron en op_id_para_confirmar
-                            ops_planificadas_exitosamente.extend(op_codigos)
+                        try:
+                            # Interpretar la respuesta de la aprobación final
+                            if status_aprob < 400 and res_aprob_dict.get('success'):
+                                logger.info(f"[AutoPlan] ÉXITO (Multi-Día): OPs {op_codigos} planificadas.")
+                                # Usamos op_codigos que son los códigos de las OPs originales
+                                # que se consolidaron en op_id_para_confirmar
+                                ops_planificadas_exitosamente.extend(op_codigos)
 
-                            # Re-chequear si esta aprobación generó una OC
-                            # (La función aprobar_orden dentro de _ejecutar_aprobacion_final maneja esto)
-                            if res_aprob_dict and res_aprob_dict.get('data') and res_aprob_dict['data'].get('oc_generada'):
-                                oc_codigo = res_aprob_dict['data'].get('oc_codigo', 'N/A')
-                                logger.info(f"[AutoPlan] -> Se generó OC {oc_codigo} para OPs {op_codigos}.")
-                                ops_con_oc_generada.append({'ops': op_codigos, 'oc': oc_codigo})
-                        else:
-                            # La aprobación final falló (ej. error de stock crítico en el último minuto)
-                            msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló en la aprobación final multi-día: {res_aprob_dict.get('error', 'Error desconocido')}"
+                                # Re-chequear si esta aprobación generó una OC
+                                if res_aprob_dict and res_aprob_dict.get('data') and res_aprob_dict['data'].get('oc_generada'):
+                                    oc_codigo = res_aprob_dict['data'].get('oc_codigo', 'N/A')
+                                    logger.info(f"[AutoPlan] -> Se generó OC {oc_codigo} para OPs {op_codigos}.")
+                                    ops_con_oc_generada.append({'ops': op_codigos, 'oc': oc_codigo})
+                            else:
+                                # La aprobación final falló
+                                error_msg = res_aprob_dict.get('error', 'Error desconocido') if isinstance(res_aprob_dict, dict) else str(res_aprob_dict)
+                                msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló en la aprobación final multi-día: {error_msg}"
+                                logger.error(f"[AutoPlan] {msg}")
+                                errores_encontrados.append(msg)
+                        except AttributeError:
+                            # Captura el error si res_aprob_dict no es un diccionario
+                            msg = f"Grupo {producto_nombre} (OPs: {op_codigos}) falló en la aprobación final multi-día con una respuesta inesperada: {str(res_aprob_dict)}"
                             logger.error(f"[AutoPlan] {msg}")
                             errores_encontrados.append(msg)
 
