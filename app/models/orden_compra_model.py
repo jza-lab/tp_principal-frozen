@@ -412,6 +412,13 @@ class OrdenCompraItemModel(BaseModel):
         Crea múltiples ítems de orden de compra.
         """
         try:
+            # --- INICIO CORRECCIÓN ---
+            # Se elimina el campo 'subtotal' de los items, ya que es una columna
+            # generada en la base de datos y no debe ser insertada explícitamente.
+            for item in items:
+                item.pop('subtotal', None)
+            # --- FIN CORRECCIÓN ---
+            
             clean_items = [self._prepare_data_for_db(item) for item in items]
             
             result = self.db.table(self.get_table_name()).insert(clean_items).execute()

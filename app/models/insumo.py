@@ -26,26 +26,49 @@ class InsumoModel(BaseModel):
 
     def find_all(self, filters: Optional[Dict] = None, order_by: str = 'nombre', limit: Optional[int] = None, select_columns: Optional[list] = None) -> Dict:
         """
-        Sobrescribe find_all para manejar la búsqueda de texto y reutilizar la lógica de BaseModel.
+        Sobrescribe find_all para manejar la búsqueda de texto y reutilizar la lógica de BaseModel,
+        incluyendo un JOIN con la tabla de proveedores.
         """
         try:
             # Copiar filtros para no modificar el original
             filters_copy = filters.copy() if filters else {}
             
-            # Extraer el filtro de búsqueda de texto si existe
             texto_busqueda = filters_copy.pop('busqueda', None)
-
-            # Llamar a la implementación de BaseModel con los filtros restantes
-            result = super().find_all(filters=filters_copy, order_by=order_by, limit=limit, select_columns=['*', 'proveedor:id_proveedor(*)'])
             
+            # Construir la consulta base con el JOIN
+            query = self.db.table(self.get_table_name()).select('*, proveedor:proveedores(*)')
+
+            # Aplicar filtros restantes (excluyendo 'busqueda')
+            for key, value in filters_copy.items():
+                if isinstance(value, list):
+                    query = query.in_(key, value)
+                else:
+                    query = query.eq(key, value)
+            
+            # Aplicar búsqueda de texto si existe (contra nombre y código)
             if texto_busqueda:
-                 logger.warning("La búsqueda por texto no es compatible con el filtrado por lista en InsumoModel.find_all")
+                search_term = f"%{texto_busqueda}%"
+                query = query.or_(f"nombre.ilike.{search_term},codigo_interno.ilike.{search_term}")
 
+            # Aplicar orden y límite
+            if order_by:
+                # La sintaxis de Supabase es "columna.orden"
+                parts = order_by.split('.')
+                col = parts[0]
+                asc = len(parts) == 1 or parts[1].lower() == 'asc'
+                query = query.order(col, desc=not asc)
+            if limit:
+                query = query.limit(limit)
 
-            if result.get('success'):
-                result['data'] = self._convert_timestamps(result['data'])
-            
-            return result
+            # Ejecutar la consulta
+            response = query.execute()
+
+            if response.data is not None:
+                # La conversión de timestamps ya la hacemos después
+                return {'success': True, 'data': self._convert_timestamps(response.data)}
+            else:
+                # Manejar el caso donde no hay datos pero la consulta fue exitosa
+                return {'success': True, 'data': []}
 
         except Exception as e:
             logger.error(f"Error obteniendo registros de {self.get_table_name()}: {str(e)}")

@@ -1,14 +1,15 @@
 from typing import Dict, TYPE_CHECKING
 from flask import request, jsonify
-from flask_jwt_extended import get_jwt
+from flask_jwt_extended import get_jwt, get_current_user
 from marshmallow import ValidationError
+from app.controllers.registro_controller import RegistroController
 from app.models.orden_compra_model import OrdenCompraItemModel, OrdenCompraModel
 from app.models.orden_compra_model import OrdenCompra
 from app.controllers.inventario_controller import InventarioController
-from app.controllers.insumo_controller import InsumoController
 from app.controllers.usuario_controller import UsuarioController
 from datetime import datetime, date
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +21,12 @@ if TYPE_CHECKING:
 
 class OrdenCompraController:
     def __init__(self):
+        from app.controllers.insumo_controller import InsumoController
         self.model = OrdenCompraModel()
         self.inventario_controller = InventarioController()
         self.insumo_controller = InsumoController()
         self.usuario_controller = UsuarioController()
+        self.registro_controller = RegistroController()
 
 
     def _parse_form_data(self, form_data):
@@ -31,19 +34,8 @@ class OrdenCompraController:
         Parsea los datos del formulario web o de un diccionario, calcula los totales
         y prepara los datos para la creación/actualización de la orden.
         """
-        orden_data = {
-            'proveedor_id': form_data.get('proveedor_id'),
-            'fecha_emision': form_data.get('fecha_emision'),
-            'fecha_estimada_entrega': form_data.get('fecha_estimada_entrega'),
-            'prioridad': form_data.get('prioridad'),
-            'observaciones': form_data.get('observaciones'),
-            # >>> AÑADE ESTA LÍNEA CRÍTICA <<<
-            'orden_produccion_id': form_data.get('orden_produccion_id'),
-        }
-
-        items_data = []
-        subtotal_calculado = 0.0
-
+        from app.controllers.insumo_controller import InsumoController
+        insumo_controller = InsumoController()
         # Determinar si los datos vienen de un form de Flask o de un dict (ej. JSON)
         if hasattr(form_data, 'getlist'):
             insumo_ids = form_data.getlist('insumo_id[]')
@@ -58,6 +50,29 @@ class OrdenCompraController:
             if not cantidades:
                 cantidades = form_data.get('cantidad_faltante[]', [])
             precios = form_data.get('precio_unitario[]', [])
+
+        primer_insumo_id = insumo_ids[0] if insumo_ids else None
+        if not primer_insumo_id:
+            raise ValueError("No se proporcionaron insumos para la orden.")
+
+        # Obtener el proveedor del primer insumo
+        primer_insumo_data, _ = insumo_controller.obtener_insumo_por_id(primer_insumo_id)
+        proveedor_id = primer_insumo_data.get('data', {}).get('id_proveedor')
+        if not proveedor_id:
+            raise ValueError(f"El insumo {primer_insumo_id} no tiene un proveedor asociado.")
+
+        orden_data = {
+            'proveedor_id': proveedor_id,
+            'fecha_emision': form_data.get('fecha_emision'),
+            'fecha_estimada_entrega': form_data.get('fecha_estimada_entrega'),
+            'prioridad': form_data.get('prioridad'),
+            'observaciones': form_data.get('observaciones'),
+            # >>> AÑADE ESTA LÍNEA CRÍTICA <<<
+            'orden_produccion_id': form_data.get('orden_produccion_id'),
+        }
+
+        items_data = []
+        subtotal_calculado = 0.0
 
         for i in range(len(insumo_ids)):
             if insumo_ids[i]:
@@ -97,15 +112,22 @@ class OrdenCompraController:
             if not orden_data.get('proveedor_id') or not orden_data.get('fecha_emision'):
                 return {'success': False, 'error': 'El proveedor y la fecha de emisión son obligatorios.'}
 
+            # --- CORRECCIÓN: Generar código único si no se provee ---
+            if 'codigo_oc' not in orden_data or not orden_data['codigo_oc']:
+                orden_data['codigo_oc'] = f"OC-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+            # ----------------------------------------------------
+
             # Asignar datos clave
             orden_data['usuario_creador_id'] = usuario_id
-            if not orden_data.get('codigo_oc'):
-                orden_data['codigo_oc'] = f"OC-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
             if not orden_data.get('estado'):
                 orden_data['estado'] = 'PENDIENTE'
 
             # Crear la orden
             result = self.model.create_with_items(orden_data, items_data)
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"Se creó la orden de compra {oc.get('codigo_oc')}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Creación', detalle)
             return result
         except Exception as e:
             logger.error(f"Error en el controlador al crear la orden: {e}")
@@ -113,15 +135,122 @@ class OrdenCompraController:
 
     def crear_orden_desde_form(self, form_data, usuario_id):
         """
-        Wrapper para crear una orden desde un formulario web.
-        Parsea los datos y luego llama al método principal de creación.
+        Wrapper para crear una o más órdenes desde un formulario web.
+        Agrupa los insumos por proveedor y genera una OC para cada uno.
         """
+        from collections import defaultdict
+        from app.controllers.insumo_controller import InsumoController
+        insumo_controller = InsumoController()
+        
         try:
-            orden_data, items_data = self._parse_form_data(form_data)
-            return self.crear_orden(orden_data, items_data, usuario_id)
+            # 1. Pre-procesar todos los items del formulario para obtener datos fiables de la BD
+            if hasattr(form_data, 'getlist'):
+                insumo_ids = form_data.getlist('insumo_id[]')
+                cantidades = form_data.getlist('cantidad_solicitada[]')
+            else: # Soporte para datos tipo JSON/dict
+                insumo_ids = form_data.get('insumo_id[]', [])
+                cantidades = form_data.get('cantidad_solicitada[]', [])
+            
+            if not insumo_ids:
+                raise ValueError("No se proporcionaron insumos para la orden.")
+                
+            items_procesados = []
+            for i in range(len(insumo_ids)):
+                insumo_id = insumo_ids[i]
+                cantidad = float(cantidades[i] or 0)
+                
+                if not insumo_id or cantidad <= 0:
+                    continue
+                    
+                # Obtener datos completos del insumo para asegurar proveedor y precio correctos
+                insumo_data_res, _ = insumo_controller.obtener_insumo_por_id(insumo_id)
+                if not insumo_data_res.get('success'):
+                    raise ValueError(f"El insumo con ID {insumo_id} no fue encontrado.")
+                
+                insumo_data = insumo_data_res['data']
+                proveedor_id = insumo_data.get('id_proveedor')
+                precio_unitario = float(insumo_data.get('precio_unitario', 0))
+                
+                if not proveedor_id:
+                    raise ValueError(f"El insumo '{insumo_data.get('nombre')}' no tiene un proveedor asociado.")
+                    
+                items_procesados.append({
+                    'insumo_id': insumo_id,
+                    'cantidad_solicitada': cantidad,
+                    'precio_unitario': precio_unitario,
+                    'proveedor_id': proveedor_id
+                })
+            
+            # 2. Agrupar items por proveedor
+            items_por_proveedor = defaultdict(list)
+            for item in items_procesados:
+                items_por_proveedor[item['proveedor_id']].append(item)
+                
+            if not items_por_proveedor:
+                 return {'success': False, 'error': 'No se procesaron items válidos para crear órdenes.'}
+
+            # 3. Iterar sobre cada grupo de proveedor y crear una orden de compra
+            resultados_creacion = []
+            ordenes_creadas_count = 0
+            
+            for proveedor_id, items_del_proveedor in items_por_proveedor.items():
+                # Generar código único para cada orden
+                codigo_oc = f"OC-{datetime.now().strftime('%Y%m%d-%H%M%S%f')}"
+                time.sleep(0.01) # Pausa mínima para asegurar timestamps diferentes
+
+                # a. Calcular totales para esta orden específica
+                subtotal = sum(item['cantidad_solicitada'] * item['precio_unitario'] for item in items_del_proveedor)
+                incluir_iva = form_data.get('incluir_iva', 'true').lower() in ['true', 'on', '1']
+                iva = subtotal * 0.21 if incluir_iva else 0.0
+                total = subtotal + iva
+                
+                # b. Construir los datos de la orden
+                orden_data = {
+                    'codigo_oc': codigo_oc,
+                    'proveedor_id': proveedor_id,
+                    'fecha_emision': form_data.get('fecha_emision'),
+                    'fecha_estimada_entrega': form_data.get('fecha_estimada_entrega'),
+                    'observaciones': form_data.get('observaciones'),
+                    'subtotal': round(subtotal, 2),
+                    'iva': round(iva, 2),
+                    'total': round(total, 2)
+                }
+                
+                # c. Limpiar el proveedor_id de los items antes de pasarlos a la creación
+                items_para_crear = [{k: v for k, v in item.items() if k != 'proveedor_id'} for item in items_del_proveedor]
+
+                # d. Crear la orden usando el método existente
+                resultado = self.crear_orden(orden_data, items_para_crear, usuario_id)
+                resultados_creacion.append(resultado)
+                if resultado.get('success'):
+                    ordenes_creadas_count += 1
+            
+            # 4. Formatear la respuesta final para el usuario
+            if ordenes_creadas_count == len(items_por_proveedor):
+                return {
+                    'success': True,
+                    'message': f'Se crearon {ordenes_creadas_count} órdenes de compra exitosamente.',
+                    'data': [res['data'] for res in resultados_creacion if res.get('success')]
+                }
+            elif ordenes_creadas_count > 0:
+                 return {
+                    'success': True, # Éxito parcial
+                    'message': f'Se crearon {ordenes_creadas_count} de {len(items_por_proveedor)} órdenes de compra. Algunas fallaron.',
+                    'data': resultados_creacion
+                }
+            else:
+                 return {
+                    'success': False,
+                    'error': 'No se pudo crear ninguna orden de compra.',
+                    'data': [res.get('error', 'Error desconocido') for res in resultados_creacion]
+                }
+
+        except ValueError as ve:
+            logger.error(f"Error de validación procesando formulario para crear órdenes: {ve}")
+            return {'success': False, 'error': str(ve)}
         except Exception as e:
-            logger.error(f"Error procesando formulario para crear orden: {e}")
-            return {'success': False, 'error': str(e)}
+            logger.error(f"Error procesando formulario para crear órdenes: {e}", exc_info=True)
+            return {'success': False, 'error': 'Ocurrió un error inesperado al procesar la solicitud.'}
 
     def actualizar_orden(self, orden_id, form_data):
         """
@@ -134,6 +263,11 @@ class OrdenCompraController:
                 return {'success': False, 'error': 'El proveedor y la fecha de emisión son obligatorios.'}
 
             result = self.model.update_with_items(orden_id, orden_data, items_data)
+
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"Se actualizó la orden de compra {oc.get('codigo_oc')}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Actualización', detalle)
 
             return result
 
@@ -221,6 +355,9 @@ class OrdenCompraController:
 
             result = self.model.update(orden_id, data)
             if result['success']:
+                oc = result.get('data')
+                detalle = f"Se actualizó la orden de compra {oc.get('codigo_oc')} (vía API)."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Actualización', detalle)
                 return jsonify({
                     'success': True,
                     'data': result['data'],
@@ -281,6 +418,9 @@ class OrdenCompraController:
             result = self.model.update(orden_id, cancelacion_data)
 
             if result['success']:
+                oc = result.get('data')
+                detalle = f"Se canceló la orden de compra {oc.get('codigo_oc')}. Motivo: {motivo}"
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cancelación', detalle)
                 return jsonify({
                     'success': True,
                     'data': result['data'],
@@ -305,6 +445,10 @@ class OrdenCompraController:
                 'updated_at': datetime.now().isoformat()
             }
             result = self.model.update(orden_id, update_data)
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"Se aprobó la orden de compra {oc.get('codigo_oc')}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
             return result
         except Exception as e:
             logger.error(f"Error aprobando orden {orden_id}: {e}")
@@ -320,6 +464,10 @@ class OrdenCompraController:
                 'updated_at': datetime.now().isoformat()
             }
             result = self.model.update(orden_id, update_data)
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"La orden de compra {oc.get('codigo_oc')} se marcó como EN TRANSITO."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
             return result
         except Exception as e:
             logger.error(f"Error marcando la orden {orden_id} como EN TRANSITO: {e}")
@@ -351,6 +499,10 @@ class OrdenCompraController:
                 'updated_at': datetime.now().isoformat()
             }
             result = self.model.update(orden_id, update_data)
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"Se rechazó la orden de compra {oc.get('codigo_oc')}. Motivo: {motivo}"
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
             return result
         except Exception as e:
             logger.error(f"Error rechazando orden {orden_id}: {e}")
@@ -592,6 +744,8 @@ class OrdenCompraController:
                         'iva': round(iva_padre, 2),
                         'total': round(total_padre, 2)
                     })
+                    detalle = f"Se procesó una recepción parcial para la OC {orden_data.get('codigo_oc')}. Se generó la OC complementaria {nueva_orden_result['data']['codigo_oc']}."
+                    self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
                     # --- FIN DE LA CORRECCIÓN ---
 
                     return {'success': True, 'message': f'Recepción parcial registrada. Se creó la orden {nueva_orden_result["data"]["codigo_oc"]} para los insumos restantes.'}
@@ -604,7 +758,11 @@ class OrdenCompraController:
                         'fecha_real_entrega': date.today().isoformat(),
                         'observaciones': f"{observaciones}\nRecepción completada. Pendiente de Control de Calidad."
                     }
-                    self.model.update(orden_id, update_data)
+                    result = self.model.update(orden_id, update_data)
+                    if result.get('success'):
+                        oc = result.get('data')
+                        detalle = f"Se procesó la recepción completa de la OC {oc.get('codigo_oc')}."
+                        self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
 
                     # 2. Mensaje de éxito (ya NO se mueve a calidad)
                     final_message = f'Recepción completada. {lotes_creados} lotes creados.'
@@ -722,6 +880,11 @@ class OrdenCompraController:
                 # Al cerrar la orden, después de que Control de Calidad ha finalizado,
                 # se reinicia la bandera para permitir nuevas OC automáticas.
                 self._reiniciar_bandera_stock_recibido(orden_id)
+
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"La orden de compra {oc.get('codigo_oc')} se marcó como CERRADA."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
             
             return result
 
@@ -757,6 +920,9 @@ class OrdenCompraController:
                 #
                 self._marcar_cadena_como_en_control_calidad(orden_id)
                 
+                detalle = f"La OC {orden_actual.get('codigo_oc')} pasó a EN CONTROL DE CALIDAD."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
+
                 logger.info(f"Usuario {usuario_id} movió la OC {orden_id} a EN_CONTROL_CALIDAD.")
                 
                 return {'success': True, 'message': 'La orden ha sido movida a Control de Calidad.'}

@@ -1,0 +1,51 @@
+{% extends "layouts/app_layout.html" %}
+{% import 'registros/macros.html' as macros %}
+
+{% block app_content %}
+<div class="container-fluid">
+    <h1 class="mb-4">Registros del Sistema</h1>
+
+    <!-- Pestañas Principales -->
+    <ul class="nav nav-tabs" id="mainRegistrosTab" role="tablist">
+        {% for categoria_nombre, subcategorias in categorias.items() %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if loop.first %}active{% endif %}" id="tab-{{ categoria_nombre|replace(' ', '_') }}" data-bs-toggle="tab" data-bs-target="#content-{{ categoria_nombre|replace(' ', '_') }}" type="button" role="tab">{{ categoria_nombre }}</button>
+        </li>
+        {% endfor %}
+    </ul>
+
+    <!-- Contenido de las Pestañas Principales -->
+    <div class="tab-content" id="mainRegistrosTabContent">
+        {% for categoria_nombre, subcategorias in categorias.items() %}
+        <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="content-{{ categoria_nombre|replace(' ', '_') }}" role="tabpanel">
+            
+            {% if subcategorias %}
+                <!-- Si hay subcategorías, crear pestañas anidadas -->
+                <div class="mt-3">
+                    <ul class="nav nav-pills" id="subTab-{{ categoria_nombre|replace(' ', '_') }}" role="tablist">
+                        {% for sub_nombre in subcategorias.keys() %}
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link {% if loop.first %}active{% endif %}" id="subtab-{{ categoria_nombre|replace(' ', '_') }}-{{ sub_nombre|replace(' ', '_') }}" data-bs-toggle="tab" data-bs-target="#subcontent-{{ categoria_nombre|replace(' ', '_') }}-{{ sub_nombre|replace(' ', '_') }}" type="button" role="tab">{{ sub_nombre }}</button>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    <div class="tab-content" id="subTabContent-{{ categoria_nombre|replace(' ', '_') }}">
+                        {% for sub_nombre, sub_db in subcategorias.items() %}
+                        <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="subcontent-{{ categoria_nombre|replace(' ', '_') }}-{{ sub_nombre|replace(' ', '_') }}" role="tabpanel">
+                            {% set registros = registros_agrupados[categoria_nombre][sub_nombre] %}
+                            {{ macros.render_registros_table(registros) }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% else %}
+                <!-- Si no hay subcategorías, mostrar la tabla directamente -->
+                {% set registros = registros_agrupados[categoria_nombre] %}
+                {{ macros.render_registros_table(registros) }}
+            {% endif %}
+
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

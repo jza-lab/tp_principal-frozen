@@ -1,6 +1,8 @@
 from app.controllers.base_controller import BaseController
+from app.controllers.registro_controller import RegistroController
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.totem_sesion import TotemSesionModel
+from flask_jwt_extended import get_current_user
 from app.models.usuario_turno import UsuarioTurnoModel
 from app.models.usuario import UsuarioModel
 from datetime import date, time
@@ -18,6 +20,7 @@ class AutorizacionController(BaseController):
         self.totem_sesion = TotemSesionModel()
         self.turno_model = UsuarioTurnoModel()
         self.usuario_model = UsuarioModel()
+        self.registro_controller = RegistroController()
 
     # region Operaciones CRUD
     def crear_autorizacion(self, data: dict) -> dict:
@@ -60,7 +63,13 @@ class AutorizacionController(BaseController):
         # 4. Creación del registro si todas las validaciones pasan
         data.pop('csrf_token', None)
         data.pop('_method', None)
-        return self.model.create(data)
+        result = self.model.create(data)
+        if result.get('success'):
+            auth = result.get('data')
+            usuario = self.usuario_model.find_by_id(auth.get('usuario_id')).get('data')
+            detalle = f"Se creó una autorización de tipo '{auth.get('tipo')}' para el empleado '{usuario.get('nombre')} {usuario.get('apellido')}'."
+            self.registro_controller.crear_registro(get_current_user(), 'Autorizaciones', 'Creación', detalle)
+        return result
 
     def obtener_todas_las_autorizaciones(self) -> dict:
         """Obtiene un historial de todas las autorizaciones agrupadas por estado."""
@@ -70,7 +79,14 @@ class AutorizacionController(BaseController):
         """
         Actualiza el estado y el comentario de una autorización específica.
         """
-        return self.model.update_estado(autorizacion_id, estado, comentario)
+        result = self.model.update_estado(autorizacion_id, estado, comentario)
+        if result.get('success'):
+            auth = self.model.find_by_id(autorizacion_id).get('data')
+            if auth:
+                usuario = self.usuario_model.find_by_id(auth.get('usuario_id')).get('data')
+                detalle = f"La autorización para '{usuario.get('nombre')} {usuario.get('apellido')}' cambió de estado a {estado}."
+                self.registro_controller.crear_registro(get_current_user(), 'Autorizaciones', 'Cambio de Estado', detalle)
+        return result
 
     # endregion
 

@@ -105,12 +105,13 @@ def nueva():
 def crear():
     try:
         controller = OrdenProduccionController()
-        datos_json = request.get_json()
-        if not datos_json:
-            return jsonify({"success": False, "error": "No se recibieron datos JSON válidos."}), 400
+        # Corregido: Usar request.form en lugar de request.get_json() para formularios web
+        datos_form = request.form
+        if not datos_form:
+            return jsonify({"success": False, "error": "No se recibieron datos de formulario válidos."}), 400
 
         usuario_id_creador = get_jwt_identity()
-        resultado = controller.crear_orden(datos_json, usuario_id_creador)
+        resultado = controller.crear_orden(datos_form, usuario_id_creador)
 
         if isinstance(resultado, tuple):
             resultado_dict, status_code = resultado

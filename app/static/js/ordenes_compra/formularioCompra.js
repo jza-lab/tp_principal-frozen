@@ -1,193 +1,180 @@
 document.addEventListener('DOMContentLoaded', function () {
+    const proveedorSelect = document.getElementById('proveedor_id');
+    const searchInput = document.getElementById('insumo-search');
+    const resultsContainer = document.getElementById('insumo-results');
     const itemsContainer = document.getElementById('itemsContainer');
+    const itemTemplate = document.getElementById('item-template');
+    const noItemsMsg = document.getElementById('no-items-msg');
     const subtotalInput = document.getElementById('subtotal');
     const ivaCheckbox = document.getElementById('iva');
     const totalInput = document.getElementById('total');
-    const addItemBtn = document.getElementById('addItemBtn');
+    let itemIndex = itemsContainer.querySelectorAll('.item-row').length;
 
-    // Mapeo de insumos para facilitar la construcción de opciones
-    const insumosData = typeof INSUMOS_DATA !== 'undefined' && Array.isArray(INSUMOS_DATA) ? INSUMOS_DATA : [];
-
-    /**
-     * Calcula los subtotales de las filas, el subtotal general y el total con/sin IVA.
-     * También llama a la función de exclusión de insumos.
-     */
-    function calcularSubtotales() {
-        let subtotalTotal = 0;
-        document.querySelectorAll('.item-row').forEach(row => {
-            // Usamos parseFloat y toFixed(2) para manejo de moneda
-            const cantidad = parseFloat(row.querySelector('.cantidad').value) || 0;
-            const precio = parseFloat(row.querySelector('.precio_unitario').value) || 0;
-            const subtotal = cantidad * precio;
-            
-            row.querySelector('.subtotal-item').value = subtotal.toFixed(2);
-            subtotalTotal += subtotal;
-        });
-
-        subtotalInput.value = subtotalTotal.toFixed(2);
-
-        // Cálculo de Total con IVA
-        let total = subtotalTotal;
-        if (ivaCheckbox.checked) {
-            total += subtotalTotal * 0.21;
+    // --- 1. Habilitar/Deshabilitar búsqueda de insumos ---
+    function toggleInsumoSearch() {
+        if (proveedorSelect.value) {
+            searchInput.disabled = false;
+            searchInput.placeholder = "Buscar insumo por nombre o código...";
+        } else {
+            searchInput.disabled = true;
+            searchInput.placeholder = "Seleccione un proveedor primero";
+            searchInput.value = '';
+            resultsContainer.innerHTML = '';
+            resultsContainer.style.display = 'none';
         }
-        totalInput.value = total.toFixed(2);
-        
-        // Llamada a la función de exclusión
-        updateAvaizlableInsumos(); 
     }
 
-    /**
-     * Itera sobre todos los selectores de insumos, recopila los IDs ya usados
-     * y deshabilita esas opciones en los demás selectores.
-     */
-    function updateAvailableInsumos() {
-        // 1. Recopilar todos los IDs de insumos seleccionados.
-        const selectedInsumoIds = new Set();
-        document.querySelectorAll('.insumo-selector').forEach(select => {
-            if (select.value) {
-                selectedInsumoIds.add(select.value);
+    proveedorSelect.addEventListener('change', toggleInsumoSearch);
+
+    // --- 2. Búsqueda dinámica de insumos ---
+    searchInput.addEventListener('input', debounce(async function () {
+        const query = searchInput.value.trim();
+        const proveedorId = proveedorSelect.value;
+
+        if (query.length < 2 || !proveedorId) {
+            resultsContainer.innerHTML = '';
+            resultsContainer.style.display = 'none';
+            return;
+        }
+
+        try {
+            const response = await fetch(`${INSUMOS_API_URL}?search=${encodeURIComponent(query)}&proveedor_id=${proveedorId}`);
+            if (!response.ok) throw new Error('Error en la red');
+            const insumos = await response.json();
+
+            resultsContainer.innerHTML = '';
+            if (insumos.length > 0) {
+                insumos.forEach(insumo => {
+                    const div = document.createElement('a');
+                    div.href = '#';
+                    div.className = 'list-group-item list-group-item-action';
+                    div.textContent = `${insumo.nombre} ($${parseFloat(insumo.precio_unitario || 0).toFixed(2)})`;
+                    div.dataset.id = insumo.id_insumo;
+                    div.dataset.nombre = insumo.nombre;
+                    div.dataset.precio = insumo.precio_unitario || 0;
+                    resultsContainer.appendChild(div);
+                });
+                resultsContainer.style.display = 'block';
+            } else {
+                resultsContainer.innerHTML = '<div class="list-group-item">No se encontraron insumos para este proveedor.</div>';
+                resultsContainer.style.display = 'block';
             }
-        });
+        } catch (error) {
+            console.error("Error al buscar insumos:", error);
+            resultsContainer.innerHTML = '<div class="list-group-item list-group-item-danger">Error al cargar.</div>';
+            resultsContainer.style.display = 'block';
+        }
+    }, 300));
 
-        // 2. Iterar sobre todos los selectores para aplicar la exclusión.
-        document.querySelectorAll('.insumo-selector').forEach(currentSelect => {
-            const currentValue = currentSelect.value;
+    // --- 3. Añadir ítem desde los resultados de búsqueda ---
+    resultsContainer.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (e.target.classList.contains('list-group-item-action')) {
+            const selectedInsumo = e.target;
+            const insumoId = selectedInsumo.dataset.id;
+            const insumoNombre = selectedInsumo.dataset.nombre;
+            const insumoPrecio = parseFloat(selectedInsumo.dataset.precio).toFixed(2);
+
+            if (document.querySelector(`input.insumo-id[value="${insumoId}"]`)) {
+                showNotificationModal("Error de validación", "Este insumo ya ha sido añadido.");
+                return;
+            }
+
+            const templateContent = itemTemplate.content.cloneNode(true);
+            const newRow = templateContent.querySelector('.item-row');
+
+            newRow.querySelector('.insumo-id').name = `items[${itemIndex}][insumo_id]`;
+            newRow.querySelector('.insumo-id').value = insumoId;
+            newRow.querySelector('.insumo-nombre').value = insumoNombre;
+            newRow.querySelector('.cantidad').name = `items[${itemIndex}][cantidad_solicitada]`;
+            newRow.querySelector('.precio_unitario').name = `items[${itemIndex}][precio_unitario]`;
+            newRow.querySelector('.precio_unitario').value = `$${insumoPrecio}`;
+
+
+            itemsContainer.appendChild(newRow);
+            itemIndex++;
             
-            // Iterar sobre todas las opciones con data-id
-            currentSelect.querySelectorAll('option[data-id]').forEach(option => {
-                const optionId = option.getAttribute('data-id');
+            searchInput.value = '';
+            resultsContainer.style.display = 'none';
 
-                // Habilitar la opción por defecto (limpiar el estado anterior)
-                option.disabled = false;
-                option.hidden = false; // Opcional: para asegurarnos de que sean visibles
-
-                // 3. Lógica de Inhabilitación:
-                // Deshabilita la opción si ha sido seleccionada, Y NO es la opción actual de ESTA fila.
-                if (selectedInsumoIds.has(optionId) && optionId !== currentValue) {
-                    option.disabled = true;
-                }
-            });
-        });
-    }
-
-    // -------------------------------------------------------------------------
-    // Eventos 
-    // -------------------------------------------------------------------------
-
-    // Eventos para inputs existentes (Cantidad, Precio, y Checkbox de IVA)
-    itemsContainer.addEventListener('input', function(e) {
-        // Ejecuta cálculo solo si el input es de cantidad o precio
-        if (e.target.classList.contains('cantidad') || e.target.classList.contains('precio_unitario')) {
+            updateUI();
             calcularSubtotales();
         }
     });
-    
-    // Evento de cambio para los selectores de insumos
-    itemsContainer.addEventListener('change', function(e) {
-        // Ejecuta exclusión y cálculo si el cambio viene de un selector de insumo
-        if (e.target.classList.contains('insumo-selector')) {
+
+    // --- 4. Eliminar ítem ---
+    itemsContainer.addEventListener('click', function (e) {
+        if (e.target.closest('.removeItemBtn')) {
+            e.target.closest('.item-row').remove();
+            updateItemIndices();
+            updateUI();
             calcularSubtotales();
-            // No es necesario llamar updateAvailableInsumos aquí, ya está en calcularSubtotales()
         }
     });
 
+    // --- 5. Recalcular totales al cambiar cantidad o IVA ---
+    itemsContainer.addEventListener('input', function (e) {
+        if (e.target.classList.contains('cantidad')) {
+            calcularSubtotales();
+        }
+    });
     ivaCheckbox.addEventListener('change', calcularSubtotales);
 
-    itemsContainer.addEventListener('change', function(e) {
-        if (e.target.classList.contains('insumo-selector')) {
-            const insumoId = e.target.value;
-            const insumo = insumosData.find(i => String(i.id) === String(insumoId));
-            const row = e.target.closest('.item-row');
-            const precioInput = row.querySelector('.precio_unitario');
-            const unidadLabel = row.querySelector('.unidad-label');
-            
-            if (insumo) {
-                if (precioInput) precioInput.value = insumo.precio_unitario ?? '';
-                if (unidadLabel) unidadLabel.textContent = insumo.unidad_medida ? `(${insumo.unidad_medida})` : '';
-            } else {
-                if (precioInput) precioInput.value = '';
-                if (unidadLabel) unidadLabel.textContent = '';
-            }
-            calcularSubtotales();
-        }
-    });
-
-    // Añadir ítem
-    addItemBtn.addEventListener('click', function () {
-        const row = document.createElement('div');
-        row.className = 'row g-3 align-items-end item-row mb-2';
-
-        let optionsHtml = '<option value="" data-id="">Seleccione un insumo...</option>';
-        insumosData.forEach(insumo => {
-            // Incluimos data-id en las opciones generadas
-            optionsHtml += `<option value="${insumo.id}" data-id="${insumo.id}">${insumo.nombre}</option>`;
+    // --- 6. Funciones auxiliares ---
+    function calcularSubtotales() {
+        let subtotal = 0;
+        document.querySelectorAll('.item-row').forEach(row => {
+            const cantidad = parseFloat(row.querySelector('.cantidad').value) || 0;
+            const precioStr = row.querySelector('.precio_unitario').value.replace('$', '').trim();
+            const precio = parseFloat(precioStr) || 0;
+            subtotal += cantidad * precio;
         });
 
-        row.innerHTML = `
-            <div class="col-md-4">
-                <label class="form-label">Insumo</label>
-                <select class="form-select insumo-selector" name="insumo_id[]" required>
-                    ${optionsHtml}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Cantidad <span class="unidad-label"></span></label>
-                <input type="number" min="1" max="5000" step="0.1" class="form-control cantidad" name="cantidad_solicitada[]" value="1">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Precio Unitario</label>
-                <input type="number" id="precio_unitario" class="form-control precio_unitario" name="precio_unitario[]" value="{{ item.precio_unitario }}" readonly>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Subtotal</label>
-                <input type="number" step="0.01" min="1" class="form-control subtotal-item" value="1.00" readonly>
-            </div>
-            <div class="col-md-2">
-                <button type="button" class="btn btn-outline-danger removeItemBtn">Eliminar</button>
-            </div>
-        `;
-        itemsContainer.appendChild(row);
-        
-        // Actualizar la exclusión de insumos inmediatamente
-        updateAvailableInsumos();
-    });
+        subtotalInput.value = `$${subtotal.toFixed(2)}`;
 
-    // Eliminar ítem
-    itemsContainer.addEventListener('click', function(e) {
-        if(e.target.classList.contains('removeItemBtn')) {
-            e.target.closest('.item-row').remove();
-            // Volver a calcular y actualizar las opciones disponibles
-            calcularSubtotales();
+        let total = subtotal;
+        if (ivaCheckbox.checked) {
+            total += subtotal * 0.21;
+        }
+        totalInput.value = `$${total.toFixed(2)}`;
+    }
+
+    function updateUI() {
+        const hasItems = itemsContainer.children.length > 0;
+        noItemsMsg.style.display = hasItems ? 'none' : 'block';
+    }
+
+    function updateItemIndices() {
+        let index = 0;
+        itemsContainer.querySelectorAll('.item-row').forEach(row => {
+            row.querySelectorAll('input').forEach(input => {
+                const name = input.getAttribute('name');
+                if (name) {
+                    input.setAttribute('name', name.replace(/items\[\d+\]/, `items[${index}]`));
+                }
+            });
+            index++;
+        });
+        itemIndex = index;
+    }
+
+    function debounce(func, delay) {
+        let timeout;
+        return function (...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), delay);
+        };
+    }
+
+    // Ocultar resultados si se hace clic fuera
+    document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target) && !resultsContainer.contains(e.target)) {
+            resultsContainer.style.display = 'none';
         }
     });
 
-    // Cálculo y exclusión inicial
+    // --- Inicialización ---
+    toggleInsumoSearch();
+    updateUI();
     calcularSubtotales();
-    updateAvailableInsumos();
 });
-
-const form = document.querySelector('form'); 
-const itemsContainer = document.getElementById('itemsContainer');
-
-form.addEventListener('submit', function(event) {
-    event.preventDefault();
-
-    if (!form.checkValidity()) {
-        form.classList.add('was-validated'); 
-        return; 
-    }
-
-    const itemRows = itemsContainer.querySelectorAll('.item-row');
-    
-    if (itemRows.length === 0) {
-        showNotificationModal('Error','Debe añadir al menos un insumo a la orden de compra.','error'); 
-    
-        itemsContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        return; 
-    }
-    form.classList.remove('was-validated'); 
-    form.submit(); 
-});
-

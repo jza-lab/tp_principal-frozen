@@ -1,6 +1,8 @@
 from app.controllers.base_controller import BaseController
+from app.controllers.registro_controller import RegistroController
 from app.models.proveedor import ProveedorModel
 from app.schemas.proveedor_schema import ProveedorSchema
+from flask_jwt_extended import get_current_user
 from typing import Dict, Optional
 import logging
 
@@ -13,6 +15,7 @@ class ProveedorController(BaseController):
         super().__init__()
         self.model = ProveedorModel()
         self.schema = ProveedorSchema()
+        self.registro_controller = RegistroController()
 
     def obtener_proveedores_activos(self) -> tuple:
         """Obtener lista de proveedores activos"""
@@ -78,6 +81,10 @@ class ProveedorController(BaseController):
             resultado_actualizar = self.model.update(proveedor_id, {'activo': False}, 'id')
             if not resultado_actualizar.get('success'):
                 return self.error_response(resultado_actualizar.get('error', 'Error al desactivar el proveedor'))
+            
+            proveedor = existing.get('data')
+            detalle = f"Se eliminó lógicamente al proveedor '{proveedor.get('nombre')}' (CUIT: {proveedor.get('cuit')})."
+            self.registro_controller.crear_registro(get_current_user(), 'Proveedores', 'Eliminación Lógica', detalle)
             return self.success_response(message='Proveedor desactivado exitosamente')
         except Exception as e:
             logger.error(f"Error eliminando proveedor {proveedor_id}: {str(e)}")
@@ -92,6 +99,10 @@ class ProveedorController(BaseController):
             resultado_actualizar = self.model.update(proveedor_id, {'activo': True}, 'id')
             if not resultado_actualizar.get('success'):
                 return self.error_response(resultado_actualizar.get('error', 'Error al activar el proveedor'))
+            
+            proveedor = existing.get('data')
+            detalle = f"Se habilitó al proveedor '{proveedor.get('nombre')}' (CUIT: {proveedor.get('cuit')})."
+            self.registro_controller.crear_registro(get_current_user(), 'Proveedores', 'Habilitación', detalle)
             return self.success_response(message='Proveedor activado exitosamente')
         except Exception as e:
             logger.error(f"Error habilitando proveedor {proveedor_id}: {str(e)}")
@@ -135,7 +146,10 @@ class ProveedorController(BaseController):
             result = self.model.create(validated_data)
 
             if result['success']:
-                return self.success_response(data=result['data'], message='Proveedor creado exitosamente', status_code=201)
+                proveedor = result.get('data')
+                detalle = f"Se creó el proveedor '{proveedor.get('nombre')}' (CUIT: {proveedor.get('cuit')})."
+                self.registro_controller.crear_registro(get_current_user(), 'Proveedores', 'Creación', detalle)
+                return self.success_response(data=proveedor, message='Proveedor creado exitosamente', status_code=201)
             else:
                 return self.error_response(result.get('error', 'Error al crear el proveedor'), 500)
 
@@ -191,7 +205,10 @@ class ProveedorController(BaseController):
 
             result = self.model.find_by_id(proveedor_id, include_direccion=True)
             if result.get('success'):
-                serialized_data = self.schema.dump(result['data'])
+                proveedor = result.get('data')
+                detalle = f"Se actualizó el proveedor '{proveedor.get('nombre')}' (CUIT: {proveedor.get('cuit')})."
+                self.registro_controller.crear_registro(get_current_user(), 'Proveedores', 'Actualización', detalle)
+                serialized_data = self.schema.dump(proveedor)
                 return self.success_response(data=serialized_data, message='Proveedor actualizado exitosamente')
             else:
                 return self.error_response('Error al obtener el proveedor actualizado', 500)

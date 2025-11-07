@@ -37,7 +37,7 @@ function showFeedbackModal(title, message, type = 'info', confirmCallback = null
     const modalElement = document.getElementById('feedbackModal');
     if (!modalElement) {
         console.error("Elemento modal 'feedbackModal' no encontrado!");
-        alert(`${title}\n\n${message}`); // Fallback a alert simple
+        showNotificationModal(title, message); // Fallback a alert simple
         return;
     }
 

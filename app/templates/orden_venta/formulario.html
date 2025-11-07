@@ -439,11 +439,11 @@
                                 <tr
                                     class="item-row {% if pedido and not pedido.estado=='PENDIENTE' %}table-light text-muted{% endif %}">
                                     <td>
-                                        <input type="hidden" name="items-{{ loop.index0 }}-id"
-                                            value="{{ item.id if item.id else '' }}">
+                                        <input type="hidden" name="items-{{ loop.index0 }}-id" value="{{ item.id if item.id else '' }}">
+                                        <input type="text" class="form-control form-control-sm product-search-input mb-1" placeholder="Buscar producto...">
                                         <select class="form-select form-select-sm producto-selector"
                                             name="items-{{ loop.index0 }}-producto_id" required {% if pedido and
-                                            pedido.estado !='PENDIENTE' %}disabled{% endif %}>
+                                            pedido.estado !='PENDIENTE' %}disabled{% endif %} size="5">
                                             <option value="">Seleccione...</option>
                                             {% for producto in productos %}
                                             <option value="{{ producto.id }}"
@@ -451,7 +451,7 @@
                                                 data-precio="{{ producto.precio_unitario | float or 0 }}"
                                                 data-unidad="{{ producto.unidad_medida }}" {% if
                                                 item.producto_id==producto.id %}selected{% endif %}>
-                                                {{ producto.nombre }}
+                                                {{ producto.nombre }} ({{ format_product_units(producto) }})
                                             </option>
                                             {% endfor %}
                                         </select>
@@ -565,13 +565,14 @@
     <tr class="item-row">
         <td>
             <input type="hidden" name="items-__prefix__-id" value="">
-            <select class="form-select form-select-sm producto-selector" name="items-__prefix__-producto_id" required>
+            <input type="text" class="form-control form-control-sm product-search-input mb-1" placeholder="Buscar producto...">
+            <select class="form-select form-select-sm producto-selector" name="items-__prefix__-producto_id" required size="5">
                 <option value="" selected data-id="">Seleccione un producto...</option>
                 {% for producto in productos %}
                 <option value="{{ producto.id }}" data-id="{{ producto.id }}"
                     data-precio="{{ producto.precio_unitario | float or 0 }}"
                     data-stock="{{ producto.stock_disponible or 0 }}" data-unidad="{{ producto.unidad_medida }}">{{
-                    producto.nombre }} ({{ producto.unidad_medida }})</option>
+                    producto.nombre }} ({{ format_product_units(producto) }})</option>
                 {% endfor %}
             </select>
         </td>
@@ -602,9 +603,9 @@
 
 <script>
     window.CLIENTE_API_URL_BASE = "{{ url_for('clientes_proveedores.buscar_por_cuil', cliente_cuil='0') }}";
-    const pedidoId = "{{ pedido.id }}"
+    const pedidoId = "{{ pedido.id if pedido else '' }}";
     const isEditing = {{ is_edit | tojson }};
-
+    const CREAR_URL = "{{ url_for('orden_venta.nueva') }}";
 </script>
 
 <script>
@@ -656,6 +657,22 @@
 
         // Estado inicial al cargar la página
         toggleDireccionEntrega(checkbox.checked);
+    });
+
+    // Lógica para filtrar los selects de productos
+    document.addEventListener('input', function(e) {
+        if (e.target && e.target.classList.contains('product-search-input')) {
+            const searchInput = e.target;
+            const itemRow = searchInput.closest('.item-row');
+            const productSelect = itemRow.querySelector('.producto-selector');
+            const options = Array.from(productSelect.options);
+            const query = searchInput.value.toLowerCase();
+
+            options.forEach(option => {
+                const shouldShow = option.value === "" || option.textContent.toLowerCase().includes(query);
+                option.style.display = shouldShow ? '' : 'none';
+            });
+        }
     });
 </script>
 {% endblock extra_js %}
