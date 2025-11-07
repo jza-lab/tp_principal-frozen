@@ -393,9 +393,9 @@ class OrdenProduccionController(BaseController):
 
     def _generar_orden_de_compra_automatica(self, insumos_faltantes: List[Dict], usuario_id: int, orden_produccion_id: int) -> Dict:
         from collections import defaultdict
-        
+
         items_por_proveedor = defaultdict(list)
-        
+
         # 1. Agrupar insumos por proveedor
         for insumo in insumos_faltantes:
             try:
@@ -403,7 +403,7 @@ class OrdenProduccionController(BaseController):
                 insumo_data_res, _ = self.insumo_controller.obtener_insumo_por_id(insumo_id)
                 if not insumo_data_res.get('success'):
                     return {'success': False, 'error': f"No se encontró el insumo con ID {insumo_id}."}
-                
+
                 insumo_data = insumo_data_res['data']
                 proveedor_id = insumo_data.get('id_proveedor')
                 if not proveedor_id:
@@ -441,7 +441,7 @@ class OrdenProduccionController(BaseController):
                 'iva': round(iva, 2),
                 'total': round(total, 2)
             }
-            
+
             items_para_crear = [{'insumo_id': i['insumo_id'], 'cantidad_solicitada': i['cantidad_solicitada'], 'precio_unitario': i['precio_unitario'], 'cantidad_recibida': 0.0} for i in items]
 
             resultado = self.orden_compra_controller.crear_orden(datos_oc, items_para_crear, usuario_id)
@@ -898,9 +898,9 @@ class OrdenProduccionController(BaseController):
                 supervisores = [] # Asegurarse de que la lista esté vacía para continuar
             else:
                 supervisores = supervisores_resp.get('data', [])
-            
+
             # TODO: Usar la hora real de la OP si está disponible. Por ahora, asumimos el inicio del turno de la mañana.
-            target_time = time(8, 0, 0) 
+            target_time = time(8, 0, 0)
             assigned_supervisor_id = None
 
             for supervisor in supervisores:
@@ -913,7 +913,7 @@ class OrdenProduccionController(BaseController):
                     try:
                         hora_inicio = time.fromisoformat(turno['hora_inicio'])
                         hora_fin = time.fromisoformat(turno['hora_fin'])
-                        
+
                         if hora_inicio <= hora_fin:
                             if hora_inicio <= target_time < hora_fin:
                                 assigned_supervisor_id = supervisor.get('id')
@@ -1137,9 +1137,9 @@ class OrdenProduccionController(BaseController):
         """
         orden_id = orden_produccion['id']
         logger.info(f"Stock insuficiente para OP {orden_id}. Generando OC(s)...")
-        
+
         oc_result = self._generar_orden_de_compra_automatica(insumos_faltantes, usuario_id, orden_id)
-        
+
         if not oc_result.get('success'):
             return self.error_response(f"Stock insuficiente, pero no se pudo generar la OC: {oc_result.get('error')}", 500)
 
@@ -1189,7 +1189,7 @@ class OrdenProduccionController(BaseController):
         if not estado_change_result.get('success'):
             logger.error(f"Error al cambiar estado a {nuevo_estado_op} para OP {orden_id}: {estado_change_result.get('error')}")
             return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
-        
+
         message = f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."
         detalle = f"Se aprobó la orden de producción {orden_produccion.get('codigo')}. {message}"
         self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Aprobación', detalle)
@@ -1227,10 +1227,13 @@ class OrdenProduccionController(BaseController):
             fecha_meta_str = op.get('fecha_meta')
             if fecha_meta_str:
                 try:
-                    # --- ¡CORRECCIÓN ROBUSTA! ---
+                    # --- INICIO DE LA CORRECCIÓN ---
+                    # El bug estaba aquí. 'date.fromisoformat' no puede
+                    # parsear un timestamp completo (ej. ...T00:00:00).
+                    # Lo partimos para tomar solo la fecha YYYY-MM-DD.
                     fecha_meta_solo_str = fecha_meta_str.split('T')[0].split(' ')[0]
                     fechas_meta_originales.append(date.fromisoformat(fecha_meta_solo_str))
-                    # --- FIN CORRECCIÓN ---
+                    # --- FIN DE LA CORRECCIÓN ---
                 except ValueError:
                     logger.warning(f"Formato de fecha meta inválido en OP {op.get('id')}: {fecha_meta_str}")
 
@@ -1269,19 +1272,40 @@ class OrdenProduccionController(BaseController):
             self.model.update(id_value=op_id, data=update_data, id_field='id')
         logger.info(f"OPs originales {op_ids} actualizadas a estado CONSOLIDADA.")
 
-    def _obtener_capacidad_linea(self, linea_asignada: int, fecha: date) -> Decimal:
+    def _obtener_capacidad_linea(self, linea_id: int, fecha: date) -> Decimal:
         """
-        Obtiene la capacidad neta de una línea (en minutos) para una fecha específica.
+        Obtiene la capacidad neta de una línea para una fecha específica.
+        --- CORREGIDO ---
+        Ahora extrae el valor 'neta' del diccionario devuelto
+        por el planificacion_controller.
         """
-        if not linea_asignada:
-            return Decimal('0.0')
+        try:
+            if not linea_id or not fecha:
+                return Decimal(0)
 
-        capacidad_data = self.planificacion_controller.obtener_capacidad_disponible(
-            [linea_asignada], fecha, fecha
-        )
+            if not self.planificacion_controller:
+                 self.planificacion_controller = PlanificacionController()
 
-        capacidad_en_minutos = capacidad_data.get(linea_asignada, {}).get(fecha.isoformat(), 0.0)
-        return Decimal(str(capacidad_en_minutos))
+            # 1. Llamar a la función que devuelve el mapa
+            capacidad_map = self.planificacion_controller.obtener_capacidad_disponible(
+                [linea_id], fecha, fecha
+            )
+
+            fecha_iso = fecha.isoformat()
+
+            # 2. Extraer el diccionario de capacidad para ese día
+            # (Ej: {'neta': 480.0, 'bloqueado': 0.0, ...})
+            capacidad_dict_dia = capacidad_map.get(linea_id, {}).get(fecha_iso, {})
+
+            # 3. Obtener el valor 'neta' (¡Esta es la corrección!)
+            capacidad_en_minutos = capacidad_dict_dia.get('neta', 0.0)
+
+            # El resto de la función (línea 1132 del traceback) ahora funcionará
+            return Decimal(str(capacidad_en_minutos))
+
+        except Exception as e:
+            logger.error(f"Error en _obtener_capacidad_linea para {linea_id} en {fecha}: {e}", exc_info=True)
+            return Decimal(0)
 
     def _calcular_ritmo_objetivo(self, orden: Dict) -> Decimal:
         """
@@ -1360,7 +1384,7 @@ class OrdenProduccionController(BaseController):
 
             if cantidad_buena < 0 or cantidad_desperdicio < 0:
                 return self.error_response("Las cantidades no pueden ser negativas.", 400)
-            
+
             # Solo requerir motivo si hay desperdicio
             if cantidad_desperdicio > 0 and not motivo_desperdicio_id:
                 return self.error_response("Se requiere un motivo para el desperdicio reportado.", 400)
@@ -1391,10 +1415,10 @@ class OrdenProduccionController(BaseController):
                 TOLERANCIA_SOBREPRODUCCION_PORCENTAJE,
                 DEFAULT_TOLERANCIA_SOBREPRODUCCION
             )
-            
+
             tolerancia_decimal = Decimal(tolerancia_porcentaje) / Decimal(100)
             cantidad_maxima_permitida = cantidad_planificada * (Decimal(1) + tolerancia_decimal)
-            
+
             # Se usa una pequeña tolerancia adicional para evitar errores de punto flotante
             TOLERANCIA_CALCULO = Decimal('0.001')
 
@@ -1404,10 +1428,10 @@ class OrdenProduccionController(BaseController):
                     f"La cantidad reportada excede el límite de sobreproducción permitido ({tolerancia_porcentaje}%). "
                     f"Excedente: {excedente:.2f} kg.", 400
                 )
-            
+
             # La cantidad a guardar sí puede ser mayor que la planificada (si está dentro de la tolerancia)
             update_data = {'cantidad_producida': nueva_cantidad_producida}
-            
+
             # --- LÓGICA DE TRANSICIÓN DE ESTADO ---
             # La orden se mueve al siguiente estado si la cantidad producida alcanza o supera la cantidad PLANIFICADA (no la máxima).
             if nueva_cantidad_producida >= cantidad_planificada:
@@ -1520,7 +1544,7 @@ class OrdenProduccionController(BaseController):
 
             # Reanudar el cronómetro
             self.op_cronometro_controller.registrar_inicio(orden_id)
-            
+
             detalle = f"Se reanudó la producción de la OP {orden.get('codigo')}."
             self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Reanudación de Producción', detalle)
 
@@ -1619,33 +1643,6 @@ class OrdenProduccionController(BaseController):
             return None, {'success': False, 'error': 'Todas las órdenes deben ser del mismo producto.'}
 
         return ops_originales, None
-
-    def _calcular_datos_super_op(self, ops_originales: List[Dict], op_ids: List[int]) -> Dict:
-        """Calcula los datos consolidados para la nueva Super OP."""
-        cantidad_total = sum(Decimal(op['cantidad_planificada']) for op in ops_originales)
-        primera_op = ops_originales[0]
-
-        fechas_meta_originales = []
-        for op in ops_originales:
-            fecha_meta_str = op.get('fecha_meta')
-            if fecha_meta_str:
-                try:
-                    fechas_meta_originales.append(date.fromisoformat(fecha_meta_str))
-                except ValueError:
-                    logger.warning(f"Formato de fecha meta inválido en OP {op.get('id')}: {fecha_meta_str}")
-
-        fecha_meta_mas_temprana = min(fechas_meta_originales) if fechas_meta_originales else None
-
-        return {
-            'producto_id': primera_op['producto_id'],
-            'cantidad_planificada': str(cantidad_total),
-            'fecha_planificada': primera_op.get('fecha_planificada'),
-            'receta_id': primera_op['receta_id'],
-            'fecha_meta': fecha_meta_mas_temprana.isoformat() if fecha_meta_mas_temprana else None,
-            'prioridad': 'ALTA',
-            'observaciones': f'Super OP consolidada desde las OPs: {", ".join(map(str, op_ids))}',
-            'estado': 'PENDIENTE'
-        }
 
     def _relinkear_items_pedido(self, op_ids: List[int], super_op_id: int) -> dict:
         """Actualiza los items de pedido de las OPs originales para que apunten a la nueva Super OP."""
