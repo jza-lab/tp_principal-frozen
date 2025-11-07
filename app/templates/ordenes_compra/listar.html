@@ -2,6 +2,10 @@
 
 {% block title %}Órdenes de Compra - Sistema Frozen{% endblock %}
 
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ordenes_compra/filtros.css') }}">
+{% endblock %}
+
 {% block app_content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
@@ -22,37 +26,108 @@
     </div>
 </div>
 
-<div class="card mb-4">
-    <div class="card-body card-filter">
-        <div class="row g-3 align-items-end">
-            <div class="col-12 mb-3">
-                <h5 class="form-label mb-1 text-white">Filtrar por Estado</h5>
-                <p class="text-white small mb-0">{{ ordenes|length }} órdenes encontradas</p>
-            </div>
+<!-- Filtros -->
+<div class="filter-card">
+    <!-- Búsqueda por código -->
+    <div class="filter-section">
+        <label class="filter-label">
+            <i class="bi bi-search me-1"></i>Buscar por Código de Orden
+        </label>
+        <div class="search-input-wrapper">
+            <i class="bi bi-upc-scan"></i>
+            <input 
+                type="text" 
+                id="searchInput" 
+                class="search-input" 
+                placeholder="Ingrese el código de orden (ej: OC-20251107...)">
+        </div>
+    </div>
 
-            <div class="col-12">
-                {% set current_status = request.args.get('estado') %}
-                <div class="d-flex flex-wrap gap-2 align-items-center">
-                    <a href="{{ url_for('orden_compra.listar', estado='') }}"
-                        class="btn btn-sm {% if not current_status %}btn-dark{% else %}btn-secondary{% endif %}">
-                        Todas
-                    </a>
-                    {% for estado_key, estado_nombre in filtros_ui %}
-                    <a href="{{ url_for('orden_compra.listar', estado=estado_key) }}"
-                        class="btn btn-sm {% if current_status == estado_key %}btn-dark{% else %}btn-secondary{% endif %}">
-                        {{ estado_nombre }}
-                    </a>
-                    {% endfor %}
-                </div>
-            </div>
+    <!-- Filtros rápidos -->
+    <div class="filter-section">
+        <label class="filter-label">
+            <i class="bi bi-lightning-fill me-1"></i>Filtros Rápidos
+        </label>
+        <div class="filter-quick-actions">
+            <button type="button" class="btn-quick-action" data-quick-filter="mis-ordenes">
+                <i class="bi bi-person-fill me-1"></i>Mis Órdenes
+            </button>
+            <button type="button" class="btn-quick-action" data-quick-filter="hoy">
+                <i class="bi bi-calendar-day me-1"></i>Hoy
+            </button>
+            <button type="button" class="btn-quick-action" data-quick-filter="ultimos-7">
+                <i class="bi bi-calendar-week me-1"></i>Últimos 7 días
+            </button>
+            <button type="button" class="btn-quick-action" data-quick-filter="ultimos-30">
+                <i class="bi bi-calendar-month me-1"></i>Últimos 30 días
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtro por estado -->
+    <div class="filter-section">
+        <label class="filter-label">
+            <i class="bi bi-funnel-fill me-1"></i>Filtrar por Estado
+        </label>
+        <div class="filter-buttons">
+            <button type="button" class="btn-filter-estado active" data-estado="">
+                <i class="bi bi-grid-3x3-gap-fill"></i>
+                Todas
+            </button>
+            <button type="button" class="btn-filter-estado" data-estado="PENDIENTE">
+                <i class="bi bi-clock"></i>
+                Pendiente
+            </button>
+            <button type="button" class="btn-filter-estado" data-estado="APROBADA">
+                <i class="bi bi-check-lg"></i>
+                Aprobada
+            </button>
+            <button type="button" class="btn-filter-estado" data-estado="EN_TRANSITO">
+                <i class="bi bi-truck"></i>
+                En Tránsito
+            </button>
+            <button type="button" class="btn-filter-estado" data-estado="RECEPCION_INCOMPLETA">
+                <i class="bi bi-box-seam"></i>
+                Recepción Incompleta
+            </button>
+            <button type="button" class="btn-filter-estado" data-estado="RECEPCION_COMPLETA">
+                <i class="bi bi-box-seam"></i>
+                Recepción Completa
+            </button>
+            <button type="button" class="btn-filter-estado" data-estado="EN_CONTROL_CALIDAD">
+                <i class="bi bi-clipboard-check"></i>
+                En Control de Calidad
+            </button>
+            <button type="button" class="btn-filter-estado" data-estado="CERRADA">
+                <i class="bi bi-lock-fill"></i>
+                Cerrada
+            </button>
+            <button type="button" class="btn-filter-estado" data-estado="RECHAZADA">
+                <i class="bi bi-x-circle"></i>
+                Rechazada
+            </button>
         </div>
     </div>
 </div>
 
+<!-- Resumen de resultados -->
+<div class="results-info">
+    <div class="results-count">
+        <strong id="visibleCount">{{ ordenes|length }}</strong> de <span id="totalCount">{{ ordenes|length }}</span> órdenes
+    </div>
+    <button type="button" class="btn-clear-filters" id="btnClearAll" style="display: none;">
+        <i class="bi bi-x-circle me-1"></i>Limpiar filtros
+    </button>
+</div>
+
 <!-- Lista de órdenes -->
-<div class="row">
+<div class="row" id="ordenesContainer">
     {% for orden in ordenes %}
-    <div class="col-md-4 mb-4">
+    <div class="col-md-4 mb-4 orden-card" 
+         data-estado="{{ orden.estado }}"
+         data-codigo="{{ orden.codigo_oc }}"
+         data-fecha="{{ orden.fecha_emision }}"
+         data-creador="{{ orden.usuario_creador_nombre }}">
         <div class="card h-100 insumo-card {% if orden.estado == 'RECHAZADA' %}orden-rechazada{% endif %}">
             <div class="card-body d-flex flex-column">
                 <div class="d-flex justify-content-between">
@@ -219,43 +294,18 @@
             </div>
         </div>
     </div>
-    {% else %}
-    <div class="col-12">
-        <div class="card bg-light border-0">
-            <div class="card-body text-center py-5">
-                <i class="bi bi-info-circle fs-1 opacity-25 mb-3"></i>
-                <h4 class="card-title">No se encontraron órdenes de compra</h4>
-                <p class="text-muted mb-0">No hay órdenes que coincidan con los filtros seleccionados.</p>
-            </div>
-        </div>
-    </div>
     {% endfor %}
 </div>
+
+<!-- Mensaje cuando no hay resultados -->
+<div id="noResultsMessage" class="no-results-message" style="display: none;">
+    <i class="bi bi-search"></i>
+    <h4>No se encontraron órdenes</h4>
+    <p>No hay órdenes que coincidan con los filtros aplicados</p>
 </div>
+
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const forms = document.querySelectorAll('.confirm-form');
-        forms.forEach(form => {
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();
-
-                const title = form.dataset.title || 'Confirmar Acción';
-                const message = form.dataset.message || '¿Está seguro de que desea realizar esta acción?';
-                const buttonType = form.dataset.buttonType || 'primary';
-
-                showConfirmationModal(
-                    title,
-                    message,
-                    () => { // Callback de confirmación
-                        form.submit();
-                    },
-                    buttonType
-                );
-            });
-        });
-    });
-</script>
+<script src="{{ url_for('static', filename='js/ordenes_compra/listar.js') }}"></script>
 {% endblock %}

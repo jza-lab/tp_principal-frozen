@@ -438,34 +438,29 @@ class InsumoController(BaseController):
 
     def actualizar_stock_insumo(self, id_insumo: str) -> tuple:
         """
-        Calcula y actualiza el stock de un insumo basado en sus lotes en inventario.
-        Devuelve el insumo actualizado.
+        Calcula y actualiza el stock disponible (actual) de un insumo basado en
+        la disponibilidad real de sus lotes (físico - reservado).
         """
         try:
-            # 1. Obtener todos los lotes disponibles para el insumo
-            lotes_result = self.inventario_model.find_by_insumo(id_insumo, solo_disponibles=True)
+            from app.controllers.inventario_controller import InventarioController
+            inventario_controller = InventarioController()
+            
+            lotes_con_disponibilidad = inventario_controller._obtener_lotes_con_disponibilidad(id_insumo)
+            
+            stock_disponible_total = sum(lote['disponibilidad'] for lote in lotes_con_disponibilidad)
 
-            if not lotes_result.get('success'):
-                return self.error_response(f"No se pudieron obtener los lotes: {lotes_result.get('error')}", 500)
-
-            # 2. Calcular el stock
-            total_stock = sum(lote.get('cantidad_actual', 0) for lote in lotes_result.get('data', []))
-
-            # 3. Actualizar el campo stock_actual en la tabla de insumos
-            update_data = {'stock_actual': int(total_stock)}
+            # Actualizar el campo stock_actual en la tabla de insumos
+            update_data = {'stock_actual': stock_disponible_total}
             update_result = self.insumo_model.update(id_insumo, update_data, 'id_insumo')
 
             if not update_result.get('success'):
                 return self.error_response(f"Error al actualizar el stock: {update_result.get('error')}", 500)
 
-            logger.info(f"Stock actualizado para el insumo {id_insumo}: {total_stock}")
+            logger.info(f"Stock disponible para el insumo {id_insumo} actualizado a: {stock_disponible_total}")
 
-            # --- INICIO DE LA NUEVA LÓGICA ---
-            # Después de actualizar, verificamos si necesita reposición.
+            # La lógica de reposición automática se mantiene
             self._verificar_y_reponer_stock(update_result['data'])
-            # --- FIN DE LA NUEVA LÓGICA ---
 
-            # 4. Devolver el insumo actualizado.
             return self.success_response(
                 data=update_result['data'],
                 message='Stock del insumo actualizado correctamente.'

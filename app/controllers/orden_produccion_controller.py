@@ -256,6 +256,83 @@ class OrdenProduccionController(BaseController):
             except Exception as e:
                 return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
+    def verificar_y_actualizar_ordenes_en_espera(self) -> Dict:
+        """
+        Verifica todas las órdenes 'EN ESPERA' y las actualiza a 'LISTA PARA PRODUCIR'
+        si el stock de insumos ya está disponible.
+        Este método está diseñado para ser llamado cuando el stock de insumos aumenta.
+        """
+        logger.info("Iniciando verificación proactiva de órdenes de producción 'EN ESPERA'.")
+        # 1. Obtener todas las órdenes 'EN ESPERA'
+        ordenes_en_espera_res = self.model.find_all(filters={'estado': 'EN ESPERA'})
+
+        if not ordenes_en_espera_res.get('success') or not ordenes_en_espera_res.get('data'):
+            logger.info("No se encontraron órdenes 'EN ESPERA' para verificar.")
+            return {'success': True, 'message': 'No hay órdenes en espera para procesar.'}
+
+        ordenes_en_espera = ordenes_en_espera_res['data']
+        ordenes_actualizadas_count = 0
+        errores = []
+
+        # 2. Iterar sobre cada orden y verificar su stock
+        for orden in ordenes_en_espera:
+            try:
+                orden_id = orden['id']
+                logger.debug(f"Verificando stock para OP {orden_id} (Código: {orden.get('codigo')})...")
+                
+                # 3. Verificar si hay stock disponible (dry run)
+                verificacion_result = self.inventario_controller.verificar_stock_para_op(orden)
+
+                if not verificacion_result.get('success'):
+                    logger.warning(f"Fallo la verificación de stock para OP {orden_id}: {verificacion_result.get('error')}")
+                    continue
+
+                insumos_faltantes = verificacion_result['data']['insumos_faltantes']
+
+                # 4. Si no hay faltantes, proceder a reservar y cambiar estado
+                if not insumos_faltantes:
+                    logger.info(f"Stock completo encontrado para OP {orden_id}. Procediendo a reservar y actualizar estado.")
+                    
+                    # Usar el ID del usuario que creó la orden para la reserva
+                    usuario_creador_id = orden.get('usuario_creador_id')
+                    if not usuario_creador_id:
+                        logger.error(f"La OP {orden_id} no tiene un usuario creador. No se puede reservar el stock. Saltando.")
+                        errores.append(f"OP {orden_id}: Falta usuario creador.")
+                        continue
+
+                    # 5. Reservar el stock
+                    reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden, usuario_creador_id)
+                    if not reserva_result.get('success'):
+                        logger.error(f"Stock disponible para OP {orden_id}, pero la reserva falló: {reserva_result.get('error')}")
+                        errores.append(f"OP {orden_id}: Fallo en reserva - {reserva_result.get('error')}")
+                        continue
+                    
+                    # 6. Cambiar el estado de la orden
+                    nuevo_estado = 'LISTA PARA PRODUCIR'
+                    cambio_estado_result = self.model.cambiar_estado(orden_id, nuevo_estado)
+
+                    if cambio_estado_result.get('success'):
+                        logger.info(f"Éxito: La OP {orden_id} ha sido actualizada a '{nuevo_estado}'.")
+                        ordenes_actualizadas_count += 1
+                    else:
+                        logger.error(f"Fallo al cambiar el estado de la OP {orden_id} a '{nuevo_estado}': {cambio_estado_result.get('error')}")
+                        errores.append(f"OP {orden_id}: Fallo al cambiar estado - {cambio_estado_result.get('error')}")
+
+                else:
+                    logger.debug(f"Stock aún insuficiente para OP {orden_id}.")
+
+            except Exception as e:
+                logger.error(f"Error inesperado procesando la OP {orden.get('id')} en la verificación proactiva: {e}", exc_info=True)
+                errores.append(f"OP {orden.get('id')}: Error - {str(e)}")
+        
+        # 7. Preparar el resumen final
+        summary_message = f"Verificación completada. {ordenes_actualizadas_count} órdenes actualizadas."
+        if errores:
+            summary_message += f" Se encontraron {len(errores)} errores: {'; '.join(errores)}"
+        
+        logger.info(summary_message)
+        return {'success': True, 'message': summary_message, 'data': {'actualizadas': ordenes_actualizadas_count, 'errores': len(errores)}}
+
     # --- WRAPPER PARA DELEGAR VERIFICACIÓN DE STOCK (FIX de AttributeError) ---
     def verificar_stock_para_op(self, orden_simulada: Dict) -> Dict:
         """

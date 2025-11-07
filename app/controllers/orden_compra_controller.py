@@ -582,47 +582,6 @@ class OrdenCompraController:
         except Exception as e:
             logger.error(f"Error en la cadena de completado para la orden {orden_id}: {e}", exc_info=True)
 
-    def _manejar_transicion_op_asociada(self, orden_data, usuario_id, orden_produccion_controller: "OrdenProduccionController"):
-        """
-        Gestiona la transición de estado de una Orden de Producción asociada
-        cuando se reciben todos los insumos necesarios de una Orden de Compra.
-        """
-        op_transition_message = ""
-        if not orden_data.get('orden_produccion_id'):
-            return op_transition_message
-
-        op_id = orden_data['orden_produccion_id']
-        op_result = orden_produccion_controller.obtener_orden_por_id(op_id)
-        if not op_result.get('success'):
-            op_error_msg = f"No se pudo encontrar la OP {op_id} asociada."
-            logger.error(op_error_msg)
-            return f"ADVERTENCIA: {op_error_msg}"
-
-        orden_produccion = op_result['data']
-        if orden_produccion.get('estado') == 'EN ESPERA':
-            logger.info(f"OP {op_id} está EN ESPERA. Intentando reservar insumos tras recepción de OC.")
-            reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
-
-            if not reserva_result.get('success'):
-                op_error_msg = f"Insumos recibidos pero la reserva automática para OP {op_id} falló. Error: {reserva_result.get('error')}"
-                op_transition_message = f"ADVERTENCIA: {op_error_msg}"
-                logger.error(op_error_msg)
-            else:
-                nuevo_estado_op = 'LISTA PARA PRODUCIR'
-                op_update_result = orden_produccion_controller.cambiar_estado_orden_simple(op_id, nuevo_estado_op)
-
-                if not op_update_result.get('success'):
-                    op_error_msg = op_update_result.get('error', 'Error desconocido.')
-                    op_transition_message = f"ADVERTENCIA: Falló al actualizar la OP {op_id} a {nuevo_estado_op}. Error: {op_error_msg}"
-                    logger.error(op_transition_message)
-                else:
-                    op_transition_message = f"Insumos reservados. La OP {op_id} ha sido actualizada a '{nuevo_estado_op}'."
-                    logger.info(f"OC {orden_data['id']} recibida, OP {op_id} movida a '{nuevo_estado_op}'.")
-        else:
-            logger.info(f"OC {orden_data['id']} recibida, pero la OP {op_id} asociada ya estaba en estado '{orden_produccion.get('estado')}'. No se realizaron cambios.")
-            op_transition_message = f"La OP {op_id} no estaba 'EN ESPERA', por lo que no fue modificada."
-
-        return op_transition_message
 
     def _crear_lotes_para_items_recibidos(self, items_para_lote, orden_data, usuario_id):
         """
@@ -773,11 +732,6 @@ class OrdenCompraController:
                     final_message = f'Recepción completada. {lotes_creados} lotes creados.'
                     if lotes_error > 0: final_message += f' ({lotes_error} con error).'
 
-                    # 3. Manejar OP asociada (esto se mantiene)
-                    op_transition_message = self._manejar_transicion_op_asociada(orden_data, usuario_id, orden_produccion_controller)
-                    if op_transition_message:
-                        final_message += f" | {op_transition_message}"
-
                     return {'success': True, 'message': final_message}
                     # --- FIN DE LA CORRECCIÓN ---
 
@@ -851,36 +805,6 @@ class OrdenCompraController:
             if result.get('success'):
                 logger.info(f"Orden de compra {orden_id} marcada como CERRADA.")
 
-                # --- INICIO DE LA NUEVA LÓGICA DE RESERVA DE LOTES ---
-                orden_produccion_id = orden_actual.get('orden_produccion_id')
-                codigo_oc = orden_actual.get('codigo_oc')
-
-                if orden_produccion_id and codigo_oc:
-                    logger.info(f"OC {orden_id} está vinculada a la OP {orden_produccion_id}. Procediendo a reservar lotes.")
-                    # El documento de ingreso puede tener o no el prefijo 'OC-'
-                    documento_ingreso_con_prefijo = f"OC-{codigo_oc}" if not codigo_oc.startswith('OC-') else codigo_oc
-                    documento_ingreso_sin_prefijo = codigo_oc.replace('OC-', '')
-
-                    # Buscamos lotes que coincidan con cualquiera de los dos formatos del código de OC
-                    lotes_a_reservar_res = self.inventario_controller.inventario_model.find_all(
-                        filters={'documento_ingreso': ('in', [documento_ingreso_con_prefijo, documento_ingreso_sin_prefijo])}
-                    )
-
-                    if lotes_a_reservar_res.get('success'):
-                        lotes_encontrados = lotes_a_reservar_res.get('data', [])
-                        logger.info(f"Se encontraron {len(lotes_encontrados)} lotes para reservar para la OP {orden_produccion_id}.")
-                        for lote in lotes_encontrados:
-                            update_data_lote = {
-                                'estado': 'reservado',
-                                'orden_produccion_id': orden_produccion_id
-                            }
-                            # Actualizamos cada lote individualmente
-                            self.inventario_controller.inventario_model.update(lote['id_lote'], update_data_lote, 'id_lote')
-                            logger.info(f"Lote {lote['id_lote']} reservado para la OP {orden_produccion_id}.")
-                    else:
-                        logger.error(f"Error al buscar lotes para la OC {codigo_oc}: {lotes_a_reservar_res.get('error')}")
-                # --- FIN DE LA NUEVA LÓGICA ---
-
                 # >>> PASO CRÍTICO CORREGIDO <<<
                 # Al cerrar la orden, después de que Control de Calidad ha finalizado,
                 # se reinicia la bandera para permitir nuevas OC automáticas.
@@ -890,7 +814,14 @@ class OrdenCompraController:
                 oc = result.get('data')
                 detalle = f"La orden de compra {oc.get('codigo_oc')} se marcó como CERRADA."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
-            
+                
+                try:
+                    from app.controllers.orden_produccion_controller import OrdenProduccionController
+                    orden_produccion_controller = OrdenProduccionController()
+                    orden_produccion_controller.verificar_y_actualizar_ordenes_en_espera()
+                except Exception as e_op:
+                    logger.error(f"Error al ejecutar la verificación proactiva de OPs tras cerrar la OC {orden_id}: {e_op}", exc_info=True)
+
             return result
 
         except Exception as e:
