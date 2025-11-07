@@ -1,7 +1,7 @@
 from .base_model import BaseModel
 
 class AlertaRiesgoModel(BaseModel):
-    def __init__(self, id=None, codigo=None, origen_tipo_entidad=None, origen_id_entidad=None, estado=None, motivo=None, comentarios=None, url_evidencia=None, fecha_creacion=None, resolucion_seleccionada=None):
+    def __init__(self, id=None, codigo=None, origen_tipo_entidad=None, origen_id_entidad=None, estado=None, motivo=None, comentarios=None, url_evidencia=None, fecha_creacion=None, resolucion_seleccionada=None, id_usuario_creador=None):
        
         super().__init__()
         self.id = id
@@ -14,6 +14,7 @@ class AlertaRiesgoModel(BaseModel):
         self.url_evidencia = url_evidencia
         self.fecha_creacion = fecha_creacion
         self.resolucion_seleccionada = resolucion_seleccionada
+        self.id_usuario_creador = id_usuario_creador
 
     @classmethod
     def get_table_name(cls):
@@ -96,10 +97,11 @@ class AlertaRiesgoModel(BaseModel):
         } for a in afectados]
         return self.db.table('alerta_riesgo_afectados').insert(records).execute()
     
-    def actualizar_estado_afectados(self, alerta_id, entidad_ids, resolucion, tipo_entidad, documento_id=None):
+    def actualizar_estado_afectados(self, alerta_id, entidad_ids, resolucion, tipo_entidad, id_usuario_resolucion, documento_id=None):
         update_data = {
             'estado': 'resuelto',
             'resolucion_aplicada': resolucion,
+            'id_usuario_resolucion': id_usuario_resolucion
         }
         if documento_id:
             update_data['id_documento_relacionado'] = documento_id

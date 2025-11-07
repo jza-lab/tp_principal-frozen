@@ -4,14 +4,18 @@ from app.controllers.riesgo_controller import RiesgoController
 from app.utils.decorators import permission_required
 
 admin_riesgo_bp = Blueprint('admin_riesgo', __name__, url_prefix='/admin/riesgos')
+from flask_jwt_extended import jwt_required, get_jwt_identity
+
 
 @admin_riesgo_bp.route('/crear-alerta', methods=['POST'])
 @jwt_required()
 @permission_required(accion='gestionar_reclamos') # Reuse permission for now
 def crear_alerta_riesgo_route():
     datos = request.json
+    usuario_id = get_jwt_identity()
+
     controller = RiesgoController()
-    response, status_code = controller.crear_alerta_riesgo(datos)
+    response, status_code = controller.crear_alerta_riesgo_con_usuario(datos, usuario_id)
 
     if status_code == 201:
         alerta_codigo = response.get('data', {}).get('codigo')
@@ -38,12 +42,21 @@ def detalle_alerta_riesgo(codigo_alerta):
 @permission_required(accion='gestionar_reclamos')
 def ejecutar_accion_riesgo(codigo_alerta):
     form_data = request.form
+    usuario_id = get_jwt_identity()
+
     
     controller = RiesgoController()
-      # El controlador ahora devuelve una tupla (dict, status_code)
-    response, status_code = controller.ejecutar_accion_riesgo(codigo_alerta, form_data)
+    response, status_code = controller.ejecutar_accion_riesgo(codigo_alerta, form_data, usuario_id)
 
-    # La respuesta se devuelve directamente como JSON
+    return jsonify(response), status_code
+
+@admin_riesgo_bp.route('/contactar-clientes/<codigo_alerta>', methods=['POST'])
+@jwt_required()
+@permission_required(accion='gestionar_reclamos')
+def contactar_clientes(codigo_alerta):
+    form_data = request.form
+    controller = RiesgoController()
+    response, status_code = controller.contactar_clientes_afectados(codigo_alerta, form_data)
     return jsonify(response), status_code
 
 @admin_riesgo_bp.route('/accion-resultado')

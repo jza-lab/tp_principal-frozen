@@ -3,7 +3,7 @@
 {% block title %}Detalle de Alerta de Riesgo {{ alerta.codigo }}{% endblock %}
 
 {% block app_content %}
-<div class="container-fluid mt-4">
+<div class="container-fluid mt-4 px-1 px-md-3">
     <div class="card">
         <div class="card-header bg-danger text-black">
             <h4 class="mb-0">
@@ -26,27 +26,77 @@
             <hr>
 
             <div class="row">
-                <div class="col-lg-4 mb-4">
-                    <div class="card sticky-top" style="top: 20px;">
-                        <div class="card-body">
-                            <h5 class="card-title"><i class="bi bi-journal-text me-2"></i>Información de la Alerta</h5>
-                            <p><strong>Motivo:</strong> {{ alerta.motivo }}</p>
-                            {% if alerta.comentarios %}
-                            <p><strong>Comentarios:</strong> {{ alerta.comentarios }}</p>
-                            {% endif %}
-                            {% if alerta.url_evidencia %}
-                            <p><strong>Evidencia:</strong></p>
-                            <a href="{{ alerta.url_evidencia }}" target="_blank">
-                                <img src="{{ alerta.url_evidencia }}" alt="Evidencia de la alerta" class="img-thumbnail"
-                                    style="max-width: 150px; cursor: pointer;">
-                            </a>
-                            {% endif %}
+                <div class="col-lg-4 col-md-12 mb-4">
+                    <div class="sticky-top" style="top: 20px;">
+                        <div class="card">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="bi bi-journal-text me-2"></i>Información de la Alerta
+                                </h5>
+                                <p><strong>Motivo:</strong> {{ alerta.motivo }}</p>
+                                {% if alerta.comentarios %}
+                                <p><strong>Comentarios:</strong> {{ alerta.comentarios }}</p>
+                                {% endif %}
+                                {% if alerta.url_evidencia %}
+                                <p><strong>Evidencia:</strong></p>
+                                <a href="{{ alerta.url_evidencia }}" target="_blank">
+                                    <img src="{{ alerta.url_evidencia }}" alt="Evidencia de la alerta"
+                                        class="img-thumbnail" style="max-width: 150px; cursor: pointer;">
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+
+
+                        <!-- Sección de Usuarios Involucrados -->
+                        <div class="card mt-4">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3"><i class="bi bi-people-fill me-2"></i>Personal Involucrado
+                                </h5>
+
+                                {% from 'admin_riesgos/_user_card.html' import render_user_card %}
+
+                                <!-- Creador de la Alerta -->
+                                {{ render_user_card(alerta.creador_info, 'Creador de la Alerta', is_primary=True) }}
+
+                                <!-- Participantes en la Resolución -->
+                                {% if alerta.participantes_resolucion %}
+                                <div class="mt-4">
+                                    <h6>Participantes en la Resolución</h6>
+                                    {% for participante in alerta.participantes_resolucion %}
+                                    <div class="card mb-3">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center">
+                                                <div class="me-3">
+                                                    <i class="bi bi-person-circle"
+                                                        style="font-size: 3rem; color: #6c757d;"></i>
+                                                </div>
+                                                <div class="flex-grow-1">
+                                                    <h6 class="card-title mb-1">{{ participante.info.nombre_completo }}
+                                                    </h6>
+                                                    <p class="card-text mb-1"><small class="text-muted">{{
+                                                            participante.info.rol }}</small></p>
+                                                </div>
+                                            </div>
+                                            <div class="mt-3">
+                                                <p class="mb-1"><strong>Acciones Realizadas:</strong></p>
+                                                <ul class="list-group list-group-flush">
+                                                    {% for accion in participante.acciones %}
+                                                    <li class="list-group-item py-1">{{ accion }}</li>
+                                                    {% endfor %}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Columna Principal de Gestión (Derecha) -->
-                <div class="col-lg-8">
+                <div class="col-lg-8 col-md-12">
                     <form id="form-gestion-riesgo"
                         action="{{ url_for('admin_riesgo.ejecutar_accion_riesgo', codigo_alerta=alerta.codigo) }}"
                         method="POST">
@@ -153,20 +203,28 @@
                                                 <th><input type="checkbox" id="seleccionar-todos-pedidos"></th>
                                                 <th>Pedido</th>
                                                 <th>Cliente</th>
+                                                <th>Afectación (Items)</th>
+                                                <th>Afectación (Valor)</th>
                                                 <th>Estado</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {% for pedido in pedidos %}
-                                            <tr class="{% if pedido.estado_resolucion == 'resuelto' %}table-light text-muted{% endif %}">
+                                            <tr
+                                                class="{% if pedido.estado_resolucion == 'resuelto' %}table-light text-muted{% endif %}">
                                                 <td>
                                                     <input type="checkbox" name="pedido_ids" value="{{ pedido.id }}"
                                                         class="pedido-checkbox" {% if
                                                         pedido.estado_resolucion=='resuelto' %}disabled{% endif %}>
                                                 </td>
-                                                <td><a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}">#{{ pedido.id }}</a></td>
+                                                <td><a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}">#{{
+                                                        pedido.id }}</a></td>
 
                                                 <td>{{ pedido.nombre_cliente }}</td>
+                                                <td><span class="badge bg-secondary">{{ pedido.afectacion_items_str
+                                                        }}</span></td>
+                                                <td><span class="badge bg-danger">{{ pedido.afectacion_valor_str
+                                                        }}</span></td>
                                                 <td>
                                                     {% if pedido.estado_resolucion == 'resuelto' %}
                                                     <span class="badge bg-success">{{ pedido.resolucion_aplicada |
@@ -183,6 +241,14 @@
                                 {% else %}
                                 <p class="text-muted small">No hay pedidos afectados.</p>
                                 {% endif %}
+                                {% if pedidos %}
+                                <div class="d-flex justify-content-end mt-3">
+                                    <button type="button" class="btn btn-info" data-bs-toggle="modal"
+                                        data-bs-target="#modalContactarClientes">
+                                        <i class="bi bi-envelope-fill me-2"></i>Contactar Clientes
+                                    </button>
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
 
@@ -193,23 +259,10 @@
                                 <h5><i class="bi bi-lightning-charge me-2"></i>Acciones de Respuesta</h5>
                             </div>
                             <div class="card-body">
-                                <p class="text-muted small">Seleccione los items de las listas de arriba y luego
+                                <p class="text-muted small">Seleccione los pedidos de la lista de arriba y luego
                                     elija una acción a ejecutar.</p>
+                                <h6 class="mt-3">Acciones sobre Pedidos</h6>
 
-                                <h6 class="mt-3">Lotes y Órdenes de Producción</h6>
-                                <div class="d-flex gap-2">
-                                    <button type="submit" name="accion" value="cuarentena_lotes"
-                                        class="btn btn-secondary">
-                                        <i class="bi bi-shield-lock me-1"></i> Poner Lotes en Cuarentena
-                                    </button>
-                                    <button type="submit" name="accion" value="pausar_ops" class="btn btn-secondary">
-                                        <i class="bi bi-pause-circle me-1"></i> Pausar Órdenes de Producción
-                                    </button>
-                                </div>
-
-                                <hr>
-
-                                <h6 class="mt-3">Pedidos</h6>
                                 <div class="d-flex flex-wrap gap-2 align-items-center">
                                     <button type="submit" name="accion" value="nota_credito" class="btn btn-primary">
                                         <i class="bi bi-receipt me-1"></i> Generar Nota de Crédito
@@ -263,6 +316,7 @@
         </div>
     </div>
 </div>
+{% include 'admin_riesgos/_modal_contactar_clientes.html' %}
 
 <!-- Modals para NC -->
 {% if alerta.notas_de_credito %}
@@ -447,6 +501,111 @@
 
             // Guardar
             doc.save(`Nota-Credito-NC-${data.id}.pdf`);
+        }
+
+        // --- Lógica para el modal de Contactar Clientes ---
+        const modalContactar = document.getElementById('modalContactarClientes');
+        if (modalContactar) {
+            const asuntoInput = document.getElementById('email-asunto');
+            const cuerpoTextarea = document.getElementById('email-cuerpo');
+            const listaPedidosDiv = document.getElementById('lista-pedidos-contacto');
+            const btnEnviarCorreo = document.getElementById('btnEnviarCorreoClientes');
+
+            modalContactar.addEventListener('show.bs.modal', function () {
+                const pedidosSeleccionados = document.querySelectorAll('.pedido-checkbox:checked:not(:disabled)');
+
+                listaPedidosDiv.innerHTML = ''; // Limpiar lista anterior
+
+                if (pedidosSeleccionados.length === 0) {
+                    listaPedidosDiv.innerHTML = '<p class="text-danger">No se ha seleccionado ningún pedido. Por favor, cierre este modal y seleccione al menos un pedido de la lista.</p>';
+                    asuntoInput.value = '';
+                    cuerpoTextarea.value = '';
+                    btnEnviarCorreo.disabled = true;
+                    return;
+                }
+
+                btnEnviarCorreo.disabled = false;
+                const form = document.getElementById('formContactarClientes');
+                // Limpiar inputs ocultos previos antes de añadir los nuevos
+                form.querySelectorAll('input[name="pedido_ids[]"]').forEach(el => el.remove());
+
+                const ul = document.createElement('ul');
+                ul.className = 'list-group';
+                let pedidosData = [];
+
+                pedidosSeleccionados.forEach(checkbox => {
+                    const pedidoId = checkbox.value;
+                    const fila = checkbox.closest('tr');
+                    const clienteNombre = fila.querySelector('td:nth-child(3)').textContent;
+
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item';
+                    li.textContent = `Pedido #${pedidoId} - Cliente: ${clienteNombre}`;
+                    ul.appendChild(li);
+
+                    // Añadir como input oculto para el formulario
+                    const hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.name = 'pedido_ids[]';
+                    hiddenInput.value = pedidoId;
+                    form.appendChild(hiddenInput);
+
+                    pedidosData.push({ id: pedidoId });
+                });
+
+                listaPedidosDiv.appendChild(ul);
+
+                // Pre-llenar asunto y cuerpo
+                if (pedidosData.length === 1) {
+                    asuntoInput.value = `Información sobre su pedido #${pedidosData[0].id}`;
+                } else {
+                    asuntoInput.value = 'Información sobre su pedido';
+                }
+
+                cuerpoTextarea.value = `Estimado/a cliente,\n\nNos ponemos en contacto con usted en relación a su reciente pedido.\n\nHemos identificado una situación que requiere nuestra atención con respecto a algunos de los productos incluidos en su orden. Nuestro equipo ya está trabajando para resolverlo con la mayor celeridad posible.\n\nNos comunicaremos nuevamente con usted a la brevedad para proporcionarle más detalles y coordinar los siguientes pasos.\n\nAgradecemos su comprensión y paciencia.\n\nAtentamente,\nEl equipo de [Nombre de la Empresa]`;
+            });
+
+            btnEnviarCorreo.addEventListener('click', function () {
+                const form = document.getElementById('formContactarClientes');
+                const formData = new FormData(form);
+                const spinner = this.querySelector('.spinner-border');
+
+                // Validar
+                if (!asuntoInput.value.trim() || !cuerpoTextarea.value.trim()) {
+                    showNotificationModal('Error', 'El asunto y el cuerpo del correo no pueden estar vacíos.', 'error');
+                    return;
+                }
+
+                spinner.classList.remove('d-none');
+                this.disabled = true;
+
+                fetch("{{ url_for('admin_riesgo.contactar_clientes', codigo_alerta=alerta.codigo) }}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': '{{ csrf_token() }}'
+                    }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showNotificationModal('Éxito', data.message || 'Correos enviados correctamente.', 'success');
+                            const modalInstance = bootstrap.Modal.getInstance(modalContactar);
+                            modalInstance.hide();
+                        } else {
+                            showNotificationModal('Error', data.error || 'Ocurrió un error al enviar los correos.', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error en la petición fetch:', error);
+                        showNotificationModal('Error', 'Error de conexión. Por favor, intente de nuevo.', 'error');
+                    })
+                    .finally(() => {
+                        spinner.classList.add('d-none');
+                        this.disabled = false;
+                    });
+            });
         }
     });
 </script>

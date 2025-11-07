@@ -30,7 +30,53 @@ class RiesgoController(BaseController):
         except Exception as e:
             logger.error(f"Error al previsualizar riesgo: {e}", exc_info=True)
             return {"success": False, "error": f"Error interno: {str(e)}"}, 500
+        
+    def crear_alerta_riesgo_con_usuario(self, datos_json, usuario_id):
+        try:
+            tipo_entidad = datos_json.get("tipo_entidad")
+            id_entidad = datos_json.get("id_entidad")
+            if not tipo_entidad or not id_entidad:
+                return {"success": False, "error": "tipo_entidad y id_entidad son requeridos."}, 400
+            
+            motivo = datos_json.get("motivo")
+            comentarios = datos_json.get("comentarios")
+            url_evidencia = datos_json.get("url_evidencia")
 
+            if not tipo_entidad or not id_entidad or not motivo:
+                return {"success": False, "error": "tipo_entidad, id_entidad y motivo son requeridos."}, 400
+            
+            afectados = self.trazabilidad_model.obtener_lista_afectados(tipo_entidad, id_entidad)
+            
+            count_res = self.alerta_riesgo_model.db.table(self.alerta_riesgo_model.get_table_name()).select('count', count='exact').execute()
+            count = count_res.count
+            
+            nueva_alerta_data = {
+                "origen_tipo_entidad": tipo_entidad,
+                "origen_id_entidad": str(id_entidad),
+                "estado": "Pendiente",
+                "codigo": f"ALR-{count + 1}",
+                "motivo": motivo,
+                "comentarios": comentarios,
+                "url_evidencia": url_evidencia,
+                "id_usuario_creador": usuario_id
+            }
+            
+            resultado_alerta = self.alerta_riesgo_model.create(nueva_alerta_data)
+            if not resultado_alerta.get("success"):
+                return resultado_alerta, 500
+
+            nueva_alerta = resultado_alerta.get("data")[0]
+            if afectados:
+                self.alerta_riesgo_model.asociar_afectados(nueva_alerta['id'], afectados)
+
+            return {"success": True, "data": nueva_alerta}, 201
+
+        except ValidationError as err:
+            return {"success": False, "errors": err.messages}, 400
+        except Exception as e:
+            logger.error(f"Error al crear alerta de riesgo: {e}", exc_info=True)
+            return {"success": False, "error": f"Error interno: {str(e)}"}, 500
+        
     def crear_alerta_riesgo(self, datos_json):
         try:
             tipo_entidad = datos_json.get("tipo_entidad")
@@ -85,8 +131,34 @@ class RiesgoController(BaseController):
                  return {"success": False, "error": "Alerta no encontrada"}, 404
             
             alerta = alerta_res.get("data")[0]
+
+            from app.controllers.usuario_controller import UsuarioController
+            usuario_controller = UsuarioController()
+
+            # Obtener detalles del creador
+            creador_id = alerta.get('id_usuario_creador')
+            if creador_id:
+                alerta['creador_info'] = usuario_controller.obtener_detalles_completos_usuario(creador_id)
+            else:
+                alerta['creador_info'] = None
+
             # Siempre obtener los detalles de las entidades afectadas y su estado
             afectados_con_estado = self.alerta_riesgo_model.obtener_afectados_con_estado(alerta['id'])
+            participantes = {}
+            for afectado in afectados_con_estado:
+                resolutor_id = afectado.get('id_usuario_resolucion')
+                if resolutor_id and afectado.get('estado') == 'resuelto':
+                    if resolutor_id not in participantes:
+                        participantes[resolutor_id] = {
+                            'info': usuario_controller.obtener_detalles_completos_usuario(resolutor_id),
+                            'acciones': []
+                        }
+                    
+                    accion_desc = f"{afectado.get('resolucion_aplicada', 'Acción desconocida').replace('_', ' ').title()} sobre {afectado.get('tipo_entidad', '').replace('_', ' ')} #{afectado.get('id_entidad')}"
+                    participantes[resolutor_id]['acciones'].append(accion_desc)
+            
+            alerta['participantes_resolucion'] = list(participantes.values())
+            # --- Fin del procesamiento de participantes ---
             
             # Obtener los detalles completos (código, nombre, etc.)
             afectados_detalle = self.alerta_riesgo_model.obtener_afectados_detalle_para_previsualizacion(afectados_con_estado)
@@ -105,7 +177,75 @@ class RiesgoController(BaseController):
                     entidad['resolucion_aplicada'] = resolucion
 
             alerta['afectados_detalle'] = afectados_detalle
-            
+
+            if 'pedidos' in afectados_detalle:
+                from app.controllers.pedido_controller import PedidoController
+                pedido_controller = PedidoController()
+                afectados_trazabilidad_completa = self.trazabilidad_model.obtener_lista_afectados(
+                    alerta['origen_tipo_entidad'], 
+                    alerta['origen_id_entidad']
+                )
+                # Obtener la lista de IDs de lotes de producto afectados
+                lotes_producto_afectados_ids = [
+                    str(afectado['id_entidad']) 
+                    for afectado in afectados_trazabilidad_completa 
+                    if afectado['tipo_entidad'] == 'lote_producto'
+                ]
+
+                for pedido in afectados_detalle['pedidos']:
+                    try:
+                        res_pedido, _ = pedido_controller.obtener_pedido_por_id(pedido['id'])
+                        if not res_pedido.get('success'):
+                            pedido['afectacion_items_str'] = "Error al cargar"
+                            pedido['afectacion_valor_str'] = "Error"
+                            continue
+
+                        pedido_completo = res_pedido.get('data', {})
+                        items_pedido = pedido_completo.get('items', [])
+
+                        if not items_pedido:
+                            pedido['afectacion_items_str'] = "0 de 0"
+                            pedido['afectacion_valor_str'] = "0%"
+                            continue
+
+                        total_items_count = len(items_pedido)
+                        
+                        total_valor = 0
+                        for item in items_pedido:
+                            try:
+                                precio = float(item.get('producto_nombre', {}).get('precio_unitario', 0))
+                                cantidad = float(item.get('cantidad', 0))
+                                total_valor += cantidad * precio
+                            except (ValueError, TypeError):
+                                continue
+
+
+                        items_afectados_count = 0
+                        valor_afectado = 0.0
+
+                        for item in items_pedido:
+                            if item.get('id_lote_producto') and str(item.get('id_lote_producto')) in lotes_producto_afectados_ids:
+                                items_afectados_count += 1
+                                try:
+                                    precio = float(item.get('producto_nombre', {}).get('precio_unitario', 0))
+                                    cantidad = float(item.get('cantidad', 0))
+                                    valor_afectado += cantidad * precio
+                                except (ValueError, TypeError):
+                                    continue
+
+                        pedido['afectacion_items_str'] = f"{items_afectados_count} de {total_items_count}"
+                        
+                        if total_valor > 0:
+                            porcentaje_valor = round((valor_afectado / total_valor) * 100)
+                            pedido['afectacion_valor_str'] = f"{porcentaje_valor}%"
+                        else:
+                            pedido['afectacion_valor_str'] = "0%"
+                            
+                    except Exception as e:
+                        logger.error(f"Error al calcular afectación para pedido {pedido['id']}: {e}", exc_info=True)
+                        pedido['afectacion_items_str'] = "Error"
+                        pedido['afectacion_valor_str'] = "Error"
+
             if alerta['estado'] in ['Resuelta', 'Cerrada']:
                 ncs_asociadas_res = self.nota_credito_controller.obtener_detalle_nc_por_alerta(alerta['id'])
                 alerta['notas_de_credito'] = ncs_asociadas_res.get('data', [])
@@ -116,25 +256,21 @@ class RiesgoController(BaseController):
             logger.error(f"Error al obtener detalle completo de alerta {codigo_alerta}: {e}", exc_info=True)
             return {"success": False, "error": f"Error interno: {str(e)}"}, 500
 
-    def ejecutar_accion_riesgo(self, codigo_alerta, form_data):
+    def ejecutar_accion_riesgo(self, codigo_alerta, form_data, usuario_id):
         accion = form_data.get("accion")
-          # Mapeo de acciones a métodos
         acciones = {
             "nota_credito": self._ejecutar_nota_de_credito,
-            "inhabilitar_pedido": self._ejecutar_inhabilitar_pedidos,
-            "cuarentena_lotes": self._ejecutar_cuarentena_lotes,
-            "pausar_ops": self._ejecutar_pausar_ops,
-            "cancelar_pedidos": self._ejecutar_inhabilitar_pedidos # Alias deprecado
+            "inhabilitar_pedido": self._ejecutar_inhabilitar_pedidos
         }
 
         if accion in acciones:
             # Todas las funciones de ejecución ahora devuelven un tuple (dict, status_code)
-            return acciones[accion](codigo_alerta, form_data)
+            return acciones[accion](codigo_alerta, form_data, usuario_id)
         
         return ({"success": False, "error": "Acción no válida."}, 400)
         
 
-    def _ejecutar_nota_de_credito(self, codigo_alerta, form_data):
+    def _ejecutar_nota_de_credito(self, codigo_alerta, form_data, usuario_id):
         pedidos_seleccionados = form_data.getlist("pedido_ids")
         recrear_pedido = form_data.get("recrear_pedido") == "on"
         if not pedidos_seleccionados:
@@ -152,7 +288,6 @@ class RiesgoController(BaseController):
             lotes_producto_afectados_ids = [
                 a['id_entidad'] for a in afectados_completo if a['tipo_entidad'] == 'lote_producto'
             ]
-            print(lotes_producto_afectados_ids)
             resultados_nc = self.nota_credito_controller.crear_notas_credito_para_pedidos_afectados(
                 alerta_id=alerta['id'],
                 pedidos_ids=pedidos_seleccionados,
@@ -160,7 +295,6 @@ class RiesgoController(BaseController):
                 detalle=alerta.get('motivo'),
                 lotes_producto_afectados_ids=lotes_producto_afectados_ids
             )
-            print(resultados_nc)
             if not resultados_nc['success']:
                 logger.error(f"Error al crear notas de crédito para alerta {codigo_alerta}: {resultados_nc.get('errors')}")
                 return ({"success": False, "error": "No se pudo crear Nota de Crédito.", "details": resultados_nc.get('errors')}, 500)
@@ -168,7 +302,8 @@ class RiesgoController(BaseController):
             notas_creadas = resultados_nc.get('data', [])
             for nc in notas_creadas:
                 pedido_id_resuelto = nc['pedido_origen_id']
-                self.alerta_riesgo_model.actualizar_estado_afectados(alerta['id'], [pedido_id_resuelto], 'nota_credito', 'pedido', nc['id'])
+                self.alerta_riesgo_model.actualizar_estado_afectados(alerta['id'], [pedido_id_resuelto], 'nota_credito', 'pedido', usuario_id, nc['id'])
+
 
 
             # Lógica para recrear pedidos
@@ -182,7 +317,7 @@ class RiesgoController(BaseController):
             logger.error(f"Error al ejecutar nota de crédito: {e}", exc_info=True)
             return ({"success": False, "error": f"Error interno: {str(e)}"}, 500)
 
-    def _ejecutar_inhabilitar_pedidos(self, codigo_alerta, form_data):
+    def _ejecutar_inhabilitar_pedidos(self, codigo_alerta, form_data, usuario_id):
         pedidos_seleccionados = form_data.getlist("pedido_ids")
         recrear_pedido = form_data.get("recrear_pedido") == "on"
         if not pedidos_seleccionados:
@@ -200,7 +335,7 @@ class RiesgoController(BaseController):
             for pedido_id in pedidos_seleccionados:
                 res, _ = pedido_controller.cancelar_pedido(int(pedido_id))
                 if res.get('success'):
-                    self.alerta_riesgo_model.actualizar_estado_afectados(alerta['id'], [pedido_id], 'inhabilitado', 'pedido')
+                    self.alerta_riesgo_model.actualizar_estado_afectados(alerta['id'], [pedido_id], 'inhabilitado', 'pedido', usuario_id)
                     inhabilitados_count += 1
 
             if recrear_pedido:
@@ -323,3 +458,57 @@ class RiesgoController(BaseController):
             return ({"success": False, "error": "Ninguna OP pudo ser pausada."}, 500)
 
         return ({"success": True, "message": f"Se pausaron {count} Órdenes de Producción."}, 200)
+
+
+    def contactar_clientes_afectados(self, codigo_alerta, form_data):
+        pedido_ids = form_data.getlist("pedido_ids[]")
+        asunto = form_data.get("asunto")
+        cuerpo = form_data.get("cuerpo")
+
+        if not pedido_ids:
+            return {"success": False, "error": "No se seleccionaron pedidos."}, 400
+        if not asunto or not cuerpo:
+            return {"success": False, "error": "El asunto y el cuerpo son requeridos."}, 400
+
+        try:
+            from app.controllers.pedido_controller import PedidoController
+            from app.services.email_service import send_email
+            
+            pedido_controller = PedidoController()
+            
+            correos_enviados = 0
+            errores = []
+
+            for pedido_id in pedido_ids:
+                res, _ = pedido_controller.obtener_pedido_por_id(int(pedido_id))
+                if not res.get('success'):
+                    errores.append(f"No se encontró el pedido #{pedido_id}.")
+                    continue
+                
+                pedido_data = res.get('data')
+                cliente_email = pedido_data.get('cliente', {}).get('email')
+                
+                if not cliente_email:
+                    errores.append(f"El cliente del pedido #{pedido_id} no tiene un email registrado.")
+                    continue
+
+                try:
+                    # Usar la configuración general de correo
+                    send_email(cliente_email, asunto, cuerpo)
+                    correos_enviados += 1
+                except Exception as e:
+                    logger.error(f"Error al enviar correo para pedido #{pedido_id}: {e}", exc_info=True)
+                    errores.append(f"No se pudo enviar el correo para el pedido #{pedido_id}.")
+
+            if correos_enviados == 0 and errores:
+                 return {"success": False, "error": f"No se pudo enviar ningún correo. Detalles: {'; '.join(errores)}"}, 500
+            
+            mensaje = f"Se enviaron {correos_enviados} de {len(pedido_ids)} correos."
+            if errores:
+                mensaje += f" Errores: {'; '.join(errores)}"
+
+            return {"success": True, "message": mensaje}, 200
+
+        except Exception as e:
+            logger.error(f"Error en contactar_clientes_afectados para alerta {codigo_alerta}: {e}", exc_info=True)
+            return {"success": False, "error": "Error interno del servidor al procesar la solicitud."}, 500

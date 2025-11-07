@@ -100,6 +100,37 @@ class UsuarioController(BaseController):
         except Exception as e:
             logger.error(f"Error al crear usuario: {str(e)}", exc_info=True)
             return {'success': False, 'error': f'Error interno: {str(e)}'}
+        
+    def obtener_detalles_completos_usuario(self, usuario_id: int) -> Optional[Dict]:
+        """
+        Obtiene un diccionario completo con todos los datos relevantes de un usuario
+        para ser mostrado en la interfaz (nombre, rol, turno, sectores, contacto).
+        """
+        if not usuario_id:
+            return None
+
+        usuario_base_res = self.model.find_by_id(usuario_id)
+        if not usuario_base_res.get('success'):
+            return None
+        
+        usuario = usuario_base_res.get('data')
+        
+        # El modelo ya anida 'roles' y 'turno', así que podemos usarlos directamente.
+        rol_info = usuario.get('roles', {})
+        turno_info = usuario.get('turno', {})
+        
+        # Para los sectores, necesitamos una consulta adicional.
+        sectores = self.obtener_sectores_usuario(usuario_id)
+        
+        return {
+            'id': usuario.get('id'),
+            'nombre_completo': f"{usuario.get('nombre', '')} {usuario.get('apellido', '')}".strip(),
+            'email': usuario.get('email'),
+            'telefono': usuario.get('telefono'),
+            'rol': rol_info.get('nombre') if rol_info else 'No asignado',
+            'turno': turno_info.get('nombre') if turno_info else 'No asignado',
+            'sectores': [s['nombre'] for s in sectores if s] if sectores else ['Sin sector']
+        }
 
     def actualizar_usuario(self, usuario_id: int, data: Dict) -> Dict:
         """Orquesta la actualización completa de un usuario."""
