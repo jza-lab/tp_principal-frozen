@@ -204,6 +204,10 @@ class OrdenCompraModel(BaseModel):
                         query = query.gte('fecha_emision', start_date.isoformat())
                         query = query.lte('fecha_emision', (end_date + timedelta(days=1)).isoformat())
 
+                if 'usuario_id' in filters and filters['usuario_id']:
+                    user_id = filters['usuario_id']
+                    query = query.or_(f"usuario_creador_id.eq.{user_id},usuario_aprobador_id.eq.{user_id}")
+
 
             response = query.order('fecha_emision', desc=True).execute()
             

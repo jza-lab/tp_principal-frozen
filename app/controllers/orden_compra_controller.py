@@ -345,6 +345,11 @@ class OrdenCompraController:
                 filters['prioridad'] = request.args.get('prioridad')
             if 'rango_fecha' not in filters and request.args.get('rango_fecha'):
                 filters['rango_fecha'] = request.args.get('rango_fecha')
+            
+            if 'filtro' not in filters and request.args.get('filtro') == 'mis_ordenes':
+                current_user_id = get_current_user().id
+                if current_user_id:
+                    filters['usuario_id'] = current_user_id
 
             result = self.model.get_all(filters)
 

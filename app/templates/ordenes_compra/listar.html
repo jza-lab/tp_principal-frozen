@@ -129,7 +129,7 @@
          data-fecha="{{ orden.fecha_emision }}"
          data-creador="{{ orden.usuario_creador_nombre }}"
          data-aprobador="{{ orden.usuario_aprobador_nombre or '' }}">
-        <div class="card h-100 insumo-card {% if orden.estado in ['RECHAZADA', 'CERRADA', 'CANCELADA'] %}orden-rechazada{% endif %}">
+        <div class="card h-100 {% if orden.estado in ['RECHAZADA', 'CERRADA', 'CANCELADA'] %}orden-rechazada{% endif %}">
             <div class="card-body d-flex flex-column">
                 <div class="d-flex justify-content-between">
                     <h5 class="card-title">{{ orden.proveedor_nombre or 'Proveedor no definido' }}</h5>

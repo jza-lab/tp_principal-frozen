@@ -1,226 +1,149 @@
-    document.addEventListener('DOMContentLoaded', function () {
-        // Variables globales
-        const searchInput = document.getElementById('searchInput');
-        const estadoBtns = document.querySelectorAll('.btn-filter-estado');
-        const quickActionBtns = document.querySelectorAll('.btn-quick-action');
-        const ordenCards = document.querySelectorAll('.orden-card');
-        const btnClearAll = document.getElementById('btnClearAll');
-        const visibleCountEl = document.getElementById('visibleCount');
-        const totalCountEl = document.getElementById('totalCount');
-        const ordenesContainer = document.getElementById('ordenesContainer');
-        const noResultsMessage = document.getElementById('noResultsMessage');
+document.addEventListener('DOMContentLoaded', function () {
+    // Variables globales
+    const searchInput = document.getElementById('searchInput');
+    const estadoBtns = document.querySelectorAll('.btn-filter-estado');
+    const quickActionBtns = document.querySelectorAll('.btn-quick-action');
+    const ordenCards = document.querySelectorAll('.orden-card');
+    const btnClearAll = document.getElementById('btnClearAll');
+    const visibleCountEl = document.getElementById('visibleCount');
+    const totalCountEl = document.getElementById('totalCount');
+    const ordenesContainer = document.getElementById('ordenesContainer');
+    const noResultsMessage = document.getElementById('noResultsMessage');
 
-        // Usuario actual (deberías obtenerlo del backend)
-        const currentUser = "{{ current_user.nombre if current_user else '' }}";
+    let activeFilters = {
+        estado: '',
+        search: ''
+    };
 
-        let activeFilters = {
-            estado: '',
-            search: '',
-            quickFilter: ''
-        };
-
-        // Total de órdenes
-        const totalOrdenes = ordenCards.length;
+    // Total de órdenes
+    const totalOrdenes = ordenCards.length;
+    if (totalCountEl) {
         totalCountEl.textContent = totalOrdenes;
+    }
+    
+    // Función de filtrado del lado del cliente (solo para búsqueda y estado)
+    function applyClientFilters() {
+        let visibleCount = 0;
 
-        // Función principal de filtrado
-        function applyFilters() {
-            let visibleCount = 0;
+        ordenCards.forEach(card => {
+            let show = true;
 
-            ordenCards.forEach(card => {
-                let show = true;
-
-                // Filtro por estado
-                if (activeFilters.estado && card.dataset.estado !== activeFilters.estado) {
-                    show = false;
-                }
-
-                // Filtro por búsqueda de código
-                if (activeFilters.search) {
-                    const codigo = card.dataset.codigo.toLowerCase();
-                    const searchTerm = activeFilters.search.toLowerCase();
-                    if (!codigo.includes(searchTerm)) {
-                        show = false;
-                    }
-                }
-
-                // Filtro rápido por fecha
-                if (activeFilters.quickFilter) {
-                    const fecha = new Date(card.dataset.fecha);
-                    const hoy = new Date();
-                    hoy.setHours(0, 0, 0, 0);
-
-                    switch (activeFilters.quickFilter) {
-                        case 'mis-ordenes':
-                            const esCreador = card.dataset.creador === currentUser;
-                            const esAprobador = card.dataset.aprobador === currentUser;
-                            if (!esCreador && !esAprobador) {
-                                show = false;
-                            }
-                            break;
-                        case 'hoy':
-                            const fechaCard = new Date(fecha);
-                            fechaCard.setHours(0, 0, 0, 0);
-                            if (fechaCard.getTime() !== hoy.getTime()) {
-                                show = false;
-                            }
-                            break;
-                        case 'ultimos-7':
-                            const hace7 = new Date(hoy);
-                            hace7.setDate(hace7.getDate() - 7);
-                            if (fecha < hace7) {
-                                show = false;
-                            }
-                            break;
-                        case 'ultimos-30':
-                            const hace30 = new Date(hoy);
-                            hace30.setDate(hace30.getDate() - 30);
-                            if (fecha < hace30) {
-                                show = false;
-                            }
-                            break;
-                    }
-                }
-
-                // Mostrar u ocultar
-                if (show) {
-                    card.classList.remove('hidden');
-                    visibleCount++;
-                } else {
-                    card.classList.add('hidden');
-                }
-            });
-
-            // Actualizar contador
-            visibleCountEl.textContent = visibleCount;
-
-            // Mostrar mensaje si no hay resultados
-            if (visibleCount === 0) {
-                ordenesContainer.style.display = 'none';
-                noResultsMessage.style.display = 'block';
-            } else {
-                ordenesContainer.style.display = 'flex';
-                noResultsMessage.style.display = 'none';
+            // Filtro por estado
+            if (activeFilters.estado && card.dataset.estado !== activeFilters.estado) {
+                show = false;
             }
 
-            // Mostrar/ocultar botón de limpiar filtros
-            const hasActiveFilters = activeFilters.estado || activeFilters.search || activeFilters.quickFilter;
-            btnClearAll.style.display = hasActiveFilters ? 'block' : 'none';
-        }
+            // Filtro por búsqueda de código
+            if (activeFilters.search) {
+                const codigo = card.dataset.codigo.toLowerCase();
+                const searchTerm = activeFilters.search.toLowerCase();
+                if (!codigo.includes(searchTerm)) {
+                    show = false;
+                }
+            }
 
-        // Event listeners para botones de estado
-        estadoBtns.forEach(btn => {
-            btn.addEventListener('click', function () {
-                // Remover active de todos
-                estadoBtns.forEach(b => b.classList.remove('active'));
-                
-                // Activar el clickeado
-                this.classList.add('active');
-                
-                // Actualizar filtro
-                activeFilters.estado = this.dataset.estado;
-                
-                applyFilters();
-            });
+            // Mostrar u ocultar
+            card.style.display = show ? '' : 'none';
+            if (show) {
+                visibleCount++;
+            }
         });
 
-        // Event listener para búsqueda
+        // Actualizar contador
+        if (visibleCountEl) {
+            visibleCountEl.textContent = visibleCount;
+        }
+
+        // Mostrar mensaje si no hay resultados
+        const hasResults = visibleCount > 0;
+        if (ordenesContainer) {
+            ordenesContainer.style.display = hasResults ? '' : 'none';
+        }
+        if (noResultsMessage) {
+            noResultsMessage.style.display = hasResults ? 'none' : 'flex';
+        }
+
+        // Mostrar/ocultar botón de limpiar filtros (solo para filtros de cliente)
+        const hasActiveClientFilters = activeFilters.estado || activeFilters.search;
+        if (btnClearAll) {
+           // Se muestra si hay cualquier filtro activo, cliente o servidor
+           const urlParams = new URLSearchParams(window.location.search);
+           btnClearAll.style.display = (hasActiveClientFilters || urlParams.has('filtro') || urlParams.has('rango_fecha')) ? 'block' : 'none';
+        }
+    }
+
+    // Event listeners para botones de estado (filtrado en cliente)
+    estadoBtns.forEach(btn => {
+        btn.addEventListener('click', function () {
+            estadoBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            activeFilters.estado = this.dataset.estado;
+            applyClientFilters();
+        });
+    });
+
+    // Event listener para búsqueda (filtrado en cliente)
+    if (searchInput) {
         let searchTimeout;
         searchInput.addEventListener('input', function () {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
                 activeFilters.search = this.value.trim();
-                applyFilters();
-            }, 300); // Debounce de 300ms
+                applyClientFilters();
+            }, 300);
         });
+    }
 
-        // Event listeners para filtros rápidos
-        quickActionBtns.forEach(btn => {
-            btn.addEventListener('click', function () {
-                const filter = this.dataset.quickFilter;
-                const currentUrl = new URL(window.location.href);
+    // Event listeners para filtros rápidos (recarga de página)
+    quickActionBtns.forEach(btn => {
+        btn.addEventListener('click', function () {
+            const filter = this.dataset.quickFilter;
+            const currentUrl = new URL(window.location.href);
+            const isActive = this.classList.contains('active');
 
-                // Manejo de 'mis-ordenes' como filtro de cliente
-                if (filter === 'mis-ordenes') {
-                    // Este filtro sigue siendo del lado del cliente, ya que no tenemos un ID de usuario en la URL
-                    if (this.classList.contains('active')) {
-                        this.classList.remove('active');
-                        activeFilters.quickFilter = '';
-                    } else {
-                        quickActionBtns.forEach(b => b.classList.remove('active'));
-                        this.classList.add('active');
-                        activeFilters.quickFilter = filter;
-                    }
-                    applyFilters();
-                    return; // Importante para no recargar la página
-                }
+            let paramName, paramValue;
+            if (filter === 'mis-ordenes') {
+                paramName = 'filtro';
+                paramValue = 'mis_ordenes';
+            } else {
+                paramName = 'rango_fecha';
+                paramValue = filter;
+            }
 
-                // Para filtros de fecha, modificamos la URL y recargamos
-                const isActive = this.classList.contains('active');
+            // Limpiar filtros de URL para evitar conflictos
+            currentUrl.searchParams.delete('filtro');
+            currentUrl.searchParams.delete('rango_fecha');
 
-                if (isActive) {
-                    // Si el botón ya está activo, lo desactivamos y quitamos el parámetro
-                    currentUrl.searchParams.delete('rango_fecha');
-                } else {
-                    // Si no, lo activamos y establecemos el parámetro
-                    currentUrl.searchParams.set('rango_fecha', filter);
-                }
+            if (!isActive) {
+                // Si no estaba activo, lo activamos y establecemos el parámetro
+                currentUrl.searchParams.set(paramName, paramValue);
+            }
+            // Si estaba activo, al limpiarlo arriba ya es suficiente para desactivarlo.
 
-                // Forzamos la recarga de la página con la nueva URL
-                window.location.href = currentUrl.toString();
-            });
-        });
-
-        // Al cargar la página, marcar como activo el botón de filtro de fecha si el parámetro está en la URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const fechaFilter = urlParams.get('rango_fecha');
-        if (fechaFilter) {
-            quickActionBtns.forEach(btn => {
-                if (btn.dataset.quickFilter === fechaFilter) {
-                    btn.classList.add('active');
-                }
-            });
-        }
-
-        // Limpiar todos los filtros
-        btnClearAll.addEventListener('click', function () {
-            // Resetear filtros
-            activeFilters = {
-                estado: '',
-                search: '',
-                quickFilter: ''
-            };
-
-            // Limpiar búsqueda
-            searchInput.value = '';
-
-            // Resetear botones de estado
-            estadoBtns.forEach(b => b.classList.remove('active'));
-            estadoBtns[0].classList.add('active'); // Activar "Todas"
-
-            // Resetear filtros rápidos
-            quickActionBtns.forEach(b => b.classList.remove('active'));
-
-            applyFilters();
-        });
-
-        // Manejo de formularios de confirmación
-        const forms = document.querySelectorAll('.confirm-form');
-        forms.forEach(form => {
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();
-                const title = form.dataset.title || 'Confirmar Acción';
-                const message = form.dataset.message || '¿Está seguro de que desea realizar esta acción?';
-                const buttonType = form.dataset.buttonType || 'primary';
-
-                showConfirmationModal(
-                    title,
-                    message,
-                    () => {
-                        form.submit();
-                    },
-                    buttonType
-                );
-            });
+            window.location.href = currentUrl.toString();
         });
     });
+
+    // Al cargar la página, marcar como activo el botón de filtro rápido si el parámetro está en la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const fechaFilter = urlParams.get('rango_fecha');
+    const misOrdenesFilter = urlParams.get('filtro');
+
+    quickActionBtns.forEach(btn => {
+        const quickFilter = btn.dataset.quickFilter;
+        if ((quickFilter === fechaFilter) || (quickFilter === 'mis-ordenes' && misOrdenesFilter === 'mis_ordenes')) {
+            btn.classList.add('active');
+        }
+    });
+
+    // Limpiar todos los filtros (cliente y servidor)
+    if (btnClearAll) {
+        btnClearAll.addEventListener('click', function () {
+            // Redirige a la URL base sin parámetros de consulta
+            window.location.href = window.location.origin + window.location.pathname;
+        });
+    }
+
+    // Aplicar filtros de cliente al cargar la página por si el usuario vuelve con el historial
+    applyClientFilters();
+});
