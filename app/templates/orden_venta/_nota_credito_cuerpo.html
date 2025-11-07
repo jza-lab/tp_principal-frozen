@@ -5,7 +5,7 @@
 {% set TIPO_COMPROBANTE_CODIGO = "03" %} {# Código AFIP para Nota de Crédito A #}
 
 {# Asumimos que nc.codigo_nc es algo como "NC-123" o "0001-00001234". Intentamos splitear. #}
-{% set ptv_nro_list = (nc.codigo_nc or '0001-00000000')  %}
+{% set ptv_nro_list = (nc.codigo_nc or '0001-00000000') %}
 {% set PUNTO_VENTA = ptv_nro_list[0] | default('0001') %}
 {% set NRO_COMPROBANTE = 0000000000 %}
 
@@ -25,15 +25,15 @@
 {% set CLIENTE_CUIT = pedido.cliente.cuit | default('N/A', true) %}
 {% set CLIENTE_CONDICION_IVA = pedido.cliente.condicion_iva | default('Consumidor Final', true) %}
 {% set CLIENTE_DOMICILIO = [
-    pedido.direccion.calle | default('', true),
-    pedido.direccion.altura | default('', true),
-    pedido.direccion.piso | default('', true),
-    pedido.direccion.depto | default('', true)
+pedido.direccion.calle | default('', true),
+pedido.direccion.altura | default('', true),
+pedido.direccion.piso | default('', true),
+pedido.direccion.depto | default('', true)
 ] | join(' ') | trim %}
 {% set CLIENTE_LOCALIDAD = [
-    pedido.direccion.codigo_postal | default('', true),
-    pedido.direccion.localidad | default('', true),
-    pedido.direccion.provincia | default('Buenos Aires', true)
+pedido.direccion.codigo_postal | default('', true),
+pedido.direccion.localidad | default('', true),
+pedido.direccion.provincia | default('Buenos Aires', true)
 ] | join(' ') | trim %}
 
 
@@ -63,7 +63,7 @@
                             <strong style="margin-left: 20px;">Comp. Nro:</strong> {{ NRO_COMPROBANTE }}
                         </p>
                         <p style="margin: 2px 0;">
-                            <strong>Fecha de Emisión:</strong> {{ nc.fecha_emision | format_datetime }}
+                            <strong>Fecha de Emisión:</strong> {{ nc.created_at | format_datetime }}
                         </p>
                         <hr style="border: 0; border-top: 1px solid #000; margin: 5px 0;">
                         <p style="margin: 2px 0;"><strong>CUIT:</strong> {{ EMISOR_CUIT }}</p>
@@ -117,10 +117,10 @@
             Deberás modificar el backend (ej. pedido_controller.py) para que cargue
             los items de las notas de crédito al cargar el pedido.
             #}
-            {% for item in nc.items %}
+            {% for item in nc['items'] %}
             <tr style="border-bottom: 1px solid #ccc;">
-                <td style="padding: 4px 5px;">{{ item.producto_nombre }}</td>
-                <td style="padding: 4px 5px;">{{ item.lote_numero }}</td>
+                <td style="padding: 4px 5px;">{{ item.productos.nombre }}</td>
+                <td style="padding: 4px 5px;">{{ item.lotes_productos.numero_lote }}</td>
                 <td style="padding: 4px 5px; text-align: right;">{{ item.cantidad }}</td>
                 <td style="padding: 4px 5px; text-align: right;">{{ item.precio_unitario | formato_moneda }}</td>
                 <td style="padding: 4px 5px; text-align: right;">{{ item.subtotal | formato_moneda }}</td>
@@ -140,9 +140,11 @@
             <td style="width: 60%; vertical-align: top; padding-right: 10px;">
                 <div style="border: 1px solid #000; padding: 5px; font-size: 10pt;">
                     <strong>Motivo de la Nota de Crédito:</strong><br>
-                    <p style="margin:0;">{{ nc.motivo | default('Ajuste de cuenta corriente por devolución de mercadería.', true) }}</p>
+                    <p style="margin:0;">{{ nc.motivo | default('Ajuste de cuenta corriente por devolución de
+                        mercadería.', true) }}</p>
                 </div>
-                <table style="width: 100%; border-collapse: collapse; margin-top: 10px; border: 1px solid #000; font-size: 10pt;">
+                <table
+                    style="width: 100%; border-collapse: collapse; margin-top: 10px; border: 1px solid #000; font-size: 10pt;">
                     <tr>
                         <td style="padding: 5px;">
                             <strong>CAE N°:</strong> {{ nc.cae | default('N/A (Comprobante no fiscal)', true) }}
@@ -153,7 +155,7 @@
                     </tr>
                 </table>
             </td>
-            
+
             <td style="width: 40%; vertical-align: top; font-size: 10pt;">
                 <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
                     {# El cálculo de IVA debe venir del backend, esto es un supuesto #}
@@ -162,15 +164,18 @@
                     {% set monto_iva = monto_neto * 0.21 %}
                     <tr>
                         <td style="padding: 4px 5px; text-align: right;">Subtotal Neto:</td>
-                        <td style="width: 50%; padding: 4px 5px; text-align: right;">{{ monto_neto | formato_moneda }}</td>
+                        <td style="width: 50%; padding: 4px 5px; text-align: right;">{{ monto_neto | formato_moneda }}
+                        </td>
                     </tr>
                     <tr>
                         <td style="padding: 4px 5px; text-align: right;">IVA (21%):</td>
-                        <td style="width: 50%; padding: 4px 5px; text-align: right;">{{ monto_iva | formato_moneda }}</td>
+                        <td style="width: 50%; padding: 4px 5px; text-align: right;">{{ monto_iva | formato_moneda }}
+                        </td>
                     </tr>
                     <tr style="border-top: 1px solid #000; background-color: #f0f0f0;">
                         <td style="padding: 8px 5px; text-align: right; font-weight: bold;">TOTAL A ACREDITAR:</td>
-                        <td style="padding: 8px 5px; text-align: right; font-weight: bold;">{{ monto_monto | formato_moneda }}</td>
+                        <td style="padding: 8px 5px; text-align: right; font-weight: bold;">{{ monto_monto |
+                            formato_moneda }}</td>
                     </tr>
                 </table>
             </td>
