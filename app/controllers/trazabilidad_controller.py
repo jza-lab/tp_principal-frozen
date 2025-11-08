@@ -68,12 +68,13 @@ class TrazabilidadController(BaseController):
             from app.database import Database
             db = Database().client
             lotes_producidos_result = db.table('lotes_productos').select(
-                'numero_lote, cantidad_inicial'
+                'id_lote, numero_lote, cantidad_inicial'
             ).eq('orden_produccion_id', orden_produccion_id).execute()
 
             if lotes_producidos_result.data:
                 for lote in lotes_producidos_result.data:
                     lotes_producidos.append({
+                        'id': lote.get('id_lote'),
                         'numero_lote': lote.get('numero_lote'),
                         'cantidad_producida': lote.get('cantidad_inicial')
                     })
@@ -125,6 +126,7 @@ class TrazabilidadController(BaseController):
                         'proveedor_nombre': oc.get('proveedores', {}).get('nombre', 'N/A'),
                         'estado': oc.get('estado'),
                         'fecha_estimada_entrega': oc.get('fecha_estimada_entrega'),
+                        'fecha_real_entrega': oc.get('fecha_real_entrega'),
                         'items': items
                     })
 
@@ -148,7 +150,7 @@ class TrazabilidadController(BaseController):
                 },
                 'responsables': {
                     'supervisor': orden_produccion_data.get('supervisor_nombre', 'N/A'),
-                    'supervisor_calidad': orden_produccion_data.get('supervisor_calidad_nombre', 'N/A'),
+                    'supervisor_calidad': orden_produccion_data.get('aprobador_calidad_nombre', 'N/A'),
                     'operario': orden_produccion_data.get('operario_nombre', 'N/A')
                 }
             }

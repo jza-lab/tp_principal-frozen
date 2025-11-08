@@ -767,4 +767,45 @@
     align-items: center;
     gap: 4px;
     border: 1px solid #fb923c;
+/* ===== ESTILOS PARA COLAPSO HORIZONTAL ===== */
+.kanban-column-wrapper {
+    transition: all 0.3s ease-in-out;
+}
+
+.columna-colapsada {
+    min-width: 60px !important;
+    flex-grow: 0;
+}
+
+.columna-colapsada .kanban-column {
+    border-color: transparent;
+    background: none;
+}
+
+.columna-colapsada .column-header {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    text-align: left;
+    height: 100%;
+    cursor: pointer;
+    border-radius: 12px;
+    border: 2px solid #e5e7eb;
+    background: #f9fafb;
+    justify-content: space-between; /* Alinea título y flecha */
+    padding: 18px 10px; /* Ajuste de padding para vertical */
+}
+
+.columna-colapsada .kanban-title-text {
+    padding-bottom: 15px; /* Más espacio para el título */
+}
+
+.columna-colapsada .column-toggle {
+    transform: rotate(90deg); /* Gira la flecha para que apunte correctamente */
+    align-self: flex-start;
+}
+
+.columna-colapsada .column-count-badge,
+.columna-colapsada .kanban-cards,
+.columna-colapsada .line-status-indicator {
+    display: none;
 }

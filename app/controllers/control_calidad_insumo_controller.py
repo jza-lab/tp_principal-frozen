@@ -3,6 +3,7 @@ from app.controllers.base_controller import BaseController
 from app.models.control_calidad_insumo import ControlCalidadInsumoModel
 from app.models.inventario import InventarioModel
 from app.controllers.orden_compra_controller import OrdenCompraController
+from app.controllers.insumo_controller import InsumoController
 from app.database import Database
 from werkzeug.utils import secure_filename
 import logging
@@ -21,6 +22,7 @@ class ControlCalidadInsumoController(BaseController):
         self.model = ControlCalidadInsumoModel()
         self.inventario_model = InventarioModel()
         self.orden_compra_controller = OrdenCompraController()
+        self.insumo_controller = InsumoController()
 
     def _subir_foto_y_obtener_url(self, file_storage, lote_id: int) -> str | None:
         """
@@ -131,12 +133,12 @@ class ControlCalidadInsumoController(BaseController):
 
             # Recalcular el stock del insumo afectado
             if insumo_id:
-                self.inventario_model.recalcular_stock_para_insumo(insumo_id)
+                self.insumo_controller.actualizar_stock_insumo(insumo_id)
 
             # Verificar si la orden de compra asociada ya puede ser cerrada
             orden_compra_id_a_verificar = self._extraer_oc_id_de_lote(lote)
             if orden_compra_id_a_verificar:
-                self._verificar_y_cerrar_orden_si_completa(orden_compra_id_a_verificar)
+                self._verificar_y_cerrar_orden_si_completa(orden_compra_id_a_verificar, usuario_id)
             
             return self.success_response(data=lote_actualizado, message=f"Lote {lote_id} procesado con éxito.")
 
@@ -155,12 +157,12 @@ class ControlCalidadInsumoController(BaseController):
             logger.error(f"Error en procesar_inspeccion_api: {e}", exc_info=True)
             return self.error_response('Error interno del servidor.'), 500
 
-    def finalizar_inspeccion_orden(self, orden_compra_id: int) -> tuple:
+    def finalizar_inspeccion_orden(self, orden_compra_id: int, usuario_id: int) -> tuple:
         """
         Cierra una orden de compra una vez que toda la inspección ha terminado.
         """
         try:
-            self._verificar_y_cerrar_orden_si_completa(orden_compra_id)
+            self._verificar_y_cerrar_orden_si_completa(orden_compra_id, usuario_id)
             return self.success_response(message=f"Proceso de finalización para la orden {orden_compra_id} ejecutado.")
         except Exception as e:
             logger.error(f"Error al finalizar la inspección para la orden {orden_compra_id}: {e}", exc_info=True)
@@ -181,7 +183,7 @@ class ControlCalidadInsumoController(BaseController):
             logger.warning(f"No se pudo extraer la OC ID del lote {lote.get('id_lote')} a partir de '{lote.get('documento_ingreso')}': {e}")
         return None
 
-    def _verificar_y_cerrar_orden_si_completa(self, orden_compra_id: int):
+    def _verificar_y_cerrar_orden_si_completa(self, orden_compra_id: int, usuario_id: int):
         """
         Verifica si todos los lotes de una OC ya han sido inspeccionados (no están 'EN REVISION')
         y, si es así, cierra la orden.
@@ -209,7 +211,7 @@ class ControlCalidadInsumoController(BaseController):
             lotes = lotes_de_oc_res.get('data', [])
             if not lotes:
                 logger.warning(f"No se encontraron lotes para la OC {codigo_oc}, procediendo a cerrar.")
-                self.orden_compra_controller.marcar_como_cerrada(orden_compra_id)
+                self.orden_compra_controller.marcar_como_cerrada(orden_compra_id, usuario_id)
                 return
 
             # 3. Verificar si algún lote todavía está pendiente de revisión
@@ -220,7 +222,7 @@ class ControlCalidadInsumoController(BaseController):
 
             # 4. Si el bucle termina, significa que ningún lote está 'EN REVISION'. Cerramos la OC.
             logger.info(f"Todos los lotes de la OC {orden_compra_id} han sido procesados. Cerrando la orden.")
-            self.orden_compra_controller.marcar_como_cerrada(orden_compra_id)
+            self.orden_compra_controller.marcar_como_cerrada(orden_compra_id, usuario_id)
 
         except Exception as e:
             logger.error(f"Error crítico al verificar y cerrar la OC {orden_compra_id}: {e}", exc_info=True)

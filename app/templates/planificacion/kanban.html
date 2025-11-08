@@ -120,6 +120,9 @@
                             {{ ordenes_por_estado.get(estado_key, [])|length }}
                         </span>
                     </div>
+                    <div class="column-toggle">
+                        <i class="bi bi-chevron-up"></i>
+                    </div>
                     
                     {# Estado de la línea (solo para columnas de proceso) #}
                     {% if estado_key.startswith('EN_LINEA') %}

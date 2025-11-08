@@ -1,6 +1,6 @@
 from dataclasses import dataclass, asdict
 from typing import Optional, Dict, List
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from app.models.base_model import BaseModel
 import logging
 
@@ -169,7 +169,7 @@ class OrdenCompraModel(BaseModel):
         """
         try:
             query = self.db.table(self.get_table_name()).select(
-                "*, proveedor:proveedores(nombre), usuario_creador:usuarios!usuario_creador_id(nombre)"
+                "*, proveedor:proveedores(nombre), usuario_creador:usuarios!usuario_creador_id(nombre), usuario_aprobador:usuarios!usuario_aprobador_id(nombre)"
             )
 
             if filters:
@@ -182,6 +182,32 @@ class OrdenCompraModel(BaseModel):
                     query = query.eq('proveedor_id', filters['proveedor_id'])
                 if 'prioridad' in filters and filters['prioridad']:
                     query = query.eq('prioridad', filters['prioridad'])
+                
+                if 'rango_fecha' in filters and filters['rango_fecha']:
+                    rango = filters['rango_fecha']
+                    today = date.today()
+                    if rango == 'hoy':
+                        start_date = today
+                        end_date = today
+                    elif rango == 'ultimos-7':
+                        start_date = today - timedelta(days=6)
+                        end_date = today
+                    elif rango == 'ultimos-30':
+                        start_date = today - timedelta(days=29)
+                        end_date = today
+                    else:
+                        start_date = None
+                        end_date = None
+                    
+                    if start_date and end_date:
+                        # Se añade +1 día al end_date para incluir todo el día final
+                        query = query.gte('fecha_emision', start_date.isoformat())
+                        query = query.lte('fecha_emision', (end_date + timedelta(days=1)).isoformat())
+
+                if 'usuario_id' in filters and filters['usuario_id']:
+                    user_id = filters['usuario_id']
+                    query = query.or_(f"usuario_creador_id.eq.{user_id},usuario_aprobador_id.eq.{user_id}")
+
 
             response = query.order('fecha_emision', desc=True).execute()
             
@@ -197,6 +223,12 @@ class OrdenCompraModel(BaseModel):
                     del orden['usuario_creador']
                 else:
                     orden['usuario_creador_nombre'] = 'N/A'
+                
+                if orden.get('usuario_aprobador'):
+                    orden['usuario_aprobador_nombre'] = orden['usuario_aprobador']['nombre']
+                    del orden['usuario_aprobador']
+                else:
+                    orden['usuario_aprobador_nombre'] = 'N/A'
 
             return {'success': True, 'data': response.data}
         except Exception as e:

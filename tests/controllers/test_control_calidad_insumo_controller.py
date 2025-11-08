@@ -49,17 +49,20 @@ class TestControlCalidadInsumoController:
         mock_cc_dependencies['inventario_model'].find_by_id.return_value = {'success': True, 'data': lote_data}
         mock_cc_dependencies['inventario_model'].update.return_value = {'success': True, 'data': {**lote_data, 'estado': 'disponible'}}
 
-        # Act
-        response, status_code = cc_controller.procesar_inspeccion(lote_id, 'Aceptar', form_data, None, usuario_id)
+        with patch.object(cc_controller, '_extraer_oc_id_de_lote', return_value=99), \
+             patch.object(cc_controller, '_verificar_y_cerrar_orden_si_completa') as mock_verificar:
+            # Act
+            response, status_code = cc_controller.procesar_inspeccion(lote_id, 'Aceptar', form_data, None, usuario_id)
 
-        # Assert
-        assert status_code == 200
-        assert response['success']
-        assert response['data']['estado'] == 'disponible'
-        # Verificar que se llamó a la actualización del lote con el estado 'disponible'
-        mock_cc_dependencies['inventario_model'].update.assert_called_once_with(lote_id, {'estado': 'disponible'}, 'id_lote')
-        # Verificar que se recalcula el stock del insumo
-        mock_cc_dependencies['inventario_model'].recalcular_stock_para_insumo.assert_called_once_with(100)
+            # Assert
+            assert status_code == 200
+            assert response['success']
+            assert response['data']['estado'] == 'disponible'
+            # Verificar que se llamó a la actualización del lote con el estado 'disponible'
+            mock_cc_dependencies['inventario_model'].update.assert_called_once_with(lote_id, {'estado': 'disponible'}, 'id_lote')
+            # Verificar que se recalcula el stock del insumo
+            mock_cc_dependencies['inventario_model'].recalcular_stock_para_insumo.assert_called_once_with(100)
+            mock_verificar.assert_called_once_with(99, usuario_id)
 
     # Test para Rechazar una parte de un lote
     def test_procesar_inspeccion_rechazar_parcialmente(self, cc_controller, mock_cc_dependencies):
@@ -72,7 +75,8 @@ class TestControlCalidadInsumoController:
         mock_cc_dependencies['inventario_model'].find_by_id.return_value = {'success': True, 'data': lote_data}
         mock_cc_dependencies['inventario_model'].update.return_value = {'success': True, 'data': {**lote_data, 'cantidad_actual': 40.0}}
         # Mock para la extracción de la OC ID
-        with patch.object(cc_controller, '_extraer_oc_id_de_lote', return_value=99):
+        with patch.object(cc_controller, '_extraer_oc_id_de_lote', return_value=99), \
+             patch.object(cc_controller, '_verificar_y_cerrar_orden_si_completa') as mock_verificar:
             # Act
             response, status_code = cc_controller.procesar_inspeccion(lote_id, 'Rechazar', form_data, None, usuario_id)
 
@@ -85,6 +89,7 @@ class TestControlCalidadInsumoController:
             )
             # Verificar que se creó un registro de C.C.
             mock_cc_dependencies['cc_model'].create_registro.assert_called_once()
+            mock_verificar.assert_called_once_with(99, usuario_id)
 
     # Test para validar que no se puede procesar una cantidad mayor a la del lote
     def test_procesar_inspeccion_cantidad_invalida(self, cc_controller, mock_cc_dependencies):
@@ -108,6 +113,7 @@ class TestControlCalidadInsumoController:
     def test_cerrar_oc_si_todos_lotes_procesados(self, cc_controller, mock_cc_dependencies):
         # Arrange
         orden_compra_id = 99
+        usuario_id = 1
         codigo_oc = 'OC-FINALIZADA'
         
         # Mock para la OC
@@ -122,16 +128,17 @@ class TestControlCalidadInsumoController:
         mock_cc_dependencies['inventario_model'].get_all_lotes_for_view.return_value = {'success': True, 'data': lotes_procesados}
 
         # Act
-        cc_controller._verificar_y_cerrar_orden_si_completa(orden_compra_id)
+        cc_controller._verificar_y_cerrar_orden_si_completa(orden_compra_id, usuario_id)
 
         # Assert
         # Verificar que se llamó al método para marcar la OC como cerrada
-        mock_cc_dependencies['oc_controller'].marcar_como_cerrada.assert_called_once_with(orden_compra_id)
+        mock_cc_dependencies['oc_controller'].marcar_como_cerrada.assert_called_once_with(orden_compra_id, usuario_id)
 
     # Test para verificar que la OC NO se cierra si aún quedan lotes pendientes
     def test_no_cerrar_oc_si_quedan_lotes_pendientes(self, cc_controller, mock_cc_dependencies):
         # Arrange
         orden_compra_id = 100
+        usuario_id = 1
         codigo_oc = 'OC-PENDIENTE'
         
         mock_cc_dependencies['oc_controller'].get_orden.return_value = (
@@ -145,7 +152,7 @@ class TestControlCalidadInsumoController:
         mock_cc_dependencies['inventario_model'].get_all_lotes_for_view.return_value = {'success': True, 'data': lotes_pendientes}
 
         # Act
-        cc_controller._verificar_y_cerrar_orden_si_completa(orden_compra_id)
+        cc_controller._verificar_y_cerrar_orden_si_completa(orden_compra_id, usuario_id)
 
         # Assert
         # Verificar que NO se llamó al método para marcar la OC como cerrada

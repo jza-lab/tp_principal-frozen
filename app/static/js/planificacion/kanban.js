@@ -3,6 +3,35 @@ document.addEventListener('DOMContentLoaded', function () {
     // ===== INICIALIZACIÓN =====
     console.log('📋 Tablero Kanban inicializado');
     
+    // ===== LÓGICA PARA COLAPSO HORIZONTAL DE COLUMNAS =====
+    const columnHeaders = document.querySelectorAll('.column-header');
+
+    columnHeaders.forEach(header => {
+        header.addEventListener('click', (event) => {
+            // Asegurarse de no colapsar si se hace clic en un botón dentro del header
+            if (event.target.closest('button')) {
+                return;
+            }
+
+            const columnWrapper = header.closest('.kanban-column-wrapper');
+            const icon = header.querySelector('.column-toggle i');
+
+            if (!columnWrapper || !icon) return;
+
+            // Alternar la clase en el contenedor principal de la columna
+            columnWrapper.classList.toggle('columna-colapsada');
+
+            // Actualizar el ícono de la flecha
+            if (columnWrapper.classList.contains('columna-colapsada')) {
+                icon.classList.remove('bi-chevron-up');
+                icon.classList.add('bi-chevron-down');
+            } else {
+                icon.classList.remove('bi-chevron-down');
+                icon.classList.add('bi-chevron-up');
+            }
+        });
+    });
+    
     // ===== FILTROS =====
     const filterButtons = document.querySelectorAll('.filter-btn');
     const allCards = document.querySelectorAll('.kanban-card');
@@ -128,20 +157,24 @@ document.addEventListener('DOMContentLoaded', function () {
                 const card = buttonElement.closest('.kanban-card');
                 const completedColumn = document.getElementById('kanban-cards-COMPLETADA');
                 if (card && completedColumn) {
-                    card.remove();
-                    completedColumn.prepend(card); // Añadir al principio
+                    completedColumn.prepend(card); // Mover la tarjeta a la nueva columna.
+                    
+                    // Actualizar el botón para reflejar el estado completado.
+                    buttonElement.innerHTML = '<i class="bi bi-check-circle-fill"></i> Aprobado';
+                    buttonElement.disabled = true;
+
                     updateColumnCounts();
                 }
             } else {
                 showNotification(`Error: ${result.error || 'No se pudo aprobar la orden.'}`, 'error');
-                button.disabled = false;
-                button.innerHTML = '<i class="bi bi-check2-circle"></i> Aprobar';
+                buttonElement.disabled = false;
+                buttonElement.innerHTML = '<i class="bi bi-check2-circle"></i> Aprobar';
             }
         } catch (error) {
             console.error('Error en la llamada API para aprobar calidad:', error);
             showNotification('Error de conexión al intentar aprobar.', 'error');
-            button.disabled = false;
-            button.innerHTML = '<i class="bi bi-check2-circle"></i> Aprobar';
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = '<i class="bi bi-check2-circle"></i> Aprobar';
         }
     }
 
@@ -187,30 +220,66 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('op-cantidad-producida').innerText = cantidadProducida;
         document.getElementById('op-id').value = opId;
         
-        document.getElementById('form-control-calidad-op').reset();
+        const form = document.getElementById('form-control-calidad-op');
+        form.reset();
+        form.classList.remove('was-validated');
+
+        document.getElementById('campos-cantidades').style.display = 'none';
+        document.getElementById('campo-rechazar').style.display = 'none';
+        document.getElementById('campo-cuarentena').style.display = 'none';
 
         modal.show();
     }
-    
-    // Descomentar para habilitar drag & drop
-    // if (typeof Sortable !== 'undefined') {
-    //     initializeDragAndDrop();
-    // }
 
-    document.getElementById('btn-aprobar-op').addEventListener('click', () => processQC('APROBADO'));
-    document.getElementById('btn-cuarentena-op').addEventListener('click', () => processQC('EN_CUARENTENA'));
-    document.getElementById('btn-rechazar-op').addEventListener('click', () => processQC('RECHAZADO'));
+    const decisionSelect = document.getElementById('decision-inspeccion');
+    if (decisionSelect) {
+        decisionSelect.addEventListener('change', function() {
+            const decision = this.value;
+            const camposCantidades = document.getElementById('campos-cantidades');
+            const campoRechazar = document.getElementById('campo-rechazar');
+            const campoCuarentena = document.getElementById('campo-cuarentena');
 
-    async function processQC(decision) {
+            camposCantidades.style.display = 'none';
+            campoRechazar.style.display = 'none';
+            campoCuarentena.style.display = 'none';
+
+            if (decision === 'RECHAZO_PARCIAL') {
+                camposCantidades.style.display = 'block';
+                campoRechazar.style.display = 'block';
+            } else if (decision === 'CUARENTENA_PARCIAL') {
+                camposCantidades.style.display = 'block';
+                campoCuarentena.style.display = 'block';
+            } else if (decision === 'MIXTO') {
+                camposCantidades.style.display = 'block';
+                campoRechazar.style.display = 'block';
+                campoCuarentena.style.display = 'block';
+            }
+        });
+    }
+
+    const btnProcesar = document.getElementById('btn-procesar-qc');
+    if (btnProcesar) {
+        btnProcesar.addEventListener('click', processQC);
+    }
+
+    async function processQC() {
         const opId = document.getElementById('op-id').value;
         const form = document.getElementById('form-control-calidad-op');
+
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            return;
+        }
+        form.classList.remove('was-validated');
+
         const formData = new FormData(form);
+        const decision = formData.get('decision_inspeccion');
         formData.append('decision', decision);
 
         try {
             const response = await fetch(`/produccion/kanban/api/op/${opId}/procesar-calidad`, {
                 method: 'POST',
-                body: formData, // Enviar FormData directamente, sin headers de Content-Type
+                body: formData,
             });
 
             const result = await response.json();
@@ -222,11 +291,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 const card = document.querySelector(`.kanban-card[data-op-id="${opId}"]`);
                 if (card) {
-                    if (decision === 'RECHAZADO' && data.cantidad_rechazada === document.getElementById('op-cantidad-producida').innerText) {
+                    const cantidadProducida = parseFloat(document.getElementById('op-cantidad-producida').innerText);
+                    const cantidadRechazada = parseFloat(formData.get('cantidad_rechazada') || 0);
+
+                    if ((decision === 'RECHAZO_PARCIAL' || decision === 'MIXTO') && cantidadRechazada >= cantidadProducida) {
                         card.remove();
                     } else {
                         const completedColumn = document.getElementById('kanban-cards-COMPLETADA');
-                        completedColumn.prepend(card);
+                        if (completedColumn) {
+                            completedColumn.prepend(card);
+                        }
                     }
                     updateColumnCounts();
                 }
