@@ -589,10 +589,6 @@ class OrdenCompraController:
         except Exception as e:
             logger.error(f"Error en la cadena de completado para la orden {orden_id}: {e}", exc_info=True)
 
-<<<<<<< HEAD
-=======
-
->>>>>>> develop
     def _crear_lotes_para_items_recibidos(self, items_para_lote, orden_data, usuario_id):
         """
         Helper para crear lotes de inventario para los items recibidos.
