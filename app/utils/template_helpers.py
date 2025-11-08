@@ -53,6 +53,12 @@ def format_datetime_art(value, format='%d/%m/%Y %H:%M:%S'):
     return art_datetime.strftime(format)
 
 
+def format_time_filter(value):
+    """Filtro para formatear HH:MM:SS a HH:MM."""
+    if isinstance(value, str) and len(value.split(':')) == 3:
+        return ':'.join(value.split(':')[:2])
+    return value
+
 def setup_template_helpers(app):
     """Registra los helpers con la aplicación Flask."""
     @app.context_processor

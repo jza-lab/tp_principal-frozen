@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const timerStatus = document.getElementById('timer-status');
     const statusBadge = document.getElementById('status-badge');
     const activityLog = document.getElementById('activity-log');
+    const tiempoRestanteTurnoDisplay = document.getElementById('tiempo-restante-turno');
     
     // Overlay y modales
     const pauseOverlay = document.getElementById('pause-overlay');
@@ -82,6 +83,41 @@ document.addEventListener('DOMContentLoaded', function () {
         return Number(num).toFixed(decimals);
     }
 
+    function actualizarTiempoRestanteTurno() {
+        if (!TURNO_ACTUAL || !TURNO_ACTUAL.hora_fin) {
+            tiempoRestanteTurnoDisplay.textContent = 'N/D';
+            return;
+        }
+    
+        const ahora = new Date();
+        const finTurno = new Date();
+        
+        const parts = TURNO_ACTUAL.hora_fin.split(':');
+        const horas = parseInt(parts[0], 10);
+        const minutos = parseInt(parts[1], 10);
+        const segundos = parseInt(parts[2] || 0, 10);
+
+        if (isNaN(horas) || isNaN(minutos) || isNaN(segundos)) {
+            tiempoRestanteTurnoDisplay.textContent = 'Error';
+            console.error('Error al parsear la hora de fin de turno:', TURNO_ACTUAL.hora_fin);
+            return;
+        }
+        
+        finTurno.setHours(horas, minutos, segundos, 0);
+    
+        // Si la hora de fin ya pasó (ej. turno de mañana y es de tarde), no mostrar nada
+        if (ahora > finTurno) {
+            tiempoRestanteTurnoDisplay.textContent = 'Finalizado';
+            return;
+        }
+    
+        const diffMillis = finTurno - ahora;
+        const diffHoras = Math.floor(diffMillis / 1000 / 3600);
+        const diffMinutos = Math.floor((diffMillis / 1000 / 60) % 60);
+    
+        tiempoRestanteTurnoDisplay.textContent = `${diffHoras}h ${diffMinutos}min`;
+    }
+
     // ===== CRONÓMETRO PRINCIPAL =====
     function startTimer() {
         if (estado.timerInterval) return;
@@ -96,6 +132,11 @@ document.addEventListener('DOMContentLoaded', function () {
             // Actualizar OEE cada 10 segundos
             if (estado.segundosTranscurridos % 10 === 0) {
                 calcularOEE();
+            }
+
+            // Actualizar tiempo restante del turno cada 60 segundos
+            if (estado.segundosTranscurridos % 60 === 0) {
+                actualizarTiempoRestanteTurno();
             }
         }, 1000);
         
@@ -371,6 +412,14 @@ document.addEventListener('DOMContentLoaded', function () {
             esValido = false;
         }
 
+        // 4. El desperdicio reportado no puede exceder la cantidad restante de la orden.
+        const cantidadRestante = estado.cantidadPlanificada - estado.cantidadProducida;
+        if (cantidadMala > cantidadRestante) {
+            showNotification(`❌ El desperdicio (${formatNumber(cantidadMala, 2)}) no puede superar la cantidad restante por producir (${formatNumber(cantidadRestante, 2)}).`, 'error');
+            cantidadMalaInput.classList.add('is-invalid');
+            esValido = false;
+        }
+
         if (!esValido) {
             return; // Detener si alguna validación falló
         }
@@ -393,15 +442,17 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (nuevaCantidadProducida > estado.cantidadPlanificada) {
             const sobreproduccion = formatNumber(nuevaCantidadProducida - estado.cantidadPlanificada, 2);
             const porcentaje = (sobreproduccion / estado.cantidadPlanificada) * 100;
-            const confirmacion = confirm(
-                `⚠️ ¡Atención! Estás reportando una sobreproducción de ${sobreproduccion} kg (${porcentaje.toFixed(1)}%).\n\n` +
-                `Esto está dentro de la tolerancia permitida del ${TOLERANCIA_SOBREPRODUCCION}%. ¿Deseas continuar?`
+            
+            const confirmacion = window.confirm(
+                `⚠️ Se ha detectado una sobreproducción de ${sobreproduccion} kg (${porcentaje.toFixed(1)}%).\n\n¿Desea continuar y registrar este avance?`
             );
             
             if (confirmacion) {
                 enviarReporteAPI(payload);
+            } else {
+                showNotification('ℹ️ Reporte de avance cancelado por el usuario.', 'info');
             }
-            // Si no confirma, no se hace nada.
+
         } else {
             // Reporte normal, sin sobreproducción
             enviarReporteAPI(payload);
@@ -653,6 +704,7 @@ document.addEventListener('DOMContentLoaded', function () {
     
         calcularOEE();
         console.log('✅ Sistema MES de producción inicializado correctamente');
+        actualizarTiempoRestanteTurno(); // Llamada inicial
     }
     
     function popularSelects() {
