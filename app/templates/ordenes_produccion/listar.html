@@ -147,16 +147,13 @@
                 <div class="mt-auto">
                     {# Asignaciones #}
                     <div class="card-assignment-details mb-2">
-                        {% if orden.linea_asignada or orden.supervisor_nombre or orden.operario_nombre %}
+                        {% if orden.linea_asignada or orden.operario_nombre %}
                         <hr class="card-divider my-1">
                         {% if orden.linea_asignada %}<span class="me-2" title="Línea Asignada"><i
                                 class="bi bi-diagram-3-fill text-primary"></i> <b>Línea:</b> {{ orden.linea_asignada
                             }}</span>{% endif %}
-                        {% if orden.supervisor_nombre %}<span class="me-2" title="Supervisor Asignado"><i
-                                class="bi bi-person-badge-fill text-info"></i> <b>Sup:</b> {{ orden.supervisor_nombre or
-                            'N/A' }}</span>{% endif %}
                         {% if orden.operario_nombre %}<span><i class="bi bi-person-fill text-secondary"
-                                title="Operario Asignado"></i> <b>Op:</b> {{ orden.operario_nombre or 'N/A' }}</span>{%
+                                title="Operario Asignado"></i> <b>Operario:</b> {{ orden.operario_nombre or 'N/A' }}</span>{%
                         endif %}
                         {% else %}
                         <hr class="card-divider my-1" style="border-top-style: dashed; opacity: 0.3;">

@@ -35,29 +35,32 @@ class TrazabilidadController(BaseController):
             
             orden_produccion_data = op_result['data']
 
-            # 2. Trazabilidad Ascendente (Upstream)
+            # 2. Trazabilidad Ascendente (Upstream) - LÓGICA CORREGIDA
             insumos_usados = []
-            reservas_result = self.reserva_insumo_model.get_by_orden_produccion_id(orden_produccion_id)
-            if reservas_result.get('success'):
-                for reserva in reservas_result['data']:
-                    lote_inventario = reserva.get('lote_inventario', {})
-                    if lote_inventario:
-                        proveedor_info = lote_inventario.get('proveedor') # Puede ser None
-                        
-                        proveedor_id = None
-                        proveedor_nombre = 'Proveedor no asignado'
-                        if proveedor_info:
-                            proveedor_id = proveedor_info.get('id')
-                            proveedor_nombre = proveedor_info.get('nombre', 'Proveedor sin nombre')
+            from app.database import Database
+            db = Database().client
+            
+            # Consultar directamente el inventario por la OP ID
+            insumos_result = db.table('insumos_inventario').select(
+                'id_lote, numero_lote_proveedor, cantidad_inicial, '
+                'insumo:insumos_catalogo(nombre), '
+                'proveedor:id_proveedor(id, nombre)'
+            ).eq('orden_produccion_id', orden_produccion_id).execute()
 
-                        insumos_usados.append({
-                            'id_lote_insumo': lote_inventario.get('id_lote'),
-                            'lote_insumo': lote_inventario.get('numero_lote_proveedor', 'N/A'),
-                            'nombre_insumo': lote_inventario.get('insumo',{}).get('nombre', 'N/A'),
-                            'cantidad_usada': reserva.get('cantidad_reservada'),
-                            'id_proveedor': proveedor_id,
-                            'proveedor': proveedor_nombre
-                        })
+            if insumos_result.data:
+                for insumo in insumos_result.data:
+                    proveedor_info = insumo.get('proveedor')
+                    proveedor_id = proveedor_info.get('id') if proveedor_info else None
+                    proveedor_nombre = proveedor_info.get('nombre', 'N/A') if proveedor_info else 'N/A'
+
+                    insumos_usados.append({
+                        'id_lote_insumo': insumo.get('id_lote'),
+                        'lote_insumo': insumo.get('numero_lote_proveedor', 'N/A'),
+                        'nombre_insumo': insumo.get('insumo', {}).get('nombre', 'N/A'),
+                        'cantidad_usada': insumo.get('cantidad_inicial'), # Asumimos que se usó la cantidad inicial del lote
+                        'id_proveedor': proveedor_id,
+                        'proveedor': proveedor_nombre
+                    })
 
             # 3. Trazabilidad Descendente (Downstream) - LÓGICA CORREGIDA Y SIMPLIFICADA
             lotes_producidos = []
@@ -149,10 +152,10 @@ class TrazabilidadController(BaseController):
                     'ordenes_compra_asociadas': resumen_ocs_asociadas
                 },
                 'responsables': {
-                    'supervisor': orden_produccion_data.get('supervisor_nombre', 'N/A'),
                     'supervisor_calidad': orden_produccion_data.get('aprobador_calidad_nombre', 'N/A'),
                     'operario': orden_produccion_data.get('operario_nombre', 'N/A')
                 }
+
             }
 
             return {'success': True, 'data': response_data}

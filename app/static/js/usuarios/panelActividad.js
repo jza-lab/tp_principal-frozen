@@ -10,12 +10,15 @@ const ActividadPanel = (function() {
         const loginDate = new Date(sesion.fecha_inicio + 'Z');
         const formattedDate = loginDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
         const loginTime = loginDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-        const logoutTime = sesion.fecha_fin ? new Date(sesion.fecha_fin + 'Z').toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : null;
-
-        const statusClass = logoutTime ? 'status-exit' : 'status-enter';
-        const statusIcon = logoutTime ? 'box-arrow-left' : 'box-arrow-in-right';
-        const statusText = logoutTime ? `Egreso ${logoutTime}` : `Ingreso ${loginTime}`;
         
+        let logoutHtml = '<span class="status-enter"><i class="bi bi-box-arrow-in-right"></i> Ingreso ' + formattedDate + ' ' + loginTime + '</span>';
+        if (sesion.fecha_fin) {
+            const logoutDate = new Date(sesion.fecha_fin + 'Z');
+            const formattedLogoutDate = logoutDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const logoutTime = logoutDate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+            logoutHtml += '<br><span class="status-exit"><i class="bi bi-box-arrow-left"></i> Egreso ' + formattedLogoutDate + ' ' + logoutTime + '</span>';
+        }
+
         const sector = user.sectores && user.sectores.length > 0 && user.sectores[0].sectores ? user.sectores[0].sectores.nombre : 'Sin sector';
 
         return `
@@ -30,9 +33,8 @@ const ActividadPanel = (function() {
                         <span><i class="bi bi-calendar-event"></i>${formattedDate}</span>
                     </div>
                 </div>
-                <div class="activity-card-status ${statusClass}">
-                    <i class="bi bi-${statusIcon}"></i>
-                    <span>${statusText}</span>
+                <div class="activity-card-status">
+                    ${logoutHtml}
                 </div>
             </div>`;
     }
@@ -115,23 +117,19 @@ const ActividadPanel = (function() {
 
     function setupDateFilters() {
         filterFechaDesde.addEventListener('change', () => {
-            if (filterFechaHasta.value && filterFechaDesde.value > filterFechaHasta.value) {
-                filterFechaHasta.value = '';
+            if (filterFechaDesde.value) {
+                filterFechaHasta.min = filterFechaDesde.value;
             }
-            filterFechaHasta.min = filterFechaDesde.value;
             applyActivityFilters();
         });
 
         filterFechaHasta.addEventListener('change', () => {
-            if (filterFechaDesde.value && filterFechaHasta.value < filterFechaDesde.value) {
-                filterFechaDesde.value = '';
-            }
             applyActivityFilters();
         });
     }
 
     function bindEvents() {
-        filterSector.addEventListener('input', applyActivityFilters);
+        filterSector.addEventListener('change', applyActivityFilters);
         setupDateFilters();
     }
 

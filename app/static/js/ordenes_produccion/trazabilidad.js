@@ -174,10 +174,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="card-body p-3">
                             <div class="d-flex justify-content-around text-center">
                                 <div>
-                                    <p class="mb-0 text-muted small">Supervisor/es</p>
-                                    <strong>${responsablesData.supervisor || 'N/A'}</strong>
-                                </div>
-                                <div>
                                     <p class="mb-0 text-muted small">Supervisor/es de calidad</p>
                                     <strong>${responsablesData.supervisor_calidad || 'N/A'}</strong>
                                 </div>
