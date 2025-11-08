@@ -1043,6 +1043,17 @@ class OrdenProduccionController(BaseController):
             # --- NUEVO: OBTENER TRASPASO PENDIENTE ---
             traspaso_pendiente_result = self.traspaso_turno_model.find_latest_pending_by_op_id(orden_id)
             traspaso_pendiente = traspaso_pendiente_result.get('data') if traspaso_pendiente_result.get('success') else None
+            
+            # --- NUEVO: OBTENER UNIDAD DE MEDIDA Y TURNO ACTUAL ---
+            producto_id = orden_data.get('producto_id')
+            producto_data = self.producto_controller.obtener_producto_por_id(producto_id).get('data', {})
+            orden_data['producto_unidad_medida'] = producto_data.get('unidad_medida', 'unidades')
+
+            from app.models.usuario_turno import UsuarioTurnoModel
+            turno_model = UsuarioTurnoModel()
+            turno_actual_result = turno_model.find_current_shift()
+            turno_actual = turno_actual_result.get('data') if turno_actual_result.get('success') else {}
+
 
             # 4. Ensamblar todos los datos
             datos_completos = {
@@ -1050,7 +1061,8 @@ class OrdenProduccionController(BaseController):
                 'ingredientes': ingredientes,
                 'motivos_paro': motivos_paro,
                 'motivos_desperdicio': motivos_desperdicio,
-                'traspaso_pendiente': traspaso_pendiente # <-- Añadir al contexto
+                'traspaso_pendiente': traspaso_pendiente, # <-- Añadir al contexto
+                'turno_actual': turno_actual
             }
 
             return self.success_response(data=datos_completos)
@@ -1385,11 +1397,30 @@ class OrdenProduccionController(BaseController):
             if cantidad_buena < 0 or cantidad_desperdicio < 0:
                 return self.error_response("Las cantidades no pueden ser negativas.", 400)
 
-            # Solo requerir motivo si hay desperdicio
+            if cantidad_buena == 0 and cantidad_desperdicio == 0:
+                return self.error_response("Debe reportar al menos una cantidad (producida o de desperdicio).", 400)
+
+            # 1. Obtener estado actual de la orden ANTES de validar desperdicio
+            orden_actual_res = self.model.find_by_id(orden_id)
+            if not orden_actual_res.get('success'):
+                return self.error_response("Orden de producción no encontrada.", 404)
+            orden_actual = orden_actual_res.get('data', {})
+            
+            # 2. Nueva validación de desperdicio contra la cantidad restante
+            cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
+            cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
+            cantidad_restante = cantidad_planificada - cantidad_producida_actual
+
+            if cantidad_desperdicio > cantidad_restante:
+                return self.error_response(
+                    f"El desperdicio ({cantidad_desperdicio:.2f}) no puede superar la cantidad restante por producir ({cantidad_restante:.2f}).", 400
+                )
+
+            # 3. Validar motivo solo si hay desperdicio
             if cantidad_desperdicio > 0 and not motivo_desperdicio_id:
                 return self.error_response("Se requiere un motivo para el desperdicio reportado.", 400)
 
-            # 2. Registrar desperdicio si existe
+            # 4. Registrar desperdicio si existe
             if cantidad_desperdicio > 0:
                 desperdicio_model = RegistroDesperdicioModel()
                 desperdicio_data = {
@@ -1400,12 +1431,7 @@ class OrdenProduccionController(BaseController):
                 }
                 desperdicio_model.create(desperdicio_data)
 
-            # 3. Actualizar la cantidad producida en la orden
-            orden_actual_res = self.model.find_by_id(orden_id)
-            if not orden_actual_res.get('success'):
-                return self.error_response("Orden de producción no encontrada.", 404)
-
-            orden_actual = orden_actual_res.get('data', {})
+            # 5. Proceder a actualizar la cantidad producida (ya tenemos la orden)
             cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
             cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
             nueva_cantidad_producida = cantidad_producida_actual + cantidad_buena

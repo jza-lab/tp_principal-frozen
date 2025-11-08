@@ -33,3 +33,29 @@ class UsuarioTurnoModel(BaseModel):
         Busca un turno específico por su ID.
         """
         return super().find_by_id(turno_id, id_field='id')
+
+    def find_current_shift(self) -> dict:
+        """
+        Encuentra el turno actual basado en la hora del sistema en UTC-3.
+        """
+        try:
+            from datetime import datetime, time, timedelta
+            
+            # Obtener la hora actual en UTC y ajustarla a UTC-3 (Argentina)
+            now_utc = datetime.utcnow()
+            now_argentina = now_utc - timedelta(hours=3)
+            current_time_str = now_argentina.strftime('%H:%M:%S')
+
+            # Realizar la consulta a la base de datos
+            response = self.db.table(self.get_table_name()).select("*").lte('hora_inicio', current_time_str).gte('hora_fin', current_time_str).execute()
+            
+            if response.data:
+                return {'success': True, 'data': response.data[0]}
+            else:
+                # Si no hay un turno que cruce la medianoche, esto es suficiente.
+                # Para turnos que cruzan la medianoche (ej. 22:00-06:00), se necesitaría una lógica más compleja.
+                # Por ahora, se asume que no hay turnos nocturnos que crucen la medianoche.
+                return {'success': False, 'error': 'No se encontró un turno activo en este momento.'}
+        except Exception as e:
+            logger.error(f"Error al buscar el turno actual: {e}", exc_info=True)
+            return {'success': False, 'error': f"Error en la base de datos: {e}"}

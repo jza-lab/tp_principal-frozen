@@ -21,7 +21,6 @@ from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.direccion import DireccionModel
 from app.schemas.direccion_schema import DireccionSchema
 from flask import current_app
-from app.models.permisos import PermisosModel
 from app.utils.permission_map import CANONICAL_PERMISSION_MAP
 from app.models.sector import SectorModel
 

@@ -133,9 +133,6 @@
                         <p class="text-muted text-center">Sin materiales definidos</p>
                         {% endfor %}
                     </div>
-                    <button class="btn btn-outline-primary btn-block mt-3">
-                        <i class="bi bi-file-earmark-pdf"></i> Ver Receta (PDF)
-                    </button>
                 </div>
             </div>
 
@@ -148,7 +145,7 @@
             <div class="objetivo-panel">
                 <div class="objetivo-label">OBJETIVO DE PRODUCCIÓN</div>
                 <div class="objetivo-cantidad">
-                    {{ orden.cantidad_planificada }} <span class="objetivo-unidad">kg</span>
+                    {{ orden.cantidad_planificada }} <span class="objetivo-unidad">{{ orden.producto_unidad_medida }}</span>
                 </div>
             </div>
 
@@ -161,7 +158,7 @@
                     <div class="progreso-content">
                         <div class="progreso-label">Producido (OK)</div>
                         <div class="progreso-value" id="cantidad-producida">
-                            {{ orden.cantidad_producida or 0 }} <span class="progreso-unit">kg</span>
+                            {{ orden.cantidad_producida or 0 }} <span class="progreso-unit">{{ orden.producto_unidad_medida }}</span>
                         </div>
                     </div>
                 </div>
@@ -173,7 +170,7 @@
                     <div class="progreso-content">
                         <div class="progreso-label">Desperdicio</div>
                         <div class="progreso-value" id="cantidad-desperdicio">
-                            0 <span class="progreso-unit">kg</span>
+                            0 <span class="progreso-unit">{{ orden.producto_unidad_medida }}</span>
                         </div>
                     </div>
                 </div>
@@ -185,7 +182,7 @@
                     <div class="progreso-content">
                         <div class="progreso-label">Ritmo Actual</div>
                         <div class="progreso-value" id="ritmo-actual">
-                            0 <span class="progreso-unit">kg/h</span>
+                            0 <span class="progreso-unit">{{ orden.producto_unidad_medida }}/h</span>
                         </div>
                     </div>
                 </div>
@@ -197,7 +194,7 @@
                     <div class="progreso-content">
                         <div class="progreso-label">Ritmo Objetivo</div>
                         <div class="progreso-value">
-                            {{ orden.ritmo_objetivo or 5 }} <span class="progreso-unit">kg/h</span>
+                            {{ orden.ritmo_objetivo or 5 }} <span class="progreso-unit">{{ orden.producto_unidad_medida }}/h</span>
                         </div>
                     </div>
                 </div>
@@ -287,15 +284,11 @@
                     <div class="shift-info">
                         <div class="shift-row">
                             <span class="shift-label">Turno Actual:</span>
-                            <span class="shift-value">Mañana (08:00 - 16:00)</span>
+                            <span class="shift-value">{{ turno_actual.nombre }} ({{ turno_actual.hora_inicio | format_time }} - {{ turno_actual.hora_fin | format_time }})</span>
                         </div>
                         <div class="shift-row">
                             <span class="shift-label">Operario:</span>
                             <span class="shift-value">{{ orden.operario_nombre or 'No asignado' }}</span>
-                        </div>
-                        <div class="shift-row">
-                            <span class="shift-label">Supervisor:</span>
-                            <span class="shift-value">{{ orden.supervisor_nombre or 'No asignado' }}</span>
                         </div>
                         <div class="shift-row">
                             <span class="shift-label">Tiempo restante:</span>
@@ -345,6 +338,7 @@
         const MOTIVOS_PARO = {{ motivos_paro | tojson }};
         const MOTIVOS_DESPERDICIO = {{ motivos_desperdicio | tojson }};
         const TOLERANCIA_SOBREPRODUCCION = {{ tolerancia_sobreproduccion | tojson }};
+        const TURNO_ACTUAL = {{ turno_actual | tojson }};
     </script>
     <script src="{{ url_for('static', filename='js/planificacion/foco_produccion.js', v='1.2') }}"></script>
     <script src="{{ url_for('static', filename='js/planificacion/traspaso_turno.js') }}?v=1.0"></script>

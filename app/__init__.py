@@ -289,10 +289,11 @@ def create_app() -> Flask:
         return dict(current_user=get_current_user())
 
     # Registrar filtros directamente en el entorno de Jinja
-    from app.utils.template_helpers import format_datetime_art
+    from app.utils.template_helpers import format_datetime_art, format_time_filter
     app.jinja_env.filters['format_datetime'] = _format_datetime_filter
     app.jinja_env.filters['formato_moneda'] = _formato_moneda_filter
     app.jinja_env.filters['format_datetime_art'] = format_datetime_art
+    app.jinja_env.filters['format_time'] = format_time_filter
 
 
     # 3. Registrar la función decorada. No es necesario cambiar esta parte.
