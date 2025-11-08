@@ -9,6 +9,12 @@ from app.controllers.insumo_controller import InsumoController
 from app.models.registro_desperdicio_model import RegistroDesperdicioModel
 from app.models.reserva_insumo import ReservaInsumoModel
 from app.utils.estados import OP_KANBAN_COLUMNAS
+from app.controllers.lote_producto_controller import LoteProductoController
+from app.controllers.control_calidad_producto_controller import ControlCalidadProductoController
+from app.database import Database
+from werkzeug.utils import secure_filename
+import os
+from storage3.exceptions import StorageApiError
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +26,8 @@ class ProduccionKanbanController(BaseController):
         self.insumo_controller = InsumoController()
         self.desperdicio_model = RegistroDesperdicioModel()
         self.reserva_insumo_model = ReservaInsumoModel()
+        self.lote_producto_controller = LoteProductoController()
+        self.control_calidad_producto_controller = ControlCalidadProductoController()
 
     def obtener_datos_para_tablero(self, usuario_id: int, usuario_rol: str) -> tuple:
         """
@@ -56,6 +64,8 @@ class ProduccionKanbanController(BaseController):
 
             # 4. Enriquecer y agrupar órdenes utilizando los datos precargados
             ordenes_enriquecidas = []
+            lotes_productos_map = self._obtener_lotes_de_productos_masivo(op_ids)
+
             for orden in ordenes:
                 op_id = orden.get('id')
                 receta_id = orden.get('receta_id')
@@ -83,8 +93,11 @@ class ProduccionKanbanController(BaseController):
                 else:
                     orden['materiales_disponibles'] = True # No es relevante para otros estados
                 
+                lote_asociado = lotes_productos_map.get(op_id)
+                orden['en_cuarentena'] = lote_asociado and lote_asociado.get('cantidad_en_cuarentena') and float(lote_asociado.get('cantidad_en_cuarentena')) > 0
+
                 # Resto del enriquecimiento que no depende de BBDD en bucle
-                orden['lote'] = self._obtener_lote_de_orden(orden)
+                orden['lote'] = lote_asociado.get('numero_lote') if lote_asociado else self._obtener_lote_de_orden(orden)
                 orden['prioridad'] = self._calcular_prioridad(orden)
                 orden['fecha_meta_str'] = orden.get('fecha_meta')
                 orden['tiempo_hasta_meta_horas'] = self._calcular_tiempo_hasta_meta(orden)
@@ -199,6 +212,12 @@ class ProduccionKanbanController(BaseController):
                     insumos_necesarios_map[receta_id][insumo_id] = cantidad_necesaria
                 
         return recetas_map, insumos_necesarios_map
+
+    def _obtener_lotes_de_productos_masivo(self, op_ids: list) -> dict:
+        lotes_res = self.lote_producto_controller.model.find_all(filters={'orden_produccion_id': ('in', op_ids)})
+        if not lotes_res.get('success'):
+            return {}
+        return {lote['orden_produccion_id']: lote for lote in lotes_res.get('data', [])}
 
     def _obtener_stock_masivo(self, insumo_ids: list) -> dict:
         # Asegurarse de que los IDs (que pueden ser UUIDs) se pasen como strings
@@ -484,3 +503,121 @@ class ProduccionKanbanController(BaseController):
         except Exception as e:
             logger.error(f"Error al obtener estado de producción para OP {op_id} desde KanbanController: {e}", exc_info=True)
             return self.error_response(f"Error interno al consultar estado: {str(e)}", 500)
+
+    def procesar_decision_calidad(self, op_id: int, form_data: dict, foto_file, usuario_id: int) -> tuple:
+        try:
+            decision = form_data.get('decision')
+            cantidad_cuarentena = float(form_data.get('cantidad_cuarentena') or 0)
+            cantidad_rechazada = float(form_data.get('cantidad_rechazada') or 0)
+            comentarios = form_data.get('comentarios')
+            resultado_inspeccion = form_data.get('resultado_inspeccion')
+
+            op_res = self.orden_produccion_controller.obtener_orden_por_id(op_id)
+            if not op_res.get('success'):
+                return self.error_response("Orden de Producción no encontrada.", 404)
+            orden_produccion = op_res['data']
+            
+            cantidad_producida = float(orden_produccion.get('cantidad_producida', 0))
+            cantidad_aceptada = cantidad_producida - cantidad_cuarentena - cantidad_rechazada
+
+            if cantidad_aceptada < 0:
+                return self.error_response("Las cantidades en cuarentena y rechazadas no pueden superar la cantidad producida.", 400)
+
+            # Manejo de la subida de la imagen
+            foto_url = self._subir_foto_y_obtener_url(foto_file, op_id)
+
+            # Crear lote
+            lote_data = {
+                'producto_id': orden_produccion.get('producto_id'),
+                'cantidad_inicial': cantidad_producida,
+                'cantidad_actual': cantidad_aceptada,
+                'cantidad_en_cuarentena': cantidad_cuarentena,
+                'orden_produccion_id': op_id,
+                'pedido_id': orden_produccion.get('pedido_id') 
+            }
+            
+            if cantidad_cuarentena == cantidad_producida:
+                lote_estado = 'CUARENTENA'
+            elif cantidad_rechazada == cantidad_producida:
+                lote_estado = 'RECHAZADO'
+            elif orden_produccion.get('pedido_id'):
+                lote_estado = 'RESERVADO'
+            else:
+                lote_estado = 'DISPONIBLE'
+            lote_data['estado'] = lote_estado
+            
+            lote_res, _ = self.lote_producto_controller.crear_lote_desde_formulario(lote_data, usuario_id)
+
+            if not lote_res.get('success'):
+                return self.error_response(f"Error al crear el lote: {lote_res.get('error')}", 500)
+            
+            lote_creado = lote_res['data']
+            lote_id = lote_creado.get('id_lote')
+
+            # Crear registro de CC con los nuevos campos
+            cc_data = {
+                'lote_producto_id': lote_id,
+                'usuario_supervisor_id': usuario_id,
+                'decision_final': decision,
+                'orden_produccion_id': op_id,
+                'comentarios': comentarios,
+                'resultado_inspeccion': resultado_inspeccion,
+                'foto_url': foto_url
+            }
+            # Usar el método del controlador en lugar del modelo directamente
+            cc_res, _ = self.control_calidad_producto_controller.crear_registro_control_calidad(cc_data)
+            if not cc_res.get('success'):
+                 # Si falla, registrar el error y continuar, ya que el lote ya se creó.
+                 logger.error(f"El lote {lote_id} fue creado, pero falló la creación del registro de C.C.: {cc_res.get('error')}")
+
+
+
+            # Actualizar OP
+            nuevo_estado_op = 'COMPLETADA'
+            if cantidad_rechazada == cantidad_producida:
+                nuevo_estado_op = 'CANCELADA'
+            self.orden_produccion_controller.cambiar_estado_orden_simple(op_id, nuevo_estado_op)
+
+            return self.success_response(message="Decisión de calidad procesada exitosamente.")
+
+        except Exception as e:
+            logger.error(f"Error crítico al procesar decisión de calidad para OP {op_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
+
+    def _subir_foto_y_obtener_url(self, file_storage, op_id: int) -> str | None:
+        """
+        Sube un archivo al bucket de Supabase y devuelve su URL pública.
+        """
+        if not file_storage or not file_storage.filename:
+            return None
+        try:
+            db_client = Database().client
+            bucket_name = "fotos_control_calidad"
+
+            filename = secure_filename(file_storage.filename)
+            extension = os.path.splitext(filename)[1]
+            unique_filename = f"productos/op_{op_id}_{int(datetime.now().timestamp())}{extension}"
+
+            file_content = file_storage.read()
+            
+            response = db_client.storage.from_(bucket_name).upload(
+                path=unique_filename,
+                file=file_content,
+                file_options={"content-type": file_storage.mimetype}
+            )
+            
+            url_response = db_client.storage.from_(bucket_name).get_public_url(unique_filename)
+            logger.info(f"Foto subida con éxito para la OP {op_id}. URL: {url_response}")
+            return url_response
+
+        except StorageApiError as e:
+            if "Bucket not found" in str(e):
+                error_message = f"Error de configuración: El bucket de almacenamiento '{bucket_name}' no se encontró en Supabase."
+                logger.error(error_message)
+                raise Exception(error_message)
+            else:
+                logger.error(f"Error de Supabase Storage al subir foto para la OP {op_id}: {e}", exc_info=True)
+                raise e
+        except Exception as e:
+            logger.error(f"Excepción general al subir foto para la OP {op_id}: {e}", exc_info=True)
+            raise e

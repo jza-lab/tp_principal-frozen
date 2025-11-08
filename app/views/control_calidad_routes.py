@@ -112,7 +112,8 @@ def finalizar_inspeccion_api(orden_id):
     """
     API para marcar una orden como 'CERRADA' después de la inspección.
     """
+    usuario_id = get_jwt_identity()
     cc_controller = ControlCalidadInsumoController()
-    resultado, status_code = cc_controller.finalizar_inspeccion_orden(orden_id)
+    resultado, status_code = cc_controller.finalizar_inspeccion_orden(orden_id, usuario_id)
     
     return jsonify(resultado), status_code

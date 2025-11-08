@@ -138,14 +138,14 @@ class LoteProductoModel(BaseModel):
         """
         try:
             # --- PASO 1: Obtener el lote (Sin cambios) ---
-            result = self.db.table(self.get_table_name()).select(
-                '*, producto:productos(nombre, codigo)'
+            lote_result = self.db.table(self.get_table_name()).select(
+                '*, producto:productos(nombre, codigo), orden_produccion:orden_produccion_id(id, codigo)'
             ).eq('id_lote', id_lote).single().execute()
-
             # ... (Manejo de 'item' y 'producto' sin cambios) ...
-            if not result.data:
+            
+            if not lote_result.data:
                 return {'success': False, 'error': 'Lote no encontrado'}
-            item = result.data
+            item = lote_result.data
             if item.get('producto'):
                 item['producto_nombre'] = item['producto']['nombre']
                 item['producto_codigo'] = item['producto']['codigo']
@@ -154,17 +154,44 @@ class LoteProductoModel(BaseModel):
                 item['producto_codigo'] = 'N/A'
             del item['producto']
 
-            # --- INICIO DE LA CORRECCIÓN ---
-            # --- PASO 2: Obtener las reservas (cambiando 'codigo' por 'id') ---
+            # Paso 2: Si hay una OP, obtener los insumos que utilizó
+            item['insumos_utilizados'] = []
+            item['ordenes_compra_asociadas'] = []
+            orden_produccion = item.get('orden_produccion')
+            if orden_produccion and orden_produccion.get('id'):
+                op_id = orden_produccion['id']
+                insumos_result = self.db.table('reservas_insumos').select(
+                     'cantidad_reservada, lote:insumos_inventario!inner(id_lote, documento_ingreso, numero_lote_proveedor, insumo:insumos_catalogo(nombre))'
+                ).eq('orden_produccion_id', op_id).execute()
+
+                if insumos_result.data:
+                    item['insumos_utilizados'] = insumos_result.data
+                                        
+                    # Extraer los códigos de OC y buscar las OCs
+                    codigos_oc = {
+                        res['lote']['documento_ingreso'] 
+                        for res in insumos_result.data 
+                        if res.get('lote') and res['lote'].get('documento_ingreso')
+                    }
+                    
+                    if codigos_oc:
+                        ocs_result = self.db.table('ordenes_compra').select(
+                            'id, codigo_oc, proveedores:proveedor_id(nombre)'
+                        ).in_('codigo_oc', list(codigos_oc)).execute()
+                        
+                        if ocs_result.data:
+                            # Usar un diccionario para evitar duplicados y facilitar el acceso
+                            item['ordenes_compra_asociadas'] = {oc['codigo_oc']: oc for oc in ocs_result.data}.values()
+
+
+
+            # Paso 3: Obtener las reservas de este lote de producto
             reservas_result = self.db.table('reservas_productos').select(
                 '*, pedido:pedidos(id)' # <-- CAMBIO AQUÍ
             ).eq('lote_producto_id', id_lote).eq('estado', 'RESERVADO').execute()
             # --- FIN DE LA CORRECCIÓN ---
 
-            if reservas_result.data:
-                item['reservas'] = reservas_result.data
-            else:
-                item['reservas'] = []
+            item['reservas'] = reservas_result.data if reservas_result.data else []
 
             return {'success': True, 'data': item}
 

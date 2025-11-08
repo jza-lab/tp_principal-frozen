@@ -101,9 +101,7 @@ class PedidoController(BaseController):
         Y AÑADE información sobre el estado de las OPs vinculadas.
         """
         try:
-            # --- CAMBIO: Llamar al nuevo método del modelo ---
             result = self.model.get_one_with_items_and_op_status(pedido_id)
-            # -----------------------------------------------
 
             if not result.get('success'):
                 error_msg = result.get('error', 'Error desconocido.')
@@ -113,10 +111,14 @@ class PedidoController(BaseController):
 
             # 2. Obtener y adjuntar notas de crédito
             nc_result = self.nota_credito_model.find_all({'pedido_origen_id': pedido_id})
+            notas_de_credito_completas = []
             if nc_result.get('success'):
-                pedido_data['notas_credito'] = nc_result.get('data', [])
-            else:
-                pedido_data['notas_credito'] = [] # Asegurarse de que la lista exista
+                for nc in nc_result.get('data', []):
+                    items = self.nota_credito_model.get_items_by_nc_id(nc['id'])
+                    nc['items'] = items
+                    notas_de_credito_completas.append(nc)
+            
+            pedido_data['notas_credito'] = notas_de_credito_completas
 
             return self.success_response(data=pedido_data)
         except Exception as e:

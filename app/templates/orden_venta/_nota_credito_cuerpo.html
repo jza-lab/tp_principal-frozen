@@ -1,0 +1,184 @@
+{# Variables pasadas por contexto: 'nc' (nota de crédito), 'pedido' (pedido original) #}
+
+{# --- DATOS LEGALES DEL COMPROBANTE --- #}
+{% set TIPO_COMPROBANTE = "A" %}
+{% set TIPO_COMPROBANTE_CODIGO = "03" %} {# Código AFIP para Nota de Crédito A #}
+
+{# Asumimos que nc.codigo_nc es algo como "NC-123" o "0001-00001234". Intentamos splitear. #}
+{% set ptv_nro_list = (nc.codigo_nc or '0001-00000000') %}
+{% set PUNTO_VENTA = ptv_nro_list[0] | default('0001') %}
+{% set NRO_COMPROBANTE = 0000000000 %}
+
+
+{# --- DATOS DEL EMISOR --- #}
+{% set EMISOR_NOMBRE = "FrozenProd S.A." %}
+{% set EMISOR_CUIT = "30-71000000-8" %}
+{% set EMISOR_DOMICILIO = "Juan María Gutiérrez 1150, Los Polvorines, Provincia de Buenos Aires" %}
+{% set EMISOR_CONDICION_IVA = "Responsable Inscripto" %}
+{% set EMISOR_ING_BRUTOS = "20-12345678-3" %}
+{% set EMISOR_INICIO_ACT = "01/01/2020" %}
+
+
+{# --- DATOS DEL RECEPTOR (Cliente) --- #}
+{# Usamos el objeto 'pedido' que está en el contexto para obtener los datos del cliente #}
+{% set CLIENTE_RAZON_SOCIAL = pedido.cliente.razon_social | default(pedido.nombre_cliente, true) %}
+{% set CLIENTE_CUIT = pedido.cliente.cuit | default('N/A', true) %}
+{% set CLIENTE_CONDICION_IVA = pedido.cliente.condicion_iva | default('Consumidor Final', true) %}
+{% set CLIENTE_DOMICILIO = [
+pedido.direccion.calle | default('', true),
+pedido.direccion.altura | default('', true),
+pedido.direccion.piso | default('', true),
+pedido.direccion.depto | default('', true)
+] | join(' ') | trim %}
+{% set CLIENTE_LOCALIDAD = [
+pedido.direccion.codigo_postal | default('', true),
+pedido.direccion.localidad | default('', true),
+pedido.direccion.provincia | default('Buenos Aires', true)
+] | join(' ') | trim %}
+
+
+<div id="nc-container-{{ nc.id }}"
+    style="font-family: Arial, sans-serif; font-size: 11pt; background-color: #fff; max-width: 800px; margin: auto; padding: 5px;">
+
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td style="width: 50%; vertical-align: top; border: 1px solid #000; padding: 5px;">
+                <h3 style="margin-top: 0; margin-bottom: 5px; font-size: 18pt; font-weight: bold;">{{ EMISOR_NOMBRE }}
+                </h3>
+                <p style="margin: 2px 0; font-size: 10pt;">
+                    <strong>Razón Social:</strong> {{ EMISOR_NOMBRE }}<br>
+                    <strong>Domicilio Comercial:</strong> {{ EMISOR_DOMICILIO }}<br>
+                    <strong>Condición frente al IVA:</strong> {{ EMISOR_CONDICION_IVA }}
+                </p>
+            </td>
+            <td style="width: 50%; vertical-align: top; border: 1px solid #000; padding: 5px; text-align: center;">
+                <div style="text-align: center; margin: 0 auto;">
+                    <h2
+                        style="margin: 0; padding: 5px; font-size: 24pt; font-weight: bold; border-bottom: 1px solid #000;">
+                        NOTA DE CRÉDITO
+                    </h2>
+                    <div style="font-size: 11pt; padding: 5px 0;">
+                        <p style="margin: 2px 0;">
+                            <strong>Punto de Venta:</strong> {{ PUNTO_VENTA }}
+                            <strong style="margin-left: 20px;">Comp. Nro:</strong> {{ NRO_COMPROBANTE }}
+                        </p>
+                        <p style="margin: 2px 0;">
+                            <strong>Fecha de Emisión:</strong> {{ nc.created_at | format_datetime }}
+                        </p>
+                        <hr style="border: 0; border-top: 1px solid #000; margin: 5px 0;">
+                        <p style="margin: 2px 0;"><strong>CUIT:</strong> {{ EMISOR_CUIT }}</p>
+                        <p style="margin: 2px 0;"><strong>Ing. Brutos:</strong> {{ EMISOR_ING_BRUTOS }}</p>
+                        <p style="margin: 2px 0;"><strong>Inicio de Actividades:</strong> {{ EMISOR_INICIO_ACT }}</p>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px; border: 1px solid #000;">
+        <tr>
+            <td style="width: 50%; vertical-align: top; padding: 5px;">
+                <p style="margin: 2px 0;"><strong>Razón Social:</strong> {{ CLIENTE_RAZON_SOCIAL }}</p>
+                <p style="margin: 2px 0;"><strong>Domicilio:</strong> {{ CLIENTE_DOMICILIO }}</p>
+            </td>
+            <td style="width: 50%; vertical-align: top; padding: 5px;">
+                <p style="margin: 2px 0;"><strong>CUIT:</strong> {{ CLIENTE_CUIT }}</p>
+                <p style="margin: 2px 0;"><strong>Localidad:</strong> {{ CLIENTE_LOCALIDAD }}</p>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" style="padding: 5px; border-top: 1px solid #000;">
+                <p style="margin: 2px 0;"><strong>Condición frente al IVA:</strong> {{ CLIENTE_CONDICION_IVA }}</p>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" style="padding: 5px; border-top: 1px solid #000;">
+                <p style="margin: 2px 0;"><strong>Comprobante de Origen:</strong> Pedido {{
+                    pedido.codigo | default(nc.pedido_origen_id, true) }}</p>
+            </td>
+        </tr>
+    </table>
+
+
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10pt;">
+        <thead style="background-color: #f0f0f0;">
+            <tr style="border: 1px solid #000;">
+                <th style="border: 1px solid #000; padding: 5px; text-align: left;">Producto / Concepto</th>
+                <th style="border: 1px solid #000; padding: 5px; text-align: left;">Lote Afectado</th>
+                <th style="border: 1px solid #000; padding: 5px; text-align: right;">Cantidad</th>
+                <th style="border: 1px solid #000; padding: 5px; text-align: right;">P. Unitario</th>
+                <th style="border: 1px solid #000; padding: 5px; text-align: right;">Subtotal</th>
+            </tr>
+        </thead>
+        <tbody>
+            {#
+            ESTE ES EL BUCLE DE ITEMS.
+            Si no aparecen items en el acordeón, es porque `nc.items` está vacío en ese contexto.
+            Deberás modificar el backend (ej. pedido_controller.py) para que cargue
+            los items de las notas de crédito al cargar el pedido.
+            #}
+            {% for item in nc['items'] %}
+            <tr style="border-bottom: 1px solid #ccc;">
+                <td style="padding: 4px 5px;">{{ item.productos.nombre }}</td>
+                <td style="padding: 4px 5px;">{{ item.lotes_productos.numero_lote }}</td>
+                <td style="padding: 4px 5px; text-align: right;">{{ item.cantidad }}</td>
+                <td style="padding: 4px 5px; text-align: right;">{{ item.precio_unitario | formato_moneda }}</td>
+                <td style="padding: 4px 5px; text-align: right;">{{ item.subtotal | formato_moneda }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" class="text-center text-muted" style="padding: 10px;">
+                    (No se cargaron los items para esta Nota de Crédito en esta vista)
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+        <tr>
+            <td style="width: 60%; vertical-align: top; padding-right: 10px;">
+                <div style="border: 1px solid #000; padding: 5px; font-size: 10pt;">
+                    <strong>Motivo de la Nota de Crédito:</strong><br>
+                    <p style="margin:0;">{{ nc.motivo | default('Ajuste de cuenta corriente por devolución de
+                        mercadería.', true) }}</p>
+                </div>
+                <table
+                    style="width: 100%; border-collapse: collapse; margin-top: 10px; border: 1px solid #000; font-size: 10pt;">
+                    <tr>
+                        <td style="padding: 5px;">
+                            <strong>CAE N°:</strong> {{ nc.cae | default('N/A (Comprobante no fiscal)', true) }}
+                        </td>
+                        <td style="padding: 5px;">
+                            <strong>Vencimiento CAE:</strong> {{ nc.vto_cae | default('N/A', true) }}
+                        </td>
+                    </tr>
+                </table>
+            </td>
+
+            <td style="width: 40%; vertical-align: top; font-size: 10pt;">
+                <table style="width: 100%; border-collapse: collapse; border: 1px solid #000;">
+                    {# El cálculo de IVA debe venir del backend, esto es un supuesto #}
+                    {% set monto_monto = nc.monto | float if nc.monto else 0.0 %}
+                    {% set monto_neto = (monto_monto / 1.21) %}
+                    {% set monto_iva = monto_neto * 0.21 %}
+                    <tr>
+                        <td style="padding: 4px 5px; text-align: right;">Subtotal Neto:</td>
+                        <td style="width: 50%; padding: 4px 5px; text-align: right;">{{ monto_neto | formato_moneda }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 4px 5px; text-align: right;">IVA (21%):</td>
+                        <td style="width: 50%; padding: 4px 5px; text-align: right;">{{ monto_iva | formato_moneda }}
+                        </td>
+                    </tr>
+                    <tr style="border-top: 1px solid #000; background-color: #f0f0f0;">
+                        <td style="padding: 8px 5px; text-align: right; font-weight: bold;">TOTAL A ACREDITAR:</td>
+                        <td style="padding: 8px 5px; text-align: right; font-weight: bold;">{{ monto_monto |
+                            formato_moneda }}</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</div>

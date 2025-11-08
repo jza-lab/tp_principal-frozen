@@ -73,13 +73,13 @@
                             </td>
                             <td>{{ lote.numero_lote or 'N/A' }}</td>
                             <td class="text-end fw-bold">
-                                {% if lote.estado == 'CUARENTENA' %}
-                                    <div class="d-flex flex-column text-end" style="font-size: 0.9em; line-height: 1.4;">
-                                        <span>{{ lote.cantidad_actual | round(2) }} <small class="text-success">(Disp)</small></span>
-                                        <span>{{ lote.cantidad_en_cuarentena | round(2) }} <small class="text-warning">(Cuar)</small></span>
+                                {% if lote.cantidad_en_cuarentena and lote.cantidad_en_cuarentena > 0 %}
+                                    <div style="line-height: 1.2;">
+                                        <span style="font-size: 1em;">{{ lote.cantidad_actual | round(1) }}</span> <small class="text-success" style="font-size: 0.7em;">(Disp)</small><br>
+                                        <span style="font-size: 1em;">{{ lote.cantidad_en_cuarentena | round(1) }}</span> <small class="text-warning" style="font-size: 0.7em;">(Cuar)</small>
                                     </div>
                                 {% else %}
-                                    {{ lote.cantidad_actual | round(2) }} <small class="text-muted" style="font-size: 0.8em;">unid.</small>
+                                    {{ lote.cantidad_actual | round(1) }} <small class="text-muted" style="font-size: 0.8em;">unid.</small>
                                 {% endif %}
                             </td>
                             <td>{{ lote.created_at.strftime('%Y-%m-%d') if lote.created_at else 'N/A' }}</td>
@@ -95,6 +95,8 @@
                                 <span class="badge bg-danger">{{ lote.estado }}</span>
                                 {% elif lote.estado == 'DISPONIBLE' %}
                                 <span class="badge bg-success">{{ lote.estado }}</span>
+                                {% elif lote.estado == 'RECHAZADO' %}
+                                <span class="badge bg-danger">{{ lote.estado }}</span>
                                 {% elif lote.estado == 'CUARENTENA' %}
                                 <span class="badge bg-warning text-dark" 
                                       title="Motivo: {{ lote.motivo_cuarentena or 'Sin motivo' }}"
