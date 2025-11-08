@@ -45,6 +45,14 @@
                     {% endfor %}
                 </div>
             </div>
+            
+            {% if current_status == 'LISTO_PARA_ENTREGA' %}
+            <div class="col-12 text-center mt-3">
+                <a href="{{ url_for('despacho.crear_despacho_vista') }}" class="btn btn-info btn-lg">
+                    <i class="bi bi-truck me-2"></i> Gestionar Envíos y Despachar Pedidos
+                </a>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -133,11 +141,6 @@
 
                         {% endif %}
 
-                        {% if pedido.estado == 'LISTO_PARA_ENTREGA' and 'planificar_ov' is has_permission %}
-                        <a href="{{ url_for('orden_venta.despachar', id=pedido.id) }}" class="btn btn-sm btn-info" title="Despachar Pedido">
-                            <i class="bi bi-truck me-1"></i> Despachar
-                        </a>
-                        {% endif %}
                         {% if pedido.estado == 'EN_TRANSITO' and 'planificar_ov' is has_permission %}
                         <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}"
                             class="confirm-form d-inline" data-title="Confirmar Entrega"
