@@ -3,6 +3,7 @@ from app.controllers.base_controller import BaseController
 from app.models.control_calidad_insumo import ControlCalidadInsumoModel
 from app.models.inventario import InventarioModel
 from app.controllers.orden_compra_controller import OrdenCompraController
+from app.controllers.insumo_controller import InsumoController
 from app.database import Database
 from werkzeug.utils import secure_filename
 import logging
@@ -21,6 +22,7 @@ class ControlCalidadInsumoController(BaseController):
         self.model = ControlCalidadInsumoModel()
         self.inventario_model = InventarioModel()
         self.orden_compra_controller = OrdenCompraController()
+        self.insumo_controller = InsumoController()
 
     def _subir_foto_y_obtener_url(self, file_storage, lote_id: int) -> str | None:
         """
@@ -131,7 +133,7 @@ class ControlCalidadInsumoController(BaseController):
 
             # Recalcular el stock del insumo afectado
             if insumo_id:
-                self.inventario_model.recalcular_stock_para_insumo(insumo_id)
+                self.insumo_controller.actualizar_stock_insumo(insumo_id)
 
             # Verificar si la orden de compra asociada ya puede ser cerrada
             orden_compra_id_a_verificar = self._extraer_oc_id_de_lote(lote)
