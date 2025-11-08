@@ -7,6 +7,10 @@ window.addEventListener('pageshow', function(event) {
     }
 });
 
+// --- ¡NUEVO! Variable para el modal de carga ---
+let globalLoadingModal = null;
+
+
 /**
  * Mueve una OP a un nuevo estado (usada por Kanban).
  * @param {string} opId ID de la OP a mover.
@@ -67,6 +71,9 @@ function showFeedbackModal(title, message, type = 'info', confirmCallback = null
     cancelBtn.textContent = 'Cerrar';
     cancelBtn.className = 'btn btn-secondary'; // Resetear clase del botón cancelar/cerrar
     modalIcon.className = 'bi me-2'; // Resetear icono
+    cancelBtn.style.display = 'inline-block';
+    cancelBtn.disabled = false;
+
 
     // Configurar según el tipo
     switch (type) {
@@ -129,10 +136,38 @@ function hideLoadingSpinner(button, originalText) {
 }
 
 
+// --- ¡NUEVAS FUNCIONES HELPER (MODAL DE CARGA) ---
+/**
+ * Muestra el modal de "Procesando" global.
+ */
+function showGlobalLoading() {
+    if (globalLoadingModal) {
+        globalLoadingModal.show();
+    } else {
+        console.warn('Modal de carga #globalLoadingModal no encontrado o no inicializado.');
+    }
+}
+
+/**
+ * Oculta el modal de "Procesando" global.
+ */
+function hideGlobalLoading() {
+    if (globalLoadingModal) {
+        globalLoadingModal.hide();
+    }
+}
+// --- FIN NUEVAS FUNCIONES ---
+
+
+// --- ¡FUNCIÓN MODIFICADA! ---
 /**
  * Envía la confirmación final para una OP multi-día.
  */
 async function confirmarAsignacionLote(opIdConfirmar, asignacionesConfirmar, estadoActual = 'PENDIENTE') {
+    
+    // 1. MOSTRAR MODAL DE CARGA INMEDIATAMENTE
+    showGlobalLoading();
+
     try {
         const endpointUrl = '/planificacion/api/confirmar-aprobacion'; 
         const body = {
@@ -152,6 +187,11 @@ async function confirmarAsignacionLote(opIdConfirmar, asignacionesConfirmar, est
         });
 
         const confirmResult = await confirmResponse.json();
+
+        // 2. OCULTAR MODAL DE CARGA (antes de mostrar el resultado)
+        hideGlobalLoading();
+
+        // 3. Mostrar modal de resultado
         if (confirmResult.success) {
             showFeedbackModal('Confirmado', confirmResult.message || "Lote planificado.", 'success');
             setTimeout(() => window.location.reload(), 1500);
@@ -159,6 +199,8 @@ async function confirmarAsignacionLote(opIdConfirmar, asignacionesConfirmar, est
             showFeedbackModal('Error al Confirmar', confirmResult.error || confirmResult.message, 'error');
         }
     } catch (confirmError) {
+        // 4. OCULTAR MODAL DE CARGA (en caso de error)
+        hideGlobalLoading();
         console.error("Error red al confirmar:", confirmError);
         showFeedbackModal('Error de Conexión', 'No se pudo confirmar la planificación.', 'error');
     }
@@ -167,6 +209,13 @@ async function confirmarAsignacionLote(opIdConfirmar, asignacionesConfirmar, est
 
 // --- LÓGICAS AL CARGAR LA PÁGINA (ÚNICO DOMCONTENTLOADED) ---
 document.addEventListener('DOMContentLoaded', function () {
+
+    // --- ¡NUEVO! Inicializar el modal de carga ---
+    const loadingModalEl = document.getElementById('globalLoadingModal');
+    if (loadingModalEl) {
+        globalLoadingModal = new bootstrap.Modal(loadingModalEl);
+    }
+    // --- FIN INICIALIZACIÓN ---
 
     try {
         // --- LÓGICA DE DRAG-AND-DROP (KANBAN) ---

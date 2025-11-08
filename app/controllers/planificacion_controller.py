@@ -18,6 +18,7 @@ from datetime import date # <-- Asegúrate que esté
 from flask import jsonify # <-- Añadir (o usar desde tu BaseController si ya lo tienes)
 from app.models.bloqueo_capacidad_model import BloqueoCapacidadModel # (Debes crear este modelo simple)
 from app.models.issue_planificacion_model import IssuePlanificacionModel
+import holidays
 
 
 logger = logging.getLogger(__name__)
@@ -979,12 +980,13 @@ class PlanificacionController(BaseController):
             return self.error_response(f"Error interno: {str(e)}", 500)
 
     # --- MÉTODO MODIFICADO ---
+    # (Reemplaza la función completa, aprox. línea 1032)
+
     def obtener_capacidad_disponible(self, centro_trabajo_ids: List[int], fecha_inicio: date, fecha_fin: date) -> Dict:
         """
         Calcula la capacidad disponible (en minutos) para centros de trabajo dados,
-        entre dos fechas (inclusive). Considera estándar, eficiencia, utilización Y BLOQUEOS.
-
-        DEVUELVE: { centro_id: { fecha_iso: {..., 'motivo_bloqueo': str, 'hora_inicio': str, 'hora_fin': str} } }
+        entre dos fechas (inclusive). Considera estándar, eficiencia, utilización, BLOQUEOS,
+        FINES DE SEMANA y FERIADOS.
         """
         capacidad_por_centro_y_fecha = defaultdict(dict)
         num_dias = (fecha_fin - fecha_inicio).days + 1
@@ -998,7 +1000,7 @@ class PlanificacionController(BaseController):
                 return {}
             centros_trabajo = {ct['id']: ct for ct in ct_result.get('data', [])}
 
-            # 2. Obtener Bloqueos para este rango (Sin cambios desde la última vez)
+            # 2. Obtener Bloqueos para este rango (sin cambios)
             filtros_bloqueo = {
                 'centro_trabajo_id': ('in', tuple(centro_trabajo_ids)),
                 'fecha_gte': fecha_inicio.isoformat(),
@@ -1008,25 +1010,57 @@ class PlanificacionController(BaseController):
             bloqueos_map = defaultdict(dict)
             if bloqueos_resp.get('success'):
                 for bloqueo in bloqueos_resp.get('data', []):
-                    # Guardamos el diccionario completo
                     bloqueos_map[bloqueo['centro_trabajo_id']][bloqueo['fecha']] = bloqueo
 
-            # 3. Calcular capacidad día por día
+            # --- ¡INICIO DE LA MODIFICACIÓN (FERIADOS)! ---
+            try:
+                # 3. Obtener los años únicos del rango de fechas
+                years_to_check = list(set(range(fecha_inicio.year, fecha_fin.year + 1)))
+                # 4. Inicializar el objeto de feriados para Argentina
+                # (country_holidays('AR') es un alias para holidays.Argentina())
+                feriados_ar = holidays.country_holidays('AR', years=years_to_check)
+                logger.info(f"Cargados {len(feriados_ar)} feriados de Argentina para los años {years_to_check}")
+            except Exception as e_hol:
+                logger.error(f"Error al inicializar la librería 'holidays': {e_hol}. Los feriados no se descontarán.")
+                feriados_ar = {} # Fallback a un dict vacío
+            # --- FIN DE LA MODIFICACIÓN (FERIADOS) ---
+
+
+            # 5. Calcular capacidad día por día
             for dia_offset in range(num_dias):
                 fecha_actual = fecha_inicio + timedelta(days=dia_offset)
                 fecha_iso = fecha_actual.isoformat()
+
+                # --- ¡LÓGICA COMBINADA (FIN DE SEMANA + FERIADOS)! ---
+                dia_de_semana = fecha_actual.weekday() # 0=Lunes, 5=Sábado, 6=Domingo
+                es_fin_de_semana = (dia_de_semana >= 5)
+
+                # Comprobar si la fecha está en el set de feriados
+                nombre_feriado = feriados_ar.get(fecha_actual) # Devuelve el nombre del feriado o None
+                es_feriado = nombre_feriado is not None
+                # --- FIN LÓGICA COMBINADA ---
+
                 for ct_id in centro_trabajo_ids:
                     centro = centros_trabajo.get(ct_id)
 
-                    # --- ¡CAMBIO! Añadir horas al dict default ---
                     cap_data = {
                         'bruta': Decimal(0),
                         'bloqueado': Decimal(0),
                         'neta': Decimal(0),
                         'motivo_bloqueo': None,
-                        'hora_inicio': None, # <-- AÑADIDO
-                        'hora_fin': None       # <-- AÑADIDO
+                        'hora_inicio': None,
+                        'hora_fin': None
                     }
+
+                    # --- ¡CONDICIÓN MODIFICADA! ---
+                    # Si es fin de semana O feriado, NO calcular capacidad (capacidad neta = 0)
+                    if es_fin_de_semana or es_feriado:
+                        # Asigna el motivo (ej. "Día de la Revolución de Mayo" o "Fin de Semana")
+                        cap_data['motivo_bloqueo'] = nombre_feriado if es_feriado else 'Fin de Semana'
+                        capacidad_por_centro_y_fecha[ct_id][fecha_iso] = cap_data
+                        continue # Saltar al siguiente centro de trabajo
+                    # --- FIN DE LA MODIFICIÓN ---
+
 
                     if centro:
                         # Calcular capacidad estándar (sin cambios)
@@ -1037,28 +1071,27 @@ class PlanificacionController(BaseController):
 
                         capacidad_bruta_dia = capacidad_std * eficiencia * utilizacion * num_maquinas
 
-                        # --- Restar bloqueos (MODIFICADO) ---
+                        # Restar bloqueos (sin cambios)
                         bloqueo_data = bloqueos_map.get(ct_id, {}).get(fecha_iso, {})
                         minutos_bloqueados_dec = Decimal(bloqueo_data.get('minutos_bloqueados', 0))
-                        motivo_bloqueo_str = bloqueo_data.get('motivo')
-                        hora_inicio_str = bloqueo_data.get('hora_inicio') # <-- AÑADIDO
-                        hora_fin_str = bloqueo_data.get('hora_fin')     # <-- AÑADIDO
+
+                        # Si ya hay un bloqueo (ej. Mantenimiento), que tenga prioridad
+                        if minutos_bloqueados_dec > 0:
+                            cap_data['motivo_bloqueo'] = bloqueo_data.get('motivo')
+                            cap_data['hora_inicio'] = bloqueo_data.get('hora_inicio')
+                            cap_data['hora_fin'] = bloqueo_data.get('hora_fin')
 
                         capacidad_neta_dia = max(Decimal(0), capacidad_bruta_dia - minutos_bloqueados_dec)
                         # ----------------------------
 
-                        cap_data = {
-                            'bruta': round(capacidad_bruta_dia, 2),
-                            'bloqueado': round(minutos_bloqueados_dec, 2),
-                            'neta': round(capacidad_neta_dia, 2),
-                            'motivo_bloqueo': motivo_bloqueo_str,
-                            'hora_inicio': hora_inicio_str, # <-- AÑADIDO
-                            'hora_fin': hora_fin_str      # <-- AÑADIDO
-                        }
+                        cap_data['bruta'] = round(capacidad_bruta_dia, 2)
+                        cap_data['bloqueado'] = round(minutos_bloqueados_dec, 2)
+                        cap_data['neta'] = round(capacidad_neta_dia, 2)
+                        # (El motivo ya se asignó si había bloqueo)
 
                     capacidad_por_centro_y_fecha[ct_id][fecha_iso] = cap_data
 
-            # 4. Convertir Decimals a floats para JSON y JS
+            # 6. Convertir Decimals a floats para JSON (sin cambios)
             resultado_final_float_dict = {}
             for centro_id, cap_fecha in capacidad_por_centro_y_fecha.items():
                 resultado_final_float_dict[centro_id] = {}
@@ -1068,8 +1101,8 @@ class PlanificacionController(BaseController):
                         'bloqueado': float(cap_dict['bloqueado']),
                         'neta': float(cap_dict['neta']),
                         'motivo_bloqueo': cap_dict['motivo_bloqueo'],
-                        'hora_inicio': cap_dict['hora_inicio'], # <-- AÑADIDO
-                        'hora_fin': cap_dict['hora_fin']        # <-- AÑADIDO
+                        'hora_inicio': cap_dict['hora_inicio'],
+                        'hora_fin': cap_dict['hora_fin']
                     }
 
             return resultado_final_float_dict
