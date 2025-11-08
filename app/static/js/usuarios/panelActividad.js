@@ -116,18 +116,20 @@ const ActividadPanel = (function() {
     }
 
     function setupDateFilters() {
-        filterFechaDesde.addEventListener('input', () => {
-            filterFechaHasta.min = filterFechaDesde.value;
+        filterFechaDesde.addEventListener('change', () => {
+            if (filterFechaDesde.value) {
+                filterFechaHasta.min = filterFechaDesde.value;
+            }
             applyActivityFilters();
         });
 
-        filterFechaHasta.addEventListener('input', () => {
+        filterFechaHasta.addEventListener('change', () => {
             applyActivityFilters();
         });
     }
 
     function bindEvents() {
-        filterSector.addEventListener('input', applyActivityFilters);
+        filterSector.addEventListener('change', applyActivityFilters);
         setupDateFilters();
     }
 

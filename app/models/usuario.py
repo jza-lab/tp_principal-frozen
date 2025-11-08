@@ -173,44 +173,39 @@ class UsuarioModel(BaseModel):
         Encuentra usuarios que han iniciado sesión en la web, con filtros opcionales.
         Filtros: 'fecha_desde', 'fecha_hasta', 'sector_id'.
         """
-        try:            
+        try:
             query = self.db.table(self.get_table_name())\
-            .select("id, nombre, apellido, legajo, ultimo_login_web, roles(nombre), sectores:usuario_sectores(sectores(nombre))")\
-            .not_.is_('ultimo_login_web', None)
+                .select("id, nombre, apellido, legajo, ultimo_login_web, roles(nombre), sectores:usuario_sectores(sectores(nombre))")\
+                .not_.is_('ultimo_login_web', None)
 
-            if filtros:
-                if filtros.get('fecha_desde'):
-                    fecha_desde_obj = datetime.fromisoformat(filtros['fecha_desde']).date()
-                    start_date = datetime.combine(fecha_desde_obj, time.min)
-                    query = query.gte('ultimo_login_web', start_date.isoformat())
-                if filtros.get('fecha_hasta'):
-                    fecha_hasta_obj = datetime.fromisoformat(filtros['fecha_hasta']).date()
-                    end_date = datetime.combine(fecha_hasta_obj, time.max)
-                    query = query.lte('ultimo_login_web', end_date.isoformat())
+            # 1. Filtrar por sector primero si está presente
+            if filtros and filtros.get('sector_id'):
+                user_ids_in_sector_res = self.db.table('usuario_sectores')\
+                    .select('usuario_id')\
+                    .eq('sector_id', filtros['sector_id'])\
+                    .execute()
                 
-                if filtros.get('sector_id'):
-                    user_ids_in_sector = self.db.table('usuario_sectores')\
-                        .select('usuario_id')\
-                        .eq('sector_id', filtros['sector_id'])\
-                        .execute()
-                    
-                    if user_ids_in_sector.data:
-                        user_ids = [item['usuario_id'] for item in user_ids_in_sector.data]
-                        query = query.in_('id', user_ids)
-                    else:
-                        return {'success': True, 'data': []}
+                if not user_ids_in_sector_res.data:
+                    return {'success': True, 'data': []}
+                
+                user_ids = [item['usuario_id'] for item in user_ids_in_sector_res.data]
+                query = query.in_('id', user_ids)
 
-            # Si no se proporcionan filtros, por defecto muestra la actividad de hoy
-            if not filtros or all(not v for v in filtros.values()):
-                from app.utils.date_utils import get_today_utc3_range
-                start_of_day, end_of_day = get_today_utc3_range()
-                query = query.gte('ultimo_login_web', start_of_day.isoformat())
-                query = query.lte('ultimo_login_web', end_of_day.isoformat())
+            # 2. Aplicar filtros de fecha
+            has_date_filter = False
+            if filtros and filtros.get('fecha_desde'):
+                start_date = datetime.combine(datetime.fromisoformat(filtros['fecha_desde']).date(), time.min)
+                query = query.gte('ultimo_login_web', start_date.isoformat())
+                has_date_filter = True
+            if filtros and filtros.get('fecha_hasta'):
+                end_date = datetime.combine(datetime.fromisoformat(filtros['fecha_hasta']).date(), time.max)
+                query = query.lte('ultimo_login_web', end_date.isoformat())
+                has_date_filter = True
 
+            # 3. Ejecutar la consulta final
             response = query.order('ultimo_login_web', desc=True).execute()
 
             return {'success': True, 'data': response.data or []}
-
         except Exception as e:
             logger.error(f"Error buscando usuarios con login web (filtrado): {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
