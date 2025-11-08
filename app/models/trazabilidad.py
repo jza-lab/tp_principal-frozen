@@ -54,10 +54,11 @@ class TrazabilidadModel(BaseModel):
             total_lotes = total_lotes_res.count or 0
             if total_lotes == 0:
                 return {"total_lotes": 0, "lotes_rechazados": 0, "tasa_fallos": "0.00"}
-            rechazados_res = self.db.table('insumos_inventario').select(
-                'id_lote', count='exact'
-            ).eq('id_proveedor', proveedor_id).eq('estado_calidad', 'Rechazado').execute()
-            lotes_rechazados = rechazados_res.count or 0
+            # rechazados_res = self.db.table('insumos_inventario').select(
+            #     'id_lote', count='exact'
+            # ).eq('id_proveedor', proveedor_id).eq('estado_calidad', 'Rechazado').execute()
+            # lotes_rechazados = rechazados_res.count or 0
+            lotes_rechazados= 0
             tasa_fallos = (lotes_rechazados / total_lotes) * 100 if total_lotes > 0 else 0
             return {
                 "total_lotes": total_lotes,
