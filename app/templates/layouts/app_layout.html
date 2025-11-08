@@ -75,7 +75,7 @@
                                     {% if 'almacen_consulta_stock' is has_permission %}
                                     <li><a class="dropdown-item {% if request.endpoint.startswith('productos') %}active{% endif %}" href="{{ url_for('productos.obtener_productos') }}"><i class="bi bi-bag-fill me-2"></i> Productos</a></li>
                                     {% endif %}
-                                    {% if 'logistica_gestion_ov' is has_permission %}
+                                    {% if 'logistica_gestion_ov' is has_permission or current_user.roles.codigo == 'GERENTE' %}
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item {% if request.endpoint.startswith('orden_venta') %}active{% endif %}" href="{{ url_for('orden_venta.listar') }}"><i class="bi bi-currency-dollar me-2"></i> Ventas (Ordenes)</a></li>
                                     {% endif %}

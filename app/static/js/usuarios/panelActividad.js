@@ -114,18 +114,12 @@ const ActividadPanel = (function() {
     }
 
     function setupDateFilters() {
-        filterFechaDesde.addEventListener('change', () => {
-            if (filterFechaHasta.value && filterFechaDesde.value > filterFechaHasta.value) {
-                filterFechaHasta.value = '';
-            }
+        filterFechaDesde.addEventListener('input', () => {
             filterFechaHasta.min = filterFechaDesde.value;
             applyActivityFilters();
         });
 
-        filterFechaHasta.addEventListener('change', () => {
-            if (filterFechaDesde.value && filterFechaHasta.value < filterFechaDesde.value) {
-                filterFechaDesde.value = '';
-            }
+        filterFechaHasta.addEventListener('input', () => {
             applyActivityFilters();
         });
     }
