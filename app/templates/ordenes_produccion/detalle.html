@@ -58,7 +58,6 @@
 
 <div class="tab-content" id="loteDetailTabContent">
     <div class="tab-pane fade show active" id="info-content" role="tabpanel" aria-labelledby="info-tab">
-
         <div class="row">
             <div class="col-lg-8">
                 {# --- Tarjeta de Información General --- #}
@@ -399,19 +398,16 @@
                             <i class="bi bi-arrow-up-circle-fill text-primary me-2"></i>Origen (Hacia Atrás)
                         </h5>
 
-                        {% if trazabilidad_resumen and trazabilidad_resumen.origen and
-                        trazabilidad_resumen.origen.ordenes_compra_asociadas %}
+                        {% if trazabilidad_resumen.origen.ocs_asociadas %}
                         <div class="mb-3">
-                            <strong>Órdenes de Compra:</strong>
-                            <div class="list-container mt-1">
+                             <strong>Órdenes de Compra Asociadas:</strong>
+                            <div class="list-container mt-1" style="max-height: 200px; overflow-y: auto;">
                                 <ul class="list-group list-group-flush">
-                                    {% for oc in trazabilidad_resumen.origen.ordenes_compra_asociadas %}
-
+                                    {% for oc in trazabilidad_resumen.origen.ocs_asociadas %}
                                     <li class="list-group-item">
-                                        <a href="{{ url_for('orden_compra.detalle', id=oc.id) }}">{{
-                                            oc.codigo_oc }}</a>
-                                        <span class="text-muted small">({{ oc.proveedor_nombre or 'N/A'
-                                            }})</span>
+                                          <a href="{{ url_for('orden_compra.detalle', id=oc.id) }}">{{ oc.codigo_oc
+                                            }}</a>
+                                        <span class="text-muted small">({{ oc.proveedor_nombre or 'N/A' }})</span>
                                     </li>
                                     {% endfor %}
                                 </ul>
@@ -422,22 +418,24 @@
                         </p>
                         {% endif %}
 
-                        {% if trazabilidad_resumen and trazabilidad_resumen.origen and
-                        trazabilidad_resumen.origen.insumos %}
+                        {% if trazabilidad_resumen.origen.insumos_utilizados %}
                         <div class="mb-3">
                             <strong>Insumos Utilizados:</strong>
-                            <div class="list-container mt-1">
+                            <div class="list-container mt-1" style="max-height: 200px; overflow-y: auto;">
                                 <ul class="list-group list-group-flush">
-                                    {% for insumo in trazabilidad_resumen.origen.insumos %}
-                                    <li
-                                        class="list-group-item d-flex justify-content-between align-items-center">
-                                        <a
-                                            href="{{ url_for('inventario_view.detalle_lote', id_lote=insumo.id) }}">
-                                            {{ insumo.nombre }}
-                                        </a>
-                                        <span class="badge bg-secondary rounded-pill">
-                                            {{ insumo.cantidad }} unidades
-                                        </span>
+                                    {% for insumo in trazabilidad_resumen.origen.insumos_utilizados %}
+                                    <li class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <a href="{{ url_for('inventario_view.detalle_lote', id_lote=insumo.id) }}"
+                                                    class="fw-bold">{{ insumo.nombre }}</a>
+                                                <div class="text-muted small">
+                                                    Lote: {{ insumo.lote_proveedor }} | Prov: {{ insumo.proveedor }}
+                                                </div>
+                                            </div>
+                                            <span class="badge bg-secondary rounded-pill ms-2">{{ insumo.cantidad
+                                                }}</span>
+                                        </div>
                                     </li>
                                     {% endfor %}
                                 </ul>
@@ -450,24 +448,21 @@
 
                     <div class="col-md-6">
                         <h5 class="mb-3 border-bottom pb-2">
-                            <i class="bi bi-arrow-down-circle-fill text-success me-2"></i>Destino (Hacia
-                            Adelante)
+                            <i class="bi bi-arrow-down-circle-fill text-success me-2"></i>Destino (Hacia Adelante)
+
                         </h5>
-                        {% if trazabilidad_resumen and trazabilidad_resumen.destino and
-                        trazabilidad_resumen.destino.lotes %}
+                        {% if trazabilidad_resumen.destino.lotes_producidos %}
                         <div class="mb-3">
                             <strong>Lotes de Producto Generados:</strong>
-                            <div class="list-container mt-1">
+                            <div class="list-container mt-1" style="max-height: 200px; overflow-y: auto;">
                                 <ul class="list-group list-group-flush">
-                                    {% for lote in trazabilidad_resumen.destino.lotes %}
-                                    <li
-                                        class="list-group-item d-flex justify-content-between align-items-center">
+                                    {% for lote in trazabilidad_resumen.destino.lotes_producidos %}
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
                                         <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id) }}">
                                             Lote {{ lote.codigo }}
                                         </a>
-                                        <span class="badge bg-info rounded-pill">
-                                            {{ lote.cantidad }} unidades
-                                        </span>
+                                        <span class="badge bg-info rounded-pill">{{ lote.cantidad }}</span>
+
                                     </li>
                                     {% endfor %}
                                 </ul>
@@ -477,26 +472,25 @@
                         <p class="text-muted fst-italic mt-2">No se han generado lotes de producto.</p>
                         {% endif %}
 
-                        {% if trazabilidad_resumen and trazabilidad_resumen.destino and
-                        trazabilidad_resumen.destino.pedidos %}
+                        {% if trazabilidad_resumen.destino.pedidos_relacionados %}
                         <div class="mb-3">
-                            <strong>Pedidos Afectados:</strong>
-                            <div class="list-container mt-1">
+                             <strong>Pedidos Relacionados:</strong>
+                            <div class="list-container mt-1" style="max-height: 200px; overflow-y: auto;">
                                 <ul class="list-group list-group-flush">
-                                    {% for pedido in trazabilidad_resumen.destino.pedidos %}
-                                    <li
-                                        class="list-group-item d-flex justify-content-between align-items-center">
+                                    {% for pedido in trazabilidad_resumen.destino.pedidos_relacionados %}
+                                    <li class="list-group-item">
                                         <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}">
                                             Pedido #{{ pedido.id }}
                                         </a>
+                                        <span class="text-muted small">({{ pedido.cliente }})</span>
                                     </li>
                                     {% endfor %}
                                 </ul>
                             </div>
                         </div>
                         {% else %}
-                        <p class="text-muted fst-italic mt-2">No hay pedidos asociados a los lotes generados.
-                        </p>
+                        <p class="text-muted fst-italic mt-2">No hay pedidos asociados a los lotes generados.</p>
+
                         {% endif %}
                     </div>
                 </div>
