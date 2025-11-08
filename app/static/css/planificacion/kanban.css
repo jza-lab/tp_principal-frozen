@@ -754,3 +754,17 @@
 .kanban-board-container {
     height: calc(100vh - 250px); /* Ajusta este valor según la altura de tu navbar y filtros */
 }
+
+/* ===== NUEVO ESTILO PARA LA BANDERA DE CUARENTENA ===== */
+.badge-cuarentena {
+    padding: 4px 10px;
+    background-color: #f97316; /* Naranja llamativo */
+    color: #ffffff;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid #fb923c;
+}
