@@ -220,30 +220,66 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('op-cantidad-producida').innerText = cantidadProducida;
         document.getElementById('op-id').value = opId;
         
-        document.getElementById('form-control-calidad-op').reset();
+        const form = document.getElementById('form-control-calidad-op');
+        form.reset();
+        form.classList.remove('was-validated');
+
+        document.getElementById('campos-cantidades').style.display = 'none';
+        document.getElementById('campo-rechazar').style.display = 'none';
+        document.getElementById('campo-cuarentena').style.display = 'none';
 
         modal.show();
     }
-    
-    // Descomentar para habilitar drag & drop
-    // if (typeof Sortable !== 'undefined') {
-    //     initializeDragAndDrop();
-    // }
 
-    document.getElementById('btn-aprobar-op').addEventListener('click', () => processQC('APROBADO'));
-    document.getElementById('btn-cuarentena-op').addEventListener('click', () => processQC('EN_CUARENTENA'));
-    document.getElementById('btn-rechazar-op').addEventListener('click', () => processQC('RECHAZADO'));
+    const decisionSelect = document.getElementById('decision-inspeccion');
+    if (decisionSelect) {
+        decisionSelect.addEventListener('change', function() {
+            const decision = this.value;
+            const camposCantidades = document.getElementById('campos-cantidades');
+            const campoRechazar = document.getElementById('campo-rechazar');
+            const campoCuarentena = document.getElementById('campo-cuarentena');
 
-    async function processQC(decision) {
+            camposCantidades.style.display = 'none';
+            campoRechazar.style.display = 'none';
+            campoCuarentena.style.display = 'none';
+
+            if (decision === 'RECHAZO_PARCIAL') {
+                camposCantidades.style.display = 'block';
+                campoRechazar.style.display = 'block';
+            } else if (decision === 'CUARENTENA_PARCIAL') {
+                camposCantidades.style.display = 'block';
+                campoCuarentena.style.display = 'block';
+            } else if (decision === 'MIXTO') {
+                camposCantidades.style.display = 'block';
+                campoRechazar.style.display = 'block';
+                campoCuarentena.style.display = 'block';
+            }
+        });
+    }
+
+    const btnProcesar = document.getElementById('btn-procesar-qc');
+    if (btnProcesar) {
+        btnProcesar.addEventListener('click', processQC);
+    }
+
+    async function processQC() {
         const opId = document.getElementById('op-id').value;
         const form = document.getElementById('form-control-calidad-op');
+
+        if (!form.checkValidity()) {
+            form.classList.add('was-validated');
+            return;
+        }
+        form.classList.remove('was-validated');
+
         const formData = new FormData(form);
+        const decision = formData.get('decision_inspeccion');
         formData.append('decision', decision);
 
         try {
             const response = await fetch(`/produccion/kanban/api/op/${opId}/procesar-calidad`, {
                 method: 'POST',
-                body: formData, // Enviar FormData directamente, sin headers de Content-Type
+                body: formData,
             });
 
             const result = await response.json();
@@ -255,11 +291,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 const card = document.querySelector(`.kanban-card[data-op-id="${opId}"]`);
                 if (card) {
-                    if (decision === 'RECHAZADO' && data.cantidad_rechazada === document.getElementById('op-cantidad-producida').innerText) {
+                    const cantidadProducida = parseFloat(document.getElementById('op-cantidad-producida').innerText);
+                    const cantidadRechazada = parseFloat(formData.get('cantidad_rechazada') || 0);
+
+                    if ((decision === 'RECHAZO_PARCIAL' || decision === 'MIXTO') && cantidadRechazada >= cantidadProducida) {
                         card.remove();
                     } else {
                         const completedColumn = document.getElementById('kanban-cards-COMPLETADA');
-                        completedColumn.prepend(card);
+                        if (completedColumn) {
+                            completedColumn.prepend(card);
+                        }
                     }
                     updateColumnCounts();
                 }
