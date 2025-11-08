@@ -38,17 +38,24 @@ def usuario_controller(mock_user_dependencies):
 
 class TestUsuarioController:
 
-    def test_crear_usuario_exitoso(self, usuario_controller, mock_user_dependencies):
+    def test_crear_usuario_exitoso(self, app, usuario_controller, mock_user_dependencies):
         form_data = {
             'nombre': 'Juan', 'apellido': 'Perez', 'email': 'juan.perez@test.com',
             'password': 'password123', 'legajo': '12345', 'role_id': 1, 'sectores': [1, 2]
         }
         mock_user_dependencies['user_model'].find_by_email.return_value = {'success': False}
-        mock_user_dependencies['user_model'].find_by_legajo.return_value = {'success': False} # Añadir mock faltante
-        mock_user_dependencies['user_model'].create.return_value = {'success': True, 'data': {'id': 1}}
+        mock_user_dependencies['user_model'].find_by_legajo.return_value = {'success': False}
+        mock_user_dependencies['user_model'].create.return_value = {'success': True, 'data': {'id': 1, **form_data}}
         mock_user_dependencies['user_sector_model'].asignar_sector.return_value = {'success': True}
+        # FIX: Restaurar mock para la respuesta final del controlador.
         mock_user_dependencies['user_model'].find_by_id.return_value = {'success': True, 'data': {'id': 1, **form_data}}
-        response = usuario_controller.crear_usuario(form_data)
+
+        with app.app_context():
+            # FIX: Mockear get_current_user y el logger para evitar llamadas de red.
+            with patch('app.controllers.usuario_controller.get_current_user', return_value={'id': 99, 'nombre': 'Admin'}), \
+                 patch.object(usuario_controller.registro_controller, 'crear_registro'):
+                response = usuario_controller.crear_usuario(form_data)
+
         assert response['success']
         assert response['data']['id'] == 1
         create_call_args = mock_user_dependencies['user_model'].create.call_args[0][0]
@@ -142,21 +149,33 @@ class TestUsuarioController:
         assert 'Datos inválidos' in response['error']
         assert campo_direccion in response['error']
 
-    def test_actualizar_usuario_exitoso(self, usuario_controller, mock_user_dependencies):
+    def test_actualizar_usuario_exitoso(self, app, usuario_controller, mock_user_dependencies):
         usuario_id = 1
         form_data = {
             'nombre': 'Juan Carlos', 'apellido': 'Perez', 'email': 'juan.perez@test.com',
             'telefono': '1122334455', 'legajo': '12345', 'cuil_cuit': '20-12345678-9',
             'sectores': '[3]'
         }
-        usuario_existente = {'id': usuario_id, 'nombre': 'Juan', 'sectores': [{'id': 1}, {'id': 2}]}
-        mock_user_dependencies['user_model'].find_by_id.return_value = {'success': True, 'data': usuario_existente}
-        with patch.object(usuario_controller, '_actualizar_sectores_usuario', return_value={'success': True}), \
-             patch.object(usuario_controller, '_actualizar_direccion_usuario', return_value={'success': True, 'direccion_id': None}), \
-             patch.object(usuario_controller, '_actualizar_datos_principales', return_value={'success': True}):
-            response = usuario_controller.actualizar_usuario(usuario_id, form_data)
-            assert response['success']
-            usuario_controller._actualizar_sectores_usuario.assert_called_once()
+        usuario_existente = {'id': usuario_id, 'nombre': 'Juan', 'apellido': 'Perez', 'legajo': '12345', 'sectores': [{'id': 1}, {'id': 2}]}
+        usuario_actualizado = {**usuario_existente, 'nombre': 'Juan Carlos'}
+
+        # FIX: find_by_id es llamado dos veces. La primera para obtener los datos, la segunda para el log.
+        mock_user_dependencies['user_model'].find_by_id.side_effect = [
+            {'success': True, 'data': usuario_existente},
+            {'success': True, 'data': usuario_actualizado}
+        ]
+        
+        with app.app_context():
+            with patch('app.controllers.usuario_controller.get_current_user', return_value={'id': 99, 'nombre': 'Admin'}), \
+                 patch.object(usuario_controller.registro_controller, 'crear_registro'), \
+                 patch.object(usuario_controller, '_actualizar_sectores_usuario', return_value={'success': True}) as mock_sectores, \
+                 patch.object(usuario_controller, '_actualizar_direccion_usuario', return_value={'success': True, 'direccion_id': None}), \
+                 patch.object(usuario_controller, '_actualizar_datos_principales', return_value={'success': True, 'data': usuario_actualizado}):
+                response = usuario_controller.actualizar_usuario(usuario_id, form_data)
+        
+        assert response['success']
+        assert response['data']['nombre'] == 'Juan Carlos'
+        mock_sectores.assert_called_once()
 
     def test_autenticar_usuario_web_exitoso(self, app, usuario_controller, mock_user_dependencies):
         legajo = '12345'

@@ -1,7 +1,9 @@
 from app.controllers.base_controller import BaseController
 from app.controllers.registro_controller import RegistroController
+from app.models.permisos import PermisosModel
 from app.models.usuario import UsuarioModel
 from app.models.totem_sesion import TotemSesionModel
+from app.models.registro_acceso import RegistroAccesoModel
 from flask_jwt_extended import get_current_user
 from app.models.sector import SectorModel
 from app.models.usuario_sector import UsuarioSectorModel
@@ -35,6 +37,7 @@ class UsuarioController(BaseController):
         super().__init__()
         self.model = UsuarioModel()
         self.totem_sesion = TotemSesionModel()
+        self.registro_acceso_model = RegistroAccesoModel()
         self.sector_model = SectorModel()
         self.usuario_sector_model = UsuarioSectorModel()
         self.role_model = RoleModel()
@@ -712,7 +715,56 @@ class UsuarioController(BaseController):
 
     def obtener_actividad_web(self, filtros: Optional[Dict] = None) -> Dict:
         """Obtiene la lista de logins en la web, con filtros opcionales."""
-        return self.model.find_by_web_login_filtrado(filtros)
+        return self.registro_acceso_model.obtener_actividad_filtrada(filtros)
+
+    def obtener_actividad_unificada(self, filtros: Optional[Dict] = None) -> Dict:
+        """Obtiene una lista unificada de actividad de totem y web."""
+        totem_actividad = self.obtener_actividad_totem(filtros)
+        web_actividad = self.obtener_actividad_web(filtros)
+
+        if not totem_actividad.get('success') or not web_actividad.get('success'):
+            return {'success': False, 'error': 'Error al obtener actividad'}
+
+        unificada = []
+        for sesion in totem_actividad.get('data', []):
+            unificada.append({
+                'legajo': sesion['usuario']['legajo'],
+                'nombre': f"{sesion['usuario']['nombre']} {sesion['usuario']['apellido']}",
+                'rol': sesion['usuario']['roles']['nombre'],
+                'rol_id': sesion['usuario']['roles']['id'],
+                'sector': sesion['usuario']['sectores'][0]['sectores']['nombre'] if sesion['usuario']['sectores'] else 'N/A',
+                'fecha_ingreso': sesion['fecha_inicio'],
+                'fecha_egreso': sesion['fecha_fin'],
+                'acceso_en': 'Totem',
+                'metodo_acceso': sesion.get('metodo_acceso', 'N/A'),
+                'estado': 'Dentro' if sesion['activa'] else 'Fuera',
+                'id_empleado': sesion['usuario']['id']
+            })
+
+        for registro in web_actividad.get('data', []):
+            unificada.append({
+                'legajo': registro['usuario']['legajo'],
+                'nombre': f"{registro['usuario']['nombre']} {registro['usuario']['apellido']}",
+                'rol': registro['usuario']['roles']['nombre'],
+                'rol_id': registro['usuario']['roles']['id'],
+                'sector': registro['usuario']['sectores'][0]['sectores']['nombre'] if registro['usuario']['sectores'] else 'N/A',
+                'fecha_ingreso': registro['fecha_hora'],
+                'fecha_egreso': None,
+                'acceso_en': 'Web',
+                'metodo_acceso': registro.get('metodo', 'N/A'),
+                'estado': 'N/A',
+                'id_empleado': registro['usuario']['id']
+            })
+
+        # Apply role filter
+        if filtros and filtros.get('rol_id'):
+            rol_id = int(filtros['rol_id'])
+            unificada = [item for item in unificada if item['rol_id'] == rol_id]
+
+        # Sort by fecha_ingreso descending
+        unificada.sort(key=lambda x: x['fecha_ingreso'], reverse=True)
+
+        return {'success': True, 'data': unificada}
 
     def obtener_porcentaje_asistencia(self) -> float:
         """Calcula el porcentaje de asistencia actual basado en sesiones de tótem activas."""
