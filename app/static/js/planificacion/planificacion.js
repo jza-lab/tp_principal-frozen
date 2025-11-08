@@ -1,3 +1,12 @@
+window.addEventListener('pageshow', function(event) {
+    // event.persisted es true si la página se restauró desde el BFCache
+    if (event.persisted) {
+        console.log('Página cargada desde BFCache. Forzando recarga para obtener datos frescos.');
+        // Forzar una recarga completa desde el servidor
+        window.location.reload();
+    }
+});
+
 /**
  * Mueve una OP a un nuevo estado (usada por Kanban).
  * @param {string} opId ID de la OP a mover.

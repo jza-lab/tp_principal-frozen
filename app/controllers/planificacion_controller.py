@@ -372,21 +372,48 @@ class PlanificacionController(BaseController):
 
         else:
             return None, "No se proporcionaron IDs de OP."
-    # --- NUEVO HELPER para calcular carga de una OP ---
+
+    # --- NUEVO HELPER para calcular carga de una OP (CON LOGGING CORREGIDO) ---
     def _calcular_carga_op(self, op_data: Dict) -> Decimal:
         """ Calcula la carga total en minutos para una OP dada. """
         carga_total = Decimal(0)
         receta_id = op_data.get('receta_id')
         cantidad = Decimal(op_data.get('cantidad_planificada', 0))
-        if not receta_id or cantidad <= 0: return carga_total
+        op_id = op_data.get('id', 'N/A') # Para trazar la OP
 
+        if not receta_id or cantidad <= 0:
+            logger.warning(f"[Carga OP {op_id}] Carga 0.0 (No hay receta_id o cantidad es 0).")
+            return carga_total
+
+        # --- INICIO DE LA CORRECCIÓN ---
+        # El nombre correcto es con 'r' minúscula
         operaciones = self.obtener_operaciones_receta(receta_id)
-        if not operaciones: return carga_total
+        # --- FIN DE LA CORRECCIÓN ---
+
+        if not operaciones:
+            logger.warning(f"[Carga OP {op_id}] Carga 0.0 (Receta {receta_id} no tiene operaciones).")
+            return carga_total
+
+        logger.info(f"--- Calculando Carga para OP {op_id} (Receta: {receta_id}, Cant: {cantidad}) ---")
 
         for op_step in operaciones:
+
+            # --- INICIO DEL LOG ---
+            nombre_paso = op_step.get('nombre_operacion', 'Paso Desconocido')
             t_prep = Decimal(op_step.get('tiempo_preparacion', 0))
             t_ejec_unit = Decimal(op_step.get('tiempo_ejecucion_unitario', 0))
-            carga_total += t_prep + (t_ejec_unit * cantidad)
+
+            carga_paso_actual = t_prep + (t_ejec_unit * cantidad)
+            carga_total += carga_paso_actual
+
+            logger.info(f"[Carga OP {op_id}] Paso: '{nombre_paso}'")
+            logger.info(f"  -> T. Prep: {t_prep} min")
+            logger.info(f"  -> T. Ejec: {t_ejec_unit} min/u * {cantidad} u = {t_ejec_unit * cantidad} min")
+            logger.info(f"  -> Carga de este paso: {carga_paso_actual:.2f} min")
+            logger.info(f"  -> CARGA TOTAL ACUMULADA: {carga_total:.2f} min")
+            # --- FIN DEL LOG ---
+
+        logger.info(f"--- [Carga OP {op_id}] Carga Final Total: {carga_total:.2f} min ---")
         return carga_total
 
     # --- HELPER para generar respuesta de sobrecarga (MENSAJE MEJORADO) ---
@@ -561,13 +588,12 @@ class PlanificacionController(BaseController):
     def obtener_ops_pendientes_planificacion(self, dias_horizonte: int = 7) -> tuple:
         """
         Obtiene OPs PENDIENTES, agrupa, calcula sugerencias Y AÑADE unidad_medida y linea_compatible.
-
-        --- CORREGIDO ---
-        Agrupa las OPs no solo por producto, sino por [Producto + Semana de Entrega (Fecha Meta)]
-        para evitar que la planificación automática consolide lotes con fechas incompatibles.
+        --- CORREGIDO (v_capacidad_real) ---
+        La sugerencia de días ahora usa la capacidad neta de la línea (considerando
+        eficiencia y utilización) en lugar de un valor estático de 480.
         """
         try:
-            # 1. Calcular rango y filtrar OPs
+            # 1. Calcular rango y filtrar OPs (Sin cambios)
             hoy = date.today()
             dias_horizonte_int = int(dias_horizonte)
             fecha_fin_horizonte = hoy + timedelta(days=dias_horizonte_int)
@@ -582,7 +608,7 @@ class PlanificacionController(BaseController):
                 return self.error_response("Error al cargar órdenes pendientes.")
             ordenes_en_horizonte = response.get('data', [])
 
-            # 2. Agrupar por Producto y SEMANA
+            # 2. Agrupar por Producto y SEMANA (Sin cambios)
             mps_agrupado = defaultdict(lambda: {
                 'producto_id': 0,
                 'producto_nombre': '',
@@ -596,38 +622,28 @@ class PlanificacionController(BaseController):
             for op in ordenes_en_horizonte:
                 producto_id = op.get('producto_id')
                 if not producto_id: continue
-
-                # --- INICIO DE LA MODIFICACIÓN DE AGRUPACIÓN ---
                 op_fecha_meta_str = op.get('fecha_meta')
                 grupo_key = ""
                 op_fecha_meta = None
-
                 if op_fecha_meta_str:
                     try:
                         op_fecha_meta = date.fromisoformat(op_fecha_meta_str.split('T')[0].split(' ')[0])
                         year, week, _ = op_fecha_meta.isocalendar()
-                        # Crear clave compuesta: "ProductID-Year-Week"
                         grupo_key = f"{producto_id}-{year}-{week}"
                     except ValueError:
                         logger.warning(f"OP {op.get('id')} tiene fecha meta inválida: {op_fecha_meta_str}. Agrupando sin semana.")
                         grupo_key = f"{producto_id}-FECHA_INVALIDA"
                 else:
                     grupo_key = f"{producto_id}-NO_META"
-
                 item = mps_agrupado[grupo_key]
-                # --- FIN DE LA MODIFICACIÓN DE AGRUPACIÓN ---
-
                 item['producto_id'] = producto_id
                 item['producto_nombre'] = op.get('producto_nombre', 'Desconocido')
                 item['cantidad_total'] += float(op.get('cantidad_planificada', 0))
                 item['ordenes'].append(op)
-
                 if item['receta_id'] is None:
                     item['receta_id'] = op.get('receta_id')
                 if item['unidad_medida'] is None:
                     item['unidad_medida'] = op.get('producto_unidad_medida')
-
-                # Encontrar la fecha meta más próxima DENTRO de este grupo
                 if op_fecha_meta:
                     fecha_meta_mas_proxima_actual_str = item.get('fecha_meta_mas_proxima')
                     if fecha_meta_mas_proxima_actual_str:
@@ -653,21 +669,22 @@ class PlanificacionController(BaseController):
 
                 if not receta_id_agrupada: continue
 
-                # a) Calcular Tiempo de Producción y Línea Sugerida
+                # a) Calcular Carga Total (Minutos)
                 op_simulada = {
                     'receta_id': receta_id_agrupada,
                     'cantidad_planificada': cantidad_total_agrupada
                 }
-                carga_total_minutos_agg = float(self._calcular_carga_op(op_simulada))
+                carga_total_minutos_agg = Decimal(self._calcular_carga_op(op_simulada))
 
-                if carga_total_minutos_agg > 0:
-                    data['sugerencia_t_prod_dias'] = math.ceil(carga_total_minutos_agg / 480)
-                else:
-                    data['sugerencia_t_prod_dias'] = 0
+                # --- INICIO DE LA LÓGICA CORREGIDA ---
 
+                # b) Calcular Línea Sugerida PRIMERO
                 receta_res = self.receta_model.find_by_id(receta_id_agrupada, 'id')
+                linea_sug_agg = None
+                # Usamos 480 como fallback MUY defensivo
+                capacidad_neta_linea_sugerida = Decimal(480.0)
+
                 if receta_res.get('success'):
-                    # ... (Lógica de sugerencia de línea y compatibilidad, sin cambios) ...
                     receta = receta_res['data']
                     linea_compatible_str = receta.get('linea_compatible', '2')
                     data['linea_compatible'] = linea_compatible_str
@@ -677,15 +694,50 @@ class PlanificacionController(BaseController):
                     UMBRAL_CANTIDAD_LINEA_1 = 50
                     puede_l1 = '1' in linea_compatible_list and tiempo_l1 > 0
                     puede_l2 = '2' in linea_compatible_list and tiempo_l2 > 0
-                    linea_sug_agg = 0
+
                     if puede_l1 and puede_l2:
                         linea_sug_agg = 1 if cantidad_total_agrupada >= UMBRAL_CANTIDAD_LINEA_1 else 2
                     elif puede_l1: linea_sug_agg = 1
                     elif puede_l2: linea_sug_agg = 2
+
                     data['sugerencia_linea'] = linea_sug_agg if linea_sug_agg > 0 else None
 
-                # b) Verificar Stock Agregado
-                # ... (lógica de stock y t_proc_dias sin cambios) ...
+                    # --- ¡NUEVO! OBTENER CAPACIDAD REAL DE LA LÍNEA SUGERIDA ---
+                    if linea_sug_agg:
+                        try:
+                            # Usamos el modelo de centro de trabajo (que ya está en self)
+                            ct_resp = self.centro_trabajo_model.find_by_id(linea_sug_agg, 'id')
+                            if ct_resp.get('success'):
+                                ct_data = ct_resp.get('data', {})
+                                cap_std = Decimal(ct_data.get('tiempo_disponible_std_dia', 480))
+                                eficiencia = Decimal(ct_data.get('eficiencia', 1.0))
+                                utilizacion = Decimal(ct_data.get('utilizacion', 1.0))
+
+                                # Esta es la capacidad base NETA (sin bloqueos)
+                                cap_neta_calculada = cap_std * eficiencia * utilizacion
+
+                                if cap_neta_calculada > 0:
+                                    capacidad_neta_linea_sugerida = cap_neta_calculada
+                                    logger.info(f"Usando capacidad NETA {capacidad_neta_linea_sugerida} para sugerencia (Línea {linea_sug_agg})")
+                                else:
+                                    logger.warning(f"Capacidad neta para Línea {linea_sug_agg} es 0. Usando 480.")
+                            else:
+                                logger.warning(f"No se encontró CT {linea_sug_agg} para get cap. Usando 480.")
+                        except Exception as e_cap:
+                            logger.error(f"Error obteniendo cap para {linea_sug_agg}: {e_cap}. Usando 480.")
+
+                # c) Calcular Tiempo de Producción (AHORA USANDO LA CAPACIDAD CORRECTA)
+                if carga_total_minutos_agg > 0:
+                    # (Línea 687 CORREGIDA)
+                    data['sugerencia_t_prod_dias'] = math.ceil(
+                        carga_total_minutos_agg / capacidad_neta_linea_sugerida
+                    )
+                else:
+                    data['sugerencia_t_prod_dias'] = 0
+
+                # --- FIN DE LA LÓGICA CORREGIDA ---
+
+                # d) Verificar Stock Agregado (antes era b)
                 ingredientes_result = self.receta_model.get_ingredientes(receta_id_agrupada)
                 insumos_faltantes_agg = []
                 stock_ok_agg = True
@@ -709,21 +761,17 @@ class PlanificacionController(BaseController):
                         if insumo_data_res.get('success'): tiempos_entrega_agg.append(insumo_data_res['data'].get('tiempo_entrega_dias', 0))
                     data['sugerencia_t_proc_dias'] = max(tiempos_entrega_agg) if tiempos_entrega_agg else 0
 
-                # c) Calcular JIT
+                # e) Calcular JIT (antes era c)
                 try:
                     today = date.today()
                     t_prod_dias = data.get('sugerencia_t_prod_dias', 0)
                     t_proc_dias = data.get('sugerencia_t_proc_dias', 0)
-
-                    # Asegurarse de que fecha_meta_mas_proxima no sea None
                     fecha_meta_str_jit = data.get('fecha_meta_mas_proxima')
                     if not fecha_meta_str_jit:
                         logger.warning(f"Grupo {grupo_key} sin fecha meta, usando 'hoy' + 7 días para JIT.")
                         fecha_meta_str_jit = (today + timedelta(days=7)).isoformat()
-
                     fecha_meta_solo_str = fecha_meta_str_jit.split('T')[0].split(' ')[0]
                     fecha_meta = date.fromisoformat(fecha_meta_solo_str)
-
                     fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
                     fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
                     fecha_inicio_base = max(fecha_inicio_ideal, fecha_disponibilidad_material)
@@ -733,19 +781,16 @@ class PlanificacionController(BaseController):
                     logger.warning(f"No se pudo calcular JIT para modal (Grupo: {grupo_key}): {e_jit_modal}")
                     data['sugerencia_fecha_inicio_jit'] = date.today().isoformat()
 
-            # 4. Convertir a lista ordenada
+            # 4. Convertir a lista ordenada (Sin cambios)
             mps_lista_ordenada = []
             for grupo_key, data in mps_agrupado.items():
                 producto_id_str = grupo_key.split('-')[0]
-                # Encontrar el nombre del producto de la primera OP en el grupo
                 producto_nombre = data['ordenes'][0].get('producto_nombre', 'Desconocido') if data['ordenes'] else 'Desconocido'
-
                 mps_lista_ordenada.append({
                     'producto_id': int(producto_id_str) if producto_id_str.isdigit() else None,
                     'producto_nombre': producto_nombre,
                     **data
                 })
-
             mps_lista_ordenada.sort(key=lambda x: x.get('fecha_meta_mas_proxima') or '9999-12-31')
 
             resultado_final = {
