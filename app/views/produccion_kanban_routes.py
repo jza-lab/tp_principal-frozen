@@ -185,10 +185,11 @@ def api_procesar_calidad_op(op_id):
     API endpoint para procesar la decisión de control de calidad de una Orden de Producción.
     """
     usuario_id = get_jwt_identity()
-    data = request.get_json()
+    form_data = request.form.to_dict()
+    foto_file = request.files.get('foto_url')
     
     controller = ProduccionKanbanController()
-    response, status_code = controller.procesar_decision_calidad(op_id, data, usuario_id)
+    response, status_code = controller.procesar_decision_calidad(op_id, form_data, foto_file, usuario_id)
     
     return jsonify(response), status_code
 

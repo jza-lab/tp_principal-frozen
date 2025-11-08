@@ -205,21 +205,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const opId = document.getElementById('op-id').value;
         const form = document.getElementById('form-control-calidad-op');
         const formData = new FormData(form);
-
-        const data = {
-            decision,
-            cantidad_cuarentena: formData.get('cantidad_cuarentena'),
-            cantidad_rechazada: formData.get('cantidad_rechazada'),
-            comentarios: formData.get('comentarios')
-        };
+        formData.append('decision', decision);
 
         try {
             const response = await fetch(`/produccion/kanban/api/op/${opId}/procesar-calidad`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data),
+                body: formData, // Enviar FormData directamente, sin headers de Content-Type
             });
 
             const result = await response.json();

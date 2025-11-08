@@ -24,6 +24,26 @@
                     </div>
 
                     <div class="mb-3">
+                        <label for="resultado-inspeccion" class="form-label">Resultado de la Inspección</label>
+                        <select class="form-select" id="resultado-inspeccion" name="resultado_inspeccion">
+                            <option value="" selected disabled>Seleccione un resultado...</option>
+                            <option value="Defecto de empaquetado">Defecto de empaquetado</option>
+                            <option value="Contaminación cruzada">Contaminación cruzada</option>
+                            <option value="Producto quemado / sobrecocido">Producto quemado / sobrecocido</option>
+                            <option value="Producto crudo / mal cocido">Producto crudo / mal cocido</option>
+                            <option value="Forma o tamaño irregular">Forma o tamaño irregular</option>
+                            <option value="Peso incorrecto">Peso incorrecto</option>
+                            <option value="Color u olor anómalo">Color u olor anómalo</option>
+                            <option value="Otro">Otro (especificar en comentarios)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="foto-calidad" class="form-label">Cargar Foto (opcional, .png o .jpg)</label>
+                        <input class="form-control" type="file" id="foto-calidad" name="foto_url" accept="image/png, image/jpeg">
+                    </div>
+
+                    <div class="mb-3">
                         <label for="comentarios-calidad" class="form-label">Comentarios</label>
                         <textarea class="form-control" id="comentarios-calidad" name="comentarios" rows="3"></textarea>
                     </div>

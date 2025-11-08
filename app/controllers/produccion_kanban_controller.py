@@ -11,6 +11,10 @@ from app.models.reserva_insumo import ReservaInsumoModel
 from app.utils.estados import OP_KANBAN_COLUMNAS
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.controllers.control_calidad_producto_controller import ControlCalidadProductoController
+from app.database import Database
+from werkzeug.utils import secure_filename
+import os
+from storage3.exceptions import StorageApiError
 
 logger = logging.getLogger(__name__)
 
@@ -485,12 +489,13 @@ class ProduccionKanbanController(BaseController):
             logger.error(f"Error al obtener estado de producción para OP {op_id} desde KanbanController: {e}", exc_info=True)
             return self.error_response(f"Error interno al consultar estado: {str(e)}", 500)
 
-    def procesar_decision_calidad(self, op_id: int, data: dict, usuario_id: int) -> tuple:
+    def procesar_decision_calidad(self, op_id: int, form_data: dict, foto_file, usuario_id: int) -> tuple:
         try:
-            decision = data.get('decision')
-            cantidad_cuarentena = float(data.get('cantidad_cuarentena') or 0)
-            cantidad_rechazada = float(data.get('cantidad_rechazada') or 0)
-            comentarios = data.get('comentarios')
+            decision = form_data.get('decision')
+            cantidad_cuarentena = float(form_data.get('cantidad_cuarentena') or 0)
+            cantidad_rechazada = float(form_data.get('cantidad_rechazada') or 0)
+            comentarios = form_data.get('comentarios')
+            resultado_inspeccion = form_data.get('resultado_inspeccion')
 
             op_res = self.orden_produccion_controller.obtener_orden_por_id(op_id)
             if not op_res.get('success'):
@@ -503,6 +508,9 @@ class ProduccionKanbanController(BaseController):
             if cantidad_aceptada < 0:
                 return self.error_response("Las cantidades en cuarentena y rechazadas no pueden superar la cantidad producida.", 400)
 
+            # Manejo de la subida de la imagen
+            foto_url = self._subir_foto_y_obtener_url(foto_file, op_id)
+
             # Crear lote
             lote_data = {
                 'producto_id': orden_produccion.get('producto_id'),
@@ -513,19 +521,16 @@ class ProduccionKanbanController(BaseController):
                 'pedido_id': orden_produccion.get('pedido_id') 
             }
             
-            # Lógica de estado corregida
             if cantidad_cuarentena == cantidad_producida:
                 lote_estado = 'CUARENTENA'
             elif cantidad_rechazada == cantidad_producida:
-                lote_estado = 'AGOTADO'
+                lote_estado = 'RECHAZADO'
             elif orden_produccion.get('pedido_id'):
                 lote_estado = 'RESERVADO'
             else:
                 lote_estado = 'DISPONIBLE'
-
             lote_data['estado'] = lote_estado
             
-            # Corregido para usar el método que acepta usuario_id
             lote_res, _ = self.lote_producto_controller.crear_lote_desde_formulario(lote_data, usuario_id)
 
             if not lote_res.get('success'):
@@ -534,20 +539,28 @@ class ProduccionKanbanController(BaseController):
             lote_creado = lote_res['data']
             lote_id = lote_creado.get('id_lote')
 
-            # Crear registro de CC
-            self.control_calidad_producto_controller.crear_registro_control_calidad(
-                lote_id=lote_id,
-                usuario_id=usuario_id,
-                decision=decision,
-                orden_produccion_id=op_id,
-                comentarios=comentarios
-            )
+            # Crear registro de CC con los nuevos campos
+            cc_data = {
+                'lote_producto_id': lote_id,
+                'usuario_supervisor_id': usuario_id,
+                'decision_final': decision,
+                'orden_produccion_id': op_id,
+                'comentarios': comentarios,
+                'resultado_inspeccion': resultado_inspeccion,
+                'foto_url': foto_url
+            }
+            # Usar el método del controlador en lugar del modelo directamente
+            cc_res, _ = self.control_calidad_producto_controller.crear_registro_control_calidad(cc_data)
+            if not cc_res.get('success'):
+                 # Si falla, registrar el error y continuar, ya que el lote ya se creó.
+                 logger.error(f"El lote {lote_id} fue creado, pero falló la creación del registro de C.C.: {cc_res.get('error')}")
+
+
 
             # Actualizar OP
             nuevo_estado_op = 'COMPLETADA'
             if cantidad_rechazada == cantidad_producida:
                 nuevo_estado_op = 'CANCELADA'
-
             self.orden_produccion_controller.cambiar_estado_orden_simple(op_id, nuevo_estado_op)
 
             return self.success_response(message="Decisión de calidad procesada exitosamente.")
@@ -555,3 +568,41 @@ class ProduccionKanbanController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico al procesar decisión de calidad para OP {op_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
+
+    def _subir_foto_y_obtener_url(self, file_storage, op_id: int) -> str | None:
+        """
+        Sube un archivo al bucket de Supabase y devuelve su URL pública.
+        """
+        if not file_storage or not file_storage.filename:
+            return None
+        try:
+            db_client = Database().client
+            bucket_name = "fotos_control_calidad"
+
+            filename = secure_filename(file_storage.filename)
+            extension = os.path.splitext(filename)[1]
+            unique_filename = f"productos/op_{op_id}_{int(datetime.now().timestamp())}{extension}"
+
+            file_content = file_storage.read()
+            
+            response = db_client.storage.from_(bucket_name).upload(
+                path=unique_filename,
+                file=file_content,
+                file_options={"content-type": file_storage.mimetype}
+            )
+            
+            url_response = db_client.storage.from_(bucket_name).get_public_url(unique_filename)
+            logger.info(f"Foto subida con éxito para la OP {op_id}. URL: {url_response}")
+            return url_response
+
+        except StorageApiError as e:
+            if "Bucket not found" in str(e):
+                error_message = f"Error de configuración: El bucket de almacenamiento '{bucket_name}' no se encontró en Supabase."
+                logger.error(error_message)
+                raise Exception(error_message)
+            else:
+                logger.error(f"Error de Supabase Storage al subir foto para la OP {op_id}: {e}", exc_info=True)
+                raise e
+        except Exception as e:
+            logger.error(f"Excepción general al subir foto para la OP {op_id}: {e}", exc_info=True)
+            raise e
