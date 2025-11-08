@@ -106,15 +106,16 @@
                                 <span class="text-muted">{{ issue.mensaje }}</span>
                             </td>
                             <td class="text-center">
-                                <button class="btn btn-sm btn-outline-primary w-100 btn-open-replan-modal"
-                                    data-op-id='{{ issue.orden_produccion_id }}'
-                                    data-op-codigo='{{ issue.op_codigo }}'
-                                    data-op-producto='{{ issue.op_producto_nombre | e }}'
+                                <button class="btn btn-sm btn-outline-primary w-100 btn-open-replan-modal" data-op-id='{{ issue.orden_produccion_id }}'
+                                    data-op-codigo='{{ issue.op_codigo }}' data-op-producto='{{ issue.op_producto_nombre | e }}'
                                     data-op-cantidad='{{ issue.op_cantidad }}'
                                     data-op-linea='{{ issue.datos_snapshot.asignaciones_confirmar.linea_asignada | default(issue.op_linea_sugerida, true) }}'
-                                    data-op-fecha-inicio='{{ issue.datos_snapshot.asignaciones_confirmar.fecha_inicio }}'
-                                    data-op-supervisor=''
-                                    data-op-operario=''>
+                                    data-op-fecha-inicio='{{ issue.sugerencias_jit.sugerencia_fecha_inicio_jit | default(issue.datos_snapshot.asignaciones_confirmar.fecha_inicio) }}'
+                                    data-op-supervisor='' data-op-operario='' {# --- ¡VERIFICA ESTAS LÍNEAS! --- #}
+                                    data-sug-t-prod-dias='{{ issue.sugerencias_jit.sugerencia_t_prod_dias | default(0) }}'
+                                    data-sug-t-proc-dias='{{ issue.sugerencias_jit.sugerencia_t_proc_dias | default(0) }}'
+                                    data-sug-stock-ok='{{ 1 if issue.sugerencias_jit.sugerencia_stock_ok else 0 }}'
+                                    data-sug-fecha-jit='{{ issue.sugerencias_jit.sugerencia_fecha_inicio_jit | default("") }}'>
                                     <i class="bi bi-calendar-range me-1"></i> Re-Planificar
                                 </button>
                             </td>
@@ -153,12 +154,11 @@
                         <th class="text-center">Cant. Total Req.</th>
                         <th class="text-center">Fecha Meta Próx.</th>
                         <th style="width: 25%;">Sugerencia Agregada</th>
-                        <th style="width: 15%;" class="text-center">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item_mps in mps_items %}
-                    <tr class="fila-producto-mps" data-bs-toggle="modal" data-bs-target="#modal-producto-{{ item_mps.producto_id }}" style="cursor: pointer;" title="Clic para planificar lote semanal">
+                    <tr class="fila-producto-mps">
                         <td><strong>{{ item_mps.producto_nombre }}</strong></td>
                         <td class="text-center fs-5"><b>{{ item_mps.cantidad_total }}</b></td>
                         <td class="text-center text-danger"><strong>{{ item_mps.fecha_meta_mas_proxima|format_datetime('%d %b %Y') if item_mps.fecha_meta_mas_proxima else 'N/D' }}</strong></td>
@@ -174,15 +174,6 @@
                                     </ul>
                                 </div>
                              {% else %} <span class="text-muted">Error cálculo</span> {% endif %}
-                        </td>
-                        <td class="text-center">
-
-                            {% if 'crear_orden_de_produccion' is has_permission and not is_operario %}
-                            <button class="btn btn-sm btn-primary">
-                                <i class="bi bi-calendar-check me-1"></i> Planificar Lote
-                            </button>
-                            {% endif %}
-
                         </td>
                     </tr>
                     {% endfor %}
@@ -348,6 +339,12 @@
                                                         data-op-fecha-inicio='{{ op.fecha_inicio_planificada }}'
                                                         data-op-supervisor='{{ op.supervisor_responsable_id }}'
                                                         data-op-operario='{{ op.operario_asignado_id }}'
+                                                        
+                                                        {# --- AÑADIR ESTAS LÍNEAS --- #}
+                                                        data-sug-t-prod-dias='{{ op.sugerencias_jit.sugerencia_t_prod_dias | default(0) }}'
+                                                        data-sug-t-proc-dias='{{ op.sugerencias_jit.sugerencia_t_proc_dias | default(0) }}'
+                                                        data-sug-stock-ok='{{ 1 if op.sugerencias_jit.sugerencia_stock_ok else 0 }}'
+                                                        data-sug-fecha-jit='{{ op.sugerencias_jit.sugerencia_fecha_inicio_jit | default("") }}'
                                                         >
                                                     <i class='bi bi-calendar-range me-1'></i> Re-Planificar esta OP
                                                 </button>
@@ -729,69 +726,6 @@
     </div>
 </div>
 
-{# --- MODALES DE PLANIFICACIÓN (SIN CAMBIOS) --- #}
-{% if mps_items %}
-    {% for item_mps in mps_items %}
-    {% set op_ids_list = item_mps.ordenes | map(attribute='id') | list %}
-    <div class="modal fade" id="modal-producto-{{ item_mps.producto_id }}" tabindex="-1" aria-labelledby="modalLabel-{{ item_mps.producto_id }}" aria-hidden="true" data-op-ids="{{ op_ids_list | tojson }}">
-      <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="modalLabel-{{ item_mps.producto_id }}">Planificar Lote Semanal: <strong>{{ item_mps.producto_nombre }}</strong></h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-          </div>
-          <div class="modal-body">
-            <h6>Órdenes Individuales a Consolidar:</h6>
-          {# --- MOSTRAR UNIDAD DE MEDIDA --- #}
-          <p>Total Requerido: <b>{{ item_mps.cantidad_total }} {{ item_mps.unidad_medida or 'unidades' }}</b> | Fecha Meta Próxima: <b>{{ item_mps.fecha_meta_mas_proxima|format_datetime('%d %b %Y') if item_mps.fecha_meta_mas_proxima else 'N/D' }}</b></p>
-            <table class="table table-sm table-bordered tabla-detalle-op-revision mb-4">
-                <thead class="table-light"><tr><th style="width: 15%;">OP</th><th class="text-center" style="width: 15%;">Cantidad</th><th class="text-center" style="width: 15%;">Fecha Meta</th></thead>
-                <tbody>
-                    {% for op in item_mps.ordenes %}
-                    <tr class="detalle-op-row" data-op-id="{{ op.id }}">
-                        <td><small><code>{{ op.codigo }}</code></small></td><td class="text-center"><small>{{ op.cantidad_planificada }}</small></td><td class="text-center"><small>{{ op.fecha_meta }}</small></td>
-                        {% endfor %}</tbody></table><hr><h5 class="mb-3">Planificar Lote Consolidado</h5>
-            {% set plazo_total_agg = item_mps.sugerencia_t_prod_dias + item_mps.sugerencia_t_proc_dias %}
-            {% set fecha_inicio_sugerida = (now.date() + timedelta(days=plazo_total_agg)).strftime('%Y-%m-%d') if plazo_total_agg > 0 else now.date().strftime('%Y-%m-%d') %}
-            <div class="row g-3"><div class="col-md-6"><div class="resultado-sugerencia sugerencia-calculada {% if item_mps.sugerencia_t_proc_dias > 0 %}alert alert-warning{% else %}alert alert-success{% endif %}" style="display: block; font-size: 0.85rem; padding: 8px;">Línea Sugerida: <b>{{ item_mps.sugerencia_linea or 'N/D' }}</b><hr class="my-1">Plazo Total: <b>{{ plazo_total_agg }} días</b><ul class="mb-0 ps-3 mt-1" style="font-size: 0.8rem;"><li>Producción: {{ item_mps.sugerencia_t_prod_dias }} días</li><li>Compras: {{ item_mps.sugerencia_t_proc_dias }} días {% if item_mps.sugerencia_t_proc_dias > 0 %}(Stock Faltante){% else %}(Stock OK){% endif %}</li></ul></div></div>
-                <div class="col-md-6"><div class="card p-3"><div class="mb-2"><label class="form-label form-label-sm fw-bold">Línea <span class="text-danger">*</span></label><select class="form-select form-select-sm mb-1 modal-select-linea" title="Línea"><option value="1" {% if item_mps.sugerencia_linea == 1 %}selected{% endif %}>L1</option><option value="2" {% if item_mps.sugerencia_linea == 2 %}selected{% endif %}>L2</option></select>{# --- MOSTRAR LÍNEAS COMPATIBLES --- #}
-                        {% if item_mps.linea_compatible %}
-                        <div class="form-text small text-info mt-0">
-                            <i class="bi bi-info-circle me-1"></i>Producto compatible solo con: 
-                            {% set lineas = item_mps.linea_compatible.split(',') %}
-                            {% for linea in lineas %}
-                                <strong>Línea {{ linea.strip() }}</strong>{% if not loop.last %}, {% endif %}
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {# ----------------------------------- #}</div>
-                        <div class="mb-2">
-                            <label class="form-label form-label-sm fw-bold">Fecha de Inicio Planificada <span class="text-danger">*</span></label>
-                            {# --- AÑADIR ATRIBUTO min --- #}
-                            <input type="date" 
-                                   class="form-control form-control-sm mb-1 modal-input-fecha-inicio" 
-                                   value="{{ item_mps.sugerencia_fecha_inicio_jit }}" 
-                                   title="Fecha Inicio"
-                                   min="{{ now.date().isoformat() }}"> {# <-- El 'min' sigue siendo 'hoy' #}
-                            {# ------------------------- #}
-                        </div>
-                        <div class="mb-2"><label class="form-label form-label-sm">Supervisor (Opc)</label><select
-                                class="form-select form-select-sm mb-1 modal-select-supervisor" title="Supervisor">
-                                <option value="">Seleccionar...</option> {% for sup in supervisores %}<option value="{{ sup.id }}">{{ sup.nombre
-                                    }}</option>{% endfor %}
-                            </select></div>
-                        <div class="mb-2"><label class="form-label form-label-sm">Operario (Opc)</label><select
-                                class="form-select form-select-sm mb-1 modal-select-operario" title="Operario">
-                                <option value="">Seleccionar...</option> {% for op_user in operarios %}<option value="{{ op_user.id }}">{{
-                                    op_user.nombre }}</option>{% endfor %}
-                            </select></div>
-                        </div>
-                        </div>
-                        </div>
-                        </div>
-          <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-success btn-lg btn-consolidar-y-aprobar"><i class="bi bi-check-lg"></i> Planificar ordenes consolidadas</button></div></div></div></div>
-    {% endfor %}
-{% endif %}
 
 {# --- REUSABLE FEEDBACK MODAL --- #}
 <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
@@ -845,19 +779,28 @@
                 </div>
             </div>
 
+            {# --- INICIO: NUEVA SECCIÓN DE SUGERENCIA --- #}
+            <div id="replan_sugerencia_container" class="mb-3" style="display: none;"> 
+                <h6 class="mb-2">Sugerencia de Plazos (JIT)</h6>
+                <div id="replan_sugerencia_box" class="alert alert-success" style="font-size: 0.85rem; padding: 10px;">
+                    Fecha de Inicio Sugerida (JIT): <b id="replan_sug_fecha_jit"></b>
+                    <hr class="my-1">
+                    Plazo Total Estimado: <b id="replan_sug_plazo_total"></b> días
+                    <ul class="mb-0 ps-3 mt-1" style="font-size: 0.8rem;">
+                        <li id="replan_sug_t_prod">Producción: <b></b> días</li>
+                        <li id="replan_sug_t_proc">Compras: <b></b> días (<span id="replan_sug_stock_status"></span>)</li>
+                    </ul>
+                </div>
+            </div>
+            {# --- FIN: NUEVA SECCIÓN DE SUGERENCIA --- #}
+
             <hr>
             <h5 class="mb-3">Nuevos Parámetros de Planificación</h5>
             
             {# Inputs (copiados del modal de Plan Maestro) #}
             <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label form-label-sm fw-bold">Nueva Línea <span class="text-danger">*</span></label>
-                    <select class="form-select form-select-sm mb-1" id="replan_select_linea" name="linea_asignada">
-                        <option value="1">Línea 1</option>
-                        <option value="2">Línea 2</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
+                <input type="hidden" id="replan_select_linea" name="linea_asignada">
+                <div class="col-md-12">
                     <label class="form-label form-label-sm fw-bold">Nueva Fecha de Inicio <span class="text-danger">*</span></label>
                     <input type="date" 
                            class="form-control form-control-sm mb-1" 
@@ -865,20 +808,8 @@
                            name="fecha_inicio"
                            min="{{ now.date().isoformat() }}">
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label form-label-sm">Supervisor (Opc)</label>
-                    <select class="form-select form-select-sm mb-1" id="replan_select_supervisor" name="supervisor_id">
-                        <option value="">Seleccionar...</option>
-                        {% for sup in supervisores %}<option value="{{ sup.id }}">{{ sup.nombre }}</option>{% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label form-label-sm">Operario (Opc)</label>
-                    <select class="form-select form-select-sm mb-1" id="replan_select_operario" name="operario_id">
-                        <option value="">Seleccionar...</option>
-                        {% for op_user in operarios %}<option value="{{ op_user.id }}">{{ op_user.nombre }}</option>{% endfor %}
-                    </select>
-                </div>
+                <input type="hidden" id="replan_select_supervisor" name="supervisor_id">
+                <input type="hidden" id="replan_select_operario" name="operario_id">
             </div>
         </form>
       </div>

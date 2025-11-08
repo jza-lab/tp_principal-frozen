@@ -474,10 +474,12 @@ document.addEventListener('click', async function(e) {
 
 
     // --- BOTÓN DE REPLANIFICAR (abre modal #replanModal) ---
+    // --- (¡BLOQUE MODIFICADO!) ---
     const replanBtn = e.target.closest('.btn-open-replan-modal');
     if (replanBtn) {
         e.stopPropagation(); 
 
+        // Ocultar cualquier popover abierto
         const popoverElement = replanBtn.closest('.popover');
         if (popoverElement) {
             const trigger = document.querySelector(`[aria-describedby="${popoverElement.id}"]`);
@@ -488,27 +490,85 @@ document.addEventListener('click', async function(e) {
                 }
             }
         }
-
         const popoverEl = bootstrap.Popover.getInstance(replanBtn.closest('[data-bs-toggle="popover"]'));
         if (popoverEl) popoverEl.hide();
 
+        
+        // --- INICIO: LEER *TODOS* LOS DATA ATTRIBUTES ---
+        // Datos estándar de la OP
         const opId = replanBtn.dataset.opId;
         const codigo = replanBtn.dataset.opCodigo || '';
         const producto = replanBtn.dataset.opProducto || '';
         const cantidad = replanBtn.dataset.opCantidad || '';
         const linea = replanBtn.dataset.opLinea || '';
-        const fechaInicio = replanBtn.dataset.opFechaInicio || '';
+        const fechaInicio = replanBtn.dataset.opFechaInicio || ''; // Fecha original o JIT (depende del botón)
         const supervisor = replanBtn.dataset.opSupervisor || '';
         const operario = replanBtn.dataset.opOperario || '';
 
+        // Nuevos atributos de sugerencia (leídos desde el botón)
+        const tProdDias = parseInt(replanBtn.dataset.sugTProdDias || '0', 10);
+        const tProcDias = parseInt(replanBtn.dataset.sugTProcDias || '0', 10);
+        const stockOk = parseInt(replanBtn.dataset.sugStockOk || '0', 10) === 1;
+        const fechaJit = replanBtn.dataset.sugFechaJit || '';
+        const plazoTotal = tProdDias + tProcDias;
+        // --- FIN: LEER DATA ATTRIBUTES ---
+
+
+        // --- INICIO: POBLAR CAMPOS ESTÁNDAR ---
         document.getElementById('replan_op_id').value = opId;
         document.getElementById('replan_op_codigo').textContent = codigo;
         document.getElementById('replan_producto_nombre').textContent = producto;
         document.getElementById('replan_cantidad').textContent = cantidad;
-        document.getElementById('replan_select_linea').value = linea || '1';
-        document.getElementById('replan_input_fecha_inicio').value = fechaInicio || '';
-        document.getElementById('replan_select_supervisor').value = supervisor || '';
-        document.getElementById('replan_select_operario').value = operario || '';
+        document.getElementById('replan_select_linea').value = linea || '1'; // Campo oculto
+        document.getElementById('replan_select_supervisor').value = supervisor || ''; // Campo oculto
+        document.getElementById('replan_select_operario').value = operario || ''; // Campo oculto
+        // --- FIN: POBLAR CAMPOS ESTÁNDAR ---
+
+        
+        // --- INICIO: POBLAR NUEVA SECCIÓN DE SUGERENCIA ---
+        const sugerenciaContainer = document.getElementById('replan_sugerencia_container');
+        const sugerenciaBox = document.getElementById('replan_sugerencia_box');
+        const fechaJitEl = document.getElementById('replan_sug_fecha_jit');
+        const plazoTotalEl = document.getElementById('replan_sug_plazo_total');
+        const tProdEl = document.getElementById('replan_sug_t_prod').querySelector('b');
+        const tProcEl = document.getElementById('replan_sug_t_proc').querySelector('b');
+        const stockStatusEl = document.getElementById('replan_sug_stock_status');
+
+        if (plazoTotal > 0 || fechaJit) {
+            fechaJitEl.textContent = fechaJit || 'N/D';
+            plazoTotalEl.textContent = plazoTotal;
+            tProdEl.textContent = tProdDias;
+            tProcEl.textContent = tProcDias;
+
+            if (stockOk) {
+                stockStatusEl.textContent = 'Stock OK';
+                sugerenciaBox.classList.remove('alert-warning');
+                sugerenciaBox.classList.add('alert-success');
+            } else {
+                stockStatusEl.textContent = 'Stock Faltante';
+                sugerenciaBox.classList.remove('alert-success');
+                sugerenciaBox.classList.add('alert-warning');
+            }
+            sugerenciaContainer.style.display = 'block'; // Mostrar el contenedor
+        } else {
+            sugerenciaContainer.style.display = 'none'; // Ocultar si no hay datos
+        }
+        // --- FIN: POBLAR SECCIÓN SUGERENCIA ---
+
+
+        // --- INICIO: POBLAR FECHA DE INICIO (CON LÓGICA JIT) ---
+        const fechaInicioInput = document.getElementById('replan_input_fecha_inicio');
+        // Usar la fecha JIT sugerida SI ESTÁ DISPONIBLE,
+        // si no, usar la fecha de inicio actual de la OP
+        if (fechaJit) {
+            fechaInicioInput.value = fechaJit;
+        } else if (fechaInicio) {
+            // Asegurarse de que la fecha original tenga el formato YYYY-MM-DD
+            fechaInicioInput.value = fechaInicio.split('T')[0].split(' ')[0];
+        } else {
+            fechaInicioInput.value = ''; // Dejar vacío si no hay nada
+        }
+        // --- FIN: POBLAR FECHA ---
 
         const replanModal = new bootstrap.Modal(document.getElementById('replanModal'));
         replanModal.show();
