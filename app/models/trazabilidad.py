@@ -163,13 +163,11 @@ class TrazabilidadModel(BaseModel):
         op_id = op_origen.get('id')
 
         reservas = self.db.table('reservas_insumos').select(
-            'cantidad_reservada, insumos_inventario!inner(*, insumos_catalogo:id_insumo(nombre, unidad_medida), proveedores:id_proveedor(nombre))'
+            'cantidad_reservada, insumos_inventario!inner(*, insumos_catalogo:id_insumo(nombre, unidad_medida), proveedores!inner(id, nombre))'
         ).eq('orden_produccion_id', op_id).execute().data
-
-        # En la tabla de pedidos los campos se llaman id_pedido y codigo_pedido
-        # La tabla pedidos expone 'id' (sin codigo), ajustar el inner join en consecuencia
+        
         reservas_producto = self.db.table('reservas_productos').select(
-            'cantidad_reservada, pedidos!inner(id)'
+            'cantidad_reservada, pedidos!inner(id, clientes!inner(id, razon_social))'
         ).eq('lote_producto_id', lote_id).execute().data
         
         resumen_origen = {
@@ -188,9 +186,9 @@ class TrazabilidadModel(BaseModel):
                 {
                     # La tabla de pedidos solo tiene 'id' y no tiene 'codigo'
                     "id": r.get('pedidos', {}).get('id'),
-                    "codigo": None,
-                    "cantidad": r.get('cantidad')
-                } for r in reservas_producto
+                     "codigo": f"PED-{r.get('pedidos', {}).get('id')}",
+                    "cantidad": r.get('cantidad_reservada')
+                } for r in reservas_producto if r.get('pedidos')
             ]
         }
         
@@ -200,32 +198,102 @@ class TrazabilidadModel(BaseModel):
         lp_codigo = lote_producto.get('numero_lote')
 
         # Nodo de lote de producto
-        nodes.append({"id": lp_id_node, "label": f"LP: {lp_codigo}", "group": "lote_producto", "url": f"/lotes-productos/{lote_id}/detalle"})
+        lp_producto_nombre = lote_producto.get('productos', {}).get('nombre', 'N/A')
+        lp_fecha_vencimiento = lote_producto.get('fecha_vencimiento', 'N/A')
+        nodes.append({
+            "id": lp_id_node,
+            "label": f"LP: {lp_codigo}",
+            "group": "lote_producto",
+            "title": (f"<strong>Lote Producto:</strong> {lp_codigo}<br>"
+                      f"<strong>Producto:</strong> {lp_producto_nombre}<br>"
+                      f"<strong>Cantidad Producida:</strong> {lote_producto.get('cantidad_inicial', 'N/A')}<br>"
+                      f"<strong>Fecha Vencimiento:</strong> {lp_fecha_vencimiento}"),
+            "url": f"/lotes-productos/{lote_id}/detalle"
+        })
 
         # Nodo de OP origen
         op_id_node = f"op_{op_id}"
-        nodes.append({"id": op_id_node, "label": f"OP: {op_origen.get('codigo')}", "group": "orden_produccion", "url": f"/ordenes/{op_id}/detalle"})
+        op_cantidad_planificada = op_origen.get('cantidad_planificada', 'N/A')
+        nodes.append({
+            "id": op_id_node,
+            "label": f"OP: {op_origen.get('codigo')}",
+            "group": "orden_produccion",
+            "title": (f"<strong>Orden de Producción:</strong> {op_origen.get('codigo')}<br>"
+                      f"<strong>Cantidad Planificada:</strong> {op_cantidad_planificada}"),
+            "url": f"/ordenes/{op_id}/detalle"
+        })
+
         edges.append({"from": op_id_node, "to": lp_id_node, "label": lote_producto.get('cantidad_inicial', 1)})
 
         # Insumos usados por la OP (entradas hacia la OP)
         for r in reservas:
             insumo = r.get('insumos_inventario', {})
+            if not insumo: continue
             li_id = insumo.get('id_lote')
             li_id_node = f"li_{li_id}"
             insumo_nombre = insumo.get('insumos_catalogo', {}).get('nombre', 'N/A')
+            
+            # Buscar la Orden de Compra asociada
+            oc_node_id = None
+            codigo_oc = insumo.get('documento_ingreso')
+            if codigo_oc:
+                oc_res = self.db.table('ordenes_compra').select('id, codigo_oc').eq('codigo_oc', codigo_oc).maybe_single().execute()
+                if oc_res.data:
+                    oc = oc_res.data
+                    oc_node_id = f"oc_{oc['id']}"
+                    if not any(n['id'] == oc_node_id for n in nodes):
+                        nodes.append({
+                            "id": oc_node_id,
+                            "label": f"OC: {oc['codigo_oc']}",
+                            "group": "orden_compra",
+                            "title": f"<strong>Orden de Compra:</strong> {oc['codigo_oc']}",
+                            "url": f"/compras/detalle/{oc['id']}"
+                        })
+
             if not any(n['id'] == li_id_node for n in nodes):
-                nodes.append({"id": li_id_node, "label": f"LI: {insumo_nombre}", "group": "lote_insumo", "url": f"/inventario/lote/{li_id}"})
+                proveedor_info = insumo.get('proveedores', {}) or {}
+                proveedor_nombre = proveedor_info.get('nombre', 'N/A')
+                proveedor_nro = proveedor_info.get('id', 'N/A')
+                
+                tooltip = (f"<strong>Lote Insumo:</strong> {insumo.get('numero_lote_proveedor', 'N/A')}<br>"
+                           f"<strong>Insumo:</strong> {insumo_nombre}<br>"
+                           f"<strong>Cantidad Usada:</strong> {r.get('cantidad_reservada', 'N/A')}<br>"
+                           f"<strong>Proveedor:</strong> {proveedor_nombre} (Nro: {proveedor_nro})")
+
+                nodes.append({
+                    "id": li_id_node,
+                    "label": f"LI: {insumo_nombre}",
+                    "group": "lote_insumo",
+                    "title": tooltip,
+                    "url": f"/inventario/lote/{li_id}"})
+            
+            # Crear edge desde OC a Lote de Insumo (si existe)
+            if oc_node_id:
+                 edges.append({"from": oc_node_id, "to": li_id_node, "label": insumo.get('cantidad_ingresada')})
+
             edges.append({"from": li_id_node, "to": op_id_node, "label": r.get('cantidad_reservada')})
 
         # Pedidos relacionados con el lote de producto (salidas desde LP)
         for r in reservas_producto:
             pedido = r.get('pedidos', {})
+            if not pedido: continue
+
             ped_id = pedido.get('id')
             ped_id_node = f"ped_{ped_id}"
             if not any(n['id'] == ped_id_node for n in nodes):
-                # Ruta real pedido /orden-venta/<id>/detalle
-                nodes.append({"id": ped_id_node, "label": f"PED: {ped_id}", "group": "pedido", "url": f"/orden-venta/{ped_id}/detalle"})
-            edges.append({"from": lp_id_node, "to": ped_id_node, "label": r.get('cantidad')})
+                cliente_nombre = pedido.get('clientes', {}).get('razon_social', 'N/A')
+                tooltip = (f"<strong>Pedido:</strong> {ped_id}<br>"
+                           f"<strong>Cliente:</strong> {cliente_nombre}<br>"
+                           f"<strong>Cantidad Despachada:</strong> {r.get('cantidad_reservada', 'N/A')}")
+
+                nodes.append({
+                    "id": ped_id_node,
+                    "label": f"PED: {ped_id}",
+                    "group": "pedido",
+                    "title": tooltip,
+                    "url": f"/orden-venta/{ped_id}/detalle"
+                })
+            edges.append({"from": lp_id_node, "to": ped_id_node, "label": r.get('cantidad_reservada')})
 
         return {
             "resumen": {"origen": resumen_origen, "destino": resumen_destino},
@@ -307,7 +375,19 @@ class TrazabilidadModel(BaseModel):
             if li_id:
                 li_node = f"li_{li_id}"
                 if not any(n['id'] == li_node for n in nodes):
-                    nodes.append({'id': li_node, 'label': f"LI: {ins.get('insumos_catalogo', {}).get('nombre', 'N/A')}", 'group': 'lote_insumo', 'url': f"/inventario/lote/{li_id}"})
+                    insumo_nombre = ins.get('insumos_catalogo', {}).get('nombre', 'N/A')
+                    proveedor_nombre = ins.get('proveedores', {}).get('nombre', 'N/A')
+                    tooltip = (f"<strong>Lote Insumo:</strong> {ins.get('numero_lote_proveedor', 'N/A')}<br>"
+                               f"<strong>Insumo:</strong> {insumo_nombre}<br>"
+                               f"<strong>Cantidad Usada:</strong> {r.get('cantidad_reservada', 'N/A')}<br>"
+                               f"<strong>Proveedor:</strong> {proveedor_nombre}")
+                    nodes.append({
+                        'id': li_node,
+                        'label': f"LI: {insumo_nombre}",
+                        'group': 'lote_insumo',
+                        'title': tooltip,
+                        'url': f"/inventario/lote/{li_id}"
+                    })
                 edges.append({'from': li_node, 'to': op_node, 'label': r.get('cantidad_reservada')})
 
         # Pedidos relacionados

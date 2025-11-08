@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
         fetch(apiUrl)
             .then(response => response.json())
             .then(data => {
-                if(data.success) {
+                if (data.success) {
                     renderResumen(data.data.resumen);
                     drawVisNetwork(data.data.diagrama);
                 } else {
@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderSpinner(elementId) {
         const element = document.getElementById(elementId);
-        if(element) element.innerHTML = `<div class="text-center p-3"><div class="spinner-border text-secondary" role="status"></div></div>`;
+        if (element) element.innerHTML = `<div class="text-center p-3"><div class="spinner-border text-secondary" role="status"></div></div>`;
     }
 
     function renderResumen(data) {
@@ -51,8 +51,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const opData = resumen.origen ? resumen.origen.op : {};
         const upstreamData = resumen.origen ? { insumos: resumen.origen.insumos } : { insumos: [] };
         const downstreamData = resumen.destino ? { lotes_producidos: resumen.destino.lotes, pedidos: resumen.destino.pedidos } : { lotes_producidos: [], pedidos: [] };
-        const ocsPendientesData = resumen.ordenes_compra_pendientes || [];
-        
+        const ocsAsociadasData = resumen.ordenes_compra_asociadas || [];
+
         // --- HTML para Insumos Utilizados ---
         const upstreamHtml = upstreamData.insumos.length > 0 ? upstreamData.insumos.map(insumo => `
             <tr>
@@ -63,13 +63,13 @@ document.addEventListener('DOMContentLoaded', function () {
         `).join('') : '<tr><td colspan="3" class="text-center text-muted">No se consumieron insumos de lotes específicos.</td></tr>';
 
         // --- HTML para Órdenes de Compra Pendientes ---
-        const ocsPendientesHtml = ocsPendientesData.length > 0 ? ocsPendientesData.map(oc => `
+        const ocsAsociadasHtml = ocsAsociadasData.length > 0 ? ocsAsociadasData.map(oc => `
             <div class="card mb-2 shadow-sm">
                 <div class="card-body p-2">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <a href="/compras/detalle/${oc.id}" class="fw-bold" target="_blank">${oc.codigo_oc}</a>
-                            <span class="badge bg-warning text-dark ms-2">${oc.estado}</span>
+                            <span class="badge bg-info text-dark ms-2">${oc.estado}</span>
                         </div>
                         <small class="text-muted">Entrega: ${oc.fecha_estimada_entrega || 'N/D'}</small>
                     </div>
@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     </ul>
                 </div>
             </div>
-        `).join('') : '<p class="text-center text-muted">No hay órdenes de compra pendientes.</p>';
+        `).join('') : '<p class="text-center text-muted">No hay órdenes de compra asociadas.</p>';
 
         // --- HTML para Lotes Producidos ---
         const downstreamLotesHtml = downstreamData.lotes_producidos.length > 0 ? downstreamData.lotes_producidos.map(lote => `
@@ -114,8 +114,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         </table>
                     </div>
                     <hr>
-                    <h6 class="card-subtitle mb-2 text-muted">Insumos Pendientes de Llegada</h6>
-                    ${ocsPendientesHtml}
+                    <h6 class="card-subtitle mb-2 text-muted">Órdenes de Compra Asociadas</h6>
+                    ${ocsAsociadasHtml}
                 </div>
 
                 <!-- Downstream -->
@@ -152,12 +152,73 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const data = { nodes: nodes, edges: edges };
         const options = {
-            layout: { hierarchical: { enabled: true, direction: 'LR', sortMethod: 'directed' }},
-            edges: { arrows: 'to', font: { align: 'middle' }},
-            interaction: { hover: true },
-            physics: { enabled: false }
+            layout: {
+                hierarchical: {
+                    direction: "LR",
+                    sortMethod: "directed",
+                    levelSeparation: 300,
+                    nodeSpacing: 200
+                }
+            },
+            edges: {
+                arrows: 'to',
+                font: {
+                    align: 'middle'
+                },
+                smooth: {
+                    type: 'cubicBezier'
+                }
+            },
+            nodes: {
+                shape: 'box',
+                margin: 10,
+                font: {
+                    size: 14,
+                    color: '#ffffff'
+                },
+                borderWidth: 2
+            },
+            groups: {
+                lote_insumo: {
+                    color: {
+                        background: '#56B4E9',
+                        border: '#4691B9'
+                    }
+                },
+                orden_compra: {
+                    color: {
+                        background: '#F0E442',
+                        border: '#D4C83A'
+                    },
+                    font: {
+                        color: '#333333'
+                    }
+                },
+                orden_produccion: {
+                    color: {
+                        background: '#E69F00',
+                        border: '#B87F00'
+                    }
+                },
+                lote_producto: {
+                    color: {
+                        background: '#009E73',
+                        border: '#007E5C'
+                    }
+                },
+                pedido: {
+                    color: {
+                        background: '#CC79A7',
+                        border: '#A36085'
+                    }
+                }
+            },
+            physics: false,
+            interaction: {
+                hover: true
+            }
         };
-        
+
         container.innerHTML = '';
         const network = new vis.Network(container, data, options);
 
@@ -173,8 +234,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const btnCrearAlerta = document.getElementById('btn-crear-alerta');
-    if(btnCrearAlerta) {
-        btnCrearAlerta.addEventListener('click', function() {
+    if (btnCrearAlerta) {
+        btnCrearAlerta.addEventListener('click', function () {
             this.disabled = true;
             this.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creando...`;
 
@@ -190,22 +251,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 body: JSON.stringify(postData)
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.redirect_url) {
-                    window.location.href = data.redirect_url;
-                } else {
-                    showNotificationModal('Error', 'Error al crear la alerta: ' + (data.error || 'Error desconocido'));
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.redirect_url) {
+                        window.location.href = data.redirect_url;
+                    } else {
+                        showNotificationModal('Error', 'Error al crear la alerta: ' + (data.error || 'Error desconocido'));
+                        this.disabled = false;
+                        this.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error en fetch:', error);
+                    showNotificationModal('Error de red', 'Error de red al crear la alerta.');
                     this.disabled = false;
                     this.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo`;
-                }
-            })
-            .catch(error => {
-                console.error('Error en fetch:', error);
-                showNotificationModal('Error de red', 'Error de red al crear la alerta.');
-                this.disabled = false;
-                this.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo`;
-            });
+                });
         });
     }
 });

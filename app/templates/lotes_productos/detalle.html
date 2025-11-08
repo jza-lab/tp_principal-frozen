@@ -129,51 +129,127 @@
     </div>
 
     <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4 class="mb-0">Análisis de Trazabilidad y Riesgo</h4>
-            <button id="btn-crear-alerta" class="btn btn-danger">
-                <i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo
-            </button>
-        </div>
-
 
         <div class="card mb-4">
             <div class="card-header">
-                <i class="bi bi-list-ul me-1"></i> Resumen Compacto
+                <i class="bi bi-list-ul me-1"></i> Resumen Compacto de Trazabilidad
             </div>
-            <div class="card-body" id="resumen-trazabilidad">
-                <div class="text-center p-3">
-                    <div class="spinner-border spinner-border-sm text-secondary" role="status">
-                        <span class="visually-hidden">Cargando...</span>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Origen (Hacia Atrás) -->
+                    <div class="col-md-6">
+                        <h5 class="mb-3 border-bottom pb-2">
+                            <i class="bi bi-arrow-up-circle-fill text-primary me-2"></i>Origen (Hacia Atrás)
+                        </h5>
+                        {% if lote.orden_produccion %}
+                        <p>
+                            <strong>Creado por (OP):</strong>
+                            <a href="{{ url_for('orden_produccion.detalle', id=lote.orden_produccion.id) }}"
+                                class="fw-bold">
+                                {{ lote.orden_produccion.codigo }}
+                            </a>
+                        </p>
+                        {% if lote.insumos_utilizados %}
+                        <div class="mt-3">
+                            <strong>Insumos Utilizados:</strong>
+                            <div style="max-height: 350px; overflow-y: auto;">
+                                <ul class="list-group list-group-flush mt-1">
+                                    {% for insumo_res in lote.insumos_utilizados %}
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+
+                                        <a
+                                            href="{{ url_for('inventario_view.detalle_lote', id_lote=insumo_res.lote.id_lote) }}">
+                                            {{ insumo_res.lote.insumo.nombre }} (Lote:
+                                            {{insumo_res.lote.numero_lote_proveedor }})
+                                        </a>
+                                        <span class="badge bg-secondary rounded-pill">
+                                            {{ insumo_res.cantidad_reservada }} unidades
+                                        </span>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="text-muted fst-italic mt-2">No se encontraron insumos utilizados para esta Orden de
+                            Producción.</p>
+                        {% endif %}
+                        
+                        {% if lote.ordenes_compra_asociadas %}
+                        <div class="mt-3">
+                            <strong>Órdenes de Compra Asociadas:</strong>
+                            <ul class="list-group list-group-flush mt-1">
+                                {% for oc in lote.ordenes_compra_asociadas %}
+                                <li class="list-group-item">
+                                    <a href="{{ url_for('orden_compra.detalle', id=oc.id) }}">{{ oc.codigo_oc }}</a>
+                                    <span class="text-muted small">({{ oc.proveedores.nombre or 'N/A' }})</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        {% else %}
+                        <p class="text-muted fst-italic">Este lote no está asociado a ninguna Orden de Producción.
+                        </p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Destino (Hacia Adelante) -->
+                    <div class="col-md-6">
+                        <h5 class="mb-3 border-bottom pb-2">
+                            <i class="bi bi-arrow-down-circle-fill text-success me-2"></i>Destino (Hacia Adelante)
+                        </h5>
+                        {% if lote.reservas %}
+                        <div class="mt-3">
+                            <strong>Pedidos Asociados (Reservas Activas):</strong>
+                            <ul class="list-group list-group-flush mt-1">
+                                {% for reserva in lote.reservas %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <a
+                                        href="{{ url_for('orden_venta.detalle', id=reserva.pedido.id) if reserva.pedido else '#' }}">
+                                        Pedido #{{ reserva.pedido.id if reserva.pedido else 'N/A' }}
+                                    </a>
+                                    <span class="badge bg-success rounded-pill">
+                                        {{ reserva.cantidad_reservada }} unidades
+                                    </span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% else %}
+                        <p class="text-muted fst-italic mt-2">Este lote no tiene reservas activas en ningún pedido.
+                        </p>
+                        {% endif %}
                     </div>
                 </div>
             </div>
-
         </div>
         <div class="accordion" id="accordionDiagrama">
             <div class="accordion-item">
-                <h2 class="accordion-header" id="headingOne">
+                <h2 class="accordion-header" id="headingDiagrama">
                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                         data-bs-target="#collapseDiagrama" aria-expanded="false" aria-controls="collapseDiagrama">
                         <i class="bi bi-diagram-3 me-2"></i> Ver Diagrama de Red Completo
                     </button>
                 </h2>
-                <div id="collapseDiagrama" class="accordion-collapse collapse" aria-labelledby="headingOne"
+                <div id="collapseDiagrama" class="accordion-collapse collapse" aria-labelledby="headingDiagrama"
                     data-bs-parent="#accordionDiagrama">
                     <div class="accordion-body">
                         <ul class="list-unstyled text-muted small mb-3">
-                            <li><strong>Nodos:</strong> Círculos que representan entidades (Insumos, OPs, etc.).</li>
-                            <li><strong>Flujos:</strong> Flechas que indican la dirección del proceso productivo.</li>
-                            <li><strong>Interactividad:</strong> Pase el cursor sobre un nodo para ver detalles o haga
-                                clic para navegar a su página.</li>
-                        </ul>
-                        <div id="vis_trazabilidad">
-                            <div class="d-flex justify-content-center align-items-center h-100">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Cargando gráfico...</span>
+                            <p class="text-muted small">
+                                El diagrama de red muestra el flujo completo del proceso productivo. Haga clic en un
+                                nodo
+                                para navegar a su página de detalle.
+                            </p>
+                            <div id="vis_trazabilidad"
+                                style="height: 500px; border: 1px solid #ddd; border-radius: 4px;">
+                                <div class="d-flex justify-content-center align-items-center h-100">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Cargando gráfico...</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
                     </div>
 
                 </div>
@@ -189,9 +265,10 @@
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
 <script>
-    window.LOTE_ID = "{{ lote.id_lote | safe }}";
+       window.LOTE_PRODUCTO_ID = "{{ lote.id_lote | safe }}";
+
 </script>
-<script src="{{ url_for('static', filename='js/trazabilidadProducto.js') }}?v=1.1"></script>
+<script src="{{ url_for('static', filename='js/trazabilidadProducto.js') }}?v=1.0"></script>
 
 <script src="{{ url_for('static', filename='js/gestorAlertas.js') }}?v=1.1"></script>
 {% endblock %}
