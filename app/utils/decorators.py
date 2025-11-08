@@ -4,7 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt
 from app.utils.roles import get_redirect_url_by_role
 from app.utils.permission_map import get_allowed_roles_for_action
 
-def permission_required(accion: str):
+def permission_required(accion: str, allowed_roles: list = None):
     """
     Decorador que verifica si el rol de un usuario tiene permiso para una acción específica.
     Obtiene el rol desde el token JWT.
@@ -19,8 +19,12 @@ def permission_required(accion: str):
             if user_role_code == 'DEV':
                 return f(*args, **kwargs)
 
-            allowed_roles = get_allowed_roles_for_action(accion)
-            if user_role_code not in allowed_roles:
+            # Comprobación de roles adicionales permitidos
+            if allowed_roles and user_role_code in allowed_roles:
+                return f(*args, **kwargs)
+
+            allowed_roles_for_action = get_allowed_roles_for_action(accion)
+            if user_role_code not in allowed_roles_for_action:
                 flash(f'No tiene los permisos necesarios ({accion}) para acceder a esta sección.', 'error')
                 return redirect(get_redirect_url_by_role(user_role_code))
 

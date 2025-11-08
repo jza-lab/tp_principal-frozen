@@ -82,10 +82,14 @@ class InsumosCatalogoSchema(Schema):
         allow_none=False,
         load_default=1
     )
-    proveedor = fields.Nested(ProveedorSchema, allow_none=True)
+    id_proveedor = fields.Int(
+        required=False,
+        allow_none=True
+    )
     tiempo_entrega_dias = fields.Int(allow_none=True)
 
     proveedor = fields.Nested(ProveedorSchema, dump_only=True)
+
     @post_load
     def validate_stock_max(self, data, **kwargs):
         """Validar que stock_max sea mayor que stock_min"""

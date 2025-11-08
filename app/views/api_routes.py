@@ -12,9 +12,9 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 def obtener_actividad_totem():
     """Devuelve la actividad del tótem en formato JSON."""
     filtros = {
-        'sector_id': request.args.get('sector_id'),
-        'fecha_desde': request.args.get('fecha_desde'),
-        'fecha_hasta': request.args.get('fecha_hasta')
+        'sector_id': request.args.get('sector_id') if request.args.get('sector_id') else None,
+        'fecha_desde': request.args.get('fecha_desde') if request.args.get('fecha_desde') else None,
+        'fecha_hasta': request.args.get('fecha_hasta') if request.args.get('fecha_hasta') else None,
     }
     usuario_controller = UsuarioController()
     resultado = usuario_controller.obtener_actividad_totem(filtros)
@@ -27,9 +27,9 @@ def obtener_actividad_totem():
 def obtener_actividad_web():
     """Devuelve la actividad web en formato JSON."""
     filtros = {
-        'sector_id': request.args.get('sector_id'),
-        'fecha_desde': request.args.get('fecha_desde'),
-        'fecha_hasta': request.args.get('fecha_hasta')
+        'sector_id': request.args.get('sector_id') if request.args.get('sector_id') else None,
+        'fecha_desde': request.args.get('fecha_desde') if request.args.get('fecha_desde') else None,
+        'fecha_hasta': request.args.get('fecha_hasta') if request.args.get('fecha_hasta') else None,
     }
     usuario_controller = UsuarioController()
     resultado = usuario_controller.obtener_actividad_web(filtros)

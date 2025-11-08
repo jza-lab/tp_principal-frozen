@@ -103,44 +103,38 @@ class TotemSesionModel(BaseModel):
         Filtros: 'fecha_desde', 'fecha_hasta', 'sector_id'.
         """
         try:
+            # Base de la consulta
             query = self.db.table(self.get_table_name())\
                 .select('*, usuario:usuarios(id, nombre, apellido, legajo, roles(nombre), sectores:usuario_sectores(sectores(nombre)))')
 
-            if filtros:
-                if filtros.get('fecha_desde'):
-                    query = query.gte('fecha_inicio', f"{filtros['fecha_desde']}T00:00:00")
-                if filtros.get('fecha_hasta'):
-                    query = query.lte('fecha_inicio', f"{filtros['fecha_hasta']}T23:59:59")
+            # 1. Filtrar por sector primero si está presente
+            if filtros and filtros.get('sector_id'):
+                user_ids_in_sector_res = self.db.table('usuario_sectores')\
+                    .select('usuario_id')\
+                    .eq('sector_id', filtros['sector_id'])\
+                    .execute()
                 
-                # Filtrado por sector requiere un join
-                if filtros.get('sector_id'):
-                    # Subconsulta para obtener los user_id del sector especificado
-                    user_ids_in_sector = self.db.table('usuario_sectores')\
-                        .select('usuario_id')\
-                        .eq('sector_id', filtros['sector_id'])\
-                        .execute()
-                    
-                    if user_ids_in_sector.data:
-                        user_ids = [item['usuario_id'] for item in user_ids_in_sector.data]
-                        query = query.in_('usuario_id', user_ids)
-                    else:
-                        # Si no hay usuarios en ese sector, no habrá resultados
-                        return {'success': True, 'data': []}
+                if not user_ids_in_sector_res.data:
+                    return {'success': True, 'data': []} # No hay usuarios, no hay actividad
+                
+                user_ids = [item['usuario_id'] for item in user_ids_in_sector_res.data]
+                query = query.in_('usuario_id', user_ids)
 
-            # Si no se proporcionan fechas, por defecto muestra la actividad de hoy
-            if not filtros or (not filtros.get('fecha_desde') and not filtros.get('fecha_hasta')):
-                from datetime import date
-                hoy = date.today().isoformat()
-                query = query.gte('fecha_inicio', f'{hoy}T00:00:00')
-                query = query.lte('fecha_inicio', f'{hoy}T23:59:59')
+            # 2. Aplicar filtros de fecha
+            has_date_filter = False
+            if filtros and filtros.get('fecha_desde'):
+                query = query.gte('fecha_inicio', f"{filtros['fecha_desde']}T00:00:00")
+                has_date_filter = True
+            if filtros and filtros.get('fecha_hasta'):
+                query = query.lte('fecha_inicio', f"{filtros['fecha_hasta']}T23:59:59")
+                has_date_filter = True
 
+            # 3. Ejecutar la consulta final
             response = query.order('fecha_inicio', desc=True).execute()
 
-            if response.data:
-                return {'success': True, 'data': response.data}
-            return {'success': True, 'data': []}
+            return {'success': True, 'data': response.data or []}
         except Exception as e:
-            logger.error(f"Error obteniendo la actividad del tótem filtrada: {str(e)}")
+            logger.error(f"Error obteniendo la actividad del tótem filtrada: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def find_all_active(self) -> Dict:
