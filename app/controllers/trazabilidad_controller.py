@@ -68,12 +68,13 @@ class TrazabilidadController(BaseController):
             from app.database import Database
             db = Database().client
             lotes_producidos_result = db.table('lotes_productos').select(
-                'numero_lote, cantidad_inicial'
+                'id_lote, numero_lote, cantidad_inicial'
             ).eq('orden_produccion_id', orden_produccion_id).execute()
 
             if lotes_producidos_result.data:
                 for lote in lotes_producidos_result.data:
                     lotes_producidos.append({
+                        'id': lote.get('id_lote'),
                         'numero_lote': lote.get('numero_lote'),
                         'cantidad_producida': lote.get('cantidad_inicial')
                     })
