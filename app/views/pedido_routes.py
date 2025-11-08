@@ -44,7 +44,7 @@ def _parse_form_data(form_dict):
     return parsed_data
 
 @orden_venta_bp.route('/')
-@permission_required(accion='logistica_gestion_ov') # ANTES: 'consultar_ordenes_de_venta'
+@permission_required(accion='logistica_gestion_ov', allowed_roles=['GERENTE']) # ANTES: 'consultar_ordenes_de_venta'
 def listar():
     """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
     controller = PedidoController()
@@ -160,7 +160,7 @@ def editar(id):
     return render_template('orden_venta/formulario.html', pedido=pedido, productos=productos, is_edit=True, today=hoy, cliente = cliente)
 
 @orden_venta_bp.route('/<int:id>/detalle')
-@permission_required(accion='logistica_gestion_ov') # ANTES: 'consultar_ordenes_de_venta'
+@permission_required(accion='logistica_gestion_ov', allowed_roles=['GERENTE']) # ANTES: 'consultar_ordenes_de_venta'
 def detalle(id):
     """Muestra la página de detalle de un pedido de venta."""
     controller = PedidoController()

@@ -127,8 +127,8 @@ class TotemSesionModel(BaseModel):
                         # Si no hay usuarios en ese sector, no habrá resultados
                         return {'success': True, 'data': []}
 
-            # Si no se proporcionan fechas, por defecto muestra la actividad de hoy
-            if not filtros or (not filtros.get('fecha_desde') and not filtros.get('fecha_hasta')):
+            # Si no se proporcionan filtros, por defecto muestra la actividad de hoy
+            if not filtros or all(not v for v in filtros.values()):
                 from datetime import date
                 hoy = date.today().isoformat()
                 query = query.gte('fecha_inicio', f'{hoy}T00:00:00')

@@ -200,6 +200,13 @@ class UsuarioModel(BaseModel):
                     else:
                         return {'success': True, 'data': []}
 
+            # Si no se proporcionan filtros, por defecto muestra la actividad de hoy
+            if not filtros or all(not v for v in filtros.values()):
+                from app.utils.date_utils import get_today_utc3_range
+                start_of_day, end_of_day = get_today_utc3_range()
+                query = query.gte('ultimo_login_web', start_of_day.isoformat())
+                query = query.lte('ultimo_login_web', end_of_day.isoformat())
+
             response = query.order('ultimo_login_web', desc=True).execute()
 
             return {'success': True, 'data': response.data or []}
