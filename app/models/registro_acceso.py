@@ -16,7 +16,7 @@ class RegistroAccesoModel(BaseModel):
         try:
             # Base de la consulta
             query = self.db.table(self.get_table_name()).select(
-                '*, usuario:usuarios(id, nombre, apellido, legajo, roles(nombre), sectores:usuario_sectores(sectores(nombre)))'
+                '*, usuario:usuarios(id, nombre, apellido, legajo, roles(id, nombre), sectores:usuario_sectores(sectores(nombre)))'
             )
 
             # 1. Filtrar por sector primero si está presente
