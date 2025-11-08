@@ -182,6 +182,8 @@ class OrdenCompraModel(BaseModel):
                     query = query.eq('proveedor_id', filters['proveedor_id'])
                 if 'prioridad' in filters and filters['prioridad']:
                     query = query.eq('prioridad', filters['prioridad'])
+            if 'orden_produccion_id' in filters and filters['orden_produccion_id']:
+                query = query.eq('orden_produccion_id', filters['orden_produccion_id'])
 
             response = query.order('fecha_emision', desc=True).execute()
             
