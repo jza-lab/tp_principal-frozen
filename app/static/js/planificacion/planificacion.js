@@ -193,7 +193,8 @@ async function confirmarAsignacionLote(opIdConfirmar, asignacionesConfirmar, est
 
         // 3. Mostrar modal de resultado
         if (confirmResult.success) {
-            showFeedbackModal('Confirmado', confirmResult.message || "Lote planificado.", 'success');
+            // --- ¡CAMBIO! Título y mensaje mejorados ---
+            showFeedbackModal('¡Éxito!', confirmResult.message || "La operación se ha guardado correctamente.", 'success');
             setTimeout(() => window.location.reload(), 1500);
         } else {
             showFeedbackModal('Error al Confirmar', confirmResult.error || confirmResult.message, 'error');
@@ -475,34 +476,40 @@ document.addEventListener('click', async function(e) {
                 body: JSON.stringify({ op_ids: opIds, asignaciones: asignaciones }) 
             });
             const result = await response.json();
-
-            if (result.success) { 
-                showFeedbackModal('Éxito', result.message || "Lote planificado con éxito.", 'success');
-                setTimeout(() => window.location.reload(), 1500);
-            }
-            else if (result.error === 'SOBRECARGA_CAPACIDAD') { 
+            
+            // --- ¡LÓGICA CORREGIDA! (Misma que en Re-Planificar) ---
+            
+            if (response.status === 409 && result.error === 'SOBRECARGA_CAPACIDAD') { 
                 showFeedbackModal(result.title || 'Sobrecarga Detectada', result.message + "\n\nElija otra fecha o línea.", 'warning');
                 toggleModalLock(false); 
-            }
-            else if (result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM') { 
+            
+            } else if (response.status === 200 && (result.success || result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM')) {
+                // Simulación OK. Ocultar modal de planificación
+                if (modalInstance) modalInstance.hide();
                 toggleModalLock(false); 
                 
-                // --- INICIO DE LA CORRECCIÓN ---
-                // Esta es la corrección clave.
-                // Usamos el 'title' enviado desde el backend (que está en español).
-                const modalTitle = result.title || 
-                                   ((result.error === 'LATE_CONFIRM') ? '⚠️ Confirmar Retraso' : 'Confirmación Multi-Día');
-                // --- FIN DE LA CORRECCIÓN ---
-
-                showFeedbackModal(
-                    modalTitle,
-                    result.message,
-                    'confirm',
-                    () => { 
-                        confirmarAsignacionLote(result.op_id_confirmar, result.asignaciones_confirmar, result.estado_actual);
-                    } 
-                );
+                const op_id_confirmar = result.op_id_confirmar;
+                const asignaciones_confirmar = result.asignaciones_confirmar;
+                const estado_actual = result.estado_actual;
+                
+                if (result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM') {
+                    // Pedir confirmación al usuario
+                    const modalTitle = result.title || ((result.error === 'LATE_CONFIRM') ? '⚠️ Confirmar Retraso' : 'Confirmación Multi-Día');
+                    showFeedbackModal(
+                        modalTitle,
+                        result.message,
+                        'confirm',
+                        () => { 
+                            confirmarAsignacionLote(op_id_confirmar, asignaciones_confirmar, estado_actual);
+                        } 
+                    );
+                } else {
+                    // Éxito simple, guardar directamente
+                    confirmarAsignacionLote(op_id_confirmar, asignaciones_confirmar, estado_actual);
+                }
+                
             } else { 
+                // Error desconocido
                 showFeedbackModal('Error', result.error || result.message || 'Error desconocido.', 'error');
                 toggleModalLock(false); 
             }
@@ -625,7 +632,7 @@ document.addEventListener('click', async function(e) {
     // --- FIN LÓGICA RE-PLANIFICAR ---
 
     
-    // --- BOTÓN CONFIRMAR RE-PLANIFICACIÓN ---
+    // --- BOTÓN CONFIRMAR RE-PLANIFICACIÓN (¡CORREGIDO!) ---
     const btnConfirmReplan = e.target.closest('#btn-confirm-replan');
     if(btnConfirmReplan) {
         
@@ -652,6 +659,7 @@ document.addEventListener('click', async function(e) {
         showLoadingSpinner(btnConfirmReplan, 'Re-planificando...');
 
         try {
+            // 1. Llamar a la API de simulación
             const apiUrl = window.API_CONSOLIDAR_URL || '/planificacion/api/consolidar-y-aprobar';
             
             const response = await fetch(apiUrl, { 
@@ -670,25 +678,40 @@ document.addEventListener('click', async function(e) {
             const replanModal = bootstrap.Modal.getInstance(replanModalElement);
             if(replanModal) replanModal.hide();
             
+            // --- INICIO DE LA LÓGICA CORREGIDA ---
+
             if (response.status === 409 && result.error === 'SOBRECARGA_CAPACIDAD') {
-                showFeedbackModal(result.title || 'Sobrecarga Detectada', result.message, 'warning'); 
-            } else if (response.status === 200 && (result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM')) {
-                // --- INICIO DE LA CORRECCIÓN ---
-                // Esta es la corrección clave.
-                // Usamos el 'title' enviado desde el backend (que está en español).
-                const modalTitle = result.title || 
-                                   ((result.error === 'LATE_CONFIRM') ? '⚠️ Confirmar Retraso' : 'Confirmación Multi-Día');
-                // --- FIN DE LA CORRECCIÓN ---
-                
-                showFeedbackModal(modalTitle, result.message, 'confirm', () => {
-                    confirmarAsignacionLote(result.op_id_confirmar, result.asignaciones_confirmar, result.estado_actual);
-                });
-            } else if (response.status === 200 && result.success) {
-                showFeedbackModal('¡Re-planificado!', 'La OP ha sido re-planificada exitosamente.', 'success');
-                setTimeout(() => window.location.reload(), 1500); 
+                // Caso 1: Sobrecarga. El servidor rechaza.
+                showFeedbackModal(result.title || 'Sobrecarga Detectada', result.message, 'warning');
+            
+            } else if (response.status === 200 && (result.success || result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM')) {
+                // Caso 2: Simulación OK (Simple, Multi-día, o Tarde).
+                // El servidor aprueba la simulación, ahora debemos ejecutar la confirmación.
+
+                const op_id_confirmar = result.op_id_confirmar;
+                const asignaciones_confirmar = result.asignaciones_confirmar;
+                const estado_actual = result.estado_actual;
+
+                if (result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM') {
+                    // 2a: Es multi-día o tarde -> Pedir confirmación al usuario
+                    const modalTitle = result.title || ((result.error === 'LATE_CONFIRM') ? '⚠️ Confirmar Retraso' : 'Confirmación Multi-Día');
+                    
+                    showFeedbackModal(modalTitle, result.message, 'confirm', () => {
+                        // El usuario hizo clic en "Confirmar", ahora llamamos a la función de guardado
+                        confirmarAsignacionLote(op_id_confirmar, asignaciones_confirmar, estado_actual);
+                    });
+                } else {
+                    // 2b: Es un éxito simple (result.success == true)
+                    // No necesitamos preguntar al usuario, solo guardar.
+                    // Llamamos a la función de guardado directamente.
+                    confirmarAsignacionLote(op_id_confirmar, asignaciones_confirmar, estado_actual);
+                }
+
             } else {
+                // Caso 3: Error desconocido
                 showFeedbackModal('Error', result.error || 'No se pudo re-planificar la OP.', 'error');
             }
+            // --- FIN DE LA LÓGICA CORREGIDA ---
 
         } catch (error) {
             const replanModal = bootstrap.Modal.getInstance(replanModalElement);

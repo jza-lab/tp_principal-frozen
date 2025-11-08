@@ -97,6 +97,12 @@
                                     <strong>RETRASO CONFIRMADO:</strong>
                                 {% elif error_key == 'SOBRECARGA_CAPACIDAD' %}
                                     <strong>SOBRECARGA DE CAPACIDAD:</strong>
+                                {# --- ¡AÑADE ESTE BLOQUE! --- #}
+                                {% elif error_key == 'REPLAN_AUTO_AUSENCIA' %}
+                                <strong class="text-info"><i class="bi bi-arrow-right-circle-fill me-1"></i>RE-PLANIFICADO (AUTO):</strong>
+                                {% elif error_key == 'SOBRECARGA_INMINENTE' %}
+                                <strong class="text-danger"><i class="bi bi-shield-fill-exclamation me-1"></i>ERROR DE CAPACIDAD:</strong>
+                                {# --- FIN DEL BLOQUE --- #}
                                 {% else %}
                                     {# Fallback por si hay otros errores #}
                                     <strong>{{ error_key.replace('_', ' ') }}:</strong>
@@ -109,8 +115,8 @@
                                 <button class="btn btn-sm btn-outline-primary w-100 btn-open-replan-modal" data-op-id='{{ issue.orden_produccion_id }}'
                                     data-op-codigo='{{ issue.op_codigo }}' data-op-producto='{{ issue.op_producto_nombre | e }}'
                                     data-op-cantidad='{{ issue.op_cantidad }}'
-                                    data-op-linea='{{ issue.datos_snapshot.asignaciones_confirmar.linea_asignada | default(issue.op_linea_sugerida, true) }}'
-                                    data-op-fecha-inicio='{{ issue.sugerencias_jit.sugerencia_fecha_inicio_jit | default(issue.datos_snapshot.asignaciones_confirmar.fecha_inicio) }}'
+                                    data-op-linea='{{ issue.datos_snapshot.get("asignaciones_confirmar", {}).get("linea_asignada") | default(issue.op_linea_sugerida, true) }}'
+                                    data-op-fecha-inicio='{{ issue.sugerencias_jit.sugerencia_fecha_inicio_jit | default(issue.datos_snapshot.get("fecha_nueva")) | default(issue.datos_snapshot.get("asignaciones_confirmar", {}).get("fecha_inicio")) }}'
                                     data-op-supervisor='' data-op-operario='' {# --- ¡VERIFICA ESTAS LÍNEAS! --- #}
                                     data-sug-t-prod-dias='{{ issue.sugerencias_jit.sugerencia_t_prod_dias | default(0) }}'
                                     data-sug-t-proc-dias='{{ issue.sugerencias_jit.sugerencia_t_proc_dias | default(0) }}'

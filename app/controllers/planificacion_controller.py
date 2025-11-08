@@ -34,6 +34,7 @@ class PlanificacionController(BaseController):
         self.insumo_model = InsumoModel() # Asegúrate que esté inicializado
         self.bloqueo_capacidad_model = BloqueoCapacidadModel() # <-- Añadir esto
         self.issue_planificacion_model = IssuePlanificacionModel()
+        self.feriados_ar_cache = None # <-- ¡AÑADIR ESTA LÍNEA!
 
     def consolidar_ops(self, op_ids: List[int], usuario_id: int) -> tuple:
         """
@@ -1831,6 +1832,32 @@ class PlanificacionController(BaseController):
         vista de planificación de forma optimizada.
         """
         try:
+            # --- ¡INICIO: PLANIFICACIÓN ADAPTATIVA! ---
+            # Verificamos si hay que mover OPs de HOY por cambios de capacidad (ej. ausentismo)
+            # Lo hacemos ANTES de cargar los datos para que la vista ya esté actualizada.
+            # --- ¡INICIO: PLANIFICACIÓN ADAPTATIVA (7 DÍAS)! ---
+            try:
+                logger.info("[PlanAdaptativa] Ejecutando verificación de capacidad para los PRÓXIMOS 7 DÍAS...")
+                fecha_inicio_chequeo = date.today()
+
+                for i in range(7): # Chequear Hoy + 6 días
+                    fecha_a_chequear = fecha_inicio_chequeo + timedelta(days=i)
+
+                    # Omitir chequeo si no es un día laborable (ahorra recursos)
+                    if not self._es_dia_laborable(fecha_a_chequear):
+                        logger.info(f"[PlanAdaptativa] Omitiendo chequeo para {fecha_a_chequear.isoformat()} (No laborable).")
+                        continue
+
+                    # Es un día laborable, verificarlo
+                    logger.info(f"[PlanAdaptativa] Verificando día laborable: {fecha_a_chequear.isoformat()}...")
+                    self._verificar_y_replanificar_ops_por_fecha(
+                        fecha=fecha_a_chequear,
+                        usuario_id=current_user_id
+                    )
+            except Exception as e_adapt:
+                # No debe ser un error fatal, solo loguear.
+                logger.error(f"[PlanAdaptativa] Error en la verificación de 7 días: {e_adapt}", exc_info=True)
+            # --- FIN: PLANIFICACIÓN ADAPTATIVA ---
             # 1. Determinar rango de la semana
             if week_str:
                 try:
@@ -2122,3 +2149,143 @@ class PlanificacionController(BaseController):
             sugerencias['sugerencia_fecha_inicio_jit'] = date.today().isoformat()
 
         return sugerencias
+
+    def _verificar_y_replanificar_ops_por_fecha(self, fecha: date, usuario_id: int):
+        """
+        Verifica si las OPs planificadas para una fecha específica aún caben
+        en la capacidad neta real de ese día (considerando bloqueos de último minuto).
+        Si no caben, las mueve al próximo día disponible y crea un Issue.
+        """
+        logger.info(f"[PlanAdaptativa] Verificando OPs para {fecha.isoformat()}...")
+        fecha_iso = fecha.isoformat()
+
+        # 1. Obtener capacidad REAL neta del día
+        try:
+            capacidad_hoy = self.obtener_capacidad_disponible([1, 2], fecha, fecha)
+            cap_neta_l1 = capacidad_hoy.get(1, {}).get(fecha_iso, {}).get('neta', 0.0)
+            cap_neta_l2 = capacidad_hoy.get(2, {}).get(fecha_iso, {}).get('neta', 0.0)
+            capacidad_restante_map = { 1: cap_neta_l1, 2: cap_neta_l2 }
+            logger.info(f"[PlanAdaptativa] Capacidad neta HOY: L1={cap_neta_l1} min, L2={cap_neta_l2} min")
+        except Exception as e_cap:
+            logger.error(f"[PlanAdaptativa] No se pudo obtener la capacidad de hoy. Abortando. Error: {e_cap}")
+            return # Salir si no podemos obtener la capacidad
+
+        # 2. Obtener todas las OPs que inician (o debían iniciar) en esa fecha
+        filtros_ops = {
+            'fecha_inicio_planificada': fecha_iso,
+            'estado': ('in', ['LISTA PARA PRODUCIR', 'EN ESPERA'])
+        }
+        ops_resp, _ = self.orden_produccion_controller.obtener_ordenes(filtros_ops)
+        if not ops_resp.get('success') or not ops_resp.get('data'):
+            logger.info(f"[PlanAdaptativa] No se encontraron OPs ('LISTA' o 'EN ESPERA') planificadas para hoy. Verificación finalizada.")
+            return
+
+        ops_del_dia = ops_resp['data']
+        # Ordenar para procesar las más importantes primero (por Fecha Meta)
+        ops_del_dia.sort(key=lambda op: op.get('fecha_meta') or '9999-12-31')
+
+        logger.info(f"[PlanAdaptativa] {len(ops_del_dia)} OPs encontradas para hoy. Verificando si caben...")
+
+        # 3. Obtener el mapa de carga futura (necesario para la simulación de replanificación)
+        # Filtramos OPs que ya están en el calendario (excluyendo las de hoy que estamos verificando)
+        filtros_ops_futuras = {
+            'estado': ('in', ['EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2']),
+            'fecha_inicio_planificada_neq': fecha_iso # 'neq' = Not Equal
+        }
+        ops_futuras_resp, _ = self.orden_produccion_controller.obtener_ordenes(filtros_ops_futuras)
+        ops_futuras = ops_futuras_resp.get('data', []) if ops_futuras_resp.get('success') else []
+        carga_actual_map_futura = self.calcular_carga_capacidad(ops_futuras)
+
+
+        # 4. Iterar sobre las OPs de hoy y verificar si caben
+        for op in ops_del_dia:
+            op_id = op.get('id')
+            op_codigo = op.get('codigo')
+            linea = op.get('linea_asignada')
+
+            if not linea in [1, 2]: continue
+
+            carga_op = float(self._calcular_carga_op(op))
+
+            if carga_op <= capacidad_restante_map[linea]:
+                # ¡Esta OP cabe! "Consumir" la capacidad para el resto del chequeo
+                capacidad_restante_map[linea] -= carga_op
+                logger.info(f"[PlanAdaptativa] OK: OP {op_codigo} (Carga: {carga_op} min) cabe en L{linea} (Restante: {capacidad_restante_map[linea]} min).")
+            else:
+                # ¡Esta OP NO cabe! Hay que moverla.
+                logger.warning(f"[PlanAdaptativa] ¡CONFLICTO! OP {op_codigo} (Carga: {carga_op} min) NO cabe en L{linea} (Restante: {capacidad_restante_map[linea]} min).")
+
+                # Buscar nuevo slot desde MAÑANA
+                fecha_manana = fecha + timedelta(days=1)
+
+                simulacion_result = self._simular_asignacion_carga(
+                    carga_total_op=carga_op,
+                    linea_propuesta=linea,
+                    fecha_inicio_busqueda=fecha_manana,
+                    op_id_a_excluir=op_id, # Excluirse a sí misma de la carga futura
+                    carga_actual_map=carga_actual_map_futura
+                )
+
+                if simulacion_result['success']:
+                    nueva_fecha_inicio = simulacion_result['fecha_inicio_real']
+
+                    # 5. Mover la OP
+                    self.orden_produccion_controller.model.update(op_id, {'fecha_inicio_planificada': nueva_fecha_inicio.isoformat()}, 'id')
+
+                    # 6. Crear el Issue para el supervisor
+                    mensaje_issue = f"Movida del {fecha_iso} al {nueva_fecha_inicio.isoformat()} por falta de capacidad (ej. ausentismo o bloqueo)."
+                    snapshot_datos = {'motivo': 'REPLAN_AUTO_AUSENCIA', 'fecha_original': fecha_iso, 'fecha_nueva': nueva_fecha_inicio.isoformat()}
+
+                    self._crear_o_actualizar_issue(op_id, 'REPLAN_AUTO_AUSENCIA', mensaje_issue, snapshot_datos)
+                    logger.info(f"[PlanAdaptativa] ¡MOVIDA! {mensaje_issue}")
+
+                    # Actualizamos el mapa de carga futura para que la sig. simulación sea precisa
+                    # (Esta es una optimización simple: añadimos la carga movida al día correspondiente)
+                    carga_actual_map_futura.setdefault(linea, {})[nueva_fecha_inicio.isoformat()] = \
+                        carga_actual_map_futura.get(linea, {}).get(nueva_fecha_inicio.isoformat(), 0.0) + carga_op
+
+                else:
+                    # ¡No se pudo encontrar espacio en los próximos 30 días!
+                    mensaje_issue = f"OP {op_codigo} no cabe hoy ({fecha_iso}) y NO se encontró espacio en los próximos 30 días."
+                    logger.error(f"[PlanAdaptativa] ¡ERROR CRÍTICO! {mensaje_issue}")
+                    self._crear_o_actualizar_issue(op_id, 'SOBRECARGA_INMINENTE', mensaje_issue, {})
+
+        logger.info(f"[PlanAdaptativa] Verificación de {fecha.isoformat()} finalizada.")
+        return
+    def _get_feriados_ar(self, years: List[int]) -> dict:
+        """
+        Helper para obtener y cachear el objeto de feriados de Argentina.
+        Evita tener que reinstanciarlo en cada llamada.
+        """
+        try:
+            # Comprobar si el caché existe y si cubre los años solicitados
+            if self.feriados_ar_cache and all(y in self.feriados_ar_cache.years for y in years):
+                return self.feriados_ar_cache
+
+            # Si no, (re)crear el caché
+            self.feriados_ar_cache = holidays.country_holidays('AR', years=years)
+            logger.info(f"[Holidays] Caché de feriados de Argentina actualizado para años: {years}")
+            return self.feriados_ar_cache
+        except Exception as e_hol:
+            logger.error(f"Error al inicializar o acceder al caché de 'holidays': {e_hol}.")
+            return {} # Fallback a un dict vacío
+
+    def _es_dia_laborable(self, fecha: date) -> bool:
+        """
+        Verifica si un día es laborable (no es fin de semana Y no es feriado).
+        """
+        # 1. Chequear Fin de Semana (0=Lunes, 5=Sábado, 6=Domingo)
+        if fecha.weekday() >= 5:
+            return False
+
+        # 2. Chequear Feriado
+        try:
+            feriados_ar = self._get_feriados_ar(years=[fecha.year])
+            if fecha in feriados_ar:
+                return False # Es feriado
+        except Exception as e:
+            logger.error(f"Error al chequear feriado para {fecha.isoformat()}: {e}")
+            # Ser conservador: si falla la librería, asumir que es laborable
+            pass
+
+        return True # Es laborable
