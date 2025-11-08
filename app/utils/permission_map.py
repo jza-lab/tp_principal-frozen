@@ -56,6 +56,7 @@ CANONICAL_PERMISSION_MAP = {
     'produccion_ejecucion': ['SUPERVISOR_CALIDAD','OPERARIO','SUPERVISOR'], # Asignar operarios, mover en kanban
     'produccion_consulta': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'consultar_plan_de_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE','SUPERVISOR_CALIDAD'],
+    'consultar_kanban_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE','SUPERVISOR_CALIDAD'],
 
     # Módulo: Almacén e Inventario
     'gestionar_catalogo_de_productos': ['SUPERVISOR', 'ADMIN', 'GERENTE'],

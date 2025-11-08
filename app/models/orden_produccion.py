@@ -346,103 +346,104 @@ class OrdenProduccionModel(BaseModel):
 
     def get_for_kanban_hoy(self, filtros_operario: Optional[Dict] = None) -> Dict:
         """
-        Obtiene las OPs para el Kanban. Si se proveen filtros de operario,
-        la consulta se ajusta para mostrar solo OPs relevantes para ese usuario.
+        Obtiene las OPs para el Kanban. Incluye OPs en estados estándar
+        y aquellas pausadas que tienen un traspaso de turno pendiente.
         """
         try:
+            # 1. Obtener IDs de OPs con traspasos de turno pendientes
+            traspasos_pendientes_res = self.db.schema('mes_kanban').table('traspasos_turno').select('orden_produccion_id').is_('usuario_entrante_id', None).execute()
+            op_ids_con_traspaso = []
+            if traspasos_pendientes_res.data:
+                op_ids_con_traspaso = {item['orden_produccion_id'] for item in traspasos_pendientes_res.data}
+
+            # 2. Definir los estados base para la vista Kanban
+            estados_kanban = [
+                'EN_ESPERA', 'LISTA_PARA_PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2',
+                'EN_EMPAQUETADO', 'EN_PROCESO', 'CONTROL_DE_CALIDAD', 'COMPLETADA', 'PAUSADA'
+            ]
+            # Normalizar para la base de datos (algunos tienen espacios)
+            estados_kanban_db = list(set([e.replace('_', ' ') for e in estados_kanban] + estados_kanban))
+
+
+            # 3. Construir y ejecutar la consulta base
             query = self.db.table(self.get_table_name()).select(
                 "*, productos(nombre, unidad_medida), "
-                "creador:usuario_creador_id(nombre, apellido), "
-                "supervisor:supervisor_responsable_id(nombre, apellido), "
                 "operario:operario_asignado_id(nombre, apellido), "
                 "aprobador:aprobador_calidad_id(nombre, apellido)"
-            )
-
-            if filtros_operario and filtros_operario.get('rol') == 'OPERARIO':
-                usuario_id = filtros_operario.get('usuario_id')
-                if not usuario_id:
-                    return {'success': True, 'data': []}
-
-                # Obtener la línea de producción asignada al operario
-                user_response = self.db.table('usuarios').select('linea_produccion_id').eq('id', usuario_id).single().execute()
-                linea_operario = user_response.data.get('linea_produccion_id') if user_response.data else None
-                
-                if not linea_operario:
-                    # Si el operario no tiene línea, solo puede ver las que ya tiene asignadas
-                    query = query.eq('operario_asignado_id', usuario_id).eq('estado', 'EN_PROCESO')
-                else:
-                    # Filtro para un operario:
-                    # 1. Órdenes en 'LISTA_PARA_PRODUCIR' que pertenecen a su línea.
-                    # 2. Órdenes en 'EN_PROCESO' que él mismo haya iniciado.
-                    query = query.or_(
-                        f"and(estado.eq.LISTA_PARA_PRODUCIR,linea_asignada.eq.{linea_operario})",
-                        f"and(estado.eq.EN_PROCESO,operario_asignado_id.eq.{usuario_id})"
-                    )
-            else:
-                # Filtro para supervisores/gerentes: mostrar todas las OPs en estados relevantes.
-                estados_kanban_python = [
-                    'EN_ESPERA', 'LISTA_PARA_PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'EN_PROCESO', 'CONTROL_DE_CALIDAD', 'COMPLETADA'
-                ]
-                # Manejar la inconsistencia de formato en la base de datos
-                estados_kanban_db = [estado.replace('_', ' ') for estado in estados_kanban_python]
-                if 'EN PROCESO' in estados_kanban_db:
-                    estados_kanban_db.remove('EN PROCESO')
-                estados_kanban_db.append('EN_PROCESO')
-                # AÑADIR TAMBIÉN LA VERSIÓN CON GUION BAJO PARA CONTROL DE CALIDAD, YA QUE SE GUARDA ASÍ
-                estados_kanban_db.append('CONTROL_DE_CALIDAD')
-                
-                query = query.in_('estado', estados_kanban_db)
+            ).in_('estado', estados_kanban_db)
 
             result = query.execute()
 
-            if result.data:
-                # Procesar y aplanar los resultados como en get_all_enriched
-                processed_data = []
-                for item in result.data:
-                    if item.get('productos'):
-                        producto_info = item.pop('productos')
-                        item['producto_nombre'] = producto_info.get('nombre', 'N/A')
-                    else:
-                        item['producto_nombre'] = 'N/A'
-
-                    if item.get('operario'):
-                        operario_info = item.pop('operario')
-                        item['operario_nombre'] = f"{operario_info.get('nombre', '')} {operario_info.get('apellido', '')}".strip()
-                    else:
-                        item['operario_nombre'] = None
-
-                    if item.get('aprobador'):
-                        aprobador_info = item.pop('aprobador')
-                        item['aprobador_calidad_nombre'] = f"{aprobador_info.get('nombre', '')} {aprobador_info.get('apellido', '')}".strip()
-                    else:
-                        item['aprobador_calidad_nombre'] = None
-
-                    processed_data.append(item)
-
-                # Obtener pedidos asociados
-                op_ids = [op['id'] for op in processed_data]
-                pedidos_por_op = {}
-                if op_ids:
-                    items_result = self.db.table('pedido_items').select(
-                        'orden_produccion_id, pedido:pedidos!pedido_items_pedido_id_fkey(id)'
-                    ).in_('orden_produccion_id', op_ids).execute()
-
-                    if items_result.data:
-                        for item in items_result.data:
-                            op_id = item['orden_produccion_id']
-                            if op_id not in pedidos_por_op:
-                                pedidos_por_op[op_id] = []
-                            
-                            pedido_info = item.get('pedido')
-                            if pedido_info and not any(p['id'] == pedido_info['id'] for p in pedidos_por_op[op_id]):
-                                pedidos_por_op[op_id].append(pedido_info)
-                
-                for op in processed_data:
-                    op['pedidos_asociados'] = pedidos_por_op.get(op['id'], [])
-
-                return {'success': True, 'data': processed_data}
-            else:
+            if not result.data:
                 return {'success': True, 'data': []}
+
+            # 4. Procesar y filtrar en Python para lógica compleja
+            ordenes_finales = []
+            all_data = result.data
+
+            for item in all_data:
+                # Lógica de filtrado para Operarios
+                if filtros_operario and filtros_operario.get('rol') == 'OPERARIO':
+                    usuario_id = filtros_operario.get('usuario_id')
+                    estado_actual = item.get('estado')
+                    es_suya = item.get('operario_asignado_id') == usuario_id
+
+                    # Un operario solo ve OPs 'EN ESPERA', 'LISTA PARA PRODUCIR', las que están 'EN PROCESO' asignadas a él,
+                    # y las pausadas por traspaso que están listas para ser tomadas.
+                    if not (estado_actual in ['EN_ESPERA', 'LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR'] or
+                            (estado_actual == 'EN_PROCESO' and es_suya) or
+                            (item['id'] in op_ids_con_traspaso and estado_actual == 'PAUSADA')):
+                        continue # Si no cumple, la salta
+
+                # Lógica de visualización para traspasos
+                # Si una orden está pausada Y tiene un traspaso pendiente, se muestra como 'LISTA PARA PRODUCIR'
+                if item.get('id') in op_ids_con_traspaso and item.get('estado') == 'PAUSADA':
+                    item['estado'] = 'LISTA PARA PRODUCIR'
+                
+                # Excluir las órdenes pausadas que NO son por traspaso del Kanban
+                elif item.get('estado') == 'PAUSADA':
+                    continue
+
+                # Aplanar datos para la vista
+                if item.get('productos'):
+                    item['producto_nombre'] = item.pop('productos').get('nombre', 'N/A')
+                else:
+                    item['producto_nombre'] = 'N/A'
+
+                if item.get('operario'):
+                    operario = item.pop('operario')
+                    item['operario_nombre'] = f"{operario.get('nombre', '')} {operario.get('apellido', '')}".strip()
+                else:
+                    item['operario_nombre'] = None
+
+                if item.get('aprobador'):
+                    aprobador = item.pop('aprobador')
+                    item['aprobador_calidad_nombre'] = f"{aprobador.get('nombre', '')} {aprobador.get('apellido', '')}".strip()
+                else:
+                    item['aprobador_calidad_nombre'] = None
+
+                ordenes_finales.append(item)
+            
+            # 5. Enriquecer con pedidos asociados (solo para las órdenes finales)
+            op_ids_finales = [op['id'] for op in ordenes_finales]
+            pedidos_por_op = {}
+            if op_ids_finales:
+                items_result = self.db.table('pedido_items').select(
+                    'orden_produccion_id, pedido:pedidos!pedido_items_pedido_id_fkey(id)'
+                ).in_('orden_produccion_id', op_ids_finales).execute()
+
+                if items_result.data:
+                    for item in items_result.data:
+                        op_id = item['orden_produccion_id']
+                        if op_id not in pedidos_por_op: pedidos_por_op[op_id] = []
+                        pedido_info = item.get('pedido')
+                        if pedido_info and not any(p['id'] == pedido_info['id'] for p in pedidos_por_op.get(op_id, [])):
+                            pedidos_por_op[op_id].append(pedido_info)
+            
+            for op in ordenes_finales:
+                op['pedidos_asociados'] = pedidos_por_op.get(op['id'], [])
+
+            return {'success': True, 'data': ordenes_finales}
 
         except Exception as e:
             logger.error(f"Error en get_for_kanban_hoy: {str(e)}", exc_info=True)

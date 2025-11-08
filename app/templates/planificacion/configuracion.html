@@ -66,23 +66,37 @@
             </div>
             <div class="card-body">
                 <h6>Agregar Nuevo Bloqueo</h6>
-                <form action="{{ url_for('planificacion.agregar_bloqueo_capacidad') }}" method="POST">
+                <form action="{{ url_for('planificacion.agregar_bloqueo_capacidad') }}" method="POST" id="form-agregar-bloqueo">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="row g-2">
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label">Línea</label>
                             <select name="centro_trabajo_id" class="form-select" required>
                                 {% for linea in lineas %}<option value="{{ linea.id }}">Línea {{ linea.id }}</option>{% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label">Fecha</label>
                             <input type="date" name="fecha_bloqueo" class="form-control" min="{{ now.date().isoformat() }}" required>
                         </div>
+                        
+                        {# --- CAMPOS MODIFICADOS --- #}
                         <div class="col-md-4">
-                            <label class="form-label">Minutos</label>
-                            <input type="number" name="minutos_bloqueados" class="form-control" placeholder="Ej: 240" required>
+                            <label class="form-label">Hora Inicio</label>
+                            <input type="time" name="hora_inicio" id="bloqueo_hora_inicio" class="form-control" required>
                         </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Hora Fin</label>
+                            <input type="time" name="hora_fin" id="bloqueo_hora_fin" class="form-control" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Minutos (Calculado)</label>
+                            {# Este campo es 'readonly' y se calcula por JS. El backend lo ignora y usa su propio cálculo. #}
+                            <input type="number" name="minutos_bloqueados_display" id="bloqueo_minutos" class="form-control" readonly 
+                                   placeholder="0" required>
+                        </div>
+                        {# --- FIN CAMPOS MODIFICADOS --- #}
+
                         <div class="col-12">
                             <label class="form-label">Motivo</label>
                             <input type="text" name="motivo_bloqueo" class="form-control" placeholder="Ej: Mantenimiento preventivo">
@@ -103,7 +117,7 @@
                         <tr>
                             <th>Línea</th>
                             <th>Fecha</th>
-                            <th>Minutos</th>
+                            <th>Horario</th> {# <-- CAMBIADO #}
                             <th>Motivo</th>
                             <th></th>
                         </tr>
@@ -113,7 +127,16 @@
                         <tr>
                             <td>Línea {{ bloqueo.centro_trabajo_id }}</td>
                             <td>{{ bloqueo.fecha }}</td>
-                            <td>{{ bloqueo.minutos_bloqueados | round(0) }} min</td>
+                            {# --- SECCIÓN MODIFICADA --- #}
+                            <td>
+                                {% if bloqueo.hora_inicio and bloqueo.hora_fin %}
+                                    {{ bloqueo.hora_inicio }} - {{ bloqueo.hora_fin }}
+                                    <small class="text-muted d-block">({{ bloqueo.minutos_bloqueados | round(0) }} min)</small>
+                                {% else %}
+                                     {{ bloqueo.minutos_bloqueados | round(0) }} min
+                                {% endif %}
+                            </td>
+                            {# --- FIN SECCIÓN MODIFICADA --- #}
                             <td>{{ bloqueo.motivo or 'N/A' }}</td>
                             <td>
                                 <form action="{{ url_for('planificacion.eliminar_bloqueo_capacidad', bloqueo_id=bloqueo.id) }}" method="POST" onsubmit="return confirm('¿Está seguro que desea eliminar este bloqueo?');">
@@ -165,4 +188,53 @@
         </div>
     </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('form-agregar-bloqueo');
+    if (form) {
+        const horaInicioEl = document.getElementById('bloqueo_hora_inicio');
+        const horaFinEl = document.getElementById('bloqueo_hora_fin');
+        const minutosEl = document.getElementById('bloqueo_minutos');
+
+        function calcularDiferenciaMinutos() {
+            const horaInicio = horaInicioEl.value;
+            const horaFin = horaFinEl.value;
+
+            if (horaInicio && horaFin) {
+                try {
+                    // Usamos una fecha dummy para crear objetos Date válidos
+                    const inicioDate = new Date('1970-01-01T' + horaInicio + ':00');
+                    const finDate = new Date('1970-01-01T' + horaFin + ':00');
+
+                    if (finDate <= inicioDate) {
+                        minutosEl.value = 0;
+                        minutosEl.classList.add('is-invalid');
+                        return;
+                    }
+
+                    const diffMs = finDate - inicioDate;
+                    const diffMin = Math.round(diffMs / 60000); // Convertir milisegundos a minutos
+
+                    minutosEl.value = diffMin;
+                    minutosEl.classList.remove('is-invalid');
+                    minutosEl.classList.add('is-valid');
+                } catch (e) {
+                    console.error("Error parsing time:", e);
+                    minutosEl.value = 0;
+                    minutosEl.classList.add('is-invalid');
+                }
+            } else {
+                minutosEl.value = ''; // Limpiar si falta uno
+                minutosEl.classList.remove('is-invalid', 'is-valid');
+            }
+        }
+
+        // Añadir listeners a ambos campos de hora
+        horaInicioEl.addEventListener('input', calcularDiferenciaMinutos);
+        horaFinEl.addEventListener('input', calcularDiferenciaMinutos);
+    }
+});
+</script>
 {% endblock %}

@@ -62,7 +62,12 @@ document.addEventListener('DOMContentLoaded', function() {
         `).join('') : '<tr><td colspan="4" class="text-center text-muted">No se utilizaron insumos directos.</td></tr>';
 
         // --- HTML para Órdenes de Compra Asociadas ---
-        const ocsAsociadasHtml = ocsAsociadasData.length > 0 ? ocsAsociadasData.map(oc => `
+        const ocsAsociadasHtml = ocsAsociadasData.length > 0 ? ocsAsociadasData.map(oc => {
+            let fechaHtml = `<small class="text-muted">Est: ${oc.fecha_estimada_entrega || 'N/D'}</small>`;
+            if (oc.fecha_real_entrega) {
+                fechaHtml += `<br><small class="text-muted">Real: ${oc.fecha_real_entrega}</small>`;
+            }
+            return `
             <div class="card mb-2 shadow-sm">
                 <div class="card-body p-2">
                     <div class="d-flex justify-content-between align-items-center">
@@ -70,7 +75,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             <a href="/compras/detalle/${oc.id}" class="fw-bold" target="_blank">${oc.codigo_oc}</a>
                             <span class="badge bg-warning text-dark ms-2">${oc.estado}</span>
                         </div>
-                        <small class="text-muted">Entrega: ${oc.fecha_estimada_entrega || 'N/D'}</small>
+                        <div class="text-end">
+                            ${fechaHtml}
+                        </div>
                     </div>
                     <p class="mb-1 small">
                         Proveedor: <a href="/proveedores/${oc.proveedor_id}/ordenes_compra" target="_blank">${oc.proveedor_nombre}</a>
@@ -80,7 +87,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </ul>
                 </div>
             </div>
-        `).join('') : '<p class="text-center text-muted">No hay órdenes de compra asociadas.</p>';
+        `}).join('') : '<p class="text-center text-muted">No hay órdenes de compra asociadas.</p>';
 
 
         // --- HTML para Lotes Producidos ---

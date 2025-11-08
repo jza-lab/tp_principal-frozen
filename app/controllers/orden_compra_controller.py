@@ -343,6 +343,13 @@ class OrdenCompraController:
                 filters['proveedor_id'] = int(request.args.get('proveedor_id'))
             if 'prioridad' not in filters and request.args.get('prioridad'):
                 filters['prioridad'] = request.args.get('prioridad')
+            if 'rango_fecha' not in filters and request.args.get('rango_fecha'):
+                filters['rango_fecha'] = request.args.get('rango_fecha')
+            
+            if 'filtro' not in filters and request.args.get('filtro') == 'mis_ordenes':
+                current_user_id = get_current_user().id
+                if current_user_id:
+                    filters['usuario_id'] = current_user_id
 
             result = self.model.get_all(filters)
 
@@ -582,6 +589,10 @@ class OrdenCompraController:
         except Exception as e:
             logger.error(f"Error en la cadena de completado para la orden {orden_id}: {e}", exc_info=True)
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> develop
     def _crear_lotes_para_items_recibidos(self, items_para_lote, orden_data, usuario_id):
         """
         Helper para crear lotes de inventario para los items recibidos.
@@ -675,6 +686,14 @@ class OrdenCompraController:
                         continue
 
                 lotes_creados, lotes_error = self._crear_lotes_para_items_recibidos(items_para_lote, orden_data, usuario_id)
+
+                # Si se crearon lotes, verificamos si alguna OP 'EN ESPERA' puede pasar a 'LISTA'.
+                if lotes_creados > 0:
+                    try:
+                        logger.info("Recepción de OC completada, iniciando verificación proactiva de Órdenes de Producción en espera.")
+                        orden_produccion_controller.verificar_y_actualizar_ordenes_en_espera()
+                    except Exception as e_op:
+                        logger.error(f"Error al ejecutar la verificación proactiva de OPs tras recibir la OC {orden_id}: {e_op}", exc_info=True)
 
                 if items_faltantes:
                     # --- INICIO DE LA CORRECCIÓN (Versión Robusta) ---
@@ -891,7 +910,14 @@ class OrdenCompraController:
                 oc = result.get('data')
                 detalle = f"La orden de compra {oc.get('codigo_oc')} se marcó como CERRADA."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
-            
+                
+                try:
+                    from app.controllers.orden_produccion_controller import OrdenProduccionController
+                    orden_produccion_controller = OrdenProduccionController()
+                    orden_produccion_controller.verificar_y_actualizar_ordenes_en_espera()
+                except Exception as e_op:
+                    logger.error(f"Error al ejecutar la verificación proactiva de OPs tras cerrar la OC {orden_id}: {e_op}", exc_info=True)
+
             return result
 
         except Exception as e:
