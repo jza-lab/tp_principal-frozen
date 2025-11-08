@@ -426,8 +426,8 @@ class LoteProductoController(BaseController):
 
                 data.pop('csrf_token', None)
 
-                # Asignar cantidad_actual si existe cantidad_inicial
-                if 'cantidad_inicial' in data:
+                # Asignar cantidad_actual si no se provee explícitamente
+                if 'cantidad_actual' not in data and 'cantidad_inicial' in data:
                     data['cantidad_actual'] = data['cantidad_inicial']
 
                 # Generar número de lote si no viene del formulario

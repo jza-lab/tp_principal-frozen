@@ -1,0 +1,40 @@
+<div class="modal fade" id="modalControlCalidadOp" tabindex="-1" aria-labelledby="modalControlCalidadOpLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalControlCalidadOpLabel">Control de Calidad de Producción</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Orden de Producción: <strong id="op-codigo"></strong></p>
+                <p>Producto: <strong id="op-producto"></strong></p>
+                <p>Cantidad Producida: <strong id="op-cantidad-producida"></strong> kg</p>
+                <hr>
+                <form id="form-control-calidad-op">
+                    <input type="hidden" id="op-id" name="op_id">
+                    
+                    <div class="mb-3">
+                        <label for="cantidad-rechazada" class="form-label">Cantidad a Rechazar (kg)</label>
+                        <input type="number" class="form-control" id="cantidad-rechazada" name="cantidad_rechazada" step="0.01" min="0">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="cantidad-cuarentena" class="form-label">Cantidad a Poner en Cuarentena (kg)</label>
+                        <input type="number" class="form-control" id="cantidad-cuarentena" name="cantidad_cuarentena" step="0.01" min="0">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="comentarios-calidad" class="form-label">Comentarios</label>
+                        <textarea class="form-control" id="comentarios-calidad" name="comentarios" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btn-rechazar-op">Rechazar</button>
+                <button type="button" class="btn btn-warning" id="btn-cuarentena-op">Poner en Cuarentena</button>
+                <button type="button" class="btn btn-success" id="btn-aprobar-op">Aprobar</button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -103,18 +103,12 @@ document.addEventListener('DOMContentLoaded', function () {
     
     // ===== ACCIONES DE TARJETA =====
     document.addEventListener('click', function(e) {
-        // --- Botón Aprobar Calidad ---
-        if (e.target.matches('.btn-approve-quality') || e.target.closest('.btn-approve-quality')) {
-            const button = e.target.closest('.btn-approve-quality');
+        if (e.target.matches('.btn-procesar-calidad') || e.target.closest('.btn-procesar-calidad')) {
+            const button = e.target.closest('.btn-procesar-calidad');
             const opId = button.dataset.opId;
-            
-            if (!opId) return;
-
-            // Deshabilitar botón para evitar doble clic
-            button.disabled = true;
-            button.innerHTML = '<i class="bi bi-hourglass-split"></i> Aprobando...';
-
-            approveQualityCheck(opId, button);
+            if (opId) {
+                openQualityControlModal(opId);
+            }
         }
     });
 
@@ -154,30 +148,105 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ===== DRAG & DROP (OPCIONAL - REQUIERE SORTABLE.JS) =====
     // Si quieres habilitar arrastrar y soltar entre columnas
-    const initializeDragAndDrop = () => {
-        document.querySelectorAll('.kanban-cards').forEach(container => {
-            new Sortable(container, {
-                group: 'kanban',
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                dragClass: 'sortable-drag',
-                onEnd: function(evt) {
-                    const cardId = evt.item.dataset.opId;
-                    const newColumn = evt.to.closest('.kanban-column').dataset.estado;
+    // const initializeDragAndDrop = () => {
+    //     document.querySelectorAll('.kanban-cards').forEach(container => {
+    //         new Sortable(container, {
+    //             group: 'kanban',
+    //             animation: 150,
+    //             ghostClass: 'sortable-ghost',
+    //             dragClass: 'sortable-drag',
+    //             onEnd: function(evt) {
+    //                 const cardId = evt.item.dataset.opId;
+    //                 const newColumn = evt.to.closest('.kanban-column').dataset.estado;
                     
-                    console.log(`Orden ${cardId} movida a ${newColumn}`);
+    //                 console.log(`Orden ${cardId} movida a ${newColumn}`);
                     
-                    // Aquí puedes hacer una llamada al backend para actualizar el estado
-                    // updateOrderStatus(cardId, newColumn);
-                }
-            });
-        });
-    };
+    //                 if (newColumn === 'CONTROL_DE_CALIDAD') {
+    //                     evt.from.appendChild(evt.item);
+    //                     openQualityControlModal(cardId);
+    //                 } else {
+    //                     // updateOrderStatus(cardId, newColumn);
+    //                 }
+    //             }
+    //         });
+    //     });
+    // };
+
+    function openQualityControlModal(opId) {
+        const card = document.querySelector(`.kanban-card[data-op-id="${opId}"]`);
+        if (!card) return;
+
+        const modal = new bootstrap.Modal(document.getElementById('modalControlCalidadOp'));
+        
+        const codigo = card.querySelector('.product-code').innerText;
+        const producto = card.querySelector('.product-name').innerText;
+        const cantidadProducida = card.querySelector('.qty-value')?.innerText || card.querySelector('.progress-produced')?.innerText.split(' ')[0] || '0';
+
+        document.getElementById('op-codigo').innerText = codigo;
+        document.getElementById('op-producto').innerText = producto;
+        document.getElementById('op-cantidad-producida').innerText = cantidadProducida;
+        document.getElementById('op-id').value = opId;
+        
+        document.getElementById('form-control-calidad-op').reset();
+
+        modal.show();
+    }
     
     // Descomentar para habilitar drag & drop
     // if (typeof Sortable !== 'undefined') {
     //     initializeDragAndDrop();
     // }
+
+    document.getElementById('btn-aprobar-op').addEventListener('click', () => processQC('APROBADO'));
+    document.getElementById('btn-cuarentena-op').addEventListener('click', () => processQC('EN_CUARENTENA'));
+    document.getElementById('btn-rechazar-op').addEventListener('click', () => processQC('RECHAZADO'));
+
+    async function processQC(decision) {
+        const opId = document.getElementById('op-id').value;
+        const form = document.getElementById('form-control-calidad-op');
+        const formData = new FormData(form);
+
+        const data = {
+            decision,
+            cantidad_cuarentena: formData.get('cantidad_cuarentena'),
+            cantidad_rechazada: formData.get('cantidad_rechazada'),
+            comentarios: formData.get('comentarios')
+        };
+
+        try {
+            const response = await fetch(`/produccion/kanban/api/op/${opId}/procesar-calidad`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data),
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                showNotification(result.message || 'Decisión de calidad procesada.', 'success');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalControlCalidadOp'));
+                modal.hide();
+
+                const card = document.querySelector(`.kanban-card[data-op-id="${opId}"]`);
+                if (card) {
+                    if (decision === 'RECHAZADO' && data.cantidad_rechazada === document.getElementById('op-cantidad-producida').innerText) {
+                        card.remove();
+                    } else {
+                        const completedColumn = document.getElementById('kanban-cards-COMPLETADA');
+                        completedColumn.prepend(card);
+                    }
+                    updateColumnCounts();
+                }
+            } else {
+                showNotification(`Error: ${result.error || 'No se pudo procesar la decisión.'}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error en la llamada API para procesar calidad:', error);
+            showNotification('Error de conexión al intentar procesar la decisión.', 'error');
+        }
+    }
     
     // ===== BÚSQUEDA RÁPIDA (OPCIONAL) =====
     const createSearchBar = () => {
