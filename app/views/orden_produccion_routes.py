@@ -16,6 +16,7 @@ from app.controllers.etapa_produccion_controller import EtapaProduccionControlle
 from app.models.reserva_insumo import ReservaInsumoModel
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
+from app.controllers.trazabilidad_controller import TrazabilidadController
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.planificacion_controller import PlanificacionController
 from app.utils.decorators import roles_required, permission_any_of
@@ -225,13 +226,20 @@ def detalle(id):
     lotes_insumos_reservados_result = reserva_insumo_model.get_by_orden_produccion_id(id)
     lotes_insumos_reservados = lotes_insumos_reservados_result.get("data", [])
 
+    trazabilidad_controller = TrazabilidadController()
+    trazabilidad_data, _ = trazabilidad_controller.obtener_datos_trazabilidad('orden_produccion', id)
+    trazabilidad_resumen = {}
+    if trazabilidad_data.get('success'):
+        trazabilidad_resumen = trazabilidad_data.get('data', {}).get('resumen', {})
+
     return render_template(
         "ordenes_produccion/detalle.html",
         orden=orden,
         ingredientes=ingredientes,
         desglose_origen=desglose_origen,
         pedidos_asociados=pedidos_asociados,
-        lotes_insumos_reservados=lotes_insumos_reservados
+        lotes_insumos_reservados=lotes_insumos_reservados,
+        trazabilidad_resumen=trazabilidad_resumen
     )
 
 

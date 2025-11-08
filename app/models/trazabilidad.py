@@ -335,7 +335,8 @@ class TrazabilidadModel(BaseModel):
         reservas_productos = []
         if lote_ids:
             # La tabla pedidos solo expone 'id' (sin codigo), solicitar id y el lote relacionado
-            reservas_productos = self.db.table('reservas_productos').select('cantidad, pedidos!inner(id, lote_producto_id)').in_('lote_producto_id', lote_ids).execute().data
+            reservas_productos = self.db.table('reservas_productos').select('cantidad_reservada, lote_producto_id, pedidos!inner(id)').in_('lote_producto_id', lote_ids).execute().data
+           
 
         resumen_origen = {
             'op': {'id': orden_id, 'codigo': op.get('codigo')},
@@ -435,7 +436,6 @@ class TrazabilidadModel(BaseModel):
                     'fecha_estimada_entrega': oc.get('fecha_estimada_entrega'),
                     'items': items
                 })
-
 
         return {'resumen': {'origen': resumen_origen, 'destino': resumen_destino, 'ordenes_compra_asociadas': resumen_ocs_asociadas}, 'diagrama': {'nodes': nodes, 'edges': edges}}
 
