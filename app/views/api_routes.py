@@ -37,6 +37,22 @@ def obtener_actividad_web():
         return jsonify(success=True, data=resultado.get('data', []))
     return jsonify(success=False, error=resultado.get('error')), 500
 
+@api_bp.route('/usuarios/actividad_unificada', methods=['GET'])
+@permission_required(accion='consultar_logs_o_auditoria')
+def obtener_actividad_unificada():
+    """Devuelve la actividad unificada en formato JSON."""
+    filtros = {
+        'sector_id': request.args.get('sector_id') if request.args.get('sector_id') else None,
+        'fecha_desde': request.args.get('fecha_desde') if request.args.get('fecha_desde') else None,
+        'fecha_hasta': request.args.get('fecha_hasta') if request.args.get('fecha_hasta') else None,
+        'rol_id': request.args.get('rol_id') if request.args.get('rol_id') else None,
+    }
+    usuario_controller = UsuarioController()
+    resultado = usuario_controller.obtener_actividad_unificada(filtros)
+    if resultado.get('success'):
+        return jsonify(success=True, data=resultado.get('data', []))
+    return jsonify(success=False, error=resultado.get('error')), 500
+
 @api_bp.route('/validar/campo_usuario', methods=['POST'])
 @permission_any_of('crear_empleado', 'modificar_empleado')
 def validar_campo_usuario():

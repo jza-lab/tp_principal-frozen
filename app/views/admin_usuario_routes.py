@@ -18,7 +18,8 @@ def listar_usuarios():
     # Datos para modales o filtros en la vista
     turnos = usuario_controller.obtener_todos_los_turnos()
     sectores = usuario_controller.obtener_todos_los_sectores()
-    return render_template('usuarios/gestionEmpleados.html', usuarios=usuarios, turnos=turnos, sectores=sectores)
+    roles = usuario_controller.obtener_todos_los_roles()
+    return render_template('usuarios/gestionEmpleados.html', usuarios=usuarios, turnos=turnos, sectores=sectores, roles=roles)
 
 @admin_usuario_bp.route('/<int:id>')
 @permission_any_of('admin_gestion_personal', 'admin_configuracion_sistema', 'consultar_empleados')
