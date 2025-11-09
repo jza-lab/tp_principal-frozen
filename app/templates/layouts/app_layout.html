@@ -120,7 +120,7 @@
                         <i class="fas fa-industry me-1"></i> Producción
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownProduccion">
-                        {% if 'consultar_plan_de_produccion' is has_permission %}
+                        {% if 'consultar_plan_de_produccion' is has_permission and current_user.roles.codigo != 'OPERARIO' %}
                         <li><a class="dropdown-item {% if request.endpoint == 'planificacion.index' %}active{% endif %}"
                                 href="{{ url_for('planificacion.index') }}"><i class="bi bi-calendar-check me-2"></i>
                                 Planificación</a></li>

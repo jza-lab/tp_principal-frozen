@@ -147,7 +147,7 @@ def buscar_usuario_por_legajo():
     return jsonify({'success': False, 'error': resultado.get('error', 'Usuario no encontrado')}), 404
 
 @api_bp.route('/orden_produccion/<int:orden_id>/trazabilidad', methods=['GET'])
-@permission_required(accion='consultar_trazabilidad')
+@permission_required(accion='consultar_trazabilidad_completa')
 def get_trazabilidad_op(orden_id):
     """Devuelve la traza completa de una orden de producción."""
     controller = TrazabilidadController()
