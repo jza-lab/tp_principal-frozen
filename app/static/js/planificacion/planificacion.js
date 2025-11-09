@@ -400,6 +400,64 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch (e) {
         console.error("Error crítico en la inicialización del tablero:", e);
     }
+
+    // ========================================================
+    // === ¡AÑADE ESTE NUEVO BLOQUE DE CÓDIGO! ===
+    // ========================================================
+    const btnForzarVerificacion = document.getElementById('btn-forzar-verificacion-capacidad');
+    if (btnForzarVerificacion) {
+        btnForzarVerificacion.addEventListener('click', function() {
+            
+            showFeedbackModal(
+                'Confirmar Verificación',
+                '¿Desea revisar el plan de la semana ahora?\n\nEsto buscará conflictos en los próximos 7 días, como Órdenes de Producción que ya no caben en su día asignado.\n\nEs útil si acabas de bloquear una línea y quieres ver los problemas al instante.\n\n¿Desea continuar?',
+                'confirm',
+                async () => { // Callback de confirmación
+                    // 1. Mostrar spinner global
+                    showGlobalLoading(); 
+                    
+                    try {
+                        // 2. Llamar a la API (esta vez SIN API Key, usa la cookie JWT)
+                        const response = await fetch('/planificacion/api/ejecutar-adaptacion', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': window.CSRF_TOKEN 
+                            }
+                        });
+
+                        const result = await response.json();
+                        hideGlobalLoading(); // 3. Ocultar spinner
+
+                        if (result.success) {
+                            const data = result.data;
+                            let msg = `Verificación completada.\n\nSe generaron <b>${data.issues_generados}</b> nuevos issues/notificaciones.\nSe encontraron <b>${data.errores}</b> errores.`;
+                            
+                            // 4. Mostrar éxito y preparar recarga
+                            showFeedbackModal('Verificación Exitosa', msg, 'success');
+                            
+                            // Sobrescribir "Cerrar" para que recargue la página
+                            const feedbackModal = document.getElementById('feedbackModal');
+                            const closeBtn = feedbackModal.querySelector('#feedbackModalCancelBtn');
+                            if(closeBtn) {
+                                closeBtn.textContent = 'Aceptar y Recargar';
+                                closeBtn.onclick = () => window.location.reload();
+                            }
+                        
+                        } else {
+                            // 5. Mostrar error
+                            showFeedbackModal('Error en la Verificación', result.error || 'Ocurrió un error desconocido.', 'error');
+                        }
+                    } catch (error) {
+                        hideGlobalLoading();
+                        showFeedbackModal('Error de Conexión', 'No se pudo conectar con el servidor.', 'error');
+                        console.error('Error al forzar la verificación adaptativa:', error);
+                    }
+                } // Fin callback
+            ); // Fin showFeedbackModal
+        });
+    }
+    // ========================================================
 }); // Fin del DOMContentLoaded
 
 

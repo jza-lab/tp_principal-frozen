@@ -64,8 +64,8 @@ def procesar_inspeccion(lote_id):
     else:
         flash(resultado.get('error', 'Ocurrió un error al procesar la inspección.'), 'danger')
 
-    # Corrección: Redirigir siempre al detalle del lote modificado
-    return redirect(url_for('inventario_view.detalle_lote', id_lote=lote_id))
+    # Corrección: Redirigir a la lista general de órdenes de compra para evitar el filtro "CERRADA"
+    return redirect(url_for('orden_compra.listar'))
 
 @control_calidad_bp.route('/api/lote/<string:lote_id>/<string:accion>', methods=['POST'])
 @jwt_required()

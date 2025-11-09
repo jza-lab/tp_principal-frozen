@@ -83,15 +83,28 @@ def nuevo_lote():
             flash(f"Ocurrió un error inesperado: {e}", 'error')
 
     insumos_resp, _ = insumo_controller.obtener_insumos({'activo': True})
-    proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
 
     insumos = insumos_resp.get('data', [])
-    proveedores = proveedores_resp.get('data', [])
     today = date.today().isoformat()
 
+    # Ahora enriquecemos cada insumo con los datos de su proveedor
+    proveedor_controller = ProveedorController()
+    proveedores_cache = {}
+
+    insumos_enriquecidos = []
+    for insumo in insumos:
+        proveedor_id = insumo.get('id_proveedor')
+        if proveedor_id:
+            if proveedor_id not in proveedores_cache:
+                prov_resp, _ = proveedor_controller.obtener_proveedor(proveedor_id)
+                if prov_resp.get('success'):
+                    proveedores_cache[proveedor_id] = prov_resp.get('data')
+            
+            insumo['proveedor'] = proveedores_cache.get(proveedor_id)
+            insumos_enriquecidos.append(insumo)
+
     return render_template('inventario/formulario.html',
-                           insumos=insumos,
-                           proveedores=proveedores,
+                           insumos=insumos_enriquecidos,
                            today=today)
 
 @inventario_view_bp.route('/lote/<id_lote>')

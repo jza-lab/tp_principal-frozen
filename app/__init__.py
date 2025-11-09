@@ -233,7 +233,10 @@ def create_app() -> Flask:
     app.config.from_object(Config)
     app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
     app.config["JWT_COOKIE_CSRF_PROTECT"] = False
-    app.json = CustomJSONEncoder(app)
+    
+    from .json_encoder import CustomJSONProvider
+    app.json_provider_class = CustomJSONProvider
+    app.json = app.json_provider_class(app)
 
     CORS(app, resources={r"/api/*": {"origins": "*"}})
     csrf.init_app(app)
@@ -297,11 +300,12 @@ def create_app() -> Flask:
         return dict(current_user=get_current_user())
 
     # Registrar filtros directamente en el entorno de Jinja
-    from app.utils.template_helpers import format_datetime_art, format_time_filter
+    from app.utils.template_helpers import format_datetime_art, format_time_filter, format_condicion_iva
     app.jinja_env.filters['format_datetime'] = _format_datetime_filter
     app.jinja_env.filters['formato_moneda'] = _formato_moneda_filter
     app.jinja_env.filters['format_datetime_art'] = format_datetime_art
     app.jinja_env.filters['format_time'] = format_time_filter
+    app.jinja_env.filters['format_condicion_iva'] = format_condicion_iva
 
 
     # 3. Registrar la función decorada. No es necesario cambiar esta parte.

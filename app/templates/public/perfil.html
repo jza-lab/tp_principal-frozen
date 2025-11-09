@@ -41,7 +41,7 @@
             <hr>
             <div class="row">
                 <div class="col-md-6">
-                    <p><strong>Condición IVA:</strong> {{ cliente.condicion_iva }}</p>
+                    <p><strong>Condición IVA:</strong> {{ cliente.condicion_iva | format_condicion_iva }}</p>
                 </div>
                 <div class="col-md-6">
                     <p><strong>Estado de Verificación:</strong>
