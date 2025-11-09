@@ -42,6 +42,7 @@ class PlanificacionController(BaseController):
         Versión optimizada que NO consulta la DB.
         Calcula T_Prod, T_Proc, Línea Sug, y JIT para una ÚNICA OP
         usando los mapas de datos precargados.
+        --- CORREGIDA PARA DÍAS NO LABORABLES ---
         """
         # Valores por defecto
         sugerencias = {
@@ -70,36 +71,30 @@ class PlanificacionController(BaseController):
             insumos_map = mapas_precargados.get('insumos', {})
 
             # 1. Calcular Carga Total (¡Usando helper optimizado!)
-            # (Asumimos que _calcular_carga_op_precargada ya existe del Paso 2)
             operaciones_receta = operaciones_map.get(receta_id, [])
             carga_total_minutos = self._calcular_carga_op_precargada(op, operaciones_receta)
 
-            # 2. Calcular Línea Sugerida y Capacidad Neta (¡Desde mapas!)
+            # ... (Pasos 2-4: Calcular Línea, Capacidad y T_Prod - SIN CAMBIOS) ...
+            # [Lógica copiada de planificacion_controller.py, lines 934-972]
             linea_sug = None
-            capacidad_neta_linea_sugerida = Decimal(480.0) # Fallback
+            capacidad_neta_linea_sugerida = Decimal(480.0)
             receta = recetas_map.get(receta_id)
-
             if receta:
                 linea_compatible_str = receta.get('linea_compatible', '2')
                 sugerencias['linea_compatible'] = linea_compatible_str
                 linea_compatible_list = linea_compatible_str.split(',')
-
                 tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
                 tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
                 UMBRAL_CANTIDAD_LINEA_1 = 50
                 puede_l1 = '1' in linea_compatible_list and tiempo_l1 > 0
                 puede_l2 = '2' in linea_compatible_list and tiempo_l2 > 0
-
                 if puede_l1 and puede_l2:
                     linea_sug = 1 if cantidad >= UMBRAL_CANTIDAD_LINEA_1 else 2
                 elif puede_l1: linea_sug = 1
                 elif puede_l2: linea_sug = 2
-
                 sugerencias['sugerencia_linea'] = linea_sug
-
-                # 3. Obtener Capacidad Real (¡Desde mapa!)
                 if linea_sug:
-                    ct_data = centros_map.get(linea_sug) # <-- ¡CAMBIO!
+                    ct_data = centros_map.get(linea_sug)
                     if ct_data:
                         cap_std = Decimal(ct_data.get('tiempo_disponible_std_dia', 480))
                         eficiencia = Decimal(ct_data.get('eficiencia', 1.0))
@@ -107,40 +102,34 @@ class PlanificacionController(BaseController):
                         cap_neta_calculada = cap_std * eficiencia * utilizacion
                         if cap_neta_calculada > 0:
                             capacidad_neta_linea_sugerida = cap_neta_calculada
-
-            # 4. Calcular T_Prod (Días)
             if carga_total_minutos > 0:
                 sugerencias['sugerencia_t_prod_dias'] = math.ceil(
                     carga_total_minutos / capacidad_neta_linea_sugerida
                 )
 
-            # 5. Verificar Stock (T_Proc) (¡Desde mapas!)
+            # ... (Paso 5: Verificar Stock (T_Proc) - SIN CAMBIOS) ...
+            # [Lógica copiada de planificacion_controller.py, lines 974-1002]
             ingredientes_receta = ingredientes_map.get(receta_id, [])
             stock_ok_agg = True
             tiempos_entrega_agg = []
-
             if ingredientes_receta:
                 for ingrediente in ingredientes_receta:
                     insumo_id = ingrediente['id_insumo']
                     cantidad_ingrediente = Decimal(ingrediente.get('cantidad', 0))
                     cant_necesaria_total = cantidad_ingrediente * cantidad
-
-                    stock_disp = stock_map.get(insumo_id, Decimal(0)) # <-- ¡CAMBIO!
-
+                    stock_disp = stock_map.get(insumo_id, Decimal(0))
                     if stock_disp < cant_necesaria_total:
                         stock_ok_agg = False
-                        # Obtener tiempo de entrega (¡Desde mapa!)
-                        insumo_data = insumos_map.get(insumo_id) # <-- ¡CAMBIO!
+                        insumo_data = insumos_map.get(insumo_id)
                         if insumo_data:
                             tiempos_entrega_agg.append(insumo_data.get('tiempo_entrega_dias', 0))
             else:
                 stock_ok_agg = False
-
             sugerencias['sugerencia_stock_ok'] = stock_ok_agg
             if not stock_ok_agg:
                 sugerencias['sugerencia_t_proc_dias'] = max(tiempos_entrega_agg) if tiempos_entrega_agg else 0
 
-            # 6. Calcular JIT (igual que antes, solo usa variables locales)
+            # --- PASO 6: CALCULAR JIT (CORREGIDO) ---
             today = date.today()
             t_prod_dias = sugerencias['sugerencia_t_prod_dias']
             t_proc_dias = sugerencias['sugerencia_t_proc_dias']
@@ -152,12 +141,23 @@ class PlanificacionController(BaseController):
                     op_fecha_meta_str = (today + timedelta(days=7)).isoformat()
 
             fecha_meta_solo_str = op_fecha_meta_str.split('T')[0].split(' ')[0]
-            fecha_meta = date.fromisoformat(fecha_meta_solo_str)
-            fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
+            fecha_meta_original = date.fromisoformat(fecha_meta_solo_str)
+
+            # --- ¡INICIO DE LA CORRECCIÓN! ---
+            # 1. Ajustar la Fecha Meta hacia atrás al último día laborable
+            fecha_meta_ajustada = self._ajustar_meta_a_dia_laborable(fecha_meta_original)
+
+            # 2. Calcular JIT usando la meta ajustada
+            fecha_inicio_ideal = fecha_meta_ajustada - timedelta(days=t_prod_dias)
             fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
             fecha_inicio_base = max(fecha_inicio_ideal, fecha_disponibilidad_material)
             fecha_inicio_sugerida_jit = max(fecha_inicio_base, today)
-            sugerencias['sugerencia_fecha_inicio_jit'] = fecha_inicio_sugerida_jit.isoformat()
+
+            # 3. Ajustar la fecha de inicio sugerida hacia adelante al próximo día laborable
+            fecha_inicio_sugerida_jit_laborable = self._ajustar_inicio_a_dia_laborable(fecha_inicio_sugerida_jit)
+
+            sugerencias['sugerencia_fecha_inicio_jit'] = fecha_inicio_sugerida_jit_laborable.isoformat()
+            # --- FIN DE LA CORRECCIÓN ---
 
         except Exception as e_jit:
             logger.error(f"[JIT MODAL {op_id_log}] EXCEPCIÓN INESPERADA (Optimizado): {e_jit}", exc_info=True)
@@ -417,6 +417,174 @@ class PlanificacionController(BaseController):
         except Exception as e:
             logger.error(f"Error en obtener_datos_para_vista_planificacion: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def _ajustar_meta_a_dia_laborable(self, fecha_meta: date) -> date:
+        """
+        Ajusta una Fecha Meta al último día laborable ANTERIOR o IGUAL.
+        Ej: Domingo 16 -> Viernes 14.
+        Ej: Sábado 15 -> Viernes 14.
+        Ej: Viernes 14 -> Viernes 14.
+        """
+        fecha_ajustada = fecha_meta
+        dias_chequeados = 0
+
+        # Mover hacia atrás MIENTRAS no sea un día laborable
+        while not self._es_dia_laborable(fecha_ajustada) and dias_chequeados < 7:
+            fecha_ajustada -= timedelta(days=1)
+            dias_chequeados += 1
+
+        if dias_chequeados == 7:
+            logger.warning(f"No se encontró día laborable para la meta {fecha_meta.isoformat()}. Usando meta original.")
+            return fecha_meta # Fallback
+
+        return fecha_ajustada
+    def _ajustar_inicio_a_dia_laborable(self, fecha_inicio: date) -> date:
+        """
+        Ajusta una Fecha de Inicio al próximo día laborable SIGUIENTE o IGUAL.
+        Ej: Sábado 15 -> Lunes 17.
+        Ej: Domingo 16 -> Lunes 17.
+        Ej: Lunes 17 -> Lunes 17.
+        """
+        fecha_ajustada = fecha_inicio
+        dias_chequeados = 0
+
+        # Mover hacia adelante MIENTRAS no sea un día laborable
+        while not self._es_dia_laborable(fecha_ajustada) and dias_chequeados < 7:
+            fecha_ajustada += timedelta(days=1)
+            dias_chequeados += 1
+
+        if dias_chequeados == 7:
+            logger.warning(f"No se encontró día laborable para el inicio {fecha_inicio.isoformat()}. Usando inicio original.")
+            return fecha_inicio # Fallback
+
+        return fecha_ajustada
+
+    def _calcular_sugerencias_para_op(self, op: Dict) -> Dict:
+        """
+        Calcula T_Prod, T_Proc, Línea Sug, y JIT para una ÚNICA OP.
+        (Versión LENTA, N+1 queries. Necesaria para la 1ra pasada de precarga).
+        --- CORREGIDA PARA DÍAS NO LABORABLES ---
+        """
+        # Valores por defecto
+        sugerencias = {
+            'sugerencia_t_prod_dias': 0,
+            'sugerencia_t_proc_dias': 0,
+            'sugerencia_linea': None,
+            'sugerencia_stock_ok': False,
+            'sugerencia_fecha_inicio_jit': date.today().isoformat(),
+            'linea_compatible': None
+        }
+        op_id_log = op.get('id', 'N/A')
+
+        try:
+            receta_id = op.get('receta_id')
+            cantidad = Decimal(op.get('cantidad_planificada', 0))
+
+            if not receta_id or cantidad <= 0:
+                logger.warning(f"[JIT Modal {op_id_log}] Cálculo abortado: falta receta_id o cantidad es 0.")
+                return sugerencias
+
+            # ... (Pasos 1-4: Calcular Carga, Línea, Capacidad y T_Prod - SIN CAMBIOS) ...
+            # [Lógica copiada de planificacion_controller.py, lines 1729-1772]
+            carga_total_minutos = Decimal(self._calcular_carga_op(op))
+            receta_res = self.receta_model.find_by_id(receta_id, 'id')
+            linea_sug = None
+            capacidad_neta_linea_sugerida = Decimal(480.0)
+            if receta_res.get('success'):
+                receta = receta_res['data']
+                linea_compatible_str = receta.get('linea_compatible', '2')
+                sugerencias['linea_compatible'] = linea_compatible_str
+                linea_compatible_list = linea_compatible_str.split(',')
+                tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
+                tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
+                UMBRAL_CANTIDAD_LINEA_1 = 50
+                puede_l1 = '1' in linea_compatible_list and tiempo_l1 > 0
+                puede_l2 = '2' in linea_compatible_list and tiempo_l2 > 0
+                if puede_l1 and puede_l2:
+                    linea_sug = 1 if cantidad >= UMBRAL_CANTIDAD_LINEA_1 else 2
+                elif puede_l1: linea_sug = 1
+                elif puede_l2: linea_sug = 2
+                sugerencias['sugerencia_linea'] = linea_sug
+                if linea_sug:
+                    ct_resp = self.centro_trabajo_model.find_by_id(linea_sug, 'id')
+                    if ct_resp.get('success'):
+                        ct_data = ct_resp.get('data', {})
+                        cap_std = Decimal(ct_data.get('tiempo_disponible_std_dia', 480))
+                        eficiencia = Decimal(ct_data.get('eficiencia', 1.0))
+                        utilizacion = Decimal(ct_data.get('utilizacion', 1.0))
+                        cap_neta_calculada = cap_std * eficiencia * utilizacion
+                        if cap_neta_calculada > 0:
+                            capacidad_neta_linea_sugerida = cap_neta_calculada
+            if carga_total_minutos > 0:
+                sugerencias['sugerencia_t_prod_dias'] = math.ceil(
+                    carga_total_minutos / capacidad_neta_linea_sugerida
+                )
+
+            # ... (Paso 5: Verificar Stock (T_Proc) - SIN CAMBIOS) ...
+            # [Lógica copiada de planificacion_controller.py, lines 1774-1808]
+            ingredientes_result = self.receta_model.get_ingredientes(receta_id)
+            insumos_faltantes_agg = []
+            stock_ok_agg = True
+            tiempos_entrega_agg = []
+            if ingredientes_result.get('success'):
+                for ingrediente in ingredientes_result.get('data', []):
+                    insumo_id = ingrediente['id_insumo']
+                    try: cantidad_ingrediente = Decimal(ingrediente['cantidad'])
+                    except: cantidad_ingrediente = Decimal(0)
+                    cant_necesaria_total = cantidad_ingrediente * cantidad
+                    stock_disp_res = self.inventario_controller.obtener_stock_disponible_insumo(insumo_id)
+                    stock_disp_raw = stock_disp_res.get('data', {}).get('stock_disponible', 0) if stock_disp_res.get('success') else 0
+                    try: stock_disp = Decimal(stock_disp_raw)
+                    except: stock_disp = Decimal(0)
+                    if stock_disp < cant_necesaria_total:
+                        stock_ok_agg = False
+                        faltante = cant_necesaria_total - stock_disp
+                        insumos_faltantes_agg.append({ 'insumo_id': insumo_id, 'nombre': ingrediente.get('nombre_insumo', 'N/A'), 'cantidad_faltante': faltante })
+                        insumo_data_res = self.insumo_model.find_by_id(insumo_id, 'id_insumo')
+                        if insumo_data_res.get('success'):
+                            tiempos_entrega_agg.append(insumo_data_res['data'].get('tiempo_entrega_dias', 0))
+            else:
+                stock_ok_agg = False
+            sugerencias['sugerencia_stock_ok'] = stock_ok_agg
+            if not stock_ok_agg:
+                sugerencias['sugerencia_t_proc_dias'] = max(tiempos_entrega_agg) if tiempos_entrega_agg else 0
+
+            # --- PASO 6: CALCULAR JIT (CORREGIDO) ---
+            today = date.today()
+            t_prod_dias = sugerencias['sugerencia_t_prod_dias']
+            t_proc_dias = sugerencias['sugerencia_t_proc_dias']
+
+            op_fecha_meta_str = op.get('fecha_meta')
+            if not op_fecha_meta_str:
+                op_fecha_meta_str = op.get('fecha_inicio_planificada')
+                if not op_fecha_meta_str:
+                    op_fecha_meta_str = (today + timedelta(days=7)).isoformat()
+
+            fecha_meta_solo_str = op_fecha_meta_str.split('T')[0].split(' ')[0]
+            fecha_meta_original = date.fromisoformat(fecha_meta_solo_str)
+
+            # --- ¡INICIO DE LA CORRECCIÓN! ---
+            # 1. Ajustar la Fecha Meta hacia atrás al último día laborable
+            fecha_meta_ajustada = self._ajustar_meta_a_dia_laborable(fecha_meta_original)
+
+            # 2. Calcular JIT usando la meta ajustada
+            fecha_inicio_ideal = fecha_meta_ajustada - timedelta(days=t_prod_dias)
+            fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
+            fecha_inicio_base = max(fecha_inicio_ideal, fecha_disponibilidad_material)
+            fecha_inicio_sugerida_jit = max(fecha_inicio_base, today)
+
+            # 3. Ajustar la fecha de inicio sugerida hacia adelante al próximo día laborable
+            fecha_inicio_sugerida_jit_laborable = self._ajustar_inicio_a_dia_laborable(fecha_inicio_sugerida_jit)
+
+            sugerencias['sugerencia_fecha_inicio_jit'] = fecha_inicio_sugerida_jit_laborable.isoformat()
+            # --- FIN DE LA CORRECCIÓN ---
+
+        except Exception as e_jit:
+            op_id_log = op.get('id', 'N/A')
+            logger.error(f"[JIT MODAL {op_id_log}] EXCEPCIÓN INESPERADA en _calcular_sugerencias_para_op: {e_jit}", exc_info=True)
+            sugerencias['sugerencia_fecha_inicio_jit'] = date.today().isoformat()
+
+        return sugerencias
 
     def consolidar_ops(self, op_ids: List[int], usuario_id: int) -> tuple:
         """
