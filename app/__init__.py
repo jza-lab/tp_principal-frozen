@@ -74,7 +74,6 @@ def expired_token_callback(jwt_header, jwt_payload):
     flash('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.', 'warning')
     return response
 
-
 def _register_blueprints(app: Flask):
     """Registra todos los blueprints de la aplicación."""
     from app.views.main_routes import main_bp
@@ -301,17 +300,18 @@ def create_app() -> Flask:
         return dict(current_user=get_current_user())
 
     # Registrar filtros directamente en el entorno de Jinja
-    from app.utils.template_helpers import format_datetime_art, format_time_filter
+    from app.utils.template_helpers import format_datetime_art, format_time_filter, format_condicion_iva
     app.jinja_env.filters['format_datetime'] = _format_datetime_filter
     app.jinja_env.filters['formato_moneda'] = _formato_moneda_filter
     app.jinja_env.filters['format_datetime_art'] = format_datetime_art
     app.jinja_env.filters['format_time'] = format_time_filter
+    app.jinja_env.filters['format_condicion_iva'] = format_condicion_iva
 
 
     # 3. Registrar la función decorada. No es necesario cambiar esta parte.
     app.jinja_env.globals['has_permission'] = _has_permission_filter # Se registra como global
     app.jinja_env.tests['has_permission'] = _has_permission_filter # Y como test
-
+    
     from app.utils.template_helpers import setup_template_helpers
     setup_template_helpers(app)
 
