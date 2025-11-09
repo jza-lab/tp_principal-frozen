@@ -27,7 +27,21 @@
     </a>
     {# --- INICIO: BOTÓN AÑADIDO --- #}
     {# Asumimos un permiso 'forzar_auto_planificacion'. Si es otro, ajústalo. #}
-    
+    {# --- ¡NUEVO BOTÓN DE NOTIFICACIONES! --- #}
+    <button class="btn btn-outline-secondary position-relative ms-auto" type="button" 
+            data-bs-toggle="offcanvas" data-bs-target="#notificationOffcanvas" 
+            aria-controls="notificationOffcanvas" title="Ver notificaciones del sistema">
+        <i class="bi bi-bell-fill"></i>
+        
+        {# El contador solo aparece si hay notificaciones #}
+        {% if planning_notifications %}
+        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+            {{ planning_notifications | length }}
+            <span class="visually-hidden">Avisos sin leer</span>
+        </span>
+        {% endif %}
+    </button>
+    {# --- FIN NUEVO BOTÓN --- #}
     <button type="button" class="btn btn-primary ms-2" id="btn-forzar-auto-planificacion" title="Ejecutar la planificación automática de OPs PENDIENTES ahora">
         <i class="bi bi-robot me-1"></i> Forzar Auto-Planificación
     </button>
@@ -56,7 +70,7 @@
                 <div class="d-flex align-items-center w-100">
                     <i class="bi bi-exclamation-triangle-fill fs-5 me-3"></i>
                     <div class="flex-grow-1">
-                        <span class="fw-semibold">Issues de Planificación (Atención Requerida)</span>
+                        <span class="fw-semibold">Planificación (Atención Requerida)</span>
                         <small class="d-block">OPs que fallaron en la planificación automática.</small>
                     </div>
                     <div class="badge bg-danger rounded-pill">
@@ -97,6 +111,12 @@
                                     <strong>RETRASO CONFIRMADO:</strong>
                                 {% elif error_key == 'SOBRECARGA_CAPACIDAD' %}
                                     <strong>SOBRECARGA DE CAPACIDAD:</strong>
+                                {# --- ¡AÑADE ESTE BLOQUE! --- #}
+                                {% elif error_key == 'REPLAN_AUTO_AUSENCIA' %}
+                                <strong class="text-info"><i class="bi bi-arrow-right-circle-fill me-1"></i>RE-PLANIFICADO (AUTO):</strong>
+                                {% elif error_key == 'SOBRECARGA_INMINENTE' %}
+                                <strong class="text-danger"><i class="bi bi-shield-fill-exclamation me-1"></i>ERROR DE CAPACIDAD:</strong>
+                                {# --- FIN DEL BLOQUE --- #}
                                 {% else %}
                                     {# Fallback por si hay otros errores #}
                                     <strong>{{ error_key.replace('_', ' ') }}:</strong>
@@ -106,15 +126,16 @@
                                 <span class="text-muted">{{ issue.mensaje }}</span>
                             </td>
                             <td class="text-center">
-                                <button class="btn btn-sm btn-outline-primary w-100 btn-open-replan-modal"
-                                    data-op-id='{{ issue.orden_produccion_id }}'
-                                    data-op-codigo='{{ issue.op_codigo }}'
-                                    data-op-producto='{{ issue.op_producto_nombre | e }}'
+                                <button class="btn btn-sm btn-outline-primary w-100 btn-open-replan-modal" data-op-id='{{ issue.orden_produccion_id }}'
+                                    data-op-codigo='{{ issue.op_codigo }}' data-op-producto='{{ issue.op_producto_nombre | e }}'
                                     data-op-cantidad='{{ issue.op_cantidad }}'
-                                    data-op-linea='{{ issue.datos_snapshot.get("asignaciones_confirmar", {}).get("linea_asignada") or issue.op_linea_sugerida }}'
-                                    data-op-fecha-inicio='{{ issue.datos_snapshot.get("asignaciones_confirmar", {}).get("fecha_inicio") }}'
-                                    data-op-supervisor=''
-                                    data-op-operario=''>
+                                    data-op-linea='{{ issue.datos_snapshot.get("asignaciones_confirmar", {}).get("linea_asignada") | default(issue.op_linea_sugerida, true) }}'
+                                    data-op-fecha-inicio='{{ issue.sugerencias_jit.sugerencia_fecha_inicio_jit | default(issue.datos_snapshot.get("fecha_nueva")) | default(issue.datos_snapshot.get("asignaciones_confirmar", {}).get("fecha_inicio")) }}'
+                                    data-op-supervisor='' data-op-operario='' {# --- ¡VERIFICA ESTAS LÍNEAS! --- #}
+                                    data-sug-t-prod-dias='{{ issue.sugerencias_jit.sugerencia_t_prod_dias | default(0) }}'
+                                    data-sug-t-proc-dias='{{ issue.sugerencias_jit.sugerencia_t_proc_dias | default(0) }}'
+                                    data-sug-stock-ok='{{ 1 if issue.sugerencias_jit.sugerencia_stock_ok else 0 }}'
+                                    data-sug-fecha-jit='{{ issue.sugerencias_jit.sugerencia_fecha_inicio_jit | default("") }}'>
                                     <i class="bi bi-calendar-range me-1"></i> Re-Planificar
                                 </button>
                             </td>
@@ -153,12 +174,11 @@
                         <th class="text-center">Cant. Total Req.</th>
                         <th class="text-center">Fecha Meta Próx.</th>
                         <th style="width: 25%;">Sugerencia Agregada</th>
-                        <th style="width: 15%;" class="text-center">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item_mps in mps_items %}
-                    <tr class="fila-producto-mps" data-bs-toggle="modal" data-bs-target="#modal-producto-{{ item_mps.producto_id }}" style="cursor: pointer;" title="Clic para planificar lote semanal">
+                    <tr class="fila-producto-mps">
                         <td><strong>{{ item_mps.producto_nombre }}</strong></td>
                         <td class="text-center fs-5"><b>{{ item_mps.cantidad_total }}</b></td>
                         <td class="text-center text-danger"><strong>{{ item_mps.fecha_meta_mas_proxima|format_datetime('%d %b %Y') if item_mps.fecha_meta_mas_proxima else 'N/D' }}</strong></td>
@@ -174,15 +194,6 @@
                                     </ul>
                                 </div>
                              {% else %} <span class="text-muted">Error cálculo</span> {% endif %}
-                        </td>
-                        <td class="text-center">
-
-                            {% if 'crear_orden_de_produccion' is has_permission and not is_operario %}
-                            <button class="btn btn-sm btn-primary">
-                                <i class="bi bi-calendar-check me-1"></i> Planificar Lote
-                            </button>
-                            {% endif %}
-
                         </td>
                     </tr>
                     {% endfor %}
@@ -291,9 +302,17 @@
                             
                             {# 3. Usar la clave ISO para obtener las OPs #}
                             {% set ops_del_dia = ordenes_por_dia.get(fecha_iso_key, []) %}
+
+                            {# --- INICIO DE MODIFICACIÓN (COMISIDAD) --- #}
+                            {# 4. Revisar la capacidad de este día para saber si es feriado/finde #}
+                            {# Usamos la Línea 1 como referencia, ambas tendrán 0 #}
+                            {% set cap_data_dia = capacidad_crp.get(1, {}).get(fecha_iso_key, {'neta': 480, 'motivo_bloqueo': None}) %}
+                            {% set motivo_dia = cap_data_dia.motivo_bloqueo %}
+                            {# --- FIN DE MODIFICACIÓN --- #}
                     
                             <div class="col-lg col-md-4 col-sm-6 mb-3">
-                                <div class="day-column h-100 shadow-sm">
+                                {# --- NUEVO: Añadir clase 'bg-light-subtle' si es día no laborable --- #}
+                                <div class="day-column h-100 shadow-sm {% if motivo_dia %}bg-light-subtle{% endif %}">
                                     <div class="day-header d-flex justify-content-between align-items-center">
                                         <span class="fw-bold">{{ dia_display }}</span> {# <-- ¡Cambiado! #}
                                         <span class="badge {% if ops_del_dia %}bg-primary{% else %}bg-secondary{% endif %} rounded-pill">
@@ -301,16 +320,34 @@
                                         </span>
                                     </div>
                                     <div class="day-content">
+                                        {# --- INICIO DE MODIFICACIÓN (COMISIDAD) --- #}
+                                        {# 1. Si NO hay OPs programadas... #}
                                         {% if not ops_del_dia %}
-                                        <div class="text-center text-muted py-4">
-                                            <i class="bi bi-calendar-x display-6"></i>
-                                            <p class="small mt-2 mb-0">Sin órdenes programadas</p>
-                                        </div>
+                                            {# 1a. ...y el motivo es "Fin de Semana" #}
+                                            {% if motivo_dia and 'Fin de Semana' in motivo_dia %}
+                                                <div class="text-center text-muted py-4 opacity-75">
+                                                    <i class="bi bi-cup-hot-fill display-6"></i>
+                                                    <p class="small fw-bold mt-2 mb-0">Fin de Semana</p>
+                                                </div>
+                                            {# 1b. ...y hay otro motivo (FERIADO) #}
+                                            {% elif motivo_dia %}
+                                                <div class="text-center text-muted py-4 opacity-75">
+                                                    <i class="bi bi-flag-fill display-6"></i>
+                                                    <p class="small fw-bold mt-2 mb-0">{{ motivo_dia }}</p>
+                                                </div>
+                                            {# 1c. ...y es un día laborable (simplemente vacío) #}
+                                            {% else %}
+                                                <div class="text-center text-muted py-4 opacity-25">
+                                                    <i class="bi bi-calendar-check display-6"></i>
+                                                    <p class="small mt-2 mb-0">Día libre</p>
+                                                </div>
+                                            {% endif %}
                                         {% endif %}
+                                        {# --- FIN DE MODIFICACIÓN --- #}
                                         
                                         {% for op in ops_del_dia %}
                                         
-                                        {# --- DEFINIR CONTENIDO DEL POPOVER --- #}
+                                        {# --- DEFINIR CONTENIDO DEL POPOVER (CÓDIGO RESTAURADO) --- #}
                                         {% set popover_content %}
                                             <dl class='row mb-0' style='font-size: 0.85rem; min-width: 300px;'>
                                                 <dt class='col-5'><i class='bi bi-box-seam me-1'></i>Producto:</dt>
@@ -335,9 +372,6 @@
                                                 <dt class='col-12 border-top pt-2 mt-2'><i class='bi bi-clock-history me-1'></i>Inicio Plan.:</dt>
                                                 <dd class='col-12'>{{ op.fecha_inicio_planificada or 'N/P' }}</dd>
                                             </dl>
-                                            {# --- INICIO: NUEVO BOTÓN DE RE-PLANIFICAR --- #}
-                                            {# Asumimos un permiso 'replanificar_op'. Ajusta si es necesario. #}
-                                            
                                             <div class='border-top pt-2 mt-2'>
                                                 <button class='btn btn-sm btn-outline-primary w-100 btn-open-replan-modal'
                                                         data-op-id='{{ op.id }}'
@@ -348,6 +382,10 @@
                                                         data-op-fecha-inicio='{{ op.fecha_inicio_planificada }}'
                                                         data-op-supervisor='{{ op.supervisor_responsable_id }}'
                                                         data-op-operario='{{ op.operario_asignado_id }}'
+                                                        data-sug-t-prod-dias='{{ op.sugerencias_jit.sugerencia_t_prod_dias | default(0) }}'
+                                                        data-sug-t-proc-dias='{{ op.sugerencias_jit.sugerencia_t_proc_dias | default(0) }}'
+                                                        data-sug-stock-ok='{{ 1 if op.sugerencias_jit.sugerencia_stock_ok else 0 }}'
+                                                        data-sug-fecha-jit='{{ op.sugerencias_jit.sugerencia_fecha_inicio_jit | default("") }}'
                                                         >
                                                     <i class='bi bi-calendar-range me-1'></i> Re-Planificar esta OP
                                                 </button>
@@ -355,11 +393,10 @@
                                             
                                         {% endset %}
         
-                                        {# --- INICIO CAMBIO: Wrapper ahora activa POPOVER --- #}
+                                        {# --- WRAPPER POPOVER (CÓDIGO RESTAURADO) --- #}
                                         <div class="op-card-mini-wrapper d-block mb-2" 
                                              tabindex="0" 
                                              data-bs-toggle="popover" 
-                                             
                                              data-bs-html="true" 
                                              title="<i class='bi bi-info-circle me-2'></i>Detalle Rápido: {{ op.codigo }}"
                                              data-bs-content="{{ popover_content | e }}"
@@ -367,7 +404,7 @@
                                              data-op-id="{{ op.id }}"
                                         >
                                         
-                                            {# --- CONTENIDO VISUAL DE LA TARJETA (SIN CAMBIOS) --- #}
+                                            {# --- CONTENIDO VISUAL DE LA TARJETA (CÓDIGO RESTAURADO) --- #}
                                             <div class="op-card-mini position-relative {% if op.linea_asignada %}border-start border-3 border-primary{% else %}border-start border-3 border-secondary{% endif %}"
                                                 style="padding-left: 0.75rem;">
                                         
@@ -416,7 +453,7 @@
                                             </div>
                                             {# --- FIN: CONTENIDO VISUAL --- #}
                                         </div>
-                                        {# --- FIN CAMBIO --- #}
+                                        {# --- FIN WRAPPER POPOVER --- #}
                                         {% endfor %}
                                     </div>
                                 </div>
@@ -571,14 +608,40 @@
                                                 {% for i in range(num_dias) %}
                                                 {% set fecha_dia = fecha_inicio + timedelta(days=i) %}
                                                 {% set fecha_iso = fecha_dia.isoformat() %}
-                                                {# --- CORRECCIÓN: Obtener el diccionario de capacidad --- #}
-                                                {% set cap_data = capacidad_crp.get(centro_id, {}).get(fecha_iso, {'neta': 0}) %}
-                                                <td class="{% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %}">
-                                                    {# --- CORRECCIÓN: Usar cap_data.neta --- #}
-                                                    <span class="fw-bold text-primary">{{ cap_data.neta | round(0) }}</span>
-                                                    <small class="text-muted d-block">min</small>
+                                                
+                                                {# --- INICIO DE MODIFICACIÓN (COMISIDAD) --- #}
+                                                {# Obtenemos el diccionario completo, incluyendo el motivo #}
+                                                {% set cap_data = capacidad_crp.get(centro_id, {}).get(fecha_iso, {'neta': 0, 'motivo_bloqueo': None}) %}
+                                                {% set motivo = cap_data.motivo_bloqueo %}
+                                                
+                                                <td class="
+                                                    {% if fecha_dia.weekday() >= 5 %}weekend-cell{% endif %} 
+                                                    {# Añadimos un fondo sutil si es día no laborable #}
+                                                    {% if motivo %}bg-light-subtle non-working-day{% endif %}
+                                                "
+                                                {# Añadimos un tooltip (al pasar el mouse) con el motivo #}
+                                                {% if motivo %}
+                                                    data-bs-toggle="tooltip" data-bs-placement="top" title="{{ motivo | e }}"
+                                                {% endif %}
+                                                >
+                                                
+                                                    {# Si hay un motivo (Feriado o Finde), mostramos un ícono #}
+                                                    {% if motivo and 'Fin de Semana' in motivo %}
+                                                        <span class="fs-4 text-muted" style="line-height: 1;">😴</span>
+                                                        <small class="text-muted d-block" style="margin-top: 1px;">{{ motivo }}</small>
+                                                    
+                                                    {% elif motivo %} {# Cualquier otro motivo (ej. Feriado) #}
+                                                        <span class="fs-4" style="line-height: 1;">🎉</span>
+                                                        <small class="text-muted d-block" style="margin-top: 1px; font-size: 0.75em;">{{ motivo }}</small>
+                                                    
+                                                    {# Si no hay motivo, es un día laborable y mostramos la capacidad #}
+                                                    {% else %}
+                                                        <span class="fw-bold text-primary">{{ cap_data.neta | round(0) }}</span>
+                                                        <small class="text-muted d-block">min</small>
+                                                    {% endif %}
                                                 </td>
                                                 {% endfor %}
+                                                {# --- FIN DE MODIFICACIÓN --- #}
                                             </tr>
                                 
                                             {# --- INICIO: NUEVA FILA DE BLOQUEOS (CON COLORES) --- #}
@@ -729,69 +792,6 @@
     </div>
 </div>
 
-{# --- MODALES DE PLANIFICACIÓN (SIN CAMBIOS) --- #}
-{% if mps_items %}
-    {% for item_mps in mps_items %}
-    {% set op_ids_list = item_mps.ordenes | map(attribute='id') | list %}
-    <div class="modal fade" id="modal-producto-{{ item_mps.producto_id }}" tabindex="-1" aria-labelledby="modalLabel-{{ item_mps.producto_id }}" aria-hidden="true" data-op-ids="{{ op_ids_list | tojson }}">
-      <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="modalLabel-{{ item_mps.producto_id }}">Planificar Lote Semanal: <strong>{{ item_mps.producto_nombre }}</strong></h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-          </div>
-          <div class="modal-body">
-            <h6>Órdenes Individuales a Consolidar:</h6>
-          {# --- MOSTRAR UNIDAD DE MEDIDA --- #}
-          <p>Total Requerido: <b>{{ item_mps.cantidad_total }} {{ item_mps.unidad_medida or 'unidades' }}</b> | Fecha Meta Próxima: <b>{{ item_mps.fecha_meta_mas_proxima|format_datetime('%d %b %Y') if item_mps.fecha_meta_mas_proxima else 'N/D' }}</b></p>
-            <table class="table table-sm table-bordered tabla-detalle-op-revision mb-4">
-                <thead class="table-light"><tr><th style="width: 15%;">OP</th><th class="text-center" style="width: 15%;">Cantidad</th><th class="text-center" style="width: 15%;">Fecha Meta</th></thead>
-                <tbody>
-                    {% for op in item_mps.ordenes %}
-                    <tr class="detalle-op-row" data-op-id="{{ op.id }}">
-                        <td><small><code>{{ op.codigo }}</code></small></td><td class="text-center"><small>{{ op.cantidad_planificada }}</small></td><td class="text-center"><small>{{ op.fecha_meta }}</small></td>
-                        {% endfor %}</tbody></table><hr><h5 class="mb-3">Planificar Lote Consolidado</h5>
-            {% set plazo_total_agg = item_mps.sugerencia_t_prod_dias + item_mps.sugerencia_t_proc_dias %}
-            {% set fecha_inicio_sugerida = (now.date() + timedelta(days=plazo_total_agg)).strftime('%Y-%m-%d') if plazo_total_agg > 0 else now.date().strftime('%Y-%m-%d') %}
-            <div class="row g-3"><div class="col-md-6"><div class="resultado-sugerencia sugerencia-calculada {% if item_mps.sugerencia_t_proc_dias > 0 %}alert alert-warning{% else %}alert alert-success{% endif %}" style="display: block; font-size: 0.85rem; padding: 8px;">Línea Sugerida: <b>{{ item_mps.sugerencia_linea or 'N/D' }}</b><hr class="my-1">Plazo Total: <b>{{ plazo_total_agg }} días</b><ul class="mb-0 ps-3 mt-1" style="font-size: 0.8rem;"><li>Producción: {{ item_mps.sugerencia_t_prod_dias }} días</li><li>Compras: {{ item_mps.sugerencia_t_proc_dias }} días {% if item_mps.sugerencia_t_proc_dias > 0 %}(Stock Faltante){% else %}(Stock OK){% endif %}</li></ul></div></div>
-                <div class="col-md-6"><div class="card p-3"><div class="mb-2"><label class="form-label form-label-sm fw-bold">Línea <span class="text-danger">*</span></label><select class="form-select form-select-sm mb-1 modal-select-linea" title="Línea"><option value="1" {% if item_mps.sugerencia_linea == 1 %}selected{% endif %}>L1</option><option value="2" {% if item_mps.sugerencia_linea == 2 %}selected{% endif %}>L2</option></select>{# --- MOSTRAR LÍNEAS COMPATIBLES --- #}
-                        {% if item_mps.linea_compatible %}
-                        <div class="form-text small text-info mt-0">
-                            <i class="bi bi-info-circle me-1"></i>Producto compatible solo con: 
-                            {% set lineas = item_mps.linea_compatible.split(',') %}
-                            {% for linea in lineas %}
-                                <strong>Línea {{ linea.strip() }}</strong>{% if not loop.last %}, {% endif %}
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {# ----------------------------------- #}</div>
-                        <div class="mb-2">
-                            <label class="form-label form-label-sm fw-bold">Fecha de Inicio Planificada <span class="text-danger">*</span></label>
-                            {# --- AÑADIR ATRIBUTO min --- #}
-                            <input type="date" 
-                                   class="form-control form-control-sm mb-1 modal-input-fecha-inicio" 
-                                   value="{{ item_mps.sugerencia_fecha_inicio_jit }}" 
-                                   title="Fecha Inicio"
-                                   min="{{ now.date().isoformat() }}"> {# <-- El 'min' sigue siendo 'hoy' #}
-                            {# ------------------------- #}
-                        </div>
-                        <div class="mb-2"><label class="form-label form-label-sm">Supervisor (Opc)</label><select
-                                class="form-select form-select-sm mb-1 modal-select-supervisor" title="Supervisor">
-                                <option value="">Seleccionar...</option> {% for sup in supervisores %}<option value="{{ sup.id }}">{{ sup.nombre
-                                    }}</option>{% endfor %}
-                            </select></div>
-                        <div class="mb-2"><label class="form-label form-label-sm">Operario (Opc)</label><select
-                                class="form-select form-select-sm mb-1 modal-select-operario" title="Operario">
-                                <option value="">Seleccionar...</option> {% for op_user in operarios %}<option value="{{ op_user.id }}">{{
-                                    op_user.nombre }}</option>{% endfor %}
-                            </select></div>
-                        </div>
-                        </div>
-                        </div>
-                        </div>
-          <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-success btn-lg btn-consolidar-y-aprobar"><i class="bi bi-check-lg"></i> Planificar ordenes consolidadas</button></div></div></div></div>
-    {% endfor %}
-{% endif %}
 
 {# --- REUSABLE FEEDBACK MODAL --- #}
 <div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
@@ -817,6 +817,23 @@
   </div>
 </div>
 {# --- END FEEDBACK MODAL --- #}
+
+{# --- ¡NUEVO! MODAL DE CARGA GLOBAL --- #}
+<div class="modal fade" id="globalLoadingModal" 
+     data-bs-backdrop="static" data-bs-keyboard="false" 
+     tabindex="-1" aria-labelledby="globalLoadingModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="background-color: transparent; border: none;">
+      <div class="modal-body text-center p-4">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+          <span class="visually-hidden">Cargando...</span>
+        </div>
+        <h5 class="text-white mt-3 mb-0" id="globalLoadingModalLabel">Procesando...</h5>
+      </div>
+    </div>
+  </div>
+</div>
+{# --- FIN MODAL DE CARGA --- #}
 
 {# --- MODAL DE RE-PLANIFICACIÓN (NUEVO) --- #}
 <div class="modal fade" id="replanModal" tabindex="-1" aria-labelledby="replanModalLabel" aria-hidden="true">
@@ -845,19 +862,28 @@
                 </div>
             </div>
 
+            {# --- INICIO: NUEVA SECCIÓN DE SUGERENCIA --- #}
+            <div id="replan_sugerencia_container" class="mb-3" style="display: none;"> 
+                <h6 class="mb-2">Sugerencia de Plazos (Justo A Tiempo)</h6>
+                <div id="replan_sugerencia_box" class="alert alert-success" style="font-size: 0.85rem; padding: 10px;">
+                    Fecha de Inicio Sugerida (Justo A Tiempo): <b id="replan_sug_fecha_jit"></b>
+                    <hr class="my-1">
+                    Plazo Total Estimado: <b id="replan_sug_plazo_total"></b> días
+                    <ul class="mb-0 ps-3 mt-1" style="font-size: 0.8rem;">
+                        <li id="replan_sug_t_prod">Producción: <b></b> días</li>
+                        <li id="replan_sug_t_proc">Compras: <b></b> días (<span id="replan_sug_stock_status"></span>)</li>
+                    </ul>
+                </div>
+            </div>
+            {# --- FIN: NUEVA SECCIÓN DE SUGERENCIA --- #}
+
             <hr>
             <h5 class="mb-3">Nuevos Parámetros de Planificación</h5>
             
             {# Inputs (copiados del modal de Plan Maestro) #}
             <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label form-label-sm fw-bold">Nueva Línea <span class="text-danger">*</span></label>
-                    <select class="form-select form-select-sm mb-1" id="replan_select_linea" name="linea_asignada">
-                        <option value="1">Línea 1</option>
-                        <option value="2">Línea 2</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
+                <input type="hidden" id="replan_select_linea" name="linea_asignada">
+                <div class="col-md-12">
                     <label class="form-label form-label-sm fw-bold">Nueva Fecha de Inicio <span class="text-danger">*</span></label>
                     <input type="date" 
                            class="form-control form-control-sm mb-1" 
@@ -865,20 +891,8 @@
                            name="fecha_inicio"
                            min="{{ now.date().isoformat() }}">
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label form-label-sm">Supervisor (Opc)</label>
-                    <select class="form-select form-select-sm mb-1" id="replan_select_supervisor" name="supervisor_id">
-                        <option value="">Seleccionar...</option>
-                        {% for sup in supervisores %}<option value="{{ sup.id }}">{{ sup.nombre }}</option>{% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label form-label-sm">Operario (Opc)</label>
-                    <select class="form-select form-select-sm mb-1" id="replan_select_operario" name="operario_id">
-                        <option value="">Seleccionar...</option>
-                        {% for op_user in operarios %}<option value="{{ op_user.id }}">{{ op_user.nombre }}</option>{% endfor %}
-                    </select>
-                </div>
+                <input type="hidden" id="replan_select_supervisor" name="supervisor_id">
+                <input type="hidden" id="replan_select_operario" name="operario_id">
             </div>
         </form>
       </div>
@@ -890,6 +904,49 @@
   </div>
 </div>
 {# --- FIN MODAL RE-PLANIFICACIÓN --- #}
+
+{# --- ¡NUEVO! PANEL LATERAL (OFFCANVAS) DE NOTIFICACIONES --- #}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="notificationOffcanvas" aria-labelledby="notificationOffcanvasLabel">
+  <div class="offcanvas-header bg-light">
+    <h5 class="offcanvas-title" id="notificationOffcanvasLabel">
+        <i class="bi bi-bell-fill text-info me-2"></i>Notificaciones del Sistema
+    </h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body p-0">
+    
+    {% if not planning_notifications %}
+        <div class="text-center text-muted p-5">
+            <i class="bi bi-check-circle display-4"></i>
+            <p class="mt-3 mb-0">No hay avisos nuevos.</p>
+        </div>
+    {% else %}
+        <div class="list-group list-group-flush">
+            {% for issue in planning_notifications %}
+            <div class="list-group-item list-group-item-action py-3">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1 text-info-emphasis">
+                        <i class="bi bi-arrow-right-circle-fill me-1"></i>RE-PLANIFICADO (AUTO)
+                    </h6>
+                    <small class="text-muted">{{ issue.updated_at | format_datetime('%d/%m %H:%M') }}</small>
+                </div>
+                <p class="mb-2 small text-muted">{{ issue.mensaje }}</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <code class="small">{{ issue.op_codigo }} ({{ issue.op_producto_nombre }})</code>
+                    <button class="btn btn-sm btn-outline-success btn-marcar-visto" 
+                            data-issue-id='{{ issue.id }}' 
+                            title="Marcar este aviso como leído">
+                        <i class="bi bi-check-lg me-1"></i> Visto
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+  </div>
+</div>
+{# --- FIN PANEL LATERAL (OFFCANVAS) --- #}
 
 {% endblock %}
 
