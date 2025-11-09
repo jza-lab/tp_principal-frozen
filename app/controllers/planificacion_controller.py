@@ -290,8 +290,13 @@ class PlanificacionController(BaseController):
             if ingredientes_resp.get('success'):
                 for ing in ingredientes_resp.get('data', []):
                     mapas_precargados['ingredientes'][ing['receta_id']].append(ing)
-                    if ing.get('insumos') and 'id_insumo' in ing['insumos']:
-                        insumo_data = ing['insumos']
+
+                    # --- ¡INICIO DE LA CORRECCIÓN! ---
+                    # Cambiar 'insumos' por 'insumos_catalogo' para que coincida con la consulta
+                    if ing.get('insumos_catalogo') and 'id_insumo' in ing.get('insumos_catalogo'):
+                        insumo_data = ing.get('insumos_catalogo')
+                    # --- FIN DE LA CORRECCIÓN! ---
+
                         insumos_map_temp[insumo_data['id_insumo']] = insumo_data
 
             mapas_precargados['insumos'] = insumos_map_temp

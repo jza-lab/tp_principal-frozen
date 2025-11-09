@@ -46,48 +46,41 @@
 {% endblock %}
 
 {% block app_content %}
-<div class="btn-toolbar mb-2">
-    <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2" title="Volver a la página anterior">
-        <i class="bi bi-arrow-left"></i> Volver
-    </a>
-    {# --- INICIO: BOTÓN AÑADIDO --- #}
-    {# Asumimos un permiso 'forzar_auto_planificacion'. Si es otro, ajústalo. #}
-    {# --- ¡NUEVO BOTÓN DE NOTIFICACIONES! --- #}
-    <button class="btn btn-outline-secondary position-relative ms-auto" type="button" 
-            data-bs-toggle="offcanvas" data-bs-target="#notificationOffcanvas" 
-            aria-controls="notificationOffcanvas" title="Ver notificaciones del sistema">
-        <i class="bi bi-bell-fill"></i>
-        
-        {# El contador solo aparece si hay notificaciones #}
-        {% if planning_notifications %}
-        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-            {{ planning_notifications | length }}
-            <span class="visually-hidden">Avisos sin leer</span>
-        </span>
-        {% endif %}
-    </button>
-    {# --- FIN NUEVO BOTÓN --- #}
-    <button type="button" class="btn btn-primary ms-2" id="btn-forzar-auto-planificacion" title="Ejecutar la planificación automática de OPs PENDIENTES ahora">
-        <i class="bi bi-robot me-1"></i> Forzar Auto-Planificación
-    </button>
-
-    <button type="button" class="btn btn-warning ms-2" id="btn-forzar-verificacion-capacidad" title="Verificar capacidad y replanificar conflictos AHORA">
-        <i class="bi bi-shield-fill-exclamation me-1"></i> Forzar Verificación
-    </button>
+<div class="d-flex justify-content-between align-items-center pb-2 mb-4 border-bottom">
     
-    {# --- FIN: BOTÓN AÑADIDO --- #}
-    {# --- ¡NUEVO BOTÓN DE CONFIGURACIÓN! --- #}
-    {# Asumimos un permiso de 'admin' o 'configurar_planificacion' #}
-    <a href="{{ url_for('planificacion.configuracion_lineas') }}" class="btn btn-outline-info ms-2" title="Configurar capacidad y bloqueos de líneas">
-        <i class="bi bi-gear-fill me-1"></i> Configurar Líneas
-    </a>
-    {# --- FIN NUEVO BOTÓN --- #}
-</div>
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
-    <div>
-        <h1 class="h2 mb-1">Centro de Planificación</h1>
-        <p class="text-muted mb-0">Planifique OPs pendientes, vea la semana y gestione el tablero.</p>
+    <div class="d-flex align-items-center">
+        <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-3" title="Volver a la página anterior">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+        <div>
+            <h1 class="h3 mb-0">Centro de Planificación</h1> 
+            <p class="text-muted mb-0" style="font-size: 0.9rem;">Planifique OPs pendientes, vea la semana y gestione el tablero.</p> 
+        </div>
     </div>
+
+    <div class="btn-toolbar" role="toolbar">
+        <button class="btn btn-outline-secondary position-relative ms-2" type="button" 
+                data-bs-toggle="offcanvas" data-bs-target="#notificationOffcanvas" 
+                aria-controls="notificationOffcanvas" title="Ver notificaciones del sistema">
+            <i class="bi bi-bell-fill"></i>
+            {% if planning_notifications %}
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                {{ planning_notifications | length }}
+                <span class="visually-hidden">Avisos sin leer</span>
+            </span>
+            {% endif %}
+        </button>
+        <button type="button" class="btn btn-primary ms-2" id="btn-forzar-auto-planificacion" title="Ejecutar la planificación automática de OPs PENDIENTES ahora">
+            <i class="bi bi-robot me-1"></i> Forzar Auto-Planificación
+        </button>
+        <button type="button" class="btn btn-warning ms-2" id="btn-forzar-verificacion-capacidad" title="Verificar capacidad y replanificar conflictos AHORA">
+            <i class="bi bi-shield-fill-exclamation me-1"></i> Forzar Verificación
+        </button>
+        <a href="{{ url_for('planificacion.configuracion_lineas') }}" class="btn btn-outline-info ms-2" title="Configurar capacidad y bloqueos de líneas">
+            <i class="bi bi-gear-fill me-1"></i> Configurar Líneas
+        </a>
+    </div>
+    
 </div>
 
 {# --- ¡NUEVO PANEL DE ISSUES DE PLANIFICACIÓN! --- #}
@@ -226,7 +219,7 @@
 
         <div class="accordion mb-4" id="accordionSemanal"> <div class="accordion-item">
                 <h2 class="accordion-header" id="headingSemanal">
-                    <button class="accordion-button collapsed bg-primary-subtle" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSemanal" aria-expanded="false" aria-controls="collapseSemanal">
+                    <button class="accordion-button collapsed bg-primary-subtle" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSemanal" aria-expanded="true" aria-controls="collapseSemanal">
                         <div class="d-flex align-items-center w-100">
                             <i class="bi bi-calendar-week fs-5 me-3 text-primary-emphasis"></i>
                             <div class="flex-grow-1">
@@ -420,7 +413,7 @@
         <div class="accordion mb-4" id="accordionCRP">
             <div class="accordion-item">
                 <h2 class="accordion-header" id="headingCRP">
-                    <button class="accordion-button collapsed bg-info-subtle" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCRP" aria-expanded="false" aria-controls="collapseCRP">
+                    <button class="accordion-button collapsed bg-info-subtle" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCRP" aria-expanded="true" aria-controls="collapseCRP">
                         <div class="d-flex align-items-center w-100">
                             <i class="bi bi-speedometer2 fs-5 me-3 text-info-emphasis"></i>
                             <div class="flex-grow-1">
@@ -431,7 +424,7 @@
                         </div>
                     </button>
                 </h2>
-                <div id="collapseCRP" class="accordion-collapse collapse" aria-labelledby="headingCRP" data-bs-parent="#accordionCRP">
+                <div id="collapseCRP" class="accordion-collapse collapse show" aria-labelledby="headingCRP" data-bs-parent="#accordionCRP">
                     <div class="accordion-body">
                         {# Leyenda de colores #}
                         <div class="row mb-3">
