@@ -625,11 +625,11 @@
         // Variables globales inyectadas por Jinja2 para el formulario PÚBLICO
         const CREAR_URL = "{{ url_for('public.crear_pedido_api') }}"; // Apunta al nuevo endpoint público
         const PROFORMA_GENERATION_URL = "{{ url_for('public.generar_proforma_api') }}";
-        const PRODUCTOS_DATA = "{{ productos | tojson | safe }}";
+        const PRODUCTOS_DATA = {{ productos | tojson | safe }};
         const LISTAR_URL = "{{ url_for('public.index') }}"; // A dónde ir si se cancela
         const isEditing = false;
         const pedidoId = 0;
-        const cliente = "{{ clienteJs | tojson | safe }}";
+        const cliente = {{ clienteJs | tojson | safe }};
     </script>
 
     <script src="{{ url_for('static', filename='js/orden_venta/gestionCalculos.js') }}"></script>

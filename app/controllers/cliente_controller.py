@@ -80,6 +80,10 @@ class ClienteController(BaseController):
             logger.error(f"Error obteniendo Cliente {cliente_cuil}: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
+    def obtener_cliente_por_cuit(self, cuit: str) -> tuple:
+        """Obtener un Cliente por su CUIT/CUIL"""
+        return self.obtener_cliente_cuil(cuit)
+
     def eliminar_cliente(self, cliente_id: int) -> tuple:
         """Elimina (desactiva) un Cliente por su ID"""
         try:

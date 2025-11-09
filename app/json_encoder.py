@@ -1,19 +1,17 @@
 import json
 from decimal import Decimal
 from datetime import date, datetime
-from flask.json.provider import DefaultJSONProvider  # ✅ Importación correcta para Flask 2.3+
+from flask.json.provider import DefaultJSONProvider
 
-class CustomJSONEncoder(DefaultJSONProvider):
-    """Encoder personalizado para manejar Decimal y otros tipos no serializables"""
-
+class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
-        # Convertir Decimal a float
         if isinstance(obj, Decimal):
             return float(obj)
-
-        # Convertir date y datetime a string ISO
-        if isinstance(obj, (date, datetime)):
+        if isinstance(obj, (datetime, date)):
             return obj.isoformat()
-
-        # Para otros tipos, usar el encoder por defecto
         return super().default(obj)
+
+class CustomJSONProvider(DefaultJSONProvider):
+    def __init__(self, app):
+        super().__init__(app)
+        self.default = CustomJSONEncoder().default

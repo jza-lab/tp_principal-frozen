@@ -166,9 +166,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     [form, itemsContainer].forEach(el => ['input', 'change', 'DOMSubtreeModified'].forEach(evt => el.addEventListener(evt, () => {
+        const clienteId = idClienteInput.value;
         const cuit = document.getElementById('cuil_cuit_cliente').value.trim();
         const email = document.getElementById('email_cliente').value.trim();
-        const isClientDataPresent = cuit.length > 5 && email.includes('@');
+        const isClientDataPresent = clienteId || (cuit.length >= 11 && email.includes('@'));
         const hasItems = itemsContainer.querySelectorAll('.item-row').length > 0;
         nextStep1Btn.disabled = !(isClientDataPresent && hasItems);
     })));
@@ -473,6 +474,77 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
     observer.observe(paymentReceipt, { childList: true, subtree: true });
+
+    // --- NUEVA FUNCIÓN PARA BÚSQUEDA DE CLIENTE POR CUIT ---
+    const cuitInput = document.getElementById('cuil_cuit_cliente');
+    cuitInput.addEventListener('blur', async function() {
+        const cuit = this.value.trim();
+        if (cuit.length >= 11) {
+            try {
+                const response = await fetch(`/public/api/buscar-cliente?cuit=${cuit}`);
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    const cliente = result.data;
+                    // Rellenar campos del cliente
+                    document.getElementById('id_cliente').value = cliente.id;
+                    document.getElementById('email_cliente').value = cliente.email;
+                    document.getElementById('nombre_cliente').value = cliente.nombre || cliente.razon_social;
+                    document.getElementById('telefono').value = cliente.telefono;
+                    
+                    // --- CORRECCIÓN: Lógica robusta para Condición IVA ---
+                    let ivaKey = cliente.condicion_iva;
+                    let ivaData = CONDICION_IVA_MAP[ivaKey];
+                    
+                    // Si no se encuentra por clave (ej. viene "Responsable Inscripto" en vez de "1")
+                    if (!ivaData) {
+                        const foundEntry = Object.entries(CONDICION_IVA_MAP).find(([key, data]) => data.text === ivaKey);
+                        if (foundEntry) {
+                            ivaKey = foundEntry[0]; // Corregimos al key numérico
+                            ivaData = foundEntry[1];
+                        }
+                    }
+
+                    // Fallback final si todo falla
+                    if (!ivaData) {
+                        ivaKey = '4';
+                        ivaData = CONDICION_IVA_MAP[ivaKey];
+                    }
+
+                    condicionIvaDisplay.value = ivaData.text;
+                    tipoFacturaInput.value = ivaData.factura;
+                    condicionIvaValue.value = ivaKey; // Usar siempre la clave numérica correcta
+
+                    // Actualizar dirección si existe
+                    if (cliente.direccion) {
+                        calleFacturacionInput.value = cliente.direccion.calle;
+                        alturaFacturacionInput.value = cliente.direccion.altura;
+                        provinciaFacturacionInput.value = cliente.direccion.provincia;
+                        localidadFacturacionInput.value = cliente.direccion.localidad;
+                        cpFacturacionInput.value = cliente.direccion.codigo_postal;
+                    }
+                    actualizarCondicionVenta(cliente.id);
+                } else {
+                    // Limpiar campos si el cliente no se encuentra
+                    document.getElementById('id_cliente').value = '';
+                    document.getElementById('nombre_cliente').value = '';
+                    document.getElementById('telefono').value = '';
+                    condicionIvaDisplay.value = 'Consumidor Final';
+                    tipoFacturaInput.value = 'B';
+                    condicionIvaValue.value = '4'; // Consumidor Final por defecto
+                    // Limpiar dirección
+                    calleFacturacionInput.value = '';
+                    alturaFacturacionInput.value = '';
+                    provinciaFacturacionInput.value = '';
+                    localidadFacturacionInput.value = '';
+                    cpFacturacionInput.value = '';
+                }
+            } catch (error) {
+                console.error('Error al buscar cliente:', error);
+                showNotificationModal('Error de Red', 'No se pudo conectar con el servidor para buscar el cliente.', 'error');
+            }
+        }
+    });
 
     async function actualizarCondicionVenta(clienteId) {
         const condicionVentaSelect = document.getElementById('condicion_venta');

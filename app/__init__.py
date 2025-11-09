@@ -233,7 +233,10 @@ def create_app() -> Flask:
     app.config.from_object(Config)
     app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
     app.config["JWT_COOKIE_CSRF_PROTECT"] = False
-    app.json = CustomJSONEncoder(app)
+    
+    from .json_encoder import CustomJSONProvider
+    app.json_provider_class = CustomJSONProvider
+    app.json = app.json_provider_class(app)
 
     CORS(app, resources={r"/api/*": {"origins": "*"}})
     csrf.init_app(app)
