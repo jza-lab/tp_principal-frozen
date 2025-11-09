@@ -45,6 +45,14 @@
                     {% endfor %}
                 </div>
             </div>
+            
+            {% if current_status == 'LISTO_PARA_ENTREGA' %}
+            <div class="col-12 text-center mt-3">
+                <a href="{{ url_for('despacho.crear_despacho_vista') }}" class="btn btn-info btn-lg">
+                    <i class="bi bi-truck me-2"></i> Gestionar Envíos y Despachar Pedidos
+                </a>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -86,15 +94,15 @@
                 {# --- Sección de Items --- #}
                 <div class="mb-2">
                      <span class="fw-bold"><i class="bi bi-list-ul me-1"></i>Items:</span>
-                     <span class="badge bg-light text-dark">{{ pedido['items']|length }} producto(s)</span>
-                     {% if pedido['items']|length > 0 and pedido['items']|length <= 3 %}
+                     <span class="badge bg-light text-dark">{{ pedido.pedido_items|length }} producto(s)</span>
+                     {% if pedido.pedido_items|length > 0 and pedido.pedido_items|length <= 3 %}
                          <ul class="list-unstyled small text-muted mt-1 mb-0 ps-3">
-                         {% for item in pedido['items'] %}
-                              <li>• {{ (item.producto_nombre.nombre or 'N/A') | truncate(30, True) }} ({{ item.cantidad }})</li>
+                         {% for item in pedido.pedido_items %}
+                              <li>• {{ (item['producto_nombre']['nombre'] or 'N/A') | truncate(30, True) }} ({{ item.cantidad }})</li>
                          {% endfor %}
                          </ul>
-                     {% elif pedido['items']|length > 3 %}
-                          <small class="d-block text-muted mt-1 ps-3">• {{ (pedido['items'][0].producto_nombre.nombre or 'N/A') | truncate(30, True) }} y {{ pedido['items']|length - 1 }} más...</small>
+                     {% elif pedido.pedido_items|length > 3 %}
+                          <small class="d-block text-muted mt-1 ps-3">• {{ (pedido.pedido_items[0]['producto_nombre']['nombre'] or 'N/A') | truncate(30, True) }} y {{ pedido.pedido_items|length - 1 }} más...</small>
                      {% endif %}
                 </div>
 
@@ -133,11 +141,6 @@
 
                         {% endif %}
 
-                        {% if pedido.estado == 'LISTO_PARA_ENTREGA' and 'planificar_ov' is has_permission %}
-                        <a href="{{ url_for('orden_venta.despachar', id=pedido.id) }}" class="btn btn-sm btn-info" title="Despachar Pedido">
-                            <i class="bi bi-truck me-1"></i> Despachar
-                        </a>
-                        {% endif %}
                         {% if pedido.estado == 'EN_TRANSITO' and 'planificar_ov' is has_permission %}
                         <form method="POST" action="{{ url_for('orden_venta.completar', id=pedido.id) }}"
                             class="confirm-form d-inline" data-title="Confirmar Entrega"

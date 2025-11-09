@@ -1,0 +1,131 @@
+{% extends "layouts/app_layout.html" %}
+
+{% block title %}Gestión de Envíos{% endblock %}
+
+{% block app_content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Gestión de Envíos</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item active">Gestión de Envíos</li>
+    </ol>
+
+    <!-- Pestañas de Navegación -->
+    <ul class="nav nav-tabs" id="enviosTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="transportes-tab" data-bs-toggle="tab" data-bs-target="#transportes" type="button" role="tab" aria-controls="transportes" aria-selected="true">
+                <i class="fas fa-truck-moving me-1"></i> Gestión de Transportes
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="zonas-tab" data-bs-toggle="tab" data-bs-target="#zonas" type="button" role="tab" aria-controls="zonas" aria-selected="false">
+                <i class="fas fa-map-marked-alt me-1"></i> Gestión de Zonas
+            </button>
+        </li>
+    </ul>
+
+    <!-- Contenido de las Pestañas -->
+    <div class="tab-content" id="enviosTabContent">
+        <!-- Pestaña de Transportes -->
+        <div class="tab-pane fade show active" id="transportes" role="tabpanel" aria-labelledby="transportes-tab">
+            <div class="card mb-4 mt-3">
+                <div class="card-header">
+                    <i class="fas fa-car me-1"></i>
+                    Listado de Vehículos
+                    <a href="{{ url_for('vehiculo.crear_vehiculo') }}" class="btn btn-primary btn-sm float-end">
+                        <i class="fas fa-plus"></i> Nuevo Vehículo
+                    </a>
+                </div>
+                <div class="card-body">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Patente</th>
+                                <th>Tipo</th>
+                                <th>Capacidad (kg)</th>
+                                <th>Conductor</th>
+                                <th>DNI</th>
+                                <th>Teléfono</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for vehiculo in vehiculos %}
+                            <tr>
+                                <td>{{ vehiculo.patente }}</td>
+                                <td>{{ vehiculo.tipo_vehiculo }}</td>
+                                <td>{{ vehiculo.capacidad_kg }}</td>
+                                <td>{{ vehiculo.nombre_conductor }}</td>
+                                <td>{{ vehiculo.dni_conductor }}</td>
+                                <td>{{ vehiculo.telefono_conductor }}</td>
+                                <td>
+                                    <a href="{{ url_for('vehiculo.editar_vehiculo', vehiculo_id=vehiculo.id) }}" class="btn btn-secondary btn-sm">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form action="{{ url_for('vehiculo.eliminar_vehiculo', vehiculo_id=vehiculo.id) }}" method="POST" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Estás seguro de que deseas eliminar este vehículo?');">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center">No hay vehículos registrados.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestaña de Zonas -->
+        <div class="tab-pane fade" id="zonas" role="tabpanel" aria-labelledby="zonas-tab">
+            <div class="card mb-4 mt-3">
+                <div class="card-header">
+                    <i class="fas fa-map-marked-alt me-1"></i>
+                    Listado de Zonas
+                    <a href="{{ url_for('zonas.crear_zona') }}" class="btn btn-primary btn-sm float-end">
+                        <i class="fas fa-plus me-1"></i> Nueva Zona
+                    </a>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Nombre de la Zona</th>
+                                <th>Localidades Asignadas</th>
+                                <th style="width: 15%;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for zona in zonas %}
+                            <tr>
+                                <td>{{ zona.nombre }}</td>
+                                <td>
+                                    {% if zona.localidades %}
+                                        {{ zona.localidades|length }}
+                                    {% else %}
+                                        0
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('zonas.editar_zona', zona_id=zona.id) }}" class="btn btn-secondary btn-sm">
+                                        <i class="fas fa-edit me-1"></i> Editar
+                                    </a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center">No hay zonas creadas todavía.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,72 @@
+<div class="modal fade" id="modalControlCalidadOp" tabindex="-1" aria-labelledby="modalControlCalidadOpLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalControlCalidadOpLabel">Control de Calidad de Producción</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Orden de Producción: <strong id="op-codigo"></strong></p>
+                <p>Producto: <strong id="op-producto"></strong></p>
+                <p>Cantidad Producida: <strong id="op-cantidad-producida"></strong> kg</p>
+                <hr>
+                <form id="form-control-calidad-op" novalidate>
+                    <input type="hidden" id="op-id" name="op_id">
+                    
+                    <div class="mb-3">
+                        <label for="decision-inspeccion" class="form-label">Resultado de la Inspección</label>
+                        <select class="form-select" id="decision-inspeccion" name="decision_inspeccion" required>
+                            <option value="" selected disabled>Seleccione un resultado...</option>
+                            <option value="APROBADO">Aprobar lote completo</option>
+                            <option value="RECHAZO_PARCIAL">Rechazar parcialmente</option>
+                            <option value="CUARENTENA_PARCIAL">Poner en cuarentena parcialmente</option>
+                            <option value="MIXTO">Decisión Mixta (Rechazo y Cuarentena)</option>
+                        </select>
+                         <div class="invalid-feedback">Por favor, seleccione un resultado.</div>
+                    </div>
+
+                    <div id="campos-cantidades" style="display: none;">
+                        <div class="mb-3" id="campo-rechazar" style="display: none;">
+                            <label for="cantidad-rechazada" class="form-label">Cantidad a Rechazar (kg)</label>
+                            <input type="number" class="form-control" id="cantidad-rechazada" name="cantidad_rechazada" step="0.01" min="0">
+                        </div>
+
+                        <div class="mb-3" id="campo-cuarentena" style="display: none;">
+                            <label for="cantidad-cuarentena" class="form-label">Cantidad a Poner en Cuarentena (kg)</label>
+                            <input type="number" class="form-control" id="cantidad-cuarentena" name="cantidad_cuarentena" step="0.01" min="0">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="motivo-inspeccion" class="form-label">Motivo de la decisión (si aplica)</label>
+                        <select class="form-select" id="motivo-inspeccion" name="motivo_inspeccion">
+                            <option value="" selected disabled>Seleccione un motivo...</option>
+                            <option value="Defecto de empaquetado">Defecto de empaquetado</option>
+                            <option value="Contaminación cruzada">Contaminación cruzada</option>
+                            <option value="Producto quemado / sobrecocido">Producto quemado / sobrecocido</option>
+                            <option value="Producto crudo / mal cocido">Producto crudo / mal cocido</option>
+                            <option value="Forma o tamaño irregular">Forma o tamaño irregular</option>
+                            <option value="Peso incorrecto">Peso incorrecto</option>
+                            <option value="Color u olor anómalo">Color u olor anómalo</option>
+                            <option value="Otro">Otro (especificar en comentarios)</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="foto-calidad" class="form-label">Cargar Foto (opcional, .png o .jpg)</label>
+                        <input class="form-control" type="file" id="foto-calidad" name="foto_url" accept="image/png, image/jpeg">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="comentarios-calidad" class="form-label">Comentarios</label>
+                        <textarea class="form-control" id="comentarios-calidad" name="comentarios" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-procesar-qc">Procesar</button>
+            </div>
+        </div>
+    </div>
+</div>

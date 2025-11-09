@@ -1,0 +1,125 @@
+{% extends "layouts/app_layout.html" %}
+
+{% block title %}Crear Nuevo Despacho{% endblock %}
+
+{% block extra_css %}
+<style>
+    #vehicle-info {
+        display: none;
+    }
+    .capacity-bar-container {
+        height: 25px;
+        background-color: #e9ecef;
+        border-radius: .25rem;
+    }
+    .capacity-bar {
+        height: 100%;
+        background-color: #0d6efd;
+        border-radius: .25rem;
+        transition: width 0.3s ease-in-out;
+    }
+    .capacity-bar.over-capacity {
+        background-color: #dc3545;
+    }
+</style>
+{% endblock %}
+
+{% block app_content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Crear Nuevo Despacho</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="{{ url_for('orden_venta.listar') }}">Ventas</a></li>
+        <li class="breadcrumb-item active">Crear Despacho</li>
+    </ol>
+    
+    <div class="row">
+        <!-- Columna de Selección de Pedidos -->
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header"><i class="fas fa-list-check me-1"></i>Seleccionar Pedidos</div>
+                <div class="card-body">
+                    {% for nombre_grupo, pedidos in pedidos_por_grupo.items() %}
+                        <h5>{{ nombre_grupo }}</h5>
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th style="width: 5%;"><input type="checkbox" class="form-check-input" id="select-all-{{ nombre_grupo }}"></th>
+                                    <th># Pedido</th>
+                                    <th>Cliente</th>
+                                    <th>Dirección</th>
+                                    <th class="text-end">Peso (kg)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for pedido in pedidos %}
+                                <tr data-pedido-id="{{ pedido.id }}" data-peso="{{ pedido.peso_total_calculado }}">
+                                    <td><input type="checkbox" class="form-check-input pedido-checkbox" value="{{ pedido.id }}"></td>
+                                    <td>PED-{{ pedido.id }}</td>
+                                    <td>{{ pedido.cliente.nombre }}</td>
+                                    <td>{{ pedido.direccion.calle }} {{ pedido.direccion.altura }}, {{ pedido.direccion.localidad }}</td>
+                                    <td class="text-end">{{ "%.2f"|format(pedido.peso_total_calculado) }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <p class="text-center">No hay pedidos listos para entregar.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Columna de Resumen y Despacho -->
+        <div class="col-lg-4">
+            <div class="card mb-4 sticky-top">
+                <div class="card-header"><i class="fas fa-truck me-1"></i>Información del Despacho</div>
+                <div class="card-body">
+                    <!-- Buscador de Vehículo -->
+                    <div class="mb-3">
+                        <label for="patente-search" class="form-label">Buscar Vehículo por Patente</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="patente-search" placeholder="AAA-123">
+                            <button class="btn btn-outline-secondary" type="button" id="search-btn"><i class="fas fa-search"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Info del Vehículo (oculto por defecto) -->
+                    <div id="vehicle-info" class="mb-3">
+                        <h5 id="vehicle-patente"></h5>
+                        <p class="mb-1"><strong>Conductor:</strong> <span id="vehicle-conductor"></span></p>
+                        <p class="mb-1"><strong>Capacidad:</strong> <span id="vehicle-capacidad"></span> kg</p>
+                        <input type="hidden" id="vehicle-id">
+                    </div>
+
+                    <!-- Resumen de Carga -->
+                    <h5>Resumen de Carga</h5>
+                    <p><strong>Pedidos seleccionados:</strong> <span id="selected-count">0</span></p>
+                    <p><strong>Peso total:</strong> <span id="total-weight">0.00</span> kg</p>
+                    <div class="capacity-bar-container mb-3">
+                        <div class="capacity-bar" id="capacity-bar" style="width: 0%;"></div>
+                    </div>
+
+                    <!-- Observaciones -->
+                    <div class="mb-3">
+                        <label for="observaciones" class="form-label">Observaciones (Opcional)</label>
+                        <textarea class="form-control" id="observaciones" rows="3"></textarea>
+                    </div>
+
+                    <!-- Botón de Confirmar -->
+                    <div class="d-grid">
+                        <button class="btn btn-primary" id="confirm-despacho-btn" disabled>
+                            <i class="fas fa-check-circle me-1"></i> Confirmar Despacho
+                        </button>
+                    </div>
+
+                    <!-- Contenedor para resultado exitoso -->
+                    <div id="success-result" class="mt-3" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="{{ url_for('static', filename='js/despachos/crear_despacho.js') }}"></script>
+
+{% endblock %}
+

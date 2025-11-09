@@ -1,84 +1,88 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const trazabilidadTab = document.getElementById('trazabilidad-tab');
-    if (!trazabilidadTab) return;
+    const TIPO_ENTIDAD = 'lote_producto';
+    const ID_ENTIDAD = window.LOTE_PRODUCTO_ID;
+    const visContainer = document.getElementById('vis_trazabilidad');
+    const accordionButton = document.querySelector('button[data-bs-target="#collapseDiagrama"]');
+    let network = null;
+    let chartLoaded = false;
 
-    let isDataLoaded = false;
-
-    trazabilidadTab.addEventListener('shown.bs.tab', function () {
-        if (!isDataLoaded) {
-            loadTrazabilidadData();
-            isDataLoaded = true;
-        }
-    });
-
-    function loadTrazabilidadData() {
-        const loteId = window.LOTE_ID;
-        if (!loteId) {
-            console.error("LOTE_ID not defined.");
-            return;
-        }
-        const apiUrl = `/api/trazabilidad/lote_producto/${loteId}`;
-
-        renderSpinner('resumen-trazabilidad');
-        
-        fetch(apiUrl)
-            .then(response => response.json())
-            .then(data => {
-                if(data.success) {
-                    renderResumen(data.data.resumen);
-                    drawVisNetwork(data.data.diagrama);
-                } else {
-                    throw new Error(data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error loading traceability data:', error);
-                document.getElementById('resumen-trazabilidad').innerHTML = `<div class="alert alert-danger">Error al cargar datos.</div>`;
-            });
-    }
-
-    function renderSpinner(elementId) {
-        const element = document.getElementById(elementId);
-        if(element) element.innerHTML = `<div class="text-center p-3"><div class="spinner-border text-secondary" role="status"></div></div>`;
-    }
-
-    function renderResumen(resumen) {
-        const container = document.getElementById('resumen-trazabilidad');
-        if (!resumen || !resumen.origen) {
-            container.innerHTML = '<p>No se encontró resumen.</p>';
-            return;
-        }
-        const origen = resumen.origen;
-        container.innerHTML = `
-            <h6>Origen (Hacia Atrás)</h6>
-            <ul class="list-group list-group-flush">
-                <li class="list-group-item">
-                    <strong>Creado por (OP):</strong> 
-                    <a href="/orden-produccion/detalle/${origen.op_id}">${origen.op_codigo}</a>
-                </li>
-            </ul>`;
-    }
-
-    function drawVisNetwork(diagrama) {
-        const container = document.getElementById('vis_trazabilidad');
-        if (!diagrama || !diagrama.nodes || diagrama.nodes.length === 0) {
-            container.innerHTML = '<div class="alert alert-info text-center p-4">No se encontraron datos para el diagrama de red.</div>';
-            return;
-        }
-
-        const nodes = new vis.DataSet(diagrama.nodes);
-        const edges = new vis.DataSet(diagrama.edges);
-
-        const data = { nodes: nodes, edges: edges };
+    function initVisNetwork(data) {
+        const nodes = new vis.DataSet(data.nodes);
+        const edges = new vis.DataSet(data.edges);
         const options = {
-            layout: { hierarchical: { enabled: true, direction: 'LR', sortMethod: 'directed' }},
-            edges: { arrows: 'to', font: { align: 'middle' }},
-            interaction: { hover: true },
-            physics: { enabled: false }
+            layout: {
+                hierarchical: {
+                    direction: "LR", // Left to Right
+                    sortMethod: "directed",
+                    levelSeparation: 300,
+                    nodeSpacing: 200
+                }
+            },
+            edges: {
+                arrows: 'to',
+                font: {
+                    align: 'middle'
+                },
+                smooth: {
+                    type: 'cubicBezier'
+                }
+            },
+            nodes: {
+                shape: 'box',
+                margin: 10,
+                font: {
+                    size: 14,
+                    color: '#ffffff'
+                },
+                borderWidth: 2
+            },
+            groups: {
+                lote_insumo: {
+                    color: {
+                        background: '#56B4E9',
+                        border: '#4691B9'
+                    }
+                },
+                orden_compra: {
+                    color: {
+                        background: '#F0E442',
+                        border: '#D4C83A'
+                    },
+                    font: {
+                        color: '#333333'
+                    }
+                },
+                orden_produccion: {
+                    color: {
+                        background: '#E69F00',
+                        border: '#B87F00'
+                    }
+                },
+                lote_producto: {
+                    color: {
+                        background: '#009E73',
+                        border: '#007E5C'
+                    }
+                },
+                pedido: {
+                    color: {
+                        background: '#CC79A7',
+                        border: '#A36085'
+                    }
+                },
+                ingreso_manual: {
+                    color: {
+                        background: '#999999',
+                        border: '#7A7A7A'
+                    }
+                }
+            },
+            physics: false
         };
-        
-        container.innerHTML = '';
-        const network = new vis.Network(container, data, options);
+        network = new vis.Network(visContainer, {
+            nodes: nodes,
+            edges: edges
+        }, options);
 
         network.on("click", function (params) {
             if (params.nodes.length > 0) {
@@ -89,42 +93,40 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         });
+         // Ocultar el spinner y mostrar el contenedor
+        const spinner = visContainer.querySelector('.spinner-border');
+        if (spinner) {
+            spinner.parentElement.style.display = 'none';
+        }
     }
 
-    const btnCrearAlerta = document.getElementById('btn-crear-alerta');
-    if(btnCrearAlerta) {
-        btnCrearAlerta.addEventListener('click', function() {
-            this.disabled = true;
-            this.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creando...`;
-
-            const postData = {
-                tipo_entidad: 'lote_producto',
-                id_entidad: window.LOTE_ID
-            };
-
-            fetch('/admin/riesgos/crear-alerta', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(postData)
+    function loadChart() {
+        if (chartLoaded) return;
+        
+        fetch(`/api/trazabilidad/${TIPO_ENTIDAD}/${ID_ENTIDAD}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('La respuesta de la red no fue exitosa.');
+                }
+                return response.json();
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.redirect_url) {
-                    window.location.href = data.redirect_url;
+            .then(result => {
+                if (result.success && result.data.diagrama) {
+                    initVisNetwork(result.data.diagrama);
+                    chartLoaded = true;
                 } else {
-                    showNotificationModal('Error', 'Error al crear la alerta: ' + (data.error || 'Error desconocido'));
-                    this.disabled = false;
-                    this.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo`;
+                    visContainer.innerHTML = '<div class="alert alert-warning">No se pudo cargar el diagrama de trazabilidad.</div>';
                 }
             })
             .catch(error => {
-                console.error('Error en fetch:', error);
-                showNotificationModal('Error de red', 'Error de red al crear la alerta.');
-                this.disabled = false;
-                this.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo`;
+                console.error('Error al cargar datos de trazabilidad:', error);
+                visContainer.innerHTML = '<div class="alert alert-danger">Error al cargar el diagrama.</div>';
             });
-        });
     }
+    
+    // Cargar el gráfico solo cuando se abre el acordeón
+    const collapseElement = document.getElementById('collapseDiagrama');
+    collapseElement.addEventListener('shown.bs.tab', loadChart);
+    // Para la primera vez que se hace clic
+    accordionButton.addEventListener('click', loadChart, { once: true });
 });

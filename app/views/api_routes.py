@@ -155,3 +155,16 @@ def get_trazabilidad_op(orden_id):
     if resultado.get('success'):
         return jsonify(success=True, data=resultado.get('data'))
     return jsonify(success=False, error=resultado.get('error')), 500
+
+
+from app.controllers.nota_credito_controller import NotaCreditoController
+
+@api_bp.route('/notas-credito/<int:nc_id>/detalles', methods=['GET'])
+@permission_required(accion='consultar_documentos')
+def get_nota_credito_detalles(nc_id):
+    """
+    Devuelve los detalles completos de una Nota de Crédito para usar en reportes o PDFs.
+    """
+    controller = NotaCreditoController()
+    resultado, status_code = controller.obtener_detalles_para_pdf(nc_id)
+    return jsonify(resultado), status_code

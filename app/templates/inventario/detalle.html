@@ -22,6 +22,10 @@
         <p class="text-muted mb-0">Insumo: <strong>{{ lote.insumo_nombre or 'N/A' }}</strong></p>
     </div>
     <div class="btn-toolbar">
+        <button class="btn btn-danger me-2 btn-crear-alerta" data-tipo-entidad="lote_insumo"
+            data-id-entidad="{{ lote.id_lote }}" data-nombre-entidad="Lote de Insumo {{ lote.numero_lote_proveedor }}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo
+        </button>
         <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2"
             title="Volver a la página anterior">
             <i class="bi bi-arrow-left"></i> Volver
@@ -164,51 +168,49 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Historial de Calidad -->
         <div class="card mt-4">
             <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-shield-check me-2"></i>Historial de Control de Calidad y Cuarentena</h5>
+                <h5 class="mb-0"><i class="bi bi-shield-check me-2"></i>Historial de Control de Calidad y Cuarentena
+                </h5>
             </div>
             <div class="card-body">
                 {% if lote.historial_calidad %}
-                    {% for evento in lote.historial_calidad %}
-                        <div class="row mb-4 pb-3 border-bottom">
-                            <div class="col-md-8">
-                                <p class="mb-1"><strong>Fecha:</strong> {{ evento.created_at.strftime('%Y-%m-%d %H:%M') if evento.created_at else 'N/A' }}</p>
-                                <p class="mb-1"><strong>Decisión:</strong> <span class="fw-bold">{{ evento.decision_final.replace('_', ' ') | title }}</span></p>
-                                <p class="mb-1"><strong>Motivo:</strong> {{ evento.resultado_inspeccion or 'No especificado' }}</p>
-                                {% if evento.comentarios %}
-                                <p class="mb-1"><strong>Comentarios:</strong> {{ evento.comentarios }}</p>
-                                {% endif %}
-                            </div>
-                            <div class="col-md-4 text-center">
-                                {% if evento.foto_url %}
-                                    <a href="{{ evento.foto_url }}" target="_blank">
-                                        <img src="{{ evento.foto_url }}" alt="Foto de control de calidad" class="img-fluid rounded" style="max-height: 150px;">
-                                    </a>
-                                    <small class="text-muted d-block mt-1">Clic para ampliar</small>
-                                {% else %}
-                                    <div class="text-muted fst-italic mt-3">Sin foto adjunta</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    {% endfor %}
+                {% for evento in lote.historial_calidad %}
+                <div class="row mb-4 pb-3 border-bottom">
+                    <div class="col-md-8">
+                        <p class="mb-1"><strong>Fecha:</strong> {{ evento.created_at.strftime('%Y-%m-%d %H:%M') if
+                            evento.created_at else 'N/A' }}</p>
+                        <p class="mb-1"><strong>Decisión:</strong> <span class="fw-bold">{{
+                                evento.decision_final.replace('_', ' ') | title }}</span></p>
+                        <p class="mb-1"><strong>Motivo:</strong> {{ evento.resultado_inspeccion or 'No especificado' }}
+                        </p>
+                        {% if evento.comentarios %}
+                        <p class="mb-1"><strong>Comentarios:</strong> {{ evento.comentarios }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-4 text-center">
+                        {% if evento.foto_url %}
+                        <a href="{{ evento.foto_url }}" target="_blank">
+                            <img src="{{ evento.foto_url }}" alt="Foto de control de calidad" class="img-fluid rounded"
+                                style="max-height: 150px;">
+                        </a>
+                        <small class="text-muted d-block mt-1">Clic para ampliar</small>
+                        {% else %}
+                        <div class="text-muted fst-italic mt-3">Sin foto adjunta</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
                 {% else %}
-                    <p class="text-muted">Este lote no tiene eventos de control de calidad o cuarentena registrados.</p>
+                <p class="text-muted">Este lote no tiene eventos de control de calidad o cuarentena registrados.</p>
                 {% endif %}
             </div>
         </div>
     </div>
 
     <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4 class="mb-0">Análisis de Trazabilidad y Riesgo</h4>
-            <button id="btn-crear-alerta" class="btn btn-danger">
-                <i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo
-            </button>
-        </div>
-
         <div class="row">
             <div class="col-lg-8">
                 <div class="card mb-4">
@@ -273,6 +275,7 @@
         </div>
     </div>
 </div>
+{% include "admin_riesgos/_modal_crear_alerta.html" %}
 {% endblock %}
 
 
@@ -283,5 +286,5 @@
     window.LOTE_ID = "{{ lote.id_lote | safe }}";
 </script>
 <script src="{{ url_for('static', filename='js/trazabilidadInsumo.js') }}?v=1.1"></script>
-
+<script src="{{ url_for('static', filename='js/gestorAlertas.js') }}?v=1.1"></script>
 {% endblock %}

@@ -1,0 +1,60 @@
+{% extends "layouts/app_layout.html" %}
+
+{% block title %}Gestión de Transportes{% endblock %}
+
+{% block app_content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Gestión de Transportes</h1>
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-car me-1"></i>
+            Listado de Vehículos
+            <a href="{{ url_for('vehiculo.crear_vehiculo') }}" class="btn btn-primary btn-sm float-end">
+                <i class="fas fa-plus"></i> Nuevo Vehículo
+            </a>
+        </div>
+        <div class="card-body">
+            <table id="datatablesSimple" class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Patente</th>
+                        <th>Tipo</th>
+                        <th>Capacidad (kg)</th>
+                        <th>Conductor</th>
+                        <th>DNI</th>
+                        <th>Teléfono</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for vehiculo in vehiculos %}
+                    <tr>
+                        <td>{{ vehiculo.patente }}</td>
+                        <td>{{ vehiculo.tipo_vehiculo }}</td>
+                        <td>{{ vehiculo.capacidad_kg }}</td>
+                        <td>{{ vehiculo.nombre_conductor }}</td>
+                        <td>{{ vehiculo.dni_conductor }}</td>
+                        <td>{{ vehiculo.telefono_conductor }}</td>
+                        <td>
+                            <a href="{{ url_for('vehiculo.editar_vehiculo', vehiculo_id=vehiculo.id) }}" class="btn btn-secondary btn-sm">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <form action="{{ url_for('vehiculo.eliminar_vehiculo', vehiculo_id=vehiculo.id) }}" method="POST" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Estás seguro de que deseas eliminar este vehículo?');">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center">No hay vehículos registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

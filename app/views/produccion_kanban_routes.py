@@ -205,6 +205,23 @@ def api_aprobar_calidad(op_id):
     return jsonify(response), status_code
 
 
+@produccion_kanban_bp.route('/api/op/<int:op_id>/procesar-calidad', methods=['POST'])
+@jwt_required()
+@permission_required(accion='produccion_ejecucion') 
+def api_procesar_calidad_op(op_id):
+    """
+    API endpoint para procesar la decisión de control de calidad de una Orden de Producción.
+    """
+    usuario_id = get_jwt_identity()
+    form_data = request.form.to_dict()
+    foto_file = request.files.get('foto_url')
+    
+    controller = ProduccionKanbanController()
+    response, status_code = controller.procesar_decision_calidad(op_id, form_data, foto_file, usuario_id)
+    
+    return jsonify(response), status_code
+
+
 
 # --- Rutas para el Cronómetro del Foco de Producción ---
 @produccion_kanban_bp.route('/api/op/<int:op_id>/cronometro/iniciar', methods=['POST'])

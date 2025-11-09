@@ -1,0 +1,41 @@
+{% macro render_user_card(usuario, title, is_primary=False) %}
+<div class="card mb-3 {% if is_primary %}border-primary border-2{% endif %}">
+    <div class="card-header {% if is_primary %}bg-primary text-black{% endif %}">{{ title }}</div>
+    <div class="card-body">
+        {% if usuario %}
+        <div class="d-flex align-items-center">
+            <div class="me-3">
+                <i class="bi bi-person-circle" style="font-size: 4rem; color: #6c757d;"></i>
+            </div>
+            <div class="flex-grow-1 overflow-hidden">
+                <h5 class="card-title mb-1">{{ usuario.nombre_completo }}</h5>
+                <p class="card-text mb-1">
+                    <small class="text-muted">
+                        {{ usuario.rol }} | {{ usuario.turno }}
+                    </small>
+                </p>
+                <p class="card-text mb-1">
+                    <strong>Sectores:</strong> {{ usuario.sectores|join(', ') }}
+                </p>
+                <p class="card-text mb-0">
+                    <i class="bi bi-envelope-fill me-1"></i> <a href="mailto:{{ usuario.email }}">{{ usuario.email }}</a>
+                    {% if usuario.telefono %}
+                    <span class="ms-3"><i class="bi bi-telephone-fill me-1"></i> {{ usuario.telefono }}</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        {% else %}
+        <div class="d-flex align-items-center">
+            <div class="me-3">
+                <i class="bi bi-question-circle" style="font-size: 4rem; color: #6c757d;"></i>
+            </div>
+            <div>
+                <h5 class="card-title mb-0">Usuario Desconocido</h5>
+                <p class="card-text text-muted">No se pudo determinar el usuario para esta acción.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}

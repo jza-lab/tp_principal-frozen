@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Hoja de Ruta</title>
+    <style>
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 10px;
+            color: #333;
+        }
+        .container {
+            width: 95%;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #444;
+            border-bottom: 2px solid #444;
+            padding-bottom: 10px;
+        }
+        .header-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border-radius: 5px;
+        }
+        .header-info div {
+            width: 48%;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .signature-box {
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px dashed #999;
+        }
+        .signature-line {
+            border-bottom: 1px solid #333;
+            width: 200px;
+            display: inline-block;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Hoja de Ruta - Despacho #{{ despacho.id }}</h1>
+        
+        <div class="header-info">
+            <div>
+                <strong>Fecha de Emisión:</strong> {{ fecha_emision }}<br>
+                <strong>Conductor:</strong> {{ despacho.vehiculo.conductor.nombre }} {{ despacho.vehiculo.conductor.apellido }}<br>
+                <strong>DNI Conductor:</strong> {{ despacho.vehiculo.conductor.dni }}
+            </div>
+            <div>
+                <strong>Vehículo:</strong> {{ despacho.vehiculo.marca }} {{ despacho.vehiculo.modelo }}<br>
+                <strong>Patente:</strong> {{ despacho.vehiculo.patente }}<br>
+                <strong>Total de Pedidos:</strong> {{ despacho.pedidos|length }}
+            </div>
+        </div>
+
+        <h2>Detalle de Entregas</h2>
+        
+        {% for pedido in despacho.pedidos %}
+        <div class="delivery-item" style="page-break-inside: avoid;">
+            <h3>Pedido #{{ pedido.id }}</h3>
+            <table>
+                <tr>
+                    <th style="width: 20%;">Cliente</th>
+                    <td>{{ pedido.cliente.nombre }}</td>
+                </tr>
+                <tr>
+                    <th>Dirección</th>
+                    <td>{{ pedido.direccion.calle }} {{ pedido.direccion.altura }}, {{ pedido.direccion.localidad }}</td>
+                </tr>
+                <tr>
+                    <th>Observaciones del Pedido</th>
+                    <td>{{ pedido.observaciones if pedido.observaciones else 'N/A' }}</td>
+                </tr>
+            </table>
+
+            <div class="signature-box">
+                <strong>Recibí Conforme:</strong>
+                <div class="signature-line"></div>
+                <p style="margin-top: 5px;">Aclaración: ........................................... DNI: ...........................................</p>
+            </div>
+        </div>
+        {% if not loop.last %}
+            <hr style="margin-top: 20px;">
+        {% endif %}
+        {% endfor %}
+
+    </div>
+</body>
+</html>

@@ -1,0 +1,60 @@
+{% extends 'layouts/app_layout.html' %}
+{% block title %}Detalle de Alerta de Riesgo {{ alerta.codigo }}{% endblock %}
+
+{% block app_content %}
+<div class="container-fluid mt-4">
+    <div class="card">
+        <div class="card-header">
+            <h4 class="mb-0">Detalle de Alerta de Riesgo: {{ alerta.codigo }}</h4>
+        </div>
+        <div class="card-body">
+            <p><strong>Origen:</strong> {{ alerta.origen_tipo_entidad }}</p>
+            <p><strong>Estado:</strong> {{ alerta.estado }}</p>
+            <p><strong>Resolución:</strong> {{ alerta.resolucion_seleccionada }}</p>
+            <hr>
+            <h5>Pedidos Afectados</h5>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Pedido</th>
+                        <th>Cliente</th>
+                        <th>Contacto</th>
+                        <th>Resolución</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pedido in alerta.afectados_detalle.pedidos %}
+                    <tr>
+                        <td>{{ pedido.codigo }}</td>
+                        <td>{{ pedido.cliente_razon_social }}</td>
+                        <td>{{ pedido.cliente_email }}</td>
+                        <td>
+                            {% if alerta.resolucion_seleccionada == 'nota_credito' %}
+                                {% set nc = alerta.notas_de_credito | selectattr('pedido_origen_id', 'equalto', pedido.id) | first %}
+                                {% if nc %}
+                                    NC-{{ nc.id }} por ${{ nc.monto }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            {% else %}
+                                {{ alerta.resolucion_seleccionada }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" disabled>
+                                <i class="bi bi-envelope-fill me-1"></i> Enviar Email (Próximamente)
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center">No hay pedidos afectados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

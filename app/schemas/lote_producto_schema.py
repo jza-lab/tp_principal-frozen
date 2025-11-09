@@ -11,11 +11,12 @@ class LoteProductoSchema(Schema):
     fecha_produccion = fields.Str(required=True)  # Manejar como string
     fecha_vencimiento = fields.Str(allow_none=True)  # Manejar como string
     costo_produccion_unitario = fields.Float(validate=validate.Range(min=0), allow_none=True)
-    estado = fields.Str(validate=validate.OneOf(['DISPONIBLE', 'RESERVADO', 'AGOTADO', 'VENCIDO', 'RETIRADO', 'CUARENTENA']))
+    estado = fields.Str(validate=validate.OneOf(['DISPONIBLE', 'RESERVADO', 'AGOTADO', 'VENCIDO', 'RETIRADO', 'CUARENTENA', 'RECHAZADO']))
     motivo_cuarentena = fields.Str(allow_none=True, validate=validate.Length(max=255))
     cantidad_en_cuarentena = fields.Float(allow_none=True, validate=validate.Range(min=0))
     ubicacion_fisica = fields.Str(allow_none=True, validate=validate.Length(max=100))
     orden_produccion_id = fields.Int(allow_none=True)
+    pedido_id = fields.Int(allow_none=True)
     observaciones = fields.Str(allow_none=True)
     created_at = fields.Str(dump_only=True)  # Manejar como string
     updated_at = fields.Str(dump_only=True)  # Manejar como string

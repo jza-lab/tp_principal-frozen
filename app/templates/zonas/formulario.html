@@ -1,0 +1,157 @@
+{% extends "layouts/app_layout.html" %}
+
+{% block title %}{% if is_new %}Crear Nueva Zona{% else %}Editar Zona{% endif %}{% endblock %}
+
+{% block app_content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">{% if is_new %}Crear Nueva Zona{% else %}Editar Zona: {{ zona.nombre if zona }}{% endif %}</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('zonas.listar_zonas') }}">Gestión de Zonas</a></li>
+        <li class="breadcrumb-item active">{% if is_new %}Nueva{% else %}Editar{% endif %}</li>
+    </ol>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-edit me-1"></i>
+            Datos de la Zona
+        </div>
+        <div class="card-body">
+            <form method="POST" action="">
+                {{ csrf_form.csrf_token }}
+                <div class="mb-3">
+                    <label for="nombre" class="form-label">Nombre de la Zona</label>
+                    <input type="text" class="form-control" id="nombre" name="nombre" value="{{ zona.nombre if zona else '' }}" required>
+                </div>
+
+                <h5 class="mt-4">Localidades Asignadas</h5>
+                <p class="text-muted">A continuación, busque y asigne las localidades que pertenecerán a esta zona.</p>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Buscar y Agregar Localidades</h6>
+                        <div class="input-group mb-3">
+                            <input type="text" id="localidad-search" class="form-control" placeholder="Escriba para buscar...">
+                        </div>
+                        <ul id="available-localities" class="list-group" style="height: 250px; overflow-y: auto;">
+                            <!-- Resultados de la búsqueda de la API aparecerán aquí -->
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Localidades en esta Zona</h6>
+                        <ul id="assigned-localities" class="list-group" style="height: 250px; overflow-y: auto;">
+                            {% if zona and zona.localidades %}
+                                {% for loc in zona.localidades %}
+                                    <li class="list-group-item d-flex justify-content-between align-items-center" data-id="{{ loc.id }}">
+                                        {{ loc.nombre }}
+                                        <button type="button" class="btn btn-danger btn-sm remove-localidad-btn">&times;</button>
+                                    </li>
+                                {% endfor %}
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+
+                <input type="hidden" name="localidades_ids" id="localidades_ids" value="">
+
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Guardar Cambios
+                    </button>
+                    <a href="{{ url_for('zonas.listar_zonas') }}" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.getElementById('localidad-search');
+    const availableList = document.getElementById('available-localities');
+    const assignedList = document.getElementById('assigned-localities');
+    const hiddenInput = document.getElementById('localidades_ids');
+
+    let assignedIds = new Set();
+
+    // Inicializar con localidades ya asignadas
+    assignedList.querySelectorAll('li').forEach(item => {
+        assignedIds.add(item.dataset.id);
+    });
+    updateHiddenInput();
+
+    // --- Búsqueda de Localidades ---
+    searchInput.addEventListener('input', async function() {
+        const term = this.value.trim();
+        if (term.length < 3) {
+            availableList.innerHTML = '';
+            return;
+        }
+
+        const response = await fetch(`/admin/zonas/api/buscar-localidades?term=${term}`);
+        const localidades = await response.json();
+        
+        availableList.innerHTML = '';
+        localidades.forEach(loc => {
+            if (!assignedIds.has(String(loc.id))) {
+                const li = document.createElement('li');
+                li.className = 'list-group-item list-group-item-action';
+                li.textContent = `${loc.localidad}, ${loc.provincia}`;
+                li.dataset.id = loc.id;
+                li.dataset.nombre = `${loc.localidad}, ${loc.provincia}`;
+                li.style.cursor = 'pointer';
+                li.addEventListener('click', addLocalidad);
+                availableList.appendChild(li);
+            }
+        });
+    });
+
+    // --- Añadir Localidad ---
+    function addLocalidad() {
+        const locId = this.dataset.id;
+        if (assignedIds.has(locId)) return;
+
+        assignedIds.add(locId);
+        this.remove(); // Quitar de disponibles
+
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.textContent = this.dataset.nombre;
+        li.dataset.id = locId;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-danger btn-sm';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.addEventListener('click', removeLocalidad);
+        
+        li.appendChild(removeBtn);
+        assignedList.appendChild(li);
+        
+        updateHiddenInput();
+    }
+    
+    // --- Quitar Localidad ---
+    function removeLocalidad() {
+        const item = this.closest('li');
+        const locId = item.dataset.id;
+        
+        assignedIds.delete(locId);
+        item.remove();
+        updateHiddenInput();
+    }
+
+    // --- Sincronizar con el input oculto ---
+    function updateHiddenInput() {
+        hiddenInput.value = JSON.stringify(Array.from(assignedIds));
+    }
+
+    // Permitir quitar localidades ya cargadas en la página de edición
+    assignedList.querySelectorAll('.btn-danger').forEach(btn => {
+        btn.addEventListener('click', removeLocalidad);
+    });
+});
+</script>
+{% endblock %}

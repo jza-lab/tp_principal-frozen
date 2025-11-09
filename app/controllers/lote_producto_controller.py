@@ -426,8 +426,8 @@ class LoteProductoController(BaseController):
 
                 data.pop('csrf_token', None)
 
-                # Asignar cantidad_actual si existe cantidad_inicial
-                if 'cantidad_inicial' in data:
+                # Asignar cantidad_actual si no se provee explícitamente
+                if 'cantidad_actual' not in data and 'cantidad_inicial' in data:
                     data['cantidad_actual'] = data['cantidad_inicial']
 
                 # Generar número de lote si no viene del formulario
@@ -475,22 +475,32 @@ class LoteProductoController(BaseController):
             return self.error_response(f"Error interno: {str(e)}", 500)
 
     def obtener_lote_por_id_para_vista(self, id_lote: int) -> tuple:
-        """Obtiene el detalle de un lote de producto para la vista."""
+        """Obtiene el detalle de un lote de producto para la vista, incluyendo el historial de calidad."""
+        from app.controllers.control_calidad_producto_controller import ControlCalidadProductoController
         try:
             result = self.model.get_lote_detail_for_view(id_lote)
-            if result.get('success'):
-                lote = result.get('data')
-
-                # Convertir strings de fecha a objetos datetime
-                if lote:
-                    if lote.get('created_at') and isinstance(lote['created_at'], str):
-                        lote['created_at'] = datetime.fromisoformat(lote['created_at'])
-                    if lote.get('fecha_vencimiento') and isinstance(lote['fecha_vencimiento'], str):
-                        lote['fecha_vencimiento'] = datetime.fromisoformat(lote['fecha_vencimiento'])
-
-                return self.success_response(data=lote)
-            else:
+            if not result.get('success') or not result.get('data'):
                 return self.error_response(result.get('error', 'Lote no encontrado.'), 404)
+
+            lote = result.get('data')
+
+            # Enriquecer con historial de calidad
+            cc_controller = ControlCalidadProductoController()
+            historial_res, _ = cc_controller.obtener_registros_por_lote_producto(id_lote)
+            lote['historial_calidad'] = historial_res.get('data', []) if historial_res.get('success') else []
+
+
+            # Convertir strings de fecha a objetos datetime
+            if lote.get('created_at') and isinstance(lote['created_at'], str):
+                lote['created_at'] = datetime.fromisoformat(lote['created_at'])
+            if lote.get('fecha_vencimiento') and isinstance(lote['fecha_vencimiento'], str):
+                lote['fecha_vencimiento'] = datetime.fromisoformat(lote['fecha_vencimiento'])
+            
+            for evento in lote.get('historial_calidad', []):
+                if evento.get('created_at') and isinstance(evento['created_at'], str):
+                    evento['created_at'] = datetime.fromisoformat(evento['created_at'])
+
+            return self.success_response(data=lote)
         except Exception as e:
             logger.error(f"Error obteniendo detalle de lote: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)

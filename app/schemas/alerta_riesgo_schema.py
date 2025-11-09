@@ -11,15 +11,16 @@ class AlertaRiesgoSchema(Schema):
     
     estado = fields.Str(
         validate=validate.OneOf(
-            ["Borrador", "Activa", "Cerrada"],
+            ["Pendiente", "En Investigacion", "Resuelta", "Cerrada"],
             error="Estado no válido."
         ),
-        load_default="Borrador",
-        dump_default="Borrador"
+        load_default="Pendiente",
+        dump_default="Pendiente"
     )
     
-    motivos = fields.List(fields.Str(), required=False, allow_none=True)
-    detalle_motivo = fields.Str(required=False, allow_none=True)
+    motivo = fields.Str(required=False, allow_none=True)
+    comentarios = fields.Str(required=False, allow_none=True)
+    url_evidencia = fields.Str(required=False, allow_none=True)
     resolucion_seleccionada = fields.Str(required=False, allow_none=True)
 
     fecha_creacion = fields.DateTime(dump_only=True)
