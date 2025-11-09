@@ -10,58 +10,54 @@ document.addEventListener('DOMContentLoaded', function () {
     const saveButton = document.querySelector('button[type="submit"]');
     
     // --- Estado ---
-    // La variable 'zonaId' debe ser inyectada desde el template.
-    // Buscamos un script tag que la contenga.
     const zonaIdElement = document.getElementById('zona-data');
     const zonaId = zonaIdElement ? JSON.parse(zonaIdElement.textContent).zonaId : null;
-
     let assignedIds = new Set();
-    let debounceTimer;
+    let allLocalidades = []; // Almacenará todas las localidades cargadas inicialmente
 
     // --- Inicialización ---
-    function initialize() {
-        if (!form) return; // No ejecutar si no estamos en la página del formulario
+    async function initialize() {
+        if (!form) return;
 
-        // Cargar los IDs de las localidades ya asignadas
         assignedList.querySelectorAll('li').forEach(item => {
             assignedIds.add(item.dataset.id);
         });
         updateHiddenInput();
-        validateForm(); // Validar el estado inicial del formulario
+        validateForm();
+
+        // Cargar todas las localidades al inicio
+        await fetchAllLocalities();
 
         // --- Event Listeners ---
         nombreInput.addEventListener('input', validateForm);
         searchInput.addEventListener('input', onSearchInput);
         
-        // Asignar evento para los botones de eliminar existentes
         assignedList.querySelectorAll('.remove-localidad-btn').forEach(btn => {
             btn.addEventListener('click', onRemoveLocalidad);
         });
     }
 
-    // --- Lógica de Búsqueda ---
-    function onSearchInput() {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            fetchAvailableLocalities(searchInput.value.trim());
-        }, 300); // Debounce de 300ms
+    // --- Lógica de Búsqueda y Filtrado ---
+    async function fetchAllLocalities() {
+        try {
+            // Hacemos una búsqueda inicial sin término para obtener todo
+            const response = await fetch(`/admin/zonas/api/buscar-localidades?term=`);
+            if (!response.ok) throw new Error('Error en la red');
+            allLocalidades = await response.json();
+            renderAvailableLocalities(allLocalidades); // Renderizar la lista completa
+        } catch (error) {
+            console.error('Error al cargar todas las localidades:', error);
+            availableList.innerHTML = '<li class="list-group-item text-danger">Error al cargar la lista de localidades.</li>';
+        }
     }
 
-    async function fetchAvailableLocalities(term) {
-        if (term.length < 3) {
-            availableList.innerHTML = '<li class="list-group-item text-muted">Escriba al menos 3 letras para buscar...</li>';
-            return;
-        }
-
-        try {
-            const response = await fetch(`/admin/zonas/api/buscar-localidades?term=${encodeURIComponent(term)}`);
-            if (!response.ok) throw new Error('Error en la red');
-            const localidades = await response.json();
-            renderAvailableLocalities(localidades);
-        } catch (error) {
-            console.error('Error al buscar localidades:', error);
-            availableList.innerHTML = '<li class="list-group-item text-danger">Error al cargar localidades.</li>';
-        }
+    function onSearchInput() {
+        const searchTerm = searchInput.value.trim().toLowerCase();
+        const filteredLocalidades = allLocalidades.filter(loc => {
+            const locName = `${loc.localidad}, ${loc.provincia}`.toLowerCase();
+            return locName.includes(searchTerm);
+        });
+        renderAvailableLocalities(filteredLocalidades);
     }
 
     function renderAvailableLocalities(localidades) {
@@ -83,7 +79,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 content += ` <small class="text-muted fst-italic">(en ${loc.zona_asignada})</small>`;
                 li.classList.add('disabled');
             } else if (isAssignedToCurrent) {
-                li.classList.add('active'); // Ya está en la lista de asignadas
+                li.classList.add('active');
             } else {
                 li.style.cursor = 'pointer';
                 li.addEventListener('click', () => onAddLocalidad(loc));
@@ -97,7 +93,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Lógica de Asignación/Desasignación ---
     function onAddLocalidad(loc) {
         if (assignedIds.has(String(loc.id))) return;
-
         assignedIds.add(String(loc.id));
         
         const li = document.createElement('li');
@@ -116,7 +111,7 @@ document.addEventListener('DOMContentLoaded', function () {
         
         updateHiddenInput();
         validateForm();
-        fetchAvailableLocalities(searchInput.value.trim()); // Refrescar la lista de disponibles
+        onSearchInput(); // Refrescar la lista para marcar el item como activo
     }
 
     function onRemoveLocalidad(event) {
@@ -128,25 +123,23 @@ document.addEventListener('DOMContentLoaded', function () {
         
         updateHiddenInput();
         validateForm();
-        fetchAvailableLocalities(searchInput.value.trim()); // Refrescar la lista de disponibles
+        onSearchInput(); // Refrescar la lista para desmarcar el item
     }
 
     // --- Utilidades y Validación ---
     function updateHiddenInput() {
-        // Filtramos para asegurarnos de que solo haya IDs válidos (no null/undefined)
         const validIds = Array.from(assignedIds).filter(id => id);
         hiddenInput.value = JSON.stringify(validIds);
     }
 
     function validateForm() {
         const isNombreValid = nombreInput.value.trim() !== '';
+        saveButton.disabled = !isNombreValid;
         
         if (isNombreValid) {
             nombreInput.classList.remove('is-invalid');
-            saveButton.disabled = false;
         } else {
             nombreInput.classList.add('is-invalid');
-            saveButton.disabled = true;
         }
     }
 

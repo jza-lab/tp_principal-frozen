@@ -177,13 +177,19 @@ class DireccionModel(BaseModel):
 
     def search_distinct_localidades(self, term: str):
         """
-        Busca localidades únicas que coincidan parcialmente con un término de búsqueda.
+        Busca localidades únicas. Si 'term' tiene valor, filtra por coincidencia parcial.
+        Si 'term' está vacío, devuelve todas las localidades únicas.
         La búsqueda no distingue entre mayúsculas y minúsculas.
         Devuelve una lista de diccionarios con id, localidad y provincia.
         """
         try:
-            # Seleccionamos los campos necesarios y filtramos
-            response = self.db.table(self.get_table_name()).select('id, localidad, provincia').ilike('localidad', f'%{term}%').limit(20).execute()
+            query = self.db.table(self.get_table_name()).select('id, localidad, provincia')
+            
+            # Aplicar filtro solo si el término de búsqueda no está vacío
+            if term:
+                query = query.ilike('localidad', f'%{term}%')
+
+            response = query.execute()
 
             if not response.data:
                 return {'success': True, 'data': []}
