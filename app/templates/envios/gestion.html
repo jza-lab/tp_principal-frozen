@@ -61,12 +61,11 @@
                                     <a href="{{ url_for('vehiculo.editar_vehiculo', vehiculo_id=vehiculo.id) }}" class="btn btn-secondary btn-sm">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <form action="{{ url_for('vehiculo.eliminar_vehiculo', vehiculo_id=vehiculo.id) }}" method="POST" class="d-inline">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('¿Estás seguro de que deseas eliminar este vehículo?');">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </form>
+                                    <!-- Botón que activa el modal -->
+                                    <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#confirmDeleteModal" 
+                                            data-url="{{ url_for('vehiculo.eliminar_vehiculo', vehiculo_id=vehiculo.id) }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
                                 </td>
                             </tr>
                             {% else %}
@@ -128,4 +127,44 @@
         </div>
     </div>
 </div>
+
+<!-- Modal de Confirmación de Eliminación -->
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="confirmDeleteModalLabel">Confirmar Eliminación</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        ¿Está seguro de que desea eliminar este vehículo? Esta acción no se puede deshacer.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form id="deleteForm" method="POST" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" class="btn btn-danger">Eliminar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var confirmDeleteModal = document.getElementById('confirmDeleteModal');
+    if (confirmDeleteModal) {
+        confirmDeleteModal.addEventListener('show.bs.modal', function (event) {
+            var button = event.relatedTarget; // Botón que activó el modal
+            var url = button.getAttribute('data-url'); // Extraer la URL del atributo data-url
+            var form = confirmDeleteModal.querySelector('#deleteForm'); // Encontrar el formulario dentro del modal
+            form.action = url; // Establecer la acción del formulario a la URL
+        });
+    }
+});
+</script>
 {% endblock %}

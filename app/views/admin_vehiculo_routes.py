@@ -24,7 +24,7 @@ def crear_vehiculo():
         response = vehiculo_controller.crear_vehiculo(data)
         if response['success']:
             flash('Vehículo creado exitosamente.', 'success')
-            return redirect(url_for('vehiculo.listar_vehiculos'))
+            return redirect(url_for('envio.gestion_envios'))
         else:
             flash(f"Error al crear el vehículo: {response['error']}", 'danger')
     return render_template('vehiculos/formulario.html', vehiculo=None, is_new=True)
@@ -37,14 +37,14 @@ def editar_vehiculo(vehiculo_id):
         response = vehiculo_controller.actualizar_vehiculo(vehiculo_id, data)
         if response['success']:
             flash('Vehículo actualizado exitosamente.', 'success')
-            return redirect(url_for('vehiculo.listar_vehiculos'))
+            return redirect(url_for('envio.gestion_envios'))
         else:
             flash(f"Error al actualizar el vehículo: {response['error']}", 'danger')
 
     response = vehiculo_controller.obtener_vehiculo_por_id(vehiculo_id)
     if not response['success']:
         flash(response['error'], 'danger')
-        return redirect(url_for('vehiculo.listar_vehiculos'))
+        return redirect(url_for('envio.gestion_envios'))
     
     vehiculo = response['data']
     return render_template('vehiculos/formulario.html', vehiculo=vehiculo, is_new=False)
@@ -57,7 +57,7 @@ def eliminar_vehiculo(vehiculo_id):
         flash('Vehículo eliminado exitosamente.', 'success')
     else:
         flash(f"Error al eliminar el vehículo: {response['error']}", 'danger')
-    return redirect(url_for('vehiculo.listar_vehiculos'))
+    return redirect(url_for('envio.gestion_envios'))
 
 # --- API Endpoints ---
 @vehiculo_bp.route('/api/buscar', methods=['GET'])

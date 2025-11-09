@@ -174,3 +174,22 @@ class DireccionModel(BaseModel):
             logger.error(f"Error verificando si la dirección {direccion_id} es compartida: {e}")
             # En caso de error, asumimos que es compartida para ser cautelosos
             return True
+
+    def search_distinct_localidades(self, term: str):
+        """
+        Busca localidades únicas que coincidan parcialmente con un término de búsqueda.
+        La búsqueda no distingue entre mayúsculas y minúsculas y devuelve una lista de strings.
+        """
+        try:
+            response = self.db.table(self.get_table_name()).select('localidad').ilike('localidad', f'%{term}%').limit(10).execute()
+            
+            if response.data:
+                # Usar un set para obtener localidades únicas y luego convertirlo a lista para mantener el orden de inserción (aunque aquí no importe)
+                localidades_unicas = sorted(list(set(item['localidad'] for item in response.data)))
+                return localidades_unicas
+            
+            return []
+
+        except Exception as e:
+            logger.error(f"Error buscando localidades: {e}")
+            return []
