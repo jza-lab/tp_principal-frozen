@@ -1,0 +1,57 @@
+{% extends "layouts/app_layout.html" %}
+
+{% block title %}Gestión de Zonas{% endblock %}
+
+{% block app_content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Gestión de Zonas</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item active">Zonas de Entrega</li>
+    </ol>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-map-marked-alt me-1"></i>
+            Listado de Zonas
+            <a href="{{ url_for('zonas.crear_zona') }}" class="btn btn-primary btn-sm float-end">
+                <i class="fas fa-plus me-1"></i> Nueva Zona
+            </a>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nombre de la Zona</th>
+                        <th>Localidades Asignadas</th>
+                        <th style="width: 15%;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for zona in zonas %}
+                    <tr>
+                        <td>{{ zona.nombre }}</td>
+                        <td>
+                            {% if zona.localidades %}
+                                {{ zona.localidades|length }}
+                            {% else %}
+                                0
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('zonas.editar_zona', zona_id=zona.id) }}" class="btn btn-secondary btn-sm">
+                                <i class="fas fa-edit me-1"></i> Editar
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" class="text-center">No hay zonas creadas todavía.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -74,7 +74,7 @@ def index():
     is_operario = 'OPERARIO' in user_roles
     is_supervisor_calidad = 'SUPERVISOR_CALIDAD' in user_roles
 
-    return render_template(
+    rendered_page = render_template(
         'planificacion/tablero.html',
         mps_data=datos.get('mps_data', {}),
         ordenes_por_dia=datos.get('ordenes_por_dia', {}),
@@ -85,6 +85,9 @@ def index():
         inicio_semana=datos.get('inicio_semana'),
         fin_semana=datos.get('fin_semana'),
         planning_issues=datos.get('planning_issues', []), # <-- ¡AÑADIR ESTA LÍNEA!
+        # --- ¡¡AÑADE ESTA LÍNEA!! ---
+        planning_notifications=datos.get('planning_notifications', []),
+        # --- FIN DE LA CORRECCIÓN ---
         semana_actual_str=week_str,
         semana_anterior_str=prev_week_str,
         semana_siguiente_str=next_week_str,
@@ -97,6 +100,28 @@ def index():
         is_operario=is_operario,
         is_supervisor_calidad=is_supervisor_calidad
     )
+    # Devuelve la página renderizada que preparaste antes
+    return rendered_page
+
+# ----------------------------------------------------
+# Esta es la nueva función que añade las cabeceras.
+# Pégala justo después de tu función `index()`
+# ----------------------------------------------------
+@planificacion_bp.after_request
+def add_no_cache_headers(response):
+    """
+    Asegura que las respuestas de este blueprint no sean cacheadas
+    por el navegador, forzando la recarga de datos frescos.
+    --- CORREGIDO v2 ---
+    Se aplica a TODAS las rutas del blueprint para ser más agresivo.
+    """
+    # --- INICIO DE LA SOLUCIÓN ---
+    # Quitar el 'if' y aplicar a todas las respuestas de /planificacion/
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate' # HTTP 1.1
+    response.headers['Pragma'] = 'no-cache' # HTTP 1.0
+    response.headers['Expires'] = '0' # Proxies
+    return response
+    # --- FIN DE LA SOLUCIÓN ---
 
 # --- Rutas de API (sin cambios) ---
 
@@ -169,7 +194,7 @@ def validar_fecha_requerida_api():
 def configuracion_lineas():
     """Muestra la página de configuración de líneas, bloqueos y parámetros generales."""
     from app.controllers.configuracion_controller import ConfiguracionController, TOLERANCIA_SOBREPRODUCCION_PORCENTAJE, DEFAULT_TOLERANCIA_SOBREPRODUCCION
-    
+
     plan_controller = PlanificacionController()
     config_controller = ConfiguracionController()
 
@@ -188,7 +213,7 @@ def configuracion_lineas():
         TOLERANCIA_SOBREPRODUCCION_PORCENTAJE,
         DEFAULT_TOLERANCIA_SOBREPRODUCCION
     )
-    
+
     # Añadir al contexto en un diccionario anidado para Jinja2
     contexto['configuracion'] = {
         'TOLERANCIA_SOBREPRODUCCION_PORCENTAJE': tolerancia
@@ -252,26 +277,42 @@ def guardar_configuracion_produccion():
     Guarda los parámetros generales de producción, como la tolerancia de sobreproducción.
     """
     from app.controllers.configuracion_controller import ConfiguracionController, TOLERANCIA_SOBREPRODUCCION_PORCENTAJE
-    
+
     controller = ConfiguracionController()
-    
+
     try:
         tolerancia_str = request.form.get(TOLERANCIA_SOBREPRODUCCION_PORCENTAJE, '0')
         tolerancia_val = int(float(tolerancia_str)) # Convertir a float primero para manejar decimales, luego a int
-        
+
         if not (0 <= tolerancia_val <= 100):
             flash('El valor de tolerancia debe ser un número entero entre 0 y 100.', 'warning')
         else:
             response, status_code = controller.actualizar_valor_configuracion(
-                TOLERANCIA_SOBREPRODUCCION_PORCENTAJE, 
+                TOLERANCIA_SOBREPRODUCCION_PORCENTAJE,
                 tolerancia_val
             )
             if status_code == 200:
                 flash(response.get('message', 'Parámetros guardados.'), 'success')
             else:
                 flash(response.get('error', 'Error al guardar los parámetros.'), 'error')
-                
+
     except (ValueError, TypeError):
         flash('Valor de tolerancia inválido. Debe ser un número.', 'warning')
-    
+
     return redirect(url_for('planificacion.configuracion_lineas'))
+
+# --- ¡¡¡INICIO DE LA NUEVA RUTA!!! ---
+@planificacion_bp.route('/api/resolver-issue/<int:issue_id>', methods=['POST'])
+##@jwt_required()
+##@permission_required(accion='consultar_plan_de_produccion') # Puedes usar un permiso más genérico
+def resolver_issue_api(issue_id):
+    """
+    API Endpoint para marcar un issue como 'RESUELTO'.
+    Llama al método 'resolver_issue_api' del controlador.
+    """
+    controller = PlanificacionController()
+    # El ID de usuario se obtiene por JWT pero no es necesario para esta acción
+    # según el controlador actual.
+    response, status_code = controller.resolver_issue_api(issue_id)
+    return jsonify(response), status_code
+# --- ¡¡¡FIN DE LA NUEVA RUTA!!! ---

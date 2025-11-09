@@ -14,6 +14,8 @@ from app.models.rol import RoleModel
 from app.controllers.cliente_controller import ClienteController
 from app.models.reclamo import ReclamoModel
 from app.models.chatbot_qa import ChatbotQA
+from app.views.admin_vehiculo_routes import vehiculo_bp
+from app.views.admin_despacho_routes import despacho_bp
 from types import SimpleNamespace
 
 jwt = JWTManager()
@@ -149,6 +151,12 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(admin_riesgo_bp)
     app.register_blueprint(riesgos_bp)
     app.register_blueprint(registros_bp)
+    from app.views.admin_zona_routes import zona_bp
+    from app.views.admin_envio_routes import envio_bp
+    app.register_blueprint(vehiculo_bp)
+    app.register_blueprint(despacho_bp)
+    app.register_blueprint(zona_bp)
+    app.register_blueprint(envio_bp)
 
 def _register_error_handlers(app: Flask):
     """Registra los manejadores de errores globales."""

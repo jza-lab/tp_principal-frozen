@@ -4,9 +4,37 @@ const ActividadPanel = (function() {
     let filterSector, filterRol, filterFechaDesde, filterFechaHasta, refreshButton;
 
     // --- FUNCIONES DE RENDERIZADO (privadas) ---
+    function formatArgentinianDate(dateString) {
+        if (!dateString) return 'N/A';
+        
+        try {
+            // Se asegura que el string de fecha sea tratado como UTC.
+            // Si no termina con 'Z', se lo agregamos.
+            const utcDateString = dateString.endsWith('Z') ? dateString : dateString + 'Z';
+            const date = new Date(utcDateString);
+
+            // Verificar si la fecha es válida
+            if (isNaN(date.getTime())) {
+                return 'Fecha Inválida';
+            }
+
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0'); // Meses son 0-indexados
+            const year = date.getFullYear();
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+
+            return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+        } catch (error) {
+            console.error('Error al formatear fecha:', dateString, error);
+            return 'Fecha Inválida';
+        }
+    }
+    
     function createActivityTableRow(actividad) {
-        const fechaIngreso = actividad.fecha_ingreso ? new Date(actividad.fecha_ingreso + 'Z').toLocaleString('es-AR') : 'N/A';
-        const fechaEgreso = actividad.fecha_egreso ? new Date(actividad.fecha_egreso + 'Z').toLocaleString('es-AR') : 'N/A';
+        const fechaIngreso = formatArgentinianDate(actividad.fecha_ingreso);
+        const fechaEgreso = formatArgentinianDate(actividad.fecha_egreso);
 
         return `
             <tr>

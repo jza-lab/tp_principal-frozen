@@ -9,7 +9,14 @@ from werkzeug.utils import secure_filename
 import logging
 from datetime import datetime
 import os
-from storage3.exceptions import StorageApiError
+
+try:
+    from storage3.exceptions import StorageApiError
+except Exception:
+    # Fallback if storage3 is not installed/available in the environment.
+    class StorageApiError(Exception):
+        """Fallback Storage API error used when the storage3 package is unavailable."""
+        pass
 
 logger = logging.getLogger(__name__)
 

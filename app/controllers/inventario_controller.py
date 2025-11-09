@@ -153,7 +153,7 @@ class InventarioController(BaseController):
                     update_data['estado'] = 'agotado'
                 
                 self.inventario_model.update(lote_id, update_data, 'id_lote')
-                self.reserva_insumo_model.delete(reserva['id'], 'id')
+                self.reserva_insumo_model.update(reserva['id'], {'estado': 'CONSUMIDO'}, 'id')
 
             # Actualizar el stock general de los insumos afectados
             for insumo_id in insumos_afectados:

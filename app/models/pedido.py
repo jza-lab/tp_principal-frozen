@@ -80,12 +80,17 @@ class PedidoModel(BaseModel):
 
         pedido_data['todas_ops_completadas'] = todas_completadas # Añadir bandera al pedido
 
-        # 4. Obtener datos de despacho si existen
-        despacho_result = self.db.table('despachos').select('*').eq('id_pedido', pedido_id).execute()
-        if despacho_result.data:
-            pedido_data['despacho'] = despacho_result.data[0]
-        else:
-            pedido_data['despacho'] = None
+        # 4. Obtener datos de despacho si existen (NUEVA LÓGICA)
+        pedido_data['despacho'] = None # Inicializar por defecto
+        # Primero, buscar en la tabla intermedia
+        despacho_item_result = self.db.table('despacho_items').select('despacho_id').eq('pedido_id', pedido_id).limit(1).execute()
+
+        if despacho_item_result.data:
+            despacho_id = despacho_item_result.data[0]['despacho_id']
+            # Ahora, con el ID del despacho, obtener sus detalles
+            despacho_result = self.db.table('despachos').select('*').eq('id', despacho_id).single().execute()
+            if despacho_result.data:
+                pedido_data['despacho'] = despacho_result.data
 
         return {'success': True, 'data': pedido_data}
 
@@ -156,11 +161,13 @@ class PedidoModel(BaseModel):
             return {'success': False, 'error': str(e)}
 
     def get_all_with_items(self, filtros: Optional[Dict] = None) -> Dict:
-        """Obtiene todos los pedidos con sus items, especificando la relación."""
+        """Obtiene todos los pedidos con sus items, cliente y dirección."""
         try:
             query = self.db.table(self.get_table_name()).select(
-                # --- LÍNEA CORREGIDA ---
-                '*, items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre))'
+                '*, '
+                'cliente:clientes(nombre), '
+                'direccion:id_direccion_entrega(*), '
+                'pedido_items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre))'
             )
             if filtros:
                 for key, value in filtros.items():
@@ -367,16 +374,6 @@ class PedidoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error al actualizar estado agregado para el pedido {pedido_id}: {str(e)}")
             return {'success': False, 'error': str(e)}
-        
-    def get_reservas_for_item(self, item_id: int) -> List[Dict]:
-        """Obtiene las reservas de lotes de producto para un item de pedido específico."""
-        try:
-            reservas_res = self.db.table('reservas_productos').select('*').eq('pedido_item_id', item_id).execute()
-            return reservas_res.data or []
-        except Exception as e:
-            logger.error(f"Error obteniendo reservas para el item {item_id}: {e}")
-            return []
-
 
     def find_all_items(self, filters: Optional[Dict] = None) -> Dict:
         """
@@ -559,28 +556,6 @@ class PedidoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo top productos: {str(e)}")
             return {'success': False, 'error': str(e)}
-                
-    def get_items_no_afectados(self, pedido_id: int, lotes_afectados_ids: List[str]) -> List[Dict]:
-        """
-        Obtiene los items de un pedido que no están vinculados a una lista de lotes afectados.
-        """
-        try:
-            items_pedido = self.get_items(pedido_id)
-            items_no_afectados = []
-
-            for item in items_pedido:
-                reservas_item = self.get_reservas_for_item(item['id'])
-                if any(r['lote_producto_id'] in lotes_afectados_ids for r in reservas_item):
-                    continue  # El item está afectado
-                items_no_afectados.append({
-                    "producto_id": item['producto_id'],
-                    "cantidad": item['cantidad']
-                })
-            return items_no_afectados
-        except Exception as e:
-            logger.error(f"Error obteniendo items no afectados para el pedido {pedido_id}: {e}")
-            return []
-
 
 class PedidoItemModel(BaseModel):
     """Modelo para la tabla pedido_items"""
