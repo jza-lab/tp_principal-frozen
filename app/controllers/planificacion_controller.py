@@ -36,6 +36,135 @@ class PlanificacionController(BaseController):
         self.issue_planificacion_model = IssuePlanificacionModel()
         self.feriados_ar_cache = None # <-- ¡AÑADIR ESTA LÍNEA!
 
+
+    def _calcular_sugerencias_para_op_optimizado(self, op: Dict, mapas_precargados: Dict) -> Dict:
+        """
+        Versión optimizada que NO consulta la DB.
+        Calcula T_Prod, T_Proc, Línea Sug, y JIT para una ÚNICA OP
+        usando los mapas de datos precargados.
+        """
+        # Valores por defecto
+        sugerencias = {
+            'sugerencia_t_prod_dias': 0,
+            'sugerencia_t_proc_dias': 0,
+            'sugerencia_linea': None,
+            'sugerencia_stock_ok': False,
+            'sugerencia_fecha_inicio_jit': date.today().isoformat(),
+            'linea_compatible': None
+        }
+        op_id_log = op.get('id', 'N/A')
+
+        try:
+            receta_id = op.get('receta_id')
+            cantidad = Decimal(op.get('cantidad_planificada', 0))
+
+            if not receta_id or cantidad <= 0:
+                return sugerencias # Devuelve default si no hay datos
+
+            # Mapas de datos
+            operaciones_map = mapas_precargados.get('operaciones', {})
+            recetas_map = mapas_precargados.get('recetas', {})
+            centros_map = mapas_precargados.get('centros_trabajo', {})
+            ingredientes_map = mapas_precargados.get('ingredientes', {})
+            stock_map = mapas_precargados.get('stock', {})
+            insumos_map = mapas_precargados.get('insumos', {})
+
+            # 1. Calcular Carga Total (¡Usando helper optimizado!)
+            # (Asumimos que _calcular_carga_op_precargada ya existe del Paso 2)
+            operaciones_receta = operaciones_map.get(receta_id, [])
+            carga_total_minutos = self._calcular_carga_op_precargada(op, operaciones_receta)
+
+            # 2. Calcular Línea Sugerida y Capacidad Neta (¡Desde mapas!)
+            linea_sug = None
+            capacidad_neta_linea_sugerida = Decimal(480.0) # Fallback
+            receta = recetas_map.get(receta_id)
+
+            if receta:
+                linea_compatible_str = receta.get('linea_compatible', '2')
+                sugerencias['linea_compatible'] = linea_compatible_str
+                linea_compatible_list = linea_compatible_str.split(',')
+
+                tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
+                tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
+                UMBRAL_CANTIDAD_LINEA_1 = 50
+                puede_l1 = '1' in linea_compatible_list and tiempo_l1 > 0
+                puede_l2 = '2' in linea_compatible_list and tiempo_l2 > 0
+
+                if puede_l1 and puede_l2:
+                    linea_sug = 1 if cantidad >= UMBRAL_CANTIDAD_LINEA_1 else 2
+                elif puede_l1: linea_sug = 1
+                elif puede_l2: linea_sug = 2
+
+                sugerencias['sugerencia_linea'] = linea_sug
+
+                # 3. Obtener Capacidad Real (¡Desde mapa!)
+                if linea_sug:
+                    ct_data = centros_map.get(linea_sug) # <-- ¡CAMBIO!
+                    if ct_data:
+                        cap_std = Decimal(ct_data.get('tiempo_disponible_std_dia', 480))
+                        eficiencia = Decimal(ct_data.get('eficiencia', 1.0))
+                        utilizacion = Decimal(ct_data.get('utilizacion', 1.0))
+                        cap_neta_calculada = cap_std * eficiencia * utilizacion
+                        if cap_neta_calculada > 0:
+                            capacidad_neta_linea_sugerida = cap_neta_calculada
+
+            # 4. Calcular T_Prod (Días)
+            if carga_total_minutos > 0:
+                sugerencias['sugerencia_t_prod_dias'] = math.ceil(
+                    carga_total_minutos / capacidad_neta_linea_sugerida
+                )
+
+            # 5. Verificar Stock (T_Proc) (¡Desde mapas!)
+            ingredientes_receta = ingredientes_map.get(receta_id, [])
+            stock_ok_agg = True
+            tiempos_entrega_agg = []
+
+            if ingredientes_receta:
+                for ingrediente in ingredientes_receta:
+                    insumo_id = ingrediente['id_insumo']
+                    cantidad_ingrediente = Decimal(ingrediente.get('cantidad', 0))
+                    cant_necesaria_total = cantidad_ingrediente * cantidad
+
+                    stock_disp = stock_map.get(insumo_id, Decimal(0)) # <-- ¡CAMBIO!
+
+                    if stock_disp < cant_necesaria_total:
+                        stock_ok_agg = False
+                        # Obtener tiempo de entrega (¡Desde mapa!)
+                        insumo_data = insumos_map.get(insumo_id) # <-- ¡CAMBIO!
+                        if insumo_data:
+                            tiempos_entrega_agg.append(insumo_data.get('tiempo_entrega_dias', 0))
+            else:
+                stock_ok_agg = False
+
+            sugerencias['sugerencia_stock_ok'] = stock_ok_agg
+            if not stock_ok_agg:
+                sugerencias['sugerencia_t_proc_dias'] = max(tiempos_entrega_agg) if tiempos_entrega_agg else 0
+
+            # 6. Calcular JIT (igual que antes, solo usa variables locales)
+            today = date.today()
+            t_prod_dias = sugerencias['sugerencia_t_prod_dias']
+            t_proc_dias = sugerencias['sugerencia_t_proc_dias']
+
+            op_fecha_meta_str = op.get('fecha_meta')
+            if not op_fecha_meta_str:
+                op_fecha_meta_str = op.get('fecha_inicio_planificada')
+                if not op_fecha_meta_str:
+                    op_fecha_meta_str = (today + timedelta(days=7)).isoformat()
+
+            fecha_meta_solo_str = op_fecha_meta_str.split('T')[0].split(' ')[0]
+            fecha_meta = date.fromisoformat(fecha_meta_solo_str)
+            fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
+            fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
+            fecha_inicio_base = max(fecha_inicio_ideal, fecha_disponibilidad_material)
+            fecha_inicio_sugerida_jit = max(fecha_inicio_base, today)
+            sugerencias['sugerencia_fecha_inicio_jit'] = fecha_inicio_sugerida_jit.isoformat()
+
+        except Exception as e_jit:
+            logger.error(f"[JIT MODAL {op_id_log}] EXCEPCIÓN INESPERADA (Optimizado): {e_jit}", exc_info=True)
+            sugerencias['sugerencia_fecha_inicio_jit'] = date.today().isoformat()
+
+        return sugerencias
+
     # ==================================================================
     # === 1. AÑADE ESTA NUEVA FUNCIÓN COMPLETA ===
     # Esta es la lógica que vamos a mover.
@@ -87,35 +216,12 @@ class PlanificacionController(BaseController):
     def obtener_datos_para_vista_planificacion(self, week_str: str, horizonte_dias: int, current_user_id: int, current_user_rol: str) -> tuple:
         """
         Método orquestador que obtiene y procesa todos los datos necesarios para la
-        vista de planificación de forma optimizada.
+        vista de planificación de forma optimizada (con Precarga Total).
         """
         try:
-##            # --- ¡INICIO: PLANIFICACIÓN ADAPTATIVA (7 DÍAS)! ---
-##            nuevos_issues_generados = [] # <-- ¡NUEVO!
-##            try:
-##                logger.info("[PlanAdaptativa] Ejecutando verificación de capacidad para los PRÓXIMOS 7 DÍAS...")
-##                fecha_inicio_chequeo = date.today()
-##
-##                for i in range(7): # Chequear Hoy + 6 días
-##                    fecha_a_chequear = fecha_inicio_chequeo + timedelta(days=i)
-##
-##                    if not self._es_dia_laborable(fecha_a_chequear):
-##                        logger.info(f"[PlanAdaptativa] Omitiendo chequeo para {fecha_a_chequear.isoformat()} (No laborable).")
-##                        continue
-##
-##                    logger.info(f"[PlanAdaptativa] Verificando día laborable: {fecha_a_chequear.isoformat()}...")
-##                    # --- ¡MODIFICADO! ---
-##                    nuevos_issues_del_dia = self._verificar_y_replanificar_ops_por_fecha(
-##                        fecha=fecha_a_chequear,
-##                        usuario_id=current_user_id
-##                    )
-##                    if nuevos_issues_del_dia:
-##                        nuevos_issues_generados.extend(nuevos_issues_del_dia)
-##                    # --- FIN MODIFICACIÓN ---
-##            except Exception as e_adapt:
-##                logger.error(f"[PlanAdaptativa] Error en la verificación de 7 días: {e_adapt}", exc_info=True)
-##            # --- FIN: PLANIFICACIÓN ADAPTATIVA ---
+            # --- Tarea de fondo (movida al scheduler) ---
             nuevos_issues_generados = []
+
             # 1. Determinar rango de la semana (Sin cambios)
             if week_str:
                 try:
@@ -145,104 +251,144 @@ class PlanificacionController(BaseController):
                  return self.error_response("Error al obtener las órdenes planificadas.", 500)
             ops_planificadas = response_ops_planificadas.get('data', [])
 
-            # 3. Procesamiento en Memoria (Sin cambios)
-            response_mps, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias)
-            mps_data = response_mps.get('data', {}) if response_mps.get('success') else {}
-            response_semanal, _ = self.obtener_planificacion_semanal(week_str, ordenes_pre_cargadas=ops_planificadas)
+            # 3. Procesamiento en Memoria (¡MODIFICADO!)
+            # Primera llamada a MPS: solo para obtener la lista de OPs crudas
+            response_mps, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias, mapas_precargados_externos=None)
+            mps_data_inicial = response_mps.get('data', {}) if response_mps.get('success') else {}
+
+            # --- ¡INICIO DE LA PRECARGA TOTAL! ---
+            logger.info("[Precarga] Iniciando precarga total de datos...")
+
+            # A. Recolectar todos los IDs necesarios
+            # Combinar OPs del calendario Y OPs pendientes
+            all_ops = ops_planificadas + mps_data_inicial.get('mps_agrupado_ops_raw', [])
+            receta_ids_globales = list(set(op.get('receta_id') for op in all_ops if op.get('receta_id')))
+
+            # B. Consultar Modelos UNA SOLA VEZ
+            operaciones_resp = self.operacion_receta_model.find_by_receta_ids(receta_ids_globales)
+            recetas_resp = self.receta_model.find_by_ids(receta_ids_globales)
+            ingredientes_resp = self.receta_model.get_ingredientes_by_receta_ids(receta_ids_globales)
+            centros_resp = self.centro_trabajo_model.find_all() # Son solo 2-3, es barato
+            stock_resp = self.inventario_controller.get_all_stock_disponible_map()
+
+            # C. Construir los Mapas de Datos
+            mapas_precargados = {
+                'operaciones': defaultdict(list),
+                'recetas': {r['id']: r for r in recetas_resp.get('data', [])},
+                'centros_trabajo': {c['id']: c for c in centros_resp.get('data', [])},
+                'ingredientes': defaultdict(list),
+                'stock': stock_resp.get('data', {}),
+                'insumos': {}
+            }
+
+            # Poblar mapa de operaciones
+            for op_step in operaciones_resp.get('data', []):
+                mapas_precargados['operaciones'][op_step['receta_id']].append(op_step)
+
+            # Poblar mapas de ingredientes e insumos
+            insumos_map_temp = {}
+            if ingredientes_resp.get('success'):
+                for ing in ingredientes_resp.get('data', []):
+                    mapas_precargados['ingredientes'][ing['receta_id']].append(ing)
+                    if ing.get('insumos') and 'id_insumo' in ing['insumos']:
+                        insumo_data = ing['insumos']
+                        insumos_map_temp[insumo_data['id_insumo']] = insumo_data
+
+            mapas_precargados['insumos'] = insumos_map_temp
+            logger.info(f"[Precarga] Finalizada. {len(mapas_precargados['recetas'])} recetas, {len(mapas_precargados['ingredientes'])} grupos de ingr., {len(mapas_precargados['stock'])} items de stock.")
+            # --- ¡FIN DE LA PRECARGA TOTAL! ---
+
+            # 3.b. Segunda llamada a MPS (¡AHORA CON MAPAS!)
+            # Esta vez calculará las sugerencias JIT usando los mapas.
+            response_mps_optimizado, _ = self.obtener_ops_pendientes_planificacion(
+                dias_horizonte=horizonte_dias,
+                mapas_precargados_externos=mapas_precargados
+            )
+            mps_data = response_mps_optimizado.get('data', {}) if response_mps_optimizado.get('success') else {}
+
+            # 4. Obtener Planificación Semanal (¡AHORA CON MAPAS!)
+            response_semanal, _ = self.obtener_planificacion_semanal(
+                week_str,
+                ordenes_pre_cargadas=ops_planificadas,
+                mapas_precargados_externos=mapas_precargados # <--- ¡NUEVO!
+            )
             data_semanal = response_semanal.get('data', {}) if response_semanal.get('success') else {}
             ordenes_por_dia = data_semanal.get('ops_visibles_por_dia', {})
 
-            # --- Enriquecimiento del Calendario (Sin cambios) ---
+            # --- Filtro para CRP (de la corrección anterior) ---
+            ops_de_la_semana_set = set()
+            for ops_del_dia in ordenes_por_dia.values():
+                for op in ops_del_dia:
+                    ops_de_la_semana_set.add(op['id'])
+            ops_filtradas_para_semana = [
+                op for op in ops_planificadas if op.get('id') in ops_de_la_semana_set
+            ]
+            # --- Fin Filtro CRP ---
+
+            # --- Enriquecimiento del Calendario (¡ACTUALIZADO!) ---
             enriched_ordenes_por_dia = {}
             if ordenes_por_dia:
                 for dia_iso, ops_del_dia in ordenes_por_dia.items():
                     ops_enriquecidas_dia = []
                     for op in ops_del_dia:
-                        sugerencias = self._calcular_sugerencias_para_op(op)
+                        # Usar la función optimizada
+                        sugerencias = self._calcular_sugerencias_para_op_optimizado(op, mapas_precargados) # <--- ¡OPTIMIZADO!
                         op['sugerencias_jit'] = sugerencias
                         ops_enriquecidas_dia.append(op)
                     enriched_ordenes_por_dia[dia_iso] = ops_enriquecidas_dia
 
-            # --- CRP Data (Sin cambios) ---
-            carga_calculada = self.calcular_carga_capacidad(ops_planificadas)
+            # --- CRP Data (¡ACTUALIZADO!) ---
+            carga_calculada = self.calcular_carga_capacidad(ops_filtradas_para_semana, mapas_precargados_externos=mapas_precargados) # <--- ¡OPTIMIZADO!
             capacidad_disponible = self.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
 
-            # --- ¡BLOQUE DE ISSUES CORREGIDO! (Lógica de combinación de la última vez) ---
+            # --- ¡BLOQUE DE ISSUES (¡ACTUALIZADO!) ---
+            # ... (Lógica de combinación de issues sin cambios) ...
             response_issues = self.issue_planificacion_model.get_all_with_op_details()
             all_issues_raw = response_issues.get('data', []) if response_issues.get('success') else []
             planning_issues_raw_db = [issue for issue in all_issues_raw if issue.get('estado', 'PENDIENTE') == 'PENDIENTE']
-
             op_ids_en_memoria = {issue['orden_produccion_id'] for issue in nuevos_issues_generados}
             planning_issues_a_procesar = list(nuevos_issues_generados)
-
             for db_issue in planning_issues_raw_db:
                 if db_issue.get('orden_produccion_id') not in op_ids_en_memoria:
                     planning_issues_a_procesar.append(db_issue)
 
-            # --- LOG DE VERIFICACIÓN ---
-            logger.info(f"[Vista Planif.] Issues a procesar (total: {len(planning_issues_a_procesar)}): {[i.get('id') for i in planning_issues_a_procesar]}")
-            # --- FIN LOG ---
-
-            # --- FIN BLOQUE COMBINACIÓN ---
-
-            # --- ENRIQUECER Y SEPARAR ISSUES DE NOTIFICACIONES ---
-            # --- ¡¡¡INICIO DE LA NUEVA CORRECCIÓN!!! ---
             enriched_planning_issues = []
             enriched_planning_notifications = []
 
             if planning_issues_a_procesar:
                 for issue in planning_issues_a_procesar:
+                    # ... (lógica de 'if not op_id_para_jit') ...
+                    if not issue.get('orden_produccion_id'): continue
+
+                    # ... (lógica de 'if 'receta_id' in issue' para obtener op_data_real) ...
                     op_id_para_jit = issue.get('orden_produccion_id')
                     op_data_real = None
-                    sugerencias = {}
-
-                    logger.info(f"[Vista Planif.] Procesando issue {issue.get('id')}, tipo: {issue.get('tipo_error')}")
-
-                    if not op_id_para_jit:
-                        logger.warning(f"Issue {issue.get('id')} omitido: no tiene 'orden_produccion_id'.")
-                        continue # Saltar issue corrupto
-
-                    # --- PASO 1: OBTENER LOS DATOS DE LA OP ---
-                    # (Intenta usar el objeto en memoria, si no, búscalo en la DB)
-                    if 'receta_id' in issue: # Clave para saber si es un issue enriquecido en-memoria
-                        logger.info(f"[Vista Planif.] Issue {issue.get('id')} es de memoria (enriquecido).")
+                    if 'receta_id' in issue:
                         op_data_real = issue
                     else:
-                        # Es un issue de la DB, buscar su OP
-                        logger.info(f"[Vista Planif.] Issue {issue.get('id')} es de DB, buscando OP: {op_id_para_jit}...")
                         op_result = self.orden_produccion_controller.obtener_orden_por_id(op_id_para_jit)
-
                         if op_result.get('success'):
                             op_data_real = op_result.get('data')
-
-                            # Añadir datos de la OP al issue (para los que vienen de la DB)
                             issue['op_codigo'] = op_data_real.get('codigo')
                             issue['op_producto_nombre'] = op_data_real.get('producto_nombre')
-                            # --- INICIO DE LA CORRECCIÓN ---
-                            issue['cantidad_planificada'] = op_data_real.get('cantidad_planificada') # NO 'op_cantidad'
-                            # --- FIN DE LA CORRECCIÓN ---
+                            issue['cantidad_planificada'] = op_data_real.get('cantidad_planificada')
                             issue['op_fecha_meta'] = op_data_real.get('fecha_meta')
                         else:
-                            logger.warning(f"[Vista Planif.] Issue {issue.get('id')} (OP: {op_id_para_jit}): NO SE PUDO CARGAR LA OP. Razón: {op_result.get('error')}")
-                            # op_data_real se mantiene como None
+                            logger.warning(f"[Vista Planif.] Issue {issue.get('id')} (OP: {op_id_para_jit}): NO SE PUDO CARGAR LA OP.")
 
-                    # --- PASO 2: CALCULAR JIT (SI TENEMOS DATOS) ---
+                    # --- ¡CAMBIO! ---
                     if op_data_real:
-                        # Solo podemos calcular sugerencias si encontramos la OP
-                        sugerencias = self._calcular_sugerencias_para_op(op_data_real)
-
+                        sugerencias = self._calcular_sugerencias_para_op_optimizado(op_data_real, mapas_precargados) # <--- ¡OPTIMIZADO!
+                    else:
+                        sugerencias = {} # Fallback si la OP no se pudo cargar
                     issue['sugerencias_jit'] = sugerencias
 
-                    # --- PASO 3: SEPARAR (LÓGICA MOVIDA) ---
-                    # Esta es la lógica clave. Ahora se ejecuta para CADA issue,
-                    # incluso si la OP asociada no se encontró.
+                    # ... (Lógica de separación de issues/notificaciones) ...
                     if issue.get('tipo_error') == 'REPLAN_AUTO_AUSENCIA':
-                        logger.info(f"[Vista Planif.] Issue {issue.get('id')} CLASIFICADO como NOTIFICACIÓN.")
                         enriched_planning_notifications.append(issue)
                     else:
-                        logger.info(f"[Vista Planif.] Issue {issue.get('id')} CLASIFICADO como ISSUE.")
                         enriched_planning_issues.append(issue)
-            # --- ¡¡¡FIN DE LA NUEVA CORRECCIÓN!!! ---
+            # --- FIN BLOQUE ISSUES ---
 
             # 4. Obtener Datos Auxiliares (Usuarios) (Sin cambios)
             from app.controllers.usuario_controller import UsuarioController
@@ -265,10 +411,6 @@ class PlanificacionController(BaseController):
                 'planning_issues': enriched_planning_issues,
                 'planning_notifications': enriched_planning_notifications
             }
-
-            # --- LOG DE VERIFICACIÓN FINAL ---
-            logger.info(f"[Vista Planif.] Finalizado. Total Notificaciones: {len(enriched_planning_notifications)}, Total Issues: {len(enriched_planning_issues)}")
-            # --- FIN LOG ---
 
             return self.success_response(data=datos_vista)
 
@@ -841,12 +983,11 @@ class PlanificacionController(BaseController):
             logger.error(f"Error crítico en mover_orden para OP {op_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
-    def obtener_ops_pendientes_planificacion(self, dias_horizonte: int = 7) -> tuple:
+    def obtener_ops_pendientes_planificacion(self, dias_horizonte: int = 7, mapas_precargados_externos: Optional[Dict] = None) -> tuple:
         """
         Obtiene OPs PENDIENTES, agrupa, calcula sugerencias Y AÑADE unidad_medida y linea_compatible.
-        --- CORREGIDO (v_capacidad_real) ---
-        La sugerencia de días ahora usa la capacidad neta de la línea (considerando
-        eficiencia y utilización) en lugar de un valor estático de 480.
+        --- MODIFICADO ---
+        Si 'mapas_precargados_externos' se provee, usa la versión optimizada.
         """
         try:
             # 1. Calcular rango y filtrar OPs (Sin cambios)
@@ -909,133 +1050,41 @@ class PlanificacionController(BaseController):
                     else:
                         item['fecha_meta_mas_proxima'] = op_fecha_meta_str
 
+            # 3. Calcular sugerencia agregada (¡MODIFICADO!)
 
-            # 3. Calcular sugerencia agregada (T_Prod, Línea, T_Proc, Stock)
+            # Decidir qué función de cálculo usar
+            usar_calculo_optimizado = mapas_precargados_externos is not None
+
+            if not usar_calculo_optimizado:
+                # Si estamos en la primera pasada (sin mapas), preparamos la devolución de OPs crudas
+                # para que la función principal pueda construir los mapas.
+                resultado_vacio_con_ops_crudas = {
+                    'mps_agrupado': [], # Devolvemos vacío aquí...
+                    'mps_agrupado_ops_raw': ordenes_en_horizonte, # ...pero con las OPs aquí.
+                    'inicio_horizonte': hoy.isoformat(),
+                    'fin_horizonte': fecha_fin_horizonte.isoformat(),
+                    'dias_horizonte': dias_horizonte_int
+                }
+                # (Continuamos para llenar el 'mps_agrupado' con la función LENTA)
+
             for grupo_key, data in mps_agrupado.items():
                 cantidad_total_agrupada = data['cantidad_total']
                 receta_id_agrupada = data['receta_id']
 
-                # Inicializar valores de sugerencia
-                data['sugerencia_t_prod_dias'] = 0
-                data['sugerencia_linea'] = None
-                data['sugerencia_t_proc_dias'] = 0
-                data['sugerencia_stock_ok'] = False
-                data['sugerencia_insumos_faltantes'] = []
-                data['linea_compatible'] = None
-
-                if not receta_id_agrupada: continue
-
-                # a) Calcular Carga Total (Minutos)
                 op_simulada = {
                     'receta_id': receta_id_agrupada,
-                    'cantidad_planificada': cantidad_total_agrupada
+                    'cantidad_planificada': cantidad_total_agrupada,
+                    'fecha_meta': data.get('fecha_meta_mas_proxima')
                 }
-                carga_total_minutos_agg = Decimal(self._calcular_carga_op(op_simulada))
 
-                # --- INICIO DE LA LÓGICA CORREGIDA ---
-
-                # b) Calcular Línea Sugerida PRIMERO
-                receta_res = self.receta_model.find_by_id(receta_id_agrupada, 'id')
-                linea_sug_agg = None
-                # Usamos 480 como fallback MUY defensivo
-                capacidad_neta_linea_sugerida = Decimal(480.0)
-
-                if receta_res.get('success'):
-                    receta = receta_res['data']
-                    linea_compatible_str = receta.get('linea_compatible', '2')
-                    data['linea_compatible'] = linea_compatible_str
-                    linea_compatible_list = linea_compatible_str.split(',')
-                    tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
-                    tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
-                    UMBRAL_CANTIDAD_LINEA_1 = 50
-                    puede_l1 = '1' in linea_compatible_list and tiempo_l1 > 0
-                    puede_l2 = '2' in linea_compatible_list and tiempo_l2 > 0
-
-                    if puede_l1 and puede_l2:
-                        linea_sug_agg = 1 if cantidad_total_agrupada >= UMBRAL_CANTIDAD_LINEA_1 else 2
-                    elif puede_l1: linea_sug_agg = 1
-                    elif puede_l2: linea_sug_agg = 2
-
-                    data['sugerencia_linea'] = linea_sug_agg if linea_sug_agg > 0 else None
-
-                    # --- ¡NUEVO! OBTENER CAPACIDAD REAL DE LA LÍNEA SUGERIDA ---
-                    if linea_sug_agg:
-                        try:
-                            # Usamos el modelo de centro de trabajo (que ya está en self)
-                            ct_resp = self.centro_trabajo_model.find_by_id(linea_sug_agg, 'id')
-                            if ct_resp.get('success'):
-                                ct_data = ct_resp.get('data', {})
-                                cap_std = Decimal(ct_data.get('tiempo_disponible_std_dia', 480))
-                                eficiencia = Decimal(ct_data.get('eficiencia', 1.0))
-                                utilizacion = Decimal(ct_data.get('utilizacion', 1.0))
-
-                                # Esta es la capacidad base NETA (sin bloqueos)
-                                cap_neta_calculada = cap_std * eficiencia * utilizacion
-
-                                if cap_neta_calculada > 0:
-                                    capacidad_neta_linea_sugerida = cap_neta_calculada
-                                    logger.info(f"Usando capacidad NETA {capacidad_neta_linea_sugerida} para sugerencia (Línea {linea_sug_agg})")
-                                else:
-                                    logger.warning(f"Capacidad neta para Línea {linea_sug_agg} es 0. Usando 480.")
-                            else:
-                                logger.warning(f"No se encontró CT {linea_sug_agg} para get cap. Usando 480.")
-                        except Exception as e_cap:
-                            logger.error(f"Error obteniendo cap para {linea_sug_agg}: {e_cap}. Usando 480.")
-
-                # c) Calcular Tiempo de Producción (AHORA USANDO LA CAPACIDAD CORRECTA)
-                if carga_total_minutos_agg > 0:
-                    # (Línea 687 CORREGIDA)
-                    data['sugerencia_t_prod_dias'] = math.ceil(
-                        carga_total_minutos_agg / capacidad_neta_linea_sugerida
-                    )
+                # --- ¡CAMBIO DE LÓGICA! ---
+                if usar_calculo_optimizado:
+                    sugerencias = self._calcular_sugerencias_para_op_optimizado(op_simulada, mapas_precargados_externos)
                 else:
-                    data['sugerencia_t_prod_dias'] = 0
+                    # Usar la función antigua (lenta) si no hay mapas
+                    sugerencias = self._calcular_sugerencias_para_op(op_simulada)
 
-                # --- FIN DE LA LÓGICA CORREGIDA ---
-
-                # d) Verificar Stock Agregado (antes era b)
-                ingredientes_result = self.receta_model.get_ingredientes(receta_id_agrupada)
-                insumos_faltantes_agg = []
-                stock_ok_agg = True
-                if ingredientes_result.get('success'):
-                    for ingrediente in ingredientes_result.get('data', []):
-                        insumo_id = ingrediente['id_insumo']
-                        cant_necesaria_total = ingrediente['cantidad'] * cantidad_total_agrupada
-                        stock_disp_res = self.inventario_controller.obtener_stock_disponible_insumo(insumo_id)
-                        stock_disp = stock_disp_res.get('data', {}).get('stock_disponible', 0) if stock_disp_res.get('success') else 0
-                        if stock_disp < cant_necesaria_total:
-                            stock_ok_agg = False
-                            faltante = cant_necesaria_total - stock_disp
-                            insumos_faltantes_agg.append({ 'insumo_id': insumo_id, 'nombre': ingrediente.get('nombre_insumo', 'N/A'), 'cantidad_faltante': faltante })
-                else: stock_ok_agg = False
-                data['sugerencia_stock_ok'] = stock_ok_agg
-                data['sugerencia_insumos_faltantes'] = insumos_faltantes_agg
-                if not stock_ok_agg:
-                    tiempos_entrega_agg = []
-                    for insumo_f in insumos_faltantes_agg:
-                        insumo_data_res = self.insumo_model.find_by_id(insumo_f['insumo_id'], 'id_insumo')
-                        if insumo_data_res.get('success'): tiempos_entrega_agg.append(insumo_data_res['data'].get('tiempo_entrega_dias', 0))
-                    data['sugerencia_t_proc_dias'] = max(tiempos_entrega_agg) if tiempos_entrega_agg else 0
-
-                # e) Calcular JIT (antes era c)
-                try:
-                    today = date.today()
-                    t_prod_dias = data.get('sugerencia_t_prod_dias', 0)
-                    t_proc_dias = data.get('sugerencia_t_proc_dias', 0)
-                    fecha_meta_str_jit = data.get('fecha_meta_mas_proxima')
-                    if not fecha_meta_str_jit:
-                        logger.warning(f"Grupo {grupo_key} sin fecha meta, usando 'hoy' + 7 días para JIT.")
-                        fecha_meta_str_jit = (today + timedelta(days=7)).isoformat()
-                    fecha_meta_solo_str = fecha_meta_str_jit.split('T')[0].split(' ')[0]
-                    fecha_meta = date.fromisoformat(fecha_meta_solo_str)
-                    fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
-                    fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
-                    fecha_inicio_base = max(fecha_inicio_ideal, fecha_disponibilidad_material)
-                    fecha_inicio_sugerida_jit = max(fecha_inicio_base, today)
-                    data['sugerencia_fecha_inicio_jit'] = fecha_inicio_sugerida_jit.isoformat()
-                except Exception as e_jit_modal:
-                    logger.warning(f"No se pudo calcular JIT para modal (Grupo: {grupo_key}): {e_jit_modal}")
-                    data['sugerencia_fecha_inicio_jit'] = date.today().isoformat()
+                data.update(sugerencias) # fusionar el dict de sugerencias
 
             # 4. Convertir a lista ordenada (Sin cambios)
             mps_lista_ordenada = []
@@ -1049,8 +1098,10 @@ class PlanificacionController(BaseController):
                 })
             mps_lista_ordenada.sort(key=lambda x: x.get('fecha_meta_mas_proxima') or '9999-12-31')
 
+            # Devolver el resultado final
             resultado_final = {
                  'mps_agrupado': mps_lista_ordenada,
+                 'mps_agrupado_ops_raw': ordenes_en_horizonte, # Siempre devolvemos las OPs crudas
                  'inicio_horizonte': hoy.isoformat(),
                  'fin_horizonte': fecha_fin_horizonte.isoformat(),
                  'dias_horizonte': dias_horizonte_int
@@ -1065,11 +1116,11 @@ class PlanificacionController(BaseController):
     # ==================================================================
     # === 2. REEMPLAZA TU FUNCIÓN 'obtener_planificacion_semanal' ===
     # ==================================================================
-    def obtener_planificacion_semanal(self, week_str: Optional[str] = None, ordenes_pre_cargadas: Optional[List[Dict]] = None) -> tuple:
+    def obtener_planificacion_semanal(self, week_str: Optional[str] = None, ordenes_pre_cargadas: Optional[List[Dict]] = None, mapas_precargados_externos: Optional[Dict] = None) -> tuple:
         """
-        Obtiene las OPs planificadas para una semana específica, calculando los días
-        que cada OP ocupa y agrupándolas por día visible.
+        Obtiene las OPs planificadas para una semana específica.
         --- OPTIMIZADO (N+1) ---
+        Acepta 'mapas_precargados_externos' para usar datos de operaciones ya cargados.
         """
         try:
             # ... (Lógica inicial: locale, rango de semana, sin cambios) ...
@@ -1091,10 +1142,8 @@ class PlanificacionController(BaseController):
             # ... (Lógica de 'ordenes_pre_cargadas' y 'fallback', sin cambios) ...
             if ordenes_pre_cargadas is not None:
                 ordenes_relevantes = ordenes_pre_cargadas
-                logger.debug("obtener_planificacion_semanal: Usando lista de OPs pre-cargada.")
             else:
-                ordenes_relevantes = []
-                logger.debug("obtener_planificacion_semanal: No se pasó lista pre-cargada, buscando OPs...")
+                # ... (código de fallback para buscar OPs) ...
                 dias_previos_margen = 14
                 fecha_inicio_filtro = start_of_week - timedelta(days=dias_previos_margen)
                 filtros_amplios = {
@@ -1106,56 +1155,54 @@ class PlanificacionController(BaseController):
                      ])
                 }
                 response_ops, _ = self.orden_produccion_controller.obtener_ordenes(filtros_amplios)
-                if not response_ops.get('success'):
-                    return self.error_response("Error al obtener OPs para cálculo semanal.", 500)
                 ordenes_relevantes = response_ops.get('data', [])
 
             if not ordenes_relevantes:
                  resultado_vacio = { 'ops_visibles_por_dia': {}, 'inicio_semana': start_of_week.isoformat(), 'fin_semana': end_of_week.isoformat(), 'semana_actual_str': week_str }
                  return self.success_response(data=resultado_vacio)
 
-
-            # 3. Obtener Capacidad (sin cambios)
+            # ... (Lógica de Obtener Capacidad, sin cambios) ...
             fechas_inicio_ops = [date.fromisoformat(op['fecha_inicio_planificada']) for op in ordenes_relevantes if op.get('fecha_inicio_planificada')]
             fecha_min_calculo = min(fechas_inicio_ops) if fechas_inicio_ops else start_of_week
             fecha_max_calculo = end_of_week + timedelta(days=14)
             capacidad_rango = self.obtener_capacidad_disponible([1, 2], fecha_min_calculo, fecha_max_calculo)
 
-            # 4. Simular duración y días ocupados
+            # ... (Lógica de Simulación, sin cambios) ...
             ops_con_dias_ocupados = []
             carga_acumulada_simulacion = {1: defaultdict(float), 2: defaultdict(float)}
-
             ordenes_relevantes.sort(key=lambda op: op.get('fecha_inicio_planificada') or '9999-12-31')
 
-            # --- ¡INICIO DE LA OPTIMIZACIÓN N+1! ---
-            # A. Obtener todos los IDs de recetas únicos
-            receta_ids_unicos_sem = list(set(op.get('receta_id') for op in ordenes_relevantes if op.get('receta_id')))
-            operaciones_map_sem = defaultdict(list)
-
-            # B. Hacer UNA sola consulta a la DB para todas las operaciones
-            if receta_ids_unicos_sem:
-                operaciones_resp_sem = self.operacion_receta_model.find_by_receta_ids(receta_ids_unicos_sem)
-                if operaciones_resp_sem.get('success'):
-                    for op_step in operaciones_resp_sem.get('data', []):
-                        operaciones_map_sem[op_step['receta_id']].append(op_step)
+            # --- ¡INICIO DE LA OPTIMIZACIÓN N+1 (MODIFICADA)! ---
+            operaciones_map_sem = {}
+            if mapas_precargados_externos:
+                logger.debug("[Plan Semanal] Usando mapa de operaciones precargado.")
+                operaciones_map_sem = mapas_precargados_externos.get('operaciones', {})
+            else:
+                # Fallback: Usar la optimización del Paso 2 (si no se pasaron mapas)
+                logger.warning("[Plan Semanal] ¡Fallback! Cargando operaciones (N+1 optimizado).")
+                receta_ids_unicos_sem = list(set(op.get('receta_id') for op in ordenes_relevantes if op.get('receta_id')))
+                if receta_ids_unicos_sem:
+                    operaciones_resp_sem = self.operacion_receta_model.find_by_receta_ids(receta_ids_unicos_sem)
+                    if operaciones_resp_sem.get('success'):
+                        for op_step in operaciones_resp_sem.get('data', []):
+                            operaciones_map_sem.setdefault(op_step['receta_id'], []).append(op_step)
             # --- FIN DE LA OPTIMIZACIÓN N+1 ---
 
             for orden in ordenes_relevantes:
+                # ... (lógica del bucle sin cambios, ya usa _calcular_carga_op_precargada) ...
+                # ...
                 op_id = orden.get('id')
                 linea_asignada = orden.get('linea_asignada')
                 fecha_inicio_str = orden.get('fecha_inicio_planificada')
-                receta_id = orden.get('receta_id') # <-- Obtener receta_id
+                receta_id = orden.get('receta_id')
 
-                if not linea_asignada or not fecha_inicio_str or not receta_id: continue # <-- Validar receta_id
+                if not linea_asignada or not fecha_inicio_str or not receta_id: continue
 
                 try:
                     fecha_inicio_op = date.fromisoformat(fecha_inicio_str)
 
-                    # --- ¡CAMBIO! Usar la función precargada ---
-                    # Original: carga_total_op = float(self._calcular_carga_op(orden))
                     operaciones_para_esta_op = operaciones_map_sem.get(receta_id, [])
                     carga_total_op = float(self._calcular_carga_op_precargada(orden, operaciones_para_esta_op))
-                    # --- FIN DEL CAMBIO ---
 
                     if carga_total_op <= 0: continue
 
@@ -1166,13 +1213,12 @@ class PlanificacionController(BaseController):
                     max_dias_op_sim = 30
 
                     while carga_restante_sim > 0.01 and dias_simulados < max_dias_op_sim:
-                        # ... (lógica interna del bucle 'while' sin cambios) ...
                         fecha_actual_sim_str = fecha_actual_sim.isoformat()
                         cap_dia_dict = capacidad_rango.get(linea_asignada, {}).get(fecha_actual_sim_str, {})
                         cap_dia = cap_dia_dict.get('neta', 0.0)
                         carga_existente_sim = carga_acumulada_simulacion[linea_asignada].get(fecha_actual_sim_str, 0.0)
                         cap_restante_sim = max(0.0, cap_dia - carga_existente_sim)
-                        carga_a_asignar_sim = min(carga_restante_sim, cap_restante_sim)
+                        carga_a_asignar_sim = min(carga_restante_sim, cap_restante_sim) # Corregido
                         if carga_a_asignar_sim > 0:
                             dias_ocupados_por_esta_op.append(fecha_actual_sim_str)
                             carga_acumulada_simulacion[linea_asignada][fecha_actual_sim_str] += carga_a_asignar_sim
@@ -1186,7 +1232,6 @@ class PlanificacionController(BaseController):
 
                 except Exception as e_sim:
                      logger.error(f"Error simulando OP {op_id}: {e_sim}", exc_info=True)
-
 
             # ... (Lógica final: construir diccionario y devolver, sin cambios) ...
             ops_visibles_por_dia = defaultdict(list)
@@ -1313,27 +1358,29 @@ class PlanificacionController(BaseController):
     # ==================================================================
     # === 5. REEMPLAZA TU FUNCIÓN 'calcular_carga_capacidad' ===
     # ==================================================================
-    def calcular_carga_capacidad(self, ordenes_planificadas: List[Dict]) -> Dict:
+    def calcular_carga_capacidad(self, ordenes_planificadas: List[Dict], mapas_precargados_externos: Optional[Dict] = None) -> Dict:
         """
-        Calcula la carga (en minutos) por centro de trabajo y fecha, DISTRIBUYENDO
-        la carga de cada OP a lo largo de los días necesarios según la capacidad diaria.
+        Calcula la carga (en minutos) por centro de trabajo y fecha.
         --- OPTIMIZADO (N+1) ---
+        Acepta 'mapas_precargados_externos' para usar datos de operaciones ya cargados.
         """
         carga_distribuida = {1: defaultdict(float), 2: defaultdict(float)}
         fechas_inicio = []
 
-        # --- ¡INICIO DE LA OPTIMIZACIÓN N+1! ---
-        # A. Obtener todos los IDs de recetas únicos
-        receta_ids_unicos = list(set(op.get('receta_id') for op in ordenes_planificadas if op.get('receta_id')))
-        if not receta_ids_unicos:
-            return {1:{}, 2:{}} # No hay nada que calcular
-
-        # B. Hacer UNA sola consulta a la DB para todas las operaciones
-        operaciones_resp = self.operacion_receta_model.find_by_receta_ids(receta_ids_unicos)
-        operaciones_map = defaultdict(list)
-        if operaciones_resp.get('success'):
-            for op_step in operaciones_resp.get('data', []):
-                operaciones_map[op_step['receta_id']].append(op_step)
+        # --- ¡INICIO DE LA OPTIMIZACIÓN N+1 (MODIFICADA)! ---
+        operaciones_map = {}
+        if mapas_precargados_externos:
+            logger.debug("[Calc Carga] Usando mapa de operaciones precargado.")
+            operaciones_map = mapas_precargados_externos.get('operaciones', {})
+        else:
+            # Fallback: Usar la optimización del Paso 2 (si no se pasaron mapas)
+            logger.warning("[Calc Carga] ¡Fallback! Cargando operaciones (N+1 optimizado).")
+            receta_ids_unicos = list(set(op.get('receta_id') for op in ordenes_planificadas if op.get('receta_id')))
+            if receta_ids_unicos:
+                operaciones_resp = self.operacion_receta_model.find_by_receta_ids(receta_ids_unicos)
+                if operaciones_resp.get('success'):
+                    for op_step in operaciones_resp.get('data', []):
+                        operaciones_map.setdefault(op_step['receta_id'], []).append(op_step)
         # --- FIN DE LA OPTIMIZACIÓN N+1 ---
 
 
@@ -1355,26 +1402,25 @@ class PlanificacionController(BaseController):
         )
 
         for orden in ordenes_ordenadas:
+            # ... (lógica del bucle sin cambios, ya usa _calcular_carga_op_precargada) ...
+            # ...
             try:
                 linea_asignada = orden.get('linea_asignada')
                 fecha_inicio_op_str = orden.get('fecha_inicio_planificada')
-                receta_id = orden.get('receta_id') # <-- Obtener receta_id
+                receta_id = orden.get('receta_id')
 
-                if linea_asignada not in [1, 2] or not fecha_inicio_op_str or not receta_id: continue # <-- Validar
+                if linea_asignada not in [1, 2] or not fecha_inicio_op_str or not receta_id: continue
 
                 fecha_inicio_op = date.fromisoformat(fecha_inicio_op_str)
 
-                # --- ¡CAMBIO! Usar la función precargada ---
-                # Original: carga_total_op = float(self._calcular_carga_op(orden))
+                # (Ya estaba optimizado en el Paso 2)
                 operaciones_para_esta_op = operaciones_map.get(receta_id, [])
                 carga_total_op = float(self._calcular_carga_op_precargada(orden, operaciones_para_esta_op))
-                # --- FIN DEL CAMBIO ---
 
                 if carga_total_op <= 0: continue
 
                 logger.debug(f"Distribuyendo carga para OP {orden.get('codigo', orden.get('id'))}: {carga_total_op:.2f} min en Línea {linea_asignada} desde {fecha_inicio_op_str}")
 
-                # ... (Lógica del bucle 'while' de simulación, sin cambios) ...
                 carga_restante_op = carga_total_op
                 fecha_actual_sim = fecha_inicio_op
                 dias_procesados = 0
@@ -2073,63 +2119,63 @@ class PlanificacionController(BaseController):
             logger.error(f"Error al resolver/eliminar issue para OP {op_id}: {e}", exc_info=True)
 
 
-    def _calcular_sugerencias_para_op(self, op: Dict) -> Dict:
+    def _calcular_sugerencias_para_op_optimizado(self, op: Dict, mapas_precargados: Dict) -> Dict:
         """
-        Calcula T_Prod, T_Proc, Línea Sug, y JIT para una ÚNICA OP.
-        (Lógica adaptada de 'obtener_ops_pendientes_planificacion')
-        --- CORREGIDO (Manejo de TypeError float-Decimal) ---
+        Versión optimizada que NO consulta la DB.
+        Calcula T_Prod, T_Proc, Línea Sug, y JIT para una ÚNICA OP
+        usando los mapas de datos precargados.
         """
-        # Valores por defecto
         sugerencias = {
-            'sugerencia_t_prod_dias': 0,
-            'sugerencia_t_proc_dias': 0,
-            'sugerencia_linea': None,
-            'sugerencia_stock_ok': False,
-            'sugerencia_fecha_inicio_jit': date.today().isoformat(),
-            'linea_compatible': None
+            'sugerencia_t_prod_dias': 0, 'sugerencia_t_proc_dias': 0,
+            'sugerencia_linea': None, 'sugerencia_stock_ok': False,
+            'sugerencia_fecha_inicio_jit': date.today().isoformat(), 'linea_compatible': None
         }
-        op_id_log = op.get('id', 'N/A') # Para logging de errores
+        op_id_log = op.get('id', 'N/A')
 
         try:
             receta_id = op.get('receta_id')
             cantidad = Decimal(op.get('cantidad_planificada', 0))
 
             if not receta_id or cantidad <= 0:
-                logger.warning(f"[JIT Modal {op_id_log}] Cálculo abortado: falta receta_id o cantidad es 0.")
-                return sugerencias
+                return sugerencias # Devuelve default si no hay datos
 
-            # 1. Calcular Carga Total (Minutos)
-            carga_total_minutos = Decimal(self._calcular_carga_op(op))
+            # Mapas de datos
+            operaciones_map = mapas_precargados.get('operaciones', {})
+            recetas_map = mapas_precargados.get('recetas', {})
+            centros_map = mapas_precargados.get('centros_trabajo', {})
+            ingredientes_map = mapas_precargados.get('ingredientes', {})
+            stock_map = mapas_precargados.get('stock', {})
+            insumos_map = mapas_precargados.get('insumos', {})
 
-            # 2. Calcular Línea Sugerida y Capacidad Neta
-            receta_res = self.receta_model.find_by_id(receta_id, 'id')
+            # 1. Calcular Carga Total (¡Usando helper optimizado!)
+            operaciones_receta = operaciones_map.get(receta_id, [])
+            carga_total_minutos = self._calcular_carga_op_precargada(op, operaciones_receta)
+
+            # 2. Calcular Línea Sugerida y Capacidad Neta (¡Desde mapas!)
             linea_sug = None
-            capacidad_neta_linea_sugerida = Decimal(480.0)
+            capacidad_neta_linea_sugerida = Decimal(480.0) # Fallback
+            receta = recetas_map.get(receta_id)
 
-            if receta_res.get('success'):
-                receta = receta_res['data']
+            if receta:
                 linea_compatible_str = receta.get('linea_compatible', '2')
                 sugerencias['linea_compatible'] = linea_compatible_str
+                # ... (lógica de decisión de línea_sug, igual que antes) ...
                 linea_compatible_list = linea_compatible_str.split(',')
-
                 tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
                 tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
                 UMBRAL_CANTIDAD_LINEA_1 = 50
                 puede_l1 = '1' in linea_compatible_list and tiempo_l1 > 0
                 puede_l2 = '2' in linea_compatible_list and tiempo_l2 > 0
-
                 if puede_l1 and puede_l2:
                     linea_sug = 1 if cantidad >= UMBRAL_CANTIDAD_LINEA_1 else 2
                 elif puede_l1: linea_sug = 1
                 elif puede_l2: linea_sug = 2
-
                 sugerencias['sugerencia_linea'] = linea_sug
 
-                # 3. Obtener Capacidad Real
+                # 3. Obtener Capacidad Real (¡Desde mapa!)
                 if linea_sug:
-                    ct_resp = self.centro_trabajo_model.find_by_id(linea_sug, 'id')
-                    if ct_resp.get('success'):
-                        ct_data = ct_resp.get('data', {})
+                    ct_data = centros_map.get(linea_sug) # <-- ¡CAMBIO!
+                    if ct_data:
                         cap_std = Decimal(ct_data.get('tiempo_disponible_std_dia', 480))
                         eficiencia = Decimal(ct_data.get('eficiencia', 1.0))
                         utilizacion = Decimal(ct_data.get('utilizacion', 1.0))
@@ -2143,61 +2189,42 @@ class PlanificacionController(BaseController):
                     carga_total_minutos / capacidad_neta_linea_sugerida
                 )
 
-            # 5. Verificar Stock (T_Proc)
-            ingredientes_result = self.receta_model.get_ingredientes(receta_id)
-            insumos_faltantes_agg = []
+            # 5. Verificar Stock (T_Proc) (¡Desde mapas!)
+            ingredientes_receta = ingredientes_map.get(receta_id, [])
             stock_ok_agg = True
             tiempos_entrega_agg = []
 
-            if ingredientes_result.get('success'):
-                for ingrediente in ingredientes_result.get('data', []):
+            if ingredientes_receta:
+                for ingrediente in ingredientes_receta:
                     insumo_id = ingrediente['id_insumo']
-
-                    try:
-                        cantidad_ingrediente = Decimal(ingrediente['cantidad'])
-                    except:
-                        logger.error(f"[JIT Modal {op_id_log}] Error al convertir ingrediente['cantidad'] a Decimal. Valor: {ingrediente['cantidad']}")
-                        cantidad_ingrediente = Decimal(0)
-
+                    cantidad_ingrediente = Decimal(ingrediente.get('cantidad', 0))
                     cant_necesaria_total = cantidad_ingrediente * cantidad
-                    stock_disp_res = self.inventario_controller.obtener_stock_disponible_insumo(insumo_id)
 
-                    # --- ¡AQUÍ ESTÁ LA CORRECCIÓN! ---
-                    stock_disp_raw = stock_disp_res.get('data', {}).get('stock_disponible', 0) if stock_disp_res.get('success') else 0
-                    try:
-                        stock_disp = Decimal(stock_disp_raw)
-                    except:
-                        logger.error(f"[JIT Modal {op_id_log}] Error al convertir stock_disp a Decimal. Valor: {stock_disp_raw}")
-                        stock_disp = Decimal(0)
-                    # --- FIN DE LA CORRECCIÓN ---
+                    stock_disp = stock_map.get(insumo_id, Decimal(0)) # <-- ¡CAMBIO!
 
                     if stock_disp < cant_necesaria_total:
                         stock_ok_agg = False
-                        faltante = cant_necesaria_total - stock_disp # <-- Ahora esto funcionará
-                        insumos_faltantes_agg.append({ 'insumo_id': insumo_id, 'nombre': ingrediente.get('nombre_insumo', 'N/A'), 'cantidad_faltante': faltante })
-
-                        insumo_data_res = self.insumo_model.find_by_id(insumo_id, 'id_insumo')
-                        if insumo_data_res.get('success'):
-                            tiempos_entrega_agg.append(insumo_data_res['data'].get('tiempo_entrega_dias', 0))
+                        # Obtener tiempo de entrega (¡Desde mapa!)
+                        insumo_data = insumos_map.get(insumo_id) # <-- ¡CAMBIO!
+                        if insumo_data:
+                            tiempos_entrega_agg.append(insumo_data.get('tiempo_entrega_dias', 0))
             else:
                 stock_ok_agg = False
-                logger.warning(f"[JIT Modal {op_id_log}] No se pudieron obtener ingredientes para receta {receta_id}")
 
             sugerencias['sugerencia_stock_ok'] = stock_ok_agg
             if not stock_ok_agg:
                 sugerencias['sugerencia_t_proc_dias'] = max(tiempos_entrega_agg) if tiempos_entrega_agg else 0
 
-            # 6. Calcular JIT (con el fallback que ya teníamos)
+            # 6. Calcular JIT (igual que antes, solo usa variables locales)
+            # ... (lógica JIT sin cambios) ...
             today = date.today()
             t_prod_dias = sugerencias['sugerencia_t_prod_dias']
             t_proc_dias = sugerencias['sugerencia_t_proc_dias']
-
             op_fecha_meta_str = op.get('fecha_meta')
             if not op_fecha_meta_str:
                 op_fecha_meta_str = op.get('fecha_inicio_planificada')
                 if not op_fecha_meta_str:
                     op_fecha_meta_str = (today + timedelta(days=7)).isoformat()
-
             fecha_meta_solo_str = op_fecha_meta_str.split('T')[0].split(' ')[0]
             fecha_meta = date.fromisoformat(fecha_meta_solo_str)
             fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
@@ -2207,8 +2234,7 @@ class PlanificacionController(BaseController):
             sugerencias['sugerencia_fecha_inicio_jit'] = fecha_inicio_sugerida_jit.isoformat()
 
         except Exception as e_jit:
-            op_id_log = op.get('id', 'N/A')
-            logger.error(f"[JIT MODAL {op_id_log}] EXCEPCIÓN INESPERADA en _calcular_sugerencias_para_op: {e_jit}", exc_info=True)
+            logger.error(f"[JIT MODAL {op_id_log}] EXCEPCIÓN INESPERADA (Optimizado): {e_jit}", exc_info=True)
             sugerencias['sugerencia_fecha_inicio_jit'] = date.today().isoformat()
 
         return sugerencias
