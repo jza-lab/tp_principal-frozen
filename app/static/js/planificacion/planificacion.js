@@ -1,3 +1,16 @@
+window.addEventListener('pageshow', function(event) {
+    // event.persisted es true si la página se restauró desde el BFCache
+    if (event.persisted) {
+        console.log('Página cargada desde BFCache. Forzando recarga para obtener datos frescos.');
+        // Forzar una recarga completa desde el servidor
+        window.location.reload();
+    }
+});
+
+// --- ¡NUEVO! Variable para el modal de carga ---
+let globalLoadingModal = null;
+
+
 /**
  * Mueve una OP a un nuevo estado (usada por Kanban).
  * @param {string} opId ID de la OP a mover.
@@ -58,6 +71,9 @@ function showFeedbackModal(title, message, type = 'info', confirmCallback = null
     cancelBtn.textContent = 'Cerrar';
     cancelBtn.className = 'btn btn-secondary'; // Resetear clase del botón cancelar/cerrar
     modalIcon.className = 'bi me-2'; // Resetear icono
+    cancelBtn.style.display = 'inline-block';
+    cancelBtn.disabled = false;
+
 
     // Configurar según el tipo
     switch (type) {
@@ -120,10 +136,38 @@ function hideLoadingSpinner(button, originalText) {
 }
 
 
+// --- ¡NUEVAS FUNCIONES HELPER (MODAL DE CARGA) ---
+/**
+ * Muestra el modal de "Procesando" global.
+ */
+function showGlobalLoading() {
+    if (globalLoadingModal) {
+        globalLoadingModal.show();
+    } else {
+        console.warn('Modal de carga #globalLoadingModal no encontrado o no inicializado.');
+    }
+}
+
+/**
+ * Oculta el modal de "Procesando" global.
+ */
+function hideGlobalLoading() {
+    if (globalLoadingModal) {
+        globalLoadingModal.hide();
+    }
+}
+// --- FIN NUEVAS FUNCIONES ---
+
+
+// --- ¡FUNCIÓN MODIFICADA! ---
 /**
  * Envía la confirmación final para una OP multi-día.
  */
 async function confirmarAsignacionLote(opIdConfirmar, asignacionesConfirmar, estadoActual = 'PENDIENTE') {
+    
+    // 1. MOSTRAR MODAL DE CARGA INMEDIATAMENTE
+    showGlobalLoading();
+
     try {
         const endpointUrl = '/planificacion/api/confirmar-aprobacion'; 
         const body = {
@@ -143,13 +187,21 @@ async function confirmarAsignacionLote(opIdConfirmar, asignacionesConfirmar, est
         });
 
         const confirmResult = await confirmResponse.json();
+
+        // 2. OCULTAR MODAL DE CARGA (antes de mostrar el resultado)
+        hideGlobalLoading();
+
+        // 3. Mostrar modal de resultado
         if (confirmResult.success) {
-            showFeedbackModal('Confirmado', confirmResult.message || "Lote planificado.", 'success');
+            // --- ¡CAMBIO! Título y mensaje mejorados ---
+            showFeedbackModal('¡Éxito!', confirmResult.message || "La operación se ha guardado correctamente.", 'success');
             setTimeout(() => window.location.reload(), 1500);
         } else {
             showFeedbackModal('Error al Confirmar', confirmResult.error || confirmResult.message, 'error');
         }
     } catch (confirmError) {
+        // 4. OCULTAR MODAL DE CARGA (en caso de error)
+        hideGlobalLoading();
         console.error("Error red al confirmar:", confirmError);
         showFeedbackModal('Error de Conexión', 'No se pudo confirmar la planificación.', 'error');
     }
@@ -158,6 +210,13 @@ async function confirmarAsignacionLote(opIdConfirmar, asignacionesConfirmar, est
 
 // --- LÓGICAS AL CARGAR LA PÁGINA (ÚNICO DOMCONTENTLOADED) ---
 document.addEventListener('DOMContentLoaded', function () {
+
+    // --- ¡NUEVO! Inicializar el modal de carga ---
+    const loadingModalEl = document.getElementById('globalLoadingModal');
+    if (loadingModalEl) {
+        globalLoadingModal = new bootstrap.Modal(loadingModalEl);
+    }
+    // --- FIN INICIALIZACIÓN ---
 
     try {
         // --- LÓGICA DE DRAG-AND-DROP (KANBAN) ---
@@ -417,34 +476,40 @@ document.addEventListener('click', async function(e) {
                 body: JSON.stringify({ op_ids: opIds, asignaciones: asignaciones }) 
             });
             const result = await response.json();
-
-            if (result.success) { 
-                showFeedbackModal('Éxito', result.message || "Lote planificado con éxito.", 'success');
-                setTimeout(() => window.location.reload(), 1500);
-            }
-            else if (result.error === 'SOBRECARGA_CAPACIDAD') { 
+            
+            // --- ¡LÓGICA CORREGIDA! (Misma que en Re-Planificar) ---
+            
+            if (response.status === 409 && result.error === 'SOBRECARGA_CAPACIDAD') { 
                 showFeedbackModal(result.title || 'Sobrecarga Detectada', result.message + "\n\nElija otra fecha o línea.", 'warning');
                 toggleModalLock(false); 
-            }
-            else if (result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM') { 
+            
+            } else if (response.status === 200 && (result.success || result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM')) {
+                // Simulación OK. Ocultar modal de planificación
+                if (modalInstance) modalInstance.hide();
                 toggleModalLock(false); 
                 
-                // --- INICIO DE LA CORRECCIÓN ---
-                // Esta es la corrección clave.
-                // Usamos el 'title' enviado desde el backend (que está en español).
-                const modalTitle = result.title || 
-                                   ((result.error === 'LATE_CONFIRM') ? '⚠️ Confirmar Retraso' : 'Confirmación Multi-Día');
-                // --- FIN DE LA CORRECCIÓN ---
-
-                showFeedbackModal(
-                    modalTitle,
-                    result.message,
-                    'confirm',
-                    () => { 
-                        confirmarAsignacionLote(result.op_id_confirmar, result.asignaciones_confirmar, result.estado_actual);
-                    } 
-                );
+                const op_id_confirmar = result.op_id_confirmar;
+                const asignaciones_confirmar = result.asignaciones_confirmar;
+                const estado_actual = result.estado_actual;
+                
+                if (result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM') {
+                    // Pedir confirmación al usuario
+                    const modalTitle = result.title || ((result.error === 'LATE_CONFIRM') ? '⚠️ Confirmar Retraso' : 'Confirmación Multi-Día');
+                    showFeedbackModal(
+                        modalTitle,
+                        result.message,
+                        'confirm',
+                        () => { 
+                            confirmarAsignacionLote(op_id_confirmar, asignaciones_confirmar, estado_actual);
+                        } 
+                    );
+                } else {
+                    // Éxito simple, guardar directamente
+                    confirmarAsignacionLote(op_id_confirmar, asignaciones_confirmar, estado_actual);
+                }
+                
             } else { 
+                // Error desconocido
                 showFeedbackModal('Error', result.error || result.message || 'Error desconocido.', 'error');
                 toggleModalLock(false); 
             }
@@ -465,10 +530,12 @@ document.addEventListener('click', async function(e) {
 
 
     // --- BOTÓN DE REPLANIFICAR (abre modal #replanModal) ---
+    // --- (¡BLOQUE MODIFICADO!) ---
     const replanBtn = e.target.closest('.btn-open-replan-modal');
     if (replanBtn) {
         e.stopPropagation(); 
 
+        // Ocultar cualquier popover abierto
         const popoverElement = replanBtn.closest('.popover');
         if (popoverElement) {
             const trigger = document.querySelector(`[aria-describedby="${popoverElement.id}"]`);
@@ -479,27 +546,85 @@ document.addEventListener('click', async function(e) {
                 }
             }
         }
-
         const popoverEl = bootstrap.Popover.getInstance(replanBtn.closest('[data-bs-toggle="popover"]'));
         if (popoverEl) popoverEl.hide();
 
+        
+        // --- INICIO: LEER *TODOS* LOS DATA ATTRIBUTES ---
+        // Datos estándar de la OP
         const opId = replanBtn.dataset.opId;
         const codigo = replanBtn.dataset.opCodigo || '';
         const producto = replanBtn.dataset.opProducto || '';
         const cantidad = replanBtn.dataset.opCantidad || '';
         const linea = replanBtn.dataset.opLinea || '';
-        const fechaInicio = replanBtn.dataset.opFechaInicio || '';
+        const fechaInicio = replanBtn.dataset.opFechaInicio || ''; // Fecha original o JIT (depende del botón)
         const supervisor = replanBtn.dataset.opSupervisor || '';
         const operario = replanBtn.dataset.opOperario || '';
 
+        // Nuevos atributos de sugerencia (leídos desde el botón)
+        const tProdDias = parseInt(replanBtn.dataset.sugTProdDias || '0', 10);
+        const tProcDias = parseInt(replanBtn.dataset.sugTProcDias || '0', 10);
+        const stockOk = parseInt(replanBtn.dataset.sugStockOk || '0', 10) === 1;
+        const fechaJit = replanBtn.dataset.sugFechaJit || '';
+        const plazoTotal = tProdDias + tProcDias;
+        // --- FIN: LEER DATA ATTRIBUTES ---
+
+
+        // --- INICIO: POBLAR CAMPOS ESTÁNDAR ---
         document.getElementById('replan_op_id').value = opId;
         document.getElementById('replan_op_codigo').textContent = codigo;
         document.getElementById('replan_producto_nombre').textContent = producto;
         document.getElementById('replan_cantidad').textContent = cantidad;
-        document.getElementById('replan_select_linea').value = linea || '1';
-        document.getElementById('replan_input_fecha_inicio').value = fechaInicio || '';
-        document.getElementById('replan_select_supervisor').value = supervisor || '';
-        document.getElementById('replan_select_operario').value = operario || '';
+        document.getElementById('replan_select_linea').value = linea || '1'; // Campo oculto
+        document.getElementById('replan_select_supervisor').value = supervisor || ''; // Campo oculto
+        document.getElementById('replan_select_operario').value = operario || ''; // Campo oculto
+        // --- FIN: POBLAR CAMPOS ESTÁNDAR ---
+
+        
+        // --- INICIO: POBLAR NUEVA SECCIÓN DE SUGERENCIA ---
+        const sugerenciaContainer = document.getElementById('replan_sugerencia_container');
+        const sugerenciaBox = document.getElementById('replan_sugerencia_box');
+        const fechaJitEl = document.getElementById('replan_sug_fecha_jit');
+        const plazoTotalEl = document.getElementById('replan_sug_plazo_total');
+        const tProdEl = document.getElementById('replan_sug_t_prod').querySelector('b');
+        const tProcEl = document.getElementById('replan_sug_t_proc').querySelector('b');
+        const stockStatusEl = document.getElementById('replan_sug_stock_status');
+
+        if (plazoTotal > 0 || fechaJit) {
+            fechaJitEl.textContent = fechaJit || 'N/D';
+            plazoTotalEl.textContent = plazoTotal;
+            tProdEl.textContent = tProdDias;
+            tProcEl.textContent = tProcDias;
+
+            if (stockOk) {
+                stockStatusEl.textContent = 'Stock OK';
+                sugerenciaBox.classList.remove('alert-warning');
+                sugerenciaBox.classList.add('alert-success');
+            } else {
+                stockStatusEl.textContent = 'Stock Faltante';
+                sugerenciaBox.classList.remove('alert-success');
+                sugerenciaBox.classList.add('alert-warning');
+            }
+            sugerenciaContainer.style.display = 'block'; // Mostrar el contenedor
+        } else {
+            sugerenciaContainer.style.display = 'none'; // Ocultar si no hay datos
+        }
+        // --- FIN: POBLAR SECCIÓN SUGERENCIA ---
+
+
+        // --- INICIO: POBLAR FECHA DE INICIO (CON LÓGICA JIT) ---
+        const fechaInicioInput = document.getElementById('replan_input_fecha_inicio');
+        // Usar la fecha JIT sugerida SI ESTÁ DISPONIBLE,
+        // si no, usar la fecha de inicio actual de la OP
+        if (fechaJit) {
+            fechaInicioInput.value = fechaJit;
+        } else if (fechaInicio) {
+            // Asegurarse de que la fecha original tenga el formato YYYY-MM-DD
+            fechaInicioInput.value = fechaInicio.split('T')[0].split(' ')[0];
+        } else {
+            fechaInicioInput.value = ''; // Dejar vacío si no hay nada
+        }
+        // --- FIN: POBLAR FECHA ---
 
         const replanModal = new bootstrap.Modal(document.getElementById('replanModal'));
         replanModal.show();
@@ -507,7 +632,7 @@ document.addEventListener('click', async function(e) {
     // --- FIN LÓGICA RE-PLANIFICAR ---
 
     
-    // --- BOTÓN CONFIRMAR RE-PLANIFICACIÓN ---
+    // --- BOTÓN CONFIRMAR RE-PLANIFICACIÓN (¡CORREGIDO!) ---
     const btnConfirmReplan = e.target.closest('#btn-confirm-replan');
     if(btnConfirmReplan) {
         
@@ -534,6 +659,7 @@ document.addEventListener('click', async function(e) {
         showLoadingSpinner(btnConfirmReplan, 'Re-planificando...');
 
         try {
+            // 1. Llamar a la API de simulación
             const apiUrl = window.API_CONSOLIDAR_URL || '/planificacion/api/consolidar-y-aprobar';
             
             const response = await fetch(apiUrl, { 
@@ -552,25 +678,40 @@ document.addEventListener('click', async function(e) {
             const replanModal = bootstrap.Modal.getInstance(replanModalElement);
             if(replanModal) replanModal.hide();
             
+            // --- INICIO DE LA LÓGICA CORREGIDA ---
+
             if (response.status === 409 && result.error === 'SOBRECARGA_CAPACIDAD') {
-                showFeedbackModal(result.title || 'Sobrecarga Detectada', result.message, 'warning'); 
-            } else if (response.status === 200 && (result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM')) {
-                // --- INICIO DE LA CORRECCIÓN ---
-                // Esta es la corrección clave.
-                // Usamos el 'title' enviado desde el backend (que está en español).
-                const modalTitle = result.title || 
-                                   ((result.error === 'LATE_CONFIRM') ? '⚠️ Confirmar Retraso' : 'Confirmación Multi-Día');
-                // --- FIN DE LA CORRECCIÓN ---
-                
-                showFeedbackModal(modalTitle, result.message, 'confirm', () => {
-                    confirmarAsignacionLote(result.op_id_confirmar, result.asignaciones_confirmar, result.estado_actual);
-                });
-            } else if (response.status === 200 && result.success) {
-                showFeedbackModal('¡Re-planificado!', 'La OP ha sido re-planificada exitosamente.', 'success');
-                setTimeout(() => window.location.reload(), 1500); 
+                // Caso 1: Sobrecarga. El servidor rechaza.
+                showFeedbackModal(result.title || 'Sobrecarga Detectada', result.message, 'warning');
+            
+            } else if (response.status === 200 && (result.success || result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM')) {
+                // Caso 2: Simulación OK (Simple, Multi-día, o Tarde).
+                // El servidor aprueba la simulación, ahora debemos ejecutar la confirmación.
+
+                const op_id_confirmar = result.op_id_confirmar;
+                const asignaciones_confirmar = result.asignaciones_confirmar;
+                const estado_actual = result.estado_actual;
+
+                if (result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM') {
+                    // 2a: Es multi-día o tarde -> Pedir confirmación al usuario
+                    const modalTitle = result.title || ((result.error === 'LATE_CONFIRM') ? '⚠️ Confirmar Retraso' : 'Confirmación Multi-Día');
+                    
+                    showFeedbackModal(modalTitle, result.message, 'confirm', () => {
+                        // El usuario hizo clic en "Confirmar", ahora llamamos a la función de guardado
+                        confirmarAsignacionLote(op_id_confirmar, asignaciones_confirmar, estado_actual);
+                    });
+                } else {
+                    // 2b: Es un éxito simple (result.success == true)
+                    // No necesitamos preguntar al usuario, solo guardar.
+                    // Llamamos a la función de guardado directamente.
+                    confirmarAsignacionLote(op_id_confirmar, asignaciones_confirmar, estado_actual);
+                }
+
             } else {
+                // Caso 3: Error desconocido
                 showFeedbackModal('Error', result.error || 'No se pudo re-planificar la OP.', 'error');
             }
+            // --- FIN DE LA LÓGICA CORREGIDA ---
 
         } catch (error) {
             const replanModal = bootstrap.Modal.getInstance(replanModalElement);
@@ -581,5 +722,43 @@ document.addEventListener('click', async function(e) {
         }
     }
     // --- FIN DE LA CORRECION ---
+
+    // --- ¡NUEVO! BOTÓN MARCAR ISSUE COMO VISTO (EN OFFVCANVAS) ---
+    const btnMarcarVisto = e.target.closest('.btn-marcar-visto');
+    if (btnMarcarVisto) {
+        const issueId = btnMarcarVisto.dataset.issueId;
+        const originalButtonText = btnMarcarVisto.innerHTML;
+        showLoadingSpinner(btnMarcarVisto, '...'); // Usar '...' para un spinner pequeño
+
+        try {
+            // Asumimos que la ruta es esta (debes crearla en planificacion_routes.py)
+            const response = await fetch(`/planificacion/api/resolver-issue/${issueId}`, {
+                method: 'POST', // Usamos POST para acciones que cambian estado
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': window.CSRF_TOKEN
+                }
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                // Ocultar el item de la lista (más rápido que recargar)
+                btnMarcarVisto.closest('.list-group-item').style.opacity = '0';
+                setTimeout(() => {
+                    btnMarcarVisto.closest('.list-group-item').style.display = 'none';
+                }, 300); // Esperar a que termine la animación de fade-out
+
+            } else {
+                showFeedbackModal('Error', result.error || 'No se pudo archivar el aviso.', 'error');
+                hideLoadingSpinner(btnMarcarVisto, originalButtonText);
+            }
+        } catch (error) {
+            console.error('Error al marcar issue como visto:', error);
+            showFeedbackModal('Error de Red', 'No se pudo conectar con el servidor.', 'error');
+            hideLoadingSpinner(btnMarcarVisto, originalButtonText);
+        }
+    }
+    // --- FIN DEL NUEVO BLOQUE ---
 
 }); // Fin addEventListener 'click' en 'document'

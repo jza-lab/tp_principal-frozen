@@ -115,7 +115,8 @@ class BaseModel(ABC):
                     op_map = {
                         'eq': query.eq, 'gt': query.gt, 'gte': query.gte,
                         'lt': query.lt, 'lte': query.lte, 'in': query.in_,
-                        'ilike': query.ilike
+                        'ilike': query.ilike,
+                        'neq': query.neq  # <-- ¡AÑADIR ESTA LÍNEA!
                     }
 
                     # Dividir solo si la ÚLTIMA parte es un operador conocido
