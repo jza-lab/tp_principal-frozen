@@ -111,8 +111,8 @@
                                     data-op-codigo='{{ issue.op_codigo }}'
                                     data-op-producto='{{ issue.op_producto_nombre | e }}'
                                     data-op-cantidad='{{ issue.op_cantidad }}'
-                                    data-op-linea='{{ issue.datos_snapshot.asignaciones_confirmar.linea_asignada | default(issue.op_linea_sugerida, true) }}'
-                                    data-op-fecha-inicio='{{ issue.datos_snapshot.asignaciones_confirmar.fecha_inicio }}'
+                                    data-op-linea='{{ issue.datos_snapshot.get("asignaciones_confirmar", {}).get("linea_asignada") or issue.op_linea_sugerida }}'
+                                    data-op-fecha-inicio='{{ issue.datos_snapshot.get("asignaciones_confirmar", {}).get("fecha_inicio") }}'
                                     data-op-supervisor=''
                                     data-op-operario=''>
                                     <i class="bi bi-calendar-range me-1"></i> Re-Planificar
