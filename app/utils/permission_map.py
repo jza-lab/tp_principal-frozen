@@ -97,6 +97,12 @@ CANONICAL_PERMISSION_MAP = {
     'ver_alertas': ['SUPERVISOR', 'IT', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'configurar_alertas': ['SUPERVISOR', 'IT', 'GERENTE'],
     'gestionar_reclamos': ['ADMIN', 'VENDEDOR', 'GERENTE'],
+    
+    
+    
+    #Modulo envios
+    'gestionar_flota': ['ADMIN', 'SUPERVISOR', 'GERENTE'],
+    'consultar_zonas': ['ADMIN', 'SUPERVISOR', 'GERENTE']
 }
 
 
