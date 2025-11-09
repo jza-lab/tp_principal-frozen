@@ -114,7 +114,33 @@ document.addEventListener('DOMContentLoaded', function () {
             const result = await response.json();
 
             if (result.success) {
-                window.location.href = result.redirect_url;
+                // Ocultar el formulario y mostrar el resultado
+                document.querySelector('.col-lg-8').style.display = 'none'; // Oculta la columna de pedidos
+                
+                const successDiv = document.getElementById('success-result');
+                const despachoId = result.data.despacho_id;
+                
+                successDiv.innerHTML = `
+                    <div class="alert alert-success">
+                        Despacho #${despachoId} creado exitosamente.
+                    </div>
+                    <div class="d-grid gap-2">
+                        <a href="/admin/despachos/hoja-de-ruta/${despachoId}" target="_blank" class="btn btn-success">
+                            <i class="fas fa-print me-1"></i> Ver/Imprimir Hoja de Ruta
+                        </a>
+                        <a href="${result.redirect_url}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-1"></i> Volver al Listado
+                        </a>
+                    </div>
+                `;
+                successDiv.style.display = 'block';
+
+                // Deshabilitar el botón de confirmar y cambiar el texto a "Completado"
+                confirmBtn.innerHTML = '<i class="fas fa-check-circle me-1"></i> Completado';
+                confirmBtn.classList.remove('btn-primary');
+                confirmBtn.classList.add('btn-outline-secondary');
+                confirmBtn.disabled = true;
+
             } else {
                 alert(`Error: ${result.error || 'No se pudo crear el despacho.'}`);
                 this.disabled = false;

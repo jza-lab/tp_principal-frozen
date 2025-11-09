@@ -19,15 +19,15 @@ def crear_despacho_vista():
     else:
         pedidos = response['data']
     
-    # Agrupar pedidos por localidad para la vista
-    pedidos_por_localidad = {}
+    # Agrupar pedidos por zona para la vista
+    pedidos_por_zona = {}
     for pedido in pedidos:
-        localidad = pedido.get('direccion', {}).get('localidad', 'Sin Localidad')
-        if localidad not in pedidos_por_localidad:
-            pedidos_por_localidad[localidad] = []
-        pedidos_por_localidad[localidad].append(pedido)
+        zona_nombre = pedido.get('zona', {}).get('nombre', 'Sin Zona Asignada')
+        if zona_nombre not in pedidos_por_zona:
+            pedidos_por_zona[zona_nombre] = []
+        pedidos_por_zona[zona_nombre].append(pedido)
 
-    return render_template('despachos/crear.html', pedidos_por_localidad=pedidos_por_localidad)
+    return render_template('despachos/crear.html', pedidos_por_grupo=pedidos_por_zona)
 
 @despacho_bp.route('/api/crear', methods=['POST'])
 # @permission_required('crear_despachos')
@@ -54,3 +54,16 @@ def api_crear_despacho():
         return {'success': True, 'data': response['data'], 'redirect_url': url_for('orden_venta.listar')}, 201
     else:
         return {'success': False, 'error': response.get('error', 'Error interno al crear el despacho')}, 500
+
+@despacho_bp.route('/hoja-de-ruta/<int:despacho_id>')
+# @permission_required('consultar_despachos')
+def descargar_hoja_de_ruta(despacho_id):
+    """
+    Genera y devuelve la Hoja de Ruta en formato PDF para un despacho específico.
+    """
+    response = despacho_controller.generar_hoja_de_ruta_pdf(despacho_id)
+    if isinstance(response, dict) and not response.get('success'):
+        flash(response.get('error', 'No se pudo generar la Hoja de Ruta.'), 'danger')
+        # Idealmente, redirigir a una página de listado de despachos
+        return redirect(url_for('orden_venta.listar')) 
+    return response

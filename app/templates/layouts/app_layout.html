@@ -206,7 +206,7 @@
                                     {# TODO: Proteger esta ruta con un permiso adecuado #}
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item {% if request.endpoint.startswith('vehiculo') %}active{% endif %}" href="{{ url_for('vehiculo.listar_vehiculos') }}"><i class="fas fa-truck-moving me-2"></i> Gestión de Transportes</a></li>
-
+                                    <li><a class="dropdown-item {% if request.endpoint.startswith('zonas') %}active{% endif %}" href="{{ url_for('zonas.listar_zonas') }}"><i class="fas fa-map-marked-alt me-2"></i> Gestión de Zonas</a></li>
                                     <li><a class="dropdown-item {% if 'listar_clientes' in request.endpoint %}active{% endif %}" href="{{ url_for('clientes_proveedores.listar_clientes') }}"><i class="bi bi-person-rolodex me-2"></i> Gestión de Clientes</a></li>
                                     {% endif %}
                                     {% if can_gestionar_proveedores and not is_dev %}
