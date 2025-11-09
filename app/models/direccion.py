@@ -178,18 +178,32 @@ class DireccionModel(BaseModel):
     def search_distinct_localidades(self, term: str):
         """
         Busca localidades únicas que coincidan parcialmente con un término de búsqueda.
-        La búsqueda no distingue entre mayúsculas y minúsculas y devuelve una lista de strings.
+        La búsqueda no distingue entre mayúsculas y minúsculas.
+        Devuelve una lista de diccionarios con id, localidad y provincia.
         """
         try:
-            response = self.db.table(self.get_table_name()).select('localidad').ilike('localidad', f'%{term}%').limit(10).execute()
+            # Seleccionamos los campos necesarios y filtramos
+            response = self.db.table(self.get_table_name()).select('id, localidad, provincia').ilike('localidad', f'%{term}%').limit(20).execute()
+
+            if not response.data:
+                return {'success': True, 'data': []}
+
+            # Procesamos para obtener localidades únicas (combinación de localidad y provincia)
+            localidades_vistas = set()
+            localidades_unicas = []
+            for item in response.data:
+                # Clave única para la combinación de localidad y provincia
+                clave_localidad = (item['localidad'].strip().lower(), item['provincia'].strip().lower())
+                if clave_localidad not in localidades_vistas:
+                    localidades_vistas.add(clave_localidad)
+                    localidades_unicas.append({
+                        'id': item['id'], # Usamos el ID de la primera dirección encontrada para esta localidad
+                        'localidad': item['localidad'],
+                        'provincia': item['provincia']
+                    })
             
-            if response.data:
-                # Usar un set para obtener localidades únicas y luego convertirlo a lista para mantener el orden de inserción (aunque aquí no importe)
-                localidades_unicas = sorted(list(set(item['localidad'] for item in response.data)))
-                return localidades_unicas
-            
-            return []
+            return {'success': True, 'data': localidades_unicas}
 
         except Exception as e:
             logger.error(f"Error buscando localidades: {e}")
-            return []
+            return {'success': False, 'error': str(e), 'data': []}
