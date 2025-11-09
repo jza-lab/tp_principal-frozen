@@ -79,7 +79,7 @@ class DespachoController(BaseController):
         if not despacho_response['success']:
             return despacho_response
 
-        despacho_id = despacho_response['data'][0]['id']
+        despacho_id = despacho_response['data']['id']
         
         # Usamos un modelo genérico para la tabla de items del despacho
         despacho_items_model = GenericBaseModel()
