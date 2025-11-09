@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt, get_current_user
 from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
@@ -65,6 +65,11 @@ def listar():
 @jwt_required()
 @permission_required(accion='crear_orden_de_compra')
 def nueva():
+    user = get_current_user()
+    if hasattr(user, 'rol') and user.rol == 'ADMIN':
+        flash('No tiene permisos para crear una orden de compra.', 'error')
+        return redirect(url_for('orden_compra.listar'))
+    
     controller = OrdenCompraController()
     insumo_controller = InsumoController()
     if request.method == "POST":
@@ -139,6 +144,11 @@ def detalle(id):
 @jwt_required()
 @permission_required(accion='aprobar_orden_de_compra')
 def aprobar(id):
+    user = get_current_user()
+    if hasattr(user, 'rol') and user.rol == 'ADMIN':
+        flash('No tiene permisos para aprobar una orden de compra.', 'error')
+        return redirect(url_for('orden_compra.listar'))
+        
     controller = OrdenCompraController()
     usuario_id = get_jwt_identity()
     resultado = controller.aprobar_orden(id, usuario_id)
@@ -192,8 +202,13 @@ def editar(id):
 
 
 @orden_compra_bp.route("/<int:id>/rechazar", methods=["POST"])
-@permission_any_of('editar_orden_de_compra', 'gestionar_recepcion_orden_compra')
+@permission_any_of('editar_orden_de_compra', 'gestionar_recepcion_orden_compra', 'aprobar_orden_de_compra')
 def rechazar(id):
+    user = get_current_user()
+    if hasattr(user, 'rol') and user.rol == 'ADMIN':
+        flash('No tiene permisos para rechazar una orden de compra.', 'error')
+        return redirect(url_for('orden_compra.listar'))
+        
     controller = OrdenCompraController()
     motivo = request.form.get("motivo", "No especificado")
     resultado = controller.rechazar_orden(id, motivo)

@@ -192,13 +192,14 @@ document.addEventListener('DOMContentLoaded', function () {
         
         const precioInput = row.querySelector('.precio_unitario');
         const subtotalInput = row.querySelector('.subtotal-item');
-
-        // Formatear Precio Unitario (usando el valor del atributo value que viene sin formato)
-        const precioLimpio = limpiarFormatoDinero(precioInput.value) || parseFloat(precioInput.value) || 0;
+    
+        // [CORRECCIÓN] Priorizar parseFloat para valores numéricos directos.
+        // limpiarFormatoDinero se usa como fallback si el valor ya tiene formato de moneda.
+        const precioLimpio = parseFloat(precioInput.value) || limpiarFormatoDinero(precioInput.value) || 0;
         precioInput.value = formatearADinero(precioLimpio);
-
-        // Formatear Subtotal Item
-        const rawSubtotal = limpiarFormatoDinero(subtotalInput.value) || parseFloat(subtotalInput.value) || 0;
+    
+        // Formatear Subtotal Item (corregido de la misma manera)
+        const rawSubtotal = parseFloat(subtotalInput.value) || limpiarFormatoDinero(subtotalInput.value) || 0;
         subtotalInput.value = formatearADinero(rawSubtotal);
     });
 
