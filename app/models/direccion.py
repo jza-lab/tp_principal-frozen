@@ -174,3 +174,42 @@ class DireccionModel(BaseModel):
             logger.error(f"Error verificando si la dirección {direccion_id} es compartida: {e}")
             # En caso de error, asumimos que es compartida para ser cautelosos
             return True
+
+    def search_distinct_localidades(self, term: str):
+        """
+        Busca localidades únicas. Si 'term' tiene valor, filtra por coincidencia parcial.
+        Si 'term' está vacío, devuelve todas las localidades únicas.
+        La búsqueda no distingue entre mayúsculas y minúsculas.
+        Devuelve una lista de diccionarios con id, localidad y provincia.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select('id, localidad, provincia')
+            
+            # Aplicar filtro solo si el término de búsqueda no está vacío
+            if term:
+                query = query.ilike('localidad', f'%{term}%')
+
+            response = query.execute()
+
+            if not response.data:
+                return {'success': True, 'data': []}
+
+            # Procesamos para obtener localidades únicas (combinación de localidad y provincia)
+            localidades_vistas = set()
+            localidades_unicas = []
+            for item in response.data:
+                # Clave única para la combinación de localidad y provincia
+                clave_localidad = (item['localidad'].strip().lower(), item['provincia'].strip().lower())
+                if clave_localidad not in localidades_vistas:
+                    localidades_vistas.add(clave_localidad)
+                    localidades_unicas.append({
+                        'id': item['id'], # Usamos el ID de la primera dirección encontrada para esta localidad
+                        'localidad': item['localidad'],
+                        'provincia': item['provincia']
+                    })
+            
+            return {'success': True, 'data': localidades_unicas}
+
+        except Exception as e:
+            logger.error(f"Error buscando localidades: {e}")
+            return {'success': False, 'error': str(e), 'data': []}
