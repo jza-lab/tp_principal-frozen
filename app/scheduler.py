@@ -75,5 +75,43 @@ def init_scheduler(app: Flask):
         minute=minute,
         replace_existing=True # Evita duplicados si la app se reinicia
     )
-
+    
+    scheduler.add_job(
+        id='actualizacion_crediticia_diaria',
+        func=job_actualizacion_crediticia_diaria,
+        args=[app],
+        trigger='cron',
+        hour=app.config.get('CREDIT_UPDATE_HOUR', 1), # 1 AM por defecto
+        minute=app.config.get('CREDIT_UPDATE_MINUTE', 0),
+        replace_existing=True
+    )
     scheduler.start()
+
+    
+def job_actualizacion_crediticia_diaria(app: Flask):
+    """
+    Tarea programada para actualizar pedidos vencidos y el estado crediticio de los clientes.
+    """
+    with app.app_context():
+        logger.info("--- Iniciando Job de Actualización Crediticia Diaria ---")
+        try:
+            from app.controllers.pedido_controller import PedidoController
+            from app.controllers.cliente_controller import ClienteController
+
+            pedido_controller = PedidoController()
+            cliente_controller = ClienteController()
+
+            # 1. Marcar pedidos como vencidos
+            logger.info("Marcando pedidos vencidos...")
+            pedidos_actualizados = pedido_controller.marcar_pedidos_vencidos()
+            logger.info(f"Se marcaron {pedidos_actualizados} pedidos como vencidos.")
+
+            # 2. Recalcular estado crediticio de todos los clientes
+            logger.info("Recalculando estado crediticio de los clientes...")
+            clientes_afectados = cliente_controller.recalcular_estado_crediticio_todos_los_clientes()
+            logger.info(f"Se recalculó el estado crediticio. {clientes_afectados} clientes fueron actualizados.")
+
+            logger.info("--- Job de Actualización Crediticia Diaria Completado ---")
+
+        except Exception as e:
+            logger.error(f"¡CRÍTICO! El Job de Actualización Crediticia Diaria falló: {e}", exc_info=True)

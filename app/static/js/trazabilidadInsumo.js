@@ -146,7 +146,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const display = p.numero_lote || p.codigo || p.id || p.name || `ID-${id}`;
             return `<li><a href="/lotes-productos/${id}/detalle">${escapeHtml(display)}</a></li>`;
         });
-
+        const pedidosHtml = safeListItems(uso.pedidos || [], pedido => {
+            const id = pedido.id || '';
+            const cliente = pedido.cliente || 'N/A';
+            return `<li><a href="/orden-venta/${id}/detalle">Pedido #${id}</a> (${escapeHtml(cliente)})</li>`;
+        });
         // Representación general de origen/uso (colapsable si muy grande)
         container.innerHTML = `
             <div class="row">
@@ -165,6 +169,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     <ul class="list-unstyled">${opsHtml}</ul>
                     <strong>Generó (Productos/Lotes):</strong>
                     <ul class="list-unstyled">${productosHtml}</ul>
+                    <strong>Pedidos Relacionados:</strong>
+                    <ul class="list-unstyled">${pedidosHtml}</ul>
                 </div>
             </div>`;
     }
@@ -246,10 +252,33 @@ document.addEventListener('DOMContentLoaded', function () {
             dataTable.addColumn('number', 'Cantidad');
             // Columna de tooltip para mostrar la cantidad real al pasar el mouse
             dataTable.addColumn({ type: 'string', role: 'tooltip', p: { html: true } });
+            
+
+            
+            function wrapLabel(label, maxLength = 20) {
+                if (label.length <= maxLength) return label;
+                
+                const parts = [];
+                let currentPart = '';
+                
+                label.split(' ').forEach(word => {
+                    if ((currentPart + word).length > maxLength) {
+                        parts.push(currentPart.trim());
+                        currentPart = '';
+                    }
+                    currentPart += word + ' ';
+                });
+                
+                if (currentPart) parts.push(currentPart.trim());
+                return parts.join('\n');
+            }
 
             // Mapear ids de nodo a etiquetas legibles (p. ej. código de insumo)
             const idToNode = {};
             diagrama.nodes.forEach(n => { idToNode[n.id] = n; });
+            diagrama.nodes.forEach(n => {
+                n.label = wrapLabel(n.label);
+            });
 
             // Construir lista de etiquetas y colores por nodo (en el mismo orden)
             const colorMap = {
@@ -357,7 +386,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     node: {
                         label: { 
                             fontName: 'Roboto, Arial', 
-                            fontSize: 14,
+                            fontSize: 12,
                             color: '#212529',
                             bold: true
                         },

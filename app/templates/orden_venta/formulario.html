@@ -377,6 +377,8 @@
                                 <option value="credito_90" {% if pedido and pedido.condicion_venta=='credito_90'
                                     %}selected{% endif %}>Crédito 90 días</option>
                             </select>
+                            <div id="credit-warning" class="alert alert-warning mt-2" style="display: none;"></div>
+                        
                         </div>
 
                         <div class="col-12">
@@ -599,6 +601,48 @@
 {% endblock %}
 
 {% block extra_js %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const clienteIdInput = document.getElementById('id_cliente');
+    const condicionVentaSelect = document.getElementById('condicion_venta');
+    const creditWarningDiv = document.getElementById('credit-warning');
+
+    function checkCreditStatus(clienteId) {
+        if (!clienteId) return;
+
+        fetch(`/administrar/clientes/${clienteId}/estado-crediticio`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.estado_crediticio === 'alertado') {
+                    condicionVentaSelect.querySelector('option[value="credito_30"]').disabled = true;
+                    condicionVentaSelect.querySelector('option[value="credito_90"]').disabled = true;
+                    condicionVentaSelect.value = 'contado';
+                    creditWarningDiv.textContent = 'Este cliente tiene un estado crediticio alertado. Solo se permiten ventas al contado.';
+                    creditWarningDiv.style.display = 'block';
+                } else {
+                    condicionVentaSelect.querySelector('option[value="credito_30"]').disabled = false;
+                    condicionVentaSelect.querySelector('option[value="credito_90"]').disabled = false;
+                    creditWarningDiv.style.display = 'none';
+                }
+            })
+            .catch(error => console.error('Error fetching credit status:', error));
+    }
+
+    // Check on page load if a client is already selected
+    checkCreditStatus(clienteIdInput.value);
+
+    // Re-check when the client ID changes (e.g., after a search)
+    const observer = new MutationObserver(mutations => {
+        mutations.forEach(mutation => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
+                checkCreditStatus(clienteIdInput.value);
+            }
+        });
+    });
+    observer.observe(clienteIdInput, { attributes: true });
+});
+</script>
 
 
 <script>

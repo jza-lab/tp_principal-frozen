@@ -66,7 +66,13 @@ class PedidoSchema(Schema):
 
     
     condicion_venta = fields.Str(
-        validate=validate.Length(max=50),
+        validate=validate.OneOf(['contado', 'credito_30', 'credito_90']),
         allow_none=True,
-        load_default=None
+        load_default='contado'
     )
+    estado_pago = fields.Str(
+        validate=validate.OneOf(['pendiente', 'pagado', 'vencido']),
+        allow_none=True,
+        load_default='pendiente'
+    )
+    fecha_vencimiento = fields.DateTime(allow_none=True)

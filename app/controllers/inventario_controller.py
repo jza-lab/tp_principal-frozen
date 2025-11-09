@@ -23,6 +23,8 @@ from marshmallow import ValidationError
 from app.models.receta import RecetaModel # O donde tengas la lógica de recetas
 from app.models.reserva_insumo import ReservaInsumoModel # El nuevo modelo que debes crear
 from app.schemas.reserva_insumo_schema import ReservaInsumoSchema # El nuevo schema
+from app.models.trazabilidad import TrazabilidadModel
+
 
 
 
@@ -960,191 +962,14 @@ class InventarioController(BaseController):
         para conservar la cantidad original del insumo trazado.
         """
         try:
-            links = [] # Lista final de enlaces para Sankey
-            node_map = {} # <-- Mapa para las URLs
+            trazabilidad_model = TrazabilidadModel()
+            resultado = trazabilidad_model.obtener_trazabilidad_completa_lote_insumo(id_lote)
 
-            # --- 1. NODO INICIAL: LOTE INSUMO ---
-            lote_insumo_resp = self.inventario_model.find_by_id(id_lote, 'id_lote')
-            if not lote_insumo_resp.get('success'):
-                return self.error_response('Lote de insumo no encontrado', 404)
-            
-            lote_insumo = lote_insumo_resp.get('data')
-            lote_insumo_node = f"Lote Insumo: {lote_insumo.get('numero_lote_proveedor') or id_lote[:8]}"
-            
-            # --- AÑADIR URL DEL NODO INICIAL ---
-            node_map[lote_insumo_node] = url_for('inventario_view.detalle_lote', id_lote=id_lote)
-
-            # --- 2. ENLACE 1: LOTE INSUMO -> OP ---
-            
-            reservas_insumo_resp = self.reserva_insumo_model.find_all(
-                filters={'lote_inventario_id': str(id_lote)}
-            )
-            
-            if not reservas_insumo_resp.get('success') or not reservas_insumo_resp.get('data'):
-                logger.info(f"Lote {id_lote} no tiene reservas de insumos.")
-                # --- DEVOLVER node_map INCLUSO SI ESTÁ VACÍO ---
-                return self.success_response({"links": [], "node_map": node_map})
-
-            op_consumo = {} 
-            op_ids = set()
-            for reserva in reservas_insumo_resp.get('data', []):
-                id_op = reserva.get('orden_produccion_id')
-                if id_op:
-                    op_ids.add(id_op)
-                    cantidad = float(reserva.get('cantidad_reservada', 0) or 0) + float(reserva.get('cantidad_consumida', 0) or 0)
-                    op_consumo[id_op] = op_consumo.get(id_op, 0.0) + cantidad
-
-            if not op_ids:
-                logger.info(f"El lote {id_lote} no ha sido utilizado en ninguna OP.")
-                # --- DEVOLVER node_map ---
-                return self.success_response({"links": [], "node_map": node_map})
-
-            ops_resp = self.op_model.find_all(filters={'id': ('in', list(op_ids))})
-            op_nodes = {} 
-            
-            if not ops_resp.get('success'):
-                 return self.error_response(f"Error al buscar OPs: {ops_resp.get('error')}")
-
-            for op in ops_resp.get('data', []):
-                op_id = op.get('id')
-                op_node_name = f"OP: {op.get('codigo') or op_id}"
-                op_nodes[op_id] = op_node_name
-                
-                # --- AÑADIR URL DE LA OP ---
-                node_map[op_node_name] = url_for('orden_produccion.detalle', id=op_id)
-                
-                cantidad_trazada_op = op_consumo.get(op_id, 0.0)
-                if cantidad_trazada_op > 0:
-                    links.append({
-                        "source_name": lote_insumo_node,
-                        "target_name": op_node_name,
-                        "value": cantidad_trazada_op
-                    })
-
-            # --- 3. ENLACE 2: OP -> LOTE PRODUCTO (Prorrateo) ---
-            
-            lotes_prod_resp = self.lote_producto_model.find_all(
-                filters={'orden_produccion_id': ('in', list(op_ids))}
-            )
-
-            if not lotes_prod_resp.get('success') or not lotes_prod_resp.get('data'):
-                logger.info(f"Las OPs {op_ids} no generaron lotes de producto.")
-                # --- DEVOLVER node_map ---
-                return self.success_response({"links": links, "node_map": node_map})
-
-            op_total_producido = {} 
-            for lote_prod in lotes_prod_resp.get('data', []):
-                op_id = lote_prod.get('orden_produccion_id')
-                cantidad_lote = float(lote_prod.get('cantidad_inicial', 0) or 0)
-                op_total_producido[op_id] = op_total_producido.get(op_id, 0.0) + cantidad_lote
-
-            lote_prod_nodos = {} 
-            lote_prod_cantidad_trazada = {} 
-            lote_prod_ids = set()
-
-            for lote_prod in lotes_prod_resp.get('data', []):
-                lote_prod_id = lote_prod.get('id_lote')
-                lote_prod_ids.add(lote_prod_id)
-                op_id = lote_prod.get('orden_produccion_id')
-                
-                lote_prod_node = f"Lote Prod: {lote_prod.get('numero_lote') or lote_prod_id}"
-                lote_prod_nodos[lote_prod_id] = lote_prod_node
-                
-                # --- AÑADIR URL DEL LOTE DE PRODUCTO ---
-                node_map[lote_prod_node] = url_for('lote_producto.detalle_lote', id_lote=lote_prod_id)
-                
-                cantidad_trazada_op = op_consumo.get(op_id, 0.0)
-                total_producido = op_total_producido.get(op_id, 0.0)
-                cantidad_lote = float(lote_prod.get('cantidad_inicial', 0) or 0)
-
-                cantidad_trazada_lote = 0.0
-                if total_producido > 0:
-                    proporcion = cantidad_lote / total_producido
-                    cantidad_trazada_lote = cantidad_trazada_op * proporcion
-                
-                lote_prod_cantidad_trazada[lote_prod_id] = cantidad_trazada_lote
-
-                if cantidad_trazada_lote > 0:
-                    links.append({
-                        "source_name": op_nodes[op_id],
-                        "target_name": lote_prod_node,
-                        "value": cantidad_trazada_lote
-                    })
-
-            # --- 4. ENLACE 3: LOTE PRODUCTO -> PEDIDO (Prorrateo) ---
-            
-            reservas_prod_resp = self.reserva_producto_model.find_all(
-                filters={'lote_producto_id': ('in', list(lote_prod_ids))}
-            )
-            
-            if not reservas_prod_resp.get('success') or not reservas_prod_resp.get('data'):
-                logger.info(f"Los lotes de producto {lote_prod_ids} no están en ningún pedido.")
-                # --- DEVOLVER node_map ---
-                return self.success_response({"links": links, "node_map": node_map})
-
-            lote_prod_total_reservado = {} 
-            pedido_reservas_agregadas = {} 
-            pedido_ids = set()
-
-            for res_prod in reservas_prod_resp.get('data', []):
-                lote_prod_id = res_prod.get('lote_producto_id')
-                pedido_id = res_prod.get('pedido_id')
-                
-                if not pedido_id or not lote_prod_id:
-                    continue
-                    
-                cantidad = float(res_prod.get('cantidad_reservada', 0) or 0) + float(res_prod.get('cantidad_despachada', 0) or 0)
-                
-                if cantidad > 0:
-                    lote_prod_total_reservado[lote_prod_id] = lote_prod_total_reservado.get(lote_prod_id, 0.0) + cantidad
-                    
-                    key = (lote_prod_id, pedido_id)
-                    pedido_reservas_agregadas[key] = pedido_reservas_agregadas.get(key, 0.0) + cantidad
-                    
-                    pedido_ids.add(pedido_id)
-
-            if not pedido_ids:
-                 logger.info(f"Lotes {lote_prod_ids} reservados pero sin ID de pedido.")
-                 # --- DEVOLVER node_map ---
-                 return self.success_response({"links": links, "node_map": node_map})
-
-            pedidos_resp = self.pedido_model.find_all(
-                filters={'id': ('in', list(pedido_ids))}
-            )
-            
-            if not pedidos_resp.get('success'):
-                 return self.error_response("Error al buscar Pedidos")
-
-            pedido_nodes = {} 
-            for pedido in pedidos_resp.get('data', []):
-                pedido_id = pedido.get('id')
-                cliente_nombre = pedido.get('nombre_cliente') or f"Cliente s/n" 
-                pedido_node_name = f"Pedido: #{pedido_id} ({cliente_nombre})"
-                pedido_nodes[pedido_id] = pedido_node_name
-                
-                # --- AÑADIR URL DEL PEDIDO ---
-                node_map[pedido_node_name] = url_for('orden_venta.detalle', id=pedido_id)
-
-            for (lote_prod_id, pedido_id), cantidad_reservada_agg in pedido_reservas_agregadas.items():
-                
-                cantidad_trazada_lote = lote_prod_cantidad_trazada.get(lote_prod_id, 0.0)
-                total_reservado_lote = lote_prod_total_reservado.get(lote_prod_id, 0.0)
-
-                cantidad_trazada_pedido = 0.0
-                if total_reservado_lote > 0:
-                    proporcion = cantidad_reservada_agg / total_reservado_lote
-                    cantidad_trazada_pedido = cantidad_trazada_lote * proporcion
-
-                if cantidad_trazada_pedido > 0:
-                    if lote_prod_id in lote_prod_nodos and pedido_id in pedido_nodes:
-                        links.append({
-                            "source_name": lote_prod_nodos[lote_prod_id],
-                            "target_name": pedido_nodes[pedido_id],
-                            "value": cantidad_trazada_pedido
-                        })
-
-            # --- DEVOLVER TODO AL FINAL ---
-            return self.success_response({"links": links, "node_map": node_map})
+            if resultado:
+                # El formato de respuesta ya viene listo desde el modelo.
+                return self.success_response(resultado)
+            else:
+                return self.error_response('No se encontró trazabilidad para el lote especificado.', 404)
 
         except Exception as e:
             logger.error(f"Error en obtener_trazabilidad_lote (manual) para {id_lote}: {e}", exc_info=True)

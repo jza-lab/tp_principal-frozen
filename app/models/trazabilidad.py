@@ -87,11 +87,6 @@ class TrazabilidadModel(BaseModel):
                     orden_compra = None
                 else:
                     raise e # Re-raise other API errors
-
-        reservas = self.db.table('reservas_insumos').select(
-            # evitar columnas inexistentes: usar numero_lote y cantidad_inicial en lotes_productos
-            'cantidad_reservada, ordenes_produccion!inner(id, codigo, lotes_productos!orden_produccion_id(id_lote, numero_lote, cantidad_inicial))'
-        ).eq('lote_inventario_id', lote_id).execute().data
         
         proveedor_id = lote_insumo.get('id_proveedor')
         riesgo_proveedor = self._obtener_riesgo_proveedor(proveedor_id)
@@ -99,7 +94,7 @@ class TrazabilidadModel(BaseModel):
         resumen_origen = {
             "insumo": lote_insumo.get('insumos_catalogo', {}).get('nombre', 'N/A'),
             "proveedor": lote_insumo.get('proveedores', {}).get('nombre', 'N/A'),
-            "lote_proveedor": lote_insumo.get('lote_proveedor', 'N/A'),
+            "lote_proveedor": lote_insumo.get('numero_lote_proveedor', 'N/A'),
             "orden_compra": {"id": orden_compra.get('id'), "codigo": orden_compra.get('codigo_oc')} if orden_compra else None,
             "recepcion": lote_insumo.get('fecha_ingreso', 'N/A'),
             "calidad": lote_insumo.get('estado_calidad', 'Pendiente')
@@ -107,48 +102,80 @@ class TrazabilidadModel(BaseModel):
 
         ops_usadas = []
         productos_generados = []
-        if reservas:
-            for reserva in reservas:
-                op = reserva.get('ordenes_produccion')
-                if op:
-                    ops_usadas.append({"id": op.get('id'), "codigo": op.get('codigo'), "cantidad": reserva.get('cantidad_reservada')})
-                    for lp in op.get('lotes_productos', []):
-                        # lotes_productos expone 'id_lote' y 'numero_lote' según el esquema
-                        productos_generados.append({"id": lp.get('id_lote'), "codigo": lp.get('numero_lote')})
+        pedidos_asociados=[]
+        op_id = lote_insumo.get('orden_produccion_id')
+        if op_id:
+            op_res = self.db.table('ordenes_produccion').select('id, codigo').eq('id', op_id).maybe_single().execute()
+            op = op_res.data
+            if op:
+                ops_usadas.append({
+                    "id": op['id'], 
+                    "codigo": op['codigo'],
+                    "cantidad": lote_insumo.get('cantidad_inicial') # La cantidad usada es la total del lote
+                })
+                # Buscar lotes de producto de esta OP
+                lotes_prod_res = self.db.table('lotes_productos').select('id_lote, numero_lote, cantidad_inicial').eq('orden_produccion_id', op_id).execute()
+                lotes_producto = lotes_prod_res.data or []
+                for lp in lotes_producto:
+                    productos_generados.append({"id": lp.get('id_lote'), "codigo": lp.get('numero_lote')})
         
-        resumen_uso = {"ops": ops_usadas, "productos": list({p['id']: p for p in productos_generados}.values())}
+            lote_producto_ids = [lp['id'] for lp in productos_generados]
+            if lote_producto_ids:
+                reservas_prod_res = self.db.table('reservas_productos').select('pedidos!inner(id, nombre_cliente)').in_('lote_producto_id', lote_producto_ids).execute()
+                for r in (reservas_prod_res.data or []):
+                    if r.get('pedidos'):
+                        pedidos_asociados.append({
+                                "id": r['pedidos']['id'],
+                                "cliente": r['pedidos'].get('nombre_cliente', 'N/A')
+                        })
+
+        resumen_uso = {
+            "ops": ops_usadas,
+            "productos": productos_generados,
+            "pedidos": list({p['id']: p for p in pedidos_asociados}.values()) # Eliminar duplicados
+        }
         
         nodes, edges = [], []
         li_id_node = f"li_{lote_insumo['id_lote']}"
         nodes.append({"id": li_id_node, "label": f"LI: {resumen_origen['insumo']}", "group": "lote_insumo", "url": f"/inventario/lote/{lote_insumo['id_lote']}"})
 
-        if resumen_origen['orden_compra'] and resumen_origen['orden_compra']['id']:
-            oc_id, oc_codigo = resumen_origen['orden_compra']['id'], resumen_origen['orden_compra']['codigo']
-            oc_id_node = f"oc_{oc_id}"
-            # Ajustar URL a la ruta real: /compras/detalle/<id>
-            nodes.append({"id": oc_id_node, "label": f"OC: {oc_codigo}", "group": "orden_compra", "url": f"/compras/detalle/{oc_id}"})
-            edges.append({"from": oc_id_node, "to": li_id_node, "label": lote_insumo.get('cantidad_ingresada', 1)})
-        else:
-            # Si no hay OC, crear un nodo genérico para el ingreso
-            ingreso_id_node = f"ingreso_{lote_insumo['id_lote']}"
-            nodes.append({"id": ingreso_id_node, "label": "Ingreso Lote", "group": "ingreso_manual"})
-            edges.append({"from": ingreso_id_node, "to": li_id_node, "label": lote_insumo.get('cantidad_ingresada', 1)})
+        if resumen_origen.get('orden_compra'):
+            oc = resumen_origen['orden_compra']
+            oc_id_node = f"oc_{oc['id']}"
+            nodes.append({"id": oc_id_node, "label": f"OC: {oc['codigo']}", "group": "orden_compra", "url": f"/compras/detalle/{oc['id']}"})
+            edges.append({"from": oc_id_node, "to": li_id_node, "label": str(lote_insumo.get('cantidad_ingresada', ''))})
 
-        for op in ops_usadas:
+        if ops_usadas:
+            op = ops_usadas[0]
             op_id_node = f"op_{op['id']}"
-            # Ruta real de detalle OP: /ordenes/<id>/detalle
             nodes.append({"id": op_id_node, "label": f"OP: {op['codigo']}", "group": "orden_produccion", "url": f"/ordenes/{op['id']}/detalle"})
-            edges.append({"from": li_id_node, "to": op_id_node, "label": op['cantidad']})
+            edges.append({"from": li_id_node, "to": op_id_node, "label": str(op.get('cantidad', ''))})
 
-            op_data = next((r for r in reservas if r.get('ordenes_produccion', {}).get('id') == op['id']), None)
-            if op_data:
-                for lp in op_data.get('ordenes_produccion', {}).get('lotes_productos', []):
+
+            if productos_generados:
+                lote_ids = [lp['id'] for lp in productos_generados]
+                lotes_prod_details_res = self.db.table('lotes_productos').select('id_lote, numero_lote, cantidad_inicial').in_('id_lote', lote_ids).execute()
+                for lp in (lotes_prod_details_res.data or []):
                     lp_id_node = f"lp_{lp['id_lote']}"
-                    if not any(n['id'] == lp_id_node for n in nodes):
-                        # usar numero_lote en etiqueta y cantidad_inicial como cantidad producida
-                        # Ruta real de detalle lote producto: /lotes-productos/<id>/detalle
-                        nodes.append({"id": lp_id_node, "label": f"LP: {lp.get('numero_lote')}", "group": "lote_producto", "url": f"/lotes-productos/{lp['id_lote']}/detalle"})
-                    edges.append({"from": op_id_node, "to": lp_id_node, "label": lp.get('cantidad_inicial', 1)})
+                    nodes.append({"id": lp_id_node, "label": f"LP: {lp['numero_lote']}", "group": "lote_producto", "url": f"/lotes-productos/{lp['id_lote']}/detalle"})
+                    edges.append({"from": op_id_node, "to": lp_id_node, "label": str(lp.get('cantidad_inicial', ''))})
+                if pedidos_asociados:
+                    pedidos_ids = [p['id'] for p in pedidos_asociados]
+                    reservas_pedidos_res = self.db.table('reservas_productos').select(
+                        'cantidad_reservada, lote_producto_id, pedidos!inner(id)'
+                    ).in_('lote_producto_id', lote_ids).in_('pedido_id', pedidos_ids).execute()
+                    
+                    pedidos_nodes_added = set()
+                    for r in (reservas_pedidos_res.data or []):
+                        if not r.get('pedidos'): continue
+                        ped_id = r['pedidos']['id']
+                        ped_id_node = f"ped_{ped_id}"
+                        if ped_id not in pedidos_nodes_added:
+                            nodes.append({"id": ped_id_node, "label": f"PED: #{ped_id}", "group": "pedido", "url": f"/orden-venta/{ped_id}/detalle"})
+                            pedidos_nodes_added.add(ped_id)
+                        
+                        lp_origen_node = f"lp_{r['lote_producto_id']}"
+                        edges.append({"from": lp_origen_node, "to": ped_id_node, "label": str(r.get('cantidad_reservada', ''))})
 
         return {"resumen": {"origen": resumen_origen, "uso": resumen_uso}, "riesgo_proveedor": riesgo_proveedor, "diagrama": {"nodes": nodes, "edges": edges}}
 

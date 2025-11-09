@@ -463,3 +463,17 @@ def nueva_cliente_pasos():
                            today=hoy,
                            cliente={},
                            es_cliente_nuevo=es_cliente_nuevo)
+
+@orden_venta_bp.route('/<int:id>/registrar-pago', methods=['POST'])
+@jwt_required()
+@permission_required(accion='logistica_gestion_ov')
+def registrar_pago(id):
+    """Endpoint para registrar el pago de un pedido."""
+    controller = PedidoController()
+    pago_data = request.form.to_dict()
+    file = request.files.get('comprobante')
+    response, status_code = controller.registrar_pago(id, pago_data, file)
+    if status_code < 300:
+        return jsonify({'success': True, 'message': response.get('message')}), 200
+    else:
+        return jsonify({'success': False, 'message': response.get('error')}), status_code

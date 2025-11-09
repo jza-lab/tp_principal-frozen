@@ -301,3 +301,16 @@ def buscar_cliente_por_cuil_y_email_api():
         return jsonify({"success": True, "data": resultado_busqueda.get('data')}), 200
     else:
         return jsonify({"success": False, "error": resultado_busqueda.get('error', 'Credenciales no válidas.')}), status_code
+
+@cliente_proveedor.route('/clientes/<int:id>/estado-crediticio', methods=['GET'])
+@permission_required(accion='gestionar_clientes')
+def obtener_estado_crediticio(id):
+    """
+    Endpoint HTTP para obtener el estado crediticio de un cliente.
+    """
+    cliente_controller = ClienteController()
+    cliente_respuesta, estado = cliente_controller.obtener_cliente(id)
+    if(cliente_respuesta['success']):
+        cliente=cliente_respuesta['data']
+        return jsonify({'estado_crediticio': cliente.get('estado_crediticio', 'normal')}), 200
+    return jsonify(cliente_respuesta), estado
