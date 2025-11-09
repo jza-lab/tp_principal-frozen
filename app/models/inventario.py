@@ -11,9 +11,9 @@ class InventarioModel(BaseModel):
 
     def get_table_name(self) -> str:
         return 'insumos_inventario'
-    
+
     # --- Métodos de utilidad para la base de datos ---
-    
+
     def _sanitize_dates_for_db(self, data: Dict) -> Dict:
         """
         Convierte objetos date/datetime de Python a strings ISO 8601
@@ -30,7 +30,7 @@ class InventarioModel(BaseModel):
                 except AttributeError:
                     sanitized_data[key] = str(value)
         return sanitized_data
-    
+
     # --- Métodos de consulta y manipulación de datos ---
 
     def find_by_insumo(self, id_insumo: str, solo_disponibles: bool = True) -> Dict:
@@ -50,7 +50,7 @@ class InventarioModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo lotes por insumo: {str(e)}")
             return {'success': False, 'error': str(e)}
-        
+
     def get_stock_critico(self):
         try:
             result = self.db.rpc('get_insumos_stock_critico', {}).execute()
@@ -69,7 +69,7 @@ class InventarioModel(BaseModel):
         """
         # Sanitizar los datos (la corrección clave)
         sanitized_data = self._sanitize_dates_for_db(data)
-        
+
         # Llamada al método update de BaseModel (usando super() para llamar a la implementación base)
         return super().update(id_value, sanitized_data, key_name)
 
@@ -153,9 +153,9 @@ class InventarioModel(BaseModel):
         try:
             # Consultamos todos los insumos activos que tienen definido un stock mínimo.
             query = self.db.table('insumos_catalogo').select('*').eq('activo', True).neq('stock_min', 0)
-            
+
             result = query.order('nombre').execute()
-            
+
             if not result.data:
                 return {'success': True, 'data': []}
 
@@ -163,22 +163,22 @@ class InventarioModel(BaseModel):
             filtros = filtros or {}
 
             target_estado = filtros.get('estado_stock', None)
-            
-            
+
+
             for insumo in result.data:
                 if insumo is None:
                     continue
-                
+
                 stock_actual = insumo.get('stock_actual', 0.0) or 0
                 stock_min = insumo.get('stock_min', 0) or 0
 
-                
+
                 # Calcular el estado del stock
                 if stock_min > 0 and stock_actual < stock_min:
                     insumo['estado_stock'] = 'BAJO'
                 else:
                     insumo['estado_stock'] = 'OK'
-                    
+
                 # Aplicar el filtro de estado si fue solicitado (solo para 'BAJO' o 'OK')
                 if target_estado is None or insumo['estado_stock'] == target_estado:
                     final_data.append(insumo)
@@ -207,10 +207,10 @@ class InventarioModel(BaseModel):
                             query = query.ilike(key, f'%{value}%')
                         else:
                             query = query.eq(key, value)
-            
+
             # 3. Ejecutar la consulta de lotes
             result = query.order('f_ingreso', desc=True).execute()
-            
+
             if not result.data:
                 return {'success': True, 'data': []}
 
@@ -220,7 +220,7 @@ class InventarioModel(BaseModel):
                     lote['insumo_nombre'] = lote['insumo'].get('nombre', 'Insumo no encontrado')
                 else:
                     lote['insumo_nombre'] = 'Insumo no especificado'
-                
+
                 if lote.get('proveedor'):
                     lote['proveedor_nombre'] = lote['proveedor'].get('nombre', 'Proveedor sin nombre')
                 else:
@@ -240,7 +240,7 @@ class InventarioModel(BaseModel):
         try:
             query = self.db.table(self.get_table_name()).select(
                 '*, insumo:insumos_catalogo(nombre, categoria, unidad_medida), proveedor:proveedores(nombre)'
-            ).eq('id_lote', id_lote) 
+            ).eq('id_lote', id_lote)
 
             result = query.execute()
 
@@ -316,13 +316,13 @@ class InventarioModel(BaseModel):
                 fisico = stock_fisico_map.get(insumo_id, 0.0)
                 reservado = reservas_map.get(insumo_id, 0.0)
                 disponible = fisico - reservado
-                
+
                 updates.append({
                     'id_insumo': insumo_id,
                     'stock_actual': disponible,
                     'stock_total': fisico # stock_total representa el físico
                 })
-            
+
             # 4. Ejecutar las actualizaciones de forma individual para máxima seguridad.
             # Este enfoque es más lento pero evita el comportamiento impredecible de `upsert`
             # que estaba causando el error de 'not-null constraint'. La estabilidad es prioritaria.
@@ -346,7 +346,7 @@ class InventarioModel(BaseModel):
 
             # 5. Poner en cero el stock de insumos que existen pero NO tienen lotes ni reservas
             insumos_a_cero = list(insumos_existentes_ids - todos_los_insumos_con_movimiento)
-            
+
             if insumos_a_cero:
                 (self.db.table('insumos_catalogo')
                     .update({'stock_actual': 0, 'stock_total': 0})
@@ -363,14 +363,14 @@ class InventarioModel(BaseModel):
     def get_trazabilidad_ascendente(self, id_lote_insumo) -> Dict:
         """
         Obtiene la trazabilidad ascendente de un lote de insumo.
-        Este método llama a una función de base de datos (RPC) 
+        Este método llama a una función de base de datos (RPC)
         y luego procesa los resultados para construir un árbol de dependencias.
         """
         try:
             # 1. Llamar a la función RPC de la base de datos
-            
+
             # --- INICIO DE LA CORRECCIÓN 1: Usar el nombre de función correcto ---
-            # El setup.sql 
+            # El setup.sql
             # también define 'get_trazabilidad_ascendente' (línea 1832).
             # Probamos usar esa en lugar de la que no encontraba.
             result = self.db.rpc(
@@ -378,7 +378,7 @@ class InventarioModel(BaseModel):
                 {'p_id_lote_insumo': str(id_lote_insumo)}
             ).execute()
             # --- FIN DE LA CORRECCIÓN 1 ---
-            
+
             if not result.data:
                 logger.warning(f"No se encontró trazabilidad ascendente para {id_lote_insumo}")
                 return {'success': True, 'data': {'ops': [], 'productos': [], 'pedidos': []}}
@@ -387,7 +387,7 @@ class InventarioModel(BaseModel):
             op_data = {}
             producto_data = {}
             insumo_data = {}
-            
+
             for row in result.data:
                 id_op = row.get('id_op')
                 if id_op not in op_data:
@@ -395,9 +395,9 @@ class InventarioModel(BaseModel):
                         'id': id_op,
                         'codigo_orden_produccion': row.get('codigo_op'),
                         'productos_fabricados': [],
-                        'pedidos_asociados': [] 
+                        'pedidos_asociados': []
                     }
-                
+
                 id_lote_prod = row.get('id_lote_producto')
                 if id_lote_prod not in producto_data:
                     producto_data[id_lote_prod] = {
@@ -407,8 +407,8 @@ class InventarioModel(BaseModel):
                         'id_op': id_op,
                         'insumos_utilizados': []
                     }
-                
-                # El 'id_consumo_insumo' puede no ser único si la función RPC 
+
+                # El 'id_consumo_insumo' puede no ser único si la función RPC
                 # no lo maneja, pero lo usamos como key de 'insumo_data'
                 # Asumimos que la fila 'row' es única por consumo.
                 # Si 'id_consumo_insumo' es None, esto podría agrupar mal.
@@ -439,13 +439,13 @@ class InventarioModel(BaseModel):
 
             reservas_productos_resp = self.db.table('reservas_productos').select('*').in_('lote_producto_id', lotes_producto_ids).execute()
             reservas_productos = reservas_productos_resp.data
-            
+
             pedido_ids = list(set(r['id_pedido'] for r in reservas_productos if r.get('id_pedido')))
-            
+
             pedidos_info_map = {} # { id_pedido: {'id': ..., 'codigo_pedido': ..., 'nombre_cliente': ...} }
             if pedido_ids:
                 pedidos_resp = self.db.table('pedidos').select('id_pedido, codigo_pedido, id_cliente').in_('id_pedido', pedido_ids).execute()
-                
+
                 cliente_ids = list(set(p['id_cliente'] for p in pedidos_resp.data if p.get('id_cliente')))
                 clientes_data = {}
                 if cliente_ids:
@@ -462,14 +462,14 @@ class InventarioModel(BaseModel):
 
             # 4. Procesar y asociar Pedidos
             lote_a_pedido_cantidad = {} # { (lote_prod_id, pedido_id): cantidad_total }
-            
+
             for reserva_prod in reservas_productos:
                 pedido_id = reserva_prod.get('id_pedido')
                 lote_prod_id = reserva_prod.get('lote_producto_id')
-                
+
                 if not pedido_id or not lote_prod_id or pedido_id not in pedidos_info_map:
                     continue
-                
+
                 # --- INICIO DE LA CORRECCIÓN 2: Sumar ambas cantidades ---
                 # (Esta corrección la mantenemos)
                 cantidad_reservada = float(reserva_prod.get('cantidad_reservada', 0) or 0)
@@ -482,11 +482,11 @@ class InventarioModel(BaseModel):
 
                 key = (lote_prod_id, pedido_id)
                 lote_a_pedido_cantidad[key] = lote_a_pedido_cantidad.get(key, 0.0) + cantidad_total_asignada
-            
+
             pedidos_final_map = {} # { pedido_id: { 'id': ..., 'codigo_pedido': ..., 'cantidad_asignada': ... } }
 
             for (lote_prod_id, pedido_id), cantidad_total in lote_a_pedido_cantidad.items():
-                
+
                 id_op = producto_data.get(lote_prod_id, {}).get('id_op')
                 if not id_op or id_op not in op_data:
                     continue
@@ -496,12 +496,12 @@ class InventarioModel(BaseModel):
                         **pedidos_info_map[pedido_id],
                         'cantidad_asignada': 0.0
                     }
-                
+
                 pedidos_final_map[pedido_id]['cantidad_asignada'] += cantidad_total
-                
+
                 op_pedidos_list = op_data[id_op]['pedidos_asociados']
                 pedido_encontrado = next((p for p in op_pedidos_list if p['id'] == pedido_id), None)
-                
+
                 if not pedido_encontrado:
                     op_pedidos_list.append({
                         **pedidos_info_map[pedido_id],
@@ -509,7 +509,7 @@ class InventarioModel(BaseModel):
                     })
                 else:
                     pedido_encontrado['cantidad_asignada'] += cantidad_total
-            
+
             final_data = {
                 'ops': list(op_data.values()),
                 'productos': list(producto_data.values()),
@@ -517,7 +517,31 @@ class InventarioModel(BaseModel):
             }
 
             return {'success': True, 'data': final_data}
-        
+
         except Exception as e:
             logger.error(f"Error obteniendo trazabilidad ascendente para lote {id_lote_insumo}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def get_all_stock_disponible_map(self) -> Dict:
+        """
+        Obtiene el stock disponible de TODOS los insumos en una sola consulta
+        y lo devuelve como un mapa {insumo_id: stock_disponible}.
+        """
+        try:
+            # Asumiendo que tienes una función o vista en Supabase que hace esto.
+            # Si no, esta es la consulta SQL que necesitas crear:
+            # SELECT insumo_id, SUM(stock_disponible) as stock_disponible
+            # FROM stock_insumos_lote
+            # WHERE estado = 'DISPONIBLE'
+            # GROUP BY insumo_id
+
+            # Usando Supabase RPC (Remote Procedure Call)
+            # Debes crear una función en tu DB llamada 'get_stock_total_disponible'
+            result = self.db.rpc('get_stock_total_disponible').execute()
+
+            stock_map = {item['insumo_id']: Decimal(item['stock_disponible']) for item in result.data}
+            return {'success': True, 'data': stock_map}
+
+        except Exception as e:
+            logger.error(f"Error en get_all_stock_disponible_map: {e}", exc_info=True)
+            return {'success': False, 'error': str(e), 'data': {}}

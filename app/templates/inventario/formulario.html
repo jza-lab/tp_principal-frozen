@@ -25,29 +25,38 @@
                 <form method="POST" action="{{ url_for('inventario_view.nuevo_lote') }}">
                     {{ csrf_form.csrf_token }}
                     <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="id_insumo" class="form-label">Insumo <span class="text-danger">*</span></label>
+
+                        <!-- Buscador y Selector de Insumo -->
+                        <div class="col-12">
+                             <label for="insumo-search-filter" class="form-label">Buscar Insumo <span class="text-danger">*</span></label>
                             <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-tag"></i></span>
-                                <select class="form-select" id="id_insumo" name="id_insumo" required>
-                                    <option value="" disabled selected>Seleccione un insumo...</option>
-                                    {% for insumo in insumos %}
-                                    <option value="{{ insumo.id_insumo }}">{{ insumo.nombre }} ({{ insumo.codigo_interno }})</option>
-                                    {% endfor %}
-                                </select>
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" id="insumo-search-filter" class="form-control" placeholder="Buscar por nombre o código...">
                             </div>
+                        </div>
+                        <div class="col-12">
+                            <select id="id_insumo" name="id_insumo" class="form-select" size="8" required>
+                                <option value="" disabled selected>Seleccione un insumo de la lista...</option>
+                                {% for insumo in insumos %}
+                                    {% if insumo.proveedor %}
+                                    <option value="{{ insumo.id_insumo }}" 
+                                            data-nombre="{{ insumo.nombre }}" 
+                                            data-precio="{{ insumo.precio_unitario }}" 
+                                            data-proveedor-id="{{ insumo.proveedor.id }}" 
+                                            data-proveedor-nombre="{{ insumo.proveedor.nombre }}">
+                                        {{ insumo.nombre }} ({{ insumo.codigo_interno }}) - Proveedor: {{ insumo.proveedor.nombre }}
+                                    </option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
                         </div>
 
                         <div class="col-md-6">
-                            <label for="id_proveedor" class="form-label">Proveedor</label>
+                            <label for="proveedor_nombre" class="form-label">Proveedor</label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-truck-flatbed"></i></span>
-                                <select class="form-select" id="id_proveedor" name="id_proveedor">
-                                    <option value="" disabled selected>Seleccione un proveedor...</option>
-                                    {% for proveedor in proveedores %}
-                                    <option value="{{ proveedor.id }}">{{ proveedor.nombre }}</option>
-                                    {% endfor %}
-                                </select>
+                                <input type="text" id="proveedor_nombre" class="form-control bg-light" readonly>
+                                <input type="hidden" id="id_proveedor" name="id_proveedor">
                             </div>
                         </div>
 
@@ -55,28 +64,28 @@
                             <label for="cantidad_inicial" class="form-label">Cantidad Inicial <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-box-seam"></i></span>
-                                <input type="number" min="1" max="5000"class="form-control" id="cantidad_inicial" name="cantidad_inicial" step="any" min="0.01" required>
+                                <input type="number" min="1" max="5000" class="form-control" id="cantidad_inicial" name="cantidad_inicial" step="any" min="0.01" required>
                             </div>
                         </div>
 
                         <div class="col-md-6">
-                            <label for="precio_unitario" class="form-label">Precio Unitario</label>
+                            <label for="precio_unitario" class="form-label">Precio Unitario <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
-                                <input type="number" class="form-control" id="precio_unitario" name="precio_unitario" step="0.01" min="0" max="10000"required>
+                                <input type="number" class="form-control" id="precio_unitario" name="precio_unitario" step="0.01" min="0" max="10000" required>
                             </div>
                         </div>
 
                         <div class="col-md-6">
-                            <label for="f_ingreso" class="form-label">Fecha de Ingreso</label>
+                            <label for="f_ingreso" class="form-label">Fecha de Ingreso <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
-                                <input type="date" class="form-control" id="f_ingreso" name="f_ingreso" value="{{ today }}" max="{{ today }}">
+                                <input type="date" class="form-control" id="f_ingreso" name="f_ingreso" value="{{ today }}" max="{{ today }}" required>
                             </div>
                         </div>
 
                         <div class="col-md-6">
-                            <label for="f_vencimiento" class="form-label">Fecha de Vencimiento</label>
+                            <label for="f_vencimiento" class="form-label">Fecha de Vencimiento <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-calendar-x"></i></span>
                                 <input type="date" class="form-control" id="f_vencimiento" name="f_vencimiento" required min="{{ today }}">
@@ -103,4 +112,48 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const searchFilter = document.getElementById('insumo-search-filter');
+    const insumoSelect = document.getElementById('id_insumo');
+    const proveedorNombreInput = document.getElementById('proveedor_nombre');
+    const proveedorIdInput = document.getElementById('id_proveedor');
+    const precioUnitarioInput = document.getElementById('precio_unitario');
+
+    const originalOptions = Array.from(insumoSelect.options);
+
+    // Filtrado de Insumos
+    searchFilter.addEventListener('input', function () {
+        const searchTerm = this.value.toLowerCase();
+        
+        // Limpiar el select actual
+        insumoSelect.innerHTML = '';
+        
+        // Filtrar y añadir las opciones que coinciden
+        originalOptions.forEach(option => {
+            if (option.value === "" || option.text.toLowerCase().includes(searchTerm)) {
+                insumoSelect.appendChild(option.cloneNode(true));
+            }
+        });
+    });
+
+    // Actualizar campos al seleccionar un Insumo
+    insumoSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+
+        if (selectedOption && selectedOption.value) {
+            proveedorNombreInput.value = selectedOption.dataset.proveedorNombre || '';
+            proveedorIdInput.value = selectedOption.dataset.proveedorId || '';
+            precioUnitarioInput.value = selectedOption.dataset.precio || '';
+        } else {
+            proveedorNombreInput.value = '';
+            proveedorIdInput.value = '';
+            precioUnitarioInput.value = '';
+        }
+    });
+});
+</script>
 {% endblock %}

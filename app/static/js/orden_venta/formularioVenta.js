@@ -234,16 +234,20 @@ document.addEventListener('DOMContentLoaded', function () {
         console.error("No se encontró el formulario con id 'pedido-form'.");
         return;
     }
-    if (isEditing) {
-        initialAddressState = {
-            calle: document.getElementById('calle').value,
-            altura: document.getElementById('altura').value,
-            piso: document.getElementById('piso').value,
-            depto: document.getElementById('depto').value,
-            localidad: document.getElementById('localidad').value,
-            provincia: document.getElementById('provincia').value,
-            codigo_postal: document.getElementById('codigo_postal').value
-        };
+    // CORRECCIÓN: Verificar si estamos en un contexto de edición y si los campos existen
+    if (typeof isEditing !== 'undefined' && isEditing) {
+        const calleEl = document.getElementById('calle');
+        if (calleEl) { // Si el campo 'calle' existe, asumimos que los demás también
+            initialAddressState = {
+                calle: calleEl.value,
+                altura: document.getElementById('altura').value,
+                piso: document.getElementById('piso').value,
+                depto: document.getElementById('depto').value,
+                localidad: document.getElementById('localidad').value,
+                provincia: document.getElementById('provincia').value,
+                codigo_postal: document.getElementById('codigo_postal').value
+            };
+        }
     }
     form.addEventListener('submit', handleSubmit);
 });

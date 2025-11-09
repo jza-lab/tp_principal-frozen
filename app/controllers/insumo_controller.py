@@ -179,12 +179,24 @@ class InsumoController(BaseController):
 
             else:
                 # Lógica existente para obtener todos los insumos con filtros normales
+                # --- CORRECCIÓN: Aplicar filtro de búsqueda 'search' ---
+                search_term = filtros.pop('search', None)
+                
                 result = self.insumo_model.find_all(filtros)
 
                 if not result['success']:
                     return self.error_response(result['error'])
-
+                
                 datos = result['data']
+
+                if search_term:
+                    search_term_lower = search_term.lower()
+                    datos = [
+                        insumo for insumo in datos
+                        if search_term_lower in insumo.get('nombre', '').lower() or \
+                           search_term_lower in insumo.get('codigo_interno', '').lower()
+                    ]
+                # --- FIN DE LA CORRECCIÓN ---
 
             # Ordenar la lista: activos primero, luego inactivos
             sorted_data = sorted(datos, key=lambda x: x.get('activo', False), reverse=True)

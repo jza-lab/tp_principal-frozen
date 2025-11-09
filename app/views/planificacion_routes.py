@@ -316,3 +316,48 @@ def resolver_issue_api(issue_id):
     response, status_code = controller.resolver_issue_api(issue_id)
     return jsonify(response), status_code
 # --- ¡¡¡FIN DE LA NUEVA RUTA!!! ---
+
+
+# En planificacion_routes.py
+
+@planificacion_bp.route('/api/ejecutar-adaptacion', methods=['POST'])
+##@jwt_required(optional=True) # Hacer JWT opcional
+##@permission_required(accion='ejecutar_planificacion_automatica', optional=True) # Hacer permiso opcional
+def ejecutar_adaptacion_api():
+    """
+    API Endpoint para ejecutar la tarea de planificación adaptativa (7 días).
+    Diseñado para ser llamado por un CRON job (con API Key) o
+    manualmente por un admin (con JWT).
+    """
+
+    usuario_id_sistema = None
+
+    # --- IMPORTANTE: LÓGICA DE AUTENTICACIÓN DUAL ---
+
+    # Intento 1: ¿Viene de un usuario logueado (JWT)?
+    try:
+        # Si get_jwt_identity() funciona, es un usuario.
+        usuario_id_sistema = get_jwt_identity()
+        logger.info(f"[AdaptAPI] Ejecución manual solicitada por Usuario ID: {usuario_id_sistema}")
+    except Exception as e_jwt:
+        # Si falla, no hay JWT. ¿Es un CRON?
+        logger.debug("[AdaptAPI] No es un usuario (sin JWT). Verificando API Key de CRON...")
+        api_key_enviada = request.headers.get('X-API-KEY')
+        # Reemplaza esto con una variable de entorno segura en el futuro
+        if api_key_enviada == 'TU_CLAVE_SECRETA_PARA_CRON_JOBS':
+            logger.info("[AdaptAPI] Ejecución automática por CRON (API Key válida).")
+            # Usar el ID de usuario del sistema de tu .env
+            # --- LÍNEA CORREGIDA (SIN MARCADORES) ---
+            usuario_id_sistema = int(os.environ.get('SISTEMA_USER_ID', 1))
+        else:
+            logger.warning(f"[AdaptAPI] Fallo de autenticación. Sin JWT y API Key inválida.")
+            return jsonify({'error': 'No autorizado'}), 401
+
+    if not usuario_id_sistema:
+        return jsonify({'error': 'No se pudo determinar el usuario de ejecución.'}), 401
+
+    # --- FIN DE LA LÓGICA DE AUTENTICACIÓN ---
+
+    controller = PlanificacionController()
+    response, status_code = controller.ejecutar_planificacion_adaptativa(usuario_id_sistema)
+    return jsonify(response), status_code

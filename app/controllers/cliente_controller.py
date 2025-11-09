@@ -81,6 +81,10 @@ class ClienteController(BaseController):
             logger.error(f"Error obteniendo Cliente {cliente_cuil}: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
+    def obtener_cliente_por_cuit(self, cuit: str) -> tuple:
+        """Obtener un Cliente por su CUIT/CUIL"""
+        return self.obtener_cliente_cuil(cuit)
+
     def eliminar_cliente(self, cliente_id: int) -> tuple:
         """Elimina (desactiva) un Cliente por su ID"""
         try:
@@ -417,13 +421,18 @@ class ClienteController(BaseController):
             # 2. Obtener los pedidos del cliente
             pedidos_response, _ = self.pedido_controller.obtener_pedidos_por_cliente(cliente_id)
             
-            pedidos_data = []
+            pedidos_enriquecidos = []
             if pedidos_response.get('success'):
-                pedidos_data = pedidos_response.get('data', [])
+                pedidos_crudos = pedidos_response.get('data', [])
+                for pedido_base in pedidos_crudos:
+                    # Obtener el pedido completo, que ya incluye los items
+                    pedido_completo_resp, _ = self.pedido_controller.obtener_pedido_por_id(pedido_base['id'])
+                    if pedido_completo_resp.get('success'):
+                        pedidos_enriquecidos.append(pedido_completo_resp.get('data'))
 
             # 3. Combinar los datos
             perfil_completo = cliente_data
-            perfil_completo['pedidos'] = pedidos_data
+            perfil_completo['pedidos'] = pedidos_enriquecidos
             
             return self.success_response(data=perfil_completo)
 

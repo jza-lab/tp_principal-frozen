@@ -49,6 +49,42 @@ def job_planificacion_diaria(app: Flask):
         finally:
             setattr(job_planificacion_diaria, 'running', False)
 
+# ==================================================================
+# === 1. AÑADE ESTA NUEVA FUNCIÓN DE JOB ===
+# ==================================================================
+def job_planificacion_adaptativa(app: Flask):
+    """
+    La tarea programada que se ejecuta cada N minutos.
+    Verifica si las OPs ya planificadas aún caben (ej. por ausentismo).
+    """
+    with app.app_context():
+        logger.info(f"--- [JOB ADAPTATIVO] Iniciando Job de Planificación Adaptativa (Usuario: {SISTEMA_USER_ID}) ---")
+
+        if getattr(job_planificacion_adaptativa, 'running', False):
+            logger.warning("[JOB ADAPTATIVO] Ya está en ejecución. Omitiendo.")
+            return
+
+        setattr(job_planificacion_adaptativa, 'running', True)
+
+        try:
+            # Importar el controlador aquí
+            from app.controllers.planificacion_controller import PlanificacionController
+            controller = PlanificacionController()
+
+            # Llamar a la nueva función que creamos en el controlador
+            response, status_code = controller.ejecutar_planificacion_adaptativa(
+                usuario_id=SISTEMA_USER_ID
+            )
+
+            if status_code == 200:
+                logger.info(f"--- [JOB ADAPTATIVO] Completado. Resumen: {response.get('data')} ---")
+            else:
+                logger.error(f"--- [JOB ADAPTATIVO] Completado con ERROR. {response.get('error')} ---")
+
+        except Exception as e:
+            logger.error(f"¡CRÍTICO! El [JOB ADAPTATIVO] falló: {e}", exc_info=True)
+        finally:
+            setattr(job_planificacion_adaptativa, 'running', False)
 
 def init_scheduler(app: Flask):
     """
@@ -86,6 +122,42 @@ def init_scheduler(app: Flask):
         replace_existing=True
     )
     scheduler.start()
+    # --- JOB 1: PLANIFICACIÓN DIARIA (Tu job existente) ---
+    if app.config.get('AUTO_PLAN_ENABLED', False):
+        hour = app.config.get('AUTO_PLAN_HOUR', 5)   # 5 AM por defecto
+        minute = app.config.get('AUTO_PLAN_MINUTE', 0) # en punto
+        logger.info(f"Inicializando Scheduler. Job [planificacion_diaria] programado para {hour:02d}:{minute:02d} todos los días.")
+
+        scheduler.add_job(
+            id='planificacion_diaria',
+            func=job_planificacion_diaria,
+            args=[app],
+            trigger='cron',
+            hour=hour,
+            minute=minute,
+            replace_existing=True
+        )
+    else:
+        logger.info("Scheduler de planificación DIARIA está DESHABILITADO.")
+
+    # ==================================================================
+    # === 2. AÑADE ESTE BLOQUE PARA EL NUEVO JOB ===
+    # ==================================================================
+    if app.config.get('ADAPTIVE_PLAN_ENABLED', True): # Habilitado por defecto
+        minutes = app.config.get('ADAPTIVE_PLAN_MINUTES', 10) # 10 minutos por defecto
+        logger.info(f"Inicializando Scheduler. Job [planificacion_adaptativa] programado para cada {minutes} minutos.")
+
+        scheduler.add_job(
+            id='planificacion_adaptativa',
+            func=job_planificacion_adaptativa,
+            args=[app],
+            trigger='interval', # <-- Disparador por intervalo
+            minutes=minutes,
+            replace_existing=True
+        )
+    else:
+        logger.info("Scheduler de planificación ADAPTATIVA está DESHABILITADO.")
+    # ==================================================================
 
     
 def job_actualizacion_crediticia_diaria(app: Flask):

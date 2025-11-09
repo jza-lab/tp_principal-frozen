@@ -50,6 +50,32 @@ class InventarioController(BaseController):
         self.pedido_model = PedidoModel()
         self.pedido_item_model = PedidoItemModel()
 
+    def get_all_stock_disponible_map(self) -> Dict:
+        """
+        Obtiene el stock disponible de TODOS los insumos en una sola consulta
+        y lo devuelve como un mapa {insumo_id: stock_disponible}.
+
+        Utiliza la función RPC de Supabase 'get_stock_total_disponible'.
+        """
+        try:
+            # --- ¡CORRECCIÓN! ---
+            # Cambiamos 'self.db.rpc' por 'self.inventario_model.db.rpc'
+            # (Usamos el modelo 'inventario_model' que se inicializa en __init__)
+            result = self.inventario_model.db.rpc('get_stock_total_disponible').execute()
+            # --- FIN CORRECCIÓN ---
+
+            # Convertir la lista de resultados en un mapa {id: stock}
+            stock_map = {
+                item['insumo_id']: Decimal(item['stock_disponible'])
+                for item in result.data
+            }
+
+            return {'success': True, 'data': stock_map}
+
+        except Exception as e:
+            logger.error(f"Error en get_all_stock_disponible_map: {e}", exc_info=True)
+            return {'success': False, 'error': str(e), 'data': {}}
+
     def reservar_stock_insumos_para_op(self, orden_produccion: Dict, usuario_id: int) -> dict:
         """
         Crea registros de reserva para los insumos de una OP.
@@ -73,7 +99,7 @@ class InventarioController(BaseController):
             for ingrediente in ingredientes:
                 insumo_id = ingrediente['id_insumo']
                 cantidad_necesaria = float(ingrediente.get('cantidad', 0)) * cantidad_a_producir
-                
+
                 # Usamos la lógica de verificación para obtener lotes y su disponibilidad real
                 verificacion_lotes = self._obtener_lotes_con_disponibilidad(insumo_id)
                 cantidad_restante_a_reservar = cantidad_necesaria
@@ -81,7 +107,7 @@ class InventarioController(BaseController):
                 for lote in verificacion_lotes:
                     if cantidad_restante_a_reservar <= 0:
                         break
-                    
+
                     disponibilidad_en_lote = lote['disponibilidad']
                     cantidad_a_reservar_de_lote = min(disponibilidad_en_lote, cantidad_restante_a_reservar)
 
@@ -103,7 +129,7 @@ class InventarioController(BaseController):
                         'nombre': ingrediente.get('nombre_insumo', 'N/A'),
                         'cantidad_faltante': cantidad_restante_a_reservar
                     })
-            
+
             if insumos_faltantes:
                 # En un caso real, aquí habría que hacer un rollback de las reservas creadas.
                 # Por simplicidad, asumimos que este método solo se llama después de una verificación exitosa.
@@ -136,22 +162,22 @@ class InventarioController(BaseController):
             for reserva in reservas:
                 lote_id = reserva['lote_inventario_id']
                 cantidad_a_consumir = float(reserva['cantidad_reservada'])
-                
+
                 insumos_afectados.add(reserva['insumo_id'])
 
                 lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
                 if not lote_res.get('success'):
                     logger.error(f"No se encontró el lote {lote_id} para consumir stock de OP {orden_produccion_id}. Se omite.")
                     continue
-                
+
                 lote = lote_res.get('data')
                 cantidad_actual_lote = float(lote.get('cantidad_actual', 0))
                 nueva_cantidad_lote = cantidad_actual_lote - cantidad_a_consumir
-                
+
                 update_data = {'cantidad_actual': nueva_cantidad_lote}
                 if nueva_cantidad_lote <= 0:
                     update_data['estado'] = 'agotado'
-                
+
                 self.inventario_model.update(lote_id, update_data, 'id_lote')
                 self.reserva_insumo_model.update(reserva['id'], {'estado': 'CONSUMIDO'}, 'id')
 
@@ -184,14 +210,14 @@ class InventarioController(BaseController):
             for reserva in reservas:
                 insumos_afectados.add(reserva['insumo_id'])
                 self.reserva_insumo_model.delete(reserva['id'], 'id')
-            
+
             # Es importante actualizar el stock para que la disponibilidad refleje la liberación
             for insumo_id in insumos_afectados:
                 self.insumo_controller.actualizar_stock_insumo(insumo_id)
 
             logger.info(f"Reservas liberadas para la OP {orden_produccion_id}")
             return {'success': True}
-            
+
         except Exception as e:
             logger.error(f"Error crítico al liberar stock para OP {orden_produccion_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
@@ -209,7 +235,7 @@ class InventarioController(BaseController):
         )
         if not lotes_activos_res.get('success'):
             return []
-        
+
         lotes_activos = lotes_activos_res.get('data', [])
         if not lotes_activos:
             return []
@@ -217,7 +243,7 @@ class InventarioController(BaseController):
         # 2. Obtener todas las reservas para esos lotes
         lote_ids = [lote['id_lote'] for lote in lotes_activos]
         reservas_res = self.reserva_insumo_model.find_all(filters={'lote_inventario_id': ('in', lote_ids)})
-        
+
         reservas_por_lote = {}
         if reservas_res.get('success'):
             for reserva in reservas_res.get('data', []):
@@ -229,7 +255,7 @@ class InventarioController(BaseController):
             cantidad_fisica = float(lote.get('cantidad_actual', 0))
             cantidad_reservada = reservas_por_lote.get(lote['id_lote'], 0)
             lote['disponibilidad'] = max(0, cantidad_fisica - cantidad_reservada)
-        
+
         return lotes_activos
 
     def verificar_stock_para_op(self, orden_produccion: Dict) -> dict:
@@ -360,7 +386,7 @@ class InventarioController(BaseController):
 
                 # Actualizar stock de seccion insumo automáticamente
                 self.insumo_controller.actualizar_stock_insumo(validated_data['id_insumo'])
-                
+
                 try:
                     from app.controllers.orden_produccion_controller import OrdenProduccionController
                     orden_produccion_controller = OrdenProduccionController()
@@ -449,7 +475,7 @@ class InventarioController(BaseController):
 
             if not lote_result.get('success') or not lote_result.get('data'):
                 return self.error_response('Lote no encontrado', 404)
-            
+
             lote_data = lote_result['data']
 
             # Cargar el historial de control de calidad
@@ -458,7 +484,7 @@ class InventarioController(BaseController):
                 filters={'lote_insumo_id': id_lote},
                 order_by='created_at.desc'
             )
-            
+
             if historial_result.get('success'):
                 lote_data['historial_calidad'] = historial_result.get('data', [])
             else:
@@ -578,17 +604,17 @@ class InventarioController(BaseController):
             }
 
             total_alertas = len(alertas['stock_bajo']) + len(alertas['proximos_vencimientos'])
-            
+
             if total_alertas > 0:
                 from app.controllers.registro_controller import RegistroController
                 registro_controller = RegistroController()
                 from types import SimpleNamespace
                 usuario_sistema = SimpleNamespace(nombre='Sistema', apellido='', roles=['SISTEMA'])
-                
+
                 if alertas['stock_bajo']:
                     detalle = f"Se detectaron {len(alertas['stock_bajo'])} insumos con bajo stock."
                     registro_controller.crear_registro(usuario_sistema, 'Alertas', 'Insumos', detalle)
-                
+
                 if alertas['proximos_vencimientos']:
                     detalle = f"Se detectaron {len(alertas['proximos_vencimientos'])} lotes próximos a vencer."
                     registro_controller.crear_registro(usuario_sistema, 'Alertas', 'Lotes', detalle)
@@ -639,14 +665,14 @@ class InventarioController(BaseController):
             catalogo_response = self.insumo_model.find_all(filters={'activo': True})
             if not catalogo_response.get('success'):
                 return self.error_response(catalogo_response.get('error', 'No se pudo obtener el catálogo de insumos.'), 500)
-            
+
             insumos_del_catalogo = catalogo_response.get('data', [])
 
             # 2. Obtener todos los lotes y agruparlos por insumo_id
             lotes_response, _ = self.obtener_lotes_para_vista()
             if not lotes_response.get('success'):
                 return self.error_response(lotes_response.get('error', 'No se pudieron obtener los lotes de inventario.'), 500)
-            
+
             lotes_por_insumo = {}
             for lote in lotes_response.get('data', []):
                 insumo_id = lote.get('id_insumo')
@@ -662,7 +688,7 @@ class InventarioController(BaseController):
             resultado_final = []
             for insumo in insumos_del_catalogo:
                 insumo_id = insumo['id_insumo']
-                
+
                 # Crear la estructura de datos para la vista
                 datos_insumo_para_vista = {
                     'id_insumo': insumo_id,
@@ -790,7 +816,7 @@ class InventarioController(BaseController):
                 result = self.inventario_model.update(lote_id, update_data, 'id_lote')
                 if not result.get('success'):
                     return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-            
+
             # Path 2: Cuarentena de una cantidad específica (lote con stock)
             else:
                 if estado_actual not in ['disponible', 'cuarentena']:
@@ -818,7 +844,7 @@ class InventarioController(BaseController):
                 result = self.inventario_model.update(lote_id, update_data, 'id_lote')
                 if not result.get('success'):
                     return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-            
+
             control_calidad_controller = ControlCalidadInsumoController()
             foto_url = None
             if foto_file:
@@ -836,7 +862,7 @@ class InventarioController(BaseController):
 
             if not registro_cc_result.get('success'):
                 logger.error(f"El lote {lote_id} se puso en cuarentena, pero falló la creación del registro de C.C.: {registro_cc_result.get('error')}")
-            
+
             # Envío de notificación a gerentes
             try:
                 usuario_controller = UsuarioController()
@@ -845,7 +871,7 @@ class InventarioController(BaseController):
                     notificacion_model = NotificacionModel()
                     insumo_res = self.insumo_model.find_by_id(str(lote['id_insumo']), 'id_insumo')
                     nombre_insumo = insumo_res['data'].get('nombre', 'Desconocido') if insumo_res.get('success') else 'Desconocido'
-                    
+
                     for gerente in gerentes_res['data']:
                         mensaje = f"El lote {lote.get('numero_lote_proveedor')} del insumo {nombre_insumo} ha sido puesto en cuarentena por trazabilidad."
                         notificacion_data = {
@@ -893,9 +919,9 @@ class InventarioController(BaseController):
                 result = self.inventario_model.update(lote_id, update_data, 'id_lote')
                 if not result.get('success'):
                     return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-                
+
                 return self.success_response(message="Lote liberado de cuarentena con éxito.")
-            
+
             # Caso normal: Liberar una cantidad de un lote con stock en cuarentena
             else:
                 if cantidad_a_liberar <= 0:
@@ -919,7 +945,7 @@ class InventarioController(BaseController):
                         nuevo_estado = 'disponible'
                     else:
                         nuevo_estado = 'agotado'
-                
+
                 update_data = {
                     'estado': nuevo_estado,
                     'motivo_cuarentena': nuevo_motivo,
@@ -930,7 +956,7 @@ class InventarioController(BaseController):
                 result = self.inventario_model.update(lote_id, update_data, 'id_lote')
                 if not result.get('success'):
                     return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-                
+
                 # Actualizar el stock consolidado del insumo
                 self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
 
@@ -957,7 +983,7 @@ class InventarioController(BaseController):
         """
         Obtiene la trazabilidad ascendente estricta para un lote de insumo:
         Lote Insumo -> OP -> Lote Producto -> Pedido.
-        
+
         El ancho del flujo (value) se calcula por prorrateo en cada etapa
         para conservar la cantidad original del insumo trazado.
         """
@@ -965,11 +991,188 @@ class InventarioController(BaseController):
             trazabilidad_model = TrazabilidadModel()
             resultado = trazabilidad_model.obtener_trazabilidad_completa_lote_insumo(id_lote)
 
-            if resultado:
-                # El formato de respuesta ya viene listo desde el modelo.
-                return self.success_response(resultado)
-            else:
-                return self.error_response('No se encontró trazabilidad para el lote especificado.', 404)
+            # --- 1. NODO INICIAL: LOTE INSUMO ---
+            lote_insumo_resp = self.inventario_model.find_by_id(id_lote, 'id_lote')
+            if not lote_insumo_resp.get('success'):
+                return self.error_response('Lote de insumo no encontrado', 404)
+
+            lote_insumo = lote_insumo_resp.get('data')
+            lote_insumo_node = f"Lote Insumo: {lote_insumo.get('numero_lote_proveedor') or id_lote[:8]}"
+
+            # --- AÑADIR URL DEL NODO INICIAL ---
+            node_map[lote_insumo_node] = url_for('inventario_view.detalle_lote', id_lote=id_lote)
+
+            # --- 2. ENLACE 1: LOTE INSUMO -> OP ---
+
+            reservas_insumo_resp = self.reserva_insumo_model.find_all(
+                filters={'lote_inventario_id': str(id_lote)}
+            )
+
+            if not reservas_insumo_resp.get('success') or not reservas_insumo_resp.get('data'):
+                logger.info(f"Lote {id_lote} no tiene reservas de insumos.")
+                # --- DEVOLVER node_map INCLUSO SI ESTÁ VACÍO ---
+                return self.success_response({"links": [], "node_map": node_map})
+
+            op_consumo = {}
+            op_ids = set()
+            for reserva in reservas_insumo_resp.get('data', []):
+                id_op = reserva.get('orden_produccion_id')
+                if id_op:
+                    op_ids.add(id_op)
+                    cantidad = float(reserva.get('cantidad_reservada', 0) or 0) + float(reserva.get('cantidad_consumida', 0) or 0)
+                    op_consumo[id_op] = op_consumo.get(id_op, 0.0) + cantidad
+
+            if not op_ids:
+                logger.info(f"El lote {id_lote} no ha sido utilizado en ninguna OP.")
+                # --- DEVOLVER node_map ---
+                return self.success_response({"links": [], "node_map": node_map})
+
+            ops_resp = self.op_model.find_all(filters={'id': ('in', list(op_ids))})
+            op_nodes = {}
+
+            if not ops_resp.get('success'):
+                 return self.error_response(f"Error al buscar OPs: {ops_resp.get('error')}")
+
+            for op in ops_resp.get('data', []):
+                op_id = op.get('id')
+                op_node_name = f"OP: {op.get('codigo') or op_id}"
+                op_nodes[op_id] = op_node_name
+
+                # --- AÑADIR URL DE LA OP ---
+                node_map[op_node_name] = url_for('orden_produccion.detalle', id=op_id)
+
+                cantidad_trazada_op = op_consumo.get(op_id, 0.0)
+                if cantidad_trazada_op > 0:
+                    links.append({
+                        "source_name": lote_insumo_node,
+                        "target_name": op_node_name,
+                        "value": cantidad_trazada_op
+                    })
+
+            # --- 3. ENLACE 2: OP -> LOTE PRODUCTO (Prorrateo) ---
+
+            lotes_prod_resp = self.lote_producto_model.find_all(
+                filters={'orden_produccion_id': ('in', list(op_ids))}
+            )
+
+            if not lotes_prod_resp.get('success') or not lotes_prod_resp.get('data'):
+                logger.info(f"Las OPs {op_ids} no generaron lotes de producto.")
+                # --- DEVOLVER node_map ---
+                return self.success_response({"links": links, "node_map": node_map})
+
+            op_total_producido = {}
+            for lote_prod in lotes_prod_resp.get('data', []):
+                op_id = lote_prod.get('orden_produccion_id')
+                cantidad_lote = float(lote_prod.get('cantidad_inicial', 0) or 0)
+                op_total_producido[op_id] = op_total_producido.get(op_id, 0.0) + cantidad_lote
+
+            lote_prod_nodos = {}
+            lote_prod_cantidad_trazada = {}
+            lote_prod_ids = set()
+
+            for lote_prod in lotes_prod_resp.get('data', []):
+                lote_prod_id = lote_prod.get('id_lote')
+                lote_prod_ids.add(lote_prod_id)
+                op_id = lote_prod.get('orden_produccion_id')
+
+                lote_prod_node = f"Lote Prod: {lote_prod.get('numero_lote') or lote_prod_id}"
+                lote_prod_nodos[lote_prod_id] = lote_prod_node
+
+                # --- AÑADIR URL DEL LOTE DE PRODUCTO ---
+                node_map[lote_prod_node] = url_for('lote_producto.detalle_lote', id_lote=lote_prod_id)
+
+                cantidad_trazada_op = op_consumo.get(op_id, 0.0)
+                total_producido = op_total_producido.get(op_id, 0.0)
+                cantidad_lote = float(lote_prod.get('cantidad_inicial', 0) or 0)
+
+                cantidad_trazada_lote = 0.0
+                if total_producido > 0:
+                    proporcion = cantidad_lote / total_producido
+                    cantidad_trazada_lote = cantidad_trazada_op * proporcion
+
+                lote_prod_cantidad_trazada[lote_prod_id] = cantidad_trazada_lote
+
+                if cantidad_trazada_lote > 0:
+                    links.append({
+                        "source_name": op_nodes[op_id],
+                        "target_name": lote_prod_node,
+                        "value": cantidad_trazada_lote
+                    })
+
+            # --- 4. ENLACE 3: LOTE PRODUCTO -> PEDIDO (Prorrateo) ---
+
+            reservas_prod_resp = self.reserva_producto_model.find_all(
+                filters={'lote_producto_id': ('in', list(lote_prod_ids))}
+            )
+
+            if not reservas_prod_resp.get('success') or not reservas_prod_resp.get('data'):
+                logger.info(f"Los lotes de producto {lote_prod_ids} no están en ningún pedido.")
+                # --- DEVOLVER node_map ---
+                return self.success_response({"links": links, "node_map": node_map})
+
+            lote_prod_total_reservado = {}
+            pedido_reservas_agregadas = {}
+            pedido_ids = set()
+
+            for res_prod in reservas_prod_resp.get('data', []):
+                lote_prod_id = res_prod.get('lote_producto_id')
+                pedido_id = res_prod.get('pedido_id')
+
+                if not pedido_id or not lote_prod_id:
+                    continue
+
+                cantidad = float(res_prod.get('cantidad_reservada', 0) or 0) + float(res_prod.get('cantidad_despachada', 0) or 0)
+
+                if cantidad > 0:
+                    lote_prod_total_reservado[lote_prod_id] = lote_prod_total_reservado.get(lote_prod_id, 0.0) + cantidad
+
+                    key = (lote_prod_id, pedido_id)
+                    pedido_reservas_agregadas[key] = pedido_reservas_agregadas.get(key, 0.0) + cantidad
+
+                    pedido_ids.add(pedido_id)
+
+            if not pedido_ids:
+                 logger.info(f"Lotes {lote_prod_ids} reservados pero sin ID de pedido.")
+                 # --- DEVOLVER node_map ---
+                 return self.success_response({"links": links, "node_map": node_map})
+
+            pedidos_resp = self.pedido_model.find_all(
+                filters={'id': ('in', list(pedido_ids))}
+            )
+
+            if not pedidos_resp.get('success'):
+                 return self.error_response("Error al buscar Pedidos")
+
+            pedido_nodes = {}
+            for pedido in pedidos_resp.get('data', []):
+                pedido_id = pedido.get('id')
+                cliente_nombre = pedido.get('nombre_cliente') or f"Cliente s/n"
+                pedido_node_name = f"Pedido: #{pedido_id} ({cliente_nombre})"
+                pedido_nodes[pedido_id] = pedido_node_name
+
+                # --- AÑADIR URL DEL PEDIDO ---
+                node_map[pedido_node_name] = url_for('orden_venta.detalle', id=pedido_id)
+
+            for (lote_prod_id, pedido_id), cantidad_reservada_agg in pedido_reservas_agregadas.items():
+
+                cantidad_trazada_lote = lote_prod_cantidad_trazada.get(lote_prod_id, 0.0)
+                total_reservado_lote = lote_prod_total_reservado.get(lote_prod_id, 0.0)
+
+                cantidad_trazada_pedido = 0.0
+                if total_reservado_lote > 0:
+                    proporcion = cantidad_reservada_agg / total_reservado_lote
+                    cantidad_trazada_pedido = cantidad_trazada_lote * proporcion
+
+                if cantidad_trazada_pedido > 0:
+                    if lote_prod_id in lote_prod_nodos and pedido_id in pedido_nodes:
+                        links.append({
+                            "source_name": lote_prod_nodos[lote_prod_id],
+                            "target_name": pedido_nodes[pedido_id],
+                            "value": cantidad_trazada_pedido
+                        })
+
+            # --- DEVOLVER TODO AL FINAL ---
+            return self.success_response({"links": links, "node_map": node_map})
 
         except Exception as e:
             logger.error(f"Error en obtener_trazabilidad_lote (manual) para {id_lote}: {e}", exc_info=True)
