@@ -158,6 +158,7 @@ def get_trazabilidad_op(orden_id):
 
 
 from app.controllers.nota_credito_controller import NotaCreditoController
+from app.controllers.insumo_controller import InsumoController
 
 @api_bp.route('/notas-credito/<int:nc_id>/detalles', methods=['GET'])
 @permission_required(accion='consultar_documentos')
@@ -167,4 +168,43 @@ def get_nota_credito_detalles(nc_id):
     """
     controller = NotaCreditoController()
     resultado, status_code = controller.obtener_detalles_para_pdf(nc_id)
+    return jsonify(resultado), status_code
+
+@api_bp.route('/insumos/buscar', methods=['GET'])
+@permission_required(accion='registrar_ingreso_de_materia_prima')
+def buscar_insumos():
+    """
+    Busca insumos por término de búsqueda (nombre o código) y devuelve una lista.
+    Utilizado para autocompletar en formularios.
+    """
+    search_term = request.args.get('search', '')
+    is_active = request.args.get('activo', 'true').lower() == 'true'
+    
+    if len(search_term) < 2:
+        return jsonify({'success': False, 'error': 'El término de búsqueda debe tener al menos 2 caracteres'}), 400
+
+    controller = InsumoController()
+    filtros = {
+        'search': search_term,
+        'activo': is_active
+    }
+    
+    resultado, status_code = controller.obtener_insumos(filtros)
+    
+    if resultado.get('success'):
+        # Aseguramos que la info del proveedor venga incluida
+        insumos_con_proveedor = []
+        for insumo in resultado.get('data', []):
+            proveedor_info, _ = controller.proveedor_model.find_by_id(insumo.get('id_proveedor'))
+            if proveedor_info:
+                insumo['proveedor'] = {
+                    'id': proveedor_info.get('id'),
+                    'nombre': proveedor_info.get('nombre')
+                }
+            else:
+                insumo['proveedor'] = None
+            insumos_con_proveedor.append(insumo)
+        
+        resultado['data'] = insumos_con_proveedor
+    
     return jsonify(resultado), status_code
