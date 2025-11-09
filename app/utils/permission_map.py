@@ -91,7 +91,7 @@ CANONICAL_PERMISSION_MAP = {
     'inactivar_entidad': ['GERENTE'],
     'consultar_logs_o_auditoria': ['IT', 'GERENTE', 'RRHH'],
     'ver_registros': ['IT'],
-    'consultar_trazabilidad_completa': ['GERENTE', 'SUPERVISOR_CALIDAD', 'SUPERVISOR'],
+    'consultar_trazabilidad_completa': ['GERENTE', 'SUPERVISOR_CALIDAD', 'SUPERVISOR', 'DEV'],
 
     # Módulo: Alertas y Reclamos
     'ver_alertas': ['SUPERVISOR', 'IT', 'GERENTE', 'SUPERVISOR_CALIDAD'],
