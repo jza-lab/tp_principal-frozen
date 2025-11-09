@@ -2,7 +2,10 @@ from dataclasses import dataclass, asdict
 from typing import Optional
 from datetime import datetime
 from app.models.base_model import BaseModel
+from typing import List, Optional, Dict
+import logging
 
+logger = logging.getLogger(__name__)
 
 @dataclass
 class Receta:
@@ -11,7 +14,7 @@ class Receta:
     Esta clase define los parámetros, tiempos y rendimiento de una versión
     específica de la receta para un producto. Se asocia con una lista de
     ingredientes a través de la clase `RecetaIngrediente`."""
-    
+
     id: Optional[int]
     nombre: str
     version: str
@@ -49,7 +52,7 @@ class RecetaModel(BaseModel):
     """
     def get_table_name(self) -> str:
         return 'recetas'
-    
+
     def get_ingredientes(self, receta_id: int) -> dict:
         """
         Obtiene la lista de ingredientes (insumos) para una receta específica,
@@ -81,7 +84,7 @@ class RecetaModel(BaseModel):
                         item['descripcion_insumo'] = ""
                         item['codigo_insumo'] = ""
                     ingredientes_procesados.append(item)
-                
+
                 return {'success': True, 'data': ingredientes_procesados}
             else:
                 return {'success': True, 'data': []} # No es un error si no tiene ingredientes
@@ -89,7 +92,7 @@ class RecetaModel(BaseModel):
         except Exception as e:
             # Loggear el error sería una buena práctica aquí
             return {'success': False, 'error': f'Error al obtener ingredientes: {str(e)}'}
-        
+
     def find_all_recetas_by_insumo(self, insumo_id: int) -> dict:
         """
         Encuentra todas las recetas que utilizan un insumo específico.
@@ -106,3 +109,37 @@ class RecetaModel(BaseModel):
 
         except Exception as e:
             return {'success': False, 'error': f'Error al buscar recetas por insumo: {str(e)}'}
+
+
+    def find_by_ids(self, receta_ids: List[int]) -> Dict:
+        """ Obtiene múltiples recetas por sus IDs en una consulta. """
+        if not receta_ids:
+            return {'success': True, 'data': []}
+        try:
+            ids_unicos = list(set(receta_ids))
+            query = self.db.table(self.table_name).select('*').in_('id', ids_unicos)
+            result = query.execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error en find_by_ids para recetas: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def get_ingredientes_by_receta_ids(self, receta_ids: List[int]) -> Dict:
+        """ Obtiene TODOS los ingredientes para una LISTA de IDs de receta. """
+        if not receta_ids:
+            return {'success': True, 'data': []}
+        try:
+            ids_unicos = list(set(receta_ids))
+
+            # --- ¡CORRECCIÓN! ---
+            # Cambiamos 'insumos' por 'insumos_catalogo' como sugirió el error.
+            query = self.db.table('receta_ingredientes').select(
+                '*, insumos_catalogo(nombre, tiempo_entrega_dias, id_insumo)'
+            ).in_('receta_id', ids_unicos)
+            # --- FIN CORRECCIÓN -
+
+            result = query.execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error en get_ingredientes_by_receta_ids: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
