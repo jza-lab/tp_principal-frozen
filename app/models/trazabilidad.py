@@ -1,459 +1,402 @@
-from .base_model import BaseModel
-from postgrest import APIError
+from collections import deque
+from app.database import Database
 
-class TrazabilidadModel(BaseModel):
+class TrazabilidadModel:
     """
-    Modelo para encapsular las consultas complejas de trazabilidad.
+    Servicio unificado para encapsular las consultas complejas de trazabilidad.
+    No hereda de BaseModel porque no representa una única tabla, sino que
+    orquesta consultas a través de múltiples tablas.
     """
     def __init__(self):
-        super().__init__()
+        self.db = Database().client
 
-    def obtener_entidades_afectadas(self, tipo_entidad, id_entidad):
+    def obtener_trazabilidad_unificada(self, tipo_entidad_inicial, id_entidad_inicial, nivel='simple'):
         """
-        Reemplazo en Python para el stored procedure 'get_trazabilidad_afectados'.
-        Dada una entidad de origen, encuentra todos los pedidos y lotes de producto afectados.
+        Construye y devuelve la red de trazabilidad completa o simple para una entidad dada.
+
+        Args:
+            tipo_entidad_inicial (str): El tipo de la entidad de inicio.
+            id_entidad_inicial (int): El ID de la entidad de inicio.
+            nivel (str): 'simple' para la cadena directa, 'completo' para el grafo total.
+
+        Returns:
+            dict: Un diccionario con las secciones 'resumen' y 'diagrama'.
         """
-        lotes_producto_afectados_ids = set()
-        pedidos_afectados_ids = set()
-
-        if tipo_entidad == 'lote_insumo':
-            # 1. Encontrar OPs que usaron el lote de insumo
-            reservas_insumo = self.db.table('reservas_insumos').select('orden_produccion_id').eq('lote_inventario_id', id_entidad).execute().data
-            op_ids = {r['orden_produccion_id'] for r in reservas_insumo}
-
-            # 2. Encontrar Lotes de Producto generados por esas OPs
-            if op_ids:
-                lotes_producto = self.db.table('lotes_productos').select('id_lote').in_('orden_produccion_id', list(op_ids)).execute().data
-                lotes_producto_afectados_ids.update([lp['id_lote'] for lp in lotes_producto])
-
-        elif tipo_entidad == 'orden_produccion':
-            # 1. Encontrar Lotes de Producto generados por esa OP
-            lotes_producto = self.db.table('lotes_productos').select('id_lote').eq('orden_produccion_id', id_entidad).execute().data
-            lotes_producto_afectados_ids.update([lp['id_lote'] for lp in lotes_producto])
         
-        elif tipo_entidad == 'lote_producto':
-            lotes_producto_afectados_ids.add(id_entidad)
-
-        # 3. Para todos los lotes de producto afectados, encontrar los pedidos asociados
-        if lotes_producto_afectados_ids:
-            reservas_producto = self.db.table('reservas_productos').select('pedido_id').in_('lote_producto_id', list(lotes_producto_afectados_ids)).execute().data
-            pedidos_afectados_ids.update([rp['pedido_id'] for rp in reservas_producto])
-
-        # 4. Formatear la salida como lo esperaba el controlador
-        return [
-            {'tipo': 'lote_producto', 'id': str(lp_id)} for lp_id in lotes_producto_afectados_ids
-        ] + [
-            {'tipo': 'pedido', 'id': str(p_id)} for p_id in pedidos_afectados_ids
-        ]
-
-    def _obtener_riesgo_proveedor(self, proveedor_id):
-        if not proveedor_id:
-            return {"total_lotes": 0, "lotes_rechazados": 0, "tasa_fallos": "0.00"}
-        try:
-            total_lotes_res = self.db.table('insumos_inventario').select('id_lote', count='exact').eq('id_proveedor', proveedor_id).execute()
-            total_lotes = total_lotes_res.count or 0
-            if total_lotes == 0:
-                return {"total_lotes": 0, "lotes_rechazados": 0, "tasa_fallos": "0.00"}
-            # rechazados_res = self.db.table('insumos_inventario').select(
-            #     'id_lote', count='exact'
-            # ).eq('id_proveedor', proveedor_id).eq('estado_calidad', 'Rechazado').execute()
-            # lotes_rechazados = rechazados_res.count or 0
-            lotes_rechazados= 0
-            tasa_fallos = (lotes_rechazados / total_lotes) * 100 if total_lotes > 0 else 0
-            return {
-                "total_lotes": total_lotes,
-                "lotes_rechazados": lotes_rechazados,
-                "tasa_fallos": f"{tasa_fallos:.2f}"
-            }
-        except APIError as e:
-            print(f"Error al calcular riesgo de proveedor: {e}")
-            return {"total_lotes": 0, "lotes_rechazados": 0, "tasa_fallos": "0.00"}
-
-    def obtener_trazabilidad_completa_lote_insumo(self, lote_id):
-        lote_insumo_res = self.db.table('insumos_inventario').select(
-            '*, insumos_catalogo:id_insumo(nombre, unidad_medida), proveedores:id_proveedor(id, nombre)'
-        ).eq('id_lote', lote_id).single().execute()
-        lote_insumo = lote_insumo_res.data
-        if not lote_insumo: return None
-
-        orden_compra = None
-        codigo_oc = lote_insumo.get('documento_ingreso')
-        if codigo_oc:
-            try:
-                oc_res = self.db.table('ordenes_compra').select('id, codigo_oc').eq('codigo_oc', codigo_oc).single().execute()
-                orden_compra = oc_res.data
-            except APIError as e:
-                if e.code == 'PGRST116': # No rows found
-                    orden_compra = None
-                else:
-                    raise e # Re-raise other API errors
+        # Estructuras para almacenar el grafo completo
+        nodos = {}
+        aristas = set()
         
-        proveedor_id = lote_insumo.get('id_proveedor')
-        riesgo_proveedor = self._obtener_riesgo_proveedor(proveedor_id)
+        # Normalizar ID inicial a string para consistencia
+        id_entidad_inicial = str(id_entidad_inicial)
+
+        # Estructuras para almacenar el grafo completo
+        nodos = {}
+        aristas = set()
         
-        resumen_origen = {
-            "insumo": lote_insumo.get('insumos_catalogo', {}).get('nombre', 'N/A'),
-            "proveedor": lote_insumo.get('proveedores', {}).get('nombre', 'N/A'),
-            "lote_proveedor": lote_insumo.get('numero_lote_proveedor', 'N/A'),
-            "orden_compra": {"id": orden_compra.get('id'), "codigo": orden_compra.get('codigo_oc')} if orden_compra else None,
-            "recepcion": lote_insumo.get('fecha_ingreso', 'N/A'),
-            "calidad": lote_insumo.get('estado_calidad', 'Pendiente')
-        }
-
-        ops_usadas = []
-        productos_generados = []
-        pedidos_asociados=[]
-        op_id = lote_insumo.get('orden_produccion_id')
-        if op_id:
-            op_res = self.db.table('ordenes_produccion').select('id, codigo').eq('id', op_id).maybe_single().execute()
-            op = op_res.data
-            if op:
-                ops_usadas.append({
-                    "id": op['id'], 
-                    "codigo": op['codigo'],
-                    "cantidad": lote_insumo.get('cantidad_inicial') # La cantidad usada es la total del lote
-                })
-                # Buscar lotes de producto de esta OP
-                lotes_prod_res = self.db.table('lotes_productos').select('id_lote, numero_lote, cantidad_inicial').eq('orden_produccion_id', op_id).execute()
-                lotes_producto = lotes_prod_res.data or []
-                for lp in lotes_producto:
-                    productos_generados.append({"id": lp.get('id_lote'), "codigo": lp.get('numero_lote')})
+        # Agregar el nodo inicial explícitamente para asegurar que siempre exista
+        self._agregar_nodo(nodos, tipo_entidad_inicial, id_entidad_inicial)
         
-            lote_producto_ids = [lp['id'] for lp in productos_generados]
-            if lote_producto_ids:
-                reservas_prod_res = self.db.table('reservas_productos').select('pedidos!inner(id, nombre_cliente)').in_('lote_producto_id', lote_producto_ids).execute()
-                for r in (reservas_prod_res.data or []):
-                    if r.get('pedidos'):
-                        pedidos_asociados.append({
-                                "id": r['pedidos']['id'],
-                                "cliente": r['pedidos'].get('nombre_cliente', 'N/A')
-                        })
+        # Cola para el algoritmo BFS (Búsqueda en Anchura)
+        cola = deque([(tipo_entidad_inicial, id_entidad_inicial)])
+        visitados = set([(tipo_entidad_inicial, id_entidad_inicial)])
 
-        resumen_uso = {
-            "ops": ops_usadas,
-            "productos": productos_generados,
-            "pedidos": list({p['id']: p for p in pedidos_asociados}.values()) # Eliminar duplicados
-        }
-        
-        nodes, edges = [], []
-        li_id_node = f"li_{lote_insumo['id_lote']}"
-        nodes.append({"id": li_id_node, "label": f"LI: {resumen_origen['insumo']}", "group": "lote_insumo", "url": f"/inventario/lote/{lote_insumo['id_lote']}"})
+        # 1. CONSTRUCCIÓN DEL GRAFO COMPLETO (BFS)
+        while cola:
+            tipo_entidad_actual, id_entidad_actual = cola.popleft()
 
-        if resumen_origen.get('orden_compra'):
-            oc = resumen_origen['orden_compra']
-            oc_id_node = f"oc_{oc['id']}"
-            nodes.append({"id": oc_id_node, "label": f"OC: {oc['codigo']}", "group": "orden_compra", "url": f"/compras/detalle/{oc['id']}"})
-            edges.append({"from": oc_id_node, "to": li_id_node, "label": str(lote_insumo.get('cantidad_ingresada', ''))})
+            # --- HACIA ATRÁS (Upstream) ---
+            if tipo_entidad_actual == 'pedido':
+                # Pedido -> Lote de Producto
+                reservas = self.db.table('reservas_productos').select('lote_producto_id, cantidad_reservada').eq('pedido_id', id_entidad_actual).execute().data or []
+                for r in reservas:
+                    self._agregar_nodo_y_arista(nodos, aristas, 'lote_producto', str(r['lote_producto_id']), 'pedido', id_entidad_actual, r['cantidad_reservada'], cola, visitados)
 
-        if ops_usadas:
-            op = ops_usadas[0]
-            op_id_node = f"op_{op['id']}"
-            nodes.append({"id": op_id_node, "label": f"OP: {op['codigo']}", "group": "orden_produccion", "url": f"/ordenes/{op['id']}/detalle"})
-            edges.append({"from": li_id_node, "to": op_id_node, "label": str(op.get('cantidad', ''))})
+            elif tipo_entidad_actual == 'lote_producto':
+                # Lote de Producto -> Orden de Producción
+                lote = self.db.table('lotes_productos').select('orden_produccion_id, cantidad_inicial').eq('id_lote', id_entidad_actual).maybe_single().execute().data
+                if lote and lote.get('orden_produccion_id'):
+                    self._agregar_nodo_y_arista(nodos, aristas, 'orden_produccion', str(lote['orden_produccion_id']), 'lote_producto', id_entidad_actual, lote['cantidad_inicial'], cola, visitados)
 
-
-            if productos_generados:
-                lote_ids = [lp['id'] for lp in productos_generados]
-                lotes_prod_details_res = self.db.table('lotes_productos').select('id_lote, numero_lote, cantidad_inicial').in_('id_lote', lote_ids).execute()
-                for lp in (lotes_prod_details_res.data or []):
-                    lp_id_node = f"lp_{lp['id_lote']}"
-                    nodes.append({"id": lp_id_node, "label": f"LP: {lp['numero_lote']}", "group": "lote_producto", "url": f"/lotes-productos/{lp['id_lote']}/detalle"})
-                    edges.append({"from": op_id_node, "to": lp_id_node, "label": str(lp.get('cantidad_inicial', ''))})
-                if pedidos_asociados:
-                    pedidos_ids = [p['id'] for p in pedidos_asociados]
-                    reservas_pedidos_res = self.db.table('reservas_productos').select(
-                        'cantidad_reservada, lote_producto_id, pedidos!inner(id)'
-                    ).in_('lote_producto_id', lote_ids).in_('pedido_id', pedidos_ids).execute()
-                    
-                    pedidos_nodes_added = set()
-                    for r in (reservas_pedidos_res.data or []):
-                        if not r.get('pedidos'): continue
-                        ped_id = r['pedidos']['id']
-                        ped_id_node = f"ped_{ped_id}"
-                        if ped_id not in pedidos_nodes_added:
-                            nodes.append({"id": ped_id_node, "label": f"PED: #{ped_id}", "group": "pedido", "url": f"/orden-venta/{ped_id}/detalle"})
-                            pedidos_nodes_added.add(ped_id)
-                        
-                        lp_origen_node = f"lp_{r['lote_producto_id']}"
-                        edges.append({"from": lp_origen_node, "to": ped_id_node, "label": str(r.get('cantidad_reservada', ''))})
-
-        return {"resumen": {"origen": resumen_origen, "uso": resumen_uso}, "riesgo_proveedor": riesgo_proveedor, "diagrama": {"nodes": nodes, "edges": edges}}
-
-    def obtener_trazabilidad_completa_lote_producto(self, lote_id):
-        lote_producto_res = self.db.table('lotes_productos').select(
-            '*, productos:producto_id(nombre), ordenes_produccion!inner(id, codigo)'
-        ).eq('id_lote', lote_id).single().execute()
-        lote_producto = lote_producto_res.data
-        if not lote_producto: return None
-
-        op_origen = lote_producto.get('ordenes_produccion')
-        op_id = op_origen.get('id')
-
-        reservas = self.db.table('reservas_insumos').select(
-            'cantidad_reservada, insumos_inventario!inner(*, insumos_catalogo:id_insumo(nombre, unidad_medida), proveedores!inner(id, nombre))'
-        ).eq('orden_produccion_id', op_id).execute().data
-        
-        reservas_producto = self.db.table('reservas_productos').select(
-            'cantidad_reservada, pedidos!inner(id, clientes!inner(id, razon_social))'
-        ).eq('lote_producto_id', lote_id).execute().data
-        
-        resumen_origen = {
-            "op": {"id": op_id, "codigo": op_origen.get('codigo')},
-            "insumos": [
-                {
-                    "id": r.get('insumos_inventario', {}).get('id_lote'),
-                    "nombre": r.get('insumos_inventario', {}).get('insumos_catalogo', {}).get('nombre', 'N/A'),
-                    "cantidad": r.get('cantidad_reservada')
-                } for r in reservas
-            ]
-        }
-        
-        resumen_destino = {
-            "pedidos": [
-                {
-                    # La tabla de pedidos solo tiene 'id' y no tiene 'codigo'
-                    "id": r.get('pedidos', {}).get('id'),
-                     "codigo": f"PED-{r.get('pedidos', {}).get('id')}",
-                    "cantidad": r.get('cantidad_reservada')
-                } for r in reservas_producto if r.get('pedidos')
-            ]
-        }
-        
-        nodes, edges = [], []
-        lp_id_node = f"lp_{lote_id}"
-        # usar numero_lote y cantidad_inicial según esquema
-        lp_codigo = lote_producto.get('numero_lote')
-
-        # Nodo de lote de producto
-        lp_producto_nombre = lote_producto.get('productos', {}).get('nombre', 'N/A')
-        lp_fecha_vencimiento = lote_producto.get('fecha_vencimiento', 'N/A')
-        nodes.append({
-            "id": lp_id_node,
-            "label": f"LP: {lp_codigo}",
-            "group": "lote_producto",
-            "title": (f"<strong>Lote Producto:</strong> {lp_codigo}<br>"
-                      f"<strong>Producto:</strong> {lp_producto_nombre}<br>"
-                      f"<strong>Cantidad Producida:</strong> {lote_producto.get('cantidad_inicial', 'N/A')}<br>"
-                      f"<strong>Fecha Vencimiento:</strong> {lp_fecha_vencimiento}"),
-            "url": f"/lotes-productos/{lote_id}/detalle"
-        })
-
-        # Nodo de OP origen
-        op_id_node = f"op_{op_id}"
-        op_cantidad_planificada = op_origen.get('cantidad_planificada', 'N/A')
-        nodes.append({
-            "id": op_id_node,
-            "label": f"OP: {op_origen.get('codigo')}",
-            "group": "orden_produccion",
-            "title": (f"<strong>Orden de Producción:</strong> {op_origen.get('codigo')}<br>"
-                      f"<strong>Cantidad Planificada:</strong> {op_cantidad_planificada}"),
-            "url": f"/ordenes/{op_id}/detalle"
-        })
-
-        edges.append({"from": op_id_node, "to": lp_id_node, "label": lote_producto.get('cantidad_inicial', 1)})
-
-        # Insumos usados por la OP (entradas hacia la OP)
-        for r in reservas:
-            insumo = r.get('insumos_inventario', {})
-            if not insumo: continue
-            li_id = insumo.get('id_lote')
-            li_id_node = f"li_{li_id}"
-            insumo_nombre = insumo.get('insumos_catalogo', {}).get('nombre', 'N/A')
-            
-            # Buscar la Orden de Compra asociada
-            oc_node_id = None
-            codigo_oc = insumo.get('documento_ingreso')
-            if codigo_oc:
-                oc_res = self.db.table('ordenes_compra').select('id, codigo_oc').eq('codigo_oc', codigo_oc).maybe_single().execute()
-                if oc_res.data:
-                    oc = oc_res.data
-                    oc_node_id = f"oc_{oc['id']}"
-                    if not any(n['id'] == oc_node_id for n in nodes):
-                        nodes.append({
-                            "id": oc_node_id,
-                            "label": f"OC: {oc['codigo_oc']}",
-                            "group": "orden_compra",
-                            "title": f"<strong>Orden de Compra:</strong> {oc['codigo_oc']}",
-                            "url": f"/compras/detalle/{oc['id']}"
-                        })
-
-            if not any(n['id'] == li_id_node for n in nodes):
-                proveedor_info = insumo.get('proveedores', {}) or {}
-                proveedor_nombre = proveedor_info.get('nombre', 'N/A')
-                proveedor_nro = proveedor_info.get('id', 'N/A')
+            elif tipo_entidad_actual == 'orden_produccion':
+                # Orden de Producción -> Lote de Insumo
+                reservas = self.db.table('reservas_insumos').select('lote_inventario_id, cantidad_reservada').eq('orden_produccion_id', id_entidad_actual).execute().data or []
+                for r in reservas:
+                     self._agregar_nodo_y_arista(nodos, aristas, 'lote_insumo', str(r['lote_inventario_id']), 'orden_produccion', id_entidad_actual, r['cantidad_reservada'], cola, visitados)
                 
-                tooltip = (f"<strong>Lote Insumo:</strong> {insumo.get('numero_lote_proveedor', 'N/A')}<br>"
-                           f"<strong>Insumo:</strong> {insumo_nombre}<br>"
-                           f"<strong>Cantidad Usada:</strong> {r.get('cantidad_reservada', 'N/A')}<br>"
-                           f"<strong>Proveedor:</strong> {proveedor_nombre} (Nro: {proveedor_nro})")
+                # Manejo de OCs directamente asociadas a la OP
+                ocs_directas = self.db.table('ordenes_compra').select('id, codigo_oc').eq('orden_produccion_id', id_entidad_actual).execute().data or []
+                for oc in ocs_directas:
+                    id_oc_str = str(oc['id'])
+                    # Asegurarse de que el nodo de la OC exista antes de crear aristas hacia él.
+                    self._agregar_nodo(nodos, 'orden_compra', id_oc_str)
+                    
+                    # Crear un nodo "puente" genérico para el insumo
+                    id_insumo_generico = f"insumo_generico_{id_oc_str}"
+                    self._agregar_nodo(nodos, 'lote_insumo', id_insumo_generico, {'numero_lote_proveedor': 'Insumo Genérico', 'insumos_catalogo': {'nombre': 'Genérico'}}, es_generico=True)
+                    
+                    self._agregar_arista(aristas, 'orden_compra', id_oc_str, 'lote_insumo', id_insumo_generico, '')
+                    self._agregar_arista(aristas, 'lote_insumo', id_insumo_generico, 'orden_produccion', id_entidad_actual, '')
+                    
+                    if ('orden_compra', id_oc_str) not in visitados:
+                        cola.append(('orden_compra', id_oc_str))
+                        visitados.add(('orden_compra', id_oc_str))
 
-                nodes.append({
-                    "id": li_id_node,
-                    "label": f"LI: {insumo_nombre}",
-                    "group": "lote_insumo",
-                    "title": tooltip,
-                    "url": f"/inventario/lote/{li_id}"})
+
+            elif tipo_entidad_actual == 'lote_insumo':
+                # Lote de Insumo -> Orden de Compra o Ingreso Manual
+                # Un ID de lote de insumo puede ser un UUID (string) o un int del legacy.
+                # Solo buscamos en la BD si no es un nodo genérico creado por nosotros.
+                if not id_entidad_actual.startswith('insumo_generico_'):
+                    insumo = self.db.table('insumos_inventario').select('documento_ingreso, cantidad_inicial').eq('id_lote', id_entidad_actual).maybe_single().execute().data
+                    if insumo and insumo.get('documento_ingreso'):
+                        oc = self.db.table('ordenes_compra').select('id').eq('codigo_oc', insumo['documento_ingreso']).maybe_single().execute().data
+                        if oc:
+                            self._agregar_nodo_y_arista(nodos, aristas, 'orden_compra', str(oc['id']), 'lote_insumo', id_entidad_actual, insumo['cantidad_inicial'], cola, visitados)
+                        else: # Si el código no corresponde a ninguna OC
+                            self._agregar_origen_manual(nodos, aristas, 'lote_insumo', id_entidad_actual)
+                    else: # Si no tiene documento
+                        self._agregar_origen_manual(nodos, aristas, 'lote_insumo', id_entidad_actual)
+
+            # --- HACIA ADELANTE (Downstream) ---
+            if tipo_entidad_actual == 'orden_compra':
+                # Orden de Compra -> Lote de Insumo
+                oc = self.db.table('ordenes_compra').select('codigo_oc').eq('id', id_entidad_actual).maybe_single().execute().data
+                if oc and oc.get('codigo_oc'):
+                    insumos = self.db.table('insumos_inventario').select('id_lote, cantidad_inicial').eq('documento_ingreso', oc['codigo_oc']).execute().data or []
+                    for i in insumos:
+                        # Corregido: La arista es DESDE la OC HACIA el lote de insumo
+                        self._agregar_nodo_y_arista(nodos, aristas, 
+                                                  'orden_compra', id_entidad_actual, 
+                                                  'lote_insumo', str(i['id_lote']), 
+                                                  i['cantidad_inicial'], 
+                                                  cola, visitados)
+
+            elif tipo_entidad_actual == 'lote_insumo' and not id_entidad_actual.startswith('insumo_generico_'):
+                # Lote de Insumo -> Orden de Producción
+                reservas = self.db.table('reservas_insumos').select('orden_produccion_id, cantidad_reservada').eq('lote_inventario_id', id_entidad_actual).execute().data or []
+                for r in reservas:
+                    self._agregar_nodo_y_arista(nodos, aristas, 'lote_insumo', id_entidad_actual, 'orden_produccion', str(r['orden_produccion_id']), r['cantidad_reservada'], cola, visitados)
             
-            # Crear edge desde OC a Lote de Insumo (si existe)
-            if oc_node_id:
-                 edges.append({"from": oc_node_id, "to": li_id_node, "label": insumo.get('cantidad_ingresada')})
+            elif tipo_entidad_actual == 'orden_produccion':
+                # Orden de Producción -> Lote de Producto
+                lotes = self.db.table('lotes_productos').select('id_lote, cantidad_inicial').eq('orden_produccion_id', id_entidad_actual).execute().data or []
+                for l in lotes:
+                    self._agregar_nodo_y_arista(nodos, aristas, 'orden_produccion', id_entidad_actual, 'lote_producto', str(l['id_lote']), l['cantidad_inicial'], cola, visitados)
 
-            edges.append({"from": li_id_node, "to": op_id_node, "label": r.get('cantidad_reservada')})
+            elif tipo_entidad_actual == 'lote_producto':
+                # Lote de Producto -> Pedido
+                reservas = self.db.table('reservas_productos').select('pedido_id, cantidad_reservada').eq('lote_producto_id', id_entidad_actual).execute().data or []
+                for r in reservas:
+                    self._agregar_nodo_y_arista(nodos, aristas, 'lote_producto', id_entidad_actual, 'pedido', str(r['pedido_id']), r['cantidad_reservada'], cola, visitados)
 
-        # Pedidos relacionados con el lote de producto (salidas desde LP)
-        for r in reservas_producto:
-            pedido = r.get('pedidos', {})
-            if not pedido: continue
+        # 2. FILTRADO DEL GRAFO SEGÚN EL NIVEL
+        nodos_filtrados, aristas_filtradas = self._filtrar_grafo_por_nivel(nodos, aristas, tipo_entidad_inicial, id_entidad_inicial, nivel)
 
-            ped_id = pedido.get('id')
-            ped_id_node = f"ped_{ped_id}"
-            if not any(n['id'] == ped_id_node for n in nodes):
-                cliente_nombre = pedido.get('clientes', {}).get('razon_social', 'N/A')
-                tooltip = (f"<strong>Pedido:</strong> {ped_id}<br>"
-                           f"<strong>Cliente:</strong> {cliente_nombre}<br>"
-                           f"<strong>Cantidad Despachada:</strong> {r.get('cantidad_reservada', 'N/A')}")
+        # 3. ENRIQUECIMIENTO DE DATOS Y FORMATEO FINAL
+        self._enriquecer_datos_nodos(nodos_filtrados)
+        
+        resumen = self._generar_resumen(nodos_filtrados, aristas_filtradas, tipo_entidad_inicial, id_entidad_inicial)
+        diagrama = self._generar_diagrama(nodos_filtrados, aristas_filtradas)
 
-                nodes.append({
-                    "id": ped_id_node,
-                    "label": f"PED: {ped_id}",
-                    "group": "pedido",
-                    "title": tooltip,
-                    "url": f"/orden-venta/{ped_id}/detalle"
-                })
-            edges.append({"from": lp_id_node, "to": ped_id_node, "label": r.get('cantidad_reservada')})
+        return {'resumen': resumen, 'diagrama': diagrama}
 
-        return {
-            "resumen": {"origen": resumen_origen, "destino": resumen_destino},
-            "diagrama": {"nodes": nodes, "edges": edges}
-        }
+    # --- MÉTODOS AUXILIARES ---
 
-    def obtener_trazabilidad_completa_orden_produccion(self, orden_id):
+    def _agregar_nodo(self, nodos, tipo, id, data=None, es_generico=False):
+        """Agrega un nodo a la colección si no existe."""
+        if (tipo, id) not in nodos:
+            nodos[(tipo, id)] = {'data': data, 'es_generico': es_generico}
+    
+    def _agregar_arista(self, aristas, tipo_origen, id_origen, tipo_destino, id_destino, cantidad):
+        """Agrega una arista a la colección."""
+        aristas.add(((tipo_origen, id_origen), (tipo_destino, id_destino), cantidad))
+
+    def _agregar_nodo_y_arista(self, nodos, aristas, tipo_origen, id_origen, tipo_destino, id_destino, cantidad, cola, visitados):
+        """Función helper para añadir nodos y aristas, y actualizar la cola de BFS."""
+        self._agregar_nodo(nodos, tipo_origen, id_origen)
+        self._agregar_nodo(nodos, tipo_destino, id_destino)
+        # La arista va del origen (atrás) al destino (adelante)
+        self._agregar_arista(aristas, tipo_origen, id_origen, tipo_destino, id_destino, cantidad)
+        
+        if (tipo_origen, id_origen) not in visitados:
+            cola.append((tipo_origen, id_origen))
+            visitados.add((tipo_origen, id_origen))
+        if (tipo_destino, id_destino) not in visitados:
+            cola.append((tipo_destino, id_destino))
+            visitados.add((tipo_destino, id_destino))
+
+    def _agregar_origen_manual(self, nodos, aristas, tipo_lote, id_lote):
+        """Crea un nodo de Ingreso Manual y lo conecta como origen."""
+        id_manual = 'ingreso_manual'
+        self._agregar_nodo(nodos, 'ingreso_manual', id_manual, {'nombre': 'Ingreso Manual'})
+        self._agregar_arista(aristas, 'ingreso_manual', id_manual, tipo_lote, id_lote, '')
+
+    def _filtrar_grafo_por_nivel(self, nodos_todos, aristas_todas, tipo_entidad_inicial, id_entidad_inicial, nivel):
+        """Filtra los nodos y aristas según el nivel de trazabilidad solicitado."""
+        if nivel == 'completo':
+            return nodos_todos, aristas_todas
+        
+        # Lógica para 'simple': solo la cadena directa
+        nodos_filtrados = {}
+        aristas_filtradas = set()
+        
+        # Hacia atrás
+        camino_atras = self._encontrar_camino_directo(aristas_todas, tipo_entidad_inicial, id_entidad_inicial, 'atras')
+        # Hacia adelante
+        camino_adelante = self._encontrar_camino_directo(aristas_todas, tipo_entidad_inicial, id_entidad_inicial, 'adelante')
+
+        camino_aristas = camino_atras.union(camino_adelante)
+        
+        for arista in camino_aristas:
+            origen, destino, cantidad = arista
+            aristas_filtradas.add(arista)
+            if origen not in nodos_filtrados:
+                nodos_filtrados[origen] = nodos_todos[origen]
+            if destino not in nodos_filtrados:
+                nodos_filtrados[destino] = nodos_todos[destino]
+        
+        # Asegurarse de que el nodo inicial esté si no tiene aristas
+        if not nodos_filtrados and (tipo_entidad_inicial, id_entidad_inicial) in nodos_todos:
+            nodos_filtrados[(tipo_entidad_inicial, id_entidad_inicial)] = nodos_todos[(tipo_entidad_inicial, id_entidad_inicial)]
+
+        return nodos_filtrados, aristas_filtradas
+
+    def _encontrar_camino_directo(self, aristas, tipo_entidad, id_entidad, direccion):
+        """Encuentra recursivamente el camino de aristas en una dirección."""
+        camino = set()
+        nodo_actual = (tipo_entidad, id_entidad)
+        
+        if direccion == 'atras':
+            aristas_relevantes = [a for a in aristas if a[1] == nodo_actual]
+            for a in aristas_relevantes:
+                camino.add(a)
+                camino.update(self._encontrar_camino_directo(aristas, a[0][0], a[0][1], 'atras'))
+        
+        elif direccion == 'adelante':
+            aristas_relevantes = [a for a in aristas if a[0] == nodo_actual]
+            for a in aristas_relevantes:
+                camino.add(a)
+                camino.update(self._encontrar_camino_directo(aristas, a[1][0], a[1][1], 'adelante'))
+
+        return camino
+
+    def _enriquecer_datos_nodos(self, nodos):
         """
-        Construye la trazabilidad completa para una Orden de Producción (OP).
-        Incluye insumos utilizados (lotes insumo), lotes de producto generados y pedidos relacionados.
+        Obtiene datos detallados de la BD para todos los nodos de forma masiva para evitar el problema N+1.
         """
-        op_res = self.db.table('ordenes_produccion').select(
-            '*, producto:producto_id(nombre), supervisor:supervisor_responsable_id(nombre, apellido)'
-        ).eq('id', orden_id).single().execute()
-        op = op_res.data
-        if not op: return None
-                # 2. Trazabilidad Ascendente (Upstream) - LÓGICA CORRECTA
-        insumos_usados_res = self.db.table('insumos_inventario').select(
-            'id_lote, numero_lote_proveedor, cantidad_inicial, documento_ingreso, '
-            'insumo:id_insumo(nombre), '
-            'proveedor:id_proveedor(id, nombre)'
-        ).eq('orden_produccion_id', orden_id).execute()
-        insumos_usados = insumos_usados_res.data or []
-        
-        # OCs directamente asociadas a la OP (para casos sin lote intermedio)
-        ocs_directas_res = self.db.table('ordenes_compra').select(
-            '*, proveedores:proveedor_id(id, nombre)'
-        ).eq('orden_produccion_id', orden_id).execute()
-        ocs_asociadas_directamente = ocs_directas_res.data or []
+        # 1. Agrupar IDs por tipo de entidad, asegurándose de que no sean genéricos
+        ids_por_tipo = {}
+        for (tipo, id), nodo_info in nodos.items():
+            if nodo_info.get('es_generico') or tipo == 'ingreso_manual':
+                continue
+            if tipo not in ids_por_tipo:
+                ids_por_tipo[tipo] = []
+            ids_por_tipo[tipo].append(id)
 
-
-        # 3. Trazabilidad Descendente (Downstream)
-        lotes_producto_res = self.db.table('lotes_productos').select(
-            'id_lote, numero_lote, cantidad_inicial, fecha_vencimiento, producto:producto_id(nombre)'
-        ).eq('orden_produccion_id', orden_id).execute()
-        lotes_producto = lotes_producto_res.data or []
-        lote_ids = [lp['id_lote'] for lp in lotes_producto]
-
-        pedidos_info = {}
-
-        reservas_productos = []
-        if lote_ids:
-            reservas_prod_res = self.db.table('reservas_productos').select(
-                'cantidad_reservada, lote_producto_id, pedido:pedidos!inner(id, nombre_cliente, fecha_requerido)'
-            ).in_('lote_producto_id', lote_ids).execute()
-            reservas_productos = reservas_prod_res.data or []
-            for r in reservas_productos:
-                p = r.get('pedido')
-                if p and p.get('id') not in pedidos_info:
-                    pedidos_info[p['id']] = p
-
-        # --- Construcción de Resumen ---
-        resumen_insumos = [{
-            'id': insumo.get('id_lote'),
-            'nombre': insumo.get('insumo', {}).get('nombre', 'N/A'),
-            'lote_proveedor': insumo.get('numero_lote_proveedor'),
-            'proveedor': insumo.get('proveedor', {}).get('nombre', 'N/A'),
-            'cantidad': insumo.get('cantidad_inicial'),
-        } for insumo in insumos_usados]
-        
-        resumen_ocs_asociadas = [{
-            'id': oc.get('id'),
-            'codigo_oc': oc.get('codigo_oc'),
-            'proveedor_nombre': oc.get('proveedores', {}).get('nombre', 'N/A'),
-            'estado': oc.get('estado')
-        } for oc in ocs_asociadas_directamente]
-        
-        resumen_origen = {
-            'op': {'id': orden_id, 'codigo': op.get('codigo'), 'producto': op.get('producto', {}).get('nombre'), 'cantidad': op.get('cantidad_planificada')},
-            'insumos_utilizados': resumen_insumos,
-            'ocs_asociadas': resumen_ocs_asociadas
+        # Mapeo de configuración para cada tipo de entidad
+        mapeo_tablas = {
+            'orden_compra': {'tabla': 'ordenes_compra', 'id_col': 'id', 'selects': '*, proveedores:proveedor_id(nombre)'},
+            'lote_insumo': {'tabla': 'insumos_inventario', 'id_col': 'id_lote', 'selects': '*, insumos_catalogo:id_insumo(nombre)'},
+            'orden_produccion': {'tabla': 'ordenes_produccion', 'id_col': 'id', 'selects': '*, productos:producto_id(nombre)'},
+            'lote_producto': {'tabla': 'lotes_productos', 'id_col': 'id_lote', 'selects': '*, productos:producto_id(nombre)'},
+            'pedido': {'tabla': 'pedidos', 'id_col': 'id', 'selects': '*, clientes:cliente_id(razon_social)'}
         }
         
-        resumen_destino = {
-           'lotes_producidos': [{'id': lp.get('id_lote'), 'codigo': lp.get('numero_lote'), 'cantidad': lp.get('cantidad_inicial')} for lp in lotes_producto],
-            'pedidos_relacionados': [{'id': pid, 'cliente': pinfo.get('nombre_cliente', 'N/A')} for pid, pinfo in pedidos_info.items()]
-        }
+        datos_enriquecidos = {}
 
-        nodes, edges = [], []
-        op_node = f"op_{orden_id}"
-        op_title = f"<strong>OP:</strong> {op.get('codigo')}<br><strong>Producto:</strong> {op.get('producto', {}).get('nombre')}<br><strong>Cantidad:</strong> {op.get('cantidad_planificada')}"
-        nodes.append({'id': op_node, 'label': f"OP: {op.get('codigo')}", 'group': 'orden_produccion', 'title': op_title, 'url': f"/ordenes/{orden_id}/detalle"})
+        # 2. Realizar una consulta masiva por cada tipo de entidad
+        for tipo, ids in ids_por_tipo.items():
+            if tipo in mapeo_tablas and ids:
+                config = mapeo_tablas[tipo]
+                try:
+                    # Eliminar duplicados y asegurar que los IDs son del tipo correcto para la consulta
+                    ids_unicos = list(set(ids))
+                    
+                    datos = self.db.table(config['tabla']).select(config['selects']).in_(config['id_col'], ids_unicos).execute().data
+                    
+                    # Crear un mapa de id -> data para fácil acceso
+                    datos_enriquecidos[tipo] = {str(d[config['id_col']]): d for d in datos}
 
-        # Nodos y Ejes: Upstream
-        for insumo in insumos_usados:
-            li_id, li_node = insumo['id_lote'], f"li_{insumo['id_lote']}"
-            if not any(n['id'] == li_node for n in nodes):
-                li_title = f"<strong>Lote Insumo:</strong> {insumo.get('numero_lote_proveedor', 'N/A')}<br><strong>Insumo:</strong> {insumo.get('insumo', {}).get('nombre', 'N/A')}<br><strong>Proveedor:</strong> {insumo.get('proveedor', {}).get('nombre', 'N/A')}"
-                nodes.append({'id': li_node, 'label': f"LI: {insumo.get('insumo', {}).get('nombre', 'N/A')}", 'group': 'lote_insumo', 'title': li_title, 'url': f"/inventario/lote/{li_id}"})
+                except Exception as e:
+                    print(f"Error al enriquecer nodos de tipo '{tipo}': {e}")
+                    datos_enriquecidos[tipo] = {}
+
+        # 3. Asignar los datos enriquecidos de vuelta a la estructura de nodos
+        for (tipo, id), nodo_info in nodos.items():
+            # Solo asignar si no es genérico y si los datos se encontraron
+            if not nodo_info.get('es_generico') and tipo in datos_enriquecidos:
+                 nodos[(tipo, id)]['data'] = datos_enriquecidos[tipo].get(str(id), {})
+
+
+    def _generar_resumen(self, nodos, aristas, tipo_entidad_inicial, id_entidad_inicial):
+        """Genera la sección de resumen con listas de origen y destino."""
+        resumen = {'origen': [], 'destino': []}
+        nodo_inicial = (tipo_entidad_inicial, id_entidad_inicial)
+
+        # Usamos BFS desde el nodo inicial para poblar el resumen
+        cola_resumen = deque([nodo_inicial])
+        visitados_resumen = {nodo_inicial}
+
+        while cola_resumen:
+            tipo_actual, id_actual = cola_resumen.popleft()
+            nodo_actual = (tipo_actual, id_actual)
             
-            edges.append({'from': li_node, 'to': op_node, 'label': str(insumo.get('cantidad_inicial'))})
-            codigo_oc = insumo.get('documento_ingreso')
-            if codigo_oc:
-                oc_res = self.db.table('ordenes_compra').select('id, codigo_oc').eq('codigo_oc', codigo_oc).maybe_single().execute()
-                if oc_res.data:
-                        
-                    oc = oc_res.data
-                    oc_node = f"oc_{oc['id']}"
-                    if not any(n['id'] == oc_node for n in nodes):
-                        nodes.append({'id': oc_node, 'label': f"OC: {oc['codigo_oc']}", 'group': 'orden_compra', 'url': f"/compras/detalle/{oc['id']}"})
-                    if not any(e['from'] == oc_node and e['to'] == li_node for e in edges):
-                        edges.append({'from': oc_node, 'to': li_node, 'label': str(insumo.get('cantidad_inicial'))}) # Asumimos que la OC es por la cantidad del lote
+            # Origen (hacia atrás)
+            aristas_hacia_atras = [a for a in aristas if a[1] == nodo_actual]
+            for origen, _, _ in aristas_hacia_atras:
+                if origen not in visitados_resumen:
+                    nodo_info = nodos.get(origen, {})
+                    info_nodo = self._formatear_info_resumen(origen[0], origen[1], nodo_info.get('data'), nodo_info.get('es_generico', False))
+                    if info_nodo: resumen['origen'].append(info_nodo)
+                    visitados_resumen.add(origen)
+                    cola_resumen.append(origen)
 
-        # Nodos y Ejes: OCs directas
-        for oc in ocs_asociadas_directamente:
+            # Destino (hacia adelante)
+            aristas_hacia_adelante = [a for a in aristas if a[0] == nodo_actual]
+            for _, destino, _ in aristas_hacia_adelante:
+                if destino not in visitados_resumen:
+                    nodo_info = nodos.get(destino, {})
+                    info_nodo = self._formatear_info_resumen(destino[0], destino[1], nodo_info.get('data'), nodo_info.get('es_generico', False))
+                    if info_nodo: resumen['destino'].append(info_nodo)
+                    visitados_resumen.add(destino)
+                    cola_resumen.append(destino)
+        
+        # Eliminar duplicados
+        resumen['origen'] = [dict(t) for t in {tuple(d.items()) for d in resumen['origen']}]
+        resumen['destino'] = [dict(t) for t in {tuple(d.items()) for d in resumen['destino']}]
 
-                oc_node = f"oc_{oc['id']}"
-                if not any(n['id'] == oc_node for n in nodes):
-                    nodes.append({'id': oc_node, 'label': f"OC: {oc['codigo_oc']}", 'group': 'orden_compra', 'url': f"/compras/detalle/{oc['id']}"})
+        return resumen
 
-                    bridge_node = f"insumo_generico_br_{oc['id']}"
-                    nodes.append({'id': bridge_node, 'label': "Insumo (Genérico)", 'group': 'lote_insumo', 'color': {'background':'#cccccc', 'border':'#aaaaaa'}})
-                    edges.append({'from': oc_node, 'to': bridge_node})
-                    edges.append({'from': bridge_node, 'to': op_node})
+    def _formatear_info_resumen(self, tipo, id, data, es_generico=False):
+        """Da formato a la información de un nodo para el resumen."""
+        # Excluir nodos genéricos del resumen
+        if es_generico:
+            return None
+            
+        if not data: return None
+        info = {'tipo': tipo, 'id': id}
+        if tipo == 'orden_compra':
+            info['nombre'] = data.get('codigo_oc', f'OC-{id}')
+            info['detalle'] = f"Proveedor: {data.get('proveedores', {}).get('nombre', 'N/A')}"
+        elif tipo == 'lote_insumo':
+            info['nombre'] = data.get('insumos_catalogo', {}).get('nombre', 'N/A')
+            info['detalle'] = f"Lote: {data.get('numero_lote_proveedor', 'N/A')}"
+        elif tipo == 'orden_produccion':
+            info['nombre'] = data.get('codigo', f'OP-{id}')
+            info['detalle'] = f"Producto: {data.get('productos', {}).get('nombre', 'N/A')}"
+        elif tipo == 'lote_producto':
+            info['nombre'] = data.get('productos', {}).get('nombre', 'N/A')
+            info['detalle'] = f"Lote: {data.get('numero_lote', 'N/A')}"
+        elif tipo == 'pedido':
+            info['nombre'] = f"Pedido #{id}"
+            info['detalle'] = f"Cliente: {data.get('clientes', {}).get('razon_social', 'N/A')}"
+        else:
+            return None
+        return info
 
-        # Nodos y Ejes: Downstream
-        for lp in lotes_producto:
-            lp_id, lp_node = lp['id_lote'], f"lp_{lp['id_lote']}"
-            lp_title = f"<strong>Lote Prod:</strong> {lp.get('numero_lote')}<br><strong>Producto:</strong> {lp.get('producto', {}).get('nombre')}<br><strong>Vto:</strong> {lp.get('fecha_vencimiento')}"
-            nodes.append({'id': lp_node, 'label': f"LP: {lp.get('numero_lote')}", 'group': 'lote_producto', 'title': lp_title, 'url': f"/lotes-productos/{lp_id}/detalle"})
-            edges.append({'from': op_node, 'to': lp_node, 'label': str(lp.get('cantidad_inicial'))})
+    def _generar_diagrama(self, nodos, aristas):
+        """Genera la sección de diagrama con formato para Vis.js."""
+        nodos_diagrama = []
+        urls = {
+            'orden_compra': '/compras/detalle/',
+            'lote_insumo': '/inventario/lote/',
+            'orden_produccion': '/ordenes_produccion/detalle/',
+            'lote_producto': '/lotes-productos/detalle/',
+            'pedido': '/orden-venta/detalle/'
+        }
 
-        for r in reservas_productos:
-            p = r.get('pedido', {})
-            if not p: continue
-            ped_id, ped_node = p['id'], f"ped_{p['id']}"
-            lp_origen_node = f"lp_{r['lote_producto_id']}"
-            if not any(n['id'] == ped_node for n in nodes):
-                ped_title = f"<strong>Pedido:</strong> {ped_id}<br><strong>Cliente:</strong> {p.get('nombre_cliente', 'N/A')}"
-                nodes.append({'id': ped_node, 'label': f"PED: {ped_id}", 'group': 'pedido', 'title': ped_title, 'url': f"/orden-venta/{ped_id}/detalle"})
-            edges.append({'from': lp_origen_node, 'to': ped_node, 'label': str(r.get('cantidad_reservada'))})
+        for (tipo, id), info in nodos.items():
+            data = info.get('data', {})
+            es_generico = info.get('es_generico', False)
+            
+            label = f"{tipo.replace('_', ' ').title()}"
+            if tipo == 'orden_compra': label = f"OC: {data.get('codigo_oc', id)}"
+            elif tipo == 'lote_insumo': label = f"LI: {data.get('insumos_catalogo', {}).get('nombre', 'Genérico')}"
+            elif tipo == 'orden_produccion': label = f"OP: {data.get('codigo', id)}"
+            elif tipo == 'lote_producto': label = f"LP: {data.get('numero_lote', id)}"
+            elif tipo == 'pedido': label = f"Pedido: #{id}"
+            elif tipo == 'ingreso_manual': label = "Ingreso Manual"
 
-        return {'resumen': {'origen': resumen_origen, 'destino': resumen_destino}, 'diagrama': {'nodes': nodes, 'edges': edges}}
+            nodo_obj = {
+                'id': f"{tipo}_{id}",
+                'label': label,
+                'group': tipo
+            }
+            if not es_generico and tipo in urls:
+                nodo_obj['url'] = f"{urls[tipo]}{id}"
+            if es_generico:
+                nodo_obj['color'] = {'background':'#cccccc', 'border':'#aaaaaa'}
+
+            nodos_diagrama.append(nodo_obj)
+            
+        aristas_diagrama = [{
+            'from': f"{origen[0]}_{origen[1]}",
+            'to': f"{destino[0]}_{destino[1]}",
+            'label': str(cantidad)
+        } for origen, destino, cantidad in aristas]
+
+        return {'nodes': nodos_diagrama, 'edges': aristas_diagrama}
+
+    def obtener_lista_afectados(self, tipo_entidad_inicial, id_entidad_inicial):
+        """
+        Obtiene la lista plana de todas las entidades afectadas a partir de un punto,
+        realizando una trazabilidad completa bidireccional.
+        """
+        _, aristas = self.obtener_trazabilidad_unificada(tipo_entidad_inicial, id_entidad_inicial, 'completo')['diagrama'].values()
+        
+        nodos_afectados = set()
+        for arista in aristas:
+            origen_tipo, origen_id = arista['from'].split('_', 1)
+            destino_tipo, destino_id = arista['to'].split('_', 1)
+            nodos_afectados.add((origen_tipo, origen_id))
+            nodos_afectados.add((destino_tipo, destino_id))
+        
+        #Asegurar que el nodo inicial está incluido
+        nodos_afectados.add((tipo_entidad_inicial, str(id_entidad_inicial)))
+
+        # Formatear para la salida esperada por el sistema de alertas
+        return [{'tipo_entidad': tipo, 'id_entidad': int(id)} for tipo, id in nodos_afectados if id.isdigit()]
 
     @classmethod
     def get_table_name(cls):
@@ -462,41 +405,3 @@ class TrazabilidadModel(BaseModel):
     @classmethod
     def get_id_column(cls):
         return None
-
-    def obtener_lista_afectados(self, tipo_entidad, id_entidad):
-        afectados = []
-        pid = id_entidad
-
-        if tipo_entidad == 'lote_insumo':
-            afectados.append({'tipo_entidad': 'lote_insumo', 'id_entidad': pid})
-            res_ops = self.db.table('reservas_insumos').select('orden_produccion_id').eq('lote_inventario_id', pid).execute().data or []
-            op_ids = list({r.get('orden_produccion_id') for r in res_ops if r.get('orden_produccion_id')})
-            for oid in op_ids:
-                afectados.extend(self.obtener_lista_afectados('orden_produccion', oid))
-
-        elif tipo_entidad == 'orden_produccion':
-            afectados.append({'tipo_entidad': 'orden_produccion', 'id_entidad': pid})
-            res_lps = self.db.table('lotes_productos').select('id_lote').eq('orden_produccion_id', pid).execute().data or []
-            lp_ids = list({r.get('id_lote') for r in res_lps if r.get('id_lote')})
-            for lid in lp_ids:
-                afectados.extend(self.obtener_lista_afectados('lote_producto', lid))
-
-        elif tipo_entidad == 'lote_producto':
-            afectados.append({'tipo_entidad': 'lote_producto', 'id_entidad': pid})
-            res_ped = self.db.table('reservas_productos').select('pedido_id').eq('lote_producto_id', pid).execute().data or []
-            ped_ids = list({r.get('pedido_id') for r in res_ped if r.get('pedido_id')})
-            for ped_id in ped_ids:
-                afectados.append({'tipo_entidad': 'pedido', 'id_entidad': ped_id})
-        
-        elif tipo_entidad == 'pedido':
-            afectados.append({'tipo_entidad': 'pedido', 'id_entidad': pid})
-
-        # Eliminar duplicados
-        seen = set()
-        unique = []
-        for a in afectados:
-            key = (a['tipo_entidad'], a['id_entidad'])
-            if key not in seen:
-                seen.add(key)
-                unique.append(a)
-        return unique

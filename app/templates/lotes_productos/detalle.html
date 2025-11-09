@@ -165,7 +165,15 @@
 
     <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
 
-        <div class="card mb-4">
+        <!-- Selector de Nivel de Trazabilidad -->
+        <div class="d-flex justify-content-end align-items-center mb-3">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="trazabilidad-nivel-switch">
+                <label class="form-check-label" for="trazabilidad-nivel-switch">Ver Trazabilidad Completa</label>
+            </div>
+        </div>
+
+        <div id="resumen-trazabilidad-contenedor" class="card mb-4">
             <div class="card-header">
                 <i class="bi bi-list-ul me-1"></i> Resumen Compacto de Trazabilidad
             </div>

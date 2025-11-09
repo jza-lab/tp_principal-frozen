@@ -211,16 +211,25 @@
     </div>
 
     <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
+        
+        <!-- Selector de Nivel de Trazabilidad -->
+        <div class="d-flex justify-content-end align-items-center mb-3">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="trazabilidad-nivel-switch">
+                <label class="form-check-label" for="trazabilidad-nivel-switch">Ver Trazabilidad Completa</label>
+            </div>
+        </div>
+        
         <div class="row">
             <div class="col-lg-8">
-                <div class="card mb-4">
+                <div id="resumen-trazabilidad-contenedor" class="card mb-4">
                     <div class="card-header">
-                        <i class="bi bi-list-ul me-1"></i> Resumen Compacto (Trazabilidad 1-Nivel)
+                        <i class="bi bi-list-ul me-1"></i> Resumen de Trazabilidad
                     </div>
-                    <div class="card-body" id="resumen-trazabilidad">
+                    <div class="card-body">
                         <div class="text-center p-3">
-                            <div class="spinner-border spinner-border-sm text-secondary" role="status">
-                                <span class="visually-hidden">Cargando...</span>
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando resumen...</span>
                             </div>
                         </div>
                     </div>
