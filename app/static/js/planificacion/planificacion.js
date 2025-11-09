@@ -723,4 +723,42 @@ document.addEventListener('click', async function(e) {
     }
     // --- FIN DE LA CORRECION ---
 
+    // --- ¡NUEVO! BOTÓN MARCAR ISSUE COMO VISTO (EN OFFVCANVAS) ---
+    const btnMarcarVisto = e.target.closest('.btn-marcar-visto');
+    if (btnMarcarVisto) {
+        const issueId = btnMarcarVisto.dataset.issueId;
+        const originalButtonText = btnMarcarVisto.innerHTML;
+        showLoadingSpinner(btnMarcarVisto, '...'); // Usar '...' para un spinner pequeño
+
+        try {
+            // Asumimos que la ruta es esta (debes crearla en planificacion_routes.py)
+            const response = await fetch(`/planificacion/api/resolver-issue/${issueId}`, {
+                method: 'POST', // Usamos POST para acciones que cambian estado
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': window.CSRF_TOKEN
+                }
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                // Ocultar el item de la lista (más rápido que recargar)
+                btnMarcarVisto.closest('.list-group-item').style.opacity = '0';
+                setTimeout(() => {
+                    btnMarcarVisto.closest('.list-group-item').style.display = 'none';
+                }, 300); // Esperar a que termine la animación de fade-out
+
+            } else {
+                showFeedbackModal('Error', result.error || 'No se pudo archivar el aviso.', 'error');
+                hideLoadingSpinner(btnMarcarVisto, originalButtonText);
+            }
+        } catch (error) {
+            console.error('Error al marcar issue como visto:', error);
+            showFeedbackModal('Error de Red', 'No se pudo conectar con el servidor.', 'error');
+            hideLoadingSpinner(btnMarcarVisto, originalButtonText);
+        }
+    }
+    // --- FIN DEL NUEVO BLOQUE ---
+
 }); // Fin addEventListener 'click' en 'document'

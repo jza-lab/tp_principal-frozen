@@ -85,6 +85,9 @@ def index():
         inicio_semana=datos.get('inicio_semana'),
         fin_semana=datos.get('fin_semana'),
         planning_issues=datos.get('planning_issues', []), # <-- ¡AÑADIR ESTA LÍNEA!
+        # --- ¡¡AÑADE ESTA LÍNEA!! ---
+        planning_notifications=datos.get('planning_notifications', []),
+        # --- FIN DE LA CORRECCIÓN ---
         semana_actual_str=week_str,
         semana_anterior_str=prev_week_str,
         semana_siguiente_str=next_week_str,
@@ -297,3 +300,19 @@ def guardar_configuracion_produccion():
         flash('Valor de tolerancia inválido. Debe ser un número.', 'warning')
 
     return redirect(url_for('planificacion.configuracion_lineas'))
+
+# --- ¡¡¡INICIO DE LA NUEVA RUTA!!! ---
+@planificacion_bp.route('/api/resolver-issue/<int:issue_id>', methods=['POST'])
+##@jwt_required()
+##@permission_required(accion='consultar_plan_de_produccion') # Puedes usar un permiso más genérico
+def resolver_issue_api(issue_id):
+    """
+    API Endpoint para marcar un issue como 'RESUELTO'.
+    Llama al método 'resolver_issue_api' del controlador.
+    """
+    controller = PlanificacionController()
+    # El ID de usuario se obtiene por JWT pero no es necesario para esta acción
+    # según el controlador actual.
+    response, status_code = controller.resolver_issue_api(issue_id)
+    return jsonify(response), status_code
+# --- ¡¡¡FIN DE LA NUEVA RUTA!!! ---
