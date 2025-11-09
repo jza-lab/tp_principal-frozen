@@ -57,9 +57,9 @@ class InventarioController(BaseController):
         """
         try:
             # --- ¡CORRECCIÓN! ---
-            # Cambiamos 'self.model.db.rpc' por 'self.db.rpc'
-            # (Asumiendo que InventarioController hereda de BaseController)
-            result = self.db.rpc('get_stock_total_disponible').execute()
+            # Cambiamos 'self.db.rpc' por 'self.inventario_model.db.rpc'
+            # (Usamos el modelo 'inventario_model' que se inicializa en __init__)
+            result = self.inventario_model.db.rpc('get_stock_total_disponible').execute()
             # --- FIN CORRECCIÓN ---
 
             # Convertir la lista de resultados en un mapa {id: stock}
