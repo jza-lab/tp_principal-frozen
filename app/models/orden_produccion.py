@@ -70,6 +70,16 @@ class OrdenProduccionModel(BaseModel):
 
             # Apply filters dynamically
             if filtros:
+                # --- INICIO DE LA CORRECCIÓN (MAPA DE OPERADORES) ---
+                # Definimos el mapa de operadores de Supabase/PostgREST
+                op_map = {
+                    'eq': query.eq, 'gt': query.gt, 'gte': query.gte,
+                    'lt': query.lt, 'lte': query.lte, 'in_': query.in_,
+                    'ilike': query.ilike,
+                    'neq': query.neq
+                }
+                # --- FIN DE LA CORRECCIÓN ---
+
                 for key, value in filtros.items():
                     if value is None:
                         continue
@@ -85,23 +95,44 @@ class OrdenProduccionModel(BaseModel):
                             # query = query.not_.in_(key, filter_value)
                             logger.warning(f"Operator 'not.in' for key '{key}' not fully implemented yet.")
                             pass # Add implementation or filter later in Python if needed
+                        continue # <-- Importante: saltar al siguiente filtro
 
                     # Handle specific date range keys
                     elif key == 'fecha_planificada_desde':
                         query = query.gte('fecha_planificada', value)
+                        continue # <-- Importante
                     elif key == 'fecha_planificada_hasta':
                         query = query.lte('fecha_planificada', value)
+                        continue # <-- Importante
                     elif key == 'fecha_inicio_planificada_desde':
                         query = query.gte('fecha_inicio_planificada', value)
+                        continue # <-- Importante
                     elif key == 'fecha_inicio_planificada_hasta':
                         query = query.lte('fecha_inicio_planificada', value)
-
-                        # --- AÑADIR/VERIFICAR ESTOS ELIF ---
+                        continue # <-- Importante
                     elif key == 'fecha_meta_desde':
                         query = query.gte('fecha_meta', value)
+                        continue # <-- Importante
                     elif key == 'fecha_meta_hasta':
                         query = query.lte('fecha_meta', value)
-                    # --- FIN ---
+                        continue # <-- Importante
+
+                    # --- INICIO DE LA CORRECCIÓN (LÓGICA DE OPERADORES) ---
+                    # Revisar si la clave termina con un operador (ej: 'campo_nombre_neq')
+                    parts = key.split('_')
+                    operator = parts[-1]
+
+                    if len(parts) > 1 and operator in op_map:
+                        column_name = '_'.join(parts[:-1])
+                        # Usar el operador del mapa
+                        # (Nota: 'in' se maneja como 'in_' en el mapa por ser palabra clave)
+                        if operator == 'in':
+                            query = op_map['in_'](column_name, value)
+                        else:
+                            query = op_map[operator](column_name, value)
+
+                        continue # <-- Importante: saltar al siguiente filtro
+                    # --- FIN DE LA CORRECCIÓN ---
 
                     # Default to equality filter
                     else:
@@ -176,7 +207,6 @@ class OrdenProduccionModel(BaseModel):
                             op_id = item['orden_produccion_id']
                             if op_id not in pedidos_por_op:
                                 pedidos_por_op[op_id] = []
-
                             pedido_info = item.get('pedido')
                             if pedido_info:
                                 # Evitamos duplicados si múltiples items de un mismo pedido apuntan a la misma OP
@@ -399,7 +429,7 @@ class OrdenProduccionModel(BaseModel):
                 # Si una orden está pausada Y tiene un traspaso pendiente, se muestra como 'LISTA PARA PRODUCIR'
                 if item.get('id') in op_ids_con_traspaso and item.get('estado') == 'PAUSADA':
                     item['estado'] = 'LISTA PARA PRODUCIR'
-                
+
                 # Excluir las órdenes pausadas que NO son por traspaso del Kanban
                 elif item.get('estado') == 'PAUSADA':
                     continue
@@ -423,7 +453,7 @@ class OrdenProduccionModel(BaseModel):
                     item['aprobador_calidad_nombre'] = None
 
                 ordenes_finales.append(item)
-            
+
             # 5. Enriquecer con pedidos asociados (solo para las órdenes finales)
             op_ids_finales = [op['id'] for op in ordenes_finales]
             pedidos_por_op = {}
@@ -439,7 +469,7 @@ class OrdenProduccionModel(BaseModel):
                         pedido_info = item.get('pedido')
                         if pedido_info and not any(p['id'] == pedido_info['id'] for p in pedidos_por_op.get(op_id, [])):
                             pedidos_por_op[op_id].append(pedido_info)
-            
+
             for op in ordenes_finales:
                 op['pedidos_asociados'] = pedidos_por_op.get(op['id'], [])
 
@@ -464,7 +494,7 @@ class OrdenProduccionModel(BaseModel):
 
             # Combinar con OR
             query_filter = f"or({filtro_pendientes},{filtro_planificadas})"
-            
+
             response = self.db.table(self.get_table_name()).select(
                 "*, productos(nombre, unidad_medida), "
                 "creador:usuario_creador_id(nombre, apellido), "
@@ -485,7 +515,7 @@ class OrdenProduccionModel(BaseModel):
                     # ... aplanar otros campos como supervisor, operario ...
                     processed_data.append(item)
                 return {'success': True, 'data': processed_data}
-            
+
             return {'success': True, 'data': []}
 
         except Exception as e:
