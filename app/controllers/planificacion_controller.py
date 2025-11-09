@@ -36,6 +36,246 @@ class PlanificacionController(BaseController):
         self.issue_planificacion_model = IssuePlanificacionModel()
         self.feriados_ar_cache = None # <-- ¡AÑADIR ESTA LÍNEA!
 
+    # ==================================================================
+    # === 1. AÑADE ESTA NUEVA FUNCIÓN COMPLETA ===
+    # Esta es la lógica que vamos a mover.
+    # ==================================================================
+    def ejecutar_planificacion_adaptativa(self, usuario_id: int) -> tuple:
+        """
+        Ejecuta la verificación de capacidad proactiva para los próximos 7 días.
+        Esta función está diseñada para ser llamada por una TAREA PROGRAMADA (CRON).
+        """
+        logger.info("[PlanAdaptativa_CRON] INICIANDO TAREA PROGRAMADA.")
+        nuevos_issues_generados = 0
+        errores_encontrados = []
+
+        try:
+            fecha_inicio_chequeo = date.today()
+
+            for i in range(7): # Chequear Hoy + 6 días
+                fecha_a_chequear = fecha_inicio_chequeo + timedelta(days=i)
+
+                if not self._es_dia_laborable(fecha_a_chequear):
+                    logger.info(f"[PlanAdaptativa_CRON] Omitiendo chequeo para {fecha_a_chequear.isoformat()} (No laborable).")
+                    continue
+
+                logger.info(f"[PlanAdaptativa_CRON] Verificando día laborable: {fecha_a_chequear.isoformat()}...")
+
+                try:
+                    # Esta es la misma función que tenías antes
+                    nuevos_issues_del_dia = self._verificar_y_replanificar_ops_por_fecha(
+                        fecha=fecha_a_chequear,
+                        usuario_id=usuario_id
+                    )
+                    if nuevos_issues_del_dia:
+                        nuevos_issues_generados += len(nuevos_issues_del_dia)
+                except Exception as e_dia:
+                     logger.error(f"[PlanAdaptativa_CRON] Error verificando {fecha_a_chequear.isoformat()}: {e_dia}")
+                     errores_encontrados.append(f"Error en {fecha_a_chequear.isoformat()}: {str(e_dia)}")
+
+        except Exception as e_adapt:
+            logger.error(f"[PlanAdaptativa_CRON] Error fatal en la TAREA PROGRAMADA: {e_adapt}", exc_info=True)
+            errores_encontrados.append(f"Error fatal: {str(e_adapt)}")
+            return self.error_response(f"Error fatal: {e_adapt}", 500)
+
+        logger.info("[PlanAdaptativa_CRON] TAREA PROGRAMADA FINALIZADA.")
+        return self.success_response(data={
+            'issues_generados': nuevos_issues_generados,
+            'errores': len(errores_encontrados),
+            'detalles_error': errores_encontrados
+        })
+    def obtener_datos_para_vista_planificacion(self, week_str: str, horizonte_dias: int, current_user_id: int, current_user_rol: str) -> tuple:
+        """
+        Método orquestador que obtiene y procesa todos los datos necesarios para la
+        vista de planificación de forma optimizada.
+        """
+        try:
+##            # --- ¡INICIO: PLANIFICACIÓN ADAPTATIVA (7 DÍAS)! ---
+##            nuevos_issues_generados = [] # <-- ¡NUEVO!
+##            try:
+##                logger.info("[PlanAdaptativa] Ejecutando verificación de capacidad para los PRÓXIMOS 7 DÍAS...")
+##                fecha_inicio_chequeo = date.today()
+##
+##                for i in range(7): # Chequear Hoy + 6 días
+##                    fecha_a_chequear = fecha_inicio_chequeo + timedelta(days=i)
+##
+##                    if not self._es_dia_laborable(fecha_a_chequear):
+##                        logger.info(f"[PlanAdaptativa] Omitiendo chequeo para {fecha_a_chequear.isoformat()} (No laborable).")
+##                        continue
+##
+##                    logger.info(f"[PlanAdaptativa] Verificando día laborable: {fecha_a_chequear.isoformat()}...")
+##                    # --- ¡MODIFICADO! ---
+##                    nuevos_issues_del_dia = self._verificar_y_replanificar_ops_por_fecha(
+##                        fecha=fecha_a_chequear,
+##                        usuario_id=current_user_id
+##                    )
+##                    if nuevos_issues_del_dia:
+##                        nuevos_issues_generados.extend(nuevos_issues_del_dia)
+##                    # --- FIN MODIFICACIÓN ---
+##            except Exception as e_adapt:
+##                logger.error(f"[PlanAdaptativa] Error en la verificación de 7 días: {e_adapt}", exc_info=True)
+##            # --- FIN: PLANIFICACIÓN ADAPTATIVA ---
+            nuevos_issues_generados = []
+            # 1. Determinar rango de la semana (Sin cambios)
+            if week_str:
+                try:
+                    year, week_num = map(int, week_str.split('-W'))
+                    inicio_semana = date.fromisocalendar(year, week_num, 1)
+                except ValueError:
+                    return self.error_response("Formato de semana inválido.", 400)
+            else:
+                today = date.today()
+                inicio_semana = today - timedelta(days=today.weekday())
+
+            fin_semana = inicio_semana + timedelta(days=6)
+
+            # 2. Consulta de Órdenes de Producción (Sin cambios)
+            estados_planificados_validos = [
+                'EN ESPERA', 'EN_ESPERA',
+                'LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR',
+                'EN_LINEA_1', 'EN_LINEA_2',
+                'EN_EMPAQUETADO',
+                'CONTROL_DE_CALIDAD'
+            ]
+            filtros_planificadas = {
+                'estado': ('in', estados_planificados_validos)
+            }
+            response_ops_planificadas, _ = self.orden_produccion_controller.obtener_ordenes(filtros_planificadas)
+            if not response_ops_planificadas.get('success'):
+                 return self.error_response("Error al obtener las órdenes planificadas.", 500)
+            ops_planificadas = response_ops_planificadas.get('data', [])
+
+            # 3. Procesamiento en Memoria (Sin cambios)
+            response_mps, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias)
+            mps_data = response_mps.get('data', {}) if response_mps.get('success') else {}
+            response_semanal, _ = self.obtener_planificacion_semanal(week_str, ordenes_pre_cargadas=ops_planificadas)
+            data_semanal = response_semanal.get('data', {}) if response_semanal.get('success') else {}
+            ordenes_por_dia = data_semanal.get('ops_visibles_por_dia', {})
+
+            # --- Enriquecimiento del Calendario (Sin cambios) ---
+            enriched_ordenes_por_dia = {}
+            if ordenes_por_dia:
+                for dia_iso, ops_del_dia in ordenes_por_dia.items():
+                    ops_enriquecidas_dia = []
+                    for op in ops_del_dia:
+                        sugerencias = self._calcular_sugerencias_para_op(op)
+                        op['sugerencias_jit'] = sugerencias
+                        ops_enriquecidas_dia.append(op)
+                    enriched_ordenes_por_dia[dia_iso] = ops_enriquecidas_dia
+
+            # --- CRP Data (Sin cambios) ---
+            carga_calculada = self.calcular_carga_capacidad(ops_planificadas)
+            capacidad_disponible = self.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
+
+            # --- ¡BLOQUE DE ISSUES CORREGIDO! (Lógica de combinación de la última vez) ---
+            response_issues = self.issue_planificacion_model.get_all_with_op_details()
+            all_issues_raw = response_issues.get('data', []) if response_issues.get('success') else []
+            planning_issues_raw_db = [issue for issue in all_issues_raw if issue.get('estado', 'PENDIENTE') == 'PENDIENTE']
+
+            op_ids_en_memoria = {issue['orden_produccion_id'] for issue in nuevos_issues_generados}
+            planning_issues_a_procesar = list(nuevos_issues_generados)
+
+            for db_issue in planning_issues_raw_db:
+                if db_issue.get('orden_produccion_id') not in op_ids_en_memoria:
+                    planning_issues_a_procesar.append(db_issue)
+
+            # --- LOG DE VERIFICACIÓN ---
+            logger.info(f"[Vista Planif.] Issues a procesar (total: {len(planning_issues_a_procesar)}): {[i.get('id') for i in planning_issues_a_procesar]}")
+            # --- FIN LOG ---
+
+            # --- FIN BLOQUE COMBINACIÓN ---
+
+            # --- ENRIQUECER Y SEPARAR ISSUES DE NOTIFICACIONES ---
+            # --- ¡¡¡INICIO DE LA NUEVA CORRECCIÓN!!! ---
+            enriched_planning_issues = []
+            enriched_planning_notifications = []
+
+            if planning_issues_a_procesar:
+                for issue in planning_issues_a_procesar:
+                    op_id_para_jit = issue.get('orden_produccion_id')
+                    op_data_real = None
+                    sugerencias = {}
+
+                    logger.info(f"[Vista Planif.] Procesando issue {issue.get('id')}, tipo: {issue.get('tipo_error')}")
+
+                    if not op_id_para_jit:
+                        logger.warning(f"Issue {issue.get('id')} omitido: no tiene 'orden_produccion_id'.")
+                        continue # Saltar issue corrupto
+
+                    # --- PASO 1: OBTENER LOS DATOS DE LA OP ---
+                    # (Intenta usar el objeto en memoria, si no, búscalo en la DB)
+                    if 'receta_id' in issue: # Clave para saber si es un issue enriquecido en-memoria
+                        logger.info(f"[Vista Planif.] Issue {issue.get('id')} es de memoria (enriquecido).")
+                        op_data_real = issue
+                    else:
+                        # Es un issue de la DB, buscar su OP
+                        logger.info(f"[Vista Planif.] Issue {issue.get('id')} es de DB, buscando OP: {op_id_para_jit}...")
+                        op_result = self.orden_produccion_controller.obtener_orden_por_id(op_id_para_jit)
+
+                        if op_result.get('success'):
+                            op_data_real = op_result.get('data')
+
+                            # Añadir datos de la OP al issue (para los que vienen de la DB)
+                            issue['op_codigo'] = op_data_real.get('codigo')
+                            issue['op_producto_nombre'] = op_data_real.get('producto_nombre')
+                            # --- INICIO DE LA CORRECCIÓN ---
+                            issue['cantidad_planificada'] = op_data_real.get('cantidad_planificada') # NO 'op_cantidad'
+                            # --- FIN DE LA CORRECCIÓN ---
+                            issue['op_fecha_meta'] = op_data_real.get('fecha_meta')
+                        else:
+                            logger.warning(f"[Vista Planif.] Issue {issue.get('id')} (OP: {op_id_para_jit}): NO SE PUDO CARGAR LA OP. Razón: {op_result.get('error')}")
+                            # op_data_real se mantiene como None
+
+                    # --- PASO 2: CALCULAR JIT (SI TENEMOS DATOS) ---
+                    if op_data_real:
+                        # Solo podemos calcular sugerencias si encontramos la OP
+                        sugerencias = self._calcular_sugerencias_para_op(op_data_real)
+
+                    issue['sugerencias_jit'] = sugerencias
+
+                    # --- PASO 3: SEPARAR (LÓGICA MOVIDA) ---
+                    # Esta es la lógica clave. Ahora se ejecuta para CADA issue,
+                    # incluso si la OP asociada no se encontró.
+                    if issue.get('tipo_error') == 'REPLAN_AUTO_AUSENCIA':
+                        logger.info(f"[Vista Planif.] Issue {issue.get('id')} CLASIFICADO como NOTIFICACIÓN.")
+                        enriched_planning_notifications.append(issue)
+                    else:
+                        logger.info(f"[Vista Planif.] Issue {issue.get('id')} CLASIFICADO como ISSUE.")
+                        enriched_planning_issues.append(issue)
+            # --- ¡¡¡FIN DE LA NUEVA CORRECCIÓN!!! ---
+
+            # 4. Obtener Datos Auxiliares (Usuarios) (Sin cambios)
+            from app.controllers.usuario_controller import UsuarioController
+            usuario_controller = UsuarioController()
+            supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
+            operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
+            supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []
+            operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
+
+            # 5. Ensamblar el resultado final (Sin cambios)
+            datos_vista = {
+                'mps_data': mps_data,
+                'ordenes_por_dia': enriched_ordenes_por_dia,
+                'carga_crp': carga_calculada,
+                'capacidad_crp': capacidad_disponible,
+                'supervisores': supervisores,
+                'operarios': operarios,
+                'inicio_semana': inicio_semana.isoformat(),
+                'fin_semana': fin_semana.isoformat(),
+                'planning_issues': enriched_planning_issues,
+                'planning_notifications': enriched_planning_notifications
+            }
+
+            # --- LOG DE VERIFICACIÓN FINAL ---
+            logger.info(f"[Vista Planif.] Finalizado. Total Notificaciones: {len(enriched_planning_notifications)}, Total Issues: {len(enriched_planning_issues)}")
+            # --- FIN LOG ---
+
+            return self.success_response(data=datos_vista)
+
+        except Exception as e:
+            logger.error(f"Error en obtener_datos_para_vista_planificacion: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
     def consolidar_ops(self, op_ids: List[int], usuario_id: int) -> tuple:
         """
         Orquesta la consolidación de OPs llamando al controlador de órdenes de producción.
@@ -375,22 +615,41 @@ class PlanificacionController(BaseController):
         else:
             return None, "No se proporcionaron IDs de OP."
 
-    # --- NUEVO HELPER para calcular carga de una OP (CON LOGGING CORREGIDO) ---
+    def _calcular_carga_op_precargada(self, op_data: Dict, operaciones: List[Dict]) -> Decimal:
+        """
+        Calcula la carga total en minutos para una OP,
+        usando una lista de operaciones precargadas.
+        (Lógica extraída de _calcular_carga_op)
+        """
+        carga_total = Decimal(0)
+        cantidad = Decimal(op_data.get('cantidad_planificada', 0))
+        if not operaciones or cantidad <= 0:
+            return carga_total
+
+        for op_step in operaciones:
+            t_prep = Decimal(op_step.get('tiempo_preparacion', 0))
+            t_ejec_unit = Decimal(op_step.get('tiempo_ejecucion_unitario', 0))
+            carga_total += t_prep + (t_ejec_unit * cantidad)
+        return carga_total
+
+
+    # ==================================================================
+    # === 4. REEMPLAZA TU FUNCIÓN '_calcular_carga_op' ===
+    # (Esta es la que tiene LOGGING, la mantenemos para depuración manual si es necesario)
+    # ==================================================================
     def _calcular_carga_op(self, op_data: Dict) -> Decimal:
-        """ Calcula la carga total en minutos para una OP dada. """
+        """ Calcula la carga total en minutos para una OP dada (con logging). """
         carga_total = Decimal(0)
         receta_id = op_data.get('receta_id')
         cantidad = Decimal(op_data.get('cantidad_planificada', 0))
-        op_id = op_data.get('id', 'N/A') # Para trazar la OP
+        op_id = op_data.get('id', 'N/A')
 
         if not receta_id or cantidad <= 0:
             logger.warning(f"[Carga OP {op_id}] Carga 0.0 (No hay receta_id o cantidad es 0).")
             return carga_total
 
-        # --- INICIO DE LA CORRECCIÓN ---
-        # El nombre correcto es con 'r' minúscula
+        # Llama al helper que consulta la DB
         operaciones = self.obtener_operaciones_receta(receta_id)
-        # --- FIN DE LA CORRECCIÓN ---
 
         if not operaciones:
             logger.warning(f"[Carga OP {op_id}] Carga 0.0 (Receta {receta_id} no tiene operaciones).")
@@ -399,21 +658,16 @@ class PlanificacionController(BaseController):
         logger.info(f"--- Calculando Carga para OP {op_id} (Receta: {receta_id}, Cant: {cantidad}) ---")
 
         for op_step in operaciones:
-
-            # --- INICIO DEL LOG ---
             nombre_paso = op_step.get('nombre_operacion', 'Paso Desconocido')
             t_prep = Decimal(op_step.get('tiempo_preparacion', 0))
             t_ejec_unit = Decimal(op_step.get('tiempo_ejecucion_unitario', 0))
-
             carga_paso_actual = t_prep + (t_ejec_unit * cantidad)
             carga_total += carga_paso_actual
-
             logger.info(f"[Carga OP {op_id}] Paso: '{nombre_paso}'")
             logger.info(f"  -> T. Prep: {t_prep} min")
             logger.info(f"  -> T. Ejec: {t_ejec_unit} min/u * {cantidad} u = {t_ejec_unit * cantidad} min")
             logger.info(f"  -> Carga de este paso: {carga_paso_actual:.2f} min")
             logger.info(f"  -> CARGA TOTAL ACUMULADA: {carga_total:.2f} min")
-            # --- FIN DEL LOG ---
 
         logger.info(f"--- [Carga OP {op_id}] Carga Final Total: {carga_total:.2f} min ---")
         return carga_total
@@ -808,20 +1062,22 @@ class PlanificacionController(BaseController):
             return self.error_response(f"Error interno: {str(e)}", 500)
 
 
-    # --- MÉTODO REESCRITO ---
+    # ==================================================================
+    # === 2. REEMPLAZA TU FUNCIÓN 'obtener_planificacion_semanal' ===
+    # ==================================================================
     def obtener_planificacion_semanal(self, week_str: Optional[str] = None, ordenes_pre_cargadas: Optional[List[Dict]] = None) -> tuple:
         """
         Obtiene las OPs planificadas para una semana específica, calculando los días
         que cada OP ocupa y agrupándolas por día visible.
+        --- OPTIMIZADO (N+1) ---
         """
         try:
-            # Configurar locale (sin cambios)
+            # ... (Lógica inicial: locale, rango de semana, sin cambios) ...
             try: locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
             except locale.Error:
                 try: locale.setlocale(locale.LC_TIME, 'Spanish_Spain.1252')
                 except locale.Error: logger.warning("Locale español no disponible.")
 
-            # 1. Determinar rango de la semana (sin cambios)
             if week_str:
                 try:
                     year, week_num = map(int, week_str.split('-W'))
@@ -829,102 +1085,102 @@ class PlanificacionController(BaseController):
                 except ValueError: return self.error_response("Formato semana inválido.", 400)
             else:
                 today = date.today(); start_of_week = today - timedelta(days=today.weekday())
-                week_str = start_of_week.strftime("%Y-%W") # Corregido a %W si %V daba error antes
+                week_str = start_of_week.strftime("%Y-%W")
             end_of_week = start_of_week + timedelta(days=6)
 
+            # ... (Lógica de 'ordenes_pre_cargadas' y 'fallback', sin cambios) ...
             if ordenes_pre_cargadas is not None:
-                # Usar la lista pre-cargada si se proveyó
                 ordenes_relevantes = ordenes_pre_cargadas
                 logger.debug("obtener_planificacion_semanal: Usando lista de OPs pre-cargada.")
             else:
                 ordenes_relevantes = []
-                # Bloque de fallback: si no se pasa lista, buscarla como antes
                 logger.debug("obtener_planificacion_semanal: No se pasó lista pre-cargada, buscando OPs...")
-                dias_previos_margen = 14 # Traer OPs que empezaron hasta 2 semanas antes
+                dias_previos_margen = 14
                 fecha_inicio_filtro = start_of_week - timedelta(days=dias_previos_margen)
-
                 filtros_amplios = {
                     'fecha_inicio_planificada_desde': fecha_inicio_filtro.isoformat(),
                     'fecha_inicio_planificada_hasta': end_of_week.isoformat(),
                     'estado': ('in', [
-                        'EN ESPERA',
-                        'LISTA PARA PRODUCIR',
-                        'EN_LINEA_1',
-                        'EN_LINEA_2',
-                        'EN_EMPAQUETADO',
-                        'CONTROL_DE_CALIDAD'
+                        'EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1',
+                        'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD'
                      ])
                 }
                 response_ops, _ = self.orden_produccion_controller.obtener_ordenes(filtros_amplios)
                 if not response_ops.get('success'):
                     return self.error_response("Error al obtener OPs para cálculo semanal.", 500)
-
                 ordenes_relevantes = response_ops.get('data', [])
 
-            if not ordenes_relevantes: # Si no hay OPs, devolver vacío
+            if not ordenes_relevantes:
                  resultado_vacio = { 'ops_visibles_por_dia': {}, 'inicio_semana': start_of_week.isoformat(), 'fin_semana': end_of_week.isoformat(), 'semana_actual_str': week_str }
                  return self.success_response(data=resultado_vacio)
 
 
-            # 3. Obtener Capacidad para el rango necesario (desde la OP más temprana hasta el fin de semana)
+            # 3. Obtener Capacidad (sin cambios)
             fechas_inicio_ops = [date.fromisoformat(op['fecha_inicio_planificada']) for op in ordenes_relevantes if op.get('fecha_inicio_planificada')]
             fecha_min_calculo = min(fechas_inicio_ops) if fechas_inicio_ops else start_of_week
-            # Ampliar rango final por si OPs terminan después
             fecha_max_calculo = end_of_week + timedelta(days=14)
-
             capacidad_rango = self.obtener_capacidad_disponible([1, 2], fecha_min_calculo, fecha_max_calculo)
 
-            # 4. Simular duración y días ocupados para CADA OP
+            # 4. Simular duración y días ocupados
             ops_con_dias_ocupados = []
-            carga_acumulada_simulacion = {1: defaultdict(float), 2: defaultdict(float)} # Para simular carga existente
+            carga_acumulada_simulacion = {1: defaultdict(float), 2: defaultdict(float)}
 
-            # Ordenar para procesar las más antiguas primero (más realista)
-            # --- CORRECCIÓN ---
-            # Usar 'or' para manejar tanto claves faltantes como valores None
             ordenes_relevantes.sort(key=lambda op: op.get('fecha_inicio_planificada') or '9999-12-31')
+
+            # --- ¡INICIO DE LA OPTIMIZACIÓN N+1! ---
+            # A. Obtener todos los IDs de recetas únicos
+            receta_ids_unicos_sem = list(set(op.get('receta_id') for op in ordenes_relevantes if op.get('receta_id')))
+            operaciones_map_sem = defaultdict(list)
+
+            # B. Hacer UNA sola consulta a la DB para todas las operaciones
+            if receta_ids_unicos_sem:
+                operaciones_resp_sem = self.operacion_receta_model.find_by_receta_ids(receta_ids_unicos_sem)
+                if operaciones_resp_sem.get('success'):
+                    for op_step in operaciones_resp_sem.get('data', []):
+                        operaciones_map_sem[op_step['receta_id']].append(op_step)
+            # --- FIN DE LA OPTIMIZACIÓN N+1 ---
 
             for orden in ordenes_relevantes:
                 op_id = orden.get('id')
                 linea_asignada = orden.get('linea_asignada')
                 fecha_inicio_str = orden.get('fecha_inicio_planificada')
+                receta_id = orden.get('receta_id') # <-- Obtener receta_id
 
-                if not linea_asignada or not fecha_inicio_str: continue # Saltar si faltan datos clave
+                if not linea_asignada or not fecha_inicio_str or not receta_id: continue # <-- Validar receta_id
 
                 try:
                     fecha_inicio_op = date.fromisoformat(fecha_inicio_str)
-                    carga_total_op = float(self._calcular_carga_op(orden))
+
+                    # --- ¡CAMBIO! Usar la función precargada ---
+                    # Original: carga_total_op = float(self._calcular_carga_op(orden))
+                    operaciones_para_esta_op = operaciones_map_sem.get(receta_id, [])
+                    carga_total_op = float(self._calcular_carga_op_precargada(orden, operaciones_para_esta_op))
+                    # --- FIN DEL CAMBIO ---
+
                     if carga_total_op <= 0: continue
 
                     dias_ocupados_por_esta_op = []
                     carga_restante_sim = carga_total_op
                     fecha_actual_sim = fecha_inicio_op
                     dias_simulados = 0
-                    max_dias_op_sim = 30 # Límite
+                    max_dias_op_sim = 30
 
                     while carga_restante_sim > 0.01 and dias_simulados < max_dias_op_sim:
+                        # ... (lógica interna del bucle 'while' sin cambios) ...
                         fecha_actual_sim_str = fecha_actual_sim.isoformat()
-
-                        # --- ¡CAMBIO! Usar .get('neta') ---
                         cap_dia_dict = capacidad_rango.get(linea_asignada, {}).get(fecha_actual_sim_str, {})
                         cap_dia = cap_dia_dict.get('neta', 0.0)
-                        # --- FIN CAMBIO ---
-
                         carga_existente_sim = carga_acumulada_simulacion[linea_asignada].get(fecha_actual_sim_str, 0.0)
                         cap_restante_sim = max(0.0, cap_dia - carga_existente_sim)
-
                         carga_a_asignar_sim = min(carga_restante_sim, cap_restante_sim)
-
                         if carga_a_asignar_sim > 0:
-                            dias_ocupados_por_esta_op.append(fecha_actual_sim_str) # Añadir fecha a la lista de la OP
+                            dias_ocupados_por_esta_op.append(fecha_actual_sim_str)
                             carga_acumulada_simulacion[linea_asignada][fecha_actual_sim_str] += carga_a_asignar_sim
                             carga_restante_sim -= carga_a_asignar_sim
-
-                        # Si aún queda carga, pasar al siguiente día
                         if carga_restante_sim > 0.01:
                              fecha_actual_sim += timedelta(days=1)
                         dias_simulados += 1
 
-                    # Guardar la OP junto con los días que ocupa
                     orden['dias_ocupados_calculados'] = dias_ocupados_por_esta_op
                     ops_con_dias_ocupados.append(orden)
 
@@ -932,7 +1188,7 @@ class PlanificacionController(BaseController):
                      logger.error(f"Error simulando OP {op_id}: {e_sim}", exc_info=True)
 
 
-            # 5. Construir el diccionario final para la plantilla
+            # ... (Lógica final: construir diccionario y devolver, sin cambios) ...
             ops_visibles_por_dia = defaultdict(list)
             for i in range(7):
                 dia_semana_actual = start_of_week + timedelta(days=i)
@@ -942,36 +1198,8 @@ class PlanificacionController(BaseController):
                     if start_of_week.isoformat() <= fecha_ocupada_iso <= end_of_week.isoformat():
                         if op not in ops_visibles_por_dia[fecha_ocupada_iso]:
                              ops_visibles_por_dia[fecha_ocupada_iso].append(op)
-
-            # --- CORRECCIÓN: MAPEO MANUAL DE DÍAS ---
-            # 6. Formatear claves con nombre del día (Usando mapeo manual)
-
-##            # Diccionario para traducir abreviaturas de días (inglés -> español)
-##            dias_abbr_es = {
-##                'Mon': 'Lun', 'Tue': 'Mar', 'Wed': 'Mié',
-##                'Thu': 'Jue', 'Fri': 'Vie', 'Sat': 'Sáb', 'Sun': 'Dom'
-##            }
-##
-##            formatted_grouped_by_day = {}
-##            ordered_ops_visibles = dict(sorted(ops_visibles_por_dia.items()))
-##            for dia_iso, ops_dia in ordered_ops_visibles.items():
-##                try:
-##                    dia_dt = date.fromisoformat(dia_iso)
-##                    # Obtener abreviatura en INGLÉS (%a)
-##                    abbr_en = dia_dt.strftime("%a")
-##                    # Traducir usando el diccionario (default a inglés si falla)
-##                    abbr_es = dias_abbr_es.get(abbr_en, abbr_en)
-##                    # Formatear fecha (DD/MM)
-##                    fecha_num = dia_dt.strftime("%d/%m")
-##                    # Crear clave final
-##                    key_display = f"{abbr_es} {fecha_num}"
-##                except ValueError:
-##                    key_display = dia_iso # Fallback
-##                formatted_grouped_by_day[key_display] = ops_dia
-##            # --- FIN CORRECCIÓN ---
-
             resultado = {
-                'ops_visibles_por_dia': ops_visibles_por_dia, # Usar el diccionario formateado
+                'ops_visibles_por_dia': ops_visibles_por_dia,
                 'inicio_semana': start_of_week.isoformat(),
                 'fin_semana': end_of_week.isoformat(),
                 'semana_actual_str': week_str
@@ -985,17 +1213,24 @@ class PlanificacionController(BaseController):
     # --- MÉTODO MODIFICADO ---
     # (Reemplaza la función completa, aprox. línea 1032)
 
+    # ==================================================================
+    # === 3. REEMPLAZA TU FUNCIÓN 'obtener_capacidad_disponible' ===
+    # (¡IMPORTANTE! Este es el del,
+    # NO el _calcular_carga_op de la línea 918)
+    # ==================================================================
     def obtener_capacidad_disponible(self, centro_trabajo_ids: List[int], fecha_inicio: date, fecha_fin: date) -> Dict:
         """
         Calcula la capacidad disponible (en minutos) para centros de trabajo dados,
         entre dos fechas (inclusive). Considera estándar, eficiencia, utilización, BLOQUEOS,
         FINES DE SEMANA y FERIADOS.
         """
+        # ... (Esta función ya está optimizada y no llama a _calcular_carga_op) ...
+        # ... (Puedes dejar tu versión existente de esta función sin cambios) ...
+        # ... (O pegar la versión completa de) ...
         capacidad_por_centro_y_fecha = defaultdict(dict)
         num_dias = (fecha_fin - fecha_inicio).days + 1
 
         try:
-            # 1. Obtener datos de Centros de Trabajo (sin cambios)
             id_filter = ('in', tuple(centro_trabajo_ids))
             ct_result = self.centro_trabajo_model.find_all(filters={'id': id_filter})
             if not ct_result.get('success'):
@@ -1003,7 +1238,6 @@ class PlanificacionController(BaseController):
                 return {}
             centros_trabajo = {ct['id']: ct for ct in ct_result.get('data', [])}
 
-            # 2. Obtener Bloqueos para este rango (sin cambios)
             filtros_bloqueo = {
                 'centro_trabajo_id': ('in', tuple(centro_trabajo_ids)),
                 'fecha_gte': fecha_inicio.isoformat(),
@@ -1014,102 +1248,57 @@ class PlanificacionController(BaseController):
             if bloqueos_resp.get('success'):
                 for bloqueo in bloqueos_resp.get('data', []):
                     bloqueos_map[bloqueo['centro_trabajo_id']][bloqueo['fecha']] = bloqueo
-
-            # --- ¡INICIO DE LA MODIFICACIÓN (FERIADOS)! ---
             try:
-                # 3. Obtener los años únicos del rango de fechas
                 years_to_check = list(set(range(fecha_inicio.year, fecha_fin.year + 1)))
-                # 4. Inicializar el objeto de feriados para Argentina
-                # (country_holidays('AR') es un alias para holidays.Argentina())
                 feriados_ar = holidays.country_holidays('AR', years=years_to_check)
                 logger.info(f"Cargados {len(feriados_ar)} feriados de Argentina para los años {years_to_check}")
             except Exception as e_hol:
                 logger.error(f"Error al inicializar la librería 'holidays': {e_hol}. Los feriados no se descontarán.")
-                feriados_ar = {} # Fallback a un dict vacío
-            # --- FIN DE LA MODIFICACIÓN (FERIADOS) ---
-
-
-            # 5. Calcular capacidad día por día
+                feriados_ar = {}
             for dia_offset in range(num_dias):
                 fecha_actual = fecha_inicio + timedelta(days=dia_offset)
                 fecha_iso = fecha_actual.isoformat()
-
-                # --- ¡LÓGICA COMBINADA (FIN DE SEMANA + FERIADOS)! ---
-                dia_de_semana = fecha_actual.weekday() # 0=Lunes, 5=Sábado, 6=Domingo
+                dia_de_semana = fecha_actual.weekday()
                 es_fin_de_semana = (dia_de_semana >= 5)
-
-                # Comprobar si la fecha está en el set de feriados
-                nombre_feriado = feriados_ar.get(fecha_actual) # Devuelve el nombre del feriado o None
+                nombre_feriado = feriados_ar.get(fecha_actual)
                 es_feriado = nombre_feriado is not None
-                # --- FIN LÓGICA COMBINADA ---
-
                 for ct_id in centro_trabajo_ids:
                     centro = centros_trabajo.get(ct_id)
-
                     cap_data = {
-                        'bruta': Decimal(0),
-                        'bloqueado': Decimal(0),
-                        'neta': Decimal(0),
-                        'motivo_bloqueo': None,
-                        'hora_inicio': None,
-                        'hora_fin': None
+                        'bruta': Decimal(0), 'bloqueado': Decimal(0), 'neta': Decimal(0),
+                        'motivo_bloqueo': None, 'hora_inicio': None, 'hora_fin': None
                     }
-
-                    # --- ¡CONDICIÓN MODIFICADA! ---
-                    # Si es fin de semana O feriado, NO calcular capacidad (capacidad neta = 0)
                     if es_fin_de_semana or es_feriado:
-                        # Asigna el motivo (ej. "Día de la Revolución de Mayo" o "Fin de Semana")
                         cap_data['motivo_bloqueo'] = nombre_feriado if es_feriado else 'Fin de Semana'
                         capacidad_por_centro_y_fecha[ct_id][fecha_iso] = cap_data
-                        continue # Saltar al siguiente centro de trabajo
-                    # --- FIN DE LA MODIFICIÓN ---
-
-
+                        continue
                     if centro:
-                        # Calcular capacidad estándar (sin cambios)
                         capacidad_std = Decimal(centro.get('tiempo_disponible_std_dia', 0))
                         eficiencia = Decimal(centro.get('eficiencia', 1.0))
                         utilizacion = Decimal(centro.get('utilizacion', 1.0))
                         num_maquinas = int(centro.get('numero_maquinas', 1))
-
                         capacidad_bruta_dia = capacidad_std * eficiencia * utilizacion * num_maquinas
-
-                        # Restar bloqueos (sin cambios)
                         bloqueo_data = bloqueos_map.get(ct_id, {}).get(fecha_iso, {})
                         minutos_bloqueados_dec = Decimal(bloqueo_data.get('minutos_bloqueados', 0))
-
-                        # Si ya hay un bloqueo (ej. Mantenimiento), que tenga prioridad
                         if minutos_bloqueados_dec > 0:
                             cap_data['motivo_bloqueo'] = bloqueo_data.get('motivo')
                             cap_data['hora_inicio'] = bloqueo_data.get('hora_inicio')
                             cap_data['hora_fin'] = bloqueo_data.get('hora_fin')
-
                         capacidad_neta_dia = max(Decimal(0), capacidad_bruta_dia - minutos_bloqueados_dec)
-                        # ----------------------------
-
                         cap_data['bruta'] = round(capacidad_bruta_dia, 2)
                         cap_data['bloqueado'] = round(minutos_bloqueados_dec, 2)
                         cap_data['neta'] = round(capacidad_neta_dia, 2)
-                        # (El motivo ya se asignó si había bloqueo)
-
                     capacidad_por_centro_y_fecha[ct_id][fecha_iso] = cap_data
-
-            # 6. Convertir Decimals a floats para JSON (sin cambios)
             resultado_final_float_dict = {}
             for centro_id, cap_fecha in capacidad_por_centro_y_fecha.items():
                 resultado_final_float_dict[centro_id] = {}
                 for fecha, cap_dict in cap_fecha.items():
                     resultado_final_float_dict[centro_id][fecha] = {
-                        'bruta': float(cap_dict['bruta']),
-                        'bloqueado': float(cap_dict['bloqueado']),
-                        'neta': float(cap_dict['neta']),
-                        'motivo_bloqueo': cap_dict['motivo_bloqueo'],
-                        'hora_inicio': cap_dict['hora_inicio'],
-                        'hora_fin': cap_dict['hora_fin']
+                        'bruta': float(cap_dict['bruta']), 'bloqueado': float(cap_dict['bloqueado']),
+                        'neta': float(cap_dict['neta']), 'motivo_bloqueo': cap_dict['motivo_bloqueo'],
+                        'hora_inicio': cap_dict['hora_inicio'], 'hora_fin': cap_dict['hora_fin']
                     }
-
             return resultado_final_float_dict
-
         except Exception as e:
             logger.error(f"Error calculando capacidad disponible: {e}", exc_info=True)
             return {}
@@ -1121,31 +1310,45 @@ class PlanificacionController(BaseController):
         return result.get('data', []) if result.get('success') else []
 
 
+    # ==================================================================
+    # === 5. REEMPLAZA TU FUNCIÓN 'calcular_carga_capacidad' ===
+    # ==================================================================
     def calcular_carga_capacidad(self, ordenes_planificadas: List[Dict]) -> Dict:
         """
         Calcula la carga (en minutos) por centro de trabajo y fecha, DISTRIBUYENDO
         la carga de cada OP a lo largo de los días necesarios según la capacidad diaria.
-        Devuelve: { centro_id: { fecha_iso: carga_minutos_asignada_ese_dia, ... }, ... }
+        --- OPTIMIZADO (N+1) ---
         """
         carga_distribuida = {1: defaultdict(float), 2: defaultdict(float)}
-        # Necesitamos la capacidad para simular la distribución
-        # Obtener rango de fechas mínimo y máximo de las OPs planificadas
         fechas_inicio = []
+
+        # --- ¡INICIO DE LA OPTIMIZACIÓN N+1! ---
+        # A. Obtener todos los IDs de recetas únicos
+        receta_ids_unicos = list(set(op.get('receta_id') for op in ordenes_planificadas if op.get('receta_id')))
+        if not receta_ids_unicos:
+            return {1:{}, 2:{}} # No hay nada que calcular
+
+        # B. Hacer UNA sola consulta a la DB para todas las operaciones
+        operaciones_resp = self.operacion_receta_model.find_by_receta_ids(receta_ids_unicos)
+        operaciones_map = defaultdict(list)
+        if operaciones_resp.get('success'):
+            for op_step in operaciones_resp.get('data', []):
+                operaciones_map[op_step['receta_id']].append(op_step)
+        # --- FIN DE LA OPTIMIZACIÓN N+1 ---
+
+
+        # ... (Lógica de rango de fechas, sin cambios) ...
         for op in ordenes_planificadas:
              if op.get('fecha_inicio_planificada'):
                  try: fechas_inicio.append(date.fromisoformat(op['fecha_inicio_planificada']))
                  except ValueError: pass
 
-        if not fechas_inicio: return {1:{}, 2:{}} # No hay OPs válidas para calcular
-
+        if not fechas_inicio: return {1:{}, 2:{}}
         fecha_min = min(fechas_inicio)
-        # Estimar una fecha máxima razonable (ej. fecha min + 30 días, o basado en plazos)
         fecha_max_estimada = fecha_min + timedelta(days=30)
-
-        # Obtener capacidad para todo el rango relevante
         capacidad_disponible_rango = self.obtener_capacidad_disponible([1, 2], fecha_min, fecha_max_estimada)
 
-        # Ordenar OPs por fecha de inicio para procesar cronológicamente
+        # ... (Lógica de ordenar OPs, sin cambios) ...
         ordenes_ordenadas = sorted(
             [op for op in ordenes_planificadas if op.get('fecha_inicio_planificada')],
             key=lambda op: op['fecha_inicio_planificada']
@@ -1155,58 +1358,47 @@ class PlanificacionController(BaseController):
             try:
                 linea_asignada = orden.get('linea_asignada')
                 fecha_inicio_op_str = orden.get('fecha_inicio_planificada')
-                if linea_asignada not in [1, 2] or not fecha_inicio_op_str: continue
+                receta_id = orden.get('receta_id') # <-- Obtener receta_id
+
+                if linea_asignada not in [1, 2] or not fecha_inicio_op_str or not receta_id: continue # <-- Validar
 
                 fecha_inicio_op = date.fromisoformat(fecha_inicio_op_str)
-                carga_total_op = float(self._calcular_carga_op(orden)) # Usar helper que calcula carga total
+
+                # --- ¡CAMBIO! Usar la función precargada ---
+                # Original: carga_total_op = float(self._calcular_carga_op(orden))
+                operaciones_para_esta_op = operaciones_map.get(receta_id, [])
+                carga_total_op = float(self._calcular_carga_op_precargada(orden, operaciones_para_esta_op))
+                # --- FIN DEL CAMBIO ---
+
                 if carga_total_op <= 0: continue
 
                 logger.debug(f"Distribuyendo carga para OP {orden.get('codigo', orden.get('id'))}: {carga_total_op:.2f} min en Línea {linea_asignada} desde {fecha_inicio_op_str}")
 
-                # Simular asignación día por día
+                # ... (Lógica del bucle 'while' de simulación, sin cambios) ...
                 carga_restante_op = carga_total_op
                 fecha_actual_sim = fecha_inicio_op
                 dias_procesados = 0
-                max_dias_op = 30 # Límite por OP
+                max_dias_op = 30
 
-                while carga_restante_op > 0.01 and dias_procesados < max_dias_op: # Usar > 0.01 por precisión float
+                while carga_restante_op > 0.01 and dias_procesados < max_dias_op:
                     fecha_actual_str = fecha_actual_sim.isoformat()
-
-                    # --- ¡CAMBIO! Usar .get('neta') ---
-                    # Capacidad NETA del día (considerando eficiencia, etc.)
                     cap_dia_dict = capacidad_disponible_rango.get(linea_asignada, {}).get(fecha_actual_str, {})
                     capacidad_dia = cap_dia_dict.get('neta', 0.0)
-                    # --- FIN CAMBIO ---
-
-                    # Carga YA ASIGNADA a este día por OPs anteriores en este cálculo
                     carga_ya_asignada_este_dia = carga_distribuida[linea_asignada].get(fecha_actual_str, 0.0)
-
-                    # Capacidad REALMENTE restante en el día
                     capacidad_restante_hoy = max(0.0, capacidad_dia - carga_ya_asignada_este_dia)
-
-                    # Cuánto podemos asignar de la OP actual a este día
                     carga_a_asignar_hoy = min(carga_restante_op, capacidad_restante_hoy)
-
                     if carga_a_asignar_hoy > 0:
                         carga_distribuida[linea_asignada][fecha_actual_str] += carga_a_asignar_hoy
                         carga_restante_op -= carga_a_asignar_hoy
                         logger.debug(f"  -> Asignado {carga_a_asignar_hoy:.2f} min a {fecha_actual_str}. Restante OP: {carga_restante_op:.2f} min")
-                    # else: # No cabe nada hoy
-                    #    logger.debug(f"  -> No cabe carga en {fecha_actual_str}. Cap restante: {capacidad_restante_hoy:.2f}")
-
-
-                    # Pasar al siguiente día
                     fecha_actual_sim += timedelta(days=1)
                     dias_procesados += 1
-
                 if carga_restante_op > 0.01:
                      logger.warning(f"OP {orden.get('codigo', orden.get('id'))}: No se pudo asignar toda la carga ({carga_restante_op:.2f} min restantes) en {max_dias_op} días.")
-                     # La carga que se pudo asignar hasta ahora sí se incluye en carga_distribuida
-
             except Exception as e:
                  logger.error(f"Error distribuyendo carga para OP {orden.get('codigo', orden.get('id'))}: {e}", exc_info=True)
 
-        # Convertir defaultdicts internos a dicts normales para devolver
+        # ... (Lógica final de 'return', sin cambios) ...
         resultado_final = {
             1: dict(carga_distribuida[1]),
             2: dict(carga_distribuida[2])
@@ -1827,198 +2019,6 @@ class PlanificacionController(BaseController):
                 return self.error_response(f"Error al eliminar: {result.get('error')}", 500)
         except Exception as e:
             return self.error_response(f"Error: {str(e)}", 500)
-
-    def obtener_datos_para_vista_planificacion(self, week_str: str, horizonte_dias: int, current_user_id: int, current_user_rol: str) -> tuple:
-        """
-        Método orquestador que obtiene y procesa todos los datos necesarios para la
-        vista de planificación de forma optimizada.
-        """
-        try:
-            # --- ¡INICIO: PLANIFICACIÓN ADAPTATIVA (7 DÍAS)! ---
-            nuevos_issues_generados = [] # <-- ¡NUEVO!
-            try:
-                logger.info("[PlanAdaptativa] Ejecutando verificación de capacidad para los PRÓXIMOS 7 DÍAS...")
-                fecha_inicio_chequeo = date.today()
-
-                for i in range(7): # Chequear Hoy + 6 días
-                    fecha_a_chequear = fecha_inicio_chequeo + timedelta(days=i)
-
-                    if not self._es_dia_laborable(fecha_a_chequear):
-                        logger.info(f"[PlanAdaptativa] Omitiendo chequeo para {fecha_a_chequear.isoformat()} (No laborable).")
-                        continue
-
-                    logger.info(f"[PlanAdaptativa] Verificando día laborable: {fecha_a_chequear.isoformat()}...")
-                    # --- ¡MODIFICADO! ---
-                    nuevos_issues_del_dia = self._verificar_y_replanificar_ops_por_fecha(
-                        fecha=fecha_a_chequear,
-                        usuario_id=current_user_id
-                    )
-                    if nuevos_issues_del_dia:
-                        nuevos_issues_generados.extend(nuevos_issues_del_dia)
-                    # --- FIN MODIFICACIÓN ---
-            except Exception as e_adapt:
-                logger.error(f"[PlanAdaptativa] Error en la verificación de 7 días: {e_adapt}", exc_info=True)
-            # --- FIN: PLANIFICACIÓN ADAPTATIVA ---
-
-            # 1. Determinar rango de la semana (Sin cambios)
-            if week_str:
-                try:
-                    year, week_num = map(int, week_str.split('-W'))
-                    inicio_semana = date.fromisocalendar(year, week_num, 1)
-                except ValueError:
-                    return self.error_response("Formato de semana inválido.", 400)
-            else:
-                today = date.today()
-                inicio_semana = today - timedelta(days=today.weekday())
-
-            fin_semana = inicio_semana + timedelta(days=6)
-
-            # 2. Consulta de Órdenes de Producción (Sin cambios)
-            estados_planificados_validos = [
-                'EN ESPERA', 'EN_ESPERA',
-                'LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR',
-                'EN_LINEA_1', 'EN_LINEA_2',
-                'EN_EMPAQUETADO',
-                'CONTROL_DE_CALIDAD'
-            ]
-            filtros_planificadas = {
-                'estado': ('in', estados_planificados_validos)
-            }
-            response_ops_planificadas, _ = self.orden_produccion_controller.obtener_ordenes(filtros_planificadas)
-            if not response_ops_planificadas.get('success'):
-                 return self.error_response("Error al obtener las órdenes planificadas.", 500)
-            ops_planificadas = response_ops_planificadas.get('data', [])
-
-            # 3. Procesamiento en Memoria (Sin cambios)
-            response_mps, _ = self.obtener_ops_pendientes_planificacion(dias_horizonte=horizonte_dias)
-            mps_data = response_mps.get('data', {}) if response_mps.get('success') else {}
-            response_semanal, _ = self.obtener_planificacion_semanal(week_str, ordenes_pre_cargadas=ops_planificadas)
-            data_semanal = response_semanal.get('data', {}) if response_semanal.get('success') else {}
-            ordenes_por_dia = data_semanal.get('ops_visibles_por_dia', {})
-
-            # --- Enriquecimiento del Calendario (Sin cambios) ---
-            enriched_ordenes_por_dia = {}
-            if ordenes_por_dia:
-                for dia_iso, ops_del_dia in ordenes_por_dia.items():
-                    ops_enriquecidas_dia = []
-                    for op in ops_del_dia:
-                        sugerencias = self._calcular_sugerencias_para_op(op)
-                        op['sugerencias_jit'] = sugerencias
-                        ops_enriquecidas_dia.append(op)
-                    enriched_ordenes_por_dia[dia_iso] = ops_enriquecidas_dia
-
-            # --- CRP Data (Sin cambios) ---
-            carga_calculada = self.calcular_carga_capacidad(ops_planificadas)
-            capacidad_disponible = self.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
-
-            # --- ¡BLOQUE DE ISSUES CORREGIDO! (Lógica de combinación de la última vez) ---
-            response_issues = self.issue_planificacion_model.get_all_with_op_details()
-            all_issues_raw = response_issues.get('data', []) if response_issues.get('success') else []
-            planning_issues_raw_db = [issue for issue in all_issues_raw if issue.get('estado', 'PENDIENTE') == 'PENDIENTE']
-
-            op_ids_en_memoria = {issue['orden_produccion_id'] for issue in nuevos_issues_generados}
-            planning_issues_a_procesar = list(nuevos_issues_generados)
-
-            for db_issue in planning_issues_raw_db:
-                if db_issue.get('orden_produccion_id') not in op_ids_en_memoria:
-                    planning_issues_a_procesar.append(db_issue)
-
-            # --- LOG DE VERIFICACIÓN ---
-            logger.info(f"[Vista Planif.] Issues a procesar (total: {len(planning_issues_a_procesar)}): {[i.get('id') for i in planning_issues_a_procesar]}")
-            # --- FIN LOG ---
-
-            # --- FIN BLOQUE COMBINACIÓN ---
-
-            # --- ENRIQUECER Y SEPARAR ISSUES DE NOTIFICACIONES ---
-            # --- ¡¡¡INICIO DE LA NUEVA CORRECCIÓN!!! ---
-            enriched_planning_issues = []
-            enriched_planning_notifications = []
-
-            if planning_issues_a_procesar:
-                for issue in planning_issues_a_procesar:
-                    op_id_para_jit = issue.get('orden_produccion_id')
-                    op_data_real = None
-                    sugerencias = {}
-
-                    logger.info(f"[Vista Planif.] Procesando issue {issue.get('id')}, tipo: {issue.get('tipo_error')}")
-
-                    if not op_id_para_jit:
-                        logger.warning(f"Issue {issue.get('id')} omitido: no tiene 'orden_produccion_id'.")
-                        continue # Saltar issue corrupto
-
-                    # --- PASO 1: OBTENER LOS DATOS DE LA OP ---
-                    # (Intenta usar el objeto en memoria, si no, búscalo en la DB)
-                    if 'receta_id' in issue: # Clave para saber si es un issue enriquecido en-memoria
-                        logger.info(f"[Vista Planif.] Issue {issue.get('id')} es de memoria (enriquecido).")
-                        op_data_real = issue
-                    else:
-                        # Es un issue de la DB, buscar su OP
-                        logger.info(f"[Vista Planif.] Issue {issue.get('id')} es de DB, buscando OP: {op_id_para_jit}...")
-                        op_result = self.orden_produccion_controller.obtener_orden_por_id(op_id_para_jit)
-
-                        if op_result.get('success'):
-                            op_data_real = op_result.get('data')
-
-                            # Añadir datos de la OP al issue (para los que vienen de la DB)
-                            issue['op_codigo'] = op_data_real.get('codigo')
-                            issue['op_producto_nombre'] = op_data_real.get('producto_nombre')
-                            # --- INICIO DE LA CORRECCIÓN ---
-                            issue['cantidad_planificada'] = op_data_real.get('cantidad_planificada') # NO 'op_cantidad'
-                            # --- FIN DE LA CORRECCIÓN ---
-                            issue['op_fecha_meta'] = op_data_real.get('fecha_meta')
-                        else:
-                            logger.warning(f"[Vista Planif.] Issue {issue.get('id')} (OP: {op_id_para_jit}): NO SE PUDO CARGAR LA OP. Razón: {op_result.get('error')}")
-                            # op_data_real se mantiene como None
-
-                    # --- PASO 2: CALCULAR JIT (SI TENEMOS DATOS) ---
-                    if op_data_real:
-                        # Solo podemos calcular sugerencias si encontramos la OP
-                        sugerencias = self._calcular_sugerencias_para_op(op_data_real)
-
-                    issue['sugerencias_jit'] = sugerencias
-
-                    # --- PASO 3: SEPARAR (LÓGICA MOVIDA) ---
-                    # Esta es la lógica clave. Ahora se ejecuta para CADA issue,
-                    # incluso si la OP asociada no se encontró.
-                    if issue.get('tipo_error') == 'REPLAN_AUTO_AUSENCIA':
-                        logger.info(f"[Vista Planif.] Issue {issue.get('id')} CLASIFICADO como NOTIFICACIÓN.")
-                        enriched_planning_notifications.append(issue)
-                    else:
-                        logger.info(f"[Vista Planif.] Issue {issue.get('id')} CLASIFICADO como ISSUE.")
-                        enriched_planning_issues.append(issue)
-            # --- ¡¡¡FIN DE LA NUEVA CORRECCIÓN!!! ---
-
-            # 4. Obtener Datos Auxiliares (Usuarios) (Sin cambios)
-            from app.controllers.usuario_controller import UsuarioController
-            usuario_controller = UsuarioController()
-            supervisores_resp = usuario_controller.obtener_usuarios_por_rol(['SUPERVISOR'])
-            operarios_resp = usuario_controller.obtener_usuarios_por_rol(['OPERARIO'])
-            supervisores = supervisores_resp.get('data', []) if supervisores_resp.get('success') else []
-            operarios = operarios_resp.get('data', []) if operarios_resp.get('success') else []
-
-            # 5. Ensamblar el resultado final (Sin cambios)
-            datos_vista = {
-                'mps_data': mps_data,
-                'ordenes_por_dia': enriched_ordenes_por_dia,
-                'carga_crp': carga_calculada,
-                'capacidad_crp': capacidad_disponible,
-                'supervisores': supervisores,
-                'operarios': operarios,
-                'inicio_semana': inicio_semana.isoformat(),
-                'fin_semana': fin_semana.isoformat(),
-                'planning_issues': enriched_planning_issues,
-                'planning_notifications': enriched_planning_notifications
-            }
-
-            # --- LOG DE VERIFICACIÓN FINAL ---
-            logger.info(f"[Vista Planif.] Finalizado. Total Notificaciones: {len(enriched_planning_notifications)}, Total Issues: {len(enriched_planning_issues)}")
-            # --- FIN LOG ---
-
-            return self.success_response(data=datos_vista)
-
-        except Exception as e:
-            logger.error(f"Error en obtener_datos_para_vista_planificacion: {e}", exc_info=True)
-            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
 
 
     def _crear_o_actualizar_issue(self, op_id: int, tipo_error: str, mensaje: str, datos_snapshot: Dict) -> Dict:
