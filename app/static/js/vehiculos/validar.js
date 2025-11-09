@@ -15,8 +15,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!element) return;
         element.classList.remove('is-valid');
         element.classList.add('is-invalid');
-        const errorDiv = element.nextElementSibling.nextElementSibling; // Asume estructura: input -> small -> div.invalid-feedback
-        if (errorDiv && errorDiv.classList.contains('invalid-feedback')) {
+        const errorDiv = document.getElementById(element.id + '-error');
+        if (errorDiv) {
             errorDiv.textContent = message;
         }
     };
@@ -25,8 +25,8 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!element) return;
         element.classList.remove('is-invalid');
         element.classList.add('is-valid');
-         const errorDiv = element.nextElementSibling.nextElementSibling;
-        if (errorDiv && errorDiv.classList.contains('invalid-feedback')) {
+        const errorDiv = document.getElementById(element.id + '-error');
+        if (errorDiv) {
             errorDiv.textContent = '';
         }
     };

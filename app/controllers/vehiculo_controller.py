@@ -48,6 +48,7 @@ class VehiculoController(BaseController):
         validacion = self._validar_datos_vehiculo(data)
         if not validacion['success']:
             return validacion
+        data.pop('csrf_token', None) # Eliminar el token CSRF antes de crear
         return self.model.create(data)
 
     def obtener_vehiculo_por_id(self, vehiculo_id):
@@ -60,6 +61,7 @@ class VehiculoController(BaseController):
         validacion = self._validar_datos_vehiculo(data)
         if not validacion['success']:
             return validacion
+        data.pop('csrf_token', None) # Eliminar el token CSRF antes de actualizar
         return self.model.update(vehiculo_id, data)
 
     def eliminar_vehiculo(self, vehiculo_id):
