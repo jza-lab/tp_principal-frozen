@@ -56,3 +56,7 @@ class ClienteSchema(Schema):
         dump_only=True,
         load_default='pendiente'
     )
+    estado_crediticio = fields.Str(
+        dump_only=True,
+        load_default='normal'
+    )

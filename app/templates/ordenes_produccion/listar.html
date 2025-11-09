@@ -163,10 +163,12 @@
 
                     {# Acciones (DETALLE Y TRAZABILIDAD) #}
                     <div class="d-flex justify-content-end align-items-center action-buttons pt-2">
+                        {% if current_user.roles.codigo in ['SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'] %}
                         <button type="button" class="btn btn-sm btn-outline-success me-2 btn-trazabilidad"
                             data-op-id="{{ orden.id }}" title="Ver Trazabilidad">
                             <i class="bi bi-arrows-fullscreen"></i> Trazabilidad
                         </button>
+                        {% endif %}
                         <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}"
                             class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                             <i class="bi bi-eye"></i> Detalle

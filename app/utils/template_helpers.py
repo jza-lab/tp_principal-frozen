@@ -59,10 +59,25 @@ def format_time_filter(value):
         return ':'.join(value.split(':')[:2])
     return value
 
+from app.utils.estados import CONDICION_IVA_MAP
+
+def format_condicion_iva(value):
+    """
+    Filtro Jinja para convertir el ID de condición de IVA a su representación textual.
+    """
+    if value is None:
+        return "No especificado"
+    
+    # Asegurarse de que el valor sea un string para la búsqueda en el diccionario
+    key = str(value)
+    
+    return CONDICION_IVA_MAP.get(key, "Desconocido")
+
 def setup_template_helpers(app):
     """Registra los helpers con la aplicación Flask."""
     @app.context_processor
     def inject_helpers():
         return dict(
-            format_product_units=format_product_units
+            format_product_units=format_product_units,
+            format_condicion_iva=format_condicion_iva
         )

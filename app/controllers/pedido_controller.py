@@ -21,6 +21,7 @@ from app.schemas.cliente_schema import ClienteSchema
 from app.schemas.pedido_schema import PedidoSchema
 from typing import Dict, Optional
 from marshmallow import ValidationError
+from app.config import Config
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -42,6 +43,8 @@ class PedidoController(BaseController):
         self.dcliente_schema = ClienteSchema()
         self.direccion_schema= DireccionSchema()
         self.receta_model = RecetaModel()
+        from app.controllers.storage_controller import StorageController
+        self.storage_controller = StorageController()
         # --- INSTANCIAS NUEVAS ---
         self.lote_producto_controller = LoteProductoController()
         self.nota_credito_model = NotaCreditoModel()
@@ -144,6 +147,25 @@ class PedidoController(BaseController):
 
             items_data = form_data.pop('items', [])
             pedido_data = form_data
+
+            # --- LÓGICA DE CRÉDITO ---
+            id_cliente = pedido_data.get('id_cliente')
+            cliente_info = self.cliente_model.find_by_id(id_cliente)
+            if cliente_info.get('success'):
+                cliente_data = cliente_info['data']
+                if cliente_data.get('estado_crediticio') == 'alertado' and pedido_data.get('condicion_venta') != 'contado':
+                    return self.error_response("El cliente tiene un estado crediticio 'alertado' y solo puede realizar pedidos al contado.", 403)
+
+            condicion_venta = pedido_data.get('condicion_venta', 'contado')
+            if 'fecha_solicitud' in pedido_data:
+                fecha_solicitud = datetime.fromisoformat(pedido_data['fecha_solicitud']).date()
+                if condicion_venta == 'credito_30':
+                    pedido_data['fecha_vencimiento'] = fecha_solicitud + timedelta(days=30)
+                elif condicion_venta == 'credito_90':
+                    pedido_data['fecha_vencimiento'] = fecha_solicitud + timedelta(days=90)
+                else:
+                    pedido_data['fecha_vencimiento'] = None
+            # --- FIN LÓGICA DE CRÉDITO ---          
 
             # --- VERIFICACIÓN DE STOCK Y UMBRAL ---
             all_in_stock = True
@@ -471,6 +493,26 @@ class PedidoController(BaseController):
                 form_data['items'] = self._consolidar_items(form_data['items'])
             items_data = form_data.pop('items', [])
             pedido_data = form_data
+
+            
+            # --- LÓGICA DE CRÉDITO ---
+            id_cliente = pedido_data.get('id_cliente')
+            cliente_info = self.cliente_model.find_by_id(id_cliente)
+            if cliente_info.get('success'):
+                cliente_data = cliente_info['data']
+                if cliente_data.get('estado_crediticio') == 'alertado' and pedido_data.get('condicion_venta') != 'contado':
+                    return self.error_response("El cliente tiene un estado crediticio 'alertado' y solo puede realizar pedidos al contado.", 403)
+
+            condicion_venta = pedido_data.get('condicion_venta', 'contado')
+            if 'fecha_solicitud' in pedido_data:
+                fecha_solicitud = datetime.fromisoformat(pedido_data['fecha_solicitud']).date()
+                if condicion_venta == 'credito_30':
+                    pedido_data['fecha_vencimiento'] = fecha_solicitud + timedelta(days=30)
+                elif condicion_venta == 'credito_90':
+                    pedido_data['fecha_vencimiento'] = fecha_solicitud + timedelta(days=90)
+                else:
+                    pedido_data['fecha_vencimiento'] = None
+            # --- FIN LÓGICA DE CRÉDITO ---
 
             direccion_id = None
             usar_alternativa = form_data.get('usar_direccion_alternativa')
@@ -994,3 +1036,93 @@ class PedidoController(BaseController):
                 return self.error_response(error_msg, 500)
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+
+    def registrar_pago(self, pedido_id: int, pago_data: Dict, file) -> tuple:
+        """
+        Registra el pago de un pedido y recalcula el estado crediticio del cliente.
+        """
+        try:
+            pedido_result = self.model.find_by_id(pedido_id, 'id')
+            if not pedido_result.get('success'):
+                return self.error_response("Pedido no encontrado.", 404)
+
+            pedido = pedido_result['data']
+            if pedido.get('estado_pago') == 'pagado':
+                return self.error_response("Este pedido ya ha sido marcado como pagado.", 400)
+
+            update_data = {'estado_pago': 'pagado'}
+            
+            if file:
+                bucket_name = 'comprobantes-pago'
+                destination_path = f"pedido_{pedido_id}/{file.filename}"
+                upload_result, status_code = self.storage_controller.upload_file(file, bucket_name, destination_path)
+                if status_code != 200:
+                    return self.error_response("Error al subir el comprobante de pago.", 500)
+                update_data['comprobante_pago_url'] = upload_result['url']
+
+
+            update_result = self.model.update(pedido_id, update_data, 'id')
+
+            if not update_result.get('success'):
+                return self.error_response("Error al actualizar el estado del pago.", 500)
+
+            id_cliente = pedido.get('id_cliente')
+            if id_cliente:
+                self._recalcular_estado_crediticio_cliente(id_cliente)
+
+            return self.success_response(message="Pago registrado y estado crediticio actualizado.")
+
+        except Exception as e:
+            logger.error(f"Error registrando pago para el pedido {pedido_id}: {e}", exc_info=True)
+            return self.error_response("Error interno del servidor.", 500)
+
+    def _recalcular_estado_crediticio_cliente(self, cliente_id: int):
+        """
+        Recalcula el estado crediticio de un cliente basándose en sus pedidos vencidos.
+        """
+        try:
+            pedidos_vencidos_result = self.model.find_all({'id_cliente': cliente_id, 'estado_pago': 'vencido'})
+            if pedidos_vencidos_result.get('success'):
+                conteo_vencidos = len(pedidos_vencidos_result['data'])
+                
+                umbral_alertado = Config.CREDIT_ALERT_THRESHOLD
+
+                nuevo_estado = 'alertado' if conteo_vencidos > umbral_alertado else 'normal'
+
+                cliente_actual = self.cliente_model.find_by_id(cliente_id)
+                if cliente_actual.get('success') and cliente_actual['data'].get('estado_crediticio') != nuevo_estado:
+                    self.cliente_model.update(cliente_id, {'estado_crediticio': nuevo_estado}, 'id')
+                    logger.info(f"Estado crediticio del cliente {cliente_id} actualizado a '{nuevo_estado}'.")
+        except Exception as e:
+            logger.error(f"Error recalculando estado crediticio para el cliente {cliente_id}: {e}", exc_info=True)
+
+    def marcar_pedidos_vencidos(self) -> int:
+        """
+        Busca todos los pedidos pendientes con fecha de vencimiento pasada y los marca como 'vencido'.
+        Devuelve el número de pedidos actualizados.
+        """
+        try:
+            today = date.today()
+            # Supabase no soporta (o al menos no es directo) queries de actualización con filtros complejos.
+            # Por lo tanto, obtenemos los IDs primero y luego actualizamos.
+            pedidos_a_vencer_result = self.model.db.table(self.model.get_table_name()) \
+                .select('id') \
+                .eq('estado_pago', 'pendiente') \
+                .lt('fecha_vencimiento', today.isoformat()) \
+                .execute()
+
+            if not pedidos_a_vencer_result.data:
+                return 0
+
+            ids_a_actualizar = [p['id'] for p in pedidos_a_vencer_result.data]
+            
+            if ids_a_actualizar:
+                update_result = self.model.db.table(self.model.get_table_name()) \
+                    .update({'estado_pago': 'vencido'}) \
+                    .in_('id', ids_a_actualizar) \
+                    .execute()
+                return len(update_result.data)
+            return 0
+        except Exception as e:
+            logger.error(f"Error marcando pedidos como vencidos: {e}", exc_info=True)
+            return 0

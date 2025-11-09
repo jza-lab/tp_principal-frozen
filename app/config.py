@@ -21,6 +21,10 @@ class Config:
 
     # Evitar problemas de puertos
     USE_RELOADER = DEBUG
+    
+    # Credit System Configuration
+    CREDIT_ALERT_THRESHOLD = int(os.getenv('CREDIT_ALERT_THRESHOLD', 2))
+
 
     # Pagination
     DEFAULT_PAGE_SIZE = 20

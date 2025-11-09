@@ -252,3 +252,22 @@ def enviar_consulta():
         return redirect(url_for('public.faq'))
 
     return render_template('public/formulario_consulta.html', csrf_form=csrf_form)
+
+@public_bp.route('/api/buscar-cliente', methods=['GET'])
+def buscar_cliente_por_cuit():
+    """
+    Busca un cliente por su CUIT y devuelve sus datos en formato JSON.
+    Es un endpoint público y seguro.
+    """
+    cuit = request.args.get('cuit')
+    if not cuit:
+        return jsonify({'success': False, 'error': 'CUIT no proporcionado'}), 400
+
+    cliente_controller = ClienteController()
+    cliente_response, _ = cliente_controller.obtener_cliente_por_cuit(cuit)
+    
+    if cliente_response.get('success'):
+        return jsonify(cliente_response)
+    else:
+        # Si no se encuentra, devolvemos un éxito falso pero sin error de servidor
+        return jsonify({'success': False, 'message': 'Cliente no encontrado'}), 404

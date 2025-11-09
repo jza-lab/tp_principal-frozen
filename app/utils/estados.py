@@ -201,3 +201,14 @@ ESTADOS_INSPECCION = [
     "Error de Etiquetado",
     "Otro"
 ]
+
+# -----------------------------------------------------------------------------
+# CONDICIÓN DE IVA
+# -----------------------------------------------------------------------------
+
+CONDICION_IVA_MAP = {
+    '1': 'Responsable Inscripto',
+    '2': 'Monotributista',
+    '3': 'Exento',
+    '4': 'Consumidor Final',
+}

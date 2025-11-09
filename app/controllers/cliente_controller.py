@@ -7,6 +7,7 @@ from app.controllers.pedido_controller import PedidoController
 from werkzeug.security import generate_password_hash, check_password_hash
 from typing import Dict, Optional
 import logging
+from app.config import Config
 
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,10 @@ class ClienteController(BaseController):
         except Exception as e:
             logger.error(f"Error obteniendo Cliente {cliente_cuil}: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def obtener_cliente_por_cuit(self, cuit: str) -> tuple:
+        """Obtener un Cliente por su CUIT/CUIL"""
+        return self.obtener_cliente_cuil(cuit)
 
     def eliminar_cliente(self, cliente_id: int) -> tuple:
         """Elimina (desactiva) un Cliente por su ID"""
@@ -416,16 +421,50 @@ class ClienteController(BaseController):
             # 2. Obtener los pedidos del cliente
             pedidos_response, _ = self.pedido_controller.obtener_pedidos_por_cliente(cliente_id)
             
-            pedidos_data = []
+            pedidos_enriquecidos = []
             if pedidos_response.get('success'):
-                pedidos_data = pedidos_response.get('data', [])
+                pedidos_crudos = pedidos_response.get('data', [])
+                for pedido_base in pedidos_crudos:
+                    # Obtener el pedido completo, que ya incluye los items
+                    pedido_completo_resp, _ = self.pedido_controller.obtener_pedido_por_id(pedido_base['id'])
+                    if pedido_completo_resp.get('success'):
+                        pedidos_enriquecidos.append(pedido_completo_resp.get('data'))
 
             # 3. Combinar los datos
             perfil_completo = cliente_data
-            perfil_completo['pedidos'] = pedidos_data
+            perfil_completo['pedidos'] = pedidos_enriquecidos
             
             return self.success_response(data=perfil_completo)
 
         except Exception as e:
             logger.error(f"Error obteniendo el perfil del cliente {cliente_id}: {str(e)}")
             return self.error_response('Error interno del servidor.', 500)
+    
+    def recalcular_estado_crediticio_todos_los_clientes(self) -> int:
+        """
+        Recalcula el estado crediticio para todos los clientes.
+        Devuelve el número de clientes cuyo estado fue modificado.
+        """
+        try:
+            clientes_afectados = 0
+            clientes_result = self.model.get_all()
+            if not clientes_result.get('success'):
+                logger.error("No se pudieron obtener los clientes para recalcular el estado crediticio.")
+                return 0
+
+            for cliente in clientes_result['data']:
+                pedidos_vencidos_result = self.pedido_controller.model.find_all({'id_cliente': cliente['id'], 'estado_pago': 'vencido'})
+                
+                if pedidos_vencidos_result.get('success'):
+                    conteo_vencidos = len(pedidos_vencidos_result['data'])
+                    umbral_alertado = Config.CREDIT_ALERT_THRESHOLD
+                    
+                    nuevo_estado = 'alertado' if conteo_vencidos > umbral_alertado else 'normal'
+
+                    if cliente.get('estado_crediticio') != nuevo_estado:
+                        self.model.update(cliente['id'], {'estado_crediticio': nuevo_estado}, 'id')
+                        clientes_afectados += 1
+            return clientes_afectados
+        except Exception as e:
+            logger.error(f"Error recalculando el estado crediticio de todos los clientes: {e}", exc_info=True)
+            return 0
