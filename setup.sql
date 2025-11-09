@@ -19,11 +19,14 @@ CREATE TABLE public.alerta_riesgo (
   codigo character varying,
   origen_tipo_entidad character varying,
   origen_id_entidad character varying,
-  estado character varying DEFAULT 'Borrador'::character varying,
-  motivos character varying,
-  detalle_motivo character varying,
+  estado character varying DEFAULT '''Pendiente''::character varying'::character varying,
+  motivo character varying,
+  comentarios character varying,
   resolucion_seleccionada character varying,
-  CONSTRAINT alerta_riesgo_pkey PRIMARY KEY (id)
+  url_evidencia character varying,
+  id_usuario_creador integer,
+  CONSTRAINT alerta_riesgo_pkey PRIMARY KEY (id),
+  CONSTRAINT alerta_riesgo_id_usuario_creador_fkey FOREIGN KEY (id_usuario_creador) REFERENCES public.usuarios(id)
 );
 CREATE TABLE public.alerta_riesgo_afectados (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -31,8 +34,13 @@ CREATE TABLE public.alerta_riesgo_afectados (
   alerta_id bigint,
   tipo_entidad character varying,
   id_entidad character varying,
+  estado character varying NOT NULL DEFAULT 'pendiente'::character varying,
+  resolucion_aplicada character varying,
+  id_documento_relacionado bigint,
+  id_usuario_resolucion integer,
   CONSTRAINT alerta_riesgo_afectados_pkey PRIMARY KEY (id),
-  CONSTRAINT alerta_riesgo_afectados_alerta_id_fkey FOREIGN KEY (alerta_id) REFERENCES public.alerta_riesgo(id)
+  CONSTRAINT alerta_riesgo_afectados_alerta_id_fkey FOREIGN KEY (alerta_id) REFERENCES public.alerta_riesgo(id),
+  CONSTRAINT alerta_riesgo_afectados_id_usuario_resolucion_fkey FOREIGN KEY (id_usuario_resolucion) REFERENCES public.usuarios(id)
 );
 CREATE TABLE public.bloqueos_capacidad (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -41,6 +49,8 @@ CREATE TABLE public.bloqueos_capacidad (
   minutos_bloqueados numeric NOT NULL DEFAULT 0,
   motivo text,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  hora_inicio time without time zone,
+  hora_fin time without time zone,
   CONSTRAINT bloqueos_capacidad_pkey PRIMARY KEY (id),
   CONSTRAINT bloqueos_capacidad_centro_trabajo_id_fkey FOREIGN KEY (centro_trabajo_id) REFERENCES public.CentrosTrabajo(id)
 );
@@ -71,6 +81,7 @@ CREATE TABLE public.clientes (
   contrasena character varying,
   razon_social character varying,
   estado_aprobacion character varying,
+  estado_crediticio character varying DEFAULT 'normal'::character varying,
   CONSTRAINT clientes_pkey PRIMARY KEY (id),
   CONSTRAINT clientes_direccion_id_fkey FOREIGN KEY (direccion_id) REFERENCES public.usuario_direccion(id)
 );
@@ -110,17 +121,39 @@ CREATE TABLE public.control_calidad_insumos (
   CONSTRAINT control_calidad_insumos_orden_compra_id_fkey FOREIGN KEY (orden_compra_id) REFERENCES public.ordenes_compra(id),
   CONSTRAINT control_calidad_insumos_usuario_supervisor_id_fkey FOREIGN KEY (usuario_supervisor_id) REFERENCES public.usuarios(id)
 );
+CREATE TABLE public.control_calidad_productos (
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  lote_producto_id integer NOT NULL,
+  orden_produccion_id integer,
+  usuario_supervisor_id integer NOT NULL,
+  resultado_inspeccion text,
+  comentarios text,
+  foto_url text,
+  decision_final character varying NOT NULL,
+  fecha_inspeccion timestamp with time zone NOT NULL DEFAULT now(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT control_calidad_productos_pkey PRIMARY KEY (id),
+  CONSTRAINT control_calidad_productos_lote_producto_id_fkey FOREIGN KEY (lote_producto_id) REFERENCES public.lotes_productos(id_lote),
+  CONSTRAINT control_calidad_productos_orden_produccion_id_fkey FOREIGN KEY (orden_produccion_id) REFERENCES public.ordenes_produccion(id),
+  CONSTRAINT control_calidad_productos_usuario_supervisor_id_fkey FOREIGN KEY (usuario_supervisor_id) REFERENCES public.usuarios(id)
+);
+CREATE TABLE public.despacho_items (
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  despacho_id integer NOT NULL,
+  pedido_id integer NOT NULL,
+  CONSTRAINT despacho_items_pkey PRIMARY KEY (id),
+  CONSTRAINT despacho_items_despacho_id_fkey FOREIGN KEY (despacho_id) REFERENCES public.despachos(id),
+  CONSTRAINT despacho_items_pedido_id_fkey FOREIGN KEY (pedido_id) REFERENCES public.pedidos(id)
+);
 CREATE TABLE public.despachos (
   id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
-  id_pedido integer NOT NULL,
-  nombre_transportista character varying NOT NULL,
-  dni_transportista character varying NOT NULL,
-  patente_vehiculo character varying,
-  telefono_transportista character varying,
+  vehiculo_id integer NOT NULL,
+  fecha_despacho timestamp with time zone NOT NULL DEFAULT now(),
   observaciones text,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT despachos_pkey PRIMARY KEY (id),
-  CONSTRAINT despachos_id_pedido_fkey FOREIGN KEY (id_pedido) REFERENCES public.pedidos(id)
+  CONSTRAINT despachos_vehiculo_id_fkey FOREIGN KEY (vehiculo_id) REFERENCES public.vehiculos(id)
 );
 CREATE TABLE public.historial_precios_insumos (
   id integer NOT NULL DEFAULT nextval('historial_precios_insumos_id_seq'::regclass),
@@ -190,6 +223,18 @@ CREATE TABLE public.insumos_inventario (
   CONSTRAINT insumos_inventario_id_orden_compra_fkey FOREIGN KEY (id_orden_compra) REFERENCES public.ordenes_compra(id),
   CONSTRAINT insumos_inventario_orden_produccion_id_fkey FOREIGN KEY (orden_produccion_id) REFERENCES public.ordenes_produccion(id)
 );
+CREATE TABLE public.issues_planificacion (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  orden_produccion_id bigint NOT NULL UNIQUE,
+  tipo_error character varying NOT NULL,
+  mensaje text NOT NULL,
+  estado character varying NOT NULL DEFAULT 'PENDIENTE'::character varying,
+  datos_snapshot jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT issues_planificacion_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_orden_produccion FOREIGN KEY (orden_produccion_id) REFERENCES public.ordenes_produccion(id)
+);
 CREATE TABLE public.lotes_productos (
   id_lote integer NOT NULL DEFAULT nextval('lotes_productos_id_lote_seq'::regclass) UNIQUE,
   producto_id integer NOT NULL,
@@ -199,7 +244,7 @@ CREATE TABLE public.lotes_productos (
   fecha_produccion date NOT NULL DEFAULT CURRENT_DATE,
   fecha_vencimiento date,
   costo_produccion_unitario numeric,
-  estado character varying NOT NULL DEFAULT 'DISPONIBLE'::character varying CHECK (estado::text = ANY (ARRAY['DISPONIBLE'::text, 'RESERVADO'::text, 'AGOTADO'::text, 'VENCIDO'::text, 'RETIRADO'::text, 'CUARENTENA'::text])),
+  estado character varying NOT NULL DEFAULT 'DISPONIBLE'::character varying CHECK (estado::text = ANY (ARRAY['DISPONIBLE'::text, 'RESERVADO'::text, 'AGOTADO'::text, 'VENCIDO'::text, 'RETIRADO'::text, 'CUARENTENA'::text, 'RECHAZADO'::text])),
   ubicacion_fisica character varying,
   orden_produccion_id integer,
   observaciones text,
@@ -207,9 +252,11 @@ CREATE TABLE public.lotes_productos (
   updated_at timestamp with time zone DEFAULT now(),
   motivo_cuarentena text,
   cantidad_en_cuarentena numeric,
+  pedido_id integer,
   CONSTRAINT lotes_productos_pkey PRIMARY KEY (id_lote, producto_id),
   CONSTRAINT lotes_productos_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES public.productos(id),
-  CONSTRAINT lotes_productos_orden_produccion_id_fkey FOREIGN KEY (orden_produccion_id) REFERENCES public.ordenes_produccion(id)
+  CONSTRAINT lotes_productos_orden_produccion_id_fkey FOREIGN KEY (orden_produccion_id) REFERENCES public.ordenes_produccion(id),
+  CONSTRAINT lotes_productos_pedido_id_fkey FOREIGN KEY (pedido_id) REFERENCES public.pedidos(id)
 );
 CREATE TABLE public.notas_credito (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -226,6 +273,20 @@ CREATE TABLE public.notas_credito (
   CONSTRAINT notas_credito_cliente_id_fkey FOREIGN KEY (cliente_id) REFERENCES public.clientes(id),
   CONSTRAINT notas_credito_pedido_origen_id_fkey FOREIGN KEY (pedido_origen_id) REFERENCES public.pedidos(id),
   CONSTRAINT notas_credito_alerta_origen_id_fkey FOREIGN KEY (alerta_origen_id) REFERENCES public.alerta_riesgo(id)
+);
+CREATE TABLE public.notas_credito_items (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  nota_credito_id bigint,
+  producto_id integer,
+  lote_producto_id integer,
+  cantidad real,
+  subtotal double precision,
+  precio_unitario real,
+  CONSTRAINT notas_credito_items_pkey PRIMARY KEY (id),
+  CONSTRAINT notas_credito_items_nota_credito_id_fkey FOREIGN KEY (nota_credito_id) REFERENCES public.notas_credito(id),
+  CONSTRAINT notas_credito_items_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES public.productos(id),
+  CONSTRAINT notas_credito_items_lote_producto_id_fkey FOREIGN KEY (lote_producto_id) REFERENCES public.lotes_productos(id_lote)
 );
 CREATE TABLE public.notificaciones (
   id integer NOT NULL DEFAULT nextval('notificaciones_id_seq'::regclass),
@@ -313,7 +374,7 @@ CREATE TABLE public.ordenes_produccion (
   fecha_aprobacion timestamp with time zone,
   supervisor_responsable_id integer,
   linea_produccion integer,
-  super_op_id integer,
+  aprobador_calidad_id integer,
   fecha_meta timestamp with time zone,
   linea_asignada smallint,
   operario_asignado_id integer,
@@ -325,14 +386,16 @@ CREATE TABLE public.ordenes_produccion (
   fecha_inicio_planificada date,
   orden_compra_id integer,
   cantidad_producida numeric DEFAULT '0'::numeric,
+  super_op_id integer,
   CONSTRAINT ordenes_produccion_pkey PRIMARY KEY (id),
   CONSTRAINT ordenes_produccion_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES public.productos(id),
   CONSTRAINT ordenes_produccion_receta_id_fkey FOREIGN KEY (receta_id) REFERENCES public.recetas(id),
   CONSTRAINT ordenes_produccion_usuario_creador_id_fkey FOREIGN KEY (usuario_creador_id) REFERENCES public.usuarios(id),
-  CONSTRAINT ordenes_produccion_supervisor_responsable_id_fkey FOREIGN KEY (supervisor_responsable_id) REFERENCES public.usuarios(id),
-  CONSTRAINT ordenes_produccion_super_op_id_fkey FOREIGN KEY (super_op_id) REFERENCES public.ordenes_produccion(id),
   CONSTRAINT ordenes_produccion_operario_asignado_id_fkey FOREIGN KEY (operario_asignado_id) REFERENCES public.usuarios(id),
-  CONSTRAINT ordenes_produccion_orden_compra_id_fkey FOREIGN KEY (orden_compra_id) REFERENCES public.ordenes_compra(id)
+  CONSTRAINT ordenes_produccion_orden_compra_id_fkey FOREIGN KEY (orden_compra_id) REFERENCES public.ordenes_compra(id),
+  CONSTRAINT ordenes_produccion_supervisor_responsable_id_fkey FOREIGN KEY (supervisor_responsable_id) REFERENCES public.usuarios(id),
+  CONSTRAINT ordenes_produccion_aprobador_calidad_id_fkey FOREIGN KEY (aprobador_calidad_id) REFERENCES public.usuarios(id),
+  CONSTRAINT ordenes_produccion_super_op_id_fkey FOREIGN KEY (super_op_id) REFERENCES public.ordenes_produccion(id)
 );
 CREATE TABLE public.pedido_items (
   id integer NOT NULL DEFAULT nextval('pedido_items_id_seq'::regclass),
@@ -362,6 +425,8 @@ CREATE TABLE public.pedidos (
   comentarios_adicionales text,
   fecha_estimativa_proceso date,
   condicion_venta character varying,
+  estado_pago character varying DEFAULT 'pendiente'::character varying,
+  fecha_vencimiento timestamp with time zone,
   CONSTRAINT pedidos_pkey PRIMARY KEY (id),
   CONSTRAINT pedidos_id_cliente_fkey FOREIGN KEY (id_cliente) REFERENCES public.clientes(id),
   CONSTRAINT pedidos_id_direccion_entrega_fkey FOREIGN KEY (id_direccion_entrega) REFERENCES public.usuario_direccion(id)
@@ -404,38 +469,6 @@ CREATE TABLE public.proveedores (
   direccion_id integer,
   CONSTRAINT proveedores_pkey PRIMARY KEY (id),
   CONSTRAINT proveedores_direccion_id_fkey FOREIGN KEY (direccion_id) REFERENCES public.usuario_direccion(id)
-);
-CREATE TABLE public.recepcion_items (
-  id integer NOT NULL DEFAULT nextval('recepcion_items_id_seq'::regclass),
-  recepcion_id integer,
-  orden_compra_item_id integer,
-  insumo_id uuid,
-  cantidad_recibida numeric NOT NULL,
-  lote_numero character varying,
-  fecha_vencimiento date,
-  calidad character varying DEFAULT 'BUENA'::character varying,
-  observaciones text,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT recepcion_items_pkey PRIMARY KEY (id),
-  CONSTRAINT recepcion_items_recepcion_id_fkey FOREIGN KEY (recepcion_id) REFERENCES public.recepciones_compra(id),
-  CONSTRAINT recepcion_items_orden_compra_item_id_fkey FOREIGN KEY (orden_compra_item_id) REFERENCES public.orden_compra_items(id),
-  CONSTRAINT recepcion_items_insumo_id_fkey FOREIGN KEY (insumo_id) REFERENCES public.insumos_catalogo(id_insumo)
-);
-CREATE TABLE public.recepciones_compra (
-  id integer NOT NULL DEFAULT nextval('recepciones_compra_id_seq'::regclass),
-  orden_compra_id integer,
-  codigo_recepcion character varying NOT NULL UNIQUE,
-  fecha_recepcion date DEFAULT CURRENT_DATE,
-  usuario_receptor_id integer,
-  proveedor_id integer,
-  estado character varying DEFAULT 'BORRADOR'::character varying,
-  observaciones text,
-  created_at timestamp with time zone DEFAULT now(),
-  updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT recepciones_compra_pkey PRIMARY KEY (id),
-  CONSTRAINT recepciones_compra_orden_compra_id_fkey FOREIGN KEY (orden_compra_id) REFERENCES public.ordenes_compra(id),
-  CONSTRAINT recepciones_compra_usuario_receptor_id_fkey FOREIGN KEY (usuario_receptor_id) REFERENCES public.usuarios(id),
-  CONSTRAINT recepciones_compra_proveedor_id_fkey FOREIGN KEY (proveedor_id) REFERENCES public.proveedores(id)
 );
 CREATE TABLE public.receta_ingredientes (
   id integer NOT NULL DEFAULT nextval('receta_ingredientes_id_seq'::regclass),
@@ -503,15 +536,14 @@ CREATE TABLE public.registros_acceso (
   CONSTRAINT registros_acceso_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES public.usuarios(id),
   CONSTRAINT registros_acceso_sesion_totem_id_fkey FOREIGN KEY (sesion_totem_id) REFERENCES public.totem_sesiones(id)
 );
-
 CREATE TABLE public.registros_sistema (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  fecha timestamp with time zone DEFAULT now(),
   usuario_nombre character varying,
   usuario_rol character varying,
   categoria character varying,
   accion character varying,
   detalle text,
+  fecha timestamp with time zone DEFAULT timezone('utc'::text, now()),
   CONSTRAINT registros_sistema_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.reservas_insumos (
@@ -631,16 +663,6 @@ CREATE TABLE public.usuario_direccion (
   created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT usuario_direccion_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.usuario_permisos (
-  id integer NOT NULL DEFAULT nextval('permisos_id_seq'::regclass),
-  role_id integer NOT NULL,
-  sector_id integer NOT NULL,
-  accion character varying NOT NULL,
-  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT usuario_permisos_pkey PRIMARY KEY (id),
-  CONSTRAINT fk_role FOREIGN KEY (role_id) REFERENCES public.roles(id),
-  CONSTRAINT fk_sector FOREIGN KEY (sector_id) REFERENCES public.sectores(id)
-);
 CREATE TABLE public.usuario_sectores (
   id integer NOT NULL DEFAULT nextval('usuario_sectores_id_seq'::regclass),
   usuario_id integer NOT NULL,
@@ -681,10 +703,32 @@ CREATE TABLE public.usuarios_turnos (
   hora_fin time without time zone NOT NULL,
   CONSTRAINT usuarios_turnos_pkey PRIMARY KEY (id)
 );
-
-
-
-
+CREATE TABLE public.vehiculos (
+  id integer GENERATED ALWAYS AS IDENTITY NOT NULL,
+  patente character varying NOT NULL UNIQUE,
+  tipo_vehiculo character varying,
+  capacidad_kg numeric,
+  nombre_conductor character varying NOT NULL,
+  dni_conductor character varying NOT NULL,
+  telefono_conductor character varying,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT vehiculos_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.zonas (
+  id integer NOT NULL DEFAULT nextval('zonas_id_seq'::regclass),
+  nombre character varying NOT NULL UNIQUE,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT zonas_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.zonas_localidades (
+  id integer NOT NULL DEFAULT nextval('zonas_localidades_id_seq'::regclass),
+  zona_id integer NOT NULL,
+  localidad_id integer NOT NULL,
+  CONSTRAINT zonas_localidades_pkey PRIMARY KEY (id),
+  CONSTRAINT zonas_localidades_zona_id_fkey FOREIGN KEY (zona_id) REFERENCES public.zonas(id),
+  CONSTRAINT zonas_localidades_localidad_id_fkey FOREIGN KEY (localidad_id) REFERENCES public.usuario_direccion(id)
+);
 
 // SCHEMA MES_KANBAN
 

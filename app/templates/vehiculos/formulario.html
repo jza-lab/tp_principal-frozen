@@ -15,7 +15,7 @@
             Datos del Vehículo
         </div>
         <div class="card-body">
-            <form method="POST">
+            <form id="form-vehiculo" method="POST" novalidate>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 
                 <div class="row">
@@ -24,6 +24,8 @@
                         <div class="mb-3">
                             <label for="patente" class="form-label">Patente</label>
                             <input type="text" class="form-control" id="patente" name="patente" value="{{ vehiculo.patente if vehiculo else '' }}" required>
+                            <small class="form-text text-muted">Formato: LLLNNN o LLNNNLL.</small>
+                            <div class="invalid-feedback" id="patente-error"></div>
                         </div>
                         <div class="mb-3">
                             <label for="tipo_vehiculo" class="form-label">Tipo de Vehículo</label>
@@ -31,7 +33,9 @@
                         </div>
                         <div class="mb-3">
                             <label for="capacidad_kg" class="form-label">Capacidad (kg)</label>
-                            <input type="number" step="0.01" class="form-control" id="capacidad_kg" name="capacidad_kg" value="{{ vehiculo.capacidad_kg if vehiculo else '' }}">
+                            <input type="number" step="0.01" class="form-control" id="capacidad_kg" name="capacidad_kg" value="{{ vehiculo.capacidad_kg if vehiculo else '' }}" required>
+                            <small class="form-text text-muted">Debe ser un número entre 100 y 500.</small>
+                            <div class="invalid-feedback" id="capacidad_kg-error"></div>
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -39,14 +43,20 @@
                         <div class="mb-3">
                             <label for="nombre_conductor" class="form-label">Nombre y Apellido</label>
                             <input type="text" class="form-control" id="nombre_conductor" name="nombre_conductor" value="{{ vehiculo.nombre_conductor if vehiculo else '' }}" required>
+                            <small class="form-text text-muted">Mínimo 3 caracteres, no debe contener números.</small>
+                            <div class="invalid-feedback" id="nombre_conductor-error"></div>
                         </div>
                         <div class="mb-3">
                             <label for="dni_conductor" class="form-label">DNI</label>
                             <input type="text" class="form-control" id="dni_conductor" name="dni_conductor" value="{{ vehiculo.dni_conductor if vehiculo else '' }}" required>
+                            <small class="form-text text-muted">Debe ser un número de 7 u 8 dígitos.</small>
+                            <div class="invalid-feedback" id="dni_conductor-error"></div>
                         </div>
                         <div class="mb-3">
                             <label for="telefono_conductor" class="form-label">Teléfono</label>
                             <input type="text" class="form-control" id="telefono_conductor" name="telefono_conductor" value="{{ vehiculo.telefono_conductor if vehiculo else '' }}">
+                            <small class="form-text text-muted">Opcional. Mínimo 7 dígitos.</small>
+                            <div class="invalid-feedback" id="telefono_conductor-error"></div>
                         </div>
                     </div>
                 </div>
@@ -63,4 +73,8 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/vehiculos/validar.js') }}"></script>
 {% endblock %}

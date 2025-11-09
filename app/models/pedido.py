@@ -80,12 +80,17 @@ class PedidoModel(BaseModel):
 
         pedido_data['todas_ops_completadas'] = todas_completadas # Añadir bandera al pedido
 
-        # 4. Obtener datos de despacho si existen
-        despacho_result = self.db.table('despachos').select('*').eq('id_pedido', pedido_id).execute()
-        if despacho_result.data:
-            pedido_data['despacho'] = despacho_result.data[0]
-        else:
-            pedido_data['despacho'] = None
+        # 4. Obtener datos de despacho si existen (NUEVA LÓGICA)
+        pedido_data['despacho'] = None # Inicializar por defecto
+        # Primero, buscar en la tabla intermedia
+        despacho_item_result = self.db.table('despacho_items').select('despacho_id').eq('pedido_id', pedido_id).limit(1).execute()
+
+        if despacho_item_result.data:
+            despacho_id = despacho_item_result.data[0]['despacho_id']
+            # Ahora, con el ID del despacho, obtener sus detalles
+            despacho_result = self.db.table('despachos').select('*').eq('id', despacho_id).single().execute()
+            if despacho_result.data:
+                pedido_data['despacho'] = despacho_result.data
 
         return {'success': True, 'data': pedido_data}
 

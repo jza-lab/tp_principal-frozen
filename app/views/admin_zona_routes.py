@@ -9,9 +9,7 @@ zona_controller = ZonaController()
 @zona_bp.route('/')
 # @permission_required('consultar_zonas')
 def listar_zonas():
-    response = zona_controller.obtener_zonas_con_localidades()
-    zonas = response.get('data', [])
-    return render_template('zonas/listar.html', zonas=zonas)
+    return redirect(url_for('envio.gestion_envios'))
 
 @zona_bp.route('/nueva', methods=['GET', 'POST'])
 # @permission_required('crear_zonas')
