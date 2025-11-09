@@ -20,7 +20,7 @@ def crear_zona():
         response = zona_controller.crear_o_actualizar_zona(data)
         if response['success']:
             flash('Zona creada exitosamente.', 'success')
-            return redirect(url_for('zonas.listar_zonas'))
+            return redirect(url_for('envio.gestion_envios'))
         else:
             flash(response.get('error', 'Ocurrió un error.'), 'danger')
     
@@ -35,7 +35,7 @@ def editar_zona(zona_id):
         response = zona_controller.crear_o_actualizar_zona(data, zona_id=zona_id)
         if response['success']:
             flash('Zona actualizada exitosamente.', 'success')
-            return redirect(url_for('zonas.listar_zonas'))
+            return redirect(url_for('envio.gestion_envios'))
         else:
             flash(response.get('error', 'Ocurrió un error.'), 'danger')
     
@@ -51,7 +51,7 @@ def eliminar_zona(zona_id):
         flash('Zona eliminada exitosamente.', 'success')
     else:
         flash(response.get('error', 'No se pudo eliminar la zona.'), 'danger')
-    return redirect(url_for('zonas.listar_zonas'))
+    return redirect(url_for('envio.gestion_envios'))
 
 @zona_bp.route('/api/buscar-localidades')
 # @permission_required('consultar_zonas')
