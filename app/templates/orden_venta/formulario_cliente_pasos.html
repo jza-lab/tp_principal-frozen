@@ -54,7 +54,7 @@
                                     <label for="cuil_cuit_cliente" class="form-label">CUIL/CUIT</label>
                                     <div class="input-group">
                                         <input type="text" class="form-control" id="cuil_cuit_cliente" name="cuil_cuit"
-                                            value="{{ cliente.cuit if cliente else '' }}" readonly>
+                                            value="{{ cliente.cuit if cliente else '' }}" {% if cliente.id %}readonly{% endif %}>
                                     </div>
                                 </div>
                             </div>
@@ -62,7 +62,7 @@
                                 <label for="email_cliente" class="form-label">Email de Contacto</label>
                                 <div class="input-group">
                                     <input type="email" class="form-control" id="email_cliente" name="email"
-                                        value="{{ cliente.email if cliente else '' }}" readonly>
+                                        value="{{ cliente.email if cliente else '' }}" {% if cliente.id %}readonly{% endif %}>
                                 </div>
                             </div>
                         </div>
@@ -339,8 +339,7 @@
                                     <i class="bi bi-plus-circle me-1"></i> Añadir Producto
                                 </button>
                             </h4>
-
-                            <div class="table-responsive">
+                             <div class="table-responsive">
                                 <table class="table table-sm align-middle mb-0">
                                     <thead class="bg-light">
                                         <tr>
@@ -351,40 +350,35 @@
                                         </tr>
                                     </thead>
                                     <tbody id="items-container">
-                                        <input type="hidden" name="items-TOTAL_FORMS" id="id_items-TOTAL_FORMS"
-                                            value="{{ pedido['items'] | length if pedido and pedido['items'] else 0 }}">
-
                                         {% if pedido and pedido['items'] %}
                                         {% for item in pedido['items'] %}
-                                        {% set current_product = productos | selectattr('id', 'equalto',
-                                        item.producto_id) |
-                                        list | first %}
-                                        {% set unidad_medida = current_product.unidad_medida if current_product else
-                                        'unidades'
-                                        %}
-
-                                        {% set is_integer = unidad_medida.startswith('paquete') or unidad_medida ==
-                                        'unidades'
-                                        %}
+                                        {% set current_product = productos | selectattr('id', 'equalto', item.producto_id) | list | first %}
+                                        {% set unidad_medida = current_product.unidad_medida if current_product else 'unidades' %}
+                                        {% set is_integer = unidad_medida.startswith('paquete') or unidad_medida == 'unidades' %}
                                         {% set step_value = '1' if is_integer else '0.01' %}
                                         {% set min_value = '1' if is_integer else '0.01' %}
-                                        <tr
-                                            class="item-row {% if pedido and not pedido.estado=='PENDIENTE' %}table-light text-muted{% endif %}">
+                                        <tr class="item-row {% if pedido and not pedido.estado=='PENDIENTE' %}table-light text-muted{% endif %}">
                                             <td>
-                                                <input type="hidden" name="items-{{ loop.index0 }}-id"
-                                                    value="{{ item.id if item.id else '' }}">
+                                                <input type="hidden" name="items-{{ loop.index0 }}-id" value="{{ item.id if item.id else '' }}">
+                                                
+                                                <!-- Campo de búsqueda de texto -->
                                                 <input type="text" class="form-control form-control-sm mb-1 producto-search" 
-                                                       placeholder="Buscar producto..." {% if pedido and pedido.estado !='PENDIENTE' %}disabled{% endif %}>
-                                                <select class="form-select form-select-sm producto-selector"
-                                                    name="items-{{ loop.index0 }}-producto_id" required {% if pedido and
-                                                    pedido.estado !='PENDIENTE' %}disabled{% endif %}>
+                                                       placeholder="Buscar producto..." 
+                                                       value="{{ current_product.nombre if current_product else '' }}"
+                                                       {% if pedido and pedido.estado != 'PENDIENTE' %}disabled{% endif %}>
+                                                
+                                                <!-- Select oculto que se sincronizará -->
+                                                <select class="form-select form-select-sm producto-selector" 
+                                                        name="items-{{ loop.index0 }}-producto_id" required 
+                                                        style="display: none;"
+                                                        {% if pedido and pedido.estado != 'PENDIENTE' %}disabled{% endif %}>
                                                     <option value="">Seleccione...</option>
                                                     {% for producto in productos %}
                                                     <option value="{{ producto.id }}"
-                                                        data-stock="{{ producto.stock_disponible or 0 }}"
-                                                        data-precio="{{ producto.precio_unitario | float or 0 }}"
-                                                        data-unidad="{{ producto.unidad_medida }}" {% if
-                                                        item.producto_id==producto.id %}selected{% endif %}>
+                                                            data-stock="{{ producto.stock_disponible or 0 }}"
+                                                            data-precio="{{ producto.precio_unitario | float or 0 }}"
+                                                            data-unidad="{{ producto.unidad_medida }}"
+                                                            {% if item.producto_id == producto.id %}selected{% endif %}>
                                                         {{ producto.nombre }}
                                                     </option>
                                                     {% endfor %}
@@ -451,9 +445,10 @@
                                 <td>
                                     <input type="hidden" name="items-__prefix__-id" value="">
                                     <input type="text" class="form-control form-control-sm mb-1 producto-search" placeholder="Buscar producto...">
-                                    <select class="form-select form-select-sm producto-selector"
-                                        name="items-__prefix__-producto_id" required
-                                        data-id-base="items-__prefix__-producto_id">
+                                    <select class="form-select form-select-sm producto-selector" 
+                                            name="items-__prefix__-producto_id" 
+                                            required 
+                                            style="display: none;">
                                         <option value="">Seleccione un producto...</option>
                                         {% for producto in productos %}
                                         <option value="{{ producto.id }}" data-id="{{ producto.id }}"
@@ -642,30 +637,94 @@
     <script src="{{ url_for('static', filename='js/orden_venta/formularioClientePasos.js') }}"></script>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Event delegation for product search/filter
-            document.getElementById('items-container').addEventListener('input', function(e) {
-                if (e.target && e.target.classList.contains('producto-search')) {
-                    const searchTerm = e.target.value.toLowerCase();
-                    const productSelect = e.target.closest('td').querySelector('.producto-selector');
-                    
-                    if (productSelect) {
-                        const options = productSelect.options;
-                        let firstVisible = -1;
-                        for (let i = 1; i < options.length; i++) { // Start from 1 to skip "Seleccione..."
-                            const optionText = options[i].text.toLowerCase();
-                            if (optionText.includes(searchTerm)) {
-                                options[i].style.display = '';
-                                if (firstVisible === -1) {
-                                    firstVisible = i;
-                                }
-                            } else {
-                                options[i].style.display = 'none';
-                            }
-                        }
-                    }
+    document.addEventListener('DOMContentLoaded', function() {
+        const itemsContainer = document.getElementById('items-container');
+
+        // Función para inicializar el autocompletado en un campo de búsqueda
+        function initAutocomplete(searchField) {
+            const productSelect = searchField.closest('td').querySelector('.producto-selector');
+            const suggestionsPanel = document.createElement('div');
+            suggestionsPanel.classList.add('autocomplete-suggestions');
+            searchField.parentNode.insertBefore(suggestionsPanel, searchField.nextSibling);
+
+            searchField.addEventListener('input', () => {
+                const searchTerm = searchField.value.toLowerCase();
+                suggestionsPanel.innerHTML = '';
+                suggestionsPanel.style.display = 'block';
+
+                if (searchTerm.length === 0) {
+                    suggestionsPanel.style.display = 'none';
+                    return;
+                }
+
+                const options = Array.from(productSelect.options);
+                const filteredOptions = options.filter(option => 
+                    option.value && option.text.toLowerCase().includes(searchTerm)
+                );
+
+                filteredOptions.forEach(option => {
+                    const suggestionItem = document.createElement('div');
+                    suggestionItem.textContent = option.text;
+                    suggestionItem.dataset.value = option.value;
+                    suggestionItem.addEventListener('click', () => {
+                        searchField.value = option.text;
+                        productSelect.value = option.value;
+                        // Disparar evento change para que se actualicen los cálculos
+                        productSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        suggestionsPanel.style.display = 'none';
+                    });
+                    suggestionsPanel.appendChild(suggestionItem);
+                });
+            });
+
+            // Ocultar sugerencias si se hace clic fuera
+            document.addEventListener('click', (e) => {
+                if (!searchField.contains(e.target) && !suggestionsPanel.contains(e.target)) {
+                    suggestionsPanel.style.display = 'none';
                 }
             });
+        }
+
+        // Delegación de eventos para manejar los campos de búsqueda nuevos y existentes
+        itemsContainer.addEventListener('input', function(e) {
+            if (e.target && e.target.classList.contains('producto-search')) {
+                // La lógica de autocompletado ya está manejada por initAutocomplete
+            }
         });
+
+        // Inicializar autocompletado para los campos de búsqueda existentes
+        itemsContainer.querySelectorAll('.producto-search').forEach(initAutocomplete);
+
+        // Observador para inicializar autocompletado en nuevas filas añadidas
+        const observer = new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === 1 && node.querySelector('.producto-search')) {
+                        initAutocomplete(node.querySelector('.producto-search'));
+                    }
+                });
+            });
+        });
+
+        observer.observe(itemsContainer, { childList: true });
+    });
     </script>
+    <style>
+        .autocomplete-suggestions {
+            border: 1px solid #ddd;
+            max-height: 150px;
+            overflow-y: auto;
+            position: absolute;
+            background-color: #fff;
+            z-index: 1000;
+            width: calc(100% - 30px); /* Ajustar al ancho del contenedor padre */
+        }
+        .autocomplete-suggestions div {
+            padding: 8px;
+            cursor: pointer;
+        }
+        .autocomplete-suggestions div:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
     {% endblock %}

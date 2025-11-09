@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const idClienteInput = document.getElementById('id_cliente');
     const itemsContainer = document.getElementById('items-container');
     const addItemBtn = document.getElementById('addItemBtn');
-    const fechaEntregaInput = document.getElementById('fecha_entrega');
+    const fechaEntregaInput = document.getElementById('fecha_requerido');
     const pedidoDataTemp = document.getElementById('pedido_data_temp');
 
     // CAMPOS DE CLIENTE
@@ -92,24 +92,28 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function inicializarFormularioCliente() {
         const clienteId = idClienteInput.value;
-        
+
         if (clienteId) {
+            // Cliente logueado: comportamiento original
             isUsingAlternativeAddress = true;
             toggleDireccionEntregaBtn.click()
-            // El cliente ya está cargado, así que procedemos a inicializar
             actualizarCondicionVenta(clienteId);
 
             const ivaCode = condicionIvaValue.value;
             const ivaData = CONDICION_IVA_MAP[ivaCode] || { text: 'N/A', factura: 'B' };
             condicionIvaDisplay.value = ivaData.text;
             tipoFacturaInput.value = ivaData.factura;
-
-            nextStep1Btn.disabled = false;
-            goToStep(1);
+            
+            nextStep1Btn.disabled = true; // Se habilita al añadir items
         } else {
-            nextStep1Btn.disabled = true;
-            showNotificationModal('Error', 'No se pudo cargar la información del cliente. Por favor, inicie sesión nuevamente.', 'error');
+            // Cliente anónimo: inicialización suave
+            // No deshabilitar el botón, solo esperar a que se cumplan las condiciones (cliente + items)
+            // La validación se hará en el evento 'input' del formulario.
+            condicionIvaDisplay.value = 'Consumidor Final'; // Valor por defecto
+            tipoFacturaInput.value = 'B';
+            nextStep1Btn.disabled = true; // Se habilita al añadir items
         }
+        goToStep(1); // Siempre ir al paso 1 al inicio
     }
 
 
@@ -162,9 +166,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     [form, itemsContainer].forEach(el => ['input', 'change', 'DOMSubtreeModified'].forEach(evt => el.addEventListener(evt, () => {
-        const isClientSelected = !!idClienteInput.value;
+        const cuit = document.getElementById('cuil_cuit_cliente').value.trim();
+        const email = document.getElementById('email_cliente').value.trim();
+        const isClientDataPresent = cuit.length > 5 && email.includes('@');
         const hasItems = itemsContainer.querySelectorAll('.item-row').length > 0;
-        nextStep1Btn.disabled = !(isClientSelected && hasItems);
+        nextStep1Btn.disabled = !(isClientDataPresent && hasItems);
     })));
 
     nextStep1Btn.addEventListener('click', (e) => { e.preventDefault(); goToStep(2); });

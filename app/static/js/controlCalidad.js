@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (response.ok && result.success) {
                 showNotificationModal('Inspección Finalizada', 'La orden ha sido cerrada correctamente. Redirigiendo...', 'success');
                 setTimeout(() => {
-                    window.location.href = '/compras/?estado=CERRADA'; 
+                    window.location.href = '/compras/'; 
                 }, 2000);
             } else {
                 showNotificationModal('Error', result.error || 'No se pudo finalizar la inspección.', 'danger');
