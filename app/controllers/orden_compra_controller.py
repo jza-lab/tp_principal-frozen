@@ -78,7 +78,8 @@ class OrdenCompraController:
             if insumo_ids[i]:
                 try:
                     cantidad = float(cantidades[i] or 0)
-                    precio = float(precios[i] or 0)
+                    precio_str = (precios[i] or "0").replace("$", "").strip()
+                    precio = float(precio_str)
                     item_subtotal = cantidad * precio
                     subtotal_calculado += item_subtotal
 
@@ -185,6 +186,9 @@ class OrdenCompraController:
             items_por_proveedor = defaultdict(list)
             for item in items_procesados:
                 items_por_proveedor[item['proveedor_id']].append(item)
+            
+            if not items_procesados:
+                return {'success': False, 'error': 'La orden de compra debe tener al menos un item.'}
                 
             if not items_por_proveedor:
                  return {'success': False, 'error': 'No se procesaron items válidos para crear órdenes.'}

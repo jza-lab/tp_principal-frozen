@@ -39,27 +39,28 @@ class TrazabilidadController(BaseController):
             insumos_usados = []
             from app.database import Database
             db = Database().client
-            
-            # Consultar directamente el inventario por la OP ID
-            insumos_result = db.table('insumos_inventario').select(
-                'id_lote, numero_lote_proveedor, cantidad_inicial, '
-                'insumo:insumos_catalogo(nombre), '
-                'proveedor:id_proveedor(id, nombre)'
-            ).eq('orden_produccion_id', orden_produccion_id).execute()
 
-            if insumos_result.data:
-                for insumo in insumos_result.data:
-                    proveedor_info = insumo.get('proveedor')
-                    proveedor_id = proveedor_info.get('id') if proveedor_info else None
-                    proveedor_nombre = proveedor_info.get('nombre', 'N/A') if proveedor_info else 'N/A'
+            # Consultar las reservas de insumos (tanto reservadas como ya consumidas)
+            reservas_result = db.table('reservas_insumos').select(
+                'cantidad_reservada, '
+                'lote:lote_inventario_id(id_lote, numero_lote_proveedor, insumo:id_insumo(nombre, proveedor:id_proveedor(id, nombre)))'
+            ).eq('orden_produccion_id', orden_produccion_id).in_('estado', ['RESERVADO', 'CONSUMIDO']).execute()
+
+            if reservas_result.data:
+                for reserva in reservas_result.data:
+                    lote_info = reserva.get('lote')
+                    if not lote_info: continue
+
+                    insumo_info = lote_info.get('insumo', {})
+                    proveedor_info = insumo_info.get('proveedor', {})
 
                     insumos_usados.append({
-                        'id_lote_insumo': insumo.get('id_lote'),
-                        'lote_insumo': insumo.get('numero_lote_proveedor', 'N/A'),
-                        'nombre_insumo': insumo.get('insumo', {}).get('nombre', 'N/A'),
-                        'cantidad_usada': insumo.get('cantidad_inicial'), # Asumimos que se usó la cantidad inicial del lote
-                        'id_proveedor': proveedor_id,
-                        'proveedor': proveedor_nombre
+                        'id_lote_insumo': lote_info.get('id_lote'),
+                        'lote_insumo': lote_info.get('numero_lote_proveedor', 'N/A'),
+                        'nombre_insumo': insumo_info.get('nombre', 'N/A'),
+                        'cantidad_usada': reserva.get('cantidad_reservada'),
+                        'id_proveedor': proveedor_info.get('id'),
+                        'proveedor': proveedor_info.get('nombre', 'N/A')
                     })
 
             # 3. Trazabilidad Descendente (Downstream) - LÓGICA CORREGIDA Y SIMPLIFICADA

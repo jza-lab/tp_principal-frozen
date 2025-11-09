@@ -1191,15 +1191,21 @@ class OrdenProduccionController(BaseController):
         """Gestiona el caso donde hay stock disponible, reservando y actualizando el estado."""
         orden_id = orden_produccion['id']
         logger.info(f"Stock disponible para OP {orden_id}. Reservando insumos...")
+        
+        # --- INICIO DE LA MODIFICACIÓN ---
+        # Llamar al método del InventarioController para que cree los registros de reserva.
         reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
         if not reserva_result.get('success'):
+            # Si la reserva falla por cualquier motivo, no se debe continuar.
             return self.error_response(f"Fallo crítico al reservar insumos: {reserva_result.get('error')}", 500)
+        # --- FIN DE LA MODIFICACIÓN ---
 
         nuevo_estado_op = 'LISTA PARA PRODUCIR'
         logger.info(f"Cambiando estado de OP {orden_id} a {nuevo_estado_op}.")
         estado_change_result = self.model.cambiar_estado(orden_id, nuevo_estado_op)
         if not estado_change_result.get('success'):
             logger.error(f"Error al cambiar estado a {nuevo_estado_op} para OP {orden_id}: {estado_change_result.get('error')}")
+            # Considerar revertir la reserva si el cambio de estado falla
             return self.error_response(f"Error al cambiar estado a {nuevo_estado_op}: {estado_change_result.get('error')}", 500)
 
         message = f"Stock disponible. La orden está '{nuevo_estado_op}' y los insumos reservados."

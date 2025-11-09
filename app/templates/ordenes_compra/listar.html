@@ -18,7 +18,7 @@
             <i class="bi bi-arrow-left"></i> Volver
         </a>
 
-        {% if has_permission('crear_orden_de_compra') %}
+        {% if has_permission('crear_orden_de_compra') and current_user.rol != 'ADMIN' %}
         <a href="{{ url_for('orden_compra.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nueva Orden
         </a>
@@ -188,7 +188,7 @@
                 {# Visible solo para Logística (NO Supervisor de Calidad) #}
                 {% if orden.estado == 'PENDIENTE' and current_user.rol != 'SUPERVISOR_CALIDAD' %}
                     
-                    {% if has_permission('aprobar_orden_de_compra') %}
+                    {% if has_permission('aprobar_orden_de_compra') and current_user.rol != 'ADMIN' %}
                     <div>
                         <form method="POST"
                             action="{{ url_for('orden_compra.aprobar', id=orden.id, estado=request.args.get('estado', '')) }}"
@@ -203,7 +203,7 @@
                     </div>
                     {% endif %}
                     
-                    {% if has_permission('editar_orden_de_compra') %}
+                    {% if (has_permission('editar_orden_de_compra') or has_permission('aprobar_orden_de_compra')) and current_user.rol != 'ADMIN' %}
                     <button type="button" class="btn btn-sm btn-outline-danger" title="Rechazar Orden"
                         data-bs-toggle="modal" data-bs-target="#rechazarModal-{{ orden.id }}">
                         <i class="bi bi-x-lg"></i> Rechazar
