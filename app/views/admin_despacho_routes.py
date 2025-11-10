@@ -1,9 +1,12 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from app.controllers.despacho_controller import DespachoController
+from datetime import datetime
+from app.controllers.vehiculo_controller import VehiculoController 
 from app.utils.decorators import permission_required
 
 despacho_bp = Blueprint('despacho', __name__, url_prefix='/admin/despachos')
 despacho_controller = DespachoController()
+vehiculo_controller = VehiculoController()
 
 @despacho_bp.route('/')
 @permission_required('consultar_despachos')
@@ -45,14 +48,28 @@ def gestion_despachos_vista():
     response_despachos, _ = despacho_controller.get_all()
     if response_despachos and response_despachos.get('success'):
         despachos_existentes = response_despachos.get('data', [])
+        # Corrección: Convertir 'created_at' de string a objeto datetime
+        for despacho in despachos_existentes:
+            if despacho.get('created_at') and isinstance(despacho['created_at'], str):
+                # fromisoformat maneja correctamente la información de zona horaria
+                despacho['created_at'] = datetime.fromisoformat(despacho['created_at'])
     else:
         flash(response_despachos.get('error', 'Error al cargar el historial de despachos.'), 'danger')
         despachos_existentes = []
 
+    # 3. Obtener todos los vehículos para el selector del formulario
+    response_vehiculos = vehiculo_controller.obtener_todos_los_vehiculos()
+    if not response_vehiculos or not response_vehiculos.get('success'):
+        flash(response_vehiculos.get('error', 'Error al cargar la lista de vehículos.'), 'danger')
+        vehiculos = []
+    else:
+        vehiculos = response_vehiculos.get('data', [])
+
     return render_template('despachos/gestion_despachos.html', 
                            pedidos_por_grupo=pedidos_por_zona, 
                            pedido_seleccionado_id=pedido_id_seleccionado,
-                           despachos=despachos_existentes)
+                           despachos=despachos_existentes,
+                           vehiculos=vehiculos)
 
 @despacho_bp.route('/api/crear', methods=['POST'])
 @permission_required('crear_despachos')
