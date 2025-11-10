@@ -30,10 +30,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const result = await response.json();
 
             if (result.success && result.data) {
-                vehicleData = result.data;
+                vehicleData = result.data; // La API devuelve un solo objeto
                 document.getElementById('vehicle-patente').textContent = `Patente: ${vehicleData.patente}`;
-                document.getElementById('vehicle-conductor').textContent = vehicleData.conductor.nombre_completo;
-                document.getElementById('vehicle-capacidad').textContent = vehicleData.capacidad_kg;
+                document.getElementById('vehicle-conductor').textContent = `${vehicleData.nombre_conductor} (DNI: ${vehicleData.dni_conductor})`;
+                document.getElementById('vehicle-capacidad').textContent = `${vehicleData.capacidad_kg} kg`;
                 document.getElementById('vehicle-id').value = vehicleData.id;
                 vehicleInfoDiv.style.display = 'block';
                 patenteInput.classList.remove('is-invalid');
