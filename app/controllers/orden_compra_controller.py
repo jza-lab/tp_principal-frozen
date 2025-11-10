@@ -577,7 +577,7 @@ class OrdenCompraController:
                 'cantidad_actual': cantidad_aprobada,     # <-- Cantidad DISPONIBLE (aprobada)
                 'cantidad_en_cuarentena': cantidad_cuarentena, # <-- Cantidad EN CUARENTENA
                 'precio_unitario': item_data.get('precio_unitario'),
-                'documento_ingreso': f"OC-{orden_data.get('codigo_oc')}",
+                'documento_ingreso': f"{orden_data.get('codigo_oc')}",
                 'f_ingreso': date.today().isoformat(),
                 'estado': estado_lote, # 'disponible' o 'cuarentena'
                 'orden_produccion_id': orden_data.get('orden_produccion_id')
@@ -832,9 +832,9 @@ class OrdenCompraController:
                 # Calcular el total que SÍ fue aprobado O puesto en cuarentena
                 lotes_del_item = lotes_por_insumo.get(item_insumo_id, [])
                 
-                # Sumamos lo que entró (disponible + cuarentena)
+                # Sumamos solo lo que fue aprobado (cantidad_actual del lote)
                 total_ingresado = sum(
-                    float(lote.get('cantidad_actual', 0)) + float(lote.get('cantidad_en_cuarentena', 0))
+                    float(lote.get('cantidad_actual', 0))
                     for lote in lotes_del_item
                 )
                 
