@@ -81,9 +81,20 @@ riesgos_bp = Blueprint('riesgos', __name__, url_prefix='/riesgos')
 @riesgos_bp.route('/', methods=['GET'])
 @permission_required('consultar_alertas_riesgo')
 def listar_alertas_page():
-    controller = RiesgoController()
-    resultado = controller.alerta_riesgo_model.find_all()
+    from app.controllers.usuario_controller import UsuarioController
+    
+    riesgo_controller = RiesgoController()
+    usuario_controller = UsuarioController()
+    
+    resultado = riesgo_controller.alerta_riesgo_model.find_all()
     alertas = resultado.get('data', []) if resultado.get('success') else []
+    # Enriquecer cada alerta con el nombre del usuario creador
+    for alerta in alertas:
+        if alerta.get('id_usuario_creador'):
+            user_info = usuario_controller.obtener_detalles_completos_usuario(alerta['id_usuario_creador'])
+            alerta['nombre_creador'] = user_info.get('nombre_completo', 'N/A') if user_info else 'N/A'
+        else:
+            alerta['nombre_creador'] = 'Sistema'
     return render_template('admin_riesgos/listado.html', alertas=alertas)
 
 @riesgos_bp.route('/<codigo_alerta>', methods=['GET'])
@@ -110,10 +121,12 @@ def api_previsualizar_riesgo():
     return jsonify(resultado), status_code
 
 @riesgos_bp.route('/api/crear', methods=['POST'])
+@jwt_required()
 @permission_required('crear_alerta_riesgo')
 def api_crear_alerta_riesgo():
+    usuario_id = get_jwt_identity()
     controller = RiesgoController()
-    resultado, status_code = controller.crear_alerta_riesgo(request.json)
+    resultado, status_code = controller.crear_alerta_riesgo_con_usuario(request.json, usuario_id)
     return jsonify(resultado), status_code
 
 @riesgos_bp.route('/api/subir_evidencia', methods=['POST'])

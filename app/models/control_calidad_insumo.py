@@ -36,15 +36,19 @@ class ControlCalidadInsumoModel(BaseModel):
         Crea un nuevo registro de control de calidad.
         """
         try:
-            # Asegurarse de que los campos requeridos estén presentes
-            required_fields = ['lote_insumo_id', 'usuario_supervisor_id', 'decision_final']
-            for field in required_fields:
-                if field not in data or data[field] is None:
-                    raise ValueError(f"El campo '{field}' es obligatorio.")
+            # --- MODIFICACIÓN: Lote_insumo_id ahora es opcional en la creación ---
+            # Se valida 'usuario_supervisor_id' y 'decision_final'.
+            # 'lote_insumo_id' o 'orden_compra_id' deben estar presentes.
+            if not data.get('usuario_supervisor_id') or not data.get('decision_final'):
+                raise ValueError("Los campos 'usuario_supervisor_id' y 'decision_final' son obligatorios.")
+            
+            if not data.get('lote_insumo_id') and not data.get('orden_compra_id'):
+                 raise ValueError("Se debe proveer un 'lote_insumo_id' o un 'orden_compra_id'.")
+            # --- FIN MODIFICACIÓN ---
 
             # Preparar datos para la inserción
             db_data = {
-                'lote_insumo_id': data['lote_insumo_id'],
+                'lote_insumo_id': data.get('lote_insumo_id'),
                 'orden_compra_id': data.get('orden_compra_id'),
                 'usuario_supervisor_id': data['usuario_supervisor_id'],
                 'decision_final': data['decision_final'],
@@ -57,7 +61,7 @@ class ControlCalidadInsumoModel(BaseModel):
             result = self.db.table(self.get_table_name()).insert(db_data).execute()
 
             if result.data:
-                logger.info(f"Registro de control de calidad creado con éxito para el lote {data['lote_insumo_id']}.")
+                logger.info(f"Registro de control de calidad creado con éxito para el lote {data.get('lote_insumo_id')} / OC {data.get('orden_compra_id')}.")
                 return {'success': True, 'data': result.data[0]}
             else:
                 raise Exception("La inserción no devolvió datos.")
@@ -74,12 +78,28 @@ class ControlCalidadInsumoModel(BaseModel):
         Busca si ya existe un registro de control de calidad para un lote específico.
         """
         try:
-            result = self.db.table(self.get_table_name()).select('*').eq('lote_insumo_id', lote_id).execute()
+            # --- MODIFICACIÓN: Se enriquece la consulta con el nombre del supervisor ---
+            query = self.db.table(self.get_table_name()).select(
+                "*, supervisor:usuario_supervisor_id(nombre, apellido)"
+            ).eq('lote_insumo_id', lote_id).order('fecha_inspeccion', desc=True)
+            
+            result = query.execute()
             
             if result.data:
-                return {'success': True, 'data': result.data[0]}
+                # --- MODIFICACIÓN: Se procesan los datos y se devuelve la LISTA ---
+                processed_data = []
+                for record in result.data:
+                    if record.get('supervisor'):
+                        sup = record.pop('supervisor')
+                        record['supervisor_nombre'] = f"{sup.get('nombre', '')} {sup.get('apellido', '')}".strip()
+                    else:
+                        record['supervisor_nombre'] = 'N/A'
+                    processed_data.append(record)
+                
+                return {'success': True, 'data': processed_data} # <-- DEVUELVE LISTA
+                # --- FIN MODIFICACIÓN ---
             else:
-                return {'success': False, 'error': 'No se encontró registro para este lote.'}
+                return {'success': True, 'data': []} # <-- Devuelve lista vacía
         
         except Exception as e:
             logger.error(f"Error buscando registro de C.C. por lote_id {lote_id}: {e}")
@@ -93,7 +113,7 @@ class ControlCalidadInsumoModel(BaseModel):
             query = self.db.table(self.get_table_name()).select(
                 "*, "
                 "lote:insumos_inventario(*, insumo:insumos_catalogo(nombre)), "
-                "supervisor:usuarios(*)"
+                "supervisor:usuario_supervisor_id(nombre, apellido)" # <-- Corregido el join
             ).eq('orden_compra_id', orden_id)
             
             result = query.execute()

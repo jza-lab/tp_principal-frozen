@@ -49,6 +49,8 @@ class OrdenCompra:
     updated_at: Optional[datetime] = None
     fecha_creacion: Optional[datetime] = None
     complementa_a_orden_id: Optional[int] = None
+    paso_recepcion: Optional[int] = None
+    cantidad_verificada: Optional[int] = None
 
 class OrdenCompraModel(BaseModel):
     """
@@ -139,7 +141,9 @@ class OrdenCompraModel(BaseModel):
                 'total': 'total',
                 'observaciones': 'observaciones',
                 'usuario_aprobador_id': 'usuario_aprobador_id',
-                'complementa_a_orden_id': 'complementa_a_orden_id'
+                'complementa_a_orden_id': 'complementa_a_orden_id',
+                'paso_recepcion': 'paso_recepcion',
+                'cantidad_verificada': 'cantidad_verificada'
             }
 
             for model_field, db_field in field_mapping.items():
