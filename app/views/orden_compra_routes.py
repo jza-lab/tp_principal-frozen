@@ -7,6 +7,7 @@ from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
 from app.utils.decorators import permission_required, permission_any_of
 from datetime import datetime
+# --- MODIFICACIÓN: Se re-importa ESTADOS_INSPECCION ---
 from app.utils.estados import OC_FILTROS_UI, OC_MAP_STRING_TO_INT, ESTADOS_INSPECCION
 
 orden_compra_bp = Blueprint("orden_compra", __name__, url_prefix="/compras")
@@ -94,14 +95,12 @@ def nueva():
     )
 
 
-from app.controllers.inventario_controller import InventarioController
 from flask_wtf import FlaskForm
 
 @orden_compra_bp.route("/detalle/<int:id>")
 @permission_required(accion='consultar_ordenes_de_compra')
 def detalle(id):
     orden_controller = OrdenCompraController()
-    inventario_controller = InventarioController()
     csrf_form = FlaskForm()
 
     response_data, status_code = orden_controller.get_orden(id)
@@ -110,31 +109,14 @@ def detalle(id):
         return redirect(url_for("orden_compra.listar"))
 
     orden = response_data.get("data")
-    lotes = []
-
+    
     # La lógica para calcular los totales originales ahora está centralizada en el OrdenCompraController.
     # La plantilla recibe directamente los campos `subtotal_original`, `iva_original` y `total_original`.
-    
-    # Si la orden está en control de calidad, buscamos sus lotes para inspección
-    if orden and orden.get('estado') == 'EN_CONTROL_CALIDAD':
-        codigo_oc = orden.get('codigo_oc')
-        if not codigo_oc:
-            flash('La orden no tiene un código válido para buscar sus lotes.', 'danger')
-        else:
-            # Usamos el método existente en el controlador de inventario
-            documento_ingreso = codigo_oc if codigo_oc.startswith('OC-') else f"OC-{codigo_oc}"
-            lotes_result, _ = inventario_controller.obtener_lotes_para_vista(
-                filtros={'documento_ingreso': documento_ingreso}
-            )
-            if not lotes_result.get('success'):
-                flash('Error al obtener los lotes de la orden para inspección.', 'danger')
-            else:
-                lotes = lotes_result.get('data', [])
 
     return render_template(
         "ordenes_compra/detalle.html", 
         orden=orden,
-        lotes=lotes,
+        # --- MODIFICACIÓN: Se re-añade ESTADOS_INSPECCION ---
         estados_inspeccion=ESTADOS_INSPECCION,
         csrf_form=csrf_form
     )
@@ -159,11 +141,7 @@ def aprobar(id):
             f"Error al aprobar: {resultado.get('error', 'Error desconocido')}", "error"
         )
     
-    # Obtener el estado desde los query params de la URL
     estado_actual = request.args.get('estado', '')
-    
-    print(f"DEBUG: Estado a preservar: '{estado_actual}'")
-    print(f"DEBUG: Redirigiendo a: {url_for('orden_compra.listar', estado=estado_actual) if estado_actual else url_for('orden_compra.listar')}")
     
     if estado_actual:
         return redirect(url_for("orden_compra.listar", estado=estado_actual))
@@ -219,7 +197,6 @@ def rechazar(id):
             f"Error al rechazar: {resultado.get('error', 'Error desconocido')}", "error"
         )
     
-    # Obtener el estado desde los query params de la URL
     estado_actual = request.args.get('estado', '')
     if estado_actual:
         return redirect(url_for("orden_compra.listar", estado=estado_actual))
@@ -258,7 +235,6 @@ def marcar_en_transito(id):
             "error",
         )
     
-    # Obtener el estado desde los query params de la URL
     estado_actual = request.args.get('estado', '')
     if estado_actual:
         return redirect(url_for("orden_compra.listar", estado=estado_actual))
@@ -272,19 +248,53 @@ def procesar_recepcion(orden_id):
     controller = OrdenCompraController()
     orden_produccion_controller = OrdenProduccionController()
     usuario_id = get_jwt_identity()
-    resultado = controller.procesar_recepcion(orden_id, request.form, usuario_id, orden_produccion_controller)
+    
+    # --- MODIFICACIÓN: Se pasa request.files para manejar la foto ---
+    resultado = controller.procesar_recepcion(
+        orden_id, 
+        request.form, 
+        request.files, # <--- AÑADIDO
+        usuario_id, 
+        orden_produccion_controller
+    )
+    
     if resultado.get("success"):
-        flash(
-            "Recepción de la orden procesada exitosamente. Se crearon los lotes en inventario.",
-            "success",
-        )
+        if resultado.get("partial"):
+            flash(
+                resultado.get("message", "Recepción parcial completada. Items faltantes."),
+                "warning", 
+            )
+        else:
+            flash(
+                resultado.get("message", "Recepción de la orden procesada exitosamente."),
+                "success",
+            )
     else:
         flash(
-            f"Error al procesar la recepción: {resultado.get('error', 'Error desconocido')}",
-            "error",
+            resultado.get("error", "Ocurrió un error al procesar la recepción."),
+            "error"
         )
     return redirect(url_for("orden_compra.detalle", id=orden_id))
 
 
-
-
+@orden_compra_bp.route("/<int:id_padre>/crear-oc-hija", methods=["POST"])
+@jwt_required()
+@permission_required(accion='crear_orden_de_compra')
+def crear_oc_hija(id_padre):
+    controller = OrdenCompraController()
+    usuario_id = get_jwt_identity()
+    
+    csrf_token = request.form.get('csrf_token')
+    if not csrf_token:
+         flash("Error de seguridad (Falta token CSRF).", "error")
+         return redirect(url_for("orden_compra.detalle", id=id_padre))
+         
+    resultado = controller.crear_oc_hija_desde_fallo(id_padre, usuario_id)
+    
+    if resultado.get("success"):
+        oc_hija = resultado.get('data')
+        flash(f"Orden de Compra hija {oc_hija.get('codigo_oc')} creada exitosamente.", "success")
+        return redirect(url_for("orden_compra.detalle", id=oc_hija.get('id')))
+    else:
+        flash(f"Error al crear OC hija: {resultado.get('error', 'Error desconocido')}", "error")
+        return redirect(url_for("orden_compra.detalle", id=id_padre))

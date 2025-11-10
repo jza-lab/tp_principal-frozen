@@ -7,6 +7,28 @@
 {% endblock %}
 
 {% block app_content %}
+
+{# #}
+{% if orden.orden_produccion_id %}
+<div id="opWarningModal" class="modal fade" tabindex="-1" aria-labelledby="opWarningModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title text-dark" id="opWarningModalLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Atención</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="fs-6">Esta Orden de Compra está vinculada a la <strong>Orden de Producción #{{ orden.orden_produccion_id }}</strong>.</p>
+                <p>Revise las fechas de entrega, ya que cualquier demora podría impactar directamente en el plan de producción.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">
@@ -233,122 +255,137 @@
                     </div>
                 </div>
                 
+                <!-- {# --- Bloque 'EN_CONTROL_CALIDAD' obsoleto (comentado) --- #}
                 {% if orden.estado == 'EN_CONTROL_CALIDAD' %}
-                <div class="card mt-4" id="panel-control-calidad" data-orden-id="{{ orden.id }}">
-                    <div class="card-header bg-info-soft">
-                        <h4 class="card-title mb-0 text-info"><i class="bi bi-clipboard-check me-2"></i>Panel de Control de Calidad</h4>
-                    </div>
-                    <div class="card-body">
-                        {% if lotes %}
-                            <p class="mb-3">Los siguientes lotes de insumos requieren inspección para ser aprobados e ingresados al stock disponible.</p>
-                            <div id="lista-lotes-inspeccion">
-                                {% for lote in lotes %}
-                                <div class="card mb-3 shadow-sm lote-card" data-lote-id="{{ lote.id_lote }}" data-estado-inicial="{{ lote.estado }}">
-                                    <div class="card-body">
-                                        <div class="row align-items-center">
-                                            <div class="col-md-4">
-                                                <h5 class="card-title mb-1">{{ lote.insumo_nombre }}</h5>
-                                                <p class="card-text mb-0">
-                                                    <small class="text-muted">Lote: {{ lote.numero_lote_proveedor or lote.id_lote }} | Cantidad: {{ lote.cantidad_inicial }} {{ lote.unidad_medida }}</small>
-                                                </p>
-                                            </div>
-                                            <div class="col-md-8 text-md-end" id="acciones-lote-{{ lote.id_lote }}">
-                                                {% if lote.estado == 'EN REVISION' %}
-                                                <button class="btn btn-sm btn-success btn-inspeccion" data-action="aceptar" data-lote-id="{{ lote.id_lote }}">
-                                                    <i class="bi bi-check-circle me-1"></i> Aceptar
-                                                </button>
-                                                <button class="btn btn-sm btn-outline-warning btn-inspeccion" data-action="cuarentena" data-bs-toggle="modal" data-bs-target="#modal-inspeccion-accion" data-lote-id="{{ lote.id_lote }}" data-lote-nombre="{{ lote.insumo_nombre }}">
-                                                    <i class="bi bi-shield-lock me-1"></i> Cuarentena
-                                                </button>
-                                                <button class="btn btn-sm btn-outline-danger btn-inspeccion" data-action="rechazar" data-bs-toggle="modal" data-bs-target="#modal-inspeccion-accion" data-lote-id="{{ lote.id_lote }}" data-lote-nombre="{{ lote.insumo_nombre }}">
-                                                    <i class="bi bi-x-circle me-1"></i> Rechazar
-                                                </button>
-                                                {% else %}
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                            <div class="text-end mt-4">
-                                <button class="btn btn-primary d-none" id="btn-finalizar-inspeccion">
-                                    <i class="bi bi-flag-fill me-1"></i> Finalizar Inspección y Cerrar Orden
-                                </button>
-                            </div>
-                        {% else %}
-                            <div class="alert alert-success">
-                                <i class="bi bi-check-circle-fill me-2"></i> Todos los insumos de esta orden de compra ya han sido inspeccionados.
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endif %}
+                ...
+                {% endif %} -->
+
 
                 {% if orden.estado == 'EN_RECEPCION' %}
-                <form id="recepcionForm" action="{{ url_for('orden_compra.procesar_recepcion', orden_id=orden.id) }}" method="POST">
-                    {{ csrf_form.csrf_token }}
+                    {% if orden.paso_recepcion == 0 %}
+                        {# PASO 1: Verificación de Cantidad #}
+                        <form id="recepcionForm" action="{{ url_for('orden_compra.procesar_recepcion', orden_id=orden.id) }}" method="POST">
+                            <input type="hidden" name="paso" value="1">
+                            {{ csrf_form.csrf_token }}
+                            <div class="card mt-4">
+                                <div class="card-header bg-primary-soft">
+                                    <h5 class="mb-0 text-primary"><i class="bi bi-1-circle-fill me-2"></i>Paso 1: Verificación de Cantidades</h5>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-striped table-hover mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th scope="col">Insumo</th>
+                                                    <th scope="col" class="text-end">Cant. Solicitada</th>
+                                                    <th scope="col" class="text-center">Cant. Recibida</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for item in orden['items'] %}
+                                                <tr class="item-row">
+                                                    <td>
+                                                        <div class="fw-bold">{{ item.insumo_nombre or 'Insumo no encontrado' }}</div>
+                                                        <input type="hidden" name="item_id[]" value="{{ item.id }}">
+                                                    </td>
+                                                    <td class="text-end">{{ item.cantidad_solicitada }}</td>
+                                                    <td class="text-center" style="max-width: 150px;">
+                                                        <input type="number" name="cantidad_recibida[]" class="form-control form-control-sm text-center" value="{{ item.cantidad_solicitada }}" min="0" step="any" required>
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="card-footer text-end">
+                                    <button type="submit" class="btn btn-primary">
+                                        Siguiente: Control de Calidad <i class="bi bi-arrow-right-circle-fill ms-1"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    {% elif orden.paso_recepcion == 1 %}
+                        {# --- INICIO DE LA MODIFICACIÓN: PASO 2 RE-ESTILIZADO CON TODOS LOS CAMPOS --- #}
+                        <form id="calidadForm" action="{{ url_for('orden_compra.procesar_recepcion', orden_id=orden.id) }}" method="POST" enctype="multipart/form-data">
+                            <input type="hidden" name="paso" value="2">
+                             {{ csrf_form.csrf_token }}
+                            <div class="card mt-4">
+                                <div class="card-header bg-info-soft">
+                                    <h4 class="card-title mb-0 text-info"><i class="bi bi-clipboard-check me-2"></i>Paso 2: Control de Calidad</h4>
+                                </div>
+                                <div class="card-body">
+                                    <p>Inspeccione cada ítem recibido. Las cantidades aprobadas se ingresarán al stock, mientras que las de cuarentena o rechazadas generarán un reclamo.</p>
+                                    
+                                    {% for item in orden['items'] %}
+                                    <div class="card mb-3 shadow-sm item-calidad-row" data-total-recibido="{{ item.cantidad_recibida | default(0) }}">
+                                        <div class="card-body">
+                                            <input type="hidden" name="item_id[]" value="{{ item.id }}">
+                                            
+                                            <div class="row mb-3">
+                                                <div class="col">
+                                                    <h5 class="card-title mb-1">{{ item.insumo_nombre }}</h5>
+                                                    <p class="card-text mb-0">
+                                                        <small class="text-muted">Total Recibido: 
+                                                            <strong class="total-recibido-display text-dark">{{ item.cantidad_recibida | default(0) }}</strong> {{ item.unidad_medida or 'unidades' }}
+                                                        </small>
+                                                    </p>
+                                                </div>
+                                            </div>
 
-                    <div class="card mt-4">
-                        <div class="card-header bg-success-soft">
-                            <h5 class="mb-0 text-success"><i class="bi bi-box-seam me-2"></i>Recepción de Ítems</h5>
-                        </div>
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table table-striped table-hover mb-0">
-                                    <thead>
-                                        <tr>
-                                            <th scope="col">Insumo</th>
-                                            <th scope="col" class="text-end">Cant. Solicitada</th>
-                                            <th scope="col" class="text-center">Cant. Recibida</th>
-                                            <th scope="col" class="text-end">Precio Unitario</th>
-                                            <th scope="col" class="text-end">Subtotal</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for item in orden['items'] %}
-                                        <tr class="item-row">
-                                            <td>
-                                                <div class="fw-bold">{{ item.insumo_nombre or 'Insumo no encontrado' }}</div>
-                                                <input type="hidden" name="item_id[]" value="{{ item.id }}">
-                                            </td>
-                                            <td class="text-end">{{ item.cantidad_solicitada }}</td>
-                                            <td class="text-center" style="max-width: 150px;">
-                                                <input type="number" name="cantidad_recibida[]" class="form-control form-control-sm text-center cantidad-recibida" value="{{ item.cantidad_solicitada }}" min="0" step="any" required>
-                                            </td>
-                                            <td class="text-end" style="max-width: 150px;">
-                                                <input type="number" name="precio_unitario[]" class="form-control form-control-sm text-end precio-unitario" value="{{ "%.2f"|format(item.precio_unitario|float) }}" min="0" step="any" required>
-                                            </td>
-                                            <td class="text-end fw-bold subtotal-item">$ {{ item.subtotal | formato_moneda }}</td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
+                                            <div class="row g-3 mb-3">
+                                                <div class="col-md-4">
+                                                    <label for="cantidad_aprobada_{{ item.id }}" class="form-label small text-success">Cant. Aprobada</label>
+                                                    <input type="number" name="cantidad_aprobada[]" id="cantidad_aprobada_{{ item.id }}" class="form-control form-control-sm cantidad-aprobada" value="{{ item.cantidad_recibida | default(0) }}" min="0" step="any" required>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label for="cantidad_cuarentena_{{ item.id }}" class="form-label small text-warning">Cant. en Cuarentena</label>
+                                                    <input type="number" name="cantidad_cuarentena[]" id="cantidad_cuarentena_{{ item.id }}" class="form-control form-control-sm cantidad-cuarentena" value="0" min="0" step="any" required>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <label for="cantidad_rechazada_{{ item.id }}" class="form-label small text-danger">Cant. Rechazada</label>
+                                                    <input type="number" name="cantidad_rechazada[]" id="cantidad_rechazada_{{ item.id }}" class="form-control form-control-sm cantidad-rechazada" value="0" min="0" step="any" required>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="motivo-rechazo-group" style="display: none;">
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <label for="resultado_inspeccion_{{ item.id }}" class="form-label small text-danger">Resultado de Inspección (Motivo)</label>
+                                                        <select class="form-select form-select-sm motivo-select" id="resultado_inspeccion_{{ item.id }}" name="resultado_inspeccion[]" disabled>
+                                                            <option value="" selected>Seleccione un motivo...</option>
+                                                            {% for estado in estados_inspeccion %}
+                                                            <option value="{{ estado }}">{{ estado }}</option>
+                                                            {% endfor %}
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="foto_item_{{ item.id }}" class="form-label small">Foto (Opcional)</label>
+                                                        <input class="form-control form-control-sm foto-input" type="file" id="foto_item_{{ item.id }}" name="foto_item_{{ item.id }}" accept=".jpg, .jpeg, .png" disabled>
+                                                    </div>
+                                                    <div class="col-12">
+                                                        <label for="comentarios_{{ item.id }}" class="form-label small">Comentarios</label>
+                                                        <textarea name="comentarios[]" id="comentarios_{{ item.id }}" class="form-control form-control-sm comentarios-input" rows="2" disabled></textarea>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <select name="resultado_inspeccion[]" class="motivo-select-hidden" style="display: none;">
+                                                <option value="" selected></option>
+                                            </select>
+                                            <textarea name="comentarios[]" class="comentarios-input-hidden" style="display: none;"></textarea>
+                                            
+                                        </div> </div> {% endfor %}
+                                </div>
+                                <div class="card-footer text-end">
+                                     <button type="submit" class="btn btn-success">
+                                        <i class="bi bi-check-circle-fill me-1"></i> Finalizar Recepción
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div class="card mt-4">
-                        <div class="card-header">
-                            <h5 class="mb-0">Procesar Recepción</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <label for="observaciones_recepcion" class="form-label">Observaciones de Recepción</label>
-                                <textarea class="form-control" id="observaciones_recepcion" name="observaciones" rows="3" placeholder="Ej: La caja del insumo X llegó dañada."></textarea>
-                            </div>
-                            <div class="d-flex justify-content-end gap-2">
-                                {% set can_receive = has_permission('logistica_recepcion_oc') %}
-                                <button type="submit" name="accion" value="rechazar" class="btn btn-danger {% if not can_receive %}disabled{% endif %}">
-                                    <i class="bi bi-x-circle me-1"></i>Rechazar Pedido
-                                </button>
-                                <button type="submit" name="accion" value="aceptar" class="btn btn-success {% if not can_receive %}disabled{% endif %}">
-                                    <i class="bi bi-check-circle me-1"></i>Aceptar Recepción
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </form>
+                        </form>
+                        {# --- FIN DE LA MODIFICACIÓN --- #}
+                    {% endif %}
                 {% else %}
                 <div class="card mt-4">
                     <div class="card-header">
@@ -408,7 +445,7 @@
                             Acciones Rápidas
                         </h6>
                     </div>
-                    <div class="card-body">
+                    <div class_=""card-body"">
                         <div class="d-grid gap-2">
                             <button class="btn btn-outline-secondary" disabled>
                                 <i class="bi bi-file-earmark-text me-2"></i>Visualizar factura
@@ -456,54 +493,36 @@
     </div>
 </div>
 
-<div class="modal fade" id="modal-inspeccion-accion" tabindex="-1" aria-labelledby="modalInspeccionLabel" aria-hidden="true">
+{# --- Modal 'modal-inspeccion-accion' eliminado --- #}
+
+<div class="modal fade" id="modalCrearOcHija" tabindex="-1" aria-labelledby="modalOcHijaLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form id="form-inspeccion-accion" method="POST" enctype="multipart/form-data">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalInspeccionLabel"></h5>
+            <form action="{{ url_for('orden_compra.crear_oc_hija', id_padre=orden.id) }}" method="POST">
+                {{ csrf_form.csrf_token }}
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title text-dark" id="modalOcHijaLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Acción Requerida: Items Faltantes</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <input type="hidden" id="modal-lote-id" name="lote_id">
-                    <input type="hidden" id="modal-action" name="action">
-                    <p>Lote de: <strong id="modal-lote-nombre"></strong></p>
+                    <p>La recepción de esta orden (<code class="text-muted">{{ orden.codigo_oc }}</code>) se completó, pero <strong>faltaron insumos</strong>.</p>
+                    <p>Los lotes de los insumos recibidos ya fueron creados y la OP asociada está "En Espera".</p>
+                    <p class="fw-bold">¿Desea crear una nueva Orden de Compra (OC Hija) para reponer los items faltantes?</p>
                     
-                    <div class="mb-3">
-                        <label for="modal-cantidad" class="form-label">Cantidad a Procesar</label>
-                        <input type="number" class="form-control" id="modal-cantidad" name="cantidad" step="0.01" min="0.01" required>
-                        <div class="form-text">
-                            Cantidad disponible en este lote: <span id="modal-cantidad-disponible"></span>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label for="modal-resultado-inspeccion" class="form-label">Resultado de Inspección (Requerido)</label>
-                        <select class="form-select" id="modal-resultado-inspeccion" name="resultado_inspeccion" required>
-                            <option value="" selected disabled>Seleccione un resultado...</option>
-                            {% for estado in estados_inspeccion %}
-                            <option value="{{ estado }}">{{ estado }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class_=""mb-3"">
-                        <label for="modal-comentarios" class="form-label">Comentarios</label>
-                        <textarea class="form-control" id="modal-comentarios" name="comentarios" rows="3"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label for="modal-foto" class="form-label">Foto (Opcional)</label>
-                        <input class="form-control" type="file" id="modal-foto" name="foto" accept=".jpg, .jpeg, .png">
+                    <div class="alert alert-info small">
+                        <strong>Nota:</strong> Si no crea una OC Hija ahora, la Orden de Producción seguirá "En Espera" y deberá gestionar la compra de los insumos faltantes manualmente.
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn" id="modal-btn-confirmar">Confirmar</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No, gestionar manualmente</button>
+                    <button type="submit" class="btn btn-primary">Sí, crear OC Hija ahora</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-<div class="modal fade" id="confirmacionRecepcionParcialModal" tabindex="-1" aria-labelledby="modalLabel"
-    aria-hidden="true">
+
+<div class="modal fade" id="confirmacionRecepcionParcialModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -511,9 +530,14 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Ha ingresado una cantidad menor a la solicitada para al menos un ítem.</p>
-                <p><strong>Esto creará automáticamente una nueva orden de compra con los insumos restantes.</strong></p>
-                <p>¿Desea continuar con la recepción?</p>
+                <p>Ha ingresado una cantidad diferente a la solicitada para al menos un ítem.</p>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="" id="crearOcHijaCheckbox" checked>
+                    <label class="form-check-label" for="crearOcHijaCheckbox">
+                        Crear automáticamente una nueva orden de compra (OC Hija) con los insumos restantes/faltantes.
+                    </label>
+                </div>
+                <p class="mt-3">¿Desea continuar con la recepción?</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -531,145 +555,180 @@ document.addEventListener('DOMContentLoaded', function () {
     // Variable global para que el JS de trazabilidad pueda acceder al ID
     window.ORDEN_COMPRA_ID = {{ orden.id|tojson }};
     
-    // ===== INICIO DE SCRIPT INSERTADO DESDE detalle (1).html =====
     const form = document.getElementById('recepcionForm');
-    if (!form) return;
-
-    {% if orden.estado == 'EN_RECEPCION' %}
-    const ivaRate = {{ 0.21 if orden.iva > 0 else 0 }};
-
-    const formatCurrency = (value) => {
-        const number = parseFloat(value) || 0;
-        return `$ ${number.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    };
-
-    const updateTotals = () => {
-        let subtotal = 0;
-        form.querySelectorAll('.item-row').forEach(row => {
-            const qtyInput = row.querySelector('.cantidad-recibida');
-            const priceInput = row.querySelector('.precio-unitario');
-            const subtotalCell = row.querySelector('.subtotal-item');
-            
-            if (qtyInput && priceInput && subtotalCell) {
-                const qty = parseFloat(qtyInput.value) || 0;
-                const price = parseFloat(priceInput.value) || 0;
-                const itemSubtotal = qty * price;
-                subtotalCell.textContent = formatCurrency(itemSubtotal);
-                subtotal += itemSubtotal;
-            }
-        });
-
-        // Actualiza los totales de la sección 'Valores Recibidos'
-        const subtotalEl = document.getElementById('orden-subtotal');
-        const ivaEl = document.getElementById('orden-iva');
-        const totalEl = document.getElementById('orden-total');
-        
-        if (subtotalEl && ivaEl && totalEl) {
-            const iva = subtotal * ivaRate;
-            const total = subtotal + iva;
-            subtotalEl.textContent = formatCurrency(subtotal);
-            ivaEl.textContent = formatCurrency(iva);
-            totalEl.textContent = formatCurrency(total);
-        }
-    };
-
-    form.addEventListener('input', (e) => {
-        if (e.target.classList.contains('cantidad-recibida') || e.target.classList.contains('precio-unitario')) {
-            updateTotals();
-        }
-    });
-
-    updateTotals(); // Cálculo inicial al cargar la página
     
-    const partialReceptionModal = new bootstrap.Modal(document.getElementById('confirmacionRecepcionParcialModal'));
-    
-    const submitTheForm = (action) => {
-        let actionInput = form.querySelector('input[name="accion"]');
-        if (!actionInput) {
-            actionInput = document.createElement('input');
-            actionInput.type = 'hidden';
-            actionInput.name = 'accion';
-            form.appendChild(actionInput);
-        }
-        actionInput.value = action;
-        form.submit();
-    };
+    var opWarningModal = document.getElementById('opWarningModal');
+    if (opWarningModal) {
+        var modal = new bootstrap.Modal(opWarningModal);
+        modal.show();
+    }
 
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
+    if (form) {
+        {% if orden.estado == 'EN_RECEPCION' and orden.orden_produccion_id %}
+        // --- Lógica para Alerta de Retraso en Producción (Solo Paso 1) ---
+        const alertaProduccion = document.getElementById('alerta-retraso-produccion');
+        const itemRows = form.querySelectorAll('.item-row');
+
+        const verificarCantidades = () => {
+            if (!alertaProduccion) return; // Salir si no existe
+            let mostrarAlerta = false;
+            itemRows.forEach(row => {
+                const requestedQtyText = row.cells[1] ? row.cells[1].textContent.trim() : '0';
+                const requestedQty = parseFloat(requestedQtyText);
+                
+                const receivedQtyInput = row.querySelector('input[name="cantidad_recibida[]"]');
+                const receivedQty = receivedQtyInput ? (parseFloat(receivedQtyInput.value) || 0) : 0;
+
+                if (receivedQty < requestedQty) {
+                    mostrarAlerta = true;
+                }
+            });
+
+            if (mostrarAlerta) {
+                alertaProduccion.classList.remove('d-none');
+            } else {
+                alertaProduccion.classList.add('d-none');
+            }
+        };
+
+        form.addEventListener('input', (e) => {
+            if (e.target.matches('input[name="cantidad_recibida[]"]')) {
+                verificarCantidades();
+            }
+        });
         
-        const submitter = e.submitter;
-        const action = submitter ? submitter.value : null;
+        verificarCantidades(); // Correr al inicio
+        {% endif %}
+    }
+    
+    // --- INICIO MODIFICACIÓN: Lógica JS para Formulario de Calidad (Paso 2) ---
+    document.querySelectorAll('.item-calidad-row').forEach(row => {
+        const totalRecibido = parseFloat(row.dataset.totalRecibido) || 0;
+        const aprobadaInput = row.querySelector('.cantidad-aprobada');
+        const cuarentenaInput = row.querySelector('.cantidad-cuarentena');
+        const rechazadaInput = row.querySelector('.cantidad-rechazada');
+        
+        const motivoGroup = row.querySelector('.motivo-rechazo-group');
+        const motivoSelect = row.querySelector('select.motivo-select');
+        const comentariosInput = row.querySelector('textarea.comentarios-input');
+        const fotoInput = row.querySelector('input.foto-input');
+        
+        // Campos ocultos para alineación
+        const motivoHidden = row.querySelector('select.motivo-select-hidden');
+        const comentariosHidden = row.querySelector('textarea.comentarios-input-hidden');
+        
+        const getPrecision = (numStr) => {
+            if (!numStr) return 0;
+            const s = String(numStr);
+            if (s.indexOf('.') >= 0) { return s.split('.')[1].length; }
+            return 0;
+        };
+        // Usar precisión 2 como base, o la máxima precisión de los inputs
+        const precision = Math.max(2, getPrecision(aprobadaInput.step), getPrecision(cuarentenaInput.step), getPrecision(rechazadaInput.step));
+        const roundedTotal = parseFloat(totalRecibido.toFixed(precision));
 
-        if (action !== 'aceptar') {
-            submitTheForm(action || 'rechazar');
-            return;
-        }
-
-        let isPartial = false;
-        form.querySelectorAll('.item-row').forEach(row => {
-            const requestedQtyText = row.cells[1] ? row.cells[1].textContent.trim() : '0';
-            const requestedQty = parseFloat(requestedQtyText);
+        const toggleMotivo = () => {
+            const cuarentenaVal = parseFloat(cuarentenaInput.value) || 0;
+            const rechazadaVal = parseFloat(rechazadaInput.value) || 0;
             
-            const receivedQtyInput = row.querySelector('.cantidad-recibida');
-            const receivedQty = receivedQtyInput ? (parseFloat(receivedQtyInput.value) || 0) : 0;
-
-            if (receivedQty < requestedQty) {
-                isPartial = true;
+            if (cuarentenaVal > 0 || rechazadaVal > 0) {
+                motivoGroup.style.display = 'block';
+                // Habilitar campos visibles
+                motivoSelect.disabled = false;
+                motivoSelect.required = true;
+                comentariosInput.disabled = false;
+                fotoInput.disabled = false;
+                // Deshabilitar campos ocultos
+                motivoHidden.disabled = true;
+                comentariosHidden.disabled = true;
+            } else {
+                motivoGroup.style.display = 'none';
+                // Deshabilitar campos visibles y limpiar
+                motivoSelect.disabled = true;
+                motivoSelect.required = false;
+                motivoSelect.value = '';
+                comentariosInput.disabled = true;
+                comentariosInput.value = '';
+                fotoInput.disabled = true;
+                fotoInput.value = '';
+                // Habilitar campos ocultos
+                motivoHidden.disabled = false;
+                comentariosHidden.disabled = false;
             }
-        });
+        };
 
-        if (isPartial) {
-            partialReceptionModal.show();
-        } else {
-            submitTheForm('aceptar');
-        }
-    });
+        // Función genérica para validar el valor de un input
+        const checkAndFixValue = (input) => {
+            let val = parseFloat(input.value);
+            if (isNaN(val) || val < 0) val = 0;
+            if (val > roundedTotal) val = roundedTotal;
+            return val;
+        };
 
-    document.getElementById('confirmarRecepcionBtn').addEventListener('click', () => {
-        submitTheForm('aceptar');
-    });
-
-    // --- Lógica para Alerta de Retraso en Producción ---
-    {% if orden.orden_produccion_id and orden.estado == 'EN_RECEPCION' %}
-    const alertaProduccion = document.getElementById('alerta-retraso-produccion');
-    const itemRows = form.querySelectorAll('.item-row');
-
-    const verificarCantidades = () => {
-        let mostrarAlerta = false;
-        itemRows.forEach(row => {
-            const requestedQtyText = row.cells[1] ? row.cells[1].textContent.trim() : '0';
-            const requestedQty = parseFloat(requestedQtyText);
+        // --- Lógica de Listeners Diferenciados ---
+        
+        // Si edito CUARENTENA o RECHAZADA, se ajusta APROBADA
+        const onProblemaInput = (e) => {
+            let cuarentenaVal = checkAndFixValue(cuarentenaInput);
+            let rechazadaVal = checkAndFixValue(rechazadaInput);
             
-            const receivedQtyInput = row.querySelector('.cantidad-recibida');
-            const receivedQty = receivedQtyInput ? (parseFloat(receivedQtyInput.value) || 0) : 0;
-
-            if (receivedQty < requestedQty) {
-                mostrarAlerta = true;
+            // Validar que la suma de problemas no supere el total
+            if (cuarentenaVal + rechazadaVal > roundedTotal) {
+                if (e.target === cuarentenaInput) {
+                    cuarentenaVal = roundedTotal - rechazadaVal;
+                } else {
+                    rechazadaVal = roundedTotal - cuarentenaVal;
+                }
+                // Actualizar el valor del input que se estaba editando
+                e.target.value = (e.target === cuarentenaInput ? cuarentenaVal : rechazadaVal).toFixed(precision);
             }
-        });
 
-        if (mostrarAlerta) {
-            alertaProduccion.classList.remove('d-none');
-        } else {
-            alertaProduccion.classList.add('d-none');
-        }
-    };
+            let aprobadoRestante = roundedTotal - cuarentenaVal - rechazadaVal;
+            aprobadaInput.value = aprobadoRestante.toFixed(precision);
+            toggleMotivo();
+        };
 
-    form.addEventListener('input', (e) => {
-        if (e.target.classList.contains('cantidad-recibida')) {
-            verificarCantidades();
-        }
+        // Si edito APROBADA, se ajusta RECHAZADA (asumiendo que cuarentena es prioritaria)
+        const onAprobadaInput = (e) => {
+            let aprobadaVal = checkAndFixValue(aprobadaInput);
+            let cuarentenaVal = checkAndFixValue(cuarentenaInput);
+
+            // Validar que aprobada + cuarentena no supere el total
+            if (aprobadaVal + cuarentenaVal > roundedTotal) {
+                aprobadaVal = roundedTotal - cuarentenaVal;
+                aprobadaInput.value = aprobadaVal.toFixed(precision);
+            }
+            
+            let rechazadaRestante = roundedTotal - aprobadaVal - cuarentenaVal;
+            rechazadaInput.value = rechazadaRestante.toFixed(precision);
+            toggleMotivo();
+        };
+        
+        cuarentenaInput.addEventListener('input', onProblemaInput);
+        rechazadaInput.addEventListener('input', onProblemaInput);
+        aprobadaInput.addEventListener('input', onAprobadaInput);
+
+        // Correr al inicio
+        toggleMotivo();
     });
+    // --- FIN MODIFICACIÓN JS ---
 
-    // Verificar al cargar la página por si hay valores iniciales diferentes
-    verificarCantidades();
+
+    // --- Lógica para Modal OC Hija (sin cambios) ---
+    {% if orden.estado == 'RECEPCION_INCOMPLETA' and not orden.continuada_por_orden %}
+        setTimeout(() => {
+            var ocHijaModal = new bootstrap.Modal(document.getElementById('modalCrearOcHija'), {
+                keyboard: false, 
+                backdrop: 'static'
+            });
+            ocHijaModal.show();
+        }, 1000);
+        
     {% endif %}
-    {% endif %}
-    // ===== FIN DE SCRIPT INSERTADO =====
+
 });
 </script>
-<script src="{{ url_for('static', filename='js/controlCalidad.js') }}"></script>
+{# --- Se elimina 'controlCalidad.js' --- #}
 <script src="https://www.gstatic.com/charts/loader.js"></script>
 <script src="{{ url_for('static', filename='js/trazabilidadOrdenCompra.js') }}?v=1.1"></script>
 {% endblock %}
