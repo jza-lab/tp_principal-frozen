@@ -1,6 +1,7 @@
 from app.models.base_model import BaseModel
 from typing import Dict, Any, List, Optional
 import logging
+from postgrest.exceptions import APIError
 
 logger = logging.getLogger(__name__)
 
@@ -80,13 +81,15 @@ class PedidoModel(BaseModel):
 
         pedido_data['todas_ops_completadas'] = todas_completadas # Añadir bandera al pedido
 
-        # 4. Obtener datos de despacho si existen 
-        pedido_data['despacho'] = None # Inicializar por defecto
-        # Consultar directamente la tabla de despachos con el id_pedido
-        despacho_result = self.db.table('despachos').select('*').eq('id_pedido', pedido_id).maybe_single().execute()
-
-        if despacho_result.data:
-            pedido_data['despacho'] = despacho_result.data
+        # 4. Obtener datos de despacho si existen
+        pedido_data['despacho'] = None
+        try:
+            despacho_result = self.db.table('despachos').select('*').eq('id_pedido', pedido_id).maybe_single().execute()
+            if despacho_result.data:
+                pedido_data['despacho'] = despacho_result.data
+        except APIError as e:
+            # Si la consulta a despachos falla (ej. RLS), no bloquear la carga del pedido.
+            logger.warning(f"No se pudieron obtener datos de despacho para el pedido {pedido_id}. Error: {e.message}")
 
         return {'success': True, 'data': pedido_data}
 

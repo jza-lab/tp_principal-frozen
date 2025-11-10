@@ -118,12 +118,6 @@
                         <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}"
                             class="btn btn-sm btn-outline-primary" title="Ver Detalle"><i class="bi bi-eye"></i></a>
 
-                        {% if pedido.estado == 'LISTO_PARA_ENTREGA' %}
-                        <a href="{{ url_for('despacho.api_crear_despacho', pedido_id=pedido.id) }}" class="btn btn-sm btn-info" title="Despachar Pedido">
-                            <i class="bi bi-truck"></i> Despachar
-                        </a>
-                        {% endif %}
-
                         {% if pedido.estado == 'PENDIENTE' %}
                         {% if 'logistica_gestion_ov' is has_permission %}
                         <a href="{{ url_for('orden_venta.editar', id=pedido.id) }}"

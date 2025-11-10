@@ -126,43 +126,41 @@
                     </div>
                 </div>
                 <hr>
-                {% if pedido.despacho and pedido.estado in ['EN_TRANSITO', 'COMPLETADO'] %}
                 <hr>
                 <div class="col-md-12">
                     <div class="mb-3">
-                        <label class="form-label-sm fw-bold mb-3"><i class="bi bi-truck me-1"></i>Información de
-                            Despacho</label>
+                        <label class="form-label-sm fw-bold mb-3"><i class="bi bi-truck me-1"></i>Información de Despacho</label>
+                        {% if pedido.despacho %}
                         <div class="row g-2">
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-person-badge me-1"></i>Nombre
-                                    Transportista:</label>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-person-badge me-1"></i>Nombre Transportista:</label>
                                 <p class="form-control-plaintext">{{ pedido.despacho.nombre_transportista }}</p>
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-person-vcard me-1"></i>DNI
-                                    Transportista:</label>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-person-vcard me-1"></i>DNI Transportista:</label>
                                 <p class="form-control-plaintext">{{ pedido.despacho.dni_transportista }}</p>
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-truck-front me-1"></i>Patente
-                                    Vehículo:</label>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-truck-front me-1"></i>Patente Vehículo:</label>
                                 <p class="form-control-plaintext">{{ pedido.despacho.patente_vehiculo }}</p>
                             </div>
                             <div class="col-sm-6">
-                                <label class="form-label-sm fw-bold"><i class="bi bi-telephone me-1"></i>Teléfono
-                                    Transportista:</label>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-telephone me-1"></i>Teléfono Transportista:</label>
                                 <p class="form-control-plaintext">{{ pedido.despacho.telefono_transportista }}</p>
                             </div>
                             <div class="col-sm-12">
-                                <label class="form-label-sm fw-bold"><i
-                                        class="bi bi-chat-left-text me-1"></i>Observaciones:</label>
-                                <p class="form-control-plaintext">{{ pedido.despacho.observaciones | default('Sin
-                                    observaciones', true) }}</p>
+                                <label class="form-label-sm fw-bold"><i class="bi bi-chat-left-text me-1"></i>Observaciones:</label>
+                                <p class="form-control-plaintext">{{ pedido.despacho.observaciones | default('Sin observaciones', true) }}</p>
                             </div>
                         </div>
+                        {% else %}
+                        <div class="alert alert-info bg-info-soft border-0" role="alert">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Aún no se ha asignado un despacho para este pedido.
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
-                {% endif %}
             </div>
         </div>
 
