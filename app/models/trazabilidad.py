@@ -95,7 +95,8 @@ class TrazabilidadModel:
                 if not id_entidad_actual.startswith('insumo_generico_'):
                     insumo = self.db.table('insumos_inventario').select('documento_ingreso, cantidad_inicial').eq('id_lote', id_entidad_actual).maybe_single().execute().data
                     if insumo and insumo.get('documento_ingreso'):
-                        oc = self.db.table('ordenes_compra').select('id').eq('codigo_oc', insumo['documento_ingreso']).maybe_single().execute().data
+                        oc_res = self.db.table('ordenes_compra').select('id').eq('codigo_oc', insumo['documento_ingreso']).maybe_single().execute()
+                        oc = oc_res.data
                         if oc:
                             self._agregar_nodo_y_arista(nodos, aristas, 'orden_compra', str(oc['id']), 'lote_insumo', id_entidad_actual, insumo['cantidad_inicial'], cola, visitados)
                         else: # Si el código no corresponde a ninguna OC
