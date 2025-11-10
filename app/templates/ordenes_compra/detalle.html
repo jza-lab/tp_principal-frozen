@@ -8,26 +8,13 @@
 
 {% block app_content %}
 
-{# #}
+<!-- {# --- INICIO MODIFICACIÓN: Modal eliminado --- #}
 {% if orden.orden_produccion_id %}
-<div id="opWarningModal" class="modal fade" tabindex="-1" aria-labelledby="opWarningModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-warning">
-                <h5 class="modal-title text-dark" id="opWarningModalLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Atención</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p class="fs-6">Esta Orden de Compra está vinculada a la <strong>Orden de Producción #{{ orden.orden_produccion_id }}</strong>.</p>
-                <p>Revise las fechas de entrega, ya que cualquier demora podría impactar directamente en el plan de producción.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Entendido</button>
-            </div>
-        </div>
-    </div>
+<div id="opWarningModal" ...>
+    ... (Todo este bloque de modal fue eliminado) ...
 </div>
 {% endif %}
+{# --- FIN MODIFICACIÓN --- #} -->
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
@@ -59,6 +46,19 @@
         {% endif %}
     </div>
 </div>
+
+{# --- INICIO MODIFICACIÓN: Nueva Alerta Fija --- #}
+{% if orden.orden_produccion_id %}
+<div class="alert alert-warning d-flex align-items-center" role="alert">
+    <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+    <div>
+        <strong class="alert-heading">Atención: Orden Vinculada</strong>
+        <p class="mb-0">Esta Orden de Compra está vinculada a la <strong><a href="{{ url_for('orden_produccion.detalle', id=orden.orden_produccion_id) }}" class="alert-link">Orden de Producción #{{ orden.orden_produccion_id }}</a></strong>.
+        Cualquier demora en la entrega podría impactar el plan de producción.</p>
+    </div>
+</div>
+{% endif %}
+{# --- FIN MODIFICACIÓN --- #}
 
 <ul class="nav nav-tabs-custom mb-3" id="loteDetailTab" role="tablist">
     <li class="nav-item" role="presentation">
@@ -306,7 +306,7 @@
                             </div>
                         </form>
                     {% elif orden.paso_recepcion == 1 %}
-                        {# --- INICIO DE LA MODIFICACIÓN: PASO 2 RE-ESTILIZADO CON TODOS LOS CAMPOS --- #}
+                        {# --- PASO 2 RE-ESTILIZADO CON TODOS LOS CAMPOS --- #}
                         <form id="calidadForm" action="{{ url_for('orden_compra.procesar_recepcion', orden_id=orden.id) }}" method="POST" enctype="multipart/form-data">
                             <input type="hidden" name="paso" value="2">
                              {{ csrf_form.csrf_token }}
@@ -384,7 +384,6 @@
                                 </div>
                             </div>
                         </form>
-                        {# --- FIN DE LA MODIFICACIÓN --- #}
                     {% endif %}
                 {% else %}
                 <div class="card mt-4">
@@ -445,7 +444,7 @@
                             Acciones Rápidas
                         </h6>
                     </div>
-                    <div class_=""card-body"">
+                    <div class="card-body">
                         <div class="d-grid gap-2">
                             <button class="btn btn-outline-secondary" disabled>
                                 <i class="bi bi-file-earmark-text me-2"></i>Visualizar factura
@@ -557,11 +556,15 @@ document.addEventListener('DOMContentLoaded', function () {
     
     const form = document.getElementById('recepcionForm');
     
+    // --- INICIO MODIFICACIÓN: Se elimina el trigger del modal ---
+    {# 
     var opWarningModal = document.getElementById('opWarningModal');
     if (opWarningModal) {
         var modal = new bootstrap.Modal(opWarningModal);
         modal.show();
     }
+    #}
+    // --- FIN MODIFICACIÓN ---
 
     if (form) {
         {% if orden.estado == 'EN_RECEPCION' and orden.orden_produccion_id %}
@@ -665,7 +668,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return val;
         };
 
-        // --- Lógica de Listeners Diferenciados ---
+        // --- Lógica de Listeners Diferenciados (CORREGIDA) ---
         
         // Si edito CUARENTENA o RECHAZADA, se ajusta APROBADA
         const onProblemaInput = (e) => {
@@ -676,7 +679,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (cuarentenaVal + rechazadaVal > roundedTotal) {
                 if (e.target === cuarentenaInput) {
                     cuarentenaVal = roundedTotal - rechazadaVal;
-                } else {
+                } else { // e.target es rechazadaInput
                     rechazadaVal = roundedTotal - cuarentenaVal;
                 }
                 // Actualizar el valor del input que se estaba editando
@@ -707,6 +710,7 @@ document.addEventListener('DOMContentLoaded', function () {
         cuarentenaInput.addEventListener('input', onProblemaInput);
         rechazadaInput.addEventListener('input', onProblemaInput);
         aprobadaInput.addEventListener('input', onAprobadaInput);
+        // --- FIN LÓGICA CORREGIDA ---
 
         // Correr al inicio
         toggleMotivo();
@@ -729,6 +733,6 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 {# --- Se elimina 'controlCalidad.js' --- #}
-<script src="https://www.gstatic.com/charts/loader.js"></script>
+<script src="https-www.gstatic.com/charts/loader.js"></script>
 <script src="{{ url_for('static', filename='js/trazabilidadOrdenCompra.js') }}?v=1.1"></script>
 {% endblock %}
