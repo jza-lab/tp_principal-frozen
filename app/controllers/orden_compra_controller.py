@@ -107,23 +107,30 @@ class OrdenCompraController:
 
     def crear_orden(self, orden_data, items_data, usuario_id: int) -> Dict:
         """
-        Crea una nueva orden de compra a partir de diccionarios de datos.
+        Crea una nueva orden de compra, calculando los totales de forma centralizada.
         """
         try:
             if not orden_data.get('proveedor_id') or not orden_data.get('fecha_emision'):
                 return {'success': False, 'error': 'El proveedor y la fecha de emisión son obligatorios.'}
 
-            # --- CORRECCIÓN: Generar código único si no se provee ---
+            # --- CÁLCULO CENTRALIZADO DE TOTALES ---
+            subtotal = sum(float(item.get('cantidad_solicitada', 0)) * float(item.get('precio_unitario', 0)) for item in items_data)
+            # Asumimos IVA por defecto si no se especifica
+            iva = subtotal * 0.21
+            total = subtotal + iva
+            
+            orden_data['subtotal'] = round(subtotal, 2)
+            orden_data['iva'] = round(iva, 2)
+            orden_data['total'] = round(total, 2)
+            # -----------------------------------------
+
             if 'codigo_oc' not in orden_data or not orden_data['codigo_oc']:
                 orden_data['codigo_oc'] = f"OC-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-            # ----------------------------------------------------
 
-            # Asignar datos clave
             orden_data['usuario_creador_id'] = usuario_id
             if not orden_data.get('estado'):
                 orden_data['estado'] = 'PENDIENTE'
 
-            # Crear la orden
             result = self.model.create_with_items(orden_data, items_data)
             if result.get('success'):
                 oc = result.get('data')

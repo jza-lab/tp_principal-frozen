@@ -400,7 +400,7 @@ class OrdenProduccionController(BaseController):
         for insumo in insumos_faltantes:
             try:
                 insumo_id = insumo['insumo_id']
-                insumo_data_res, _ = self.insumo_controller.obtener_insumo_por_id(insumo_id)
+                insumo_data_res = self.insumo_model.find_by_id(insumo_id, 'id_insumo')
                 if not insumo_data_res.get('success'):
                     return {'success': False, 'error': f"No se encontró el insumo con ID {insumo_id}."}
 
