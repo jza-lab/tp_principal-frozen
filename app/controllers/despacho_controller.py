@@ -79,11 +79,14 @@ class DespachoController(BaseController):
         if not despacho_response['success']:
             return despacho_response
 
-        despacho_id = despacho_response['data'][0]['id']
+        despacho_id = despacho_response['data']['id']
         
-        # Usamos un modelo genérico para la tabla de items del despacho
-        despacho_items_model = GenericBaseModel()
-        despacho_items_model.get_table_name = lambda: 'despacho_items'
+        # Clase local para manejar la tabla de items del despacho
+        class DespachoItemsModel(GenericBaseModel):
+            def get_table_name(self) -> str:
+                return 'despacho_items'
+        
+        despacho_items_model = DespachoItemsModel()
 
         for pedido_id in pedido_ids:
             # Asociar pedido al despacho

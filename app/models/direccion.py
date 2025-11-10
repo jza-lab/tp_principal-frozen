@@ -177,19 +177,13 @@ class DireccionModel(BaseModel):
 
     def search_distinct_localidades(self, term: str):
         """
-        Busca localidades únicas. Si 'term' tiene valor, filtra por coincidencia parcial.
-        Si 'term' está vacío, devuelve todas las localidades únicas.
+        Busca localidades únicas que coincidan parcialmente con un término de búsqueda.
         La búsqueda no distingue entre mayúsculas y minúsculas.
         Devuelve una lista de diccionarios con id, localidad y provincia.
         """
         try:
-            query = self.db.table(self.get_table_name()).select('id, localidad, provincia')
-            
-            # Aplicar filtro solo si el término de búsqueda no está vacío
-            if term:
-                query = query.ilike('localidad', f'%{term}%')
-
-            response = query.execute()
+            # Seleccionamos los campos necesarios y filtramos
+            response = self.db.table(self.get_table_name()).select('id, localidad, provincia').ilike('localidad', f'%{term}%').limit(20).execute()
 
             if not response.data:
                 return {'success': True, 'data': []}
@@ -212,4 +206,36 @@ class DireccionModel(BaseModel):
 
         except Exception as e:
             logger.error(f"Error buscando localidades: {e}")
+            return {'success': False, 'error': str(e), 'data': []}
+
+    def get_distinct_localidades(self):
+        """
+        Obtiene una lista de todas las localidades únicas existentes en la base de datos.
+        Devuelve una lista de diccionarios con id, localidad y provincia.
+        """
+        try:
+            # Seleccionamos todos los registros para procesarlos en memoria
+            response = self.db.table(self.get_table_name()).select('id, localidad, provincia').execute()
+
+            if not response.data:
+                return {'success': True, 'data': []}
+
+            # Procesamos para obtener localidades únicas (combinación de localidad y provincia)
+            localidades_vistas = set()
+            localidades_unicas = []
+            for item in response.data:
+                if item.get('localidad') and item.get('provincia'):
+                    clave_localidad = (item['localidad'].strip().lower(), item['provincia'].strip().lower())
+                    if clave_localidad not in localidades_vistas:
+                        localidades_vistas.add(clave_localidad)
+                        localidades_unicas.append({
+                            'id': item['id'], # Usamos el ID de la primera dirección encontrada
+                            'localidad': item['localidad'],
+                            'provincia': item['provincia']
+                        })
+            
+            return {'success': True, 'data': localidades_unicas}
+
+        except Exception as e:
+            logger.error(f"Error obteniendo localidades distintas: {e}")
             return {'success': False, 'error': str(e), 'data': []}

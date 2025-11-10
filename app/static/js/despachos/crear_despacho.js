@@ -17,14 +17,17 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     async function buscarVehiculo() {
-        const patente = patenteInput.value.trim();
+        const patente = patenteInput.value.trim().toUpperCase();
         if (!patente) return;
 
         try {
             const response = await fetch(`/admin/vehiculos/api/buscar?patente=${patente}`);
             const result = await response.json();
 
-            if (result.success) {
+            const errorDiv = document.getElementById('patente-error');
+            errorDiv.style.display = 'none'; // Ocultar por defecto
+
+            if (result.success && result.data) {
                 vehicleData = result.data;
                 document.getElementById('vehicle-patente').textContent = `Patente: ${vehicleData.patente}`;
                 document.getElementById('vehicle-conductor').textContent = vehicleData.nombre_conductor;
@@ -32,7 +35,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.getElementById('vehicle-id').value = vehicleData.id;
                 vehicleInfoDiv.style.display = 'block';
             } else {
-                alert(result.error || 'Vehículo no encontrado.');
+                errorDiv.textContent = result.error || 'Vehículo no encontrado con esa patente.';
+                errorDiv.style.display = 'block';
                 vehicleData = null;
                 vehicleInfoDiv.style.display = 'none';
             }

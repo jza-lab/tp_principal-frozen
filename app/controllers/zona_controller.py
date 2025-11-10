@@ -74,6 +74,41 @@ class ZonaController(BaseController):
                 self.zona_localidad_model.delete(item['id'])
         return self.zona_model.delete(zona_id)
 
+    def obtener_mapa_localidades_a_zonas(self):
+        """
+        Crea un mapa de {nombre_localidad: nombre_zona} para su uso en otros controladores.
+        """
+        mapa_final = {}
+        
+        # 1. Obtener todas las relaciones zona-localidad
+        relaciones_response = self.zona_localidad_model.find_all()
+        if not relaciones_response.get('success'):
+            return {'success': False, 'error': 'Error al obtener relaciones zona-localidad'}
+
+        # 2. Obtener un mapa de ID de zona -> nombre de zona
+        zonas_response = self.zona_model.find_all()
+        if not zonas_response.get('success'):
+            return {'success': False, 'error': 'Error al obtener zonas'}
+        mapa_zonas = {z['id']: z['nombre'] for z in zonas_response.get('data', [])}
+
+        # 3. Obtener un mapa de ID de localidad -> nombre de localidad
+        localidades_response = self.direccion_model.get_distinct_localidades()
+        if not localidades_response.get('success'):
+            return {'success': False, 'error': 'Error al obtener localidades'}
+        mapa_localidades = {loc['id']: loc['localidad'] for loc in localidades_response.get('data', [])}
+
+        # 4. Construir el mapa final
+        for relacion in relaciones_response.get('data', []):
+            localidad_id = relacion.get('localidad_id')
+            zona_id = relacion.get('zona_id')
+
+            if localidad_id in mapa_localidades and zona_id in mapa_zonas:
+                nombre_localidad = mapa_localidades[localidad_id]
+                nombre_zona = mapa_zonas[zona_id]
+                mapa_final[nombre_localidad] = nombre_zona
+        
+        return {'success': True, 'data': mapa_final}
+
     def buscar_localidades(self, term):
         # 1. Obtener localidades que coinciden con el término
         localidades_response = self.direccion_model.search_distinct_localidades(term)
