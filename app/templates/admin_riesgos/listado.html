@@ -19,18 +19,20 @@
                     </span>
                 </div>
                 <div class="card-body">
-                    <p class="card-text">
-                        <strong>Origen:</strong> {{ alerta.origen_tipo_entidad.replace('_', ' ') | title }}
-                        <br>
-                        <strong>ID Origen:</strong> <small>{{ alerta.origen_id_entidad }}</small>
+                    <p class="card-text mb-2">
+                        <strong class="d-block text-muted">Motivo:</strong>
+                        <span class="fw-bold">{{ alerta.motivo | default('No especificado', true) }}</span>
                     </p>
-                    <p class="card-text">
-                        <small class="text-muted">
-                            Creada el: {{ alerta.created_at | format_datetime }}
-                        </small>
+                    <p class="card-text mb-2">
+                        <strong class="d-block text-muted">Origen:</strong>
+                         {{ alerta.origen_tipo_entidad.replace('_', ' ') | title }} #{{ alerta.origen_id_entidad }}
                     </p>
+
                 </div>
-                <div class="card-footer text-end">
+                <div class="card-footer bg-light text-end">
+                     <small class="text-muted float-start pt-1">
+                        Por: <strong>{{ alerta.nombre_creador | default('Sistema', true) }}</strong> el {{ alerta.fecha_creacion | format_datetime }}
+                    </small>
                     <a href="{{ url_for('admin_riesgo.detalle_alerta_riesgo', codigo_alerta=alerta.codigo) }}" class="btn btn-primary">
                         Gestionar Alerta
                     </a>

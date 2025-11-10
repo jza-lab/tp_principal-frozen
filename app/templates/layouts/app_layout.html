@@ -256,6 +256,12 @@
                             </a>
                         </li>
                         {% endif %}
+                            <li>
+                            <a class="dropdown-item {% if request.endpoint.startswith('riesgos') or request.endpoint.startswith('admin_riesgos') %}active{% endif %}"
+                                href="{{ url_for('riesgos.listar_alertas_page') }}">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i> Alertas de Riesgo
+                            </a>
+                        </li>
                         {% if can_gestionar_consultas and not is_dev %}
                         <li>
                             <hr class="dropdown-divider">

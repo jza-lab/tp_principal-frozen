@@ -352,11 +352,21 @@ class InventarioController(BaseController):
         """Crear un nuevo lote de inventario"""
         try:
             data.pop('csrf_token', None)
-            # --- LÓGICA CORREGIDA ---
-            # Copiamos la cantidad inicial a la actual ANTES de la validación.
-            # El formulario envía 'cantidad_inicial', así que lo usamos para crear 'cantidad_actual'.
-            if 'cantidad_inicial' in data and 'cantidad_actual' not in data:
-                data['cantidad_actual'] = data['cantidad_inicial']
+            
+            # --- LÓGICA MODIFICADA PARA ACEPTAR CUARENTENA ---
+            # Si 'cantidad_actual' no se provee, se asume que es la 'cantidad_inicial'.
+            if 'cantidad_actual' not in data and 'cantidad_inicial' in data:
+                # Si se provee 'cantidad_en_cuarentena', la 'cantidad_actual' es la diferencia.
+                if 'cantidad_en_cuarentena' in data:
+                    try:
+                        inicial = float(data['cantidad_inicial'])
+                        cuarentena = float(data['cantidad_en_cuarentena'])
+                        data['cantidad_actual'] = max(0, inicial - cuarentena)
+                    except (ValueError, TypeError):
+                        return self.error_response("Valores de cantidad inválidos.", 400)
+                else:
+                    # Si no hay cuarentena, 'actual' es igual a 'inicial'.
+                    data['cantidad_actual'] = data['cantidad_inicial']
 
             # Corrección Definitiva: Eliminar costo_total ANTES de la validación.
             data.pop('costo_total', None)
@@ -376,7 +386,10 @@ class InventarioController(BaseController):
             codigo_insumo = insumo_result['data'].get('codigo_interno', 'INS')
             timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
             codigo_lote = f"{codigo_insumo}-{timestamp}"
-            validated_data['numero_lote_proveedor'] = codigo_lote
+            
+            # --- MODIFICACIÓN: Usar 'numero_lote_proveedor' si viene, sino generar ---
+            if 'numero_lote_proveedor' not in validated_data or not validated_data['numero_lote_proveedor']:
+                validated_data['numero_lote_proveedor'] = codigo_lote
 
             # Crear lote
             result = self.inventario_model.create(validated_data)
@@ -480,16 +493,17 @@ class InventarioController(BaseController):
 
             # Cargar el historial de control de calidad
             cc_model = ControlCalidadInsumoModel()
-            historial_result = cc_model.find_all(
-                filters={'lote_insumo_id': id_lote},
-                order_by='created_at.desc'
-            )
+            
+            # --- MODIFICACIÓN: Llamar a la función corregida ---
+            historial_result = cc_model.find_by_lote_id(id_lote)
 
             if historial_result.get('success'):
+                # Adjunta la lista (puede estar vacía) al lote
                 lote_data['historial_calidad'] = historial_result.get('data', [])
             else:
                 lote_data['historial_calidad'] = []
                 logger.warning(f"No se pudo cargar el historial de calidad para el lote {id_lote}: {historial_result.get('error')}")
+            # --- FIN MODIFICACIÓN ---
 
             serialized_data = self._serialize_data(lote_data)
             return self.success_response(data=serialized_data)
@@ -989,6 +1003,11 @@ class InventarioController(BaseController):
         """
         try:
             trazabilidad_model = TrazabilidadModel()
+            # --- MODIFICACIÓN: Crear el node_map aquí ---
+            links = []
+            node_map = {}
+            # --- FIN MODIFICACIÓN ---
+            
             resultado = trazabilidad_model.obtener_trazabilidad_completa_lote_insumo(id_lote)
 
             # --- 1. NODO INICIAL: LOTE INSUMO ---

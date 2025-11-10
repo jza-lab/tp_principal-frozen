@@ -164,17 +164,6 @@ class ControlCalidadInsumoController(BaseController):
             logger.error(f"Error en procesar_inspeccion_api: {e}", exc_info=True)
             return self.error_response('Error interno del servidor.'), 500
 
-    def finalizar_inspeccion_orden(self, orden_compra_id: int, usuario_id: int) -> tuple:
-        """
-        Cierra una orden de compra una vez que toda la inspección ha terminado.
-        """
-        try:
-            self._verificar_y_finalizar_orden_si_corresponde(orden_compra_id, usuario_id)
-            return self.success_response(message=f"Proceso de finalización para la orden {orden_compra_id} ejecutado.")
-        except Exception as e:
-            logger.error(f"Error al finalizar la inspección para la orden {orden_compra_id}: {e}", exc_info=True)
-            return self.error_response("Error interno al intentar finalizar la inspección."), 500
-
     def _extraer_oc_id_de_lote(self, lote: Dict) -> int | None:
         """
         Función de ayuda para obtener la OC ID del lote.
@@ -193,48 +182,37 @@ class ControlCalidadInsumoController(BaseController):
     def _verificar_y_finalizar_orden_si_corresponde(self, orden_compra_id: int, usuario_id: int):
         """
         Verifica si todos los lotes de una OC han sido inspeccionados.
-        Si es así, finaliza la OC a 'RECEPCION_COMPLETA' o 'RECEPCION_INCOMPLETA'.
+        Si es así, delega la finalización de la OC al OrdenCompraController.
         """
         try:
             oc_res, _ = self.orden_compra_controller.get_orden(orden_compra_id)
             if not oc_res.get('success'):
                 logger.error(f"No se pudo encontrar la OC {orden_compra_id} para verificar su finalización.")
                 return
-            
+
             codigo_oc = oc_res['data'].get('codigo_oc')
             if not codigo_oc:
                 return
 
-            documento_ingreso = codigo_oc if codigo_oc.startswith('OC-') else f"OC-{codigo_oc}"
-            lotes_de_oc_res = self.inventario_model.get_all_lotes_for_view(filtros={'documento_ingreso': documento_ingreso})
+            lotes_de_oc_res = self.inventario_model.find_all(
+                filters={'documento_ingreso': ('ilike', f"%{codigo_oc}%")}
+            )
 
             if not lotes_de_oc_res.get('success'):
+                logger.error(f"Error al buscar lotes para la OC {codigo_oc} para finalizar.")
                 return
 
             lotes = lotes_de_oc_res.get('data', [])
             if not lotes:
-                # Si no hay lotes, consideramos la recepción completa por defecto.
-                self.orden_compra_controller.model.update(orden_compra_id, {'estado': 'RECEPCION_COMPLETA'})
+                self.orden_compra_controller.finalizar_proceso_recepcion(orden_compra_id, usuario_id)
                 return
 
-            # Verificar si algún lote todavía está pendiente de revisión
             if any(lote.get('estado') == 'EN REVISION' for lote in lotes):
                 logger.info(f"La OC {orden_compra_id} no se finaliza. Aún hay lotes 'EN REVISION'.")
                 return
 
-            # Si todos los lotes fueron procesados, decidir el estado final
-            lotes_rechazados = [lote for lote in lotes if lote.get('estado') == 'RECHAZADO']
-            
-            if len(lotes_rechazados) == len(lotes):
-                # Todos los lotes fueron rechazados
-                nuevo_estado = 'RECEPCION_INCOMPLETA'
-                logger.info(f"Todos los lotes de la OC {orden_compra_id} fueron rechazados. Finalizando como {nuevo_estado}.")
-            else:
-                # Al menos un lote fue aceptado (disponible o cuarentena)
-                nuevo_estado = 'RECEPCION_COMPLETA'
-                logger.info(f"Al menos un lote de la OC {orden_compra_id} fue aceptado. Finalizando como {nuevo_estado}.")
-            
-            self.orden_compra_controller.model.update(orden_compra_id, {'estado': nuevo_estado})
+            logger.info(f"Todos los lotes de la OC {orden_compra_id} han sido procesados. Delegando finalización.")
+            self.orden_compra_controller.finalizar_proceso_recepcion(orden_compra_id, usuario_id)
 
         except Exception as e:
             logger.error(f"Error crítico al verificar y finalizar la OC {orden_compra_id}: {e}", exc_info=True)

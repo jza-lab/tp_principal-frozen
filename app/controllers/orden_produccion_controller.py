@@ -258,9 +258,10 @@ class OrdenProduccionController(BaseController):
 
     def verificar_y_actualizar_ordenes_en_espera(self) -> Dict:
         """
-        Verifica todas las órdenes 'EN ESPERA' y las actualiza a 'LISTA PARA PRODUCIR'
-        si el stock de insumos ya está disponible.
-        Este método está diseñado para ser llamado cuando el stock de insumos aumenta.
+        Verifica todas las órdenes 'EN ESPERA'.
+        1. Comprueba que TODAS las OCs vinculadas (Padres/Hijas) estén en 'RECEPCION COMPLETA'.
+        2. Si lo están, comprueba que el stock de insumos esté disponible.
+        Si ambas condiciones se cumplen, la OP pasa a 'LISTA PARA PRODUCIR'.
         """
         logger.info("Iniciando verificación proactiva de órdenes de producción 'EN ESPERA'.")
         # 1. Obtener todas las órdenes 'EN ESPERA'
@@ -274,12 +275,64 @@ class OrdenProduccionController(BaseController):
         ordenes_actualizadas_count = 0
         errores = []
 
-        # 2. Iterar sobre cada orden y verificar su stock
+        # 2. Iterar sobre cada orden
         for orden in ordenes_en_espera:
             try:
                 orden_id = orden['id']
-                logger.debug(f"Verificando stock para OP {orden_id} (Código: {orden.get('codigo')})...")
+                logger.debug(f"Iniciando verificación para OP {orden_id} (Código: {orden.get('codigo')})...")
                 
+                # --- INICIO DE LA NUEVA LÓGICA DE VERIFICACIÓN DE OC ---
+                logger.debug(f"Verificando estado de OCs vinculadas para OP {orden_id}...")
+                
+                # 1. Encontrar todas las OCs "Padre" vinculadas a esta OP
+                ocs_vinculadas_res = self.orden_compra_controller.model.find_all(
+                    filters={'orden_produccion_id': orden_id}
+                )
+                
+                # Si la OP tiene OCs vinculadas, debemos chequearlas
+                if ocs_vinculadas_res.get('success') and ocs_vinculadas_res.get('data'):
+                    ocs_padre = ocs_vinculadas_res.get('data')
+                    todas_ocs_completas = True
+                    
+                    for oc_padre in ocs_padre:
+                        oc_padre_id = oc_padre.get('id')
+                        
+                        # 2. Buscar si esta OC Padre tiene una Hija
+                        oc_hija_res = self.orden_compra_controller.model.find_all(
+                            filters={'complementa_a_orden_id': oc_padre_id},
+                            limit=1
+                        )
+                        
+                        oc_hija = None
+                        if oc_hija_res.get('success') and oc_hija_res.get('data'):
+                            oc_hija = oc_hija_res.get('data')[0]
+                            
+                        # 3. Determinar qué estado verificar
+                        if oc_hija:
+                            # Si hay hija, el estado de la hija es el que importa
+                            if oc_hija.get('estado') != 'RECEPCION_COMPLETA':
+                                logger.info(f"OP {orden_id} en espera. OC Hija {oc_hija.get('id')} ({oc_hija.get('estado')}) aún no está 'RECEPCION COMPLETA'.")
+                                todas_ocs_completas = False
+                                break # Salir del bucle for oc_padre
+                        else:
+                            # Si no hay hija, el estado de la padre es el que importa
+                            if oc_padre.get('estado') != 'RECEPCION_COMPLETA':
+                                logger.info(f"OP {orden_id} en espera. OC Padre {oc_padre_id} ({oc_padre.get('estado')}) (sin hija) aún no está 'RECEPCION COMPLETA'.")
+                                todas_ocs_completas = False
+                                break # Salir del bucle for oc_padre
+                    
+                    # 4. Si alguna OC (la Hija si existe, o la Padre si no) no está completa, saltar esta OP
+                    if not todas_ocs_completas:
+                        continue # Pasar a la siguiente OP en 'EN ESPERA'
+                        
+                else:
+                    # No se encontraron OCs vinculadas. En este caso, la OP depende solo del stock.
+                    logger.debug(f"OP {orden_id} no tiene OCs vinculadas, depende solo de stock.")
+                
+                logger.info(f"Verificación de OCs superada para OP {orden_id}. Procediendo a verificar stock.")
+                # --- FIN DE LA NUEVA LÓGICA DE VERIFICACIÓN DE OC ---
+                
+
                 # 3. Verificar si hay stock disponible (dry run)
                 verificacion_result = self.inventario_controller.verificar_stock_para_op(orden)
 
@@ -293,7 +346,6 @@ class OrdenProduccionController(BaseController):
                 if not insumos_faltantes:
                     logger.info(f"Stock completo encontrado para OP {orden_id}. Procediendo a reservar y actualizar estado.")
                     
-                    # Usar el ID del usuario que creó la orden para la reserva
                     usuario_creador_id = orden.get('usuario_creador_id')
                     if not usuario_creador_id:
                         logger.error(f"La OP {orden_id} no tiene un usuario creador. No se puede reservar el stock. Saltando.")
