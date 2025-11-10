@@ -561,7 +561,11 @@ class OrdenCompraController:
                 continue
 
             # Determinar el estado inicial del lote
-            estado_lote = 'disponible'
+            if orden_data.get('orden_produccion_id'):
+                estado_lote = 'reservado'
+            else:
+                estado_lote = 'disponible'
+            
             # Si SÓLO hay en cuarentena (y nada aprobado), el lote nace en cuarentena
             if cantidad_aprobada <= 0 and cantidad_cuarentena > 0:
                 estado_lote = 'cuarentena'
