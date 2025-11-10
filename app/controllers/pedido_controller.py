@@ -662,7 +662,6 @@ class PedidoController(BaseController):
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
 
-    # --- MÉTODO CORREGIDO ---
     def preparar_para_entrega(self, pedido_id: int, usuario_id: int) -> tuple:
         """
         Marca un pedido como listo para entregar, SIEMPRE Y CUANDO todas las OPs
@@ -706,6 +705,18 @@ class PedidoController(BaseController):
 
             # 3. Si todas las OPs están OK (o no había OPs), proceder con el cambio de estado
             logger.info(f"Todas las OPs para el pedido {pedido_id} están completadas. El pedido está listo para ser despachado.")
+
+            # Obtener los items del pedido para la reserva.
+            # 'items_del_pedido' ya contiene los IDs de los pedido_items, producto_id y cantidad.
+            reserva_result = self.lote_producto_controller.reservar_stock_para_pedido(
+                pedido_id=pedido_id,
+                items=items_del_pedido, # Usar los items ya obtenidos del pedido
+                usuario_id=usuario_id
+            )
+            if not reserva_result.get('success'):
+                logger.error(f"Fallo la reserva de stock para el pedido {pedido_id} durante la preparación para entrega. Error: {reserva_result.get('error')}")
+                return self.error_response(f"Error al reservar stock para el pedido: {reserva_result.get('error')}", 500)
+            logger.info(f"Stock para el pedido {pedido_id} reservado con éxito durante la preparación para entrega.")
 
             # Cambiar estado del pedido y sus items
             self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
@@ -924,7 +935,7 @@ class PedidoController(BaseController):
             logger.error(f"Error interno en planificar_pedido: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
-    def despachar_pedido(self, pedido_id: int, form_data: Dict) -> tuple:
+    def despachar_pedido(self, pedido_id: int, form_data: Optional[Dict] = None) -> tuple:
         """
         Cambia el estado de un pedido a 'EN_TRANSITO' y guarda los datos
         del despacho en la nueva tabla 'despachos'.
@@ -940,26 +951,28 @@ class PedidoController(BaseController):
             if pedido_actual.get('estado') != 'LISTO_PARA_ENTREGA':
                 return self.error_response("Solo se pueden despachar pedidos en estado 'LISTO_PARA_ENTREGA'.", 400)
 
-            # 2. Recolectar y validar datos del formulario
-            nombre_transportista = form_data.get('conductor_nombre', '').strip()
-            dni_transportista = form_data.get('conductor_dni', '').strip()
-            patente_vehiculo = form_data.get('vehiculo_patente', '').strip()
-            telefono_transportista = form_data.get('conductor_telefono', '').strip()
-            observaciones = form_data.get('observaciones', '').strip()
+            # 2. Si se proveen datos de formulario (despacho individual), crear el registro de despacho.
+            if form_data:
+                nombre_transportista = form_data.get('conductor_nombre', '').strip()
+                dni_transportista = form_data.get('conductor_dni', '').strip()
+                patente_vehiculo = form_data.get('vehiculo_patente', '').strip()
+                telefono_transportista = form_data.get('conductor_telefono', '').strip()
+                observaciones = form_data.get('observaciones', '').strip()
 
-            # (Aquí se pueden agregar validaciones más estrictas si es necesario)
-            if not all([nombre_transportista, dni_transportista, patente_vehiculo, telefono_transportista]):
-                 return self.error_response('Todos los campos del transportista y vehículo son requeridos.', 400)
+                if not all([nombre_transportista, dni_transportista, patente_vehiculo, telefono_transportista]):
+                     return self.error_response('Todos los campos del transportista y vehículo son requeridos.', 400)
 
-            # 3. Preparar datos para el nuevo modelo de despacho
-            datos_despacho = {
-                'id_pedido': pedido_id,
-                'nombre_transportista': nombre_transportista,
-                'dni_transportista': dni_transportista,
-                'patente_vehiculo': patente_vehiculo,
-                'telefono_transportista': telefono_transportista,
-                'observaciones': observaciones if observaciones else None
-            }
+                datos_despacho = {
+                    'id_pedido': pedido_id,
+                    'nombre_transportista': nombre_transportista,
+                    'dni_transportista': dni_transportista,
+                    'patente_vehiculo': patente_vehiculo,
+                    'telefono_transportista': telefono_transportista,
+                    'observaciones': observaciones if observaciones else None
+                }
+                resultado_despacho = self.despacho.create(datos_despacho)
+                if not resultado_despacho.get('success'):
+                    return self.error_response(resultado_despacho.get('error', 'Error al guardar los datos del despacho.'), 500)
 
             # 4. *** Consumir el stock reservado ANTES de cualquier otra acción ***
             logger.info(f"Consumiendo stock reservado para el pedido {pedido_id}...")
@@ -972,14 +985,6 @@ class PedidoController(BaseController):
                 return self.error_response(f"Error al despachar: {error_msg}", 500)
 
             logger.info(f"Stock para el pedido {pedido_id} consumido exitosamente.")
-
-            # 5. Crear el registro de despacho
-            resultado_despacho = self.despacho.create(datos_despacho)
-            if not resultado_despacho.get('success'):
-                error_msg = resultado_despacho.get('error', 'Error desconocido al guardar los datos del despacho.')
-                logger.error(f"Error al crear registro de despacho para pedido {pedido_id}: {error_msg}")
-                # En un escenario real, aquí se debería intentar revertir el consumo de stock.
-                return self.error_response(f"{error_msg} (Advertencia: El stock ya fue consumido)", 500)
 
             # 6. Actualizar el estado del pedido a 'EN_TRANSITO'
             cambio_estado_result = self.model.cambiar_estado(pedido_id, 'EN_TRANSITO')

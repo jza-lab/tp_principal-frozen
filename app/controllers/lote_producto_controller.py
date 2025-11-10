@@ -603,10 +603,13 @@ class LoteProductoController(BaseController):
             # 1. Buscar todas las reservas en estado 'RESERVADO' para este pedido.
             # Iniciar una lista para almacenar los lotes actualizados en caso de rollback
             lotes_actualizados_en_transaccion = []
-            reservas_result = self.reserva_model.find_all(filters={
+            reservation_filters = {
                 'pedido_id': pedido_id,
                 'estado': 'RESERVADO'
-            })
+            }
+            logger.debug(f"DEBUG: Buscando reservas con filtros: {reservation_filters}")
+            reservas_result = self.reserva_model.find_all(filters=reservation_filters)
+            logger.debug(f"DEBUG: Resultado de la búsqueda de reservas: {reservas_result}")
 
             if not reservas_result.get('success'):
                 error_msg = f"Error al consultar la base de datos de reservas para el pedido {pedido_id}."
@@ -615,6 +618,7 @@ class LoteProductoController(BaseController):
 
             reservas = reservas_result.get('data', [])
             if not reservas:
+                logger.debug(f"DEBUG: No se encontraron reservas para el pedido {pedido_id} con estado 'RESERVADO'.")
                 logger.warning(f"No se encontraron reservas activas ('RESERVADO') para el pedido {pedido_id}. No hay stock para despachar.")
                 return {'success': True, 'message': 'El pedido no tenía reservas activas para despachar.'}
 
@@ -666,6 +670,7 @@ class LoteProductoController(BaseController):
                 # e. Actualizar la reserva a 'COMPLETADO' y verificar.
                 update_reserva_res = self.reserva_model.update(reserva_id, {'estado': 'COMPLETADO'}, 'id')
                 if not update_reserva_res.get('success'):
+                    logger.error(f"DEBUG: Fallo al actualizar el estado de la Reserva ID: {reserva_id} a 'COMPLETADO'. Resultado: {update_reserva_res}")
                     error_msg = f"Fallo al actualizar el estado de la Reserva ID: {reserva_id}. Error: {update_reserva_res.get('error')}"
                     logger.error(f"Fallo al actualizar reserva: {error_msg}")
                     raise Exception(error_msg)
@@ -687,9 +692,6 @@ class LoteProductoController(BaseController):
                     logger.critical(f"FALLO CRÍTICO: No se pudo revertir el lote ID {lote_revertir['id_lote']} tras un error en el despacho. Requiere intervención manual. Error: {revert_e}")
             
             # Re-lanzar la excepción o devolver un mensaje de error
-            return {'success': False, 'error': str(e)}
-        except Exception as e:
-            logger.error(f"Error crítico durante el despacho de stock reservado del pedido {pedido_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def reservar_stock_para_pedido(self, pedido_id: int, items: list, usuario_id: int) -> dict:

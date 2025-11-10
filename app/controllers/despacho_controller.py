@@ -139,7 +139,9 @@ class DespachoController(BaseController):
             despacho_items_model.create({'despacho_id': despacho_id, 'pedido_id': pedido_id})
             
             # Actualizar estado del pedido
-            self.pedido_controller.cambiar_estado_pedido(pedido_id, 'EN_TRANSITO')
+            # Esto asegura que el stock se consuma y las reservas se actualicen.
+            # Pasamos form_data=None porque los datos del transportista ya están en la tabla 'despachos'.
+            despacho_pedido_res, _ = self.pedido_controller.despachar_pedido(pedido_id, form_data=None)
 
         return {'success': True, 'data': {'despacho_id': despacho_id}}
 
