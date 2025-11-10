@@ -2,8 +2,7 @@
 
 {% block title %}Orden de Compra {{ orden.codigo_oc }} - Sistema Frozen{% endblock %}
 
-{% block head %}
-{{ super() }}
+{% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/listarUsuarios.css') }}">
 {% endblock %}
 
@@ -16,6 +15,9 @@
         <p class="text-muted mb-0">Proveedor: {{ orden.proveedor_nombre or 'No definido' }}</p>
     </div>
     <div class="btn-toolbar">
+        <button class="btn btn-danger me-2 btn-crear-alerta" data-tipo-entidad="orden_compra" data-id-entidad="{{ orden.id }}" data-nombre-entidad="Orden de Compra {{ orden.codigo_oc }}">
+            <i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo
+        </button>
         <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2">
             <i class="bi bi-arrow-left me-1"></i>Volver
         </a>
@@ -36,27 +38,30 @@
     </div>
 </div>
 
-<div class="row">
-    <div class="col-lg-8">
-        <!-- Pestañas de Navegación -->
-        <ul class="nav nav-tabs nav-tabs-custom" id="myTab" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link nav-link-custom active" id="info-tab" data-bs-toggle="tab" data-bs-target="#info-tab-pane" type="button" role="tab" aria-controls="info-tab-pane" aria-selected="true">
-                    <i class="bi bi-info-circle-fill me-1"></i> Información General
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link nav-link-custom" id="trazabilidad-tab" data-bs-toggle="tab" data-bs-target="#trazabilidad-tab-pane" type="button" role="tab" aria-controls="trazabilidad-tab-pane" aria-selected="false">
-                    <i class="bi bi-diagram-3-fill me-1"></i> Trazabilidad
-                </button>
-            </li>
-        </ul>
+<!-- Pestañas de Navegación (Estilo Corregido) -->
+<ul class="nav nav-tabs-custom mb-3" id="loteDetailTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link-custom active" id="info-tab" data-bs-toggle="tab" data-bs-target="#info-content"
+            type="button" role="tab" aria-controls="info-content" aria-selected="true">
+            <i class="bi bi-info-circle me-1"></i>Información General
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link-custom" id="trazabilidad-tab" data-bs-toggle="tab"
+            data-bs-target="#trazabilidad-content" type="button" role="tab" aria-controls="trazabilidad-content"
+            aria-selected="false">
+            <i class="bi bi-diagram-3 me-1"></i>Trazabilidad
+        </button>
+    </li>
+</ul>
 
-        <!-- Contenido de las Pestañas -->
-        <div class="tab-content" id="myTabContent">
-            <!-- Pestaña de Información General -->
-            <div class="tab-pane fade show active" id="info-tab-pane" role="tabpanel" aria-labelledby="info-tab" tabindex="0">
-                <div class="card">
+<!-- Contenido de las Pestañas -->
+<div class="tab-content" id="loteDetailTabContent">
+    <!-- Pestaña de Información General -->
+    <div class="tab-pane fade show active" id="info-content" role="tabpanel" aria-labelledby="info-tab">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">Información General</h5>
                         <div>
@@ -186,7 +191,7 @@
 
                             {% if orden.observaciones %}
                             {% if orden.orden_produccion_id %}
-                            <div class="col-12 mt-3"> {# O ajusta el layout según prefieras #}
+                            <div class="col-12 mt-3">
                                 <h6 class="text-muted mb-2">Orden de Producción Vinculada</h6>
                                 <div class="border-start border-3 border-info ps-3">
                                     <a href="{{ url_for('orden_produccion.detalle', id=orden.orden_produccion_id) }}"
@@ -279,54 +284,6 @@
                                 <i class="bi bi-check-circle-fill me-2"></i> Todos los insumos de esta orden de compra ya han sido inspeccionados.
                             </div>
                         {% endif %}
-                    </div>
-                </div>
-
-                <!-- Modal Genérico para Acciones de Inspección -->
-                <div class="modal fade" id="modal-inspeccion-accion" tabindex="-1" aria-labelledby="modalInspeccionLabel" aria-hidden="true">
-                    <div class="modal-dialog modal-dialog-centered">
-                        <div class="modal-content">
-                            <form id="form-inspeccion-accion" method="POST" enctype="multipart/form-data">
-                                <div class="modal-header">
-                                    <h5 class="modal-title" id="modalInspeccionLabel"></h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <input type="hidden" id="modal-lote-id" name="lote_id">
-                                    <input type="hidden" id="modal-action" name="action">
-                                    <p>Lote de: <strong id="modal-lote-nombre"></strong></p>
-                                    
-                                    <div class="mb-3">
-                                        <label for="modal-cantidad" class="form-label">Cantidad a Procesar</label>
-                                        <input type="number" class="form-control" id="modal-cantidad" name="cantidad" step="0.01" min="0.01" required>
-                                        <div class="form-text">
-                                            Cantidad disponible en este lote: <span id="modal-cantidad-disponible"></span>
-                                        </div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="modal-resultado-inspeccion" class="form-label">Resultado de Inspección (Requerido)</label>
-                                        <select class="form-select" id="modal-resultado-inspeccion" name="resultado_inspeccion" required>
-                                            <option value="" selected disabled>Seleccione un resultado...</option>
-                                            {% for estado in estados_inspeccion %}
-                                            <option value="{{ estado }}">{{ estado }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="modal-comentarios" class="form-label">Comentarios</label>
-                                        <textarea class="form-control" id="modal-comentarios" name="comentarios" rows="3"></textarea>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="modal-foto" class="form-label">Foto (Opcional)</label>
-                                        <input class="form-control" type="file" id="modal-foto" name="foto" accept=".jpg, .jpeg, .png">
-                                    </div>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                    <button type="submit" class="btn" id="modal-btn-confirmar">Confirmar</button>
-                                </div>
-                            </form>
-                        </div>
                     </div>
                 </div>
                 {% endif %}
@@ -428,62 +385,109 @@
                     {% endif %}
                 </form>
             </div>
-            <!-- Pestaña de Trazabilidad -->
-            <div class="tab-pane fade" id="trazabilidad-tab-pane" role="tabpanel" aria-labelledby="trazabilidad-tab" tabindex="0">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0">Cadena de Trazabilidad</h5>
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" role="switch" id="trazabilidad-nivel-switch">
-                        <label class="form-check-label" for="trazabilidad-nivel-switch">Ver Trazabilidad Completa</label>
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="bi bi-gear me-1"></i>
+                            Acciones Rápidas
+                        </h6>
                     </div>
-                </div>
-                <div class="row">
-                    <div class="col-lg-4">
-                        <!-- Contenedor del Resumen -->
-                        <div class="card mb-3">
-                            <div class="card-header">
-                                <i class="bi bi-file-text-fill me-1"></i> Resumen de Trazabilidad
-                            </div>
-                            <div class="card-body">
-                                <div id="resumen-trazabilidad-origen"></div>
-                                <div id="resumen-trazabilidad-destino"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-8">
-                        <!-- Contenedor del Diagrama -->
-                        <div class="card">
-                            <div class="card-header">
-                               <i class="bi bi-diagram-3-fill me-1"></i> Diagrama de Flujo (Sankey)
-                            </div>
-                            <div class="card-body p-0">
-                                 <div id="sankey_trazabilidad" style="width: 100%; height: 600px;"></div>
-                            </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-secondary" disabled>
+                                <i class="bi bi-file-earmark-text me-2"></i>Visualizar factura
+                            </button>
+                            <button class="btn btn-outline-secondary" disabled>
+                                <i class="bi folder-open me-2"></i>Cargar imagen de factura
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="mb-0">
-                    <i class="bi bi-gear me-1"></i>
-                    Acciones Rápidas
-                </h6>
+    <!-- Pestaña de Trazabilidad -->
+    <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">Cadena de Trazabilidad</h5>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="trazabilidad-nivel-switch">
+                <label class="form-check-label" for="trazabilidad-nivel-switch">Ver Trazabilidad Completa</label>
             </div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    <button class="btn btn-outline-secondary" disabled>
-                        <i class="bi bi-file-earmark-text me-2"></i>Visualizar factura
-                    </button>
-                    <button class="btn btn-outline-secondary" disabled>
-                        <i class="bi folder-open me-2"></i>Cargar imagen de factura
-                    </button>
+        </div>
+        <div class="row">
+            <div class="col-lg-4">
+                <!-- Contenedor del Resumen -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <i class="bi bi-file-text-fill me-1"></i> Resumen de Trazabilidad
+                    </div>
+                    <div class="card-body">
+                        <div id="resumen-trazabilidad-origen"></div>
+                        <div id="resumen-trazabilidad-destino"></div>
+                    </div>
                 </div>
             </div>
+            <div class="col-lg-8">
+                <!-- Contenedor del Diagrama -->
+                <div class="card">
+                    <div class="card-header">
+                       <i class="bi bi-diagram-3-fill me-1"></i> Diagrama de Flujo (Sankey)
+                    </div>
+                    <div class="card-body p-0" style="overflow-y: auto; height: 600px;">
+                         <div id="sankey_trazabilidad" style="width: 100%; min-height: 600px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Genérico para Acciones de Inspección -->
+<div class="modal fade" id="modal-inspeccion-accion" tabindex="-1" aria-labelledby="modalInspeccionLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form id="form-inspeccion-accion" method="POST" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalInspeccionLabel"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="modal-lote-id" name="lote_id">
+                    <input type="hidden" id="modal-action" name="action">
+                    <p>Lote de: <strong id="modal-lote-nombre"></strong></p>
+                    
+                    <div class="mb-3">
+                        <label for="modal-cantidad" class="form-label">Cantidad a Procesar</label>
+                        <input type="number" class="form-control" id="modal-cantidad" name="cantidad" step="0.01" min="0.01" required>
+                        <div class="form-text">
+                            Cantidad disponible en este lote: <span id="modal-cantidad-disponible"></span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal-resultado-inspeccion" class="form-label">Resultado de Inspección (Requerido)</label>
+                        <select class="form-select" id="modal-resultado-inspeccion" name="resultado_inspeccion" required>
+                            <option value="" selected disabled>Seleccione un resultado...</option>
+                            {% for estado in estados_inspeccion %}
+                            <option value="{{ estado }}">{{ estado }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal-comentarios" class="form-label">Comentarios</label>
+                        <textarea class="form-control" id="modal-comentarios" name="comentarios" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="modal-foto" class="form-label">Foto (Opcional)</label>
+                        <input class="form-control" type="file" id="modal-foto" name="foto" accept=".jpg, .jpeg, .png">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn" id="modal-btn-confirmar">Confirmar</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -507,8 +511,10 @@
         </div>
     </div>
 </div>
+{% include "admin_riesgos/_modal_crear_alerta.html" %}
 {% endblock %}
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/gestorAlertas.js') }}?v=1.1"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     // Variable global para que el JS de trazabilidad pueda acceder al ID

@@ -2,8 +2,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const { jsPDF } = window.jspdf;
 
     // Chart instances
-    let insumosComposicionChart, insumosValorChart, productosValorCategoriaChart, productosDistribucionEstadoChart;
-    let productosComposicionChart, productosValorChart;
+    let insumosComposicionChart, insumosValorChart;
+    let productosComposicionChart, productosValorChart, productosValorCategoriaChart, productosDistribucionEstadoChart, productosRotacionChart, productosCoberturaChart;
 
     const insumosTab = document.querySelector('#insumos-tab');
     const productosTab = document.querySelector('#productos-tab');
@@ -44,32 +44,24 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    function showNoDataMessage(chart, message = "No hay datos disponibles") {
-        if (chart) {
-            chart.clear();
-            chart.setOption({
-                title: {
-                    text: message,
-                    left: 'center',
-                    top: 'center',
-                    textStyle: {
-                        color: '#888',
-                        fontSize: 16
-                    }
-                }
-            });
-        }
+    function showNoDataMessage(chart, summaryId, message = "No hay datos disponibles") {
+    const summaryEl = document.getElementById(summaryId);
+    if (chart) {
+        chart.clear();
+        chart.setOption({
+            title: {
+                text: message,
+                left: 'center',
+                top: 'center',
+                textStyle: { color: '#888', fontSize: 16 }
+            }
+        });
     }
+    if (summaryEl) {
+        summaryEl.innerHTML = `<p class="text-center text-muted">${message}</p>`;
+    }
+}
     
-    /**
-     * Transforma un objeto de datos {clave: valor} a un array [{name: clave, value: valor}]
-     * que es el formato esperado por ECharts para series de tipo 'pie' o 'bar'.
-     * Si los datos ya son un array, los devuelve sin cambios.
-     * @param {object|Array} data - El objeto o array de datos.
-     * @param {string} nameKey - La clave para el nombre/categoría.
-     * @param {string} valueKey - La clave para el valor.
-     * @returns {Array} - El array de datos transformado.
-     */
     function transformDataForChart(data, nameKey = 'name', valueKey = 'value') {
         if (Array.isArray(data)) {
             return data;
@@ -80,202 +72,274 @@ document.addEventListener('DOMContentLoaded', function () {
                 [valueKey]: val
             }));
         }
-        return []; // Devuelve un array vacío si el formato no es compatible
+        return [];
     }
 
 
     // --- RENDER FUNCTIONS ---
 
     function renderInsumosComposicionChart(data) {
-        const chartData = transformDataForChart(data, 'name', 'value');
-        if (!chartData || chartData.length === 0) {
-            showNoDataMessage(insumosComposicionChart, 'No hay datos de composición');
-            return;
-        }
-        const option = {
-            tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-            legend: { orient: 'vertical', left: 'left', type: 'scroll' },
-            series: [{
-                name: 'Composición', type: 'pie', radius: ['40%', '70%'],
-                avoidLabelOverlap: false, label: { show: false, position: 'center' },
-                emphasis: { label: { show: true, fontSize: '20', fontWeight: 'bold' } },
-                labelLine: { show: false }, data: chartData, color: azulPaleta
-            }]
-        };
-        insumosComposicionChart.setOption(option);
+    const chartData = transformDataForChart(data, 'name', 'value');
+    const summaryEl = document.getElementById('insumos-composicion-summary');
+
+    if (!chartData || chartData.length === 0) {
+        showNoDataMessage(insumosComposicionChart, 'insumos-composicion-summary', 'No hay datos de composición');
+        return;
     }
 
-    function renderInsumosValorChart(data) {
-        const chartData = transformDataForChart(data, 'nombre', 'valor_total');
-        if (!chartData || chartData.length === 0) {
-            showNoDataMessage(insumosValorChart, 'No hay datos de valor de insumos');
-            return;
-        }
-        const option = {
-            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-            xAxis: { type: 'category', data: chartData.map(item => item.nombre), axisLabel: { interval: 0, rotate: 30 } },
-            yAxis: { type: 'value', name: 'Valor ($)' },
-            series: [{ data: chartData.map(item => item.valor_total), type: 'bar', color: azulPaleta[0] }],
-            grid: { containLabel: true }
-        };
-        insumosValorChart.setOption(option);
+    const option = {
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: { orient: 'vertical', left: 'left', type: 'scroll' },
+        series: [{
+            name: 'Composición', type: 'pie', radius: ['40%', '70%'],
+            avoidLabelOverlap: false, label: { show: false, position: 'center' },
+            emphasis: { label: { show: true, fontSize: '20', fontWeight: 'bold' } },
+            labelLine: { show: false }, data: chartData, color: azulPaleta
+        }]
+    };
+    insumosComposicionChart.setOption(option);
+    
+    // Summary
+    const highest = chartData.reduce((max, item) => item.value > max.value ? item : max, chartData[0]);
+    summaryEl.innerHTML = `La categoría con más stock es <strong>${highest.name}</strong>, representando la mayor parte del inventario de insumos.`;
+}
+
+function renderInsumosValorChart(data) {
+    const chartData = transformDataForChart(data, 'nombre', 'valor');
+     const summaryEl = document.getElementById('insumos-valor-summary');
+
+    if (!chartData || chartData.length === 0) {
+        showNoDataMessage(insumosValorChart, 'insumos-valor-summary', 'No hay datos de valor de insumos');
+        return;
     }
 
-    function renderInsumosCriticoTable(data) {
-        const container = document.getElementById('insumos-critico-table');
-        const description = document.getElementById('insumos-critico-description');
-        if (!data || data.length === 0) {
-            container.innerHTML = '<p>No hay insumos con stock crítico actualmente.</p>';
-            description.textContent = 'Total: 0 insumos.';
-            return;
-        }
+    const option = {
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: '{b}: ${c}' },
+        xAxis: { type: 'category', data: chartData.map(item => item.nombre), axisLabel: { interval: 0, rotate: 30 } },
+        yAxis: { type: 'value', name: 'Valor ($)' },
+        series: [{ data: chartData.map(item => item.valor), type: 'bar', color: azulPaleta[0] }],
+        grid: { containLabel: true }
+    };
+    insumosValorChart.setOption(option);
+
+    // Summary
+    const mostValuable = chartData[0];
+    summaryEl.innerHTML = `El insumo más valioso en stock es <strong>${mostValuable.nombre}</strong> con un valor total de <strong>$${mostValuable.valor.toLocaleString('es-AR')}</strong>.`;
+}
+
+function renderInsumosCriticoTable(data) {
+    const container = document.getElementById('insumos-critico-table');
+    const summaryEl = document.getElementById('insumos-critico-summary');
+
+    if (!data || data.length === 0) {
+        container.innerHTML = '<p>No hay insumos con stock crítico actualmente.</p>';
+        summaryEl.innerHTML = 'Actualmente, no hay insumos por debajo de su nivel de stock mínimo definido.';
+        return;
+    }
+    
+    let tableHtml = '<ul class="list-group">';
+    data.forEach(item => {
+        const percentage = (item.stock_actual / item.stock_minimo) * 100;
+        const barColor = percentage < 50 ? 'bg-danger' : 'bg-warning';
         
-        let tableHtml = '<ul class="list-group">';
-        data.forEach(item => {
-            const percentage = (item.stock_actual / item.stock_min) * 100;
-            const barColor = percentage < 50 ? 'bg-danger' : 'bg-warning';
-            
-            tableHtml += `
-                <li class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span>${item.nombre}</span>
-                        <span class="fw-bold">${item.stock_actual} / ${item.stock_min} ${item.unidad_medida}</span>
-                    </div>
-                    <div class="progress mt-1" style="height: 10px;">
-                        <div class="progress-bar ${barColor}" role="progressbar" style="width: ${percentage}%;" aria-valuenow="${item.stock_actual}" aria-valuemin="0" aria-valuemax="${item.stock_min}"></div>
-                    </div>
-                </li>
-            `;
-        });
-        tableHtml += '</ul>';
-        container.innerHTML = tableHtml;
-        description.textContent = `Total: ${data.length} insumos en estado crítico.`;
+        tableHtml += `
+            <li class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>${item.nombre}</span>
+                    <span class="fw-bold">${item.stock_actual} / ${item.stock_minimo} ${item.unidad_medida}</span>
+                </div>
+                <div class="progress mt-1" style="height: 10px;">
+                    <div class="progress-bar ${barColor}" role="progressbar" style="width: ${percentage}%;" aria-valuenow="${item.stock_actual}" aria-valuemin="0" aria-valuemax="${item.stock_minimo}"></div>
+                </div>
+            </li>
+        `;
+    });
+    tableHtml += '</ul>';
+    container.innerHTML = tableHtml;
+
+    // Summary
+    summaryEl.innerHTML = `Se han identificado <strong>${data.length}</strong> insumos en estado crítico. El más urgente es <strong>${data[0].nombre}</strong>.`;
+}
+
+function renderInsumosVencimientoTable(data) {
+    const container = document.getElementById('insumos-vencimiento-table');
+    const summaryEl = document.getElementById('insumos-vencimiento-summary');
+
+    if (!data || data.length === 0) {
+        container.innerHTML = '<p>No hay lotes de insumos próximos a vencer.</p>';
+        summaryEl.innerHTML = 'No hay lotes de insumos con fecha de vencimiento en los próximos 30 días.';
+        return;
     }
 
-    function renderInsumosVencimientoTable(data) {
-        const container = document.getElementById('insumos-vencimiento-table');
-        if (!data || data.length === 0) {
-            container.innerHTML = '<p>No hay lotes de insumos próximos a vencer.</p>';
-            return;
-        }
-        let tableHtml = '<table class="table table-sm table-hover"><thead><tr><th>Insumo</th><th>Lote</th><th>Vencimiento</th><th>Cantidad</th></tr></thead><tbody>';
-        data.forEach(item => {
-            tableHtml += `<tr>
-                <td>${item.nombre_insumo}</td>
-                <td>${item.numero_lote}</td>
-                <td>${new Date(item.fecha_vencimiento).toLocaleDateString()}</td>
-                <td>${item.cantidad_disponible} ${item.unidad_medida}</td>
-            </tr>`;
-        });
-        tableHtml += '</tbody></table>';
-        container.innerHTML = tableHtml;
+    let tableHtml = '<table class="table table-sm table-hover"><thead><tr><th>Insumo</th><th>Lote</th><th>Vencimiento</th><th>Cantidad</th></tr></thead><tbody>';
+    data.forEach(item => {
+        tableHtml += `<tr>
+            <td>${item.insumo.nombre}</td>
+            <td>${item.numero_lote}</td>
+            <td>${new Date(item.fecha_vencimiento).toLocaleDateString()}</td>
+            <td>${item.cantidad_disponible} ${item.insumo.unidad_medida}</td>
+        </tr>`;
+    });
+    tableHtml += '</tbody></table>';
+    container.innerHTML = tableHtml;
+
+    // Summary
+    const closest = data[0];
+    summaryEl.innerHTML = `Hay <strong>${data.length}</strong> lotes próximos a vencer. El más cercano es el lote <strong>${closest.numero_lote}</strong> de <strong>${closest.insumo.nombre}</strong>, que vence el <strong>${new Date(closest.fecha_vencimiento).toLocaleDateString()}</strong>.`;
+}
+
+function renderProductosValorCategoriaChart(data) {
+    const chartData = transformDataForChart(data, 'name', 'value');
+    const summaryEl = document.getElementById('productos-valor-categoria-summary');
+
+    if (!chartData || chartData.length === 0) {
+        showNoDataMessage(productosValorCategoriaChart, 'productos-valor-categoria-summary', 'No hay datos de valor por categoría');
+        return;
     }
 
-    function renderProductosValorCategoriaChart(data) {
-        const chartData = transformDataForChart(data, 'categoria', 'valor_total');
-        if (!chartData || chartData.length === 0) {
-            showNoDataMessage(productosValorCategoriaChart, 'No hay datos de valor por categoría');
-            return;
-        }
-        const option = {
-            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: '{b}: ${c}' },
-            xAxis: { type: 'category', data: chartData.map(item => item.categoria), axisLabel: { interval: 0, rotate: 30 } },
-            yAxis: { type: 'value', name: 'Valor Total ($)' },
-            series: [{ data: chartData.map(item => item.valor_total), type: 'bar', color: azulPaleta[3] }],
-            grid: { containLabel: true }
-        };
-        productosValorCategoriaChart.setOption(option);
+    const option = {
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: '{b}: ${c}' },
+        xAxis: { type: 'category', data: chartData.map(item => item.name), axisLabel: { interval: 0, rotate: 30 } },
+        yAxis: { type: 'value', name: 'Valor Total ($)' },
+        series: [{ data: chartData.map(item => item.value), type: 'bar', color: azulPaleta[3] }],
+        grid: { containLabel: true }
+    };
+    productosValorCategoriaChart.setOption(option);
+
+    // Summary
+    const mostValuableCat = chartData[0];
+    summaryEl.innerHTML = `La categoría <strong>${mostValuableCat.name}</strong> es la que más capital concentra, con un valor de <strong>$${mostValuableCat.value.toLocaleString('es-AR')}</strong>.`;
+}
+
+function renderProductosDistribucionEstadoChart(data) {
+    const chartData = transformDataForChart(data, 'name', 'value');
+    const summaryEl = document.getElementById('productos-distribucion-summary');
+    
+    if (!chartData || !chartData.some(item => item.value > 0)) {
+        showNoDataMessage(productosDistribucionEstadoChart, 'productos-distribucion-summary', 'No hay datos de distribución por estado');
+        return;
     }
 
-    function renderProductosDistribucionEstadoChart(data) {
-        const chartData = transformDataForChart(data, 'estado', 'cantidad');
-        if (!chartData || !chartData.some(item => item.cantidad > 0)) {
-            showNoDataMessage(productosDistribucionEstadoChart, 'No hay datos de distribución por estado');
-            return;
-        }
-        const option = {
-            tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-            legend: { top: 'bottom' },
-            series: [{
-                name: 'Distribución', type: 'pie', radius: '50%', data: chartData,
-                emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } },
-                color: azulPaleta.slice(2)
-            }]
-        };
-        productosDistribucionEstadoChart.setOption(option);
+    const option = {
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: { top: 'bottom' },
+        series: [{
+            name: 'Distribución', type: 'pie', radius: '50%', data: chartData,
+            emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } },
+            color: azulPaleta.slice(2)
+        }]
+    };
+    productosDistribucionEstadoChart.setOption(option);
+
+    // Summary
+    const largestState = chartData.reduce((max, item) => item.value > max.value ? item : max, chartData[0]);
+    summaryEl.innerHTML = `El estado predominante del stock es <strong>${largestState.name}</strong>, agrupando la mayor cantidad de unidades de producto.`;
+}
+
+
+function renderProductosRotacionChart(data) {
+    const chartData = transformDataForChart(data, 'name', 'value');
+    const summaryEl = document.getElementById('productos-rotacion-summary');
+
+    if (!chartData || chartData.length === 0) {
+        showNoDataMessage(productosRotacionChart, 'productos-rotacion-summary', 'No hay datos de rotación');
+        return;
     }
 
-    function renderProductosComposicionChart(data) {
-        const chartData = transformDataForChart(data, 'name', 'value');
-        if (!chartData || chartData.length === 0) {
-            showNoDataMessage(productosComposicionChart, 'No hay datos de composición');
-            return;
-        }
-        const option = {
-            tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-            legend: { orient: 'vertical', left: 'left', type: 'scroll' },
-            series: [{
-                name: 'Composición', type: 'pie', radius: '50%', data: chartData,
-                emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } },
-                color: azulPaleta
-            }]
-        };
-        productosComposicionChart.setOption(option);
+    const option = {
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        xAxis: { type: 'category', data: chartData.map(item => item.name), axisLabel: { interval: 0, rotate: 30 } },
+        yAxis: { type: 'value', name: 'Cantidad Vendida' },
+        series: [{ data: chartData.map(item => item.value), type: 'bar', color: azulPaleta[2] }],
+        grid: { containLabel: true }
+    };
+    productosRotacionChart.setOption(option);
+    
+    // Summary
+    const topSeller = chartData[0];
+    summaryEl.innerHTML = `El producto más vendido en los últimos 30 días es <strong>${topSeller.name}</strong>, con <strong>${topSeller.value}</strong> unidades vendidas.`;
+}
+
+function renderProductosCoberturaChart(data) {
+    const chartData = transformDataForChart(data, 'name', 'value');
+    const summaryEl = document.getElementById('productos-cobertura-summary');
+
+    if (!chartData || chartData.length === 0) {
+        showNoDataMessage(productosCoberturaChart, 'productos-cobertura-summary', 'No hay datos de cobertura');
+        return;
     }
 
-    function renderProductosValorChart(data) {
-        const chartData = transformDataForChart(data, 'nombre', 'valor_total');
-        if (!chartData || chartData.length === 0) {
-            showNoDataMessage(productosValorChart, 'No hay datos de valor de productos');
-            return;
-        }
-        const option = {
-            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-            xAxis: { type: 'category', data: chartData.map(item => item.nombre), axisLabel: { interval: 0, rotate: 30 } },
-            yAxis: { type: 'value', name: 'Valor ($)' },
-            series: [{ data: chartData.map(item => item.valor_total), type: 'bar', color: azulPaleta[1] }],
-            grid: { containLabel: true }
-        };
-        productosValorChart.setOption(option);
+    const option = {
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        xAxis: { type: 'category', data: chartData.map(item => item.name), axisLabel: { interval: 0, rotate: 30 } },
+        yAxis: { type: 'value', name: 'Días de Cobertura' },
+        series: [{ data: chartData.map(item => item.value), type: 'bar', color: azulPaleta[4] }],
+        grid: { containLabel: true }
+    };
+    productosCoberturaChart.setOption(option);
+
+    // Summary
+    const lowestCoverage = chartData[0];
+    summaryEl.innerHTML = `El producto con menor cobertura es <strong>${lowestCoverage.name}</strong>, con stock para aproximadamente <strong>${lowestCoverage.value}</strong> días.`;
+}
+
+function renderProductosBajoStockTable(data) {
+    const container = document.getElementById('productos-bajo-stock-table');
+    const summaryEl = document.getElementById('productos-bajo-stock-summary');
+
+    if (!data || data.length === 0) {
+        container.innerHTML = '<p>No hay productos con bajo stock.</p>';
+        summaryEl.innerHTML = 'Todos los productos se encuentran por encima de su nivel de stock mínimo.';
+        return;
     }
 
-    function renderProductosBajoStockTable(data) {
-        const container = document.getElementById('productos-bajo-stock-table');
-        if (!data || data.length === 0) {
-            container.innerHTML = '<p>No hay productos con bajo stock.</p>';
-            return;
-        }
-        let tableHtml = '<table class="table table-sm table-hover"><thead><tr><th>Producto</th><th>Stock Actual</th><th>Stock Mínimo</th></tr></thead><tbody>';
-        data.forEach(item => {
-            tableHtml += `<tr>
-                <td>${item.nombre}</td>
-                <td>${item.stock_actual}</td>
-                <td>${item.stock_min}</td>
-            </tr>`;
-        });
-        tableHtml += '</tbody></table>';
-        container.innerHTML = tableHtml;
+    let tableHtml = '<table class="table table-sm table-hover"><thead><tr><th>Producto</th><th>Stock Actual</th><th>Stock Mínimo</th></tr></thead><tbody>';
+    data.forEach(item => {
+        const stockActualDisplay = item.stock_actual === 0
+            ? '<span class="text-danger fw-bold">No disponible</span>'
+            : item.stock_actual;
+
+        tableHtml += `<tr>
+            <td>${item.nombre}</td>
+            <td>${stockActualDisplay}</td>
+            <td>${item.stock_minimo}</td>
+        </tr>`;
+    });
+    tableHtml += '</tbody></table>';
+    container.innerHTML = tableHtml;
+
+    // Summary
+    const zeroStockCount = data.filter(item => item.stock_actual === 0).length;
+    summaryEl.innerHTML = `Hay <strong>${data.length}</strong> productos en estado de bajo stock, de los cuales <strong>${zeroStockCount}</strong> se encuentran agotados.`;
+}
+
+
+function renderProductosVencimientoTable(data) {
+    const container = document.getElementById('productos-vencimiento-table');
+    const summaryEl = document.getElementById('productos-vencimiento-summary');
+
+    if (!data || data.length === 0) {
+        container.innerHTML = '<p>No hay lotes de productos próximos a vencer.</p>';
+        summaryEl.innerHTML = 'Ningún lote de producto terminado tiene fecha de vencimiento en los próximos 30 días.';
+        return;
     }
 
-    function renderProductosVencimientoTable(data) {
-        const container = document.getElementById('productos-vencimiento-table');
-        if (!data || data.length === 0) {
-            container.innerHTML = '<p>No hay lotes de productos próximos a vencer.</p>';
-            return;
-        }
-        let tableHtml = '<table class="table table-sm table-hover"><thead><tr><th>Producto</th><th>Lote</th><th>Vencimiento</th><th>Cantidad</th></tr></thead><tbody>';
-        data.forEach(item => {
-            tableHtml += `<tr>
-                <td>${item.nombre_producto}</td>
-                <td>${item.numero_lote}</td>
-                <td>${new Date(item.fecha_vencimiento).toLocaleDateString()}</td>
-                <td>${item.cantidad_disponible}</td>
-            </tr>`;
-        });
-        tableHtml += '</tbody></table>';
-        container.innerHTML = tableHtml;
-    }
+    let tableHtml = '<table class="table table-sm table-hover"><thead><tr><th>Producto</th><th>Lote</th><th>Vencimiento</th><th>Cantidad</th></tr></thead><tbody>';
+    data.forEach(item => {
+        tableHtml += `<tr>
+            <td>${item.producto.nombre}</td>
+            <td>${item.numero_lote}</td>
+            <td>${new Date(item.fecha_vencimiento).toLocaleDateString()}</td>
+            <td>${item.cantidad_actual}</td>
+        </tr>`;
+    });
+    tableHtml += '</tbody></table>';
+    container.innerHTML = tableHtml;
 
+    // Summary
+    const closest = data[0];
+    summaryEl.innerHTML = `Se encontraron <strong>${data.length}</strong> lotes próximos a vencer. El más crítico es el lote <strong>${closest.numero_lote}</strong> de <strong>${closest.producto.nombre}</strong>.`;
+}
     // --- DATA FETCHING ---
 
     async function fetchData(url) {
@@ -289,7 +353,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return result.data;
             } else {
                 console.error(`API error for ${url}:`, result.error);
-                return null; // Retornar null para manejarlo en el llamador
+                return null;
             }
         } catch (error) {
             console.error(`Fetch error for ${url}:`, error);
@@ -301,148 +365,139 @@ document.addEventListener('DOMContentLoaded', function () {
     async function loadInsumosData() {
         showLoadingMessage(insumosComposicionChart);
         showLoadingMessage(insumosValorChart);
-        showLoadingMessage(productosValorCategoriaChart);
-        showLoadingMessage(productosDistribucionEstadoChart);
         
         const topN = document.getElementById('top-n-insumos').value;
         
         const [
-            composicionData, valorData, criticoData, vencimientoData, 
-            valorCategoriaData, distribucionEstadoData
+            composicionData, valorData, criticoData, vencimientoData
         ] = await Promise.all([
             fetchData('/reportes/api/stock/insumos/composicion'),
             fetchData(`/reportes/api/stock/insumos/valor?top_n=${topN}`),
             fetchData('/reportes/api/stock/insumos/critico'),
-            fetchData('/reportes/api/stock/insumos/vencimiento'),
-            fetchData('/reportes/api/stock/productos/valor_por_categoria'),
-            fetchData('/reportes/api/stock/productos/distribucion_por_estado')
+            fetchData('/reportes/api/stock/insumos/vencimiento')
         ]);
 
         hideLoading(insumosComposicionChart);
         hideLoading(insumosValorChart);
-        hideLoading(productosValorCategoriaChart);
-        hideLoading(productosDistribucionEstadoChart);
 
         renderInsumosComposicionChart(composicionData);
         renderInsumosValorChart(valorData);
         renderInsumosCriticoTable(criticoData);
         renderInsumosVencimientoTable(vencimientoData);
-        renderProductosValorCategoriaChart(valorCategoriaData);
-        renderProductosDistribucionEstadoChart(distribucionEstadoData);
     }
 
     async function loadProductosData() {
         showLoadingMessage(productosComposicionChart);
         showLoadingMessage(productosValorChart);
+        showLoadingMessage(productosValorCategoriaChart);
+        showLoadingMessage(productosDistribucionEstadoChart);
+        showLoadingMessage(productosRotacionChart);
+        showLoadingMessage(productosCoberturaChart);
 
         const topN = document.getElementById('top-n-productos').value;
 
         const [
-            composicionData, valorData, bajoStockData, vencimientoData
+            composicionData, valorData, bajoStockData, vencimientoData,
+            valorCategoriaData, distribucionEstadoData, rotacionData, coberturaData
         ] = await Promise.all([
             fetchData('/reportes/api/stock/productos/composicion'),
             fetchData(`/reportes/api/stock/productos/valor?top_n=${topN}`),
             fetchData('/reportes/api/stock/productos/bajo_stock'),
-            fetchData('/reportes/api/stock/productos/vencimiento')
+            fetchData('/reportes/api/stock/productos/vencimiento'),
+            fetchData('/reportes/api/stock/productos/valor_por_categoria'),
+            fetchData('/reportes/api/stock/productos/distribucion_por_estado'),
+            fetchData('/reportes/api/stock/productos/rotacion'),
+            fetchData('/reportes/api/stock/productos/cobertura')
         ]);
         
         hideLoading(productosComposicionChart);
         hideLoading(productosValorChart);
+        hideLoading(productosValorCategoriaChart);
+        hideLoading(productosDistribucionEstadoChart);
+        hideLoading(productosRotacionChart);
+        hideLoading(productosCoberturaChart);
 
         renderProductosComposicionChart(composicionData);
         renderProductosValorChart(valorData);
         renderProductosBajoStockTable(bajoStockData);
         renderProductosVencimientoTable(vencimientoData);
+        renderProductosValorCategoriaChart(valorCategoriaData);
+        renderProductosDistribucionEstadoChart(distribucionEstadoData);
+        renderProductosRotacionChart(rotacionData);
+        renderProductosCoberturaChart(coberturaData);
     }
 
     // --- PDF GENERATION ---
     async function generatePDF() {
-        downloadPdfBtn.disabled = true;
-        downloadPdfBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generando...';
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+            orientation: 'p',
+            unit: 'mm',
+            format: 'a4',
+            putOnlyUsedFonts: true,
+            floatPrecision: 16
+        });
 
-        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-        const today = new Date().toLocaleDateString('es-AR');
-        let yPos = 20;
-        const pageHeight = pdf.internal.pageSize.getHeight();
         const margin = 15;
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const contentWidth = pageWidth - margin * 2;
+        let yPos = margin;
 
-        function addHeader(pageNumber) {
-            // Placeholder for logo
-            pdf.setFontSize(8);
-            pdf.text('Logo Empresa', margin, 10);
-            pdf.text(`Reporte de Stock - ${today} - Página ${pageNumber}`, pdf.internal.pageSize.getWidth() - margin, 10, { align: 'right' });
-        }
-
-        async function addContentToPdf(elementId, title) {
-            const element = document.getElementById(elementId);
-            if (!element) return;
-            
-            const isScrollable = element.classList.contains('scrollable-table');
-            if(isScrollable) element.classList.add('printable-full-height');
-
-            const canvas = await html2canvas(element, { scale: 2 });
-
-            if(isScrollable) element.classList.remove('printable-full-height');
-            
-            const imgData = canvas.toDataURL('image/png');
-            const imgWidth = 180;
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-            if (yPos + imgHeight + 20 > pageHeight) {
-                pdf.addPage();
-                yPos = 20;
-                addHeader(pdf.internal.pages.length);
-            }
-            
-            pdf.setFontSize(14);
+        function addHeader(title) {
+            pdf.setFontSize(18);
+            pdf.setTextColor(40);
             pdf.text(title, margin, yPos);
-            yPos += 8;
-            pdf.addImage(imgData, 'PNG', margin, yPos, imgWidth, imgHeight);
-            yPos += imgHeight + 10;
+            yPos += 10;
+            pdf.setLineWidth(0.5);
+            pdf.line(margin, yPos, pageWidth - margin, yPos);
+            yPos += 10;
         }
 
-        addHeader(1);
+        function addChartToPdf(chartInstance, title) {
+            if (yPos + 80 > pageHeight - margin) {
+                pdf.addPage();
+                yPos = margin;
+                addHeader(document.querySelector('.nav-link.active').textContent.trim() + " (cont.)");
+            }
+            pdf.setFontSize(14);
+            pdf.setTextColor(60);
+            pdf.text(title, margin, yPos);
+            yPos += 5;
 
-        const activeTabId = document.querySelector('.nav-link.active').id;
-        
-        // Ensure insumos data is loaded and rendered for PDF
-        insumosTab.click();
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        pdf.setFontSize(18);
-        pdf.text('Reporte de Stock de Insumos', margin, yPos);
-        yPos += 10;
-        
-        await addContentToPdf('insumos-composicion-chart', 'Composición del Stock por Categoría');
-        await addContentToPdf('insumos-valor-chart', 'Top Insumos por Valor Total');
-        await addContentToPdf('insumos-critico-table', 'Insumos con Stock Crítico');
-        await addContentToPdf('insumos-vencimiento-table', 'Lotes de Insumos Próximos a Vencer');
-        
-        // Ensure productos data is loaded and rendered for PDF
-        productosTab.click();
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        pdf.addPage();
-        yPos = 20;
-        addHeader(pdf.internal.pages.length);
-        
-        pdf.setFontSize(18);
-        pdf.text('Reporte de Stock de Productos', margin, yPos);
-        yPos += 10;
+            const imgData = chartInstance.getDataURL({
+                pixelRatio: 2,
+                backgroundColor: '#fff'
+            });
+            pdf.addImage(imgData, 'PNG', margin, yPos, contentWidth, 80);
+            yPos += 90;
+        }
 
-        await addContentToPdf('productos-composicion-chart', 'Composición del Stock por Producto');
-        await addContentToPdf('productos-valor-chart', 'Top Productos por Valor en Stock');
-        await addContentToPdf('productos-bajo-stock-table', 'Productos con Bajo Stock');
-        await addContentToPdf('productos-vencimiento-table', 'Lotes de Productos Próximos a Vencer');
-        await addContentToPdf('productos-valor-categoria-chart', 'Valor de Stock por Categoría de Producto');
-        await addContentToPdf('productos-distribucion-estado-chart', 'Distribución de Stock por Estado');
+        const activeTabPane = document.querySelector('.tab-pane.active.show');
+        if (!activeTabPane) {
+            console.error("No active tab found for PDF generation.");
+            return;
+        }
 
-        document.getElementById(activeTabId).click();
-        
-        pdf.save(`reporte_stock_${new Date().toISOString().slice(0,10)}.pdf`);
+        const activeTabId = activeTabPane.id;
+        const reportTitle = "Reporte de Stock - " + (activeTabId === 'insumos' ? 'Insumos' : 'Productos');
 
-        downloadPdfBtn.disabled = false;
-        downloadPdfBtn.innerHTML = '<i class="fas fa-download fa-sm text-white-50"></i> Generar Reporte';
+        addHeader(reportTitle);
+
+        if (activeTabId === 'insumos') {
+            addChartToPdf(insumosComposicionChart, 'Composición del Stock de Insumos');
+            addChartToPdf(insumosValorChart, 'Valor del Stock de Insumos (Top)');
+            // Add tables for critical and expiring stock
+        } else if (activeTabId === 'productos') {
+            addChartToPdf(productosComposicionChart, 'Composición del Stock de Productos');
+            addChartToPdf(productosValorChart, 'Valor del Stock de Productos (Top)');
+            addChartToPdf(productosValorCategoriaChart, 'Valor del Stock por Categoría');
+            addChartToPdf(productosDistribucionEstadoChart, 'Distribución por Estado');
+            addChartToPdf(productosRotacionChart, 'Rotación de Productos');
+            addChartToPdf(productosCoberturaChart, 'Cobertura de Stock');
+        }
+
+        pdf.save(`reporte_stock_${activeTabId}.pdf`);
     }
 
 
@@ -451,11 +506,13 @@ document.addEventListener('DOMContentLoaded', function () {
     function initializeAllCharts() {
         insumosComposicionChart = initChart('insumos-composicion-chart');
         insumosValorChart = initChart('insumos-valor-chart');
-        productosValorCategoriaChart = initChart('productos-valor-categoria-chart');
-        productosDistribucionEstadoChart = initChart('productos-distribucion-estado-chart');
         
         productosComposicionChart = initChart('productos-composicion-chart');
         productosValorChart = initChart('productos-valor-chart');
+        productosValorCategoriaChart = initChart('productos-valor-categoria-chart');
+        productosDistribucionEstadoChart = initChart('productos-distribucion-estado-chart');
+        productosRotacionChart = initChart('productos-rotacion-chart');
+        productosCoberturaChart = initChart('productos-cobertura-chart');
     }
 
     initializeAllCharts();
@@ -468,6 +525,10 @@ document.addEventListener('DOMContentLoaded', function () {
     productosTab.addEventListener('shown.bs.tab', function () {
         if(productosComposicionChart) productosComposicionChart.resize();
         if(productosValorChart) productosValorChart.resize();
+        if(productosValorCategoriaChart) productosValorCategoriaChart.resize();
+        if(productosDistribucionEstadoChart) productosDistribucionEstadoChart.resize();
+        if(productosRotacionChart) productosRotacionChart.resize();
+        if(productosCoberturaChart) productosCoberturaChart.resize();
         
         if (!productosTabLoaded) {
             loadProductosData();
@@ -478,8 +539,6 @@ document.addEventListener('DOMContentLoaded', function () {
     insumosTab.addEventListener('shown.bs.tab', function() {
         if(insumosComposicionChart) insumosComposicionChart.resize();
         if(insumosValorChart) insumosValorChart.resize();
-        if(productosValorCategoriaChart) productosValorCategoriaChart.resize();
-        if(productosDistribucionEstadoChart) productosDistribucionEstadoChart.resize();
     });
 
     document.getElementById('top-n-insumos').addEventListener('change', async function () {

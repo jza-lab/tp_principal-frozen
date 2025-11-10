@@ -49,7 +49,11 @@
                 } %}
 
                 {% set config = estado_config.get(lote.estado, {'icon': 'bi-question-circle', 'color': 'secondary', 'title': lote.estado}) %}
-                
+                {% if lote.en_alerta %}
+                <span class="badge bg-danger" data-bs-toggle="tooltip" title="Alertado">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Alertado
+                </span>
+                {% endif %}
                 <span class="badge bg-{{ config.color }}-subtle text-{{ config.color }} fs-6"
                       data-bs-toggle="tooltip" 
                       title="{{ config.title }}">

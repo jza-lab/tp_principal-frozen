@@ -100,34 +100,6 @@
                     </div>
                 </div>
             </div>
-            <div class="row">
-                <!-- Valor por Categoría de Producto -->
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-info">Valor de Stock por Categoría de Producto</h6>
-                        </div>
-                        <div class="card-body">
-                            <p class="small text-muted">Este gráfico muestra el valor monetario total del stock para cada categoría de producto terminado.</p>
-                            <div id="productos-valor-categoria-chart" style="height: 350px;"></div>
-                            <p class="small text-muted mt-2" id="productos-valor-categoria-description"></p>
-                        </div>
-                    </div>
-                </div>
-                <!-- Distribución por Estado -->
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-success">Distribución de Stock por Estado</h6>
-                        </div>
-                        <div class="card-body">
-                            <p class="small text-muted">Este gráfico de torta muestra la proporción del stock de productos según su estado actual (Disponible, Reservado, etc.).</p>
-                            <div id="productos-distribucion-estado-chart" style="height: 350px;"></div>
-                            <p class="small text-muted mt-2" id="productos-distribucion-estado-description"></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
 
         <!-- Productos Tab Pane -->
@@ -184,6 +156,60 @@
                         </div>
                         <div class="card-body">
                             <div id="productos-vencimiento-table"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <!-- Valor por Categoría de Producto -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-info">Valor de Stock por Categoría de Producto</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted">Este gráfico muestra el valor monetario total del stock para cada categoría de producto terminado.</p>
+                            <div id="productos-valor-categoria-chart" style="height: 350px;"></div>
+                            <p class="small text-muted mt-2" id="productos-valor-categoria-description"></p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Distribución por Estado -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-success">Distribución de Stock por Estado</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted">Este gráfico de torta muestra la proporción del stock de productos según su estado actual (Disponible, Reservado, etc.).</p>
+                            <div id="productos-distribucion-estado-chart" style="height: 350px;"></div>
+                            <p class="small text-muted mt-2" id="productos-distribucion-estado-description"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <!-- Rotación de Productos -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Rotación de Productos (Ventas últimos 30 días)</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted">Productos más vendidos en el último mes, indicando alta demanda.</p>
+                            <div id="productos-rotacion-chart" style="height: 350px;"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Cobertura de Stock -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-warning">Cobertura de Stock (Días)</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted">Estimación de cuántos días de venta cubre el stock actual.</p>
+                            <div id="productos-cobertura-chart" style="height: 350px;"></div>
                         </div>
                     </div>
                 </div>

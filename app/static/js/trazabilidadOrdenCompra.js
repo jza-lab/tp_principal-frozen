@@ -7,9 +7,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // Elementos del DOM
     const trazabilidadTab = document.querySelector('#trazabilidad-tab');
     const sankeyContainer = document.getElementById('sankey_trazabilidad');
+    const resumenOrigenContenedor = document.getElementById('resumen-trazabilidad-origen');
+    const resumenDestinoContenedor = document.getElementById('resumen-trazabilidad-destino');
     const nivelSwitch = document.getElementById('trazabilidad-nivel-switch');
-    const accordionButton = document.querySelector('#accordionDiagrama .accordion-button');
-
+    
     let chart = null;
     let datosCompletosCache = null;
 
@@ -34,57 +35,52 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Funciones de renderizado ---
     function mostrarCargando() {
-        const contenedorOrigen = document.getElementById('resumen-trazabilidad-origen');
-        const contenedorDestino = document.getElementById('resumen-trazabilidad-destino');
-        
-        if (contenedorOrigen) contenedorOrigen.innerHTML = ''; // Origen no aplica para OC
-        if (contenedorDestino) {
-            contenedorDestino.innerHTML = `<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando resumen...</p></div>`;
+        if (resumenDestinoContenedor) {
+            resumenDestinoContenedor.innerHTML = `<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando resumen...</p></div>`;
         }
+        if(resumenOrigenContenedor) resumenOrigenContenedor.innerHTML = '';
         if (sankeyContainer) {
             sankeyContainer.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="ms-2">Cargando diagrama...</p></div>`;
         }
     }
 
     function renderizarResumen(resumen) {
-        const contenedorOrigen = document.getElementById('resumen-trazabilidad-origen');
-        const contenedorDestino = document.getElementById('resumen-trazabilidad-destino');
+        if (!resumenDestinoContenedor || !resumenOrigenContenedor) return;
 
-        if (!contenedorOrigen || !contenedorDestino) return;
-
-        // Limpiar contenedores
-        contenedorOrigen.innerHTML = '';
-        contenedorDestino.innerHTML = '';
+        resumenOrigenContenedor.innerHTML = ''; // Para OC, el origen no se muestra
+        resumenDestinoContenedor.innerHTML = '';
 
         if (!resumen || (!resumen.origen.length && !resumen.destino.length)) {
-            contenedorDestino.innerHTML = '<p class="text-muted">No hay datos de resumen para mostrar.</p>';
+            resumenDestinoContenedor.innerHTML = '<p class="text-muted">No hay datos de resumen para mostrar.</p>';
             return;
         }
 
-        // Para una OC, el origen es ella misma o un ingreso manual, por lo que no se muestra.
-        
-        // Procesar Destino (Hacia adelante)
+        // Definir el orden lógico del flujo para el resumen de destino
+        const ordenEntidades = ['lote_insumo', 'orden_produccion', 'lote_producto', 'pedido'];
+
         if (resumen.destino.length > 0) {
             const destinoAgrupado = agruparPorTipo(resumen.destino);
             let destinoHtml = '<h5 class="mb-3 border-bottom pb-2"><i class="bi bi-arrow-down-circle-fill text-success me-2"></i>Destino / Hacia adelante</h5>';
             
-            for (const tipo in destinoAgrupado) {
-                destinoHtml += `<h6>${formatearTipo(tipo)}</h6>`;
-                destinoHtml += '<ul class="list-group list-group-flush mb-3">';
-                destinoHtml += destinoAgrupado[tipo].map(item => `
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <a href="${(urls[item.tipo] || '#').replace('<id>', item.id)}" class="fw-bold text-decoration-none">${item.nombre}</a>
-                            <div class="text-muted small">${item.detalle || ''}</div>
-                        </div>
-                        ${item.cantidad ? `<span class="badge bg-secondary rounded-pill">${item.cantidad}</span>` : ''}
-                    </li>
-                `).join('');
-                destinoHtml += '</ul>';
-            }
-            contenedorDestino.innerHTML = destinoHtml;
+            ordenEntidades.forEach(tipo => {
+                if (destinoAgrupado[tipo]) {
+                    destinoHtml += `<h6>${formatearTipo(tipo)}</h6>`;
+                    destinoHtml += '<ul class="list-group list-group-flush mb-3">';
+                    destinoHtml += destinoAgrupado[tipo].map(item => `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <a href="${(urls[item.tipo] || '#').replace('<id>', item.id)}" class="fw-bold text-decoration-none">${item.nombre}</a>
+                                <div class="text-muted small">${item.detalle || ''}</div>
+                            </div>
+                            ${item.cantidad ? `<span class="badge bg-secondary rounded-pill">${item.cantidad}</span>` : ''}
+                        </li>
+                    `).join('');
+                    destinoHtml += '</ul>';
+                }
+            });
+            resumenDestinoContenedor.innerHTML = destinoHtml;
         } else {
-            contenedorDestino.innerHTML = `
+            resumenDestinoContenedor.innerHTML = `
                 <h5 class="mb-3 border-bottom pb-2"><i class="bi bi-arrow-down-circle-fill text-success me-2"></i>Destino / Hacia adelante</h5>
                 <p class="text-muted">No hay entidades posteriores en la trazabilidad.</p>`;
         }
@@ -95,16 +91,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (!diagrama || !diagrama.edges || !diagrama.edges.length) {
             sankeyContainer.innerHTML = '<div class="alert alert-info m-3">No hay flujos de trazabilidad para mostrar en el diagrama.</div>';
-            if (accordionButton) {
-                accordionButton.textContent = 'No hay diagrama disponible';
-                accordionButton.classList.add('disabled');
-            }
             return;
-        }
-
-        if (accordionButton) {
-            accordionButton.textContent = 'Ver Diagrama de Flujo (Sankey)';
-            accordionButton.classList.remove('disabled');
         }
 
         const data = new google.visualization.DataTable();
@@ -124,7 +111,7 @@ document.addEventListener('DOMContentLoaded', function () {
         ]);
 
         data.addRows(rows);
-        const options = { width: '100%', height: 600, sankey: { node: { label: { fontSize: 12 } }, link: { colorMode: 'gradient' } } };
+        const options = { width: '100%', height: '100%', sankey: { node: { label: { fontSize: 12 } }, link: { colorMode: 'gradient' } } };
         
         if (chart) chart.clearChart();
         chart = new google.visualization.Sankey(sankeyContainer);
@@ -151,15 +138,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     google.charts.setOnLoadCallback(() => renderizarSankey(result.data.diagrama));
                 } else {
                     const errorMsg = result.error || 'No se pudieron cargar los datos.';
-                    const contenedorDestino = document.getElementById('resumen-trazabilidad-destino');
-                    if (contenedorDestino) contenedorDestino.innerHTML = `<div class="alert alert-warning">${errorMsg}</div>`;
+                    if (resumenDestinoContenedor) resumenDestinoContenedor.innerHTML = `<div class="alert alert-warning">${errorMsg}</div>`;
                     if (sankeyContainer) sankeyContainer.innerHTML = '';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                const contenedorDestino = document.getElementById('resumen-trazabilidad-destino');
-                if (contenedorDestino) contenedorDestino.innerHTML = `<div class="alert alert-danger">Error de conexión al cargar el resumen.</div>`;
+                if (resumenDestinoContenedor) resumenDestinoContenedor.innerHTML = `<div class="alert alert-danger">Error de conexión al cargar el resumen.</div>`;
                 if (sankeyContainer) sankeyContainer.innerHTML = `<div class="alert alert-danger m-3">Error de conexión al cargar el diagrama.</div>`;
             });
     }

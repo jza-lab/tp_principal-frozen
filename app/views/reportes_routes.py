@@ -126,3 +126,13 @@ def api_stock_productos_valor_por_categoria():
 def api_stock_productos_distribucion_por_estado():
     data = stock_controller.obtener_distribucion_stock_por_estado_producto()
     return jsonify(data)
+
+@reportes_bp.route('/api/stock/productos/rotacion')
+def api_stock_productos_rotacion():
+    data = stock_controller.obtener_rotacion_productos()
+    return jsonify(data)
+
+@reportes_bp.route('/api/stock/productos/cobertura')
+def api_stock_productos_cobertura():
+    data = stock_controller.obtener_cobertura_stock()
+    return jsonify(data)

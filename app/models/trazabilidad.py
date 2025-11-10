@@ -11,127 +11,27 @@ class TrazabilidadModel:
         self.db = Database().client
 
     def obtener_trazabilidad_unificada(self, tipo_entidad_inicial, id_entidad_inicial, nivel='simple'):
-        """
-        Construye y devuelve la red de trazabilidad completa o simple para una entidad dada.
-
-        Args:
-            tipo_entidad_inicial (str): El tipo de la entidad de inicio.
-            id_entidad_inicial (int): El ID de la entidad de inicio.
-            nivel (str): 'simple' para la cadena directa, 'completo' para el grafo total.
-
-        Returns:
-            dict: Un diccionario con las secciones 'resumen' y 'diagrama'.
-        """
-        
-        # Estructuras para almacenar el grafo completo
         nodos = {}
         aristas = set()
-        
-        # Normalizar ID inicial a string para consistencia
-        id_entidad_inicial = str(id_entidad_inicial)
+        id_entidad_inicial_str = str(id_entidad_inicial)
 
-        # Estructuras para almacenar el grafo completo
-        nodos = {}
-        aristas = set()
-        
-        # Agregar el nodo inicial explícitamente para asegurar que siempre exista
-        self._agregar_nodo(nodos, tipo_entidad_inicial, id_entidad_inicial)
-        
-        # Cola para el algoritmo BFS (Búsqueda en Anchura)
-        cola = deque([(tipo_entidad_inicial, id_entidad_inicial)])
-        visitados = set([(tipo_entidad_inicial, id_entidad_inicial)])
+        self._agregar_nodo(nodos, tipo_entidad_inicial, id_entidad_inicial_str)
 
-        # 1. CONSTRUCCIÓN DEL GRAFO COMPLETO (BFS)
-        while cola:
-            tipo_entidad_actual, id_entidad_actual = cola.popleft()
+        # 1. Búsqueda hacia atrás (Upstream)
+        cola_atras = deque([(tipo_entidad_inicial, id_entidad_inicial_str)])
+        visitados_atras = set([(tipo_entidad_inicial, id_entidad_inicial_str)])
+        while cola_atras:
+            tipo_actual, id_actual = cola_atras.popleft()
+            self._trazar_atras(nodos, aristas, tipo_actual, id_actual, cola_atras, visitados_atras)
 
-            # --- HACIA ATRÁS (Upstream) ---
-            if tipo_entidad_actual == 'pedido':
-                # Pedido -> Lote de Producto
-                reservas = self.db.table('reservas_productos').select('lote_producto_id, cantidad_reservada').eq('pedido_id', id_entidad_actual).execute().data or []
-                for r in reservas:
-                    self._agregar_nodo_y_arista(nodos, aristas, 'lote_producto', str(r['lote_producto_id']), 'pedido', id_entidad_actual, r['cantidad_reservada'], cola, visitados)
+        # 2. Búsqueda hacia adelante (Downstream)
+        cola_adelante = deque([(tipo_entidad_inicial, id_entidad_inicial_str)])
+        visitados_adelante = set([(tipo_entidad_inicial, id_entidad_inicial_str)])
+        while cola_adelante:
+            tipo_actual, id_actual = cola_adelante.popleft()
+            self._trazar_adelante(nodos, aristas, tipo_actual, id_actual, cola_adelante, visitados_adelante)
 
-            elif tipo_entidad_actual == 'lote_producto':
-                # Lote de Producto -> Orden de Producción
-                lote = self.db.table('lotes_productos').select('orden_produccion_id, cantidad_inicial').eq('id_lote', id_entidad_actual).maybe_single().execute().data
-                if lote and lote.get('orden_produccion_id'):
-                    self._agregar_nodo_y_arista(nodos, aristas, 'orden_produccion', str(lote['orden_produccion_id']), 'lote_producto', id_entidad_actual, lote['cantidad_inicial'], cola, visitados)
-
-            elif tipo_entidad_actual == 'orden_produccion':
-                # Orden de Producción -> Lote de Insumo
-                reservas = self.db.table('reservas_insumos').select('lote_inventario_id, cantidad_reservada').eq('orden_produccion_id', id_entidad_actual).execute().data or []
-                for r in reservas:
-                     self._agregar_nodo_y_arista(nodos, aristas, 'lote_insumo', str(r['lote_inventario_id']), 'orden_produccion', id_entidad_actual, r['cantidad_reservada'], cola, visitados)
-                
-                # Manejo de OCs directamente asociadas a la OP
-                ocs_directas = self.db.table('ordenes_compra').select('id, codigo_oc').eq('orden_produccion_id', id_entidad_actual).execute().data or []
-                for oc in ocs_directas:
-                    id_oc_str = str(oc['id'])
-                    # Asegurarse de que el nodo de la OC exista antes de crear aristas hacia él.
-                    self._agregar_nodo(nodos, 'orden_compra', id_oc_str)
-                    
-                    # Crear un nodo "puente" genérico para el insumo
-                    id_insumo_generico = f"insumo_generico_{id_oc_str}"
-                    self._agregar_nodo(nodos, 'lote_insumo', id_insumo_generico, {'numero_lote_proveedor': 'Insumo Genérico', 'insumos_catalogo': {'nombre': 'Genérico'}}, es_generico=True)
-                    
-                    self._agregar_arista(aristas, 'orden_compra', id_oc_str, 'lote_insumo', id_insumo_generico, '')
-                    self._agregar_arista(aristas, 'lote_insumo', id_insumo_generico, 'orden_produccion', id_entidad_actual, '')
-                    
-                    if ('orden_compra', id_oc_str) not in visitados:
-                        cola.append(('orden_compra', id_oc_str))
-                        visitados.add(('orden_compra', id_oc_str))
-
-
-            elif tipo_entidad_actual == 'lote_insumo':
-                # Lote de Insumo -> Orden de Compra o Ingreso Manual
-                # Un ID de lote de insumo puede ser un UUID (string) o un int del legacy.
-                # Solo buscamos en la BD si no es un nodo genérico creado por nosotros.
-                if not id_entidad_actual.startswith('insumo_generico_'):
-                    insumo = self.db.table('insumos_inventario').select('documento_ingreso, cantidad_inicial').eq('id_lote', id_entidad_actual).maybe_single().execute().data
-                    if insumo and insumo.get('documento_ingreso'):
-                        oc = self.db.table('ordenes_compra').select('id').eq('codigo_oc', insumo['documento_ingreso']).maybe_single().execute().data
-                        if oc:
-                            self._agregar_nodo_y_arista(nodos, aristas, 'orden_compra', str(oc['id']), 'lote_insumo', id_entidad_actual, insumo['cantidad_inicial'], cola, visitados)
-                        else: # Si el código no corresponde a ninguna OC
-                            self._agregar_origen_manual(nodos, aristas, 'lote_insumo', id_entidad_actual)
-                    else: # Si no tiene documento
-                        self._agregar_origen_manual(nodos, aristas, 'lote_insumo', id_entidad_actual)
-
-            # --- HACIA ADELANTE (Downstream) ---
-            if tipo_entidad_actual == 'orden_compra':
-                # Orden de Compra -> Lote de Insumo
-                oc = self.db.table('ordenes_compra').select('codigo_oc').eq('id', id_entidad_actual).maybe_single().execute().data
-                if oc and oc.get('codigo_oc'):
-                    insumos = self.db.table('insumos_inventario').select('id_lote, cantidad_inicial').eq('documento_ingreso', oc['codigo_oc']).execute().data or []
-                    for i in insumos:
-                        # Corregido: La arista es DESDE la OC HACIA el lote de insumo
-                        self._agregar_nodo_y_arista(nodos, aristas, 
-                                                  'orden_compra', id_entidad_actual, 
-                                                  'lote_insumo', str(i['id_lote']), 
-                                                  i['cantidad_inicial'], 
-                                                  cola, visitados)
-
-            elif tipo_entidad_actual == 'lote_insumo' and not id_entidad_actual.startswith('insumo_generico_'):
-                # Lote de Insumo -> Orden de Producción
-                reservas = self.db.table('reservas_insumos').select('orden_produccion_id, cantidad_reservada').eq('lote_inventario_id', id_entidad_actual).execute().data or []
-                for r in reservas:
-                    self._agregar_nodo_y_arista(nodos, aristas, 'lote_insumo', id_entidad_actual, 'orden_produccion', str(r['orden_produccion_id']), r['cantidad_reservada'], cola, visitados)
-            
-            elif tipo_entidad_actual == 'orden_produccion':
-                # Orden de Producción -> Lote de Producto
-                lotes = self.db.table('lotes_productos').select('id_lote, cantidad_inicial').eq('orden_produccion_id', id_entidad_actual).execute().data or []
-                for l in lotes:
-                    self._agregar_nodo_y_arista(nodos, aristas, 'orden_produccion', id_entidad_actual, 'lote_producto', str(l['id_lote']), l['cantidad_inicial'], cola, visitados)
-
-            elif tipo_entidad_actual == 'lote_producto':
-                # Lote de Producto -> Pedido
-                reservas = self.db.table('reservas_productos').select('pedido_id, cantidad_reservada').eq('lote_producto_id', id_entidad_actual).execute().data or []
-                for r in reservas:
-                    self._agregar_nodo_y_arista(nodos, aristas, 'lote_producto', id_entidad_actual, 'pedido', str(r['pedido_id']), r['cantidad_reservada'], cola, visitados)
-
-        # 2. FILTRADO DEL GRAFO SEGÚN EL NIVEL
-        nodos_filtrados, aristas_filtradas = self._filtrar_grafo_por_nivel(nodos, aristas, tipo_entidad_inicial, id_entidad_inicial, nivel)
+        nodos_filtrados, aristas_filtradas = self._filtrar_grafo_por_nivel(nodos, aristas, tipo_entidad_inicial, id_entidad_inicial_str, nivel)
 
         # 3. ENRIQUECIMIENTO DE DATOS Y FORMATEO FINAL
         self._enriquecer_datos_nodos(nodos_filtrados)
@@ -141,32 +41,79 @@ class TrazabilidadModel:
 
         return {'resumen': resumen, 'diagrama': diagrama}
 
-    # --- MÉTODOS AUXILIARES ---
+    # --- MÉTODOS AUXILIARES DE TRAZABILIDAD ---
+    def _trazar_atras(self, nodos, aristas, tipo_actual, id_actual, cola, visitados):
+        if tipo_actual == 'pedido':
+            reservas = self.db.table('reservas_productos').select('lote_producto_id, cantidad_reservada').eq('pedido_id', id_actual).execute().data or []
+            for r in reservas:
+                self._agregar_nodo_y_arista(nodos, aristas, 'lote_producto', str(r['lote_producto_id']), tipo_actual, id_actual, r['cantidad_reservada'], cola, visitados)
+        elif tipo_actual == 'lote_producto':
+            lote = self.db.table('lotes_productos').select('orden_produccion_id, cantidad_inicial').eq('id_lote', id_actual).maybe_single().execute().data
+            if lote and lote.get('orden_produccion_id'):
+                self._agregar_nodo_y_arista(nodos, aristas, 'orden_produccion', str(lote['orden_produccion_id']), tipo_actual, id_actual, lote['cantidad_inicial'], cola, visitados)
+        elif tipo_actual == 'orden_produccion':
+            reservas = self.db.table('reservas_insumos').select('lote_inventario_id, cantidad_reservada').eq('orden_produccion_id', id_actual).execute().data or []
+            for r in reservas:
+                 self._agregar_nodo_y_arista(nodos, aristas, 'lote_insumo', str(r['lote_inventario_id']), tipo_actual, id_actual, r['cantidad_reservada'], cola, visitados)
+        elif tipo_actual == 'lote_insumo':
+            insumo = self.db.table('insumos_inventario').select('documento_ingreso, cantidad_inicial').eq('id_lote', id_actual).maybe_single().execute().data
+            if insumo and insumo.get('documento_ingreso'):
+                oc = self.db.table('ordenes_compra').select('id').eq('codigo_oc', insumo['documento_ingreso']).maybe_single().execute().data
+                if oc:
+                    self._agregar_nodo_y_arista(nodos, aristas, 'orden_compra', str(oc['id']), tipo_actual, id_actual, insumo['cantidad_inicial'], cola, visitados)
 
+    def _trazar_adelante(self, nodos, aristas, tipo_actual, id_actual, cola, visitados):
+        if tipo_actual == 'orden_compra':
+            oc = self.db.table('ordenes_compra').select('codigo_oc').eq('id', id_actual).maybe_single().execute().data
+            if oc and oc.get('codigo_oc'):
+                insumos = self.db.table('insumos_inventario').select('id_lote, cantidad_inicial').eq('documento_ingreso', oc['codigo_oc']).execute().data or []
+                for i in insumos:
+                    self._agregar_nodo_y_arista(nodos, aristas, tipo_actual, id_actual, 'lote_insumo', str(i['id_lote']), i['cantidad_inicial'], cola, visitados)
+        elif tipo_actual == 'lote_insumo':
+            reservas = self.db.table('reservas_insumos').select('orden_produccion_id, cantidad_reservada').eq('lote_inventario_id', id_actual).execute().data or []
+            for r in reservas:
+                self._agregar_nodo_y_arista(nodos, aristas, tipo_actual, id_actual, 'orden_produccion', str(r['orden_produccion_id']), r['cantidad_reservada'], cola, visitados)
+        elif tipo_actual == 'orden_produccion':
+            lotes = self.db.table('lotes_productos').select('id_lote, cantidad_inicial').eq('orden_produccion_id', id_actual).execute().data or []
+            for l in lotes:
+                self._agregar_nodo_y_arista(nodos, aristas, tipo_actual, id_actual, 'lote_producto', str(l['id_lote']), l['cantidad_inicial'], cola, visitados)
+        elif tipo_actual == 'lote_producto':
+            reservas = self.db.table('reservas_productos').select('pedido_id, cantidad_reservada').eq('lote_producto_id', id_actual).execute().data or []
+            for r in reservas:
+                self._agregar_nodo_y_arista(nodos, aristas, tipo_actual, id_actual, 'pedido', str(r['pedido_id']), r['cantidad_reservada'], cola, visitados)
+
+    # --- MÉTODOS AUXILIARES GENERALES ---
     def _agregar_nodo(self, nodos, tipo, id, data=None, es_generico=False):
-        """Agrega un nodo a la colección si no existe."""
         if (tipo, id) not in nodos:
             nodos[(tipo, id)] = {'data': data, 'es_generico': es_generico}
     
     def _agregar_arista(self, aristas, tipo_origen, id_origen, tipo_destino, id_destino, cantidad):
-        """Agrega una arista a la colección, asegurando que la cantidad sea numérica."""
-        # Si la cantidad es None o una cadena vacía, usar 0.
         cantidad_numerica = cantidad if cantidad is not None and cantidad != '' else 0
         aristas.add(((tipo_origen, id_origen), (tipo_destino, id_destino), cantidad_numerica))
 
     def _agregar_nodo_y_arista(self, nodos, aristas, tipo_origen, id_origen, tipo_destino, id_destino, cantidad, cola, visitados):
-        """Función helper para añadir nodos y aristas, y actualizar la cola de BFS."""
+        nodo_origen = (tipo_origen, id_origen)
+        nodo_destino = (tipo_destino, id_destino)
+        
         self._agregar_nodo(nodos, tipo_origen, id_origen)
         self._agregar_nodo(nodos, tipo_destino, id_destino)
-        # La arista va del origen (atrás) al destino (adelante)
         self._agregar_arista(aristas, tipo_origen, id_origen, tipo_destino, id_destino, cantidad)
         
-        if (tipo_origen, id_origen) not in visitados:
-            cola.append((tipo_origen, id_origen))
-            visitados.add((tipo_origen, id_origen))
-        if (tipo_destino, id_destino) not in visitados:
-            cola.append((tipo_destino, id_destino))
-            visitados.add((tipo_destino, id_destino))
+        # El nodo a explorar es el que está en la dirección de la búsqueda actual.
+        # Si la arista va de 'lote' a 'pedido', y estamos trazando hacia atrás, el siguiente nodo a explorar es 'lote'.
+        # Si estamos trazando hacia adelante, sería 'pedido'.
+        # Como _trazar_atras y _trazar_adelante gestionan su propia lógica, el nodo a añadir a la cola
+        # es el que no es el 'actual' en esa función.
+        
+        # En _trazar_atras, el nodo_destino es el 'actual', así que exploramos el nodo_origen.
+        if nodo_origen not in visitados:
+            cola.append(nodo_origen)
+            visitados.add(nodo_origen)
+
+        # En _trazar_adelante, el nodo_origen es el 'actual', así que exploramos el nodo_destino.
+        if nodo_destino not in visitados:
+            cola.append(nodo_destino)
+            visitados.add(nodo_destino)
 
     def _agregar_origen_manual(self, nodos, aristas, tipo_lote, id_lote):
         """Crea un nodo de Ingreso Manual y lo conecta como origen."""
@@ -383,22 +330,35 @@ class TrazabilidadModel:
     def obtener_lista_afectados(self, tipo_entidad_inicial, id_entidad_inicial):
         """
         Obtiene la lista plana de todas las entidades afectadas a partir de un punto,
-        realizando una trazabilidad completa bidireccional.
+        utilizando la nueva lógica de trazabilidad unificada.
         """
-        _, aristas = self.obtener_trazabilidad_unificada(tipo_entidad_inicial, id_entidad_inicial, 'completo')['diagrama'].values()
+        resultado_trazabilidad = self.obtener_trazabilidad_unificada(tipo_entidad_inicial, id_entidad_inicial, nivel='completo')
         
-        nodos_afectados = set()
-        for arista in aristas:
-            origen_tipo, origen_id = arista['from'].split('_', 1)
-            destino_tipo, destino_id = arista['to'].split('_', 1)
-            nodos_afectados.add((origen_tipo, origen_id))
-            nodos_afectados.add((destino_tipo, destino_id))
+        # Los nodos ya están enriquecidos y filtrados, así que son la fuente de verdad.
+        nodos_finales = resultado_trazabilidad.get('diagrama', {}).get('nodes', [])
         
-        #Asegurar que el nodo inicial está incluido
-        nodos_afectados.add((tipo_entidad_inicial, str(id_entidad_inicial)))
-
-        # Formatear para la salida esperada por el sistema de alertas
-        return [{'tipo_entidad': tipo, 'id_entidad': int(id)} for tipo, id in nodos_afectados if id.isdigit()]
+        afectados = []
+        for nodo in nodos_finales:
+            try:
+                # El ID del nodo es "tipo_id", necesitamos separar el tipo y el ID.
+                tipo, id_entidad = nodo['id'].split('_', 1)
+                
+                # Omitir nodos genéricos o de ingreso manual que no representan entidades reales de la BD
+                if tipo in ['ingreso_manual'] or 'generico' in id_entidad:
+                    continue
+                
+                # Intentar convertir a entero si es posible, si no, mantener como string (para UUIDs)
+                try:
+                    id_entidad_parsed = int(id_entidad)
+                except ValueError:
+                    id_entidad_parsed = id_entidad
+                    
+                afectados.append({'tipo_entidad': tipo, 'id_entidad': id_entidad_parsed})
+            except ValueError:
+                # Ignorar nodos cuyo ID no sigue el formato esperado
+                continue
+        
+        return afectados
 
     @classmethod
     def get_table_name(cls):

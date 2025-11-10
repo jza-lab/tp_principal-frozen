@@ -55,7 +55,14 @@ class ReporteStockController:
                 return {'success': True, 'data': {}}
 
             # 2. Obtener las categorías de todos los productos
-            productos_response = self.producto_model.find_all(select_columns=['nombre', 'categoria'])
+            try:
+                # Se reemplaza la llamada a find_all que no soporta select_columns en este modelo.
+                query = self.producto_model._get_query_builder().select('nombre,categoria')
+                result = query.execute()
+                productos_response = {'success': True, 'data': result.data}
+            except Exception as e:
+                productos_response = {'success': False, 'error': str(e)}
+
             if not productos_response.get('success'):
                 return productos_response
             
@@ -175,8 +182,6 @@ class ReporteStockController:
             if not response.get('success'):
                 return response
             
-            # La respuesta del modelo ya viene procesada
-            # La convertimos al formato {nombre: cantidad} que esperan los gráficos
             data = response.get('data', [])
             composicion = {item['nombre']: item['cantidad'] for item in data}
             
@@ -190,21 +195,18 @@ class ReporteStockController:
         Calcula el valor total del stock para cada producto terminado y devuelve los N más valiosos.
         """
         try:
-            # 1. Obtener el stock total por producto
             stock_response = self.lote_producto_model.obtener_composicion_inventario()
             if not stock_response.get('success'):
                 return stock_response
             
             stock_map = {item['nombre']: item['cantidad'] for item in stock_response.get('data', [])}
 
-            # 2. Obtener los precios de todos los productos
             productos_response = self.producto_model.find_all()
             if not productos_response.get('success'):
                 return productos_response
             
             productos = productos_response.get('data', [])
             
-            # 3. Calcular el valor total
             valores = []
             for producto in productos:
                 nombre = producto.get('nombre')
@@ -215,7 +217,6 @@ class ReporteStockController:
                     if valor_total > 0:
                         valores.append({'nombre': nombre, 'valor': valor_total})
 
-            # 4. Ordenar y devolver el top N
             valores_ordenados = sorted(valores, key=lambda x: x['valor'], reverse=True)
             top_n_data = {item['nombre']: round(item['valor'], 2) for item in valores_ordenados[:top_n]}
 
@@ -226,14 +227,17 @@ class ReporteStockController:
     
     def obtener_productos_bajo_stock(self):
         """
-        Obtiene los productos terminados cuyo stock total es menor o igual a su stock mínimo definido.
+        Obtiene los productos terminados cuyo stock total es menor o igual a su stock mínimo,
+        o si su stock es cero.
         """
         try:
+            # Obtiene el stock actual de todos los productos que tienen lotes
             stock_response = self.lote_producto_model.obtener_composicion_inventario()
             if not stock_response.get('success'):
                 return stock_response
             stock_map = {item['nombre']: item['cantidad'] for item in stock_response.get('data', [])}
 
+            # Obtiene la lista de todos los productos del catálogo
             productos_response = self.producto_model.find_all()
             if not productos_response.get('success'):
                 return productos_response
@@ -245,10 +249,13 @@ class ReporteStockController:
                 nombre = producto.get('nombre')
                 stock_minimo = float(producto.get('stock_minimo', 0))
                 
-                # Asegurarse de que el producto esté en el mapa de stock, incluso si es 0
+                # Si un producto no está en el mapa de stock, su stock es 0
                 stock_actual = float(stock_map.get(nombre, 0))
 
-                if stock_minimo > 0 and stock_actual <= stock_minimo:
+                # Condición de bajo stock:
+                # 1. El stock actual es 0.
+                # 2. El stock mínimo está definido (es > 0) y el stock actual es menor o igual a él.
+                if stock_actual == 0 or (stock_minimo > 0 and stock_actual <= stock_minimo):
                     productos_bajos.append({
                         'nombre': nombre,
                         'stock_actual': stock_actual,
@@ -272,5 +279,58 @@ class ReporteStockController:
             
             return {'success': True, 'data': response.get('data', [])}
 
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def obtener_rotacion_productos(self, dias=30):
+        """
+        Obtiene los productos más vendidos en los últimos X días.
+        """
+        try:
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=dias)
+            
+            sales_response = self.pedido_model.get_sales_by_product_in_period(start_date, end_date)
+            if not sales_response.get('success'):
+                return sales_response
+            
+            sales_data = sales_response.get('data', {})
+            sorted_sales = dict(sorted(sales_data.items(), key=lambda item: item[1], reverse=True))
+            
+            return {'success': True, 'data': sorted_sales}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+
+    def obtener_cobertura_stock(self, dias_periodo=30):
+        """
+        Estima para cuántos días de venta alcanza el stock actual de cada producto.
+        """
+        try:
+            # 1. Obtener ventas del último período
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=dias_periodo)
+            sales_response = self.pedido_model.get_sales_by_product_in_period(start_date, end_date)
+            if not sales_response.get('success'):
+                return sales_response
+            sales_data = sales_response.get('data', {})
+
+            # 2. Obtener stock actual
+            stock_response = self.lote_producto_model.obtener_composicion_inventario()
+            if not stock_response.get('success'):
+                return stock_response
+            stock_data = {item['nombre']: item['cantidad'] for item in stock_response.get('data', [])}
+
+            # 3. Calcular cobertura
+            coverage_data = {}
+            for product, stock in stock_data.items():
+                total_sales = sales_data.get(product, 0)
+                if total_sales > 0:
+                    daily_avg_sales = total_sales / dias_periodo
+                    days_coverage = stock / daily_avg_sales
+                    coverage_data[product] = round(days_coverage, 1)
+            
+            sorted_coverage = dict(sorted(coverage_data.items(), key=lambda item: item[1]))
+
+            return {'success': True, 'data': sorted_coverage}
         except Exception as e:
             return {'success': False, 'error': str(e)}

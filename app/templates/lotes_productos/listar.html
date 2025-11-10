@@ -91,6 +91,11 @@
                                 {% endif %}
                             </td>
                             <td>
+                                {% if lote.en_alerta %}
+                                <span class="badge bg-danger" data-bs-toggle="tooltip" title="Alertado">
+                                    <i class="bi bi-exclamation-triangle-fill"></i> Alertado
+                                </span>
+                                {% endif %}
                                 {% if lote.estado == 'AGOTADO' %}
                                 <span class="badge bg-danger">{{ lote.estado }}</span>
                                 {% elif lote.estado == 'DISPONIBLE' %}

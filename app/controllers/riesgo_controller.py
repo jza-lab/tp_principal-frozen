@@ -1,8 +1,11 @@
 from app.controllers.base_controller import BaseController
 from app.models.alerta_riesgo import AlertaRiesgoModel
-from app.models.trazabilidad import TrazabilidadModel 
+from app.models.trazabilidad import TrazabilidadModel
 from app.schemas.alerta_riesgo_schema import AlertaRiesgoSchema
 from app.controllers.nota_credito_controller import NotaCreditoController
+from app.controllers.inventario_controller import InventarioController
+from app.controllers.lote_producto_controller import LoteProductoController
+from app.controllers.orden_produccion_controller import OrdenProduccionController
 from marshmallow import ValidationError
 from flask import flash, url_for
 import logging
@@ -14,13 +17,45 @@ class RiesgoController(BaseController):
         super().__init__()
         self.alerta_riesgo_model = AlertaRiesgoModel()
         self.alerta_riesgo_schema = AlertaRiesgoSchema()
-        self.trazabilidad_model = TrazabilidadModel() 
+        self.trazabilidad_model = TrazabilidadModel()
         self.nota_credito_controller = NotaCreditoController()
+        self.inventario_controller = InventarioController()
+        self.lote_producto_controller = LoteProductoController()
+        self.orden_produccion_controller = OrdenProduccionController()
 
     def previsualizar_riesgo(self, tipo_entidad, id_entidad):
         try:
-            afectados = self.trazabilidad_model.obtener_lista_afectados(tipo_entidad, id_entidad)
+            trazabilidad_completa = self.trazabilidad_model.obtener_trazabilidad_unificada(tipo_entidad, id_entidad, nivel='completo')
             
+            resumen = trazabilidad_completa.get('resumen', {})
+            diagrama = trazabilidad_completa.get('diagrama', {})
+            
+            afectados_set = set()
+
+            def _safe_add_entity(tipo, id_val):
+                try:
+                    parsed_id = int(id_val)
+                except (ValueError, TypeError):
+                    parsed_id = str(id_val)
+                afectados_set.add((tipo, parsed_id))
+
+            _safe_add_entity(tipo_entidad, id_entidad)
+
+            for grupo in ['origen', 'destino']:
+                for item in resumen.get(grupo, []):
+                    _safe_add_entity(item['tipo'], item['id'])
+            
+            for nodo in diagrama.get('nodes', []):
+                try:
+                    parts = nodo['id'].rsplit('_', 1)
+                    if len(parts) == 2:
+                        tipo, id_str = parts
+                        _safe_add_entity(tipo, id_str)
+                except (ValueError, KeyError):
+                    continue
+
+            afectados = [{'tipo_entidad': tipo, 'id_entidad': id_ent} for tipo, id_ent in afectados_set]
+
             if not afectados:
                 return {"success": True, "data": {"afectados_detalle": {}}}, 200
 
@@ -35,30 +70,30 @@ class RiesgoController(BaseController):
         try:
             tipo_entidad = datos_json.get("tipo_entidad")
             id_entidad = datos_json.get("id_entidad")
-            if not tipo_entidad or not id_entidad:
-                return {"success": False, "error": "tipo_entidad y id_entidad son requeridos."}, 400
-            
             motivo = datos_json.get("motivo")
             comentarios = datos_json.get("comentarios")
             url_evidencia = datos_json.get("url_evidencia")
+            afectados = datos_json.get("afectados") # Usar la lista de afectados del frontend
 
             if not tipo_entidad or not id_entidad or not motivo:
                 return {"success": False, "error": "tipo_entidad, id_entidad y motivo son requeridos."}, 400
             
-            afectados = self.trazabilidad_model.obtener_lista_afectados(tipo_entidad, id_entidad)
+            # Asegurarse de que el origen está en la lista de afectados
+            origen_en_afectados = any(
+                a['tipo_entidad'] == tipo_entidad and str(a['id_entidad']) == str(id_entidad)
+                for a in afectados
+            )
+            if not origen_en_afectados:
+                afectados.append({'tipo_entidad': tipo_entidad, 'id_entidad': id_entidad})
             
             count_res = self.alerta_riesgo_model.db.table(self.alerta_riesgo_model.get_table_name()).select('count', count='exact').execute()
             count = count_res.count
             
             nueva_alerta_data = {
-                "origen_tipo_entidad": tipo_entidad,
-                "origen_id_entidad": str(id_entidad),
-                "estado": "Pendiente",
-                "codigo": f"ALR-{count + 1}",
-                "motivo": motivo,
-                "comentarios": comentarios,
-                "url_evidencia": url_evidencia,
-                "id_usuario_creador": usuario_id
+                "origen_tipo_entidad": tipo_entidad, "origen_id_entidad": str(id_entidad),
+                "estado": "Pendiente", "codigo": f"ALR-{count + 1}",
+                "motivo": motivo, "comentarios": comentarios,
+                "url_evidencia": url_evidencia, "id_usuario_creador": usuario_id
             }
             
             resultado_alerta = self.alerta_riesgo_model.create(nueva_alerta_data)
@@ -66,8 +101,10 @@ class RiesgoController(BaseController):
                 return resultado_alerta, 500
 
             nueva_alerta = resultado_alerta.get("data")[0]
+            
             if afectados:
                 self.alerta_riesgo_model.asociar_afectados(nueva_alerta['id'], afectados)
+                self._procesar_efectos_alerta(afectados, motivo_alerta=f"Alerta {nueva_alerta['codigo']}", usuario_id=usuario_id)
 
             return {"success": True, "data": nueva_alerta}, 201
 
@@ -76,6 +113,60 @@ class RiesgoController(BaseController):
         except Exception as e:
             logger.error(f"Error al crear alerta de riesgo: {e}", exc_info=True)
             return {"success": False, "error": f"Error interno: {str(e)}"}, 500
+
+    def _procesar_efectos_alerta(self, afectados, motivo_alerta, usuario_id):
+        """
+        Aplica los efectos secundarios de una alerta: marcar como alertado y poner en cuarentena/pausar.
+        """
+        mapeo_tablas = {
+            'lote_insumo': {'tabla': 'insumos_inventario', 'id_field': 'id_lote'},
+            'lote_producto': {'tabla': 'lotes_productos', 'id_field': 'id_lote'},
+            'orden_produccion': {'tabla': 'ordenes_produccion', 'id_field': 'id'},
+            'pedido': {'tabla': 'pedidos', 'id_field': 'id'}
+        }
+
+        for afectado in afectados:
+            tipo = afectado['tipo_entidad']
+            id_entidad = afectado['id_entidad']
+
+            if tipo in mapeo_tablas:
+                config = mapeo_tablas[tipo]
+                try:
+                    # 1. Marcar en_alerta = true
+                    res = self.alerta_riesgo_model.db.table(config['tabla'])\
+                        .update({'en_alerta': True})\
+                        .eq(config['id_field'], str(id_entidad))\
+                        .execute()
+                    if res.data is None and res.error:
+                         logger.error(f"Error DB al marcar en_alerta para {tipo} #{id_entidad}: {res.error}")
+
+                except Exception as e:
+                    logger.error(f"Error al marcar en_alerta para {tipo} #{id_entidad}: {e}", exc_info=True)
+
+            # 2. Poner en cuarentena o pausar
+            try:
+                if tipo == 'lote_insumo':
+                    res_cuarentena, _ = self.inventario_controller.poner_lote_en_cuarentena(
+                        lote_id=str(id_entidad), motivo=motivo_alerta, cantidad=999999, usuario_id=usuario_id
+                    )
+                    if not res_cuarentena.get('success'):
+                         logger.error(f"Fallo al poner lote_insumo #{id_entidad} en cuarentena: {res_cuarentena.get('error')}")
+
+                elif tipo == 'lote_producto':
+                    res_cuarentena, _ = self.lote_producto_controller.poner_lote_en_cuarentena(
+                        lote_id=id_entidad, motivo=motivo_alerta, cantidad=999999, usuario_id=usuario_id
+                    )
+                    if not res_cuarentena.get('success'):
+                         logger.error(f"Fallo al poner lote_producto #{id_entidad} en cuarentena: {res_cuarentena.get('error')}")
+
+                elif tipo == 'orden_produccion':
+                    op_res = self.orden_produccion_controller.model.find_by_id(id_entidad)
+                    if op_res.get('success') and op_res.get('data'):
+                        op = op_res['data'][0]
+                        if op.get('estado', '').lower() != 'completada':
+                            self.orden_produccion_controller.cambiar_estado_orden(op['id'], 'PAUSADA')
+            except Exception as e:
+                 logger.error(f"Error al aplicar efecto (cuarentena/pausa) para {tipo} #{id_entidad}: {e}", exc_info=True)
         
     def crear_alerta_riesgo(self, datos_json):
         try:

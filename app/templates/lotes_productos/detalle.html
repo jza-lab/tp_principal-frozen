@@ -68,7 +68,14 @@
                 {% elif lote.estado == 'AGOTADO' or lote.estado == 'VENCIDO' %}{% set estado_color = 'danger' %}
                 {% elif lote.estado == 'RETIRADO' %}{% set estado_color = 'secondary' %}
                 {% endif %}
-                <span class="badge bg-{{ estado_color }} fs-6">{{ lote.estado | title }}</span>
+                               <div>
+                    {% if lote.en_alerta %}
+                    <span class="badge bg-danger fs-6" data-bs-toggle="tooltip" title="Alertado">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Alertado
+                    </span>
+                    {% endif %}
+                    <span class="badge bg-{{ estado_color }} fs-6">{{ lote.estado | title }}</span>
+                </div>
             </div>
             <div class="card-body">
                 <div class="row g-4">

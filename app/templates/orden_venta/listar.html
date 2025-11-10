@@ -75,6 +75,11 @@
                     'CANCELADO': {'class': 'bg-danger-soft text-danger', 'icon': 'x-circle'}
                     } %}
                     {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon': 'question-circle'}) %}
+                                       {% if pedido.en_alerta %}
+                    <span class="badge bg-danger" data-bs-toggle="tooltip" title="Alertado">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Alertado
+                    </span>
+                    {% endif %}
                     <span class="badge {{ config.class }} ms-2">
                         <i class="bi bi-{{ config.icon }} me-1"></i>{{ pedido.estado.replace('_', ' ') }}
                     </span>

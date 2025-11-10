@@ -65,9 +65,16 @@
                 } %}
                 {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon':
                 'question-circle'}) %}
+                               <div>
+                    {% if pedido.en_alerta %}
+                    <span class="badge bg-danger fs-6" data-bs-toggle="tooltip" title="Alertado">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Alertado
+                    </span>
+                    {% endif %}
                 <span class="badge {{ config.class }} fs-6">
                     <i class="bi bi-{{ config.icon }} me-1"></i>{{ pedido.estado.replace('_', ' ') }}
                 </span>
+                               </div>
             </div>
             <div class="card-body">
                 <div class="col-md-12">
