@@ -99,7 +99,7 @@ class DespachoController(BaseController):
         """
         try:
             # Columnas a seleccionar para enriquecer la información del despacho
-            select_columns = '*, vehiculo:vehiculo_id(*), despacho_items(*, pedido:pedido_id(*))'
+            select_columns = '*, vehiculo:vehiculo_id(patente, tipo_vehiculo, capacidad_kg, nombre_conductor, dni_conductor), despacho_items(*, pedido:pedido_id(*))'
 
             # Corrección: Construir la consulta con select() en lugar de usar find_all con parámetros.
             result = self.model.db.table(self.model.get_table_name()).select(select_columns).execute()
@@ -154,14 +154,14 @@ class DespachoController(BaseController):
 
         # 1. Obtener datos del despacho
         response = self.model.db.table(self.model.get_table_name()) \
-            .select('*, vehiculo:vehiculo_id(patente, marca, modelo, nombre_conductor, dni_conductor), despacho_items(*, pedido:pedido_id(*, cliente:cliente_id(*), direccion:direccion_id(*)))') \
+            .select('*, vehiculo:vehiculo_id(patente, tipo_vehiculo, capacidad_kg, nombre_conductor, dni_conductor), despacho_items(*, pedido:pedido_id(*, cliente:clientes(*), direccion:usuario_direccion(*)))') \
             .filter('id', 'eq', despacho_id) \
             .execute()
 
-        if not response['success'] or not response['data']:
+        if not response.data:
             return {'success': False, 'error': 'Despacho no encontrado'}
         
-        despacho_data = response['data'][0]
+        despacho_data = response.data[0]
         
         # Simplificar estructura de datos para la plantilla
         despacho_data['pedidos'] = [item['pedido'] for item in despacho_data.get('despacho_items', [])]
