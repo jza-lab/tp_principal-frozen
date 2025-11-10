@@ -28,30 +28,55 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     function mostrarCargando() {
-        resumenContenedor.innerHTML = `<div class="card-header">...</div><div class="card-body text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Cargando...</p></div>`;
+        resumenContenedor.innerHTML = `<div class="card mb-4"><div class="card-body text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Cargando...</p></div></div>`;
         visContainer.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100"><div class="spinner-border text-primary"></div></div>`;
     }
 
     function renderizarResumen(resumen) {
         if (!resumen || (!resumen.origen.length && !resumen.destino.length)) {
-            resumenContenedor.innerHTML = '<div class="card-header">...</div><div class="card-body"><p class="text-muted">No hay datos.</p></div>';
+            resumenContenedor.innerHTML = '<div class="card mb-4"><div class="card-body"><p class="text-muted">No hay datos de resumen.</p></div></div>';
             return;
         }
 
-        // Para Pedido, el destino es él mismo, solo mostramos origen.
-        const origenHtml = resumen.origen.length ? resumen.origen.map(item => `
-            <li class="list-group-item">
-                <a href="${(urls[item.tipo] || '#').replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
-                <div class="text-muted small">${item.detalle}</div>
-            </li>`).join('') : '<li class="list-group-item text-muted">No hay entidades de origen.</li>';
+        const agruparEntidades = (lista, titulo, subtitulos) => {
+            let html = `<h5 class="mb-3 border-bottom pb-2">${titulo}</h5>`;
+            
+            for (const [tipo, subtitulo] of Object.entries(subtitulos)) {
+                const entidades = lista.filter(item => item.tipo === tipo);
+                html += `<strong>${subtitulo}:</strong>`;
+                const listaHtml = entidades.length ? entidades.map(item => `
+                    <li class="list-group-item">
+                        <a href="${(urls[item.tipo] || '#').replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
+                        <div class="text-muted small">${item.detalle}</div>
+                    </li>`).join('') : '<li class="list-group-item text-muted">N/A</li>';
+                
+                html += `<div class="list-container mt-1 mb-3" style="max-height: 150px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 5px;">
+                            <ul class="list-group list-group-flush">${listaHtml}</ul>
+                         </div>`;
+            }
+            return html;
+        };
+
+        const subtitulosOrigen = {
+            'lote_producto': 'Lotes de Producto',
+            'orden_produccion': 'Órdenes de Producción',
+            'lote_insumo': 'Lotes de Insumo',
+            'orden_compra': 'Órdenes de Compra'
+        };
+
+        const origenHtml = agruparEntidades(resumen.origen, '<i class="bi bi-arrow-up-circle-fill text-primary me-2"></i>Origen (Hacia Atrás)', subtitulosOrigen);
+        
+        // Para un pedido, el destino está vacío o es él mismo, por lo que no se renderiza.
 
         resumenContenedor.innerHTML = `
+        <div class="card mb-4">
             <div class="card-header"><i class="bi bi-list-ul me-1"></i> Resumen de Trazabilidad</div>
             <div class="card-body">
-                <h5 class="mb-3 border-bottom pb-2"><i class="bi bi-arrow-up-circle-fill text-primary me-2"></i>Origen (Hacia Atrás)</h5>
-                <ul class="list-group list-group-flush">${origenHtml}</ul>
-            </div>`;
+                ${origenHtml}
+            </div>
+        </div>`;
     }
+
 
     function renderizarDiagrama(diagrama) {
         if (!diagrama || !diagrama.nodes || !diagrama.nodes.length) {
@@ -61,7 +86,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         
-        accordionButton.textContent = 'Ver Diagrama de Red';
+        accordionButton.innerHTML = '<i class="bi bi-diagram-3 me-2"></i> Ver Diagrama de Red Completo';
         accordionButton.classList.remove('disabled');
 
         const nodes = new vis.DataSet(diagrama.nodes);
@@ -98,13 +123,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     renderizarResumen(result.data.resumen);
                     renderizarDiagrama(result.data.diagrama);
                 } else {
-                    resumenContenedor.innerHTML = `<div class="card-header">...</div><div class="card-body"><div class="alert alert-warning">${result.error || 'Error.'}</div></div>`;
+                    resumenContenedor.innerHTML = `<div class="card mb-4"><div class="card-body"><div class="alert alert-warning">${result.error || 'Error.'}</div></div></div>`;
                     visContainer.innerHTML = '';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                resumenContenedor.innerHTML = `<div class="card-header">...</div><div class="card-body"><div class="alert alert-danger">Error de conexión.</div></div>`;
+                resumenContenedor.innerHTML = `<div class="card mb-4"><div class="card-body"><div class="alert alert-danger">Error de conexión.</div></div></div>`;
                 visContainer.innerHTML = '';
             });
     }

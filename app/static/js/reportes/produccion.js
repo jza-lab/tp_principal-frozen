@@ -73,8 +73,7 @@ document.addEventListener('DOMContentLoaded', function () {
             tooltip: { trigger: 'item' },
             legend: { bottom: 10, left: 'center', type: 'scroll' },
             series: [{ name: 'Órdenes', type: 'pie', radius: ['50%', '70%'], center: ['50%', '40%'], avoidLabelOverlap: false, label: { show: false }, emphasis: { label: { show: true, fontSize: '20', fontWeight: 'bold', formatter: '{b}\n{c}' } }, labelLine: { show: false }, data: chartData }],
-            color: bluePalette,
-            animation: false
+            color: bluePalette
         };
         chart.setOption(option);
     }
@@ -97,8 +96,7 @@ document.addEventListener('DOMContentLoaded', function () {
             tooltip: { trigger: 'item' },
             legend: { bottom: 10, left: 'center', type: 'scroll' },
             series: [{ name: 'Cantidad', type: 'pie', radius: '50%', center: ['50%', '40%'], data: chartData, emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } } }],
-            color: bluePalette.slice(2),
-            animation: false
+            color: bluePalette.slice(2)
         };
         chart.setOption(option);
     }
@@ -134,8 +132,7 @@ document.addEventListener('DOMContentLoaded', function () {
             xAxis: { type: 'category', data: Object.keys(data) },
             yAxis: { type: 'value' },
             series: [{ data: Object.values(data), type: 'line', smooth: true, areaStyle: {} }],
-            color: bluePalette[4],
-            animation: false
+            color: bluePalette[4]
         };
         chart.setOption(option);
     }
@@ -170,8 +167,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         xAxis: { type: 'value', boundaryGap: [0, 0.01] },
                         yAxis: { type: 'category', data: data.map(item => item.name).reverse() },
                         series: [{ name: 'Cantidad Utilizada', type: 'bar', data: data.map(item => item.value).reverse() }],
-                        color: bluePalette[1],
-                        animation: false
+                        color: bluePalette[1]
                     };
                     chart.setOption(option, true);
                 } else {

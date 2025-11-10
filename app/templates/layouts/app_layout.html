@@ -76,13 +76,12 @@
                                 href="{{ url_for('precios.index') }}"><i class="bi bi-tag-fill me-2"></i> Actualizar
                                 Precios</a></li>
                         {% endif %}
-                        <li>
+                        
                             <hr class="dropdown-divider">
                         </li>
-                        <li><a class="dropdown-item {% if request.endpoint == 'reportes.produccion' %}active{% endif %}"
-                                href="{{ url_for('reportes.produccion') }}"><i class="fas fa-chart-line me-2"></i>
-                                Reportes</a>
-                            </li>
+                        <li><a class="dropdown-item {% if request.endpoint == 'reportes.stock' %}active{% endif %}"
+                                href="{{ url_for('reportes.stock') }}"><i class="fas fa-chart-pie me-2"></i> Reportes de Stock</a></li>
+
                     </ul>
                 </li>
                 {% endif %}
@@ -161,6 +160,10 @@
                                 href="{{ url_for('produccion_kanban.tablero_produccion') }}"><i
                                     class="bi bi-kanban me-2"></i> Producción de Hoy</a></li>
                         {% endif %}
+                                                <li><a class="dropdown-item {% if request.endpoint == 'reportes.produccion' %}active{% endif %}"
+                                href="{{ url_for('reportes.produccion') }}"><i class="fas fa-chart-line me-2"></i>
+                                Reportes de produccion</a>
+                            </li>
                     </ul>
                 </li>
                 {% endif %}

@@ -557,6 +557,43 @@ class PedidoModel(BaseModel):
             logger.error(f"Error obteniendo top productos: {str(e)}")
             return {'success': False, 'error': str(e)}
 
+    def get_sales_by_product_in_period(self, fecha_inicio, fecha_fin):
+        """
+        Calcula la cantidad total vendida por producto en un período de tiempo.
+        Considera solo los pedidos en estado 'COMPLETADO'.
+        """
+        try:
+            result = self.db.table('pedido_items').select(
+                'cantidad, producto:productos!inner(id, nombre)'
+            ).in_(
+                'pedido_id', 
+                self.db.table('pedidos')
+                       .select('id')
+                       .eq('estado', 'COMPLETADO')
+                       .gte('fecha_solicitud', fecha_inicio)
+                       .lte('fecha_solicitud', fecha_fin)
+                       .execute().data
+            ).execute()
+
+            if not result.data:
+                return {'success': True, 'data': {}}
+
+            sales_by_product = {}
+            for item in result.data:
+                if item.get('producto'):
+                    nombre_producto = item['producto']['nombre']
+                    cantidad = float(item.get('cantidad', 0))
+                    if nombre_producto in sales_by_product:
+                        sales_by_product[nombre_producto] += cantidad
+                    else:
+                        sales_by_product[nombre_producto] = cantidad
+            
+            return {'success': True, 'data': sales_by_product}
+
+        except Exception as e:
+            logger.error(f"Error obteniendo ventas por producto: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
 class PedidoItemModel(BaseModel):
     """Modelo para la tabla pedido_items"""
 
