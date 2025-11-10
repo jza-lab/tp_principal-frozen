@@ -226,11 +226,9 @@ def detalle(id):
     lotes_insumos_reservados_result = reserva_insumo_model.get_by_orden_produccion_id(id)
     lotes_insumos_reservados = lotes_insumos_reservados_result.get("data", [])
 
-    trazabilidad_controller = TrazabilidadController()
-    trazabilidad_data, _ = trazabilidad_controller.obtener_datos_trazabilidad('orden_produccion', id)
+    # No es necesario cargar la trazabilidad aquí, el frontend lo hace por API.
+    # Se pasa un diccionario vacío para evitar errores en la plantilla.
     trazabilidad_resumen = {}
-    if trazabilidad_data.get('success'):
-        trazabilidad_resumen = trazabilidad_data.get('data', {}).get('resumen', {})
 
     return render_template(
         "ordenes_produccion/detalle.html",

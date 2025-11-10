@@ -80,6 +80,11 @@
                             } %}
                             {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark',
                             'icon':'question-circle'}) %}
+                                                        {% if orden.en_alerta %}
+                            <span class="badge bg-danger fs-6" data-bs-toggle="tooltip" title="Alertado">
+                                <i class="bi bi-exclamation-triangle-fill"></i> Alertado
+                            </span>
+                            {% endif %}
                             <span class="badge {{ config.class }} fs-6 me-2">
                                 <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado.replace('_',' ') }}
                             </span>
@@ -386,115 +391,20 @@
                     </div>
                 </div>
             </div>{# Fin col-lg-4 #}
-        </div> </div> <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
-        <div class="card mb-4">
-            <div class="card-header">
-                <i class="bi bi-list-ul me-1"></i> Resumen Compacto de Trazabilidad
+        </div>
+    </div>
+    <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
+        
+        <!-- Selector de Nivel de Trazabilidad -->
+        <div class="d-flex justify-content-end align-items-center mb-3">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="trazabilidad-nivel-switch">
+                <label class="form-check-label" for="trazabilidad-nivel-switch">Ver Trazabilidad Completa</label>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5 class="mb-3 border-bottom pb-2">
-                            <i class="bi bi-arrow-up-circle-fill text-primary me-2"></i>Origen (Hacia Atrás)
-                        </h5>
+        </div>
 
-                        {% if trazabilidad_resumen.origen.ocs_asociadas %}
-                        <div class="mb-3">
-                             <strong>Órdenes de Compra Asociadas:</strong>
-                            <div class="list-container mt-1" style="max-height: 200px; overflow-y: auto;">
-                                <ul class="list-group list-group-flush">
-                                    {% for oc in trazabilidad_resumen.origen.ocs_asociadas %}
-                                    <li class="list-group-item">
-                                          <a href="{{ url_for('orden_compra.detalle', id=oc.id) }}">{{ oc.codigo_oc
-                                            }}</a>
-                                        <span class="text-muted small">({{ oc.proveedor_nombre or 'N/A' }})</span>
-                                    </li>
-                                    {% endfor %}
-                                </ul>
-                            </div>
-                        </div>
-                        {% else %}
-                        <p class="text-muted fst-italic mt-2">No hay Órdenes de Compra asociadas directamente.
-                        </p>
-                        {% endif %}
-
-                        {% if trazabilidad_resumen.origen.insumos_utilizados %}
-                        <div class="mb-3">
-                            <strong>Insumos Utilizados:</strong>
-                            <div class="list-container mt-1" style="max-height: 200px; overflow-y: auto;">
-                                <ul class="list-group list-group-flush">
-                                    {% for insumo in trazabilidad_resumen.origen.insumos_utilizados %}
-                                    <li class="list-group-item">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div>
-                                                <a href="{{ url_for('inventario_view.detalle_lote', id_lote=insumo.id) }}"
-                                                    class="fw-bold">{{ insumo.nombre }}</a>
-                                                <div class="text-muted small">
-                                                    Lote: {{ insumo.lote_proveedor }} | Prov: {{ insumo.proveedor }}
-                                                </div>
-                                            </div>
-                                            <span class="badge bg-secondary rounded-pill ms-2">{{ insumo.cantidad
-                                                }}</span>
-                                        </div>
-                                    </li>
-                                    {% endfor %}
-                                </ul>
-                            </div>
-                        </div>
-                        {% else %}
-                        <p class="text-muted fst-italic mt-2">No se encontraron insumos utilizados.</p>
-                        {% endif %}
-                    </div>
-
-                    <div class="col-md-6">
-                        <h5 class="mb-3 border-bottom pb-2">
-                            <i class="bi bi-arrow-down-circle-fill text-success me-2"></i>Destino (Hacia Adelante)
-
-                        </h5>
-                        {% if trazabilidad_resumen.destino.lotes_producidos %}
-                        <div class="mb-3">
-                            <strong>Lotes de Producto Generados:</strong>
-                            <div class="list-container mt-1" style="max-height: 200px; overflow-y: auto;">
-                                <ul class="list-group list-group-flush">
-                                    {% for lote in trazabilidad_resumen.destino.lotes_producidos %}
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id) }}">
-                                            Lote {{ lote.codigo }}
-                                        </a>
-                                        <span class="badge bg-info rounded-pill">{{ lote.cantidad }}</span>
-
-                                    </li>
-                                    {% endfor %}
-                                </ul>
-                            </div>
-                        </div>
-                        {% else %}
-                        <p class="text-muted fst-italic mt-2">No se han generado lotes de producto.</p>
-                        {% endif %}
-
-                        {% if trazabilidad_resumen.destino.pedidos_relacionados %}
-                        <div class="mb-3">
-                             <strong>Pedidos Relacionados:</strong>
-                            <div class="list-container mt-1" style="max-height: 200px; overflow-y: auto;">
-                                <ul class="list-group list-group-flush">
-                                    {% for pedido in trazabilidad_resumen.destino.pedidos_relacionados %}
-                                    <li class="list-group-item">
-                                        <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}">
-                                            Pedido #{{ pedido.id }}
-                                        </a>
-                                        <span class="text-muted small">({{ pedido.cliente }})</span>
-                                    </li>
-                                    {% endfor %}
-                                </ul>
-                            </div>
-                        </div>
-                        {% else %}
-                        <p class="text-muted fst-italic mt-2">No hay pedidos asociados a los lotes generados.</p>
-
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
+        <div id="resumen-trazabilidad-contenedor">
+            <!-- El contenido se generará dinámicamente por JS -->
         </div>
 
         <div class="accordion" id="accordionDiagrama">
@@ -525,7 +435,9 @@
                 </div>
             </div>
         </div>
-    </div> </div> {% include "admin_riesgos/_modal_crear_alerta.html" %}
+    </div>
+</div>
+{% include "admin_riesgos/_modal_crear_alerta.html" %}
 {% endblock %}
 
 {% block extra_js %}

@@ -15,7 +15,7 @@
             <p class="card-text">
                 <strong>Origen:</strong> {{ alerta.origen_tipo_entidad.replace('_', ' ').title() }}
                 (ID: <a
-                    href="{{ url_for('inventario_view.detalle_lote', id_lote=alerta.origen_id_entidad) if 'lote_insumo' in alerta.origen_tipo_entidad else url_for('lotes_productos.detalle_lote', id=alerta.origen_id_entidad) }}">{{
+                    href="{{ url_for('inventario_view.detalle_lote', id_lote=alerta.origen_id_entidad) if 'lote_insumo' in alerta.origen_tipo_entidad else url_for('lote_producto.detalle_lote', id_lote=alerta.origen_id_entidad) }}">{{
                     alerta.origen_id_entidad[:8] }}...</a>)
             </p>
             <p class="card-text"><strong>Estado:</strong>

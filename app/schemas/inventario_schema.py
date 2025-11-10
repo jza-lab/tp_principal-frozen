@@ -23,6 +23,7 @@ class InsumosInventarioSchema(Schema):
             "invalid": "La cantidad debe ser un número válido."
         }
     )
+    en_alerta = fields.Boolean(dump_default=False)
     cantidad_actual = fields.Decimal(
         as_string=True,
         required=True,
@@ -60,6 +61,7 @@ class InsumosInventarioSchema(Schema):
     # 2. Añadir los nuevos campos
     motivo_cuarentena = fields.Str(allow_none=True)
     cantidad_en_cuarentena = fields.Float(allow_none=True, dump_default=0)
+    en_alerta = fields.Boolean(dump_default=False)
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
 

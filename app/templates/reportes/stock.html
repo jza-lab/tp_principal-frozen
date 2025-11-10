@@ -1,176 +1,227 @@
 {% extends 'layouts/app_layout.html' %}
 
-{% block title %}Reporte de Stock - Sistema Frozen{% endblock %}
+{% block title %}Reportes de Stock{% endblock %}
+
+{% block extra_css %}
+<style>
+    @media print {
+        .scrollable-table.printable-full-height {
+            max-height: none !important;
+            overflow-y: visible !important;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block app_content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
-    <div>
-        <h1 class="h2 mb-1">Reporte de Inventario</h1>
-        <p class="text-muted mb-0">Estado actual del inventario y valorización</p>
+<div class="container-fluid">
+    <!-- Page Heading -->
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Reportes de Stock</h1>
+        <button id="download-pdf" class="btn btn-primary shadow-sm" disabled><i
+                class="fas fa-download fa-sm text-white-50"></i> Generar Reporte</button>
     </div>
-    <div class="btn-toolbar">
-        <button type="button" class="btn btn-outline-secondary me-2" onclick="window.print()">
-            <i class="bi bi-printer me-1"></i>Imprimir
-        </button>
-        <button type="button" class="btn btn-outline-secondary" disabled>
-            <i class="bi bi-download me-1"></i>Exportar Excel
-        </button>
+
+    <!-- Nav Tabs -->
+    <ul class="nav nav-tabs" id="stockTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="insumos-tab" data-bs-toggle="tab" data-bs-target="#insumos" type="button"
+                role="tab" aria-controls="insumos" aria-selected="true">Stock de Insumos</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="productos-tab" data-bs-toggle="tab" data-bs-target="#productos" type="button"
+                role="tab" aria-controls="productos" aria-selected="false">Stock de Productos</button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="stockTabContent">
+        <!-- Insumos Tab Pane -->
+        <div class="tab-pane fade show active" id="insumos" role="tabpanel" aria-labelledby="insumos-tab">
+            <div class="row mt-4">
+                <!-- Composición por Categoría -->
+                <div class="col-xl-6 col-lg-12 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Composición del Stock por Categoría</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="insumos-composicion-chart" style="height: 350px;"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Top N Insumos por Valor -->
+                <div class="col-xl-6 col-lg-12 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">Top Insumos por Valor Total</h6>
+                            <div class="form-group mb-0">
+                                <select id="top-n-insumos" class="form-control form-control-sm">
+                                    <option value="5">Top 5</option>
+                                    <option value="10" selected>Top 10</option>
+                                    <option value="15">Top 15</option>
+                                    <option value="20">Top 20</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="insumos-valor-chart" style="height: 350px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <!-- Insumos con Stock Crítico -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-danger">Insumos con Stock Crítico</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted">
+                                Este gráfico muestra los insumos cuyo stock actual está por debajo del umbral mínimo definido. Las barras indican visualmente el nivel actual (azul) en relación con el mínimo (amarillo).
+                            </p>
+                            <div class="scrollable-table printable-full-height" style="max-height: 300px; overflow-y: auto;">
+                                <div id="insumos-critico-table"></div>
+                            </div>
+                            <p class="small text-muted mt-2" id="insumos-critico-description"></p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Lotes Próximos a Vencer -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-warning">Lotes de Insumos Próximos a Vencer</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="insumos-vencimiento-table"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Productos Tab Pane -->
+        <div class="tab-pane fade" id="productos" role="tabpanel" aria-labelledby="productos-tab">
+            <div class="row mt-4">
+                <!-- Composición por Producto -->
+                <div class="col-xl-6 col-lg-12 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Composición del Stock por Producto</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="productos-composicion-chart" style="height: 350px;"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Top N Productos por Valor -->
+                <div class="col-xl-6 col-lg-12 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">Top Productos por Valor en Stock</h6>
+                            <div class="form-group mb-0">
+                                <select id="top-n-productos" class="form-control form-control-sm">
+                                    <option value="5">Top 5</option>
+                                    <option value="10" selected>Top 10</option>
+                                    <option value="15">Top 15</option>
+                                    <option value="20">Top 20</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="productos-valor-chart" style="height: 350px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+             <div class="row">
+                <!-- Productos con Bajo Stock -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-danger">Productos con Bajo Stock</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="productos-bajo-stock-table"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Lotes Próximos a Vencer -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-warning">Lotes de Productos Próximos a Vencer</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="productos-vencimiento-table"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <!-- Valor por Categoría de Producto -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-info">Valor de Stock por Categoría de Producto</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted">Este gráfico muestra el valor monetario total del stock para cada categoría de producto terminado.</p>
+                            <div id="productos-valor-categoria-chart" style="height: 350px;"></div>
+                            <p class="small text-muted mt-2" id="productos-valor-categoria-description"></p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Distribución por Estado -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-success">Distribución de Stock por Estado</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted">Este gráfico de torta muestra la proporción del stock de productos según su estado actual (Disponible, Reservado, etc.).</p>
+                            <div id="productos-distribucion-estado-chart" style="height: 350px;"></div>
+                            <p class="small text-muted mt-2" id="productos-distribucion-estado-description"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <!-- Rotación de Productos -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-primary">Rotación de Productos (Ventas últimos 30 días)</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted">Productos más vendidos en el último mes, indicando alta demanda.</p>
+                            <div id="productos-rotacion-chart" style="height: 350px;"></div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Cobertura de Stock -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3">
+                            <h6 class="m-0 font-weight-bold text-warning">Cobertura de Stock (Días)</h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small text-muted">Estimación de cuántos días de venta cubre el stock actual.</p>
+                            <div id="productos-cobertura-chart" style="height: 350px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
-
-<!-- {% if reporte and reporte.error %}
-    <div class="alert alert-danger border-danger">
-        <div class="d-flex align-items-center">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            <div>Error al generar el reporte: {{ reporte.error }}</div>
-        </div>
-    </div>
-{% else %} -->
-    <!-- Tarjetas de resumen -->
-    <div class="row mb-4">
-        <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stat-card h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="stat-label mb-1">Valor Total</div>
-                            <!-- <div class="stat-value">${{ "%.2f"|format(reporte.total_valor_inventario) if reporte else '0.00' }}</div> -->
-                            <div class="stat-value">$0</div>
-                        </div>
-                        <div class="text-muted">
-                            <i class="bi bi-currency-dollar fs-1 opacity-25"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stat-card h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="stat-label mb-1">Total Items</div>
-                            <!-- <div class="stat-value">{{ reporte.total_items if reporte else 0 }}</div> -->
-                            <div class="stat-value">0</div>
-                        </div>
-                        <div class="text-muted">
-                            <i class="bi bi-box-seam fs-1 opacity-25"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stat-card h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="stat-label mb-1">Stock Crítico</div>
-                            <!-- <div class="stat-value text-danger">{{ reporte.items_con_stock_bajo_o_critico if reporte else 0 }}</div> -->
-                            <div class="stat-value text-danger">0</div>
-                        </div>
-                        <div class="text-muted">
-                            <i class="bi bi-exclamation-triangle fs-1 opacity-25"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-3 col-md-6 mb-4">
-            <div class="card stat-card h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="stat-label mb-1">Stock Saludable</div>
-                            <!-- {% set total = reporte.total_items if reporte else 0 %}
-                            {% set criticos = reporte.items_con_stock_bajo_o_critico if reporte else 0 %}
-                            {% set porcentaje = ((total - criticos) / total * 100)|round(1) if reporte and total > 0 else 100 if not reporte else 0 %}
-                            <div class="stat-value text-success">{{ porcentaje }}%</div> -->
-                            <div class="stat-value text-success">0%</div>
-                        </div>
-                        <div class="text-muted">
-                            <i class="bi bi-check-circle fs-1 opacity-25"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Filtros de vista -->
-    <div class="card mb-4">
-        <div class="card-body">
-            <div class="btn-group" role="group">
-                <input type="radio" class="btn-check" name="vista" id="todos" autocomplete="off" checked>
-                <label class="btn btn-primary" for="todos">
-                    <i class="bi bi-list me-1"></i>Todos los Items
-                </label>
-                
-                <input type="radio" class="btn-check" name="vista" id="stock-critico" autocomplete="off">
-                <label class="btn btn-outline-danger" for="stock-critico">
-                    <i class="bi bi-exclamation-triangle me-1"></i>Stock Crítico
-                </label>
-                
-                <input type="radio" class="btn-check" name="vista" id="stock-ok" autocomplete="off">
-                <label class="btn btn-outline-success" for="stock-ok">
-                    <i class="bi bi-check-circle me-1"></i>Stock OK
-                </label>
-            </div>
-        </div>
-    </div>
-
-    <!-- Tabla detallada -->
-    <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">Detalle de Inventario</h5>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-striped table-hover mb-0" id="tablaStock">
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Nombre</th>
-                        <th>Categoría</th>
-                        <th>Stock Actual</th>
-                        <th>Stock Mínimo</th>
-                        <th>Proveedor</th>
-                        <th>Estado</th>
-                        <th class="text-end">Valor</th>
-                    </tr>
-                </thead>
-                <tbody>
-                  
-                </tbody>
-            </table>
-        </div>
-    </div>
-{% endif %}
 {% endblock %}
 
 {% block extra_js %}
-<script>
-// Filtros de tabla
-document.querySelectorAll('input[name="vista"]').forEach(radio => {
-    radio.addEventListener('change', function() {
-        const filas = document.querySelectorAll('#tablaStock tbody tr');
-        
-        filas.forEach(fila => {
-            const estado = fila.dataset.estado;
-            
-            if (this.id === 'todos') {
-                fila.style.display = '';
-            } else if (this.id === 'stock-critico' && estado === 'critico') {
-                fila.style.display = '';
-            } else if (this.id === 'stock-ok' && estado === 'ok') {
-                fila.style.display = '';
-            } else {
-                fila.style.display = 'none';
-            }
-        });
-    });
-});
-</script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.3.2/dist/echarts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/reportes/stock.js') }}?v=1.1"></script>
 {% endblock %}

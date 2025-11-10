@@ -561,6 +561,48 @@ class PedidoModel(BaseModel):
             logger.error(f"Error obteniendo top productos: {str(e)}")
             return {'success': False, 'error': str(e)}
 
+    def get_sales_by_product_in_period(self, start_date, end_date):
+        """
+        Calcula la cantidad total vendida de cada producto en un período de tiempo.
+        Este método es más robusto al realizar la consulta en dos pasos.
+        """
+        try:
+            # Paso 1: Obtener los IDs de los pedidos dentro del rango de fechas.
+            pedidos_response = self.db.table(self.get_table_name()).select('id').gte('fecha_solicitud', start_date.isoformat()).lte('fecha_solicitud', end_date.isoformat()).execute()
+            
+            if not pedidos_response.data:
+                return {'success': True, 'data': {}}
+
+            pedido_ids = [p['id'] for p in pedidos_response.data]
+
+            # Paso 2: Obtener los items de esos pedidos y agruparlos.
+            items_response = self.db.table('pedido_items').select(
+                'cantidad, productos!inner(nombre)'
+            ).in_('pedido_id', pedido_ids).execute()
+
+            if not items_response.data:
+                return {'success': True, 'data': {}}
+            
+            sales_data = {}
+            for item in items_response.data:
+                # Asegurarse de que el producto no sea nulo
+                if not item.get('productos'):
+                    continue
+                
+                nombre_producto = item['productos']['nombre']
+                cantidad = float(item['cantidad'])
+
+                if nombre_producto in sales_data:
+                    sales_data[nombre_producto] += cantidad
+                else:
+                    sales_data[nombre_producto] = cantidad
+            
+            return {'success': True, 'data': sales_data}
+
+        except Exception as e:
+            logger.error(f"Error en get_sales_by_product_in_period: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
 class PedidoItemModel(BaseModel):
     """Modelo para la tabla pedido_items"""
 

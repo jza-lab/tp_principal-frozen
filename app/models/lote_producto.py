@@ -259,3 +259,57 @@ class LoteProductoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo lotes de productos por vencimiento: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def get_stock_valorizado(self) -> List[Dict]:
+        """
+        Calcula el valor total del stock para cada producto terminado.
+        Devuelve una lista de diccionarios, ordenada por valor descendente.
+        """
+        try:
+            stock_response = self.obtener_composicion_inventario()
+            if not stock_response.get('success'):
+                return []
+            stock_map = {item['nombre']: item['cantidad'] for item in stock_response.get('data', [])}
+
+            productos_response = self.db.table('productos').select('nombre, precio_unitario').execute()
+            if not productos_response.data:
+                return []
+            
+            valores = []
+            for producto in productos_response.data:
+                nombre = producto.get('nombre')
+                if nombre in stock_map:
+                    cantidad = float(stock_map[nombre])
+                    precio = float(producto.get('precio_unitario', 0))
+                    valor_total = cantidad * precio
+                    if valor_total > 0:
+                        valores.append({'nombre': nombre, 'valor_total_stock': valor_total})
+
+            return sorted(valores, key=lambda x: x['valor_total_stock'], reverse=True)
+        except Exception as e:
+            logger.error(f"Error obteniendo stock valorizado de productos: {str(e)}")
+            return []
+
+    def obtener_stock_por_estado(self) -> Dict:
+        """
+        Obtiene la cantidad total de stock de productos agrupada por estado.
+        """
+        try:
+            result = self.db.table(self.table_name).select('estado, cantidad_actual').gt('cantidad_actual', 0).execute()
+
+            if not result.data:
+                return {'success': True, 'data': {}}
+
+            stock_por_estado = {}
+            for lote in result.data:
+                estado = lote.get('estado', 'INDEFINIDO')
+                cantidad = float(lote.get('cantidad_actual', 0))
+                if estado in stock_por_estado:
+                    stock_por_estado[estado] += cantidad
+                else:
+                    stock_por_estado[estado] = cantidad
+            
+            return {'success': True, 'data': stock_por_estado}
+        except Exception as e:
+            logger.error(f"Error obteniendo stock de productos por estado: {str(e)}")
+            return {'success': False, 'error': str(e)}

@@ -86,6 +86,10 @@
                 <i class="bi bi-truck"></i>
                 En Tránsito
             </button>
+            <button type="button" class="btn-filter-estado" data-estado="EN_RECEPCION">
+                <i class="bi bi-box-arrow-in-right"></i>
+                En Recepción
+            </button>
             <button type="button" class="btn-filter-estado" data-estado="RECEPCION_INCOMPLETA">
                 <i class="bi bi-box-seam"></i>
                 Recepción Incompleta
@@ -138,6 +142,7 @@
                     'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
                     'EN ESPERA DE INSUMO': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
                     'EN_TRANSITO': {'class': 'bg-primary-soft text-primary', 'icon': 'truck'},
+                    'EN_RECEPCION': {'class': 'bg-info-soft text-info', 'icon': 'box-arrow-in-right'},
                     'EN_CONTROL_CALIDAD': {'class': 'bg-info-soft text-info', 'icon': 'clipboard-check'},
                     'RECEPCION_COMPLETA': {'class': 'bg-success-soft text-success', 'icon': 'box-seam'},
                     'RECEPCION_INCOMPLETA': {'class': 'bg-danger-soft text-danger', 'icon': 'box-seam'},
@@ -233,24 +238,34 @@
                 {# Visible para Supervisor de Calidad O para Logística #}
                 {% elif orden.estado == 'EN_TRANSITO' %}
                     
-                    {% if current_user.rol == 'SUPERVISOR_CALIDAD' or has_permission('logistica_recepcion_oc') %}
-                    <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-info"
-                        title="Recibir Mercadería">
-                        <i class="bi bi-box-arrow-in-down"></i> Recibir
+                    {% if has_permission('logistica_recepcion_oc') %}
+                    <div>
+                        <form method="POST"
+                            action="{{ url_for('orden_compra.marcar_en_recepcion', id=orden.id, estado=request.args.get('estado', '')) }}"
+                            class="confirm-form d-inline" data-title="Marcar como 'En Recepción'"
+                            data-message="¿Confirma que la mercadería ha llegado y está lista para ser inspeccionada?"
+                            data-button-type="info">
+                            {{ csrf_form.csrf_token }}
+                            <button type="submit" class="btn btn-sm btn-info" title="Iniciar Recepción">
+                                <i class="bi bi-box-arrow-in-right"></i> Iniciar Recepción
+                            </button>
+                        </form>
+                    </div>
+                    {% endif %}
+
+                {# --- ESTADO: EN RECEPCION --- #}
+                {% elif orden.estado == 'EN_RECEPCION' %}
+                    
+                    {% if has_permission('logistica_recepcion_oc') %}
+                    <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-success"
+                        title="Procesar Mercadería">
+                        <i class="bi bi-box-seam"></i> Procesar
                     </a>
-                    {% endif %}    
+                    {% endif %}
 
                 {# --- ESTADO: RECEPCION COMPLETA --- #}
                  {% elif orden.estado == 'RECEPCION_COMPLETA' %}
-                {% if has_permission('realizar_control_de_calidad_insumos') %}
-                    <form action="{{ url_for('orden_compra.iniciar_calidad', id=orden.id) }}" method="POST" class="d-grid">
-                        {{ csrf_form.csrf_token }}
-                        <button type="submit" class="btn btn-info">
-                            <i class="bi bi-clipboard-check me-1"></i>Control de Calidad
-                        </button>
-                    </form>
-                    {% endif %}
-
+                
                 {% elif orden.estado == 'EN_CONTROL_CALIDAD' %}
 
                 {% if has_permission('realizar_control_de_calidad_insumos') %}

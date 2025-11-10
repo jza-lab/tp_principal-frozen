@@ -437,6 +437,28 @@ class ProduccionKanbanController(BaseController):
                 return self.error_response("Orden de Producción no encontrada.", 404)
             estado_actual = op_actual_res['data'].get('estado')
 
+            # --- INICIO: Lógica de Bloqueo de OP por Estado de OC ---
+            if nuevo_estado == 'LISTA_PARA_PRODUCIR':
+                from app.controllers.orden_compra_controller import OrdenCompraController
+                oc_controller = OrdenCompraController()
+                
+                # 1. Verificar si la OP tiene OCs asociadas
+                ocs_asociadas_res, _ = oc_controller.get_all_ordenes(filtros={'orden_produccion_id': op_id})
+                
+                if ocs_asociadas_res.get('success') and ocs_asociadas_res.get('data'):
+                    ocs_asociadas = ocs_asociadas_res['data']
+                    
+                    # 2. Comprobar que TODAS las OCs (incluyendo padres e hijas) estén en 'RECEPCION_COMPLETA'
+                    todas_completas = all(oc.get('estado') == 'RECEPCION_COMPLETA' for oc in ocs_asociadas)
+                    
+                    if not todas_completas:
+                        ocs_no_completas = [oc.get('codigo_oc') for oc in ocs_asociadas if oc.get('estado') != 'RECEPCION_COMPLETA']
+                        error_msg = f"No se puede iniciar la producción. Las siguientes OCs no están en 'Recepción Completa': {', '.join(ocs_no_completas)}."
+                        logger.warning(f"Bloqueo de OP {op_id}: {error_msg}")
+                        return self.error_response(error_msg, 403) # 403 Forbidden es apropiado aquí
+
+            # --- FIN: Lógica de Bloqueo ---
+
             # Aquí se pueden añadir validaciones de transición específicas del Kanban si es necesario
             # Por ejemplo, un operario solo puede mover a ciertos estados.
             # Esta lógica es un ejemplo y puede ser ajustada.

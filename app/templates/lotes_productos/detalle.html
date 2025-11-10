@@ -68,7 +68,14 @@
                 {% elif lote.estado == 'AGOTADO' or lote.estado == 'VENCIDO' %}{% set estado_color = 'danger' %}
                 {% elif lote.estado == 'RETIRADO' %}{% set estado_color = 'secondary' %}
                 {% endif %}
-                <span class="badge bg-{{ estado_color }} fs-6">{{ lote.estado | title }}</span>
+                               <div>
+                    {% if lote.en_alerta %}
+                    <span class="badge bg-danger fs-6" data-bs-toggle="tooltip" title="Alertado">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Alertado
+                    </span>
+                    {% endif %}
+                    <span class="badge bg-{{ estado_color }} fs-6">{{ lote.estado | title }}</span>
+                </div>
             </div>
             <div class="card-body">
                 <div class="row g-4">
@@ -165,7 +172,15 @@
 
     <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
 
-        <div class="card mb-4">
+        <!-- Selector de Nivel de Trazabilidad -->
+        <div class="d-flex justify-content-end align-items-center mb-3">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="trazabilidad-nivel-switch">
+                <label class="form-check-label" for="trazabilidad-nivel-switch">Ver Trazabilidad Completa</label>
+            </div>
+        </div>
+
+        <div id="resumen-trazabilidad-contenedor" class="card mb-4">
             <div class="card-header">
                 <i class="bi bi-list-ul me-1"></i> Resumen Compacto de Trazabilidad
             </div>

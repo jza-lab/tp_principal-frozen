@@ -106,6 +106,11 @@
                     } %}
                     {% set config = estado_config.get(orden.estado, {'class': 'bg-light text-dark',
                     'icon':'question-circle'}) %}
+                                       {% if orden.en_alerta %}
+                    <span class="badge bg-danger" data-bs-toggle="tooltip" title="Alertado">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Alertado
+                    </span>
+                    {% endif %}
                     <span class="badge {{ config.class }} flex-shrink-0 ms-2">
                         <i class="bi bi-{{ config.icon }} me-1"></i>{{ orden.estado.replace('_', ' ') }}
                     </span>

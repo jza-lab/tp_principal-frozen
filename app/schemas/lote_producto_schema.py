@@ -20,6 +20,7 @@ class LoteProductoSchema(Schema):
     observaciones = fields.Str(allow_none=True)
     created_at = fields.Str(dump_only=True)  # Manejar como string
     updated_at = fields.Str(dump_only=True)  # Manejar como string
+    en_alerta = fields.Boolean(dump_default=False)
 
     @validates_schema
     def validate_fechas(self, data, **kwargs):

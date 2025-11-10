@@ -69,16 +69,23 @@
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Información del Lote <code
                         class="text-muted ms-2">{{ lote.numero_lote_proveedor or 'N/A' }}</code></h5>
-                {% if lote.estado == 'disponible' %}
-                <span class="badge bg-success fs-6">{{ lote.estado | title }}</span>
-                {% elif lote.estado == 'cuarentena' %}
-                <span class="badge bg-warning text-dark fs-6"
-                    title="Motivo: {{ lote.motivo_cuarentena or 'Sin motivo' }}" data-bs-toggle="tooltip"> <i
-                        class="bi bi-shield-lock me-1"></i>{{ lote.estado | title }}
-                </span>
-                {% elif lote.estado == 'RECHAZADO' %}
-                <span class="badge bg-danger fs-6">{{ lote.estado | title }}</span>
-                {% endif %}
+                <div>
+                    {% if lote.en_alerta %}
+                    <span class="badge bg-danger fs-6" data-bs-toggle="tooltip" title="Alertado">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Alertado
+                    </span>
+                    {% endif %}
+                    {% if lote.estado == 'disponible' %}
+                    <span class="badge bg-success fs-6">{{ lote.estado | title }}</span>
+                    {% elif lote.estado == 'cuarentena' %}
+                    <span class="badge bg-warning text-dark fs-6"
+                        title="Motivo: {{ lote.motivo_cuarentena or 'Sin motivo' }}" data-bs-toggle="tooltip"> <i
+                            class="bi bi-shield-lock me-1"></i>{{ lote.estado | title }}
+                    </span>
+                    {% elif lote.estado == 'RECHAZADO' %}
+                    <span class="badge bg-danger fs-6">{{ lote.estado | title }}</span>
+                    {% endif %}
+                </div>
             </div>
             <div class="card-body">
                 <div class="row g-4">
@@ -211,16 +218,25 @@
     </div>
 
     <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
+
+        <!-- Selector de Nivel de Trazabilidad -->
+        <div class="d-flex justify-content-end align-items-center mb-3">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="trazabilidad-nivel-switch">
+                <label class="form-check-label" for="trazabilidad-nivel-switch">Ver Trazabilidad Completa</label>
+            </div>
+        </div>
+
         <div class="row">
             <div class="col-lg-8">
-                <div class="card mb-4">
+                <div id="resumen-trazabilidad-contenedor" class="card mb-4">
                     <div class="card-header">
-                        <i class="bi bi-list-ul me-1"></i> Resumen Compacto (Trazabilidad 1-Nivel)
+                        <i class="bi bi-list-ul me-1"></i> Resumen de Trazabilidad
                     </div>
-                    <div class="card-body" id="resumen-trazabilidad">
+                    <div class="card-body">
                         <div class="text-center p-3">
-                            <div class="spinner-border spinner-border-sm text-secondary" role="status">
-                                <span class="visually-hidden">Cargando...</span>
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Cargando resumen...</span>
                             </div>
                         </div>
                     </div>

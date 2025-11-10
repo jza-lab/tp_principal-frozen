@@ -2,6 +2,12 @@
 
 {% block title %}Pedido PED-{{ pedido.id }} - Sistema Frozen{% endblock %}
 
+{% block extra_css %}
+{{ super() }}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" rel="stylesheet" type="text/css" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/listarUsuarios.css') }}">
+{% endblock %}
+
 {% block app_content %}
 <div
     class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom page-content">
@@ -28,10 +34,28 @@
 
 <div class="row page-content">
     <div class="col-lg-8">
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Información General del Pedido</h5>
-                {# Definición de badges de estado #}
+        <!-- Pestañas de Navegación -->
+        <ul class="nav nav-tabs-custom mb-3" id="myTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link-custom active" id="info-tab" data-bs-toggle="tab" data-bs-target="#info-tab-pane" type="button" role="tab" aria-controls="info-tab-pane" aria-selected="true">
+                    <i class="bi bi-info-circle me-1"></i>Información General
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link-custom" id="trazabilidad-tab" data-bs-toggle="tab" data-bs-target="#trazabilidad-tab-pane" type="button" role="tab" aria-controls="trazabilidad-tab-pane" aria-selected="false">
+                    <i class="bi bi-diagram-3 me-1"></i>Trazabilidad
+                </button>
+            </li>
+        </ul>
+
+        <!-- Contenido de las Pestañas -->
+        <div class="tab-content" id="myTabContent">
+            <!-- Pestaña de Información General -->
+            <div class="tab-pane fade show active" id="info-tab-pane" role="tabpanel" aria-labelledby="info-tab" tabindex="0">
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Información General del Pedido</h5>
+                        {# Definición de badges de estado #}
                 {% set estado_config = {
                 'PENDIENTE': {'class': 'bg-secondary-soft text-secondary', 'icon': 'clock'},
                 'EN_PROCESO': {'class': 'bg-primary-soft text-primary', 'icon': 'play-circle'},
@@ -41,9 +65,16 @@
                 } %}
                 {% set config = estado_config.get(pedido.estado, {'class': 'bg-light text-dark', 'icon':
                 'question-circle'}) %}
+                               <div>
+                    {% if pedido.en_alerta %}
+                    <span class="badge bg-danger fs-6" data-bs-toggle="tooltip" title="Alertado">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Alertado
+                    </span>
+                    {% endif %}
                 <span class="badge {{ config.class }} fs-6">
                     <i class="bi bi-{{ config.icon }} me-1"></i>{{ pedido.estado.replace('_', ' ') }}
                 </span>
+                               </div>
             </div>
             <div class="card-body">
                 <div class="col-md-12">
@@ -258,6 +289,49 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+                </div>
+            </div>
+            <!-- Pestaña de Trazabilidad -->
+            <div class="tab-pane fade" id="trazabilidad-tab-pane" role="tabpanel" aria-labelledby="trazabilidad-tab" tabindex="0">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-end align-items-center mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="trazabilidad-nivel-switch">
+                                <label class="form-check-label" for="trazabilidad-nivel-switch">Ver Trazabilidad Completa</label>
+                            </div>
+                        </div>
+
+                        <div id="resumen-trazabilidad-contenedor">
+                            <!-- El contenido se generará dinámicamente por JS -->
+                        </div>
+
+                        <div class="accordion" id="accordionDiagrama">
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingDiagrama">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#collapseDiagrama" aria-expanded="false"
+                                        aria-controls="collapseDiagrama">
+                                        <i class="bi bi-diagram-3 me-2"></i> Ver Diagrama de Red Completo
+                                    </button>
+                                </h2>
+                                <div id="collapseDiagrama" class="accordion-collapse collapse" aria-labelledby="headingDiagrama"
+                                    data-bs-parent="#accordionDiagrama">
+                                    <div class="accordion-body">
+                                        <p class="text-muted small">
+                                            El diagrama de red muestra el flujo completo del proceso. Haga clic en un
+                                            nodo para navegar a su página de detalle.
+                                        </p>
+                                        <div id="vis_trazabilidad"
+                                            style="height: 500px; border: 1px solid #ddd; border-radius: 4px;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -529,5 +603,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+<script>
+    // Variable global para que el JS de trazabilidad pueda acceder al ID
+    window.PEDIDO_ID = {{ pedido.id|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/trazabilidadPedido.js') }}?v=1.1"></script>
 
 {% endblock %}

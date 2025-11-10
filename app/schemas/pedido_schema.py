@@ -70,6 +70,7 @@ class PedidoSchema(Schema):
         allow_none=True,
         load_default='contado'
     )
+    en_alerta = fields.Boolean(dump_default=False)
     estado_pago = fields.Str(
         validate=validate.OneOf(['pendiente', 'pagado', 'vencido']),
         allow_none=True,
