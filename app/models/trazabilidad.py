@@ -149,8 +149,10 @@ class TrazabilidadModel:
             nodos[(tipo, id)] = {'data': data, 'es_generico': es_generico}
     
     def _agregar_arista(self, aristas, tipo_origen, id_origen, tipo_destino, id_destino, cantidad):
-        """Agrega una arista a la colección."""
-        aristas.add(((tipo_origen, id_origen), (tipo_destino, id_destino), cantidad))
+        """Agrega una arista a la colección, asegurando que la cantidad sea numérica."""
+        # Si la cantidad es None o una cadena vacía, usar 0.
+        cantidad_numerica = cantidad if cantidad is not None and cantidad != '' else 0
+        aristas.add(((tipo_origen, id_origen), (tipo_destino, id_destino), cantidad_numerica))
 
     def _agregar_nodo_y_arista(self, nodos, aristas, tipo_origen, id_origen, tipo_destino, id_destino, cantidad, cola, visitados):
         """Función helper para añadir nodos y aristas, y actualizar la cola de BFS."""
@@ -240,7 +242,7 @@ class TrazabilidadModel:
             'lote_insumo': {'tabla': 'insumos_inventario', 'id_col': 'id_lote', 'selects': '*, insumos_catalogo:id_insumo(nombre)'},
             'orden_produccion': {'tabla': 'ordenes_produccion', 'id_col': 'id', 'selects': '*, productos:producto_id(nombre)'},
             'lote_producto': {'tabla': 'lotes_productos', 'id_col': 'id_lote', 'selects': '*, productos:producto_id(nombre)'},
-            'pedido': {'tabla': 'pedidos', 'id_col': 'id', 'selects': '*, clientes:cliente_id(razon_social)'}
+            'pedido': {'tabla': 'pedidos', 'id_col': 'id', 'selects': '*, clientes:clientes(nombre, razon_social)'}
         }
         
         datos_enriquecidos = {}
@@ -339,11 +341,11 @@ class TrazabilidadModel:
         """Genera la sección de diagrama con formato para Vis.js."""
         nodos_diagrama = []
         urls = {
-            'orden_compra': '/compras/detalle/',
-            'lote_insumo': '/inventario/lote/',
-            'orden_produccion': '/ordenes_produccion/detalle/',
-            'lote_producto': '/lotes-productos/detalle/',
-            'pedido': '/orden-venta/detalle/'
+            'orden_compra': '/compras/detalle/<id>',
+            'lote_insumo': '/inventario/lote/<id>',
+            'orden_produccion': '/ordenes/<id>/detalle',
+            'lote_producto': '/lotes-productos/<id>/detalle',
+            'pedido': '/orden-venta/<id>/detalle'
         }
 
         for (tipo, id), info in nodos.items():
@@ -364,7 +366,7 @@ class TrazabilidadModel:
                 'group': tipo
             }
             if not es_generico and tipo in urls:
-                nodo_obj['url'] = f"{urls[tipo]}{id}"
+                nodo_obj['url'] = urls[tipo].replace('<id>', str(id))
             if es_generico:
                 nodo_obj['color'] = {'background':'#cccccc', 'border':'#aaaaaa'}
 

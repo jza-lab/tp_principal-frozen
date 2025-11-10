@@ -78,19 +78,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const ocsHtml = origen_ocs.length ? origen_ocs.map(item => `
             <li class="list-group-item">
-                <a href="${urls[item.tipo]}${item.id}" class="fw-bold">${item.nombre}</a>
+                <a href="${urls[item.tipo].replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
                 <div class="text-muted small">${item.detalle}</div>
             </li>`).join('') : '<li class="list-group-item text-muted">N/A</li>';
 
         const insumosHtml = origen_insumos.length ? origen_insumos.map(item => `
             <li class="list-group-item">
-                <a href="${urls[item.tipo]}${item.id}" class="fw-bold">${item.nombre}</a>
+                <a href="${urls[item.tipo].replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
                 <div class="text-muted small">${item.detalle}</div>
             </li>`).join('') : '<li class="list-group-item text-muted">N/A</li>';
 
         const destinoHtml = resumen.destino.length ? resumen.destino.map(item => `
             <li class="list-group-item">
-                <a href="${urls[item.tipo]}${item.id}" class="fw-bold">${item.nombre}</a>
+                <a href="${urls[item.tipo].replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
                 <div class="text-muted small">${item.detalle}</div>
             </li>`).join('') : '<li class="list-group-item text-muted">No hay entidades de destino.</li>';
 
@@ -217,10 +217,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Mapeo de URLs para el resumen (ya que el JS no puede usar url_for)
     const urls = {
-        orden_compra: '/compras/detalle/',
-        lote_insumo: '/inventario/lote/',
-        orden_produccion: '/ordenes_produccion/detalle/',
-        lote_producto: '/lotes-productos/detalle/',
-        pedido: '/orden-venta/detalle/'
+        orden_compra: '/compras/detalle/<id>',
+        lote_insumo: '/inventario/lote/<id>',
+        orden_produccion: '/ordenes/<id>/detalle',
+        lote_producto: '/lotes-productos/<id>/detalle',
+        pedido: '/orden-venta/<id>/detalle'
     };
 });

@@ -1,167 +1,114 @@
 {% extends 'layouts/app_layout.html' %}
 
-{% block title %}Reporte de Producción - Sistema Frozen{% endblock %}
+{% block title %}Reportes de Producción{% endblock %}
 
 {% block app_content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
-    <div>
-        <h1 class="h2 mb-1">Reporte de Producción</h1>
-        <p class="text-muted mb-0">Análisis de producción por período</p>
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Reportes de Producción</h1>
+        <button id="download-pdf" class="btn btn-primary shadow-sm"><i
+                class="fas fa-download fa-sm text-white-50"></i> Generar Reporte</button>
     </div>
-    <div class="btn-toolbar">
-        <button type="button" class="btn btn-outline-secondary me-2" onclick="window.print()">
-            <i class="bi bi-printer me-1"></i>Imprimir
-        </button>
-        <button type="button" class="btn btn-outline-secondary" disabled>
-            <i class="bi bi-download me-1"></i>Exportar PDF
-        </button>
-    </div>
-</div>
 
-<!-- Filtros -->
-<div class="card mb-4">
-    <div class="card-body card-filter">
-        <form method="get" action="{{ url_for('reportes.produccion') }}">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-3">
-                    <label for="fecha_inicio" class="form-label">Fecha Inicio</label>
-                    <input type="date" name="fecha_inicio" class="form-control" 
-                           value="{{ fecha_inicio or '' }}">
-                </div>
-                <div class="col-md-3">
-                    <label for="fecha_fin" class="form-label">Fecha Fin</label>
-                    <input type="date" name="fecha_fin" class="form-control" 
-                           value="{{ fecha_fin or '' }}">
-                </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-outline-secondary w-100">
-                        <i class="bi bi-funnel me-1"></i>Generar Reporte
-                    </button>
-                </div>
-                <div class="col-md-3">
-                    {% if reporte and not reporte.error %}
-                    <div class="text-muted small">
-                        <p>{{ reporte.total_ordenes_completadas }} órdenes encontradas</p>
+    <!-- Mensaje de "No Hay Datos" (Oculto por defecto) -->
+    <div id="no-data-message" class="text-center" style="display: none; padding: 50px 0;">
+        <i class="fas fa-chart-bar fa-3x text-gray-300 mb-3"></i>
+        <h4 class="text-gray-800">No hay datos suficientes para generar un reporte.</h4>
+        <p class="text-muted">Una vez que haya actividad de producción, los gráficos y estadísticas aparecerán aquí.</p>
+    </div>
+
+    <!-- Contenedor Principal de Reportes -->
+    <div id="report-container">
+        <!-- Fila 1: KPIs y Gráficos Pequeños -->
+        <div class="row">
+            <!-- Tiempo de Ciclo Promedio -->
+            <div class="col-xl-4 col-md-6 mb-4">
+                <div class="card border-left-info shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Tiempo de Ciclo Promedio</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="tiempo-ciclo-promedio">Calculando...</div>
+                                 <p class="text-muted small mt-2">Este valor representa el tiempo promedio (días, horas, minutos) desde que una orden de producción entra en línea hasta que se marca como 'Completada'. Mide la eficiencia del ciclo productivo.</p>
+                                 <div class="text-muted small mt-2 chart-description" id="tiempo-ciclo-description"></div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-clock fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
                     </div>
-                    {% endif %}
                 </div>
             </div>
-        </form>
-    </div>
-</div>
 
-{% if reporte and reporte.error %}
-    <div class="alert alert-danger border-danger">
-        <div class="d-flex align-items-center">
-            <i class="bi bi-exclamation-triangle me-2"></i>
-            <div>Error al generar el reporte: {{ reporte.error }}</div>
-        </div>
-    </div>
-{% elif reporte %}
-    <!-- Resumen del período -->
-    <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">
-                <i class="bi bi-graph-up me-2"></i>
-                Resumen del Período
-            </h5>
-        </div>
-        <div class="card-body">
-            <div class="row text-center">
-                <div class="col-md-3">
-                    <div class="border-end">
-                        <div class="h3 mb-1">{{ reporte.total_ordenes_completadas }}</div>
-                        <div class="text-muted small">Órdenes Completadas</div>
+            <!-- Órdenes por Estado -->
+            <div class="col-xl-4 col-md-6 mb-4">
+                <div class="card border-left-primary shadow h-100 py-2">
+                    <div class="card-body">
+                        <h6 class="m-0 font-weight-bold text-primary mb-2">Órdenes por Estado</h6>
+                        <p class="text-muted small mb-2">Cada sección del anillo representa un estado (ej. 'Pendiente', 'Completada'). El tamaño de la sección es proporcional al número de órdenes en ese estado.</p>
+                        <div id="ordenes-por-estado-chart" style="height: 220px;"></div>
+                        <div class="text-muted small mt-2 chart-description" id="ordenes-por-estado-description"></div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="border-end">
-                        <div class="h3 mb-1">{{ reporte.total_unidades_producidas or 0 }}</div>
-                        <div class="text-muted small">Unidades Producidas</div>
+            </div>
+            
+            <!-- Composición de la Producción -->
+            <div class="col-xl-4 col-md-6 mb-4">
+                <div class="card border-left-success shadow h-100 py-2">
+                    <div class="card-body">
+                        <h6 class="m-0 font-weight-bold text-success mb-2">Composición de la Producción</h6>
+                        <p class="text-muted small mb-2">Este gráfico circular muestra qué proporción de la producción total corresponde a cada producto. Cada sección representa un producto y su tamaño indica la cantidad a producir.</p>
+                        <div id="composicion-produccion-chart" style="height: 220px;"></div>
+                        <div class="text-muted small mt-2 chart-description" id="composicion-produccion-description"></div>
                     </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="border-end">
-                        <div class="h3 mb-1">95%</div>
-                        <div class="text-muted small">Eficiencia Promedio</div>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="h3 mb-1">2.5%</div>
-                    <div class="text-muted small">Índice de Desperdicio</div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Detalle de órdenes -->
-    <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">Detalle de Órdenes Completadas</h5>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-striped table-hover mb-0">
-                <thead>
-                    <tr>
-                        <th>Código</th>
-                        <th>Producto</th>
-                        <th>Cantidad</th>
-                        <th>Planificada</th>
-                        <th>Finalizada</th>
-                        <th>Operario</th>
-                        <th>Duración</th>
-                        <th class="text-end">Eficiencia</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for orden in reporte.detalle %}
-                    <tr>
-                        <td>
-                            <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" 
-                               class="text-decoration-none">
-                                <code>{{ orden.codigo }}</code>
-                            </a>
-                        </td>
-                        <td>
-                            <strong>{{ orden.producto_nombre or orden.producto or 'N/A' }}</strong>
-                        </td>
-                        <td>{{ orden.cantidad }} unidades</td>
-                        <td>{{ orden.fecha_planificada }}</td>
-                        <td>{{ orden.fecha_fin }}</td>
-                        <td>{{ orden.operario_nombre or 'N/A' }}</td>
-                        <td>
-                            {% if orden.horas_produccion is not none %}
-                                {{ "%.1f"|format(orden.horas_produccion) }}h
-                            {% else %}
-                                <span class="text-muted">N/A</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end">
-                            <span class="badge bg-success">95%</span>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="8" class="text-center text-muted py-5">
-                            <i class="bi bi-inbox fs-1 opacity-25 mb-2"></i>
-                            <div>No hay órdenes completadas en el período seleccionado</div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <!-- Fila 2: Gráficos Grandes -->
+        <div class="row">
+            <!-- Top Insumos Utilizados -->
+            <div class="col-xl-6 col-lg-12 mb-4">
+                <div class="card shadow">
+                    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                        <h6 class="m-0 font-weight-bold text-primary">Top Insumos Utilizados</h6>
+                        <select id="top-n-select" class="form-control form-control-sm" style="width: 100px;">
+                            <option value="5">Top 5</option>
+                            <option value="10">Top 10</option>
+                            <option value="15">Top 15</option>
+                        </select>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-2">Las barras representan los insumos más consumidos. El eje Y muestra el nombre del insumo y el eje X (horizontal) la cantidad total utilizada en las unidades correspondientes.</p>
+                        <div id="top-insumos-chart" style="height: 350px;"></div>
+                        <div class="text-muted small mt-2 chart-description" id="top-insumos-description"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Producción a lo largo del tiempo -->
+            <div class="col-xl-6 col-lg-12 mb-4">
+                <div class="card shadow">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Producción a lo largo del tiempo</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-2">La línea muestra cómo ha variado el número de órdenes completadas a lo largo del tiempo. El eje Y indica la cantidad de órdenes y el eje X las semanas o meses.</p>
+                        <div id="produccion-por-tiempo-chart" style="height: 350px;"></div>
+                        <div class="text-muted small mt-2 chart-description" id="produccion-por-tiempo-description"></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-{% else %}
-    <!-- Estado inicial -->
-    <div class="card">
-        <div class="card-body text-center py-5">
-            <i class="bi bi-bar-chart fs-1 opacity-25 mb-3"></i>
-            <h4>Reporte de Producción</h4>
-            <p class="text-muted mb-4">
-                Seleccione un rango de fechas para generar el reporte de producción
-            </p>
-        </div>
-    </div>
-{% endif %}
+</div>
+
+<!-- Scripts specific to this page -->
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.3.2/dist/echarts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/reportes/produccion.js') }}?v=1.7"></script>
+{% endblock %}
+
 {% endblock %}

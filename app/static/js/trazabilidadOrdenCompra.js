@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Para OC, el origen es ella misma o manual, no se muestra. El destino es lo importante.
         const destinoHtml = resumen.destino.length ? resumen.destino.map(item => `
             <li class="list-group-item">
-                <a href="${urls[item.tipo] || '#'}${item.id}" class="fw-bold">${item.nombre}</a>
+                <a href="${(urls[item.tipo] || '#').replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
                 <div class="text-muted small">${item.detalle}</div>
             </li>`).join('') : '<li class="list-group-item text-muted">No se han generado lotes de insumo desde esta orden.</li>';
 
@@ -115,10 +115,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const urls = {
-        orden_compra: '/compras/detalle/',
-        lote_insumo: '/inventario/lote/',
-        orden_produccion: '/ordenes_produccion/detalle/',
-        lote_producto: '/lotes-productos/detalle/',
-        pedido: '/orden-venta/detalle/'
+        orden_compra: '/compras/detalle/<id>',
+        lote_insumo: '/inventario/lote/<id>',
+        orden_produccion: '/ordenes/<id>/detalle',
+        lote_producto: '/lotes-productos/<id>/detalle',
+        pedido: '/orden-venta/<id>/detalle'
     };
 });

@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const TIPO_ENTIDAD = 'pedido';
-    const ID_ENTIDAD = window.PEDIDO_ID;
+    const TIPO_ENTIDAD = 'lote_producto';
+    const ID_ENTIDAD = window.LOTE_PRODUCTO_ID;
 
     // Elementos del DOM
     const trazabilidadTab = document.querySelector('#trazabilidad-tab');
@@ -8,14 +8,30 @@ document.addEventListener('DOMContentLoaded', function () {
     const resumenContenedor = document.getElementById('resumen-trazabilidad-contenedor');
     const nivelSwitch = document.getElementById('trazabilidad-nivel-switch');
     const accordionButton = document.querySelector('#accordionDiagrama .accordion-button');
-
+    
     let network = null;
     let datosCompletosCache = null;
 
     const visOptions = {
-        layout: { hierarchical: { direction: "LR", sortMethod: "directed", levelSeparation: 300, nodeSpacing: 200 } },
-        edges: { arrows: 'to', font: { align: 'middle' }, smooth: { type: 'cubicBezier' } },
-        nodes: { shape: 'box', margin: 10, font: { size: 14, color: '#ffffff' }, borderWidth: 2 },
+        layout: {
+            hierarchical: {
+                direction: "LR",
+                sortMethod: "directed",
+                levelSeparation: 300,
+                nodeSpacing: 200
+            }
+        },
+        edges: {
+            arrows: 'to',
+            font: { align: 'middle' },
+            smooth: { type: 'cubicBezier' }
+        },
+        nodes: {
+            shape: 'box',
+            margin: 10,
+            font: { size: 14, color: '#ffffff' },
+            borderWidth: 2
+        },
         groups: {
             lote_insumo: { color: { background: '#56B4E9', border: '#4691B9' } },
             orden_compra: { color: { background: '#F0E442', border: '#D4C83A' }, font: { color: '#333333' } },
@@ -28,34 +44,47 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     function mostrarCargando() {
-        resumenContenedor.innerHTML = `<div class="card-header">...</div><div class="card-body text-center"><div class="spinner-border text-primary"></div><p class="mt-2">Cargando...</p></div>`;
-        visContainer.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100"><div class="spinner-border text-primary"></div></div>`;
+        resumenContenedor.innerHTML = `<div class="card-body text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-2">Cargando resumen...</p></div>`;
+        visContainer.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando gráfico...</span></div></div>`;
     }
 
     function renderizarResumen(resumen) {
         if (!resumen || (!resumen.origen.length && !resumen.destino.length)) {
-            resumenContenedor.innerHTML = '<div class="card-header">...</div><div class="card-body"><p class="text-muted">No hay datos.</p></div>';
+            resumenContenedor.innerHTML = '<div class="card-body"><p class="text-muted">No hay datos de resumen para mostrar.</p></div>';
             return;
         }
 
-        // Para Pedido, el destino es él mismo, solo mostramos origen.
         const origenHtml = resumen.origen.length ? resumen.origen.map(item => `
             <li class="list-group-item">
-                <a href="${urls[item.tipo] || '#'}${item.id}" class="fw-bold">${item.nombre}</a>
+                <a href="${(urls[item.tipo] || '#').replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
                 <div class="text-muted small">${item.detalle}</div>
             </li>`).join('') : '<li class="list-group-item text-muted">No hay entidades de origen.</li>';
+        
+        const destinoHtml = resumen.destino.length ? resumen.destino.map(item => `
+            <li class="list-group-item">
+                <a href="${(urls[item.tipo] || '#').replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
+                <div class="text-muted small">${item.detalle}</div>
+            </li>`).join('') : '<li class="list-group-item text-muted">No hay entidades de destino.</li>';
 
         resumenContenedor.innerHTML = `
             <div class="card-header"><i class="bi bi-list-ul me-1"></i> Resumen de Trazabilidad</div>
             <div class="card-body">
-                <h5 class="mb-3 border-bottom pb-2"><i class="bi bi-arrow-up-circle-fill text-primary me-2"></i>Origen (Hacia Atrás)</h5>
-                <ul class="list-group list-group-flush">${origenHtml}</ul>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5 class="mb-3 border-bottom pb-2"><i class="bi bi-arrow-up-circle-fill text-primary me-2"></i>Origen (Hacia Atrás)</h5>
+                        <ul class="list-group list-group-flush">${origenHtml}</ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h5 class="mb-3 border-bottom pb-2"><i class="bi bi-arrow-down-circle-fill text-success me-2"></i>Destino (Hacia Adelante)</h5>
+                        <ul class="list-group list-group-flush">${destinoHtml}</ul>
+                    </div>
+                </div>
             </div>`;
     }
 
     function renderizarDiagrama(diagrama) {
         if (!diagrama || !diagrama.nodes || !diagrama.nodes.length) {
-            visContainer.innerHTML = '<div class="alert alert-info">No hay diagrama.</div>';
+            visContainer.innerHTML = '<div class="alert alert-info">No hay datos de diagrama para mostrar.</div>';
             accordionButton.textContent = 'No hay diagrama disponible';
             accordionButton.classList.add('disabled');
             return;
@@ -71,10 +100,12 @@ document.addEventListener('DOMContentLoaded', function () {
             network.setData({ nodes, edges });
         } else {
             network = new vis.Network(visContainer, { nodes, edges }, visOptions);
-            network.on("click", params => {
+            network.on("click", function (params) {
                 if (params.nodes.length > 0) {
                     const node = nodes.get(params.nodes[0]);
-                    if (node.url) window.location.href = node.url;
+                    if (node.url) {
+                        window.location.href = node.url;
+                    }
                 }
             });
         }
@@ -91,39 +122,44 @@ document.addEventListener('DOMContentLoaded', function () {
 
         mostrarCargando();
         fetch(`/api/trazabilidad/${TIPO_ENTIDAD}/${ID_ENTIDAD}?nivel=${nivel}`)
-            .then(response => response.ok ? response.json() : Promise.reject('Error'))
+            .then(response => response.ok ? response.json() : Promise.reject('Error de red'))
             .then(result => {
                 if (result.success && result.data) {
-                    if (nivel === 'completo') datosCompletosCache = result.data;
+                    if (nivel === 'completo') {
+                        datosCompletosCache = result.data;
+                    }
                     renderizarResumen(result.data.resumen);
                     renderizarDiagrama(result.data.diagrama);
                 } else {
-                    resumenContenedor.innerHTML = `<div class="card-header">...</div><div class="card-body"><div class="alert alert-warning">${result.error || 'Error.'}</div></div>`;
+                    resumenContenedor.innerHTML = `<div class="card-body"><div class="alert alert-warning">${result.error || 'No se pudieron cargar los datos.'}</div></div>`;
                     visContainer.innerHTML = '';
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
-                resumenContenedor.innerHTML = `<div class="card-header">...</div><div class="card-body"><div class="alert alert-danger">Error de conexión.</div></div>`;
+                console.error('Error al cargar datos:', error);
+                resumenContenedor.innerHTML = `<div class="card-body"><div class="alert alert-danger">Error al conectar con el servidor.</div></div>`;
                 visContainer.innerHTML = '';
             });
     }
 
     if (trazabilidadTab) {
-        trazabilidadTab.addEventListener('shown.bs.tab', () => cargarDatosTrazabilidad('simple'), { once: true });
+        trazabilidadTab.addEventListener('shown.bs.tab', () => {
+            cargarDatosTrazabilidad('simple');
+        }, { once: true });
     }
 
     if (nivelSwitch) {
         nivelSwitch.addEventListener('change', function () {
-            cargarDatosTrazabilidad(this.checked ? 'completo' : 'simple');
+            const nivelSeleccionado = this.checked ? 'completo' : 'simple';
+            cargarDatosTrazabilidad(nivelSeleccionado);
         });
     }
 
     const urls = {
-        orden_compra: '/compras/detalle/',
-        lote_insumo: '/inventario/lote/',
-        orden_produccion: '/ordenes_produccion/detalle/',
-        lote_producto: '/lotes-productos/detalle/',
-        pedido: '/orden-venta/detalle/'
+        orden_compra: '/compras/detalle/<id>',
+        lote_insumo: '/inventario/lote/<id>',
+        orden_produccion: '/ordenes/<id>/detalle',
+        lote_producto: '/lotes-productos/<id>/detalle',
+        pedido: '/orden-venta/<id>/detalle'
     };
 });

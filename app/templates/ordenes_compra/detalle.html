@@ -1,9 +1,7 @@
 {% extends 'layouts/app_layout.html' %}
 
 {% block title %}Orden de Compra {{ orden.codigo_oc }} - Sistema Frozen{% endblock %}
-{% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/usuarios/listarUsuarios.css') }}">
-{% endblock %}
+
 {% block app_content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
@@ -451,42 +449,49 @@
         </div>
     </div>
 </div>
-
-<!-- Pestaña de Trazabilidad -->
-<div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
-    
-    <!-- Selector de Nivel de Trazabilidad -->
-    <div class="d-flex justify-content-end align-items-center mb-3">
-        <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" role="switch" id="trazabilidad-nivel-switch">
-            <label class="form-check-label" for="trazabilidad-nivel-switch">Ver Trazabilidad Completa</label>
+    <!-- Pestaña de Trazabilidad -->
+    <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
+        
+        <!-- Selector de Nivel de Trazabilidad -->
+        <div class="d-flex justify-content-end align-items-center mb-3">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="trazabilidad-nivel-switch">
+                <label class="form-check-label" for="trazabilidad-nivel-switch">Ver Trazabilidad Completa</label>
+            </div>
         </div>
-    </div>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="bi bi-list-ul me-1"></i> Resumen de Trazabilidad
+            </div>
+            <div id="resumen-trazabilidad-contenedor" class="card-body">
+                <div class="text-center p-3">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando resumen...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    <div id="resumen-trazabilidad-contenedor">
-        <!-- El contenido se generará dinámicamente por JS -->
-    </div>
-
-    <div class="accordion" id="accordionDiagrama">
-        <div class="accordion-item">
-            <h2 class="accordion-header" id="headingDiagrama">
-                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                    data-bs-target="#collapseDiagrama" aria-expanded="false"
-                    aria-controls="collapseDiagrama">
-                    <i class="bi bi-diagram-3 me-2"></i> Ver Diagrama de Flujo (Sankey)
-                </button>
-            </h2>
-            <div id="collapseDiagrama" class="accordion-collapse collapse" aria-labelledby="headingDiagrama"
-                data-bs-parent="#accordionDiagrama">
-                <div class="accordion-body">
-                    <p class="text-muted small">
-                        El diagrama de flujo muestra las conexiones directas de esta Orden de Compra. Haga clic en un
-                        nodo para navegar a su página de detalle.
-                    </p>
-                    <div id="sankey_trazabilidad" style="width: 100%; min-height: 400px; border: 1px solid #ddd; border-radius: 4px;">
-                        <div class="d-flex justify-content-center align-items-center h-100">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">Cargando gráfico...</span>
+        <div class="accordion" id="accordionDiagrama">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingOne">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseDiagrama" aria-expanded="false" aria-controls="collapseDiagrama">
+                        <i class="bi bi-diagram-3 me-2"></i> Ver Diagrama de Flujo (Sankey)
+                    </button>
+                </h2>
+                <div id="collapseDiagrama" class="accordion-collapse collapse" aria-labelledby="headingOne"
+                    data-bs-parent="#accordionDiagrama">
+                    <div class="accordion-body">
+                        <p class="text-muted small">
+                            El diagrama de flujo muestra las conexiones de esta Orden de Compra. Pase el cursor sobre los flujos para ver cantidades y haga clic en un nodo para ver su detalle.
+                        </p>
+                        <div id="trazabilidad-sankey-oc" style="width: 100%; min-height: 400px; border: 1px solid #ddd; border-radius: 4px;">
+                            <div class="d-flex justify-content-center align-items-center h-100">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Cargando gráfico...</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -494,7 +499,6 @@
             </div>
         </div>
     </div>
-</div>
 </div> <!-- Fin de tab-content -->
 
 {% include "admin_riesgos/_modal_crear_alerta.html" %}

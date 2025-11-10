@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Para Pedido, el destino es él mismo, solo mostramos origen.
         const origenHtml = resumen.origen.length ? resumen.origen.map(item => `
             <li class="list-group-item">
-                <a href="${urls[item.tipo] || '#'}${item.id}" class="fw-bold">${item.nombre}</a>
+                <a href="${(urls[item.tipo] || '#').replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
                 <div class="text-muted small">${item.detalle}</div>
             </li>`).join('') : '<li class="list-group-item text-muted">No hay entidades de origen.</li>';
 
@@ -120,10 +120,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const urls = {
-        orden_compra: '/compras/detalle/',
-        lote_insumo: '/inventario/lote/',
-        orden_produccion: '/ordenes_produccion/detalle/',
-        lote_producto: '/lotes-productos/detalle/',
-        pedido: '/orden-venta/detalle/'
+        orden_compra: '/compras/detalle/<id>',
+        lote_insumo: '/inventario/lote/<id>',
+        orden_produccion: '/ordenes/<id>/detalle',
+        lote_producto: '/lotes-productos/<id>/detalle',
+        pedido: '/orden-venta/<id>/detalle'
     };
 });
