@@ -22,7 +22,6 @@
         {% elif orden.estado == 'APROBADA' %}
         <form action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id) }}" method="POST" class="d-inline">
             {{ csrf_form.csrf_token }}
-
             <button type="submit" class="btn btn-info">
                 <i class="bi bi-truck me-1"></i>Marcar como 'En Tránsito'
             </button>
@@ -63,6 +62,7 @@
                     'APROBADA': {'class': 'bg-info-soft text-info', 'icon': 'check-lg'},
                     'EN ESPERA DE INSUMO': {'class': 'bg-warning-soft text-warning', 'icon': 'hourglass-split'},
                     'EN_TRANSITO': {'class': 'bg-primary-soft text-primary', 'icon': 'truck'},
+                    'EN_RECEPCION': {'class': 'bg-info-soft text-info', 'icon': 'box-arrow-in-right'},
                     'RECEPCION_COMPLETA': {'class': 'bg-success-soft text-success', 'icon': 'box-seam'},
                     'EN_CONTROL_CALIDAD': {'class': 'bg-info-soft text-info', 'icon': 'clipboard-check'},                    
                     'RECEPCION_INCOMPLETA': {'class': 'bg-danger-soft text-danger', 'icon': 'box-seam'},
@@ -329,15 +329,15 @@
         </div>
         {% endif %}
 
-
-        <form id="recepcionForm"
-            action="{{ url_for('orden_compra.procesar_recepcion', orden_id=orden.id) if orden.estado == 'EN_TRANSITO' else '' }}"
-            method="POST">
+        
+        {% if orden.estado == 'EN_RECEPCION' %}
+        <!-- FORMULARIO DE RECEPCIÓN (SOLO VISIBLE EN ESTADO 'EN_RECEPCION') -->
+        <form id="recepcionForm" action="{{ url_for('orden_compra.procesar_recepcion', orden_id=orden.id) }}" method="POST">
             {{ csrf_form.csrf_token }}
 
             <div class="card mt-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Ítems de la Orden</h5>
+                <div class="card-header bg-success-soft">
+                    <h5 class="mb-0 text-success"><i class="bi bi-box-seam me-2"></i>Recepción de Ítems</h5>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -346,9 +346,7 @@
                                 <tr>
                                     <th scope="col">Insumo</th>
                                     <th scope="col" class="text-end">Cant. Solicitada</th>
-                                    {% if orden.estado in ['RECEPCION_INCOMPLETA', 'RECEPCION_COMPLETA', 'EN_CONTROL_CALIDAD', 'CERRADA', 'EN_TRANSITO'] %}
-                                    <th scope="col" class="text-end">Cant. Recibida</th>
-                                    {% endif %}
+                                    <th scope="col" class="text-center">Cant. Recibida</th>
                                     <th scope="col" class="text-end">Precio Unitario</th>
                                     <th scope="col" class="text-end">Subtotal</th>
                                 </tr>
@@ -358,39 +356,16 @@
                                 <tr class="item-row">
                                     <td>
                                         <div class="fw-bold">{{ item.insumo_nombre or 'Insumo no encontrado' }}</div>
-                                        {% if orden.estado == 'EN_TRANSITO' %}
                                         <input type="hidden" name="item_id[]" value="{{ item.id }}">
-                                        {% endif %}
                                     </td>
                                     <td class="text-end">{{ item.cantidad_solicitada }}</td>
-                                    
-                                    {% if orden.estado == 'EN_TRANSITO' %}
-                                        <td class="text-center" style="max-width: 150px;">
-                                            <input type="number" name="cantidad_recibida[]" class="form-control form-control-sm text-center cantidad-recibida" value="{{ item.cantidad_solicitada }}" min="0" step="any" required>
-                                        </td>
-                                    {% elif orden.estado in ['RECEPCION_INCOMPLETA', 'RECEPCION_COMPLETA', 'EN_CONTROL_CALIDAD', 'CERRADA'] %}
-                                        <td class="text-end">{{ item.cantidad_recibida | default(0) }}</td>
-                                    {% endif %}
-
-                                    {% if orden.estado == 'EN_TRANSITO' %}
-                                        <td class="text-end" style="max-width: 150px;">
-                                            <input type="number" name="precio_unitario[]" class="form-control form-control-sm text-end precio-unitario" value="{{ "%.2f"|format(item.precio_unitario|float) }}" min="0" step="any" required>
-                                        </td>
-                                    {% else %}
-                                        <td class="text-end">$ {{ item.precio_unitario | formato_moneda }}</td>
-                                    {% endif %}
-                                    
-                                    <td class="text-end fw-bold subtotal-item">
-                                        {% if item.cantidad_recibida is not none and orden.estado in ['RECEPCION_INCOMPLETA', 'RECEPCION_COMPLETA', 'EN_CONTROL_CALIDAD', 'CERRADA'] %}
-                                            $ {{ (item.cantidad_recibida * item.precio_unitario) | formato_moneda }}
-                                        {% else %}
-                                            $ {{ item.subtotal | formato_moneda }}
-                                        {% endif %}
+                                    <td class="text-center" style="max-width: 150px;">
+                                        <input type="number" name="cantidad_recibida[]" class="form-control form-control-sm text-center cantidad-recibida" value="{{ item.cantidad_solicitada }}" min="0" step="any" required>
                                     </td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="5" class="text-center text-muted py-4">No hay ítems en esta orden.</td>
+                                    <td class="text-end" style="max-width: 150px;">
+                                        <input type="number" name="precio_unitario[]" class="form-control form-control-sm text-end precio-unitario" value="{{ "%.2f"|format(item.precio_unitario|float) }}" min="0" step="any" required>
+                                    </td>
+                                    <td class="text-end fw-bold subtotal-item">$ {{ item.subtotal | formato_moneda }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -399,7 +374,6 @@
                 </div>
             </div>
 
-            {% if orden.estado == 'EN_TRANSITO' %}
             <div class="card mt-4">
                 <div class="card-header">
                     <h5 class="mb-0">Procesar Recepción</h5>
@@ -407,25 +381,72 @@
                 <div class="card-body">
                     <div class="mb-3">
                         <label for="observaciones_recepcion" class="form-label">Observaciones de Recepción</label>
-                        <textarea class="form-control" id="observaciones_recepcion" name="observaciones" rows="3"
-                            placeholder="Ej: La caja del insumo X llegó dañada."></textarea>
+                        <textarea class="form-control" id="observaciones_recepcion" name="observaciones" rows="3" placeholder="Ej: La caja del insumo X llegó dañada."></textarea>
                     </div>
                     <div class="d-flex justify-content-end gap-2">
-                        {% set can_receive = has_permission('logistica_recepcion_oc') or
-                        has_permission('gestionar_recepcion_orden_compra') %}
-                        <button type="submit" name="accion" value="rechazar"
-                            class="btn btn-danger {% if not can_receive %}disabled{% endif %}">
+                        {% set can_receive = has_permission('logistica_recepcion_oc') %}
+                        <button type="submit" name="accion" value="rechazar" class="btn btn-danger {% if not can_receive %}disabled{% endif %}">
                             <i class="bi bi-x-circle me-1"></i>Rechazar Pedido
                         </button>
-                        <button type="submit" name="accion" value="aceptar"
-                            class="btn btn-success {% if not can_receive %}disabled{% endif %}">
+                        <button type="submit" name="accion" value="aceptar" class="btn btn-success {% if not can_receive %}disabled{% endif %}">
                             <i class="bi bi-check-circle me-1"></i>Aceptar Recepción
                         </button>
                     </div>
                 </div>
             </div>
-            {% endif %}
         </form>
+        {% else %}
+        <!-- VISTA DE SOLO LECTURA PARA OTROS ESTADOS -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Ítems de la Orden</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th scope="col">Insumo</th>
+                                <th scope="col" class="text-end">Cant. Solicitada</th>
+                                <th scope="col" class="text-end">Cant. Recibida</th>
+                                <th scope="col" class="text-end">Precio Unitario</th>
+                                <th scope="col" class="text-end">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in orden['items'] %}
+                            <tr>
+                                <td>{{ item.insumo_nombre or 'Insumo no encontrado' }}</td>
+                                <td class="text-end">{{ item.cantidad_solicitada }}</td>
+                                <td class="text-end">{{ item.cantidad_recibida | default(0) }}</td>
+                                <td class="text-end">$ {{ item.precio_unitario | formato_moneda }}</td>
+                                <td class="text-end fw-bold">
+                                    {% if item.cantidad_recibida is not none %}
+                                        $ {{ (item.cantidad_recibida * item.precio_unitario) | formato_moneda }}
+                                    {% else %}
+                                        $ {{ item.subtotal | formato_moneda }}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">No hay ítems en esta orden.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Alerta de Retraso en Producción -->
+        {% if orden.orden_produccion_id %}
+        <div id="alerta-retraso-produccion" class="alert alert-warning mt-3 d-none" role="alert">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <strong>Atención:</strong> Esta OC está relacionada con la <strong>OP-{{ orden.orden_produccion_id }}</strong>. Una recepción incompleta puede causar retrasos en la producción.
+        </div>
+        {% endif %}
     </div>
 
     <div class="col-lg-4">
@@ -537,7 +558,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('recepcionForm');
     if (!form) return;
 
-    {% if orden.estado == 'EN_TRANSITO' %}
+    {% if orden.estado == 'EN_RECEPCION' %}
     const ivaRate = {{ 0.21 if orden.iva > 0 else 0 }};
 
     const formatCurrency = (value) => {
@@ -632,6 +653,41 @@ document.addEventListener('DOMContentLoaded', function () {
         submitTheForm('aceptar');
     });
 
+    // --- Lógica para Alerta de Retraso en Producción ---
+    {% if orden.orden_produccion_id and orden.estado == 'EN_RECEPCION' %}
+    const alertaProduccion = document.getElementById('alerta-retraso-produccion');
+    const itemRows = form.querySelectorAll('.item-row');
+
+    const verificarCantidades = () => {
+        let mostrarAlerta = false;
+        itemRows.forEach(row => {
+            const requestedQtyText = row.cells[1] ? row.cells[1].textContent.trim() : '0';
+            const requestedQty = parseFloat(requestedQtyText);
+            
+            const receivedQtyInput = row.querySelector('.cantidad-recibida');
+            const receivedQty = receivedQtyInput ? (parseFloat(receivedQtyInput.value) || 0) : 0;
+
+            if (receivedQty < requestedQty) {
+                mostrarAlerta = true;
+            }
+        });
+
+        if (mostrarAlerta) {
+            alertaProduccion.classList.remove('d-none');
+        } else {
+            alertaProduccion.classList.add('d-none');
+        }
+    };
+
+    form.addEventListener('input', (e) => {
+        if (e.target.classList.contains('cantidad-recibida')) {
+            verificarCantidades();
+        }
+    });
+
+    // Verificar al cargar la página por si hay valores iniciales diferentes
+    verificarCantidades();
+    {% endif %}
     {% endif %}
 });
 </script>
