@@ -5,11 +5,6 @@
 {% block app_content %}
 <div class="container-fluid px-4">
     <h1 class="mt-4">{% if is_new %}Crear Nueva Zona{% else %}Editar Zona: {{ zona.nombre if zona }}{% endif %}</h1>
-    <ol class="breadcrumb mb-4">
-        <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard.index') }}">Dashboard</a></li>
-        <li class="breadcrumb-item"><a href="{{ url_for('zonas.listar_zonas') }}">Gestión de Zonas</a></li>
-        <li class="breadcrumb-item active">{% if is_new %}Nueva{% else %}Editar{% endif %}</li>
-    </ol>
 
     <div class="card mb-4">
         <div class="card-header">
@@ -67,91 +62,10 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const searchInput = document.getElementById('localidad-search');
-    const availableList = document.getElementById('available-localities');
-    const assignedList = document.getElementById('assigned-localities');
-    const hiddenInput = document.getElementById('localidades_ids');
-
-    let assignedIds = new Set();
-
-    // Inicializar con localidades ya asignadas
-    assignedList.querySelectorAll('li').forEach(item => {
-        assignedIds.add(item.dataset.id);
-    });
-    updateHiddenInput();
-
-    // --- Búsqueda de Localidades ---
-    searchInput.addEventListener('input', async function() {
-        const term = this.value.trim();
-        if (term.length < 3) {
-            availableList.innerHTML = '';
-            return;
-        }
-
-        const response = await fetch(`/admin/zonas/api/buscar-localidades?term=${term}`);
-        const localidades = await response.json();
-        
-        availableList.innerHTML = '';
-        localidades.forEach(loc => {
-            if (!assignedIds.has(String(loc.id))) {
-                const li = document.createElement('li');
-                li.className = 'list-group-item list-group-item-action';
-                li.textContent = `${loc.localidad}, ${loc.provincia}`;
-                li.dataset.id = loc.id;
-                li.dataset.nombre = `${loc.localidad}, ${loc.provincia}`;
-                li.style.cursor = 'pointer';
-                li.addEventListener('click', addLocalidad);
-                availableList.appendChild(li);
-            }
-        });
-    });
-
-    // --- Añadir Localidad ---
-    function addLocalidad() {
-        const locId = this.dataset.id;
-        if (assignedIds.has(locId)) return;
-
-        assignedIds.add(locId);
-        this.remove(); // Quitar de disponibles
-
-        const li = document.createElement('li');
-        li.className = 'list-group-item d-flex justify-content-between align-items-center';
-        li.textContent = this.dataset.nombre;
-        li.dataset.id = locId;
-
-        const removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'btn btn-danger btn-sm';
-        removeBtn.innerHTML = '&times;';
-        removeBtn.addEventListener('click', removeLocalidad);
-        
-        li.appendChild(removeBtn);
-        assignedList.appendChild(li);
-        
-        updateHiddenInput();
+<script id="zona-data" type="application/json">
+    {
+        "zonaId": {{ zona.id|tojson if zona else 'null' }}
     }
-    
-    // --- Quitar Localidad ---
-    function removeLocalidad() {
-        const item = this.closest('li');
-        const locId = item.dataset.id;
-        
-        assignedIds.delete(locId);
-        item.remove();
-        updateHiddenInput();
-    }
-
-    // --- Sincronizar con el input oculto ---
-    function updateHiddenInput() {
-        hiddenInput.value = JSON.stringify(Array.from(assignedIds));
-    }
-
-    // Permitir quitar localidades ya cargadas en la página de edición
-    assignedList.querySelectorAll('.btn-danger').forEach(btn => {
-        btn.addEventListener('click', removeLocalidad);
-    });
-});
 </script>
+<script src="{{ url_for('static', filename='js/despachos/gestion_zonas.js') }}"></script>
 {% endblock %}

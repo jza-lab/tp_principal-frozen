@@ -207,6 +207,12 @@
                                 {% endif %}
                             </a>
                         </li>
+                        
+                        <li><hr class="dropdown-divider"></li>
+                        {% if 'gestionar_flota' is has_permission and 'consultar_zonas' is has_permission %}
+                        <li><a class="dropdown-item {% if request.endpoint.startswith('envio') %}active{% endif %}" href="{{ url_for('envio.gestion_envios') }}"><i class="fas fa-shipping-fast me-2"></i> Gestión de Envíos</a></li>
+                        {% endif %}
+                        
                         <li><a class="dropdown-item {% if 'listar_clientes' in request.endpoint %}active{% endif %}"
                                 href="{{ url_for('clientes_proveedores.listar_clientes') }}"><i
                                     class="bi bi-person-rolodex me-2"></i> Gestión de Clientes</a></li>

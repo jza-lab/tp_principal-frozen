@@ -1,25 +1,42 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from app.controllers.despacho_controller import DespachoController
-# from app.utils.decorators import permission_required
+from datetime import datetime
+from app.controllers.vehiculo_controller import VehiculoController 
+from app.utils.decorators import permission_required
 
 despacho_bp = Blueprint('despacho', __name__, url_prefix='/admin/despachos')
 despacho_controller = DespachoController()
+vehiculo_controller = VehiculoController()
 
-@despacho_bp.route('/crear')
-# @permission_required('crear_despachos')
-def crear_despacho_vista():
+@despacho_bp.route('/')
+@permission_required('consultar_despachos')
+def listar_despachos():
+    response = despacho_controller.obtener_todos_los_despachos()
+    if response['success']:
+        despachos = response['data']
+    else:
+        flash(response.get('error', 'Error al cargar los despachos.'), 'danger')
+        despachos = []
+    return render_template('despachos/listar.html', despachos=despachos)
+
+@despacho_bp.route('/gestion', methods=['GET'])
+@permission_required('crear_despachos') # Usamos el mismo permiso, ya que es la misma área funcional
+def gestion_despachos_vista():
     """
-    Muestra la página para crear un nuevo despacho, cargando los pedidos
-    que están listos para ser enviados.
+    Muestra la página de gestión de despachos, que incluye la creación de nuevos
+    despachos (pestaña 1) y el historial de despachos existentes (pestaña 2).
+    Si se pasa un `pedido_id`, ese pedido vendrá pre-seleccionado en la primera pestaña.
     """
-    response = despacho_controller.obtener_pedidos_para_despacho()
-    if not response['success']:
-        flash(response['error'], 'danger')
+    pedido_id_seleccionado = request.args.get('pedido_id', type=int)
+
+    # 1. Obtener pedidos listos para despachar (para la pestaña de creación)
+    response_pedidos = despacho_controller.obtener_pedidos_para_despacho()
+    if not response_pedidos['success']:
+        flash(response_pedidos['error'], 'danger')
         pedidos = []
     else:
-        pedidos = response['data']
+        pedidos = response_pedidos['data']
     
-    # Agrupar pedidos por zona para la vista
     pedidos_por_zona = {}
     for pedido in pedidos:
         zona_nombre = pedido.get('zona', {}).get('nombre', 'Sin Zona Asignada')
@@ -27,10 +44,35 @@ def crear_despacho_vista():
             pedidos_por_zona[zona_nombre] = []
         pedidos_por_zona[zona_nombre].append(pedido)
 
-    return render_template('despachos/crear.html', pedidos_por_grupo=pedidos_por_zona)
+    # 2. Obtener historial de despachos (para la pestaña de historial)
+    response_despachos, _ = despacho_controller.get_all()
+    if response_despachos and response_despachos.get('success'):
+        despachos_existentes = response_despachos.get('data', [])
+        # Corrección: Convertir 'created_at' de string a objeto datetime
+        for despacho in despachos_existentes:
+            if despacho.get('created_at') and isinstance(despacho['created_at'], str):
+                # fromisoformat maneja correctamente la información de zona horaria
+                despacho['created_at'] = datetime.fromisoformat(despacho['created_at'])
+    else:
+        flash(response_despachos.get('error', 'Error al cargar el historial de despachos.'), 'danger')
+        despachos_existentes = []
+
+    # 3. Obtener todos los vehículos para el selector del formulario
+    response_vehiculos = vehiculo_controller.obtener_todos_los_vehiculos()
+    if not response_vehiculos or not response_vehiculos.get('success'):
+        flash(response_vehiculos.get('error', 'Error al cargar la lista de vehículos.'), 'danger')
+        vehiculos = []
+    else:
+        vehiculos = response_vehiculos.get('data', [])
+
+    return render_template('despachos/gestion_despachos.html', 
+                           pedidos_por_grupo=pedidos_por_zona, 
+                           pedido_seleccionado_id=pedido_id_seleccionado,
+                           despachos=despachos_existentes,
+                           vehiculos=vehiculos)
 
 @despacho_bp.route('/api/crear', methods=['POST'])
-# @permission_required('crear_despachos')
+@permission_required('crear_despachos')
 def api_crear_despacho():
     """
     Endpoint API para crear un despacho y asociar los pedidos.
@@ -50,13 +92,15 @@ def api_crear_despacho():
     )
 
     if response['success']:
-        flash('Despacho creado exitosamente.', 'success')
-        return {'success': True, 'data': response['data'], 'redirect_url': url_for('orden_venta.listar')}, 201
+        flash(f"Despacho #{response['data']['despacho_id']} creado exitosamente.", 'success')
+        # Redirigir a la misma página de gestión, pero a la pestaña de historial.
+        redirect_url = url_for('despacho.gestion_despachos_vista', tab='historial')
+        return {'success': True, 'data': response['data'], 'redirect_url': redirect_url}, 201
     else:
         return {'success': False, 'error': response.get('error', 'Error interno al crear el despacho')}, 500
 
 @despacho_bp.route('/hoja-de-ruta/<int:despacho_id>')
-# @permission_required('consultar_despachos')
+@permission_required('consultar_despachos')
 def descargar_hoja_de_ruta(despacho_id):
     """
     Genera y devuelve la Hoja de Ruta en formato PDF para un despacho específico.

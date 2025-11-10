@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const searchBtn = document.getElementById('search-btn');
     const patenteInput = document.getElementById('patente-search');
     const vehicleInfoDiv = document.getElementById('vehicle-info');
+    const patenteErrorDiv = document.getElementById('patente-error');
     const confirmBtn = document.getElementById('confirm-despacho-btn');
     const checkboxes = document.querySelectorAll('.pedido-checkbox');
     
@@ -17,28 +18,40 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     async function buscarVehiculo() {
-        const patente = patenteInput.value.trim();
+        const patente = patenteInput.value.trim().toUpperCase();
         if (!patente) return;
+
+        // Limpiar estado de validación previo
+        patenteInput.classList.remove('is-invalid');
+        patenteErrorDiv.textContent = '';
 
         try {
             const response = await fetch(`/admin/vehiculos/api/buscar?patente=${patente}`);
             const result = await response.json();
 
-            if (result.success) {
-                vehicleData = result.data;
+            if (result.success && result.data) {
+                vehicleData = result.data; // La API devuelve un solo objeto
                 document.getElementById('vehicle-patente').textContent = `Patente: ${vehicleData.patente}`;
-                document.getElementById('vehicle-conductor').textContent = vehicleData.nombre_conductor;
-                document.getElementById('vehicle-capacidad').textContent = vehicleData.capacidad_kg;
+                document.getElementById('vehicle-conductor').textContent = `${vehicleData.nombre_conductor} (DNI: ${vehicleData.dni_conductor})`;
+                document.getElementById('vehicle-capacidad').textContent = `${vehicleData.capacidad_kg} kg`;
                 document.getElementById('vehicle-id').value = vehicleData.id;
                 vehicleInfoDiv.style.display = 'block';
+                patenteInput.classList.remove('is-invalid');
+                patenteInput.classList.add('is-valid');
             } else {
-                alert(result.error || 'Vehículo no encontrado.');
                 vehicleData = null;
                 vehicleInfoDiv.style.display = 'none';
+                patenteInput.classList.add('is-invalid');
+                patenteInput.classList.remove('is-valid');
+                patenteErrorDiv.textContent = result.error || 'Vehículo no encontrado.';
             }
         } catch (error) {
             console.error('Error buscando vehículo:', error);
-            alert('Error de red al buscar el vehículo.');
+            vehicleData = null;
+            vehicleInfoDiv.style.display = 'none';
+            patenteInput.classList.add('is-invalid');
+            patenteInput.classList.remove('is-valid');
+            patenteErrorDiv.textContent = 'Error de red al buscar el vehículo.';
         }
         updateUI();
     }
@@ -46,9 +59,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Selección de Pedidos ---
     checkboxes.forEach(cb => {
         cb.addEventListener('change', function() {
-            const row = this.closest('tr');
-            const pedidoId = row.dataset.pedidoId;
-            const peso = parseFloat(row.dataset.peso);
+            const pedidoId = this.value;
+            const peso = parseFloat(this.dataset.peso) || 0;
 
             if (this.checked) {
                 selectedPedidos.set(pedidoId, peso);

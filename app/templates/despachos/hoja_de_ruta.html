@@ -63,11 +63,11 @@
         <div class="header-info">
             <div>
                 <strong>Fecha de Emisión:</strong> {{ fecha_emision }}<br>
-                <strong>Conductor:</strong> {{ despacho.vehiculo.conductor.nombre }} {{ despacho.vehiculo.conductor.apellido }}<br>
-                <strong>DNI Conductor:</strong> {{ despacho.vehiculo.conductor.dni }}
+                <strong>Conductor:</strong> {{ despacho.vehiculo.nombre_conductor }}<br>
+                <strong>DNI Conductor:</strong> {{ despacho.vehiculo.dni_conductor }}
             </div>
             <div>
-                <strong>Vehículo:</strong> {{ despacho.vehiculo.marca }} {{ despacho.vehiculo.modelo }}<br>
+                <strong>Vehículo:</strong> {{ despacho.vehiculo.tipo_vehiculo }}<br>
                 <strong>Patente:</strong> {{ despacho.vehiculo.patente }}<br>
                 <strong>Total de Pedidos:</strong> {{ despacho.pedidos|length }}
             </div>

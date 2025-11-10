@@ -5,10 +5,6 @@
 {% block app_content %}
 <div class="container-fluid px-4">
     <h1 class="mt-4">{% if is_new %}Nuevo Vehículo{% else %}Editar Vehículo{% endif %}</h1>
-    <ol class="breadcrumb mb-4">
-        <li class="breadcrumb-item"><a href="{{ url_for('vehiculo.listar_vehiculos') }}">Vehículos</a></li>
-        <li class="breadcrumb-item active">{% if is_new %}Nuevo{% else %}Editar{% endif %}</li>
-    </ol>
     <div class="card mb-4">
         <div class="card-header">
             <i class="fas fa-car-side me-1"></i>

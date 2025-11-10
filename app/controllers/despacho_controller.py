@@ -33,41 +33,87 @@ class DespachoController(BaseController):
 
     def obtener_pedidos_para_despacho(self):
         """
-        Obtiene todos los pedidos que están en estado 'LISTO PARA ENTREGAR',
-        les asigna su zona y calcula el peso total de cada uno.
+        Obtiene todos los pedidos en estado 'LISTO PARA ENTREGAR', les asigna su
+        zona y calcula su peso total de forma optimizada.
         """
-        response, _ = self.pedido_controller.obtener_pedidos(filtros={'estado': 'LISTO_PARA_ENTREGA'})
-        
-        if not response.get('success'):
-            return response
+        # 1. Obtener los pedidos base
+        pedidos_response, _ = self.pedido_controller.obtener_pedidos(filtros={'estado': 'LISTO_PARA_ENTREGA'})
+        if not pedidos_response.get('success'):
+            return pedidos_response
 
+        pedidos = pedidos_response.get('data', [])
+        if not pedidos:
+            return {'success': True, 'data': []}
+
+        # 2. Recolectar todos los IDs de productos únicos
+        producto_ids = set()
+        for pedido in pedidos:
+            for item in pedido.get('pedido_items', []):
+                if item.get('producto_id'):
+                    producto_ids.add(item['producto_id'])
+
+        # 3. Obtener los pesos de todos los productos en una sola consulta
+        pesos_map = {}
+        if producto_ids:
+            producto_model = self.producto_controller.model
+            table_name = producto_model.get_table_name()
+            try:
+                # Usamos 'in_' para buscar múltiples IDs
+                response = producto_model.db.table(table_name).select('id, peso_total_gramos').in_('id', list(producto_ids)).execute()
+                productos_data = response.data
+                # Crear un mapa de id -> peso para búsqueda rápida
+                for prod in productos_data:
+                    pesos_map[prod['id']] = prod.get('peso_total_gramos', 0) or 0
+            except Exception as e:
+                # Si la consulta de pesos falla, es mejor registrar el error y continuar
+                # asignando peso 0 que romper toda la funcionalidad.
+                print(f"Error al obtener pesos de productos: {e}")
+
+        # 4. Obtener el mapa de zonas
         zona_map_response = self.zona_controller.obtener_mapa_localidades_a_zonas()
         zona_map = zona_map_response.get('data', {}) if zona_map_response.get('success') else {}
 
+        # 5. Enriquecer cada pedido con su zona y peso total calculado
         pedidos_enriquecidos = []
-        for pedido in response['data']:
+        for pedido in pedidos:
             # Asignar zona
             localidad = pedido.get('direccion', {}).get('localidad', 'Sin Localidad')
-            zona_nombre = zona_map.get(localidad, 'Sin Zona Asignada')
-            pedido['zona'] = {'nombre': zona_nombre}
+            pedido['zona'] = {'nombre': zona_map.get(localidad, 'Sin Zona Asignada')}
 
-            # Calcular peso
-            peso_total = 0
-            if 'pedido_items' in pedido and pedido['pedido_items']:
-                for item in pedido['pedido_items']:
-                    producto_id = item.get('producto_id')
-                    cantidad = item.get('cantidad', 0)
-                    
-                    if producto_id:
-                        producto_data = self.producto_controller.obtener_producto_por_id(producto_id)
-                        if producto_data:
-                            peso_unitario = producto_data.get('peso_por_paquete_valor', 0)
-                            peso_total += (peso_unitario or 0) * cantidad
+            # Calcular peso total usando el mapa de pesos
+            peso_total_gramos = 0
+            for item in pedido.get('pedido_items', []):
+                cantidad = item.get('cantidad', 0)
+                peso_unitario = pesos_map.get(item.get('producto_id'), 0)
+                peso_total_gramos += cantidad * peso_unitario
             
-            pedido['peso_total_calculado'] = round(peso_total, 2)
+            pedido['peso_total_calculado_kg'] = round(peso_total_gramos / 1000, 2)
             pedidos_enriquecidos.append(pedido)
 
         return {'success': True, 'data': pedidos_enriquecidos}
+
+    def get_all(self):
+        """
+        Obtiene todos los despachos existentes, incluyendo información del vehículo
+        y los pedidos asociados.
+        """
+        try:
+            # Columnas a seleccionar para enriquecer la información del despacho
+            select_columns = '*, vehiculo:vehiculo_id(patente, tipo_vehiculo, capacidad_kg, nombre_conductor, dni_conductor), despacho_items(*, pedido:pedido_id(*))'
+
+            # Corrección: Construir la consulta con select() en lugar de usar find_all con parámetros.
+            result = self.model.db.table(self.model.get_table_name()).select(select_columns).execute()
+            
+            # El resultado de execute() es un objeto con un atributo 'data'.
+            if hasattr(result, 'data'):
+                return self.success_response(result.data)
+            else:
+                # Manejar el caso en que la respuesta no es la esperada.
+                return self.error_response('Error al obtener despachos: la respuesta no contiene datos.', 500)
+
+        except Exception as e:
+            # Capturar cualquier excepción inesperada durante el proceso
+            return self.error_response(f"Error excepcional en DespachoController.get_all: {e}", 500)
 
     def crear_despacho_y_actualizar_pedidos(self, vehiculo_id, pedido_ids, observaciones):
         """
@@ -79,18 +125,23 @@ class DespachoController(BaseController):
         if not despacho_response['success']:
             return despacho_response
 
-        despacho_id = despacho_response['data'][0]['id']
+        despacho_id = despacho_response['data']['id']
         
-        # Usamos un modelo genérico para la tabla de items del despacho
-        despacho_items_model = GenericBaseModel()
-        despacho_items_model.get_table_name = lambda: 'despacho_items'
+        # Se define una clase de modelo concreta para despacho_items
+        class DespachoItemModel(GenericBaseModel):
+            def get_table_name(self):
+                return 'despacho_items'
+
+        despacho_items_model = DespachoItemModel()
 
         for pedido_id in pedido_ids:
             # Asociar pedido al despacho
             despacho_items_model.create({'despacho_id': despacho_id, 'pedido_id': pedido_id})
             
             # Actualizar estado del pedido
-            self.pedido_controller.actualizar_estado_pedido(pedido_id, 'EN_TRANSITO')
+            # Esto asegura que el stock se consuma y las reservas se actualicen.
+            # Pasamos form_data=None porque los datos del transportista ya están en la tabla 'despachos'.
+            despacho_pedido_res, _ = self.pedido_controller.despachar_pedido(pedido_id, form_data=None)
 
         return {'success': True, 'data': {'despacho_id': despacho_id}}
 
@@ -104,13 +155,15 @@ class DespachoController(BaseController):
         from datetime import datetime
 
         # 1. Obtener datos del despacho
-        response = self.model.get_by_id(despacho_id, 
-            related_entities=['vehiculo:vehiculo_id(patente,marca,modelo,conductor:conductor_id(*))', 'despacho_items:despacho_id(pedido:pedido_id(*,cliente:cliente_id(*),direccion:direccion_id(*)))']
-        )
-        if not response['success'] or not response['data']:
+        response = self.model.db.table(self.model.get_table_name()) \
+            .select('*, vehiculo:vehiculo_id(patente, tipo_vehiculo, capacidad_kg, nombre_conductor, dni_conductor), despacho_items(*, pedido:pedido_id(*, cliente:clientes(*), direccion:usuario_direccion(*)))') \
+            .filter('id', 'eq', despacho_id) \
+            .execute()
+
+        if not response.data:
             return {'success': False, 'error': 'Despacho no encontrado'}
         
-        despacho_data = response['data'][0]
+        despacho_data = response.data[0]
         
         # Simplificar estructura de datos para la plantilla
         despacho_data['pedidos'] = [item['pedido'] for item in despacho_data.get('despacho_items', [])]

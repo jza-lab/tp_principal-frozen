@@ -43,16 +43,14 @@
                             {{ estado_nombre }}
                         </a>
                     {% endfor %}
+
+                    {% if current_status == 'LISTO_PARA_ENTREGA' %}
+                    <a href="{{ url_for('despacho.gestion_despachos_vista') }}" class="btn btn-info ms-auto">
+                        <i class="bi bi-truck me-2"></i> Gestionar Envíos y Despachar Pedidos
+                    </a>
+                    {% endif %}
                 </div>
             </div>
-            
-            {% if current_status == 'LISTO_PARA_ENTREGA' %}
-            <div class="col-12 text-center mt-3">
-                <a href="{{ url_for('despacho.crear_despacho_vista') }}" class="btn btn-info btn-lg">
-                    <i class="bi bi-truck me-2"></i> Gestionar Envíos y Despachar Pedidos
-                </a>
-            </div>
-            {% endif %}
         </div>
     </div>
 </div>

@@ -649,10 +649,15 @@ class InsumoController(BaseController):
                 stock = float(insumo.get('stock_actual') or 0)
                 minimo = float(insumo.get('stock_min') or 0)
 
-                # Volvemos a chequear stock < minimo aquí
                 if stock < minimo:
+                    insumo_completo_res = self.insumo_model.find_by_id(insumo['id_insumo'], 'id_insumo')
+                    if not insumo_completo_res.get('success'):
+                        logger.warning(f"No se pudo obtener el detalle completo del insumo {insumo['id_insumo']} para OC automática.")
+                        continue
+                    
+                    insumo_completo = insumo_completo_res.get('data', {})
                     cantidad_a_pedir = math.ceil(minimo - stock)
-                    precio_unitario = float(insumo.get('precio_unitario') or 0)
+                    precio_unitario = float(insumo_completo.get('precio_unitario') or 0)
                     
                     items_para_oc.append({
                         'insumo_id': insumo['id_insumo'],
@@ -661,9 +666,6 @@ class InsumoController(BaseController):
                         'cantidad_recibida': 0.0
                     })
                     insumos_para_marcar_en_espera.append(insumo['id_insumo'])
-                    
-                    # === SOLUCIÓN PROBLEMA 1: Sumar al subtotal ===
-                    subtotal_calculado += (cantidad_a_pedir * precio_unitario)
 
             if not items_para_oc:
                 logger.info(f"No se encontraron insumos CON BAJO STOCK (que no estén 'en espera') para el proveedor {proveedor_nombre_logging}.")

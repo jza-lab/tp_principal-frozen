@@ -1,6 +1,7 @@
 from app.models.base_model import BaseModel
 from typing import Dict, Any, List, Optional
 import logging
+from postgrest.exceptions import APIError
 
 logger = logging.getLogger(__name__)
 
@@ -80,17 +81,20 @@ class PedidoModel(BaseModel):
 
         pedido_data['todas_ops_completadas'] = todas_completadas # Añadir bandera al pedido
 
-        # 4. Obtener datos de despacho si existen (NUEVA LÓGICA)
-        pedido_data['despacho'] = None # Inicializar por defecto
-        # Primero, buscar en la tabla intermedia
-        despacho_item_result = self.db.table('despacho_items').select('despacho_id').eq('pedido_id', pedido_id).limit(1).execute()
+        # 4. Obtener datos de despacho si existen (CORREGIDO)
+        pedido_data['despacho'] = None
+        try:
+            # La relación es Pedido -> despacho_items -> Despacho.
+            # Primero, encontrar el despacho_item que corresponde a este pedido.
+            item_despacho_res = self.db.table('despacho_items').select('despachos(*, vehiculo:vehiculo_id(*))').eq('pedido_id', pedido_id).maybe_single().execute()
 
-        if despacho_item_result.data:
-            despacho_id = despacho_item_result.data[0]['despacho_id']
-            # Ahora, con el ID del despacho, obtener sus detalles
-            despacho_result = self.db.table('despachos').select('*').eq('id', despacho_id).single().execute()
-            if despacho_result.data:
-                pedido_data['despacho'] = despacho_result.data
+            # Si se encuentra un item_despacho y tiene datos de despacho anidados...
+            if item_despacho_res.data and item_despacho_res.data.get('despachos'):
+                pedido_data['despacho'] = item_despacho_res.data['despachos']
+
+        except APIError as e:
+            # Si la consulta a despachos falla (ej. RLS), no bloquear la carga del pedido.
+            logger.warning(f"No se pudieron obtener datos de despacho para el pedido {pedido_id}. Error: {e.message}")
 
         return {'success': True, 'data': pedido_data}
 

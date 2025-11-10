@@ -1,8 +1,13 @@
 from app.controllers.base_controller import BaseController
-from app.models.receta import RecetaModel, RecetaIngrediente
+from app.models.receta import RecetaModel
+from app.models.producto import ProductoModel
+from app.models.insumo import InsumoModel
 from app.schemas.receta_schema import RecetaSchema
 from typing import Dict, List, Optional
 from marshmallow import ValidationError
+import logging
+
+logger = logging.getLogger(__name__)
 
 class RecetaController(BaseController):
     """
@@ -12,6 +17,63 @@ class RecetaController(BaseController):
         super().__init__()
         self.model = RecetaModel()
         self.schema = RecetaSchema()
+        self.producto_model = ProductoModel()
+        self.insumo_model = InsumoModel()
+
+    def _calcular_y_actualizar_peso_producto(self, receta_id: int) -> Dict:
+        """
+        Calcula el peso total de un producto basado en los insumos de su receta y lo actualiza en la DB.
+        """
+        try:
+            # 1. Obtener la receta y el producto asociado
+            receta_resp, _ = self.obtener_receta_con_ingredientes(receta_id)
+            if not receta_resp.get('success'):
+                return {'success': False, 'error': f"Receta {receta_id} no encontrada."}
+            
+            receta = receta_resp['data']
+            producto_id = receta.get('producto_id')
+            ingredientes = receta.get('ingredientes', [])
+
+            if not producto_id:
+                return {'success': False, 'error': "La receta no está asociada a ningún producto."}
+
+            if not ingredientes:
+                # Si no hay ingredientes, el peso es 0.
+                self.producto_model.update(producto_id, {'peso_total_gramos': 0}, 'id')
+                return {'success': True, 'message': 'Receta sin ingredientes, peso establecido a 0.'}
+
+            # 2. Calcular peso total de los insumos
+            peso_total_insumos = 0
+            for ing in ingredientes:
+                insumo_id = ing.get('id_insumo')
+                cantidad = float(ing.get('cantidad', 0))
+
+                insumo_resp = self.insumo_model.find_by_id(insumo_id, 'id_insumo')
+                if not insumo_resp.get('success'):
+                    raise Exception(f"Insumo ID {insumo_id} no encontrado en el catálogo.")
+
+                insumo = insumo_resp['data']
+                peso_unitario = insumo.get('peso_gramos_unidad')
+
+                if peso_unitario is None or float(peso_unitario) <= 0:
+                    raise Exception(f"El insumo '{insumo.get('nombre')}' (ID: {insumo_id}) no tiene un 'peso_gramos_unidad' válido definido.")
+                
+                peso_total_insumos += cantidad * float(peso_unitario)
+
+            # 3. Añadir porcentaje de empaque (5%)
+            peso_final = peso_total_insumos * 1.05
+
+            # 4. Actualizar el producto
+            update_resp = self.producto_model.update(producto_id, {'peso_total_gramos': peso_final}, 'id')
+            if not update_resp.get('success'):
+                raise Exception(f"No se pudo actualizar el peso del producto ID {producto_id}.")
+
+            logger.info(f"Peso del producto ID {producto_id} actualizado a {peso_final}g.")
+            return {'success': True}
+
+        except Exception as e:
+            logger.error(f"Error calculando peso para receta {receta_id}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
 
     def obtener_recetas(self, filtros: Optional[Dict] = None) -> List[Dict]:
         """
@@ -118,15 +180,18 @@ class RecetaController(BaseController):
             # Crear los ingredientes
             for ingrediente in ingredientes_data:
                 ingrediente['receta_id'] = nueva_receta_id
-                ingrediente_result = self.ingrediente_model.create(ingrediente)
+                # Asumo que existe un self.ingrediente_model
+                ingrediente_result = self.model.db.table('receta_ingredientes').insert(ingrediente).execute()
 
                 # Si falla un ingrediente, se intenta revertir la creación de la receta
-                if not ingrediente_result.get('success'):
+                if not ingrediente_result.data:
                     self.model.delete(nueva_receta_id, 'id')
-                    return {'success': False, 'error': f"Error al crear ingrediente: {ingrediente_result.get('error')}"}
+                    return {'success': False, 'error': "Error al crear ingrediente"}
+
+            # Calcular el peso del producto después de crear la receta
+            self._calcular_y_actualizar_peso_producto(nueva_receta_id)
 
             return {'success': True, 'data': receta_result['data']}
-
         except ValidationError as e:
             return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
         except Exception as e:
@@ -143,7 +208,9 @@ class RecetaController(BaseController):
             self.model.db.table('receta_ingredientes').delete().eq('receta_id', receta_id).execute()
 
             if not receta_items:
-                return {'success': True} # No hay nada más que hacer si no hay nuevos ingredientes.
+                # Si no hay ingredientes, recalcular el peso (será 0)
+                self._calcular_y_actualizar_peso_producto(receta_id)
+                return {'success': True} 
 
             # 2. Preparar los nuevos ingredientes para una inserción en lote
             ingredientes_a_insertar = [
@@ -163,6 +230,9 @@ class RecetaController(BaseController):
             if len(insert_result.data) != len(ingredientes_a_insertar):
                 raise Exception("No se pudieron guardar todos los ingredientes de la receta.")
             
+            # Calcular el peso del producto después de actualizar los ingredientes
+            self._calcular_y_actualizar_peso_producto(receta_id)
+
             return {'success': True}
         except Exception as e:
             # Loggear el error sería una buena práctica aquí

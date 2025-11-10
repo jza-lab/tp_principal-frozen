@@ -174,3 +174,73 @@ class DireccionModel(BaseModel):
             logger.error(f"Error verificando si la dirección {direccion_id} es compartida: {e}")
             # En caso de error, asumimos que es compartida para ser cautelosos
             return True
+
+    def search_distinct_localidades(self, term: str):
+        """
+        Busca localidades únicas que coincidan parcialmente con un término de búsqueda.
+        La búsqueda no distingue entre mayúsculas y minúsculas.
+        Devuelve una lista de diccionarios con id, localidad y provincia.
+        """
+        try:
+            # Seleccionamos los campos necesarios y filtramos
+            response = self.db.table(self.get_table_name()).select('id, localidad, provincia').ilike('localidad', f'%{term}%').execute()
+
+            if not response.data:
+                return {'success': True, 'data': []}
+
+            # Procesamos para obtener localidades únicas (combinación de localidad y provincia)
+            localidades_vistas = set()
+            localidades_unicas = []
+            for item in response.data:
+                if item.get('localidad'):
+                    provincia = item.get('provincia', '').strip()
+                    clave_localidad = (item['localidad'].strip().lower(), provincia.lower())
+                    if clave_localidad not in localidades_vistas:
+                        localidades_vistas.add(clave_localidad)
+                        localidades_unicas.append({
+                            'id': item['id'], # Usamos el ID de la primera dirección encontrada para esta localidad
+                            'localidad': item['localidad'],
+                            'provincia': provincia if provincia else None
+                        })
+            
+            return {'success': True, 'data': localidades_unicas}
+
+        except Exception as e:
+            logger.error(f"Error buscando localidades: {e}")
+            return {'success': False, 'error': str(e), 'data': []}
+
+    def get_distinct_localidades(self):
+        """
+        Obtiene una lista de todas las localidades únicas existentes en la base de datos.
+        Devuelve una lista de diccionarios con id, localidad y provincia.
+        """
+        try:
+            # Seleccionamos todos los registros para procesarlos en memoria
+            response = self.db.table(self.get_table_name()).select('id, localidad, provincia').execute()
+
+            if not response.data:
+                return {'success': True, 'data': []}
+
+            # Procesamos para obtener localidades únicas (combinación de localidad y provincia)
+            localidades_vistas = set()
+            localidades_unicas = []
+            for item in response.data:
+                # Solo requerimos que la localidad exista. La provincia es opcional.
+                if item.get('localidad'):
+                    # Usamos una cadena vacía para la provincia si es None
+                    provincia = item.get('provincia', '').strip()
+                    clave_localidad = (item['localidad'].strip().lower(), provincia.lower())
+                    
+                    if clave_localidad not in localidades_vistas:
+                        localidades_vistas.add(clave_localidad)
+                        localidades_unicas.append({
+                            'id': item['id'], # Usamos el ID de la primera dirección encontrada
+                            'localidad': item['localidad'],
+                            'provincia': provincia if provincia else None # Devolver None si está vacío
+                        })
+            
+            return {'success': True, 'data': localidades_unicas}
+
+        except Exception as e:
+            logger.error(f"Error obteniendo localidades distintas: {e}")
+            return {'success': False, 'error': str(e), 'data': []}

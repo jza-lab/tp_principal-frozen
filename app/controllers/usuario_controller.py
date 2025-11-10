@@ -16,9 +16,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta, time
 import logging
 import json
-import pytz
 from app.utils.date_utils import get_now_in_argentina
-from app.controllers.direccion_controller import GeorefController
 from app.models.autorizacion_ingreso import AutorizacionIngresoModel
 from app.models.direccion import DireccionModel
 from app.schemas.direccion_schema import DireccionSchema
@@ -35,6 +33,7 @@ class UsuarioController(BaseController):
 
     def __init__(self):
         super().__init__()
+        from app.controllers.direccion_controller import GeorefController
         self.model = UsuarioModel()
         self.totem_sesion = TotemSesionModel()
         self.registro_acceso_model = RegistroAccesoModel()
