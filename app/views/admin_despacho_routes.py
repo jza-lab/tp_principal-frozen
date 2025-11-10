@@ -92,8 +92,10 @@ def api_crear_despacho():
     )
 
     if response['success']:
-        flash('Despacho creado exitosamente.', 'success')
-        return {'success': True, 'data': response['data'], 'redirect_url': url_for('orden_venta.listar')}, 201
+        flash(f"Despacho #{response['data']['despacho_id']} creado exitosamente.", 'success')
+        # Redirigir a la misma página de gestión, pero a la pestaña de historial.
+        redirect_url = url_for('despacho.gestion_despachos_vista', tab='historial')
+        return {'success': True, 'data': response['data'], 'redirect_url': redirect_url}, 201
     else:
         return {'success': False, 'error': response.get('error', 'Error interno al crear el despacho')}, 500
 
