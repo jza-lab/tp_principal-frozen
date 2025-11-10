@@ -145,7 +145,7 @@ class ControlCalidadInsumoController(BaseController):
             # Verificar si la orden de compra asociada ya puede ser cerrada
             orden_compra_id_a_verificar = self._extraer_oc_id_de_lote(lote)
             if orden_compra_id_a_verificar:
-                self._verificar_y_cerrar_orden_si_completa(orden_compra_id_a_verificar, usuario_id)
+                self._verificar_y_finalizar_orden_si_corresponde(orden_compra_id_a_verificar, usuario_id)
             
             return self.success_response(data=lote_actualizado, message=f"Lote {lote_id} procesado con éxito.")
 
@@ -169,7 +169,7 @@ class ControlCalidadInsumoController(BaseController):
         Cierra una orden de compra una vez que toda la inspección ha terminado.
         """
         try:
-            self._verificar_y_cerrar_orden_si_completa(orden_compra_id, usuario_id)
+            self._verificar_y_finalizar_orden_si_corresponde(orden_compra_id, usuario_id)
             return self.success_response(message=f"Proceso de finalización para la orden {orden_compra_id} ejecutado.")
         except Exception as e:
             logger.error(f"Error al finalizar la inspección para la orden {orden_compra_id}: {e}", exc_info=True)
@@ -190,49 +190,54 @@ class ControlCalidadInsumoController(BaseController):
             logger.warning(f"No se pudo extraer la OC ID del lote {lote.get('id_lote')} a partir de '{lote.get('documento_ingreso')}': {e}")
         return None
 
-    def _verificar_y_cerrar_orden_si_completa(self, orden_compra_id: int, usuario_id: int):
+    def _verificar_y_finalizar_orden_si_corresponde(self, orden_compra_id: int, usuario_id: int):
         """
-        Verifica si todos los lotes de una OC ya han sido inspeccionados (no están 'EN REVISION')
-        y, si es así, cierra la orden.
+        Verifica si todos los lotes de una OC han sido inspeccionados.
+        Si es así, finaliza la OC a 'RECEPCION_COMPLETA' o 'RECEPCION_INCOMPLETA'.
         """
         try:
-            # 1. Obtener el código de la OC para buscar los lotes asociados
             oc_res, _ = self.orden_compra_controller.get_orden(orden_compra_id)
             if not oc_res.get('success'):
-                logger.error(f"No se pudo encontrar la OC {orden_compra_id} para verificar su cierre.")
+                logger.error(f"No se pudo encontrar la OC {orden_compra_id} para verificar su finalización.")
                 return
             
             codigo_oc = oc_res['data'].get('codigo_oc')
             if not codigo_oc:
-                logger.error(f"La OC {orden_compra_id} no tiene un código para buscar sus lotes.")
                 return
 
-            # 2. Buscar todos los lotes asociados a esa OC por el documento de ingreso
             documento_ingreso = codigo_oc if codigo_oc.startswith('OC-') else f"OC-{codigo_oc}"
             lotes_de_oc_res = self.inventario_model.get_all_lotes_for_view(filtros={'documento_ingreso': documento_ingreso})
 
             if not lotes_de_oc_res.get('success'):
-                logger.error(f"No se pudieron obtener los lotes para la OC {codigo_oc}.")
                 return
 
             lotes = lotes_de_oc_res.get('data', [])
             if not lotes:
-                logger.warning(f"No se encontraron lotes para la OC {codigo_oc}, procediendo a cerrar.")
-                self.orden_compra_controller.marcar_como_cerrada(orden_compra_id, usuario_id)
+                # Si no hay lotes, consideramos la recepción completa por defecto.
+                self.orden_compra_controller.model.update(orden_compra_id, {'estado': 'RECEPCION_COMPLETA'})
                 return
 
-            # 3. Verificar si algún lote todavía está pendiente de revisión
-            for lote in lotes:
-                if lote.get('estado') == 'EN REVISION':
-                    logger.info(f"La OC {orden_compra_id} no se cierra. El lote {lote.get('id_lote')} aún está 'EN REVISION'.")
-                    return # Si al menos uno está en revisión, no hacemos nada y salimos.
+            # Verificar si algún lote todavía está pendiente de revisión
+            if any(lote.get('estado') == 'EN REVISION' for lote in lotes):
+                logger.info(f"La OC {orden_compra_id} no se finaliza. Aún hay lotes 'EN REVISION'.")
+                return
 
-            # 4. Si el bucle termina, significa que ningún lote está 'EN REVISION'. Cerramos la OC.
-            logger.info(f"Todos los lotes de la OC {orden_compra_id} han sido procesados. Cerrando la orden.")
-            self.orden_compra_controller.marcar_como_cerrada(orden_compra_id, usuario_id)
+            # Si todos los lotes fueron procesados, decidir el estado final
+            lotes_rechazados = [lote for lote in lotes if lote.get('estado') == 'RECHAZADO']
+            
+            if len(lotes_rechazados) == len(lotes):
+                # Todos los lotes fueron rechazados
+                nuevo_estado = 'RECEPCION_INCOMPLETA'
+                logger.info(f"Todos los lotes de la OC {orden_compra_id} fueron rechazados. Finalizando como {nuevo_estado}.")
+            else:
+                # Al menos un lote fue aceptado (disponible o cuarentena)
+                nuevo_estado = 'RECEPCION_COMPLETA'
+                logger.info(f"Al menos un lote de la OC {orden_compra_id} fue aceptado. Finalizando como {nuevo_estado}.")
+            
+            self.orden_compra_controller.model.update(orden_compra_id, {'estado': nuevo_estado})
 
         except Exception as e:
-            logger.error(f"Error crítico al verificar y cerrar la OC {orden_compra_id}: {e}", exc_info=True)
+            logger.error(f"Error crítico al verificar y finalizar la OC {orden_compra_id}: {e}", exc_info=True)
 
     def crear_registro_control_calidad(self, lote_id: str, usuario_id: int, decision: str, comentarios: str, orden_compra_id: int = None, foto_url: str = None, resultado_inspeccion: str = None) -> tuple:
         """

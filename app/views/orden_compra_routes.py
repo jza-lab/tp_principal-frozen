@@ -28,7 +28,7 @@ def listar():
     # Si es SUPERVISOR_CALIDAD y no hay un filtro de estado específico,
     # mostrar solo los estados relevantes para Calidad.
     if rol_usuario == 'SUPERVISOR_CALIDAD' and not estado:
-        filtros['estado_in'] = ['EN TRANSITO', 'RECEPCION INCOMPLETA', 'RECEPCION COMPLETA', 'RECHAZADA']
+        filtros['estado_in'] = ['EN_TRANSITO', 'EN_RECEPCION', 'RECEPCION_INCOMPLETA', 'RECEPCION_COMPLETA', 'RECHAZADA']
 
     response, status_code = controller.get_all_ordenes(filtros)
     ordenes = []
@@ -226,6 +226,25 @@ def rechazar(id):
     return redirect(url_for("orden_compra.listar"))
 
 
+@orden_compra_bp.route("/<int:id>/marcar-en-recepcion", methods=["POST"])
+@permission_required(accion='logistica_recepcion_oc')
+def marcar_en_recepcion(id):
+    controller = OrdenCompraController()
+    resultado, status_code = controller.cambiar_estado_oc(id, 'EN_RECEPCION')
+    if status_code == 200:
+        flash('La orden de compra ha sido marcada como "En Recepción".', "info")
+    else:
+        flash(
+            f"Error al actualizar el estado: {resultado.get('error', 'Error desconocido')}",
+            "error",
+        )
+    
+    estado_actual = request.args.get('estado', '')
+    if estado_actual:
+        return redirect(url_for("orden_compra.listar", estado=estado_actual))
+    return redirect(url_for("orden_compra.listar"))
+
+
 @orden_compra_bp.route("/<int:id>/marcar-en-transito", methods=["POST"])
 @permission_required(accion='logistica_recepcion_oc')
 def marcar_en_transito(id):
@@ -264,24 +283,8 @@ def procesar_recepcion(orden_id):
             f"Error al procesar la recepción: {resultado.get('error', 'Error desconocido')}",
             "error",
         )
-    return redirect(url_for("orden_compra.listar"))
+    return redirect(url_for("orden_compra.detalle", id=orden_id))
 
 
-@orden_compra_bp.route("/<int:id>/iniciar-calidad", methods=["POST"])
-@jwt_required()
-@permission_required(accion='realizar_control_de_calidad_insumos')
-def iniciar_calidad(id):
-    """
-    Endpoint para que el supervisor de calidad mueva una orden a 'EN CONTROL DE CALIDAD'.
-    """
-    controller = OrdenCompraController()
-    usuario_id = get_jwt_identity()
-    resultado = controller.iniciar_control_de_calidad(id, usuario_id)
-    
-    if resultado.get("success"):
-        flash("La orden se ha movido a Control de Calidad.", "success")
-    else:
-        flash(f"Error: {resultado.get('error', 'No se pudo iniciar el control de calidad.')}", "danger")
-        
-    return redirect(url_for("orden_compra.detalle", id=id))
+
 

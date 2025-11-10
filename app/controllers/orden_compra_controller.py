@@ -7,6 +7,7 @@ from app.models.orden_compra_model import OrdenCompraItemModel, OrdenCompraModel
 from app.models.orden_compra_model import OrdenCompra
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.usuario_controller import UsuarioController
+from app.controllers.reclamo_proveedor_controller import ReclamoProveedorController
 from datetime import datetime, date
 import logging
 import time
@@ -27,6 +28,7 @@ class OrdenCompraController:
         self.insumo_controller = InsumoController()
         self.usuario_controller = UsuarioController()
         self.registro_controller = RegistroController()
+        self.reclamo_proveedor_controller = ReclamoProveedorController()
 
 
     def _parse_form_data(self, form_data):
@@ -446,7 +448,48 @@ class OrdenCompraController:
                 return jsonify({'success': False, 'error': result['error']}), 400
 
         except Exception as e:
-            return jsonify({'success': False, 'error': str(e)}), 500
+            return {'success': False, 'error': str(e)}, 500
+            
+    def cancelar_orden(self, orden_id):
+        """Endpoint específico para cancelar órdenes de compra"""
+        try:
+            data = request.get_json() or {}
+            motivo = data.get('motivo', '')
+
+            # 1. Primero verificar que la orden existe y puede cancelarse
+            orden_actual_res = self.model.find_by_id(orden_id)
+            if not orden_actual_res.get('success'):
+                return {'success': False, 'error': 'Orden no encontrada'}, 404
+
+            orden_data = orden_actual_res['data']
+            estado_actual = orden_data.get('estado', 'PENDIENTE')
+
+            # 2. Validar que se puede cancelar
+            estados_no_cancelables = ['COMPLETADA', 'CANCELADA', 'CERRADA', 'RECEPCION_COMPLETA', 'RECEPCION_INCOMPLETA']
+            if estado_actual in estados_no_cancelables:
+                return {'success': False, 'error': f'No se puede cancelar una orden en estado {estado_actual}'}, 400
+
+            # 3. Preparar datos para cancelación
+            observaciones_actuales = orden_data.get('observaciones', '') or ''
+            cancelacion_data = {
+                'estado': 'CANCELADA',
+                'updated_at': datetime.now().isoformat(),
+                'observaciones': f"{observaciones_actuales}\n--- CANCELADA ---\nMotivo: {motivo}\nFecha: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            }
+
+            result = self.model.update(orden_id, cancelacion_data)
+
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"Se canceló la orden de compra {oc.get('codigo_oc')}. Motivo: {motivo}"
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cancelación', detalle)
+                return {'success': True, 'data': result.get('data'), 'message': 'Orden de compra cancelada exitosamente'}, 200
+            else:
+                return {'success': False, 'error': result.get('error')}, 400
+
+        except Exception as e:
+            return {'success': False, 'error': str(e)}, 500
+
     def obtener_orden_por_id(self, orden_id):
         return self.get_orden(orden_id)
 
@@ -487,6 +530,69 @@ class OrdenCompraController:
             return result
         except Exception as e:
             logger.error(f"Error marcando la orden {orden_id} como EN TRANSITO: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def cambiar_estado_oc(self, orden_id, nuevo_estado):
+        """
+        Cambia el estado de una orden de compra a un nuevo estado, con validaciones.
+        """
+        try:
+            # Validación específica para la transición a EN_RECEPCION
+            if nuevo_estado == 'EN_RECEPCION':
+                orden_actual_res, status_code = self.get_orden(orden_id)
+                if not orden_actual_res.get('success'):
+                    return orden_actual_res, status_code
+                
+                orden_data = orden_actual_res.get('data', {})
+                if orden_data.get('estado') != 'EN_TRANSITO':
+                    error_msg = f"La orden solo puede pasar a recepción desde 'EN TRANSITO'. Estado actual: {orden_data.get('estado')}"
+                    return {'success': False, 'error': error_msg}, 400
+
+            update_data = {
+                'estado': nuevo_estado,
+                'updated_at': datetime.now().isoformat()
+            }
+            result = self.model.update(orden_id, update_data)
+
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"La orden de compra {oc.get('codigo_oc')} cambió su estado a {nuevo_estado.replace('_', ' ')}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
+                return result, 200
+            else:
+                # Asumimos que un fallo en el modelo es un error del cliente o no encontrado
+                return result, 400 if 'not found' not in result.get('error', '').lower() else 404
+
+        except Exception as e:
+            logger.error(f"Error cambiando estado de la orden {orden_id} a {nuevo_estado}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}, 500
+
+    def marcar_en_recepcion(self, orden_id):
+        """
+        Marca una orden de compra como 'EN_RECEPCION'.
+        """
+        try:
+            # Validar que la orden esté en 'EN_TRANSITO'
+            orden_actual_res, _ = self.get_orden(orden_id)
+            if not orden_actual_res.get('success'):
+                return orden_actual_res
+            
+            orden_data = orden_actual_res['data']
+            if orden_data.get('estado') != 'EN_TRANSITO':
+                return {'success': False, 'error': f"La orden solo puede pasar a recepción desde el estado 'EN TRANSITO'. Estado actual: {orden_data.get('estado')}"}
+
+            update_data = {
+                'estado': 'EN_RECEPCION',
+                'updated_at': datetime.now().isoformat()
+            }
+            result = self.model.update(orden_id, update_data)
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"La orden de compra {oc.get('codigo_oc')} cambió su estado a EN RECEPCIÓN."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
+            return result
+        except Exception as e:
+            logger.error(f"Error marcando la orden {orden_id} como EN RECEPCION: {e}")
             return {'success': False, 'error': str(e)}
 
     def rechazar_orden(self, orden_id, motivo):
@@ -563,35 +669,19 @@ class OrdenCompraController:
         except Exception as e:
             logger.error(f"Error crítico durante el reinicio de banderas para la cadena de la OC {orden_id}: {e}", exc_info=True)
 
-
-    def _marcar_cadena_como_en_control_calidad(self, orden_id):
-        """
-        Marca una orden y todas sus predecesoras como 'EN_CONTROL_CALIDAD'.
-        La lógica de reinicio de la bandera de stock se ha movido a `_reiniciar_bandera_stock_recibido`.
-        """
+    def _crear_reclamo_automatico(self, orden_id, orden_data, items_faltantes):
         try:
-            current_id = orden_id
-            while current_id:
-                orden_res = self.model.get_one_with_details(current_id)
-                if not orden_res.get('success'):
-                    logger.warning(f"No se encontró la orden con ID {current_id} en la cadena de completado.")
-                    break
-
-                orden_actual = orden_res['data']
-
-                # Actualizar el estado de la orden actual a 'EN_CONTROL_CALIDAD'
-                self.model.update(current_id, {
-                    'estado': 'EN_CONTROL_CALIDAD',
-                    'fecha_real_entrega': date.today().isoformat()
-                })
-
-                logger.info(f"Orden {current_id} marcada como EN_CONTROL_CALIDAD.")
-
-                # Moverse a la orden que esta complementa
-                current_id = orden_actual.get('complementa_a_orden_id')
-
-        except Exception as e:
-            logger.error(f"Error en la cadena de completado para la orden {orden_id}: {e}", exc_info=True)
+            descripcion_reclamo = "Insumos faltantes:\n" + "\n".join([f"- {item['insumo_id']}: {item['cantidad_faltante']}" for item in items_faltantes])
+            reclamo_data = {
+                'orden_compra_id': orden_id,
+                'proveedor_id': orden_data.get('proveedor_id'),
+                'motivo': 'Recepción Incompleta',
+                'descripcion_problema': descripcion_reclamo
+            }
+            self.reclamo_proveedor_controller.crear_reclamo(reclamo_data)
+            logger.info(f"Reclamo creado automáticamente para la OC {orden_id}.")
+        except Exception as e_reclamo:
+            logger.error(f"Error al crear el reclamo automático para la OC {orden_id}: {e_reclamo}")
 
     def _crear_lotes_para_items_recibidos(self, items_para_lote, orden_data, usuario_id):
         """
@@ -631,21 +721,23 @@ class OrdenCompraController:
 
     def procesar_recepcion(self, orden_id, form_data, usuario_id, orden_produccion_controller: "OrdenProduccionController"):
         try:
+            # Verificar que la orden de compra esté en estado 'EN_RECEPCION'
+            orden_actual_res, status = self.get_orden(orden_id)
+            if not orden_actual_res.get('success'):
+                return {'success': False, 'error': 'Orden de compra no encontrada.'}
+
+            orden_actual = orden_actual_res.get('data')
+            if not orden_actual or orden_actual.get('estado') != 'EN_RECEPCION':
+                estado = orden_actual.get('estado') if orden_actual else 'desconocido'
+                return {'success': False, 'error': f"La recepción solo se puede procesar si la orden está en estado 'EN RECEPCION'. Estado actual: {estado}"}
+                
             accion = form_data.get('accion')
             observaciones = form_data.get('observaciones', '')
 
             if accion == 'aceptar':
-                orden_result = self.model.get_one_with_details(orden_id)
-                if not orden_result.get('success'):
-                    return {'success': False, 'error': 'No se pudo encontrar la orden de compra.'}
-                orden_data = orden_result['data']
+                # Reutilizamos la variable `orden_actual` que ya contiene los datos de la orden
+                orden_data = orden_actual
                 
-                # Validacion de transicion de estado para SUPERVISOR_CALIDAD
-                usuario = self.usuario_controller.obtener_usuario_por_id(usuario_id)
-                if usuario and usuario.get('roles', {}).get('codigo') == 'SUPERVISOR_CALIDAD':
-                    if orden_data.get('estado') != 'EN_TRANSITO':
-                        return {'success': False, 'error': 'Solo puede recibir órdenes que estén EN TRANSITO.'}
-
                 item_ids = form_data.getlist('item_id[]')
                 cantidades_recibidas_str = form_data.getlist('cantidad_recibida[]')
 
@@ -695,62 +787,27 @@ class OrdenCompraController:
                     except Exception as e_op:
                         logger.error(f"Error al ejecutar la verificación proactiva de OPs tras recibir la OC {orden_id}: {e_op}", exc_info=True)
 
+                # Ya no se cambia el estado de la OC aquí. Simplemente se crean los lotes.
+                final_message = f'Recepción registrada. {lotes_creados} lotes creados y enviados a Control de Calidad.'
+                if lotes_error > 0:
+                    final_message += f' ({lotes_error} con error).'
+                
                 if items_faltantes:
-                    # --- INICIO DE LA CORRECCIÓN (Versión Robusta) ---
-                    # 1. Crear un mapa con las cantidades recibidas directamente del formulario.
-                    #    Esto evita condiciones de carrera al no depender de una re-lectura de la BD.
-                    cantidades_recibidas_map = {int(item_ids[i]): float(cantidades_recibidas_str[i] or 0) for i in range(len(item_ids))}
-
-                    # 2. Recalcular los totales de la orden padre usando el mapa de cantidades del formulario.
-                    subtotal_padre = 0
-                    for item in orden_data.get('items', []):
-                        item_id = item.get('id')
-                        # Se usa la cantidad del formulario, no se vuelve a leer de la BD
-                        cantidad_recibida = cantidades_recibidas_map.get(item_id, 0.0) 
-                        precio = float(item.get('precio_unitario', 0))
-                        subtotal_padre += cantidad_recibida * precio
-                    
-                    iva_padre = subtotal_padre * 0.21 if orden_data.get('iva', 0) > 0 else 0
-                    total_padre = subtotal_padre + iva_padre
-                    
-                    # 3. Crear la orden complementaria (esto ya funcionaba bien).
+                    # Si faltan items, se crea la OC hija, el reclamo, y la OC original se marca como incompleta.
                     nueva_orden_result = self._crear_orden_complementaria(orden_data, items_faltantes, usuario_id)
                     if not nueva_orden_result.get('success'):
-                        return {'success': False, 'error': f"Recepción parcial procesada, pero falló la creación de la orden complementaria: {nueva_orden_result.get('error')}"}
+                        return {'success': False, 'error': f"Lotes creados, pero falló la creación de la orden complementaria: {nueva_orden_result.get('error')}"}
 
-                    # 4. Actualizar la orden padre con el nuevo estado, observaciones Y los totales recalculados.
-                    self.model.update(orden_id, {
-                        'estado': 'RECEPCION_INCOMPLETA',
-                        'observaciones': f"{observaciones}\nRecepción parcial. Pendiente completado en OC: {nueva_orden_result['data']['codigo_oc']}",
-                        'subtotal': round(subtotal_padre, 2),
-                        'iva': round(iva_padre, 2),
-                        'total': round(total_padre, 2)
-                    })
-                    detalle = f"Se procesó una recepción parcial para la OC {orden_data.get('codigo_oc')}. Se generó la OC complementaria {nueva_orden_result['data']['codigo_oc']}."
-                    self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
-                    # --- FIN DE LA CORRECCIÓN ---
-
-                    return {'success': True, 'message': f'Recepción parcial registrada. Se creó la orden {nueva_orden_result["data"]["codigo_oc"]} para los insumos restantes.'}
+                    self._crear_reclamo_automatico(orden_id, orden_data, items_faltantes)
+                    
+                    self.model.update(orden_id, {'estado': 'RECEPCION_INCOMPLETA'})
+                    
+                    final_message += f' Se generó la OC {nueva_orden_result["data"]["codigo_oc"]} para los items faltantes y la orden actual se marcó como Recepción Incompleta.'
                 else:
-                    # --- INICIO DE LA CORRECCIÓN ---
-                    # 1. Establecer el estado correcto (RECEPCION COMPLETA)
-                    # (OC_RECEPCION_COMPLETA se define en estados.py)
-                    update_data = {
-                        'estado': 'RECEPCION_COMPLETA',
-                        'fecha_real_entrega': date.today().isoformat(),
-                        'observaciones': f"{observaciones}\nRecepción completada. Pendiente de Control de Calidad."
-                    }
-                    result = self.model.update(orden_id, update_data)
-                    if result.get('success'):
-                        oc = result.get('data')
-                        detalle = f"Se procesó la recepción completa de la OC {oc.get('codigo_oc')}."
-                        self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
+                    # Si no hay items faltantes, la orden pasa a Control de Calidad
+                    self.model.update(orden_id, {'estado': 'EN_CONTROL_CALIDAD'})
 
-                    # 2. Mensaje de éxito (ya NO se mueve a calidad)
-                    final_message = f'Recepción completada. {lotes_creados} lotes creados.'
-                    if lotes_error > 0: final_message += f' ({lotes_error} con error).'
-
-                    return {'success': True, 'message': final_message}
+                return {'success': True, 'message': final_message}
                     # --- FIN DE LA CORRECCIÓN ---
 
             elif accion == 'rechazar':
@@ -923,42 +980,3 @@ class OrdenCompraController:
         except Exception as e:
             logger.error(f"Error marcando la orden {orden_id} como CERRADA: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
-        
-    def iniciar_control_de_calidad(self, orden_id, usuario_id):
-            """
-            Pasa una orden de 'RECEPCION_COMPLETA'
-            a 'EN_CONTROL_CALIDAD'.
-            Este método es llamado por la ruta POST /<id>/iniciar-calidad
-        
-            """
-            try:
-                # 1. Validar el estado actual de la orden
-                orden_res, _ = self.get_orden(orden_id)
-                if not orden_res.get('success'):
-                    return orden_res
-                
-                orden_actual = orden_res['data']
-                estado_actual = orden_actual.get('estado')
-
-                # Estados desde los que Calidad puede tomar la orden
-                # (Definidos en estados.py)
-                estados_permitidos = ['RECEPCION_COMPLETA']
-                
-                if estado_actual not in estados_permitidos:
-                    return {'success': False, 'error': f"Solo se puede iniciar Control de Calidad en órdenes recibidas. Estado actual: {estado_actual}."}
-
-                # 2. Usar la función existente para actualizar el estado
-                # Esta función ya actualiza el estado a 'EN_CONTROL_CALIDAD'
-                #
-                self._marcar_cadena_como_en_control_calidad(orden_id)
-                
-                detalle = f"La OC {orden_actual.get('codigo_oc')} pasó a EN CONTROL DE CALIDAD."
-                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cambio de Estado', detalle)
-
-                logger.info(f"Usuario {usuario_id} movió la OC {orden_id} a EN_CONTROL_CALIDAD.")
-                
-                return {'success': True, 'message': 'La orden ha sido movida a Control de Calidad.'}
-                
-            except Exception as e:
-                logger.error(f"Error al iniciar control de calidad para OC {orden_id}: {e}", exc_info=True)
-                return {'success': False, 'error': str(e)}
