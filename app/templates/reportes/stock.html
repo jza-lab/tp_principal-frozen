@@ -1,215 +1,176 @@
-{% extends 'layouts/app_layout.html' %}
+{% extends "layouts/app_layout.html" %}
 
 {% block title %}Reportes de Stock{% endblock %}
 
-{% block extra_css %}
-<style>
-    @media print {
-        .scrollable-table.printable-full-height {
-            max-height: none !important;
-            overflow-y: visible !important;
-        }
-    }
-</style>
-{% endblock %}
-
 {% block app_content %}
-<div class="container-fluid">
-    <!-- Page Heading -->
-    <div class="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 class="h3 mb-0 text-gray-800">Reportes de Stock</h1>
-        <button id="download-pdf" class="btn btn-primary shadow-sm" disabled><i
-                class="fas fa-download fa-sm text-white-50"></i> Generar Reporte</button>
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1><i class="bi bi-bar-chart-line-fill me-2"></i>Reportes de Stock</h1>
+        <button id="download-pdf" class="btn btn-primary" disabled>
+            <i class="bi bi-download me-2"></i>Descargar Reporte
+        </button>
     </div>
 
-    <!-- Nav Tabs -->
     <ul class="nav nav-tabs" id="stockTab" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="insumos-tab" data-bs-toggle="tab" data-bs-target="#insumos" type="button"
-                role="tab" aria-controls="insumos" aria-selected="true">Stock de Insumos</button>
+            <button class="nav-link active" id="insumos-tab" data-bs-toggle="tab" data-bs-target="#insumos" type="button" role="tab" aria-controls="insumos" aria-selected="true">
+                <i class="bi bi-box-seam me-1"></i>Insumos
+            </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="productos-tab" data-bs-toggle="tab" data-bs-target="#productos" type="button"
-                role="tab" aria-controls="productos" aria-selected="false">Stock de Productos</button>
+            <button class="nav-link" id="productos-tab" data-bs-toggle="tab" data-bs-target="#productos" type="button" role="tab" aria-controls="productos" aria-selected="false">
+                <i class="bi bi-box me-1"></i>Productos Terminados
+            </button>
         </li>
     </ul>
 
-    <!-- Tab Content -->
     <div class="tab-content" id="stockTabContent">
-        <!-- Insumos Tab Pane -->
+        <!-- Pestaña de Insumos -->
         <div class="tab-pane fade show active" id="insumos" role="tabpanel" aria-labelledby="insumos-tab">
-            <div class="row mt-4">
-                <!-- Composición por Categoría -->
-                <div class="col-xl-6 col-lg-12 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-primary">Composición del Stock por Categoría</h6>
-                        </div>
+            <div class="row mt-3 g-3">
+                <div class="col-lg-6">
+                    <div class="card h-100">
                         <div class="card-body">
-                            <div id="insumos-composicion-chart" style="height: 350px;"></div>
+                            <h5 class="card-title">Composición del Stock de Insumos</h5>
+                            <p class="text-muted small">Este gráfico de torta muestra la proporción de cada categoría de insumo sobre el total del stock disponible, permitiendo identificar rápidamente las categorías más predominantes.</p>
+                            <div id="insumos-composicion-chart" style="height: 400px;"></div>
+                            <div id="insumos-composicion-summary" class="dynamic-summary mt-2 small p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                 </div>
-                <!-- Top N Insumos por Valor -->
-                <div class="col-xl-6 col-lg-12 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                            <h6 class="m-0 font-weight-bold text-primary">Top Insumos por Valor Total</h6>
-                            <div class="form-group mb-0">
-                                <select id="top-n-insumos" class="form-control form-control-sm">
-                                    <option value="5">Top 5</option>
-                                    <option value="10" selected>Top 10</option>
-                                    <option value="15">Top 15</option>
-                                    <option value="20">Top 20</option>
-                                </select>
+                <div class="col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">Valor del Stock de Insumos</h5>
+                                <div class="d-flex align-items-center">
+                                    <label for="top-n-insumos" class="form-label me-2 mb-0">Mostrar Top:</label>
+                                    <select id="top-n-insumos" class="form-select form-select-sm" style="width: 70px;">
+                                        <option value="5">5</option>
+                                        <option value="10" selected>10</option>
+                                        <option value="15">15</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                        <div class="card-body">
-                            <div id="insumos-valor-chart" style="height: 350px;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="row">
-                <!-- Insumos con Stock Crítico -->
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-danger">Insumos con Stock Crítico</h6>
-                        </div>
-                        <div class="card-body">
-                            <p class="small text-muted">
-                                Este gráfico muestra los insumos cuyo stock actual está por debajo del umbral mínimo definido. Las barras indican visualmente el nivel actual (azul) en relación con el mínimo (amarillo).
-                            </p>
-                            <div class="scrollable-table printable-full-height" style="max-height: 300px; overflow-y: auto;">
-                                <div id="insumos-critico-table"></div>
-                            </div>
-                            <p class="small text-muted mt-2" id="insumos-critico-description"></p>
+                             <p class="text-muted small">Este gráfico de barras presenta los insumos más valiosos en inventario, multiplicando el stock actual por su costo unitario para priorizar la gestión.</p>
+                            <div id="insumos-valor-chart" style="height: 400px;"></div>
+                            <div id="insumos-valor-summary" class="dynamic-summary mt-2 small p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                 </div>
-                <!-- Lotes Próximos a Vencer -->
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-warning">Lotes de Insumos Próximos a Vencer</h6>
-                        </div>
+                 <div class="col-lg-6">
+                    <div class="card h-100">
                         <div class="card-body">
-                            <div id="insumos-vencimiento-table"></div>
+                            <h5 class="card-title">Insumos con Stock Crítico</h5>
+                             <p class="text-muted small">Esta lista resalta los insumos cuyo nivel de stock actual ha caído por debajo del mínimo definido, requiriendo atención inmediata para evitar quiebres de stock.</p>
+                            <div id="insumos-critico-table" class="mt-3" style="max-height: 350px; overflow-y: auto;"></div>
+                            <div id="insumos-critico-summary" class="dynamic-summary mt-2 small p-2 bg-light rounded border"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Lotes de Insumos Próximos a Vencer</h5>
+                            <p class="text-muted small">Esta tabla muestra los lotes de insumos que están a punto de vencer, ayudando a planificar su uso prioritario para minimizar pérdidas por caducidad.</p>
+                            <div id="insumos-vencimiento-table" class="mt-3" style="max-height: 350px; overflow-y: auto;"></div>
+                            <div id="insumos-vencimiento-summary" class="dynamic-summary mt-2 small p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Productos Tab Pane -->
+        <!-- Pestaña de Productos Terminados -->
         <div class="tab-pane fade" id="productos" role="tabpanel" aria-labelledby="productos-tab">
-            <div class="row mt-4">
-                <!-- Composición por Producto -->
-                <div class="col-xl-6 col-lg-12 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-primary">Composición del Stock por Producto</h6>
-                        </div>
+            <div class="row mt-3 g-3">
+                 <div class="col-lg-6">
+                    <div class="card h-100">
                         <div class="card-body">
-                            <div id="productos-composicion-chart" style="height: 350px;"></div>
+                            <h5 class="card-title">Composición del Stock por Producto</h5>
+                            <p class="text-muted small">Este gráfico de torta muestra la proporción de cada producto sobre el total del stock terminado, identificando los artículos con mayor presencia en el inventario.</p>
+                            <div id="productos-composicion-chart" style="height: 400px;"></div>
+                            <div id="productos-composicion-summary" class="dynamic-summary mt-2 small p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                 </div>
-                <!-- Top N Productos por Valor -->
-                <div class="col-xl-6 col-lg-12 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                            <h6 class="m-0 font-weight-bold text-primary">Top Productos por Valor en Stock</h6>
-                            <div class="form-group mb-0">
-                                <select id="top-n-productos" class="form-control form-control-sm">
-                                    <option value="5">Top 5</option>
-                                    <option value="10" selected>Top 10</option>
-                                    <option value="15">Top 15</option>
-                                    <option value="20">Top 20</option>
-                                </select>
+                <div class="col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">Top Productos por Valor en Stock</h5>
+                                <div class="d-flex align-items-center">
+                                    <label for="top-n-productos" class="form-label me-2 mb-0">Mostrar Top:</label>
+                                    <select id="top-n-productos" class="form-select form-select-sm" style="width: 70px;">
+                                        <option value="5">5</option>
+                                        <option value="10" selected>10</option>
+                                        <option value="15">15</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                        <div class="card-body">
-                            <div id="productos-valor-chart" style="height: 350px;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-             <div class="row">
-                <!-- Productos con Bajo Stock -->
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-danger">Productos con Bajo Stock</h6>
-                        </div>
-                        <div class="card-body">
-                            <div id="productos-bajo-stock-table"></div>
+                            <p class="text-muted small">Presenta los productos terminados más valiosos en el inventario, ayudando a enfocar la atención en los activos más significativos.</p>
+                            <div id="productos-valor-chart" style="height: 400px;"></div>
+                            <div id="productos-valor-summary" class="dynamic-summary mt-2 small p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                 </div>
-                <!-- Lotes Próximos a Vencer -->
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-warning">Lotes de Productos Próximos a Vencer</h6>
-                        </div>
+                <div class="col-lg-4">
+                    <div class="card h-100">
                         <div class="card-body">
-                            <div id="productos-vencimiento-table"></div>
+                            <h5 class="card-title">Distribución por Estado</h5>
+                             <p class="text-muted small">Visualiza cómo se distribuye el stock de productos terminados entre los diferentes estados (Disponible, Reservado, etc.), ofreciendo una vista clara de la disponibilidad real.</p>
+                            <div id="productos-distribucion-estado-chart" style="height: 400px;"></div>
+                            <div id="productos-distribucion-summary" class="dynamic-summary mt-2 small p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="row">
-                <!-- Valor por Categoría de Producto -->
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-info">Valor de Stock por Categoría de Producto</h6>
-                        </div>
+                <div class="col-lg-8">
+                    <div class="card h-100">
                         <div class="card-body">
-                            <p class="small text-muted">Este gráfico muestra el valor monetario total del stock para cada categoría de producto terminado.</p>
-                            <div id="productos-valor-categoria-chart" style="height: 350px;"></div>
-                            <p class="small text-muted mt-2" id="productos-valor-categoria-description"></p>
+                            <h5 class="card-title">Valor del Stock por Categoría</h5>
+                             <p class="text-muted small">Este gráfico compara el valor monetario total del inventario para cada categoría de producto, ayudando a entender qué líneas de productos concentran mayor capital.</p>
+                            <div id="productos-valor-categoria-chart" style="height: 400px;"></div>
+                            <div id="productos-valor-categoria-summary" class="dynamic-summary mt-2 small p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                 </div>
-                <!-- Distribución por Estado -->
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-success">Distribución de Stock por Estado</h6>
-                        </div>
+                <div class="col-lg-6">
+                    <div class="card h-100">
                         <div class="card-body">
-                            <p class="small text-muted">Este gráfico de torta muestra la proporción del stock de productos según su estado actual (Disponible, Reservado, etc.).</p>
-                            <div id="productos-distribucion-estado-chart" style="height: 350px;"></div>
-                            <p class="small text-muted mt-2" id="productos-distribucion-estado-description"></p>
+                            <h5 class="card-title">Rotación de Productos (Últimos 30 días)</h5>
+                            <p class="text-muted small">Muestra los productos más vendidos en el último mes, permitiendo identificar los artículos de alta demanda y optimizar las estrategias de producción y venta.</p>
+                            <div id="productos-rotacion-chart" style="height: 400px;"></div>
+                            <div id="productos-rotacion-summary" class="dynamic-summary mt-2 small p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="row">
-                <!-- Rotación de Productos -->
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-primary">Rotación de Productos (Ventas últimos 30 días)</h6>
-                        </div>
+                <div class="col-lg-6">
+                    <div class="card h-100">
                         <div class="card-body">
-                            <p class="small text-muted">Productos más vendidos en el último mes, indicando alta demanda.</p>
-                            <div id="productos-rotacion-chart" style="height: 350px;"></div>
+                            <h5 class="card-title">Cobertura de Stock</h5>
+                            <p class="text-muted small">Estima cuántos días de venta puede cubrir el stock actual de cada producto basándose en la demanda reciente, una métrica clave para la planificación de inventario.</p>
+                            <div id="productos-cobertura-chart" style="height: 400px;"></div>
+                            <div id="productos-cobertura-summary" class="dynamic-summary mt-2 small p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                 </div>
-                <!-- Cobertura de Stock -->
-                <div class="col-lg-6 mb-4">
-                    <div class="card shadow">
-                        <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-warning">Cobertura de Stock (Días)</h6>
-                        </div>
+                <div class="col-lg-6">
+                    <div class="card h-100">
                         <div class="card-body">
-                            <p class="small text-muted">Estimación de cuántos días de venta cubre el stock actual.</p>
-                            <div id="productos-cobertura-chart" style="height: 350px;"></div>
+                            <h5 class="card-title">Productos con Bajo Stock</h5>
+                            <p class="text-muted small">Enumera los productos cuyo inventario ha alcanzado su nivel mínimo o se ha agotado, alertando sobre la necesidad de reponer o producir más.</p>
+                            <div id="productos-bajo-stock-table" class="mt-3" style="max-height: 350px; overflow-y: auto;"></div>
+                            <div id="productos-bajo-stock-summary" class="dynamic-summary mt-2 small p-2 bg-light rounded border"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Lotes de Productos Próximos a Vencer</h5>
+                            <p class="text-muted small">Identifica los lotes de productos terminados cercanos a su fecha de vencimiento para facilitar acciones comerciales que eviten su pérdida.</p>
+                            <div id="productos-vencimiento-table" class="mt-3" style="max-height: 350px; overflow-y: auto;"></div>
+                            <div id="productos-vencimiento-summary" class="dynamic-summary mt-2 small p-2 bg-light rounded border"></div>
                         </div>
                     </div>
                 </div>
@@ -220,8 +181,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.3.2/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.0/dist/echarts.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="{{ url_for('static', filename='js/reportes/stock.js') }}?v=1.1"></script>
+<script src="{{ url_for('static', filename='js/reportes/stock.js') }}?v=1.4"></script>
 {% endblock %}

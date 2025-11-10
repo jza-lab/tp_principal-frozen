@@ -598,7 +598,14 @@ class PedidoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error en get_sales_by_product_in_period: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
-
+    def get_reservas_for_item(self, item_id: int) -> List[Dict]:
+        """Obtiene las reservas de lotes de producto para un item de pedido específico."""
+        try:
+            reservas_res = self.db.table('reservas_productos').select('*').eq('pedido_item_id', item_id).execute()
+            return reservas_res.data or []
+        except Exception as e:
+            logger.error(f"Error obteniendo reservas para el item {item_id}: {e}")
+            return []
 class PedidoItemModel(BaseModel):
     """Modelo para la tabla pedido_items"""
 

@@ -70,7 +70,7 @@
                 <h5 class="mb-0">Información del Lote <code
                         class="text-muted ms-2">{{ lote.numero_lote_proveedor or 'N/A' }}</code></h5>
                 <div>
-                    {% if lote.en_alerta %}
+                    {% if lote.en_alerta == True %}
                     <span class="badge bg-danger fs-6" data-bs-toggle="tooltip" title="Alertado">
                         <i class="bi bi-exclamation-triangle-fill"></i> Alertado
                     </span>
