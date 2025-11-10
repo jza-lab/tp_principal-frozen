@@ -41,13 +41,13 @@ CANONICAL_PERMISSION_MAP = {
     'gestionar_proveedores': ['ADMIN'],
     'gestionar_autorizaciones': ['ADMIN', 'SUPERVISOR', 'RRHH'],
     'admin_acceder_consultas': ['GERENTE', 'VENDEDOR'],
-    'admin_actualizar_precios_excel': ['ADMIN', 'VENDEDOR'],
+    'admin_actualizar_precios_excel': ['ADMIN'],
 
     # Módulo: Comercial (Ventas y Clientes)
     'logistica_gestion_ov': ['VENDEDOR'], # Permiso para que Vendedor gestione Órdenes de Venta
     'planificar_ov': ['VENDEDOR', 'SUPERVISOR', 'GERENTE'],
     'gestionar_clientes': ['VENDEDOR'],
-    'finanzas_ver_precios_costos': ['VENDEDOR', 'SUPERVISOR', 'GERENTE'],
+    'finanzas_ver_precios_costos': ['SUPERVISOR', 'GERENTE'],
 
     # Módulo: Producción
     'crear_orden_de_produccion': ['SUPERVISOR'],

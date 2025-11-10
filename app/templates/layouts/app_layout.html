@@ -75,10 +75,11 @@
                         <li><a class="dropdown-item {% if request.endpoint.startswith('precios') %}active{% endif %}"
                                 href="{{ url_for('precios.index') }}"><i class="bi bi-tag-fill me-2"></i> Actualizar
                                 Precios</a></li>
-                        {% endif %}
                         
                             <hr class="dropdown-divider">
                         </li>
+                        {% endif %}
+
                         <li><a class="dropdown-item {% if request.endpoint == 'reportes.stock' %}active{% endif %}"
                                 href="{{ url_for('reportes.stock') }}"><i class="fas fa-chart-pie me-2"></i> Reportes de Stock</a></li>
 
