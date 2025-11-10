@@ -5,21 +5,35 @@ from app.utils.decorators import permission_required
 despacho_bp = Blueprint('despacho', __name__, url_prefix='/admin/despachos')
 despacho_controller = DespachoController()
 
-@despacho_bp.route('/crear')
-@permission_required('crear_despachos')
-def crear_despacho_vista():
+@despacho_bp.route('/')
+@permission_required('consultar_despachos')
+def listar_despachos():
+    response = despacho_controller.obtener_todos_los_despachos()
+    if response['success']:
+        despachos = response['data']
+    else:
+        flash(response.get('error', 'Error al cargar los despachos.'), 'danger')
+        despachos = []
+    return render_template('despachos/listar.html', despachos=despachos)
+
+@despacho_bp.route('/gestion', methods=['GET'])
+@permission_required('crear_despachos') # Usamos el mismo permiso, ya que es la misma área funcional
+def gestion_despachos_vista():
     """
-    Muestra la página para crear un nuevo despacho, cargando los pedidos
-    que están listos para ser enviados.
+    Muestra la página de gestión de despachos, que incluye la creación de nuevos
+    despachos (pestaña 1) y el historial de despachos existentes (pestaña 2).
+    Si se pasa un `pedido_id`, ese pedido vendrá pre-seleccionado en la primera pestaña.
     """
-    response = despacho_controller.obtener_pedidos_para_despacho()
-    if not response['success']:
-        flash(response['error'], 'danger')
+    pedido_id_seleccionado = request.args.get('pedido_id', type=int)
+
+    # 1. Obtener pedidos listos para despachar (para la pestaña de creación)
+    response_pedidos = despacho_controller.obtener_pedidos_para_despacho()
+    if not response_pedidos['success']:
+        flash(response_pedidos['error'], 'danger')
         pedidos = []
     else:
-        pedidos = response['data']
+        pedidos = response_pedidos['data']
     
-    # Agrupar pedidos por zona para la vista
     pedidos_por_zona = {}
     for pedido in pedidos:
         zona_nombre = pedido.get('zona', {}).get('nombre', 'Sin Zona Asignada')
@@ -27,7 +41,18 @@ def crear_despacho_vista():
             pedidos_por_zona[zona_nombre] = []
         pedidos_por_zona[zona_nombre].append(pedido)
 
-    return render_template('despachos/crear.html', pedidos_por_grupo=pedidos_por_zona)
+    # 2. Obtener historial de despachos (para la pestaña de historial)
+    response_despachos, _ = despacho_controller.get_all()
+    if response_despachos['success']:
+        despachos_existentes = response_despachos['data']
+    else:
+        flash(response_despachos.get('error', 'Error al cargar el historial de despachos.'), 'danger')
+        despachos_existentes = []
+
+    return render_template('despachos/gestion_despachos.html', 
+                           pedidos_por_grupo=pedidos_por_zona, 
+                           pedido_seleccionado_id=pedido_id_seleccionado,
+                           despachos=despachos_existentes)
 
 @despacho_bp.route('/api/crear', methods=['POST'])
 @permission_required('crear_despachos')

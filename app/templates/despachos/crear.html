@@ -121,6 +121,18 @@
     </div>
 </div>
 <script src="{{ url_for('static', filename='js/despachos/crear_despacho.js') }}"></script>
-
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const pedidoSeleccionadoId = {{ pedido_seleccionado_id|tojson }};
+        if (pedidoSeleccionadoId) {
+            const checkbox = document.querySelector(`.pedido-checkbox[value="${pedidoSeleccionadoId}"]`);
+            if (checkbox) {
+                checkbox.checked = true;
+                // Disparar el evento 'change' para que el script principal actualice la UI
+                checkbox.dispatchEvent(new Event('change'));
+            }
+        }
+    });
+</script>
 {% endblock %}
 

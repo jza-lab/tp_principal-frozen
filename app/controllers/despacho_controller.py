@@ -102,18 +102,21 @@ class DespachoController(BaseController):
         if not despacho_response['success']:
             return despacho_response
 
-        despacho_id = despacho_response['data'][0]['id']
+        despacho_id = despacho_response['data']['id']
         
-        # Usamos un modelo genérico para la tabla de items del despacho
-        despacho_items_model = GenericBaseModel()
-        despacho_items_model.get_table_name = lambda: 'despacho_items'
+        # Se define una clase de modelo concreta para despacho_items
+        class DespachoItemModel(GenericBaseModel):
+            def get_table_name(self):
+                return 'despacho_items'
+
+        despacho_items_model = DespachoItemModel()
 
         for pedido_id in pedido_ids:
             # Asociar pedido al despacho
             despacho_items_model.create({'despacho_id': despacho_id, 'pedido_id': pedido_id})
             
             # Actualizar estado del pedido
-            self.pedido_controller.actualizar_estado_pedido(pedido_id, 'EN_TRANSITO')
+            self.pedido_controller.cambiar_estado_pedido(pedido_id, 'EN_TRANSITO')
 
         return {'success': True, 'data': {'despacho_id': despacho_id}}
 
@@ -127,9 +130,11 @@ class DespachoController(BaseController):
         from datetime import datetime
 
         # 1. Obtener datos del despacho
-        response = self.model.get_by_id(despacho_id, 
-            related_entities=['vehiculo:vehiculo_id(patente,marca,modelo,conductor:conductor_id(*))', 'despacho_items:despacho_id(pedido:pedido_id(*,cliente:cliente_id(*),direccion:direccion_id(*)))']
-        )
+        response = self.model.db.table(self.model.get_table_name()) \
+            .select('*, vehiculo:vehiculo_id(patente, marca, modelo, nombre_conductor, dni_conductor), despacho_items(*, pedido:pedido_id(*, cliente:cliente_id(*), direccion:direccion_id(*)))') \
+            .filter('id', 'eq', despacho_id) \
+            .execute()
+
         if not response['success'] or not response['data']:
             return {'success': False, 'error': 'Despacho no encontrado'}
         
