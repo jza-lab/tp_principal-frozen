@@ -43,8 +43,8 @@ def gestion_despachos_vista():
 
     # 2. Obtener historial de despachos (para la pestaña de historial)
     response_despachos, _ = despacho_controller.get_all()
-    if response_despachos['success']:
-        despachos_existentes = response_despachos['data']
+    if response_despachos and response_despachos.get('success'):
+        despachos_existentes = response_despachos.get('data', [])
     else:
         flash(response_despachos.get('error', 'Error al cargar el historial de despachos.'), 'danger')
         despachos_existentes = []

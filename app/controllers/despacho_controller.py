@@ -92,6 +92,29 @@ class DespachoController(BaseController):
 
         return {'success': True, 'data': pedidos_enriquecidos}
 
+    def get_all(self):
+        """
+        Obtiene todos los despachos existentes, incluyendo información del vehículo
+        y los pedidos asociados.
+        """
+        try:
+            # Columnas a seleccionar para enriquecer la información del despacho
+            select_columns = '*, vehiculo:vehiculo_id(*), despacho_items(*, pedido:pedido_id(*))'
+
+            # Corrección: Construir la consulta con select() en lugar de usar find_all con parámetros.
+            result = self.model.db.table(self.model.get_table_name()).select(select_columns).execute()
+            
+            # El resultado de execute() es un objeto con un atributo 'data'.
+            if hasattr(result, 'data'):
+                return self.success_response(result.data)
+            else:
+                # Manejar el caso en que la respuesta no es la esperada.
+                return self.error_response('Error al obtener despachos: la respuesta no contiene datos.', 500)
+
+        except Exception as e:
+            # Capturar cualquier excepción inesperada durante el proceso
+            return self.error_response(f"Error excepcional en DespachoController.get_all: {e}", 500)
+
     def crear_despacho_y_actualizar_pedidos(self, vehiculo_id, pedido_ids, observaciones):
         """
         Crea un nuevo despacho y actualiza el estado de los pedidos a 'EN_TRANSITO'.
