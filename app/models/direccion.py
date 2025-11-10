@@ -183,7 +183,7 @@ class DireccionModel(BaseModel):
         """
         try:
             # Seleccionamos los campos necesarios y filtramos
-            response = self.db.table(self.get_table_name()).select('id, localidad, provincia').ilike('localidad', f'%{term}%').limit(20).execute()
+            response = self.db.table(self.get_table_name()).select('id, localidad, provincia').ilike('localidad', f'%{term}%').execute()
 
             if not response.data:
                 return {'success': True, 'data': []}
@@ -192,15 +192,16 @@ class DireccionModel(BaseModel):
             localidades_vistas = set()
             localidades_unicas = []
             for item in response.data:
-                # Clave única para la combinación de localidad y provincia
-                clave_localidad = (item['localidad'].strip().lower(), item['provincia'].strip().lower())
-                if clave_localidad not in localidades_vistas:
-                    localidades_vistas.add(clave_localidad)
-                    localidades_unicas.append({
-                        'id': item['id'], # Usamos el ID de la primera dirección encontrada para esta localidad
-                        'localidad': item['localidad'],
-                        'provincia': item['provincia']
-                    })
+                if item.get('localidad'):
+                    provincia = item.get('provincia', '').strip()
+                    clave_localidad = (item['localidad'].strip().lower(), provincia.lower())
+                    if clave_localidad not in localidades_vistas:
+                        localidades_vistas.add(clave_localidad)
+                        localidades_unicas.append({
+                            'id': item['id'], # Usamos el ID de la primera dirección encontrada para esta localidad
+                            'localidad': item['localidad'],
+                            'provincia': provincia if provincia else None
+                        })
             
             return {'success': True, 'data': localidades_unicas}
 
@@ -224,14 +225,18 @@ class DireccionModel(BaseModel):
             localidades_vistas = set()
             localidades_unicas = []
             for item in response.data:
-                if item.get('localidad') and item.get('provincia'):
-                    clave_localidad = (item['localidad'].strip().lower(), item['provincia'].strip().lower())
+                # Solo requerimos que la localidad exista. La provincia es opcional.
+                if item.get('localidad'):
+                    # Usamos una cadena vacía para la provincia si es None
+                    provincia = item.get('provincia', '').strip()
+                    clave_localidad = (item['localidad'].strip().lower(), provincia.lower())
+                    
                     if clave_localidad not in localidades_vistas:
                         localidades_vistas.add(clave_localidad)
                         localidades_unicas.append({
                             'id': item['id'], # Usamos el ID de la primera dirección encontrada
                             'localidad': item['localidad'],
-                            'provincia': item['provincia']
+                            'provincia': provincia if provincia else None # Devolver None si está vacío
                         })
             
             return {'success': True, 'data': localidades_unicas}

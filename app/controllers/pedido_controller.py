@@ -981,19 +981,20 @@ class PedidoController(BaseController):
                 # En un escenario real, aquí se debería intentar revertir el consumo de stock.
                 return self.error_response(f"{error_msg} (Advertencia: El stock ya fue consumido)", 500)
 
-            # 6. Actualizar el estado del pedido
-            update_data = {'estado': 'EN_TRANSITO'}
-            result = self.model.update(pedido_id, update_data)
+            # 6. Actualizar el estado del pedido a 'EN_TRANSITO'
+            cambio_estado_result = self.model.cambiar_estado(pedido_id, 'EN_TRANSITO')
 
-            if result.get('success'):
+            if cambio_estado_result.get('success'):
                 logger.info(f"Pedido {pedido_id} cambiado a estado 'EN_TRANSITO' con éxito.")
                 detalle = f"El pedido de venta {pedido_actual.get('codigo_ov')} fue despachado."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Despacho', detalle)
                 return self.success_response(message="Pedido despachado con éxito.")
             else:
-                # En un caso real, aquí se debería considerar revertir la creación del despacho (transacción)
-                logger.error(f"Error al despachar pedido {pedido_id} después de guardar despacho: {result.get('error')}")
-                return self.error_response(result.get('error', 'El despacho fue registrado, pero no se pudo actualizar el estado del pedido.'), 500)
+                # En un caso real, aquí se debería considerar revertir la creación del despacho y el consumo de stock (transacción)
+                error_msg_update = cambio_estado_result.get('error', 'Error desconocido al actualizar estado del pedido.')
+                logger.error(f"Error al despachar pedido {pedido_id} después de guardar despacho: {error_msg_update}")
+                return self.error_response(f"El despacho fue registrado y el stock consumido, pero no se pudo actualizar el estado del pedido. Error: {error_msg_update}", 500)
+
 
         except Exception as e:
             logger.error(f"Error interno en despachar_pedido: {e}", exc_info=True)
