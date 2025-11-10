@@ -84,13 +84,12 @@ class PedidoModel(BaseModel):
         # 4. Obtener datos de despacho si existen (CORREGIDO)
         pedido_data['despacho'] = None
         try:
-            # La relación es Pedido -> despacho_items -> Despacho.
-            # Primero, encontrar el despacho_item que corresponde a este pedido.
-            item_despacho_res = self.db.table('despacho_items').select('despachos(*, vehiculo:vehiculo_id(*))').eq('pedido_id', pedido_id).maybe_single().execute()
+            item_despacho_res = self.db.table('despacho_items').select('despachos(*, vehiculo:vehiculo_id(*))').eq('pedido_id', pedido_id).execute()
 
             # Si se encuentra un item_despacho y tiene datos de despacho anidados...
-            if item_despacho_res.data and item_despacho_res.data.get('despachos'):
-                pedido_data['despacho'] = item_despacho_res.data['despachos']
+            if item_despacho_res and item_despacho_res.data:
+                # Tomamos el primer resultado y su despacho asociado.
+                pedido_data['despacho'] = item_despacho_res.data[0].get('despachos')
 
         except APIError as e:
             # Si la consulta a despachos falla (ej. RLS), no bloquear la carga del pedido.
