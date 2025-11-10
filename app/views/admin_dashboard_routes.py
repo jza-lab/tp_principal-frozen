@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from flask import Blueprint, render_template
 from flask_jwt_extended import jwt_required, get_jwt
 from app.controllers.usuario_controller import UsuarioController
@@ -59,7 +59,14 @@ def index():
     ordenes_listas_para_producir = respuesta_ordenes.get('data', [])
 
     asistencia = usuario_controller.obtener_porcentaje_asistencia()
-    notificaciones = notificacion_controller.obtener_notificaciones_no_leidas()
+    
+    notificaciones_utc = notificacion_controller.obtener_notificaciones_no_leidas()
+    notificaciones = []
+    for notif in notificaciones_utc:
+        if isinstance(notif.get('created_at'), str):
+            # Convertir el string a datetime antes de restar
+            notif['created_at'] = datetime.fromisoformat(notif['created_at']) - timedelta(hours=3)
+        notificaciones.append(notif)
     
     insumos_bajo_stock_resp, _ = inventario_controller.obtener_insumos_bajo_stock()
     insumos_bajo_stock_list = insumos_bajo_stock_resp.get('data', [])
@@ -123,6 +130,10 @@ def index():
     lotes_vencimiento_result = lote_producto_controller.obtener_lotes_y_conteo_vencimientos()
     lotes_producto_vencimiento_count = lotes_vencimiento_result.get('count', 0)
     lotes_producto_vencimiento_lista = lotes_vencimiento_result.get('data', [])
+    
+    for lote in lotes_producto_vencimiento_lista:
+        if isinstance(lote.get('fecha_vencimiento'), str):
+            lote['fecha_vencimiento'] = datetime.fromisoformat(lote['fecha_vencimiento'].split('T')[0])
 
     lotes_sin_trazabilidad = lote_producto_controller.obtener_conteo_lotes_sin_trazabilidad()
     ordenes_reabiertas = orden_produccion_controller.obtener_conteo_ordenes_reabiertas()
