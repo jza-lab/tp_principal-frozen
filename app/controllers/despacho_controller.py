@@ -33,45 +33,60 @@ class DespachoController(BaseController):
 
     def obtener_pedidos_para_despacho(self):
         """
-        Obtiene todos los pedidos que están en estado 'LISTO PARA ENTREGAR',
-        les asigna su zona y calcula el peso total de cada uno.
+        Obtiene todos los pedidos en estado 'LISTO PARA ENTREGAR', les asigna su
+        zona y calcula su peso total de forma optimizada.
         """
-        response, _ = self.pedido_controller.obtener_pedidos(filtros={'estado': 'LISTO_PARA_ENTREGA'})
-        
-        if not response.get('success'):
-            return response
+        # 1. Obtener los pedidos base
+        pedidos_response, _ = self.pedido_controller.obtener_pedidos(filtros={'estado': 'LISTO_PARA_ENTREGA'})
+        if not pedidos_response.get('success'):
+            return pedidos_response
 
+        pedidos = pedidos_response.get('data', [])
+        if not pedidos:
+            return {'success': True, 'data': []}
+
+        # 2. Recolectar todos los IDs de productos únicos
+        producto_ids = set()
+        for pedido in pedidos:
+            for item in pedido.get('pedido_items', []):
+                if item.get('producto_id'):
+                    producto_ids.add(item['producto_id'])
+
+        # 3. Obtener los pesos de todos los productos en una sola consulta
+        pesos_map = {}
+        if producto_ids:
+            producto_model = self.producto_controller.model
+            table_name = producto_model.get_table_name()
+            try:
+                # Usamos 'in_' para buscar múltiples IDs
+                response = producto_model.db.table(table_name).select('id, peso_total_gramos').in_('id', list(producto_ids)).execute()
+                productos_data = response.data
+                # Crear un mapa de id -> peso para búsqueda rápida
+                for prod in productos_data:
+                    pesos_map[prod['id']] = prod.get('peso_total_gramos', 0) or 0
+            except Exception as e:
+                # Si la consulta de pesos falla, es mejor registrar el error y continuar
+                # asignando peso 0 que romper toda la funcionalidad.
+                print(f"Error al obtener pesos de productos: {e}")
+
+        # 4. Obtener el mapa de zonas
         zona_map_response = self.zona_controller.obtener_mapa_localidades_a_zonas()
         zona_map = zona_map_response.get('data', {}) if zona_map_response.get('success') else {}
 
+        # 5. Enriquecer cada pedido con su zona y peso total calculado
         pedidos_enriquecidos = []
-        for pedido in response['data']:
+        for pedido in pedidos:
             # Asignar zona
             localidad = pedido.get('direccion', {}).get('localidad', 'Sin Localidad')
-            zona_nombre = zona_map.get(localidad, 'Sin Zona Asignada')
-            pedido['zona'] = {'nombre': zona_nombre}
+            pedido['zona'] = {'nombre': zona_map.get(localidad, 'Sin Zona Asignada')}
 
-            # Calcular peso
+            # Calcular peso total usando el mapa de pesos
             peso_total_gramos = 0
-            if 'pedido_items' in pedido and pedido['pedido_items']:
-                for item in pedido['pedido_items']:
-                    producto_id = item.get('producto_id')
-                    cantidad = item.get('cantidad', 0)
-                    
-                    if producto_id and cantidad > 0:
-                        # Hacemos un llamado directo al modelo para eficiencia
-                        producto_model = self.producto_controller.model
-                        try:
-                            response = producto_model.get_table().select('peso_total_gramos').eq('id', producto_id).single().execute()
-                            producto_data = response.data
-                        except Exception:
-                            producto_data = None
-                        
-                        if producto_data:
-                            peso_unitario_gramos = producto_data.get('peso_total_gramos', 0)
-                            peso_total_gramos += (peso_unitario_gramos or 0) * cantidad
+            for item in pedido.get('pedido_items', []):
+                cantidad = item.get('cantidad', 0)
+                peso_unitario = pesos_map.get(item.get('producto_id'), 0)
+                peso_total_gramos += cantidad * peso_unitario
             
-            # Convertir a kilogramos y redondear
             pedido['peso_total_calculado_kg'] = round(peso_total_gramos / 1000, 2)
             pedidos_enriquecidos.append(pedido)
 
