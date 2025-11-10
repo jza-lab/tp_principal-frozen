@@ -127,7 +127,21 @@ class InsumoController(BaseController):
             
             filtros = filtros or {}
 
+            # --- INICIO: Lógica de filtros de categoría mejorada ---
             stock_status_filter = filtros.pop('stock_status', None)
+            categorias_filter = filtros.pop('categorias', None) # Para selección múltiple (list)
+            categoria_single_filter = filtros.pop('categoria', None) # Para 'select' tradicional (str)
+
+            all_categorias = []
+            if categorias_filter:
+                all_categorias.extend(categorias_filter)
+            if categoria_single_filter and categoria_single_filter not in all_categorias:
+                all_categorias.append(categoria_single_filter)
+
+            if all_categorias:
+                # Usar 'categoria' como clave porque el modelo InsumoModel espera esta clave para el filtro .in_
+                filtros['categoria'] = all_categorias 
+            # --- FIN: Lógica de filtros de categoría mejorada ---
 
             if stock_status_filter == 'bajo':
                 # 1. Obtener la lista básica de insumos que están BAJO STOCK
@@ -153,8 +167,12 @@ class InsumoController(BaseController):
                     search_term = f"%{filtros['busqueda']}%"
                     query = query.or_(f"nombre.ilike.{search_term},codigo_interno.ilike.{search_term}")
 
-                if filtros.get('categoria'):
-                    query = query.eq('categoria', filtros['categoria'])
+                if 'categoria' in filtros:
+                    categorias = filtros['categoria']
+                    if isinstance(categorias, list) and len(categorias) > 0:
+                        query = query.in_('categoria', categorias)
+                    elif isinstance(categorias, str):
+                        query = query.eq('categoria', categorias)
 
                 result = query.execute()
 
@@ -179,24 +197,12 @@ class InsumoController(BaseController):
 
             else:
                 # Lógica existente para obtener todos los insumos con filtros normales
-                # --- CORRECCIÓN: Aplicar filtro de búsqueda 'search' ---
-                search_term = filtros.pop('search', None)
-                
                 result = self.insumo_model.find_all(filtros)
 
                 if not result['success']:
                     return self.error_response(result['error'])
                 
                 datos = result['data']
-
-                if search_term:
-                    search_term_lower = search_term.lower()
-                    datos = [
-                        insumo for insumo in datos
-                        if search_term_lower in insumo.get('nombre', '').lower() or \
-                           search_term_lower in insumo.get('codigo_interno', '').lower()
-                    ]
-                # --- FIN DE LA CORRECCIÓN ---
 
             # Ordenar la lista: activos primero, luego inactivos
             sorted_data = sorted(datos, key=lambda x: x.get('activo', False), reverse=True)
@@ -397,6 +403,27 @@ class InsumoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error obteniendo insumos con stock: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def obtener_sugerencias_insumos(self, query: str) -> tuple:
+        """Obtener una lista de nombres de insumos para sugerencias de autocompletado."""
+        try:
+            if not query or len(query) < 2:
+                return self.success_response(data=[])
+
+            result = self.insumo_model.find_all(
+                filters={'busqueda': query},
+                select_columns=['nombre'],
+                limit=10 
+            )
+
+            if result['success']:
+                nombres = [insumo['nombre'] for insumo in result['data']]
+                return self.success_response(data=nombres)
+            else:
+                return self.error_response(result['error'])
+        except Exception as e:
+            logger.error(f"Error obteniendo sugerencias de insumos: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def obtener_categorias_distintas(self) -> tuple:

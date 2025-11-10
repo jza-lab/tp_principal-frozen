@@ -288,6 +288,35 @@ def eliminar_lote(id_insumo, id_lote):
         )
 
 
+@insumos_bp.route("/filter", methods=["GET"])
+@permission_required(accion='almacen_ver_insumos')
+def api_filter_insumos():
+    """
+    Endpoint de API para el filtrado dinámico de insumos.
+    """
+    try:
+        insumo_controller = InsumoController()
+        
+        # Recolectar filtros desde los query parameters
+        filtros = {
+            'busqueda': request.args.get('busqueda', None),
+            'stock_status': request.args.get('stock_status', None),
+            # getlist para recibir múltiples valores para 'categorias'
+            'categorias': request.args.getlist('categorias') 
+        }
+        
+        # Limpiar filtros nulos o vacíos
+        filtros = {k: v for k, v in filtros.items() if v}
+        
+        response, status = insumo_controller.obtener_insumos(filtros)
+        
+        return jsonify(response), status
+            
+    except Exception as e:
+        logger.error(f"Error en api_filter_insumos: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+
 @insumos_bp.route("/", methods=["GET"])
 def api_get_insumos():
     """
@@ -300,7 +329,7 @@ def api_get_insumos():
         
         filtros = {}
         if search_query:
-            filtros['nombre'] = search_query
+            filtros['busqueda'] = search_query
         if proveedor_id:
             filtros['id_proveedor'] = proveedor_id
         
@@ -313,6 +342,25 @@ def api_get_insumos():
             
     except Exception as e:
         logger.error(f"Error en api_get_insumos: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+
+@insumos_bp.route("/suggestions", methods=["GET"])
+@permission_required(accion='almacen_ver_insumos')
+def api_get_insumo_suggestions():
+    """
+    Endpoint de API para obtener sugerencias de insumos para autocompletar.
+    """
+    try:
+        insumo_controller = InsumoController()
+        query = request.args.get('q', '')
+        
+        response, status = insumo_controller.obtener_sugerencias_insumos(query)
+        
+        return jsonify(response), status
+            
+    except Exception as e:
+        logger.error(f"Error en api_get_insumo_suggestions: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 
