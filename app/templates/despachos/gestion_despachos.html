@@ -21,23 +21,34 @@
     .capacity-bar.over-capacity {
         background-color: #dc3545;
     }
+    .table-hover tbody tr:hover {
+        background-color: #f5f5f5;
+    }
+    .icon-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .text-muted {
+        font-size: 0.9em;
+    }
 </style>
 {% endblock %}
 
 {% block app_content %}
 <div class="container-fluid">
-    <h1 class="h3 mb-4 text-gray-800">Gestión de Despachos y Envíos</h1>
+    <h1 class="h3 mb-4 text-gray-800"><i class="bi bi-truck me-2"></i>Gestión de Despachos y Envíos</h1>
 
     <!-- Pestañas de Navegación -->
     <ul class="nav nav-tabs" id="gestionDespachosTab" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="crear-despacho-tab" data-bs-toggle="tab" data-bs-target="#crear-despacho" type="button" role="tab" aria-controls="crear-despacho" aria-selected="true">
-                <i class="fas fa-box-open me-2"></i>Pedidos Listos para Despachar
+                <i class="bi bi-box-seam me-2"></i>Pedidos Listos para Despachar
             </button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="historial-despachos-tab" data-bs-toggle="tab" data-bs-target="#historial-despachos" type="button" role="tab" aria-controls="historial-despachos" aria-selected="false">
-                <i class="fas fa-history me-2"></i>Historial de Despachos
+                <i class="bi bi-clock-history me-2"></i>Historial de Despachos
             </button>
         </li>
     </ul>
@@ -50,7 +61,7 @@
                 <!-- Columna de Selección de Pedidos -->
                 <div class="col-lg-8">
                     <div class="card mb-4">
-                        <div class="card-header"><i class="fas fa-list-check me-1"></i>Seleccionar Pedidos</div>
+                        <div class="card-header"><i class="bi bi-list-check me-1"></i>Seleccionar Pedidos</div>
                         <div class="card-body">
                             {% for nombre_grupo, pedidos in pedidos_por_grupo.items() %}
                                 <h5>{{ nombre_grupo }}</h5>
@@ -68,16 +79,18 @@
                                         {% for pedido in pedidos %}
                                         <tr data-pedido-id="{{ pedido.id }}">
                                             <td><input type="checkbox" class="form-check-input pedido-checkbox" value="{{ pedido.id }}" data-peso="{{ pedido.peso_total_calculado_kg }}"></td>
-                                            <td>PED-{{ pedido.id }}</td>
-                                            <td>{{ pedido.cliente.nombre }}</td>
-                                            <td>{{ pedido.direccion.calle }} {{ pedido.direccion.altura }}, {{ pedido.direccion.localidad }}</td>
-                                            <td class="text-end">{{ "%.2f"|format(pedido.peso_total_calculado_kg) }}</td>
+                                            <td><span class="badge bg-secondary">PED-{{ pedido.id }}</span></td>
+                                            <td><div class="icon-cell"><i class="bi bi-person"></i> {{ pedido.cliente.nombre }}</div></td>
+                                            <td><div class="icon-cell"><i class="bi bi-geo-alt"></i> <span>{{ pedido.direccion.calle }} {{ pedido.direccion.altura }}, <span class="text-muted">{{ pedido.direccion.localidad }}</span></span></div></td>
+                                            <td class="text-end"><div class="icon-cell justify-content-end"><i class="bi bi-box-seam"></i> {{ "%.2f"|format(pedido.peso_total_calculado_kg) }}</div></td>
                                         </tr>
                                         {% endfor %}
                                     </tbody>
                                 </table>
                             {% else %}
-                                <p class="text-center">No hay pedidos listos para entregar.</p>
+                                <div class="alert alert-info text-center">
+                                    <i class="bi bi-info-circle me-2"></i>No hay pedidos listos para entregar.
+                                </div>
                             {% endfor %}
                         </div>
                     </div>
@@ -86,14 +99,14 @@
                 <!-- Columna de Resumen y Despacho -->
                 <div class="col-lg-4">
                     <div class="card mb-4 sticky-top">
-                        <div class="card-header"><i class="fas fa-truck me-1"></i>Información del Despacho</div>
+                        <div class="card-header"><i class="bi bi-clipboard-data me-1"></i>Información del Despacho</div>
                         <div class="card-body">
                             <!-- Buscador de Vehículo -->
                             <div class="mb-3">
-                                <label for="patente-search" class="form-label">Buscar Vehículo por Patente</label>
+                                <label for="patente-search" class="form-label"><i class="bi bi-truck-front me-2"></i>Buscar Vehículo por Patente</label>
                                 <div class="input-group has-validation">
                                     <input type="text" class="form-control" id="patente-search" placeholder="AAA-123">
-                                    <button class="btn btn-outline-secondary" type="button" id="search-btn"><i class="fas fa-search"></i></button>
+                                    <button class="btn btn-outline-secondary" type="button" id="search-btn"><i class="bi bi-search"></i></button>
                                     <div id="patente-error" class="invalid-feedback"></div>
                                 </div>
                             </div>
@@ -107,23 +120,23 @@
                             </div>
 
                             <!-- Resumen de Carga -->
-                            <h5>Resumen de Carga</h5>
-                            <p><strong>Pedidos seleccionados:</strong> <span id="selected-count">0</span></p>
-                            <p><strong>Peso total:</strong> <span id="total-weight">0.00</span> kg</p>
+                            <h5><i class="bi bi-basket me-2"></i>Resumen de Carga</h5>
+                            <p><i class="bi bi-check2-square me-2 text-primary"></i><strong>Pedidos seleccionados:</strong> <span id="selected-count">0</span></p>
+                            <p><i class="bi bi-box-seam me-2 text-primary"></i><strong>Peso total:</strong> <span id="total-weight">0.00</span> kg</p>
                             <div class="capacity-bar-container mb-3">
                                 <div class="capacity-bar" id="capacity-bar" style="width: 0%;"></div>
                             </div>
 
                             <!-- Observaciones -->
                             <div class="mb-3">
-                                <label for="observaciones" class="form-label">Observaciones (Opcional)</label>
+                                <label for="observaciones" class="form-label"><i class="bi bi-pencil-square me-2"></i>Observaciones (Opcional)</label>
                                 <textarea class="form-control" id="observaciones" rows="3"></textarea>
                             </div>
 
                             <!-- Botón de Confirmar -->
                             <div class="d-grid">
                                 <button class="btn btn-primary" id="confirm-despacho-btn" disabled>
-                                    <i class="fas fa-check-circle me-1"></i> Confirmar Despacho
+                                    <i class="bi bi-check-circle me-1"></i> Confirmar Despacho
                                 </button>
                             </div>
 
@@ -139,12 +152,12 @@
         <div class="tab-pane fade" id="historial-despachos" role="tabpanel" aria-labelledby="historial-despachos-tab">
             <div class="card shadow mt-3">
                 <div class="card-header">
-                    <h6 class="m-0 font-weight-bold text-primary">Historial de Despachos Realizados</h6>
+                    <h6 class="m-0 font-weight-bold text-primary"><i class="bi bi-list-ul me-2"></i>Historial de Despachos Realizados</h6>
                 </div>
                 <div class="card-body">
                     {% if despachos %}
                     <div class="table-responsive">
-                        <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                        <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
                             <thead>
                                 <tr>
                                     <th>ID Despacho</th>
@@ -157,19 +170,30 @@
                             </thead>
                             <tbody>
                                 {% for despacho in despachos %}
+                                {% set estado = despacho.estado|default('CREADO', true) %}
+                                {% set badge_class = 'bg-secondary' %}
+                                {% if estado == 'EN_TRANSITO' %}
+                                    {% set badge_class = 'bg-warning text-dark' %}
+                                {% elif estado == 'ENTREGADO' %}
+                                    {% set badge_class = 'bg-success' %}
+                                {% elif estado == 'CREADO' %}
+                                    {% set badge_class = 'bg-primary' %}
+                                {% elif estado == 'CANCELADO' %}
+                                    {% set badge_class = 'bg-danger' %}
+                                {% endif %}
                                 <tr>
-                                    <td>#{{ despacho.id }}</td>
-                                    <td>{{ despacho.created_at.strftime('%d/%m/%Y') if despacho.created_at else 'N/A' }}</td>
-                                    <td>{{ despacho.vehiculo.patente if despacho.vehiculo else 'N/A' }} - {{ despacho.vehiculo.marca if despacho.vehiculo else '' }} {{ despacho.vehiculo.modelo if despacho.vehiculo else '' }}</td>
+                                    <td><span class="badge bg-dark">#{{ despacho.id }}</span></td>
+                                    <td><div class="icon-cell"><i class="bi bi-calendar-event"></i> {{ despacho.created_at.strftime('%d/%m/%Y') if despacho.created_at else 'N/A' }}</div></td>
+                                    <td><div class="icon-cell"><i class="bi bi-truck"></i> {{ despacho.vehiculo.patente if despacho.vehiculo else 'N/A' }} <span class="text-muted">- {{ despacho.vehiculo.marca if despacho.vehiculo else '' }} {{ despacho.vehiculo.modelo if despacho.vehiculo else '' }}</span></div></td>
                                     <td>
                                         {% for item in despacho.despacho_items %}
-                                            <a href="{{ url_for('orden_venta.detalle', id=item.pedido.id) }}" class="badge bg-primary text-white">#{{ item.pedido.id }}</a>
+                                            <a href="{{ url_for('orden_venta.detalle', id=item.pedido.id) }}" class="badge bg-dark text-white text-decoration-none">#{{ item.pedido.id }}</a>
                                         {% endfor %}
                                     </td>
-                                    <td><span class="badge bg-info text-dark">{{ despacho.estado|default('CREADO', true)|replace('_', ' ')|title }}</span></td>
+                                    <td><span class="badge {{ badge_class }}">{{ estado|replace('_', ' ')|title }}</span></td>
                                     <td>
-                                        <a href="{{ url_for('despacho.descargar_hoja_de_ruta', despacho_id=despacho.id) }}" class="btn btn-sm btn-outline-danger" target="_blank" title="Descargar Hoja de Ruta">
-                                            <i class="fas fa-file-pdf"></i>
+                                        <a href="{{ url_for('despacho.descargar_hoja_de_ruta', despacho_id=despacho.id) }}" class="btn btn-sm btn-outline-danger" target="_blank" title="Descargar Hoja de Ruta (PDF)">
+                                            <i class="bi bi-file-earmark-pdf"></i>
                                         </a>
                                     </td>
                                 </tr>
@@ -178,8 +202,8 @@
                         </table>
                     </div>
                     {% else %}
-                    <div class="alert alert-secondary">
-                        Aún no se ha registrado ningún despacho.
+                    <div class="alert alert-secondary text-center">
+                        <i class="bi bi-info-circle me-2"></i>Aún no se ha registrado ningún despacho.
                     </div>
                     {% endif %}
                 </div>
