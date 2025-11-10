@@ -71,4 +71,5 @@ class VehiculoController(BaseController):
         """
         Busca un vehículo por su patente.
         """
-        return self.model.find_all(filters={'patente': patente})
+        patente_upper = patente.strip().upper() if patente else ''
+        return self.model.find_all(filters={'patente': patente_upper})

@@ -999,6 +999,20 @@ class PedidoController(BaseController):
             logger.error(f"Error interno en despachar_pedido: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
+    def despachar_pedido_completo(self, pedido_id: int) -> tuple:
+        """
+        Orquesta el proceso completo de despacho de un pedido.
+        1. Consume el stock reservado.
+        2. Cambia el estado del pedido a 'EN_TRANSITO'.
+        """
+        # 1. Consumir stock reservado
+        consumir_stock_response = self.lote_producto_controller.despachar_stock_reservado_por_pedido(pedido_id)
+        if not consumir_stock_response.get('success'):
+            return self.error_response(consumir_stock_response.get('error', 'No se pudo consumir el stock reservado.'), 500)
+
+        # 2. Cambiar estado del pedido
+        return self.cambiar_estado_pedido(pedido_id, 'EN_TRANSITO')
+
     def obtener_cantidad_pedidos_estado(self, estado: str, fecha: Optional[str] = None) -> Optional[Dict]:
         filtros = {'estado': estado} if estado else {}
 
