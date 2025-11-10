@@ -52,19 +52,27 @@ class DespachoController(BaseController):
             pedido['zona'] = {'nombre': zona_nombre}
 
             # Calcular peso
-            peso_total = 0
+            peso_total_gramos = 0
             if 'pedido_items' in pedido and pedido['pedido_items']:
                 for item in pedido['pedido_items']:
                     producto_id = item.get('producto_id')
                     cantidad = item.get('cantidad', 0)
                     
-                    if producto_id:
-                        producto_data = self.producto_controller.obtener_producto_por_id(producto_id)
+                    if producto_id and cantidad > 0:
+                        # Hacemos un llamado directo al modelo para eficiencia
+                        producto_model = self.producto_controller.model
+                        try:
+                            response = producto_model.get_table().select('peso_total_gramos').eq('id', producto_id).single().execute()
+                            producto_data = response.data
+                        except Exception:
+                            producto_data = None
+                        
                         if producto_data:
-                            peso_unitario = producto_data.get('peso_por_paquete_valor', 0)
-                            peso_total += (peso_unitario or 0) * cantidad
+                            peso_unitario_gramos = producto_data.get('peso_total_gramos', 0)
+                            peso_total_gramos += (peso_unitario_gramos or 0) * cantidad
             
-            pedido['peso_total_calculado'] = round(peso_total, 2)
+            # Convertir a kilogramos y redondear
+            pedido['peso_total_calculado_kg'] = round(peso_total_gramos / 1000, 2)
             pedidos_enriquecidos.append(pedido)
 
         return {'success': True, 'data': pedidos_enriquecidos}
@@ -79,14 +87,11 @@ class DespachoController(BaseController):
         if not despacho_response['success']:
             return despacho_response
 
-        despacho_id = despacho_response['data']['id']
+        despacho_id = despacho_response['data'][0]['id']
         
-        # Clase local para manejar la tabla de items del despacho
-        class DespachoItemsModel(GenericBaseModel):
-            def get_table_name(self) -> str:
-                return 'despacho_items'
-        
-        despacho_items_model = DespachoItemsModel()
+        # Usamos un modelo genérico para la tabla de items del despacho
+        despacho_items_model = GenericBaseModel()
+        despacho_items_model.get_table_name = lambda: 'despacho_items'
 
         for pedido_id in pedido_ids:
             # Asociar pedido al despacho

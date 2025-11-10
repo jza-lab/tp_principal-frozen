@@ -17,17 +17,14 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     async function buscarVehiculo() {
-        const patente = patenteInput.value.trim().toUpperCase();
+        const patente = patenteInput.value.trim();
         if (!patente) return;
 
         try {
             const response = await fetch(`/admin/vehiculos/api/buscar?patente=${patente}`);
             const result = await response.json();
 
-            const errorDiv = document.getElementById('patente-error');
-            errorDiv.style.display = 'none'; // Ocultar por defecto
-
-            if (result.success && result.data) {
+            if (result.success) {
                 vehicleData = result.data;
                 document.getElementById('vehicle-patente').textContent = `Patente: ${vehicleData.patente}`;
                 document.getElementById('vehicle-conductor').textContent = vehicleData.nombre_conductor;
@@ -35,8 +32,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 document.getElementById('vehicle-id').value = vehicleData.id;
                 vehicleInfoDiv.style.display = 'block';
             } else {
-                errorDiv.textContent = result.error || 'Vehículo no encontrado con esa patente.';
-                errorDiv.style.display = 'block';
+                alert(result.error || 'Vehículo no encontrado.');
                 vehicleData = null;
                 vehicleInfoDiv.style.display = 'none';
             }
@@ -50,9 +46,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Selección de Pedidos ---
     checkboxes.forEach(cb => {
         cb.addEventListener('change', function() {
-            const row = this.closest('tr');
-            const pedidoId = row.dataset.pedidoId;
-            const peso = parseFloat(row.dataset.peso);
+            const pedidoId = this.value;
+            const peso = parseFloat(this.dataset.peso) || 0;
 
             if (this.checked) {
                 selectedPedidos.set(pedidoId, peso);
