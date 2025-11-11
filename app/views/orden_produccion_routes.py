@@ -22,7 +22,7 @@ from app.controllers.planificacion_controller import PlanificacionController
 from app.utils.decorators import roles_required, permission_any_of
 from app.utils.decorators import permission_required
 from datetime import date, datetime, timedelta
-from app.utils.estados import OP_FILTROS_UI, OP_MAP_STRING_TO_INT
+from app.utils.estados import OP_FILTROS_UI_ACTUALIZADOS, OP_MAP_STRING_TO_INT
 
 orden_produccion_bp = Blueprint("orden_produccion", __name__, url_prefix="/ordenes")
 
@@ -38,7 +38,16 @@ def listar():
     usuario_controller = UsuarioController()
     estado = request.args.get("estado")
     rango_fecha = request.args.get('rango_fecha')
-    filtros = {"estado": estado} if estado else {}
+    
+    filtros = {}
+    if estado and estado != 'TODAS':
+        if estado == 'linea_1':
+            filtros['linea_asignada'] = 1
+        elif estado == 'linea_2':
+            filtros['linea_asignada'] = 2
+        else:
+            filtros['estado'] = estado
+
     if rango_fecha:
         filtros['rango_fecha'] = rango_fecha
 
@@ -76,7 +85,7 @@ def listar():
         ordenes=ordenes,
         titulo=titulo,
         supervisores=supervisores,
-        filtros_ui=OP_FILTROS_UI
+        filtros_ui=OP_FILTROS_UI_ACTUALIZADOS
     )
 
 

@@ -26,46 +26,74 @@
     </div>
 </div>
 
-<!-- Nueva Barra de Filtros Dinámicos -->
-<div id="FiltrosOrdenesProduccion" class="card-filter-container mb-4">
-    <div class="row g-3">
-        <!-- Filtro por Código -->
-        <div class="col-md-3">
-            <label for="filtroCodigo" class="form-label">Código de Orden</label>
-            <input type="text" id="filtroCodigo" class="form-control form-control-sm" placeholder="Buscar por OP-...">
-        </div>
-
-        <!-- Filtros Rápidos de Fecha -->
-        <div class="col-md-4">
-            <label class="form-label">Fecha Planificada</label>
-            <div id="quick-date-filters" class="btn-group btn-group-sm w-100" role="group">
-                <button type="button" class="btn btn-outline-secondary" data-range="hoy">Hoy</button>
-                <button type="button" class="btn btn-outline-secondary" data-range="semana">Semana</button>
-                <button type="button" class="btn btn-outline-secondary" data-range="mes">Mes</button>
-                <button type="button" class="btn btn-outline-secondary active" data-range="historico">Histórico</button>
-            </div>
-        </div>
-
-        <!-- Conteo de Órdenes -->
-        <div class="col-md-5 d-flex align-items-end justify-content-end">
-            <p id="ordenes-count" class="text-white text-end mb-1">Cargando...</p>
+<!-- Filtros -->
+<div class="filter-card">
+    <!-- Búsqueda por código -->
+    <div class="filter-section">
+        <label class="filter-label">
+            <i class="bi bi-search me-1"></i>Buscar por Código de Orden
+        </label>
+        <div class="search-input-wrapper">
+            <i class="bi bi-upc-scan"></i>
+            <input 
+                type="text" 
+                id="searchInput" 
+                class="search-input" 
+                placeholder="Ingrese el código de la orden (ej: OP-202...)">
         </div>
     </div>
-    <hr class="filter-divider">
-    <div class="row">
-        <div class="col-12">
-            <label class="form-label">Filtrar por Estado</label>
-            <div id="status-filters" class="status-filters-container">
-                <!-- Los botones de estado se generan dinámicamente -->
-            </div>
+
+    <!-- Filtros Rápidos de Fecha -->
+    <div class="filter-section">
+        <label class="filter-label">
+            <i class="bi bi-lightning-fill me-1"></i>Filtros Rápidos por Fecha
+        </label>
+        <div id="quick-date-filters" class="filter-quick-actions">
+            <button type="button" class="btn-quick-action" data-range="hoy">
+                <i class="bi bi-calendar-day me-1"></i>Hoy
+            </button>
+            <button type="button" class="btn-quick-action" data-range="semana">
+                <i class="bi bi-calendar-week me-1"></i>Semana
+            </button>
+             <button type="button" class="btn-quick-action" data-range="mes">
+                <i class="bi bi-calendar-month me-1"></i>Mes
+            </button>
+            <button type="button" class="btn-quick-action active" data-range="historico">
+                <i class="bi bi-clock-history me-1"></i>Histórico
+            </button>
         </div>
     </div>
+
+    <!-- Filtro por estado -->
+    <div class="filter-section">
+        <label class="filter-label">
+            <i class="bi bi-funnel-fill me-1"></i>Filtrar por Estado
+        </label>
+        <div id="status-filters" class="filter-buttons">
+             {% for estado_key, estado_nombre in filtros_ui %}
+                <button type="button" class="btn-filter-estado" data-estado="{{ estado_key }}">
+                    <i class="bi bi-tag"></i>
+                    {{ estado_nombre }}
+                </button>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Resumen de resultados -->
+<div class="results-info">
+    <div class="results-count" id="ordenes-count">
+        Cargando...
+    </div>
+    <button type="button" class="btn-clear-filters" id="btnClearAll" style="display: none;">
+        <i class="bi bi-x-circle me-1"></i>Limpiar filtros
+    </button>
 </div>
 
 
 <div class="row" id="ordenes-produccion-list">
     {% for orden in ordenes %}
-    <div class="col-md-4 mb-4" data-estado="{{ orden.estado }}">
+    <div class="col-md-4 mb-4" data-estado="{{ orden.estado }}" data-codigo="{{ orden.codigo }}" data-linea="{{ orden.linea_asignada or '' }}">
         <div class="card orden-card h-100 {% if orden.estado == 'CANCELADA' %}orden-rechazada{% endif %}">
             <div class="card-body d-flex flex-column">
                 <div class="d-flex justify-content-between align-items-start">
