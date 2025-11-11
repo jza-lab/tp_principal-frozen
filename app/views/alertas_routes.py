@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.configuracion_controller import ConfiguracionController
+from marshmallow import ValidationError
 from app.utils.decorators import permission_required
 from app.controllers.producto_controller import ProductoController
 
@@ -33,8 +34,10 @@ def actualizar_stock_min_max():
     """
     Actualiza el stock mínimo y máximo para un insumo.
     """
+    insumo_controller = InsumoController()
+    insumo_id = request.form.get('id_insumo')
+
     try:
-        insumo_id = request.form.get('id_insumo')
         stock_min = request.form.get('stock_min')
         stock_max = request.form.get('stock_max')
         
@@ -46,13 +49,12 @@ def actualizar_stock_min_max():
         if stock_min is not None and stock_min.strip() != '':
             update_data['stock_min'] = int(stock_min)
         if stock_max is not None and stock_max.strip() != '':
-            update_data['stock_max'] = int(stock_max) # OJO, este campo no existe
+            update_data['stock_max'] = int(stock_max)
 
         if not update_data:
             flash('No se proporcionaron datos para actualizar.', 'warning')
             return redirect(url_for('alertas.listar_insumos_alertas'))
             
-        insumo_controller = InsumoController()
         response, status_code = insumo_controller.actualizar_insumo(insumo_id, update_data)
 
         if status_code == 200:
@@ -60,12 +62,22 @@ def actualizar_stock_min_max():
         else:
             flash(f"Error al actualizar: {response.get('error', 'Error desconocido')}", 'error')
 
+    except ValidationError as e:
+        error_list = '<ul class="list-unstyled mb-0">'
+        if isinstance(e.messages, dict):
+            for field, messages in e.messages.items():
+                for message in messages:
+                    error_list += f"<li>{message}</li>"
+        else:
+            error_list += f"<li>{e.messages}</li>"
+        error_list += '</ul>'
+        flash(error_list, 'error')
+
     except ValueError:
         flash('Error: El stock mínimo y máximo deben ser números enteros.', 'error')
     except Exception as e:
         flash(f'Ocurrió un error inesperado: {str(e)}', 'error')
 
-    # (Acá también podrías agregar el ?tab=... si la página de insumos tuviera tabs)
     return redirect(url_for('alertas.listar_insumos_alertas'))
 
 @alertas_bp.route('/lotes', methods=['GET', 'POST'])

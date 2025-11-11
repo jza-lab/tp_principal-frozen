@@ -555,49 +555,18 @@ class OrdenProduccionController(BaseController):
                 if usuario_id:
                     update_data['aprobador_calidad_id'] = usuario_id
 
-                # 1. Verificar si la OP está vinculada a ítems de pedido
-                items_a_surtir_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
-                items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
-
-                # 2. Decidir el estado inicial del lote
-                estado_lote_inicial = 'RESERVADO' if items_vinculados else 'DISPONIBLE'
-
-                # 3. Preparar y crear el lote con el estado decidido
-                datos_lote = {
-                    'producto_id': orden_produccion['producto_id'],
-                    'cantidad_inicial': orden_produccion['cantidad_planificada'],
-                    'orden_produccion_id': orden_id,
-                    'fecha_produccion': date.today().isoformat(),
-                    'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat(),
-                    'estado': estado_lote_inicial # <-- Pasamos el estado decidido
-                }
-                resultado_lote, status_lote = self.lote_producto_controller.crear_lote_desde_formulario(
-                    datos_lote, usuario_id=orden_produccion.get('usuario_creador_id', 1)
+                # Lógica de creación de lote y reservas centralizada
+                lote_result, lote_status = self.lote_producto_controller.crear_lote_y_reservas_desde_op(
+                    orden_produccion_data=orden_produccion,
+                    usuario_id=orden_produccion.get('usuario_creador_id', 1)
                 )
-                if status_lote >= 400:
-                    return self.error_response(f"Fallo al registrar el lote de producto: {resultado_lote.get('error')}", 500)
 
-                lote_creado = resultado_lote['data']
-                message_to_use = f"Orden completada. Lote N° {lote_creado['numero_lote']} creado como '{estado_lote_inicial}'."
+                if lote_status >= 400:
+                    return self.error_response(f"Fallo al procesar el lote/reserva: {lote_result.get('error')}", 500)
 
-                # 4. Si el lote se creó como RESERVADO, crear los registros de reserva
-                if estado_lote_inicial == 'RESERVADO':
-                    for item in items_vinculados:
-                        datos_reserva = {
-                            'lote_producto_id': lote_creado['id_lote'],
-                            'pedido_id': item['pedido_id'],
-                            'pedido_item_id': item['id'],
-                            'cantidad_reservada': float(item['cantidad']), # Asumimos que la OP cubre la cantidad del item
-                            'usuario_reserva_id': orden_produccion.get('usuario_creador_id', 1)
-                        }
-                        # Creamos la reserva directamente, sin descontar stock
-                        self.lote_producto_controller.reserva_model.create(
-                            self.lote_producto_controller.reserva_schema.load(datos_reserva)
-                        )
-                    logger.info(f"Registros de reserva creados para el lote {lote_creado['numero_lote']}.")
-                    message_to_use += " y vinculado a los pedidos correspondientes."
+                message_to_use = f"Orden completada. {lote_result.get('message', '')}"
 
-            # 5. Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
+            # Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
             result = self.model.cambiar_estado(orden_id, nuevo_estado, extra_data=update_data)
             if result.get('success'):
                 op = result.get('data')

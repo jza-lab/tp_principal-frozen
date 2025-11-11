@@ -132,6 +132,18 @@ class TrazabilidadModel:
                 for l in lotes:
                     self._agregar_nodo_y_arista(nodos, aristas, 'orden_produccion', id_entidad_actual, 'lote_producto', str(l['id_lote']), l['cantidad_inicial'], cola, visitados)
 
+                # Orden de Producción -> Pedido (Vínculo directo a través de pedido_items)
+                pedido_items = self.db.table('pedido_items').select('pedido_id, cantidad').eq('orden_produccion_id', query_id).execute().data or []
+                pedidos_vinculados = {}
+                for item in pedido_items:
+                    pedido_id = str(item['pedido_id'])
+                    if pedido_id not in pedidos_vinculados:
+                        pedidos_vinculados[pedido_id] = 0
+                    pedidos_vinculados[pedido_id] += item['cantidad']
+
+                for pedido_id, cantidad_total in pedidos_vinculados.items():
+                    self._agregar_nodo_y_arista(nodos, aristas, 'orden_produccion', id_entidad_actual, 'pedido', pedido_id, cantidad_total, cola, visitados)
+
             elif tipo_entidad_actual == 'lote_producto':
                 # Lote de Producto -> Pedido
                 reservas = self.db.table('reservas_productos').select('pedido_id, cantidad_reservada').eq('lote_producto_id', query_id).execute().data or []

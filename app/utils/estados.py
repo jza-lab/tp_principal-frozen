@@ -212,3 +212,17 @@ CONDICION_IVA_MAP = {
     '3': 'Exento',
     '4': 'Consumidor Final',
 }
+
+# --- Lista para la UI de filtros (ACTUALIZADA) ---
+OP_FILTROS_UI_ACTUALIZADOS = [
+    ('TODAS', 'Todas'),
+    (OP_PENDIENTE, 'Pendientes'),
+    (OP_EN_ESPERA, 'En Espera'),
+    (OP_LISTA_PARA_PRODUCIR, 'Listas para Producir'),
+    ('linea_1', 'Linea 1'),
+    ('linea_2', 'Linea 2'),
+    (OP_CONTROL_CALIDAD, 'Calidad'),
+    (OP_COMPLETADA, 'Completadas'),
+    (OP_CONSOLIDADA, 'Consolidadas'),
+    (OP_CANCELADA, 'Canceladas'),
+]

@@ -558,14 +558,22 @@ class ProduccionKanbanController(BaseController):
                 'pedido_id': orden_produccion.get('pedido_id') 
             }
             
+            # Verificar si la OP está vinculada a algún item de pedido.
+            from app.models.pedido import PedidoModel
+            pedido_model = PedidoModel()
+            items_vinculados_res = pedido_model.find_all_items(filters={'orden_produccion_id': op_id})
+            op_tiene_pedido_asociado = (items_vinculados_res.get('success') and bool(items_vinculados_res.get('data'))) or bool(orden_produccion.get('pedido_id'))
+
             if cantidad_cuarentena == cantidad_producida:
                 lote_estado = 'CUARENTENA'
             elif cantidad_rechazada == cantidad_producida:
                 lote_estado = 'RECHAZADO'
-            elif orden_produccion.get('pedido_id'):
-                lote_estado = 'RESERVADO'
             else:
+                # --- CORRECCIÓN ---
+                # El lote siempre se crea como DISPONIBLE, incluso si es para un pedido.
+                # La reserva en la tabla `reservas_productos` es la que establece la trazabilidad.
                 lote_estado = 'DISPONIBLE'
+            # --- FIN DE LA CORRECCIÓN ---
             lote_data['estado'] = lote_estado
             
             lote_res, _ = self.lote_producto_controller.crear_lote_desde_formulario(lote_data, usuario_id)
@@ -598,7 +606,10 @@ class ProduccionKanbanController(BaseController):
             nuevo_estado_op = 'COMPLETADA'
             if cantidad_rechazada == cantidad_producida:
                 nuevo_estado_op = 'CANCELADA'
-            self.orden_produccion_controller.cambiar_estado_orden_simple(op_id, nuevo_estado_op)
+            
+            # Usar el método completo 'cambiar_estado_orden' en lugar de 'cambiar_estado_orden_simple'.
+            # Esto asegura que se ejecute la lógica post-cambio, como la actualización del estado del pedido de venta asociado.
+            self.orden_produccion_controller.cambiar_estado_orden(op_id, nuevo_estado_op, usuario_id)
 
             return self.success_response(message="Decisión de calidad procesada exitosamente.")
 
