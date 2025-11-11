@@ -48,8 +48,7 @@ def _parse_form_data(form_dict):
 def listar():
     """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
     controller = PedidoController()
-    estado = request.args.get('estado')
-    filtros = {'estado': estado} if estado else {}
+    filtros = {}
 
     response, _ = controller.obtener_pedidos(filtros)
     pedidos = []
