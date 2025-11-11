@@ -89,17 +89,20 @@ class TrazabilidadModel:
             # --- HACIA ADELANTE (Downstream) ---
             if tipo_entidad_actual == 'orden_compra':
                 # Orden de Compra -> Lote de Insumo
-                if tipo_entidad_inicial not in ['lote_insumo', 'orden_produccion', 'lote_producto', 'pedido']:
-                    oc = self.db.table('ordenes_compra').select('codigo_oc').eq('id', query_id).maybe_single().execute().data
-                if oc and oc.get('codigo_oc'):
-                    insumos = self.db.table('insumos_inventario').select('id_lote, cantidad_inicial').eq('documento_ingreso', oc['codigo_oc']).execute().data or []
-                    for i in insumos:
-                        # Corregido: La arista es DESDE la OC HACIA el lote de insumo
-                        self._agregar_nodo_y_arista(nodos, aristas, 
-                                                  'orden_compra', id_entidad_actual, 
-                                                  'lote_insumo', str(i['id_lote']), 
-                                                  i['cantidad_inicial'], 
-                                                  cola, visitados)
+                # Se corrige para evitar un error si la OC no se encuentra y para detener la expansión no deseada.
+                # Si estamos trazando desde una OC, sí queremos expandir a todos sus lotes.
+                # Si llegamos a una OC desde un lote, NO queremos expandir a otros lotes de la misma OC.
+                if tipo_entidad_inicial == 'orden_compra':
+                    oc_res = self.db.table('ordenes_compra').select('codigo_oc').eq('id', query_id).maybe_single().execute()
+                    oc = oc_res.data
+                    if oc and oc.get('codigo_oc'):
+                        insumos = self.db.table('insumos_inventario').select('id_lote, cantidad_inicial').eq('documento_ingreso', oc['codigo_oc']).execute().data or []
+                        for i in insumos:
+                            self._agregar_nodo_y_arista(nodos, aristas,
+                                                      'orden_compra', id_entidad_actual,
+                                                      'lote_insumo', str(i['id_lote']),
+                                                      i['cantidad_inicial'],
+                                                      cola, visitados)
 
             elif tipo_entidad_actual == 'lote_insumo' and not id_entidad_actual.startswith('insumo_generico_'):
                 # Lote de Insumo -> Orden de Producción
@@ -112,18 +115,6 @@ class TrazabilidadModel:
                 lotes = self.db.table('lotes_productos').select('id_lote, cantidad_inicial').eq('orden_produccion_id', query_id).execute().data or []
                 for l in lotes:
                     self._agregar_nodo_y_arista(nodos, aristas, 'orden_produccion', id_entidad_actual, 'lote_producto', str(l['id_lote']), l['cantidad_inicial'], cola, visitados)
-
-                # Orden de Producción -> Pedido (Vínculo directo a través de pedido_items)
-                pedido_items = self.db.table('pedido_items').select('pedido_id, cantidad').eq('orden_produccion_id', query_id).execute().data or []
-                pedidos_vinculados = {}
-                for item in pedido_items:
-                    pedido_id = str(item['pedido_id'])
-                    if pedido_id not in pedidos_vinculados:
-                        pedidos_vinculados[pedido_id] = 0
-                    pedidos_vinculados[pedido_id] += item['cantidad']
-
-                for pedido_id, cantidad_total in pedidos_vinculados.items():
-                    self._agregar_nodo_y_arista(nodos, aristas, 'orden_produccion', id_entidad_actual, 'pedido', pedido_id, cantidad_total, cola, visitados)
 
             elif tipo_entidad_actual == 'lote_producto':
                 # Lote de Producto -> Pedido
