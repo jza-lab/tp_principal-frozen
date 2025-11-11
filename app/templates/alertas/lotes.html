@@ -25,7 +25,7 @@
                 {{ csrf_form.csrf_token }}
                 <div class="mb-3">
                     <label for="dias_vencimiento" class="form-label">Días de antelación para alerta de vencimiento</label>
-                    <input type="number" class="form-control" id="dias_vencimiento" name="dias_vencimiento" value="{{ dias_vencimiento }}" required>
+                    <input type="number" min="0" max="30" class="form-control" id="dias_vencimiento" name="dias_vencimiento" value="{{ dias_vencimiento }}" required>
                     <div class="form-text">
                         Esta configuración determina cuántos días antes de la fecha de vencimiento de un lote se generará una alerta.
                     </div>
