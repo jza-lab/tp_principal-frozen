@@ -11,7 +11,7 @@
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
     <h1 class="h2">Inventario de Productos</h1>
     <div class="btn-toolbar mb-2 mb-md-0">
-        {% if 'gestionar_lotes' is has_permission %}
+        {% if 'gestionar_lotes' is has_permission and current_user.roles.codigo != 'GERENTE' %}
         <div class="btn-group me-2">
             <a href="{{ url_for('lote_producto.cargar_lotes_excel') }}" class="btn btn-secondary">
                 <i class="bi bi-file-earmark-arrow-up me-1"></i>

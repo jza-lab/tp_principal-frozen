@@ -112,9 +112,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const data = await response.json();
 
-            if (data.success && data.redirect_url) {
-                // Redirigir a la URL proporcionada por el backend
-                window.location.href = data.redirect_url;
+           if (data.success) {
+                modal.hide();
+                showNotificationModal('Éxito', 'Alerta creada correctamente.', 'success');
+                 // Recargar la página para reflejar los cambios después de un momento
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
             } else {
                 throw new Error(data.error || 'La respuesta del servidor no fue la esperada.');
             }

@@ -100,14 +100,6 @@
                         data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
                     <i class="bi bi-shield-check"></i>
                 </button>
-                <button type="button" class="btn btn-sm btn-outline-danger"
-                        title="Marcar como No Apto"
-                        data-bs-toggle="modal"
-                        data-bs-target="#modalNoApto"
-                        data-lote-id="{{ lote.id_lote }}"
-                        data-lote-numero="{{ lote.numero_lote_proveedor }}">
-                    <i class="bi bi-x-octagon-fill"></i>
-                </button>
                 {% endif %}
             </td>
         </tr>

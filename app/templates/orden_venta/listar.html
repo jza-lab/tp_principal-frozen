@@ -16,7 +16,7 @@
         <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2" title="Volver a la página anterior">
             <i class="bi bi-arrow-left"></i> Volver
         </a>
-        {% if has_permission('logistica_gestion_ov') %}
+        {% if 'logistica_gestion_ov' is has_permission or current_user.roles.codigo == 'VENDEDOR' %}
         <a href="{{ url_for('orden_venta.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nuevo Pedido
         </a>
@@ -75,9 +75,11 @@
                     {{ estado_nombre }}
                 </button>
             {% endfor %}
+            {% if current_user.roles.codigo != 'GERENTE' %}
             <a href="{{ url_for('despacho.gestion_despachos_vista') }}" class="btn btn-info ms-auto" id="btn-gestionar-despachos" style="display: none;">
                 <i class="bi bi-truck me-2"></i> Gestionar Envíos y Despachar Pedidos
             </a>
+            {% endif %}
         </div>
     </div>
 </div>

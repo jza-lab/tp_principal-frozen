@@ -27,7 +27,7 @@
                 <span class="tab-indicator"></span>
             </button>
         </li>
-        {% if has_permission('admin_gestion_personal') %}
+        {% if 'admin_gestion_personal' is has_permission or current_user.roles.codigo == 'ADMIN' %}
         <li class="nav-item" role="presentation">
             <button class="nav-link-custom" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity-panel" type="button" role="tab">
                 <i class="bi bi-activity me-2"></i>

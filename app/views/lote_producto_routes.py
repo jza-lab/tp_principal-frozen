@@ -42,7 +42,7 @@ def detalle_lote(id_lote):
 
 @lote_producto_bp.route('/nuevo', methods=['GET', 'POST'])
 @jwt_required()
-@permission_required(accion='crear_control_de_calidad_por_lote')
+@permission_required(accion='gestionar_lotes')
 def nuevo_lote():
     controller = LoteProductoController()
     producto_controller = ProductoController()
