@@ -69,16 +69,6 @@ class TrazabilidadModel:
                     reservas = self.db.table('reservas_insumos').select('lote_inventario_id, cantidad_reservada').eq('orden_produccion_id', query_id).execute().data or []
                     for r in reservas:
                         self._agregar_nodo_y_arista(nodos, aristas, 'lote_insumo', str(r['lote_inventario_id']), 'orden_produccion', id_entidad_actual, r['cantidad_reservada'], cola, visitados)
-                    
-                # Manejo de OCs directamente asociadas a la OP
-                ocs_directas = self.db.table('ordenes_compra').select('id, codigo_oc').eq('orden_produccion_id', query_id).execute().data or []
-                for oc in ocs_directas:
-                    self._agregar_nodo_y_arista(nodos, aristas, 
-                                              'orden_compra', str(oc['id']), 
-                                              'orden_produccion', id_entidad_actual, 
-                                              0,
-                                              cola, visitados)
-
 
             elif tipo_entidad_actual == 'lote_insumo':
                 # Lote de Insumo -> Orden de Compra o Ingreso Manual
@@ -388,6 +378,24 @@ class TrazabilidadModel:
             # Solo asignar si no es genérico y si los datos se encontraron
             if not nodo_info.get('es_generico') and tipo in datos_enriquecidos:
                  nodos[(tipo, id)]['data'] = datos_enriquecidos[tipo].get(str(id), {})
+        
+        # Lógica adicional para determinar si una OC es auto-generada para un pedido específico
+        if 'orden_compra' in datos_enriquecidos:
+            op_ids_from_ocs = {
+                oc['orden_produccion_id']
+                for oc in datos_enriquecidos['orden_compra'].values()
+                if oc.get('orden_produccion_id') is not None
+            }
+
+            if op_ids_from_ocs:
+                # Averiguar cuáles de estas OPs están realmente vinculadas a un ítem de pedido
+                pedido_items_res = self.db.table('pedido_items').select('orden_produccion_id').in_('orden_produccion_id', list(op_ids_from_ocs)).execute().data or []
+                op_ids_linked_to_pedidos = {item['orden_produccion_id'] for item in pedido_items_res}
+                
+                # Marcar cada OC con el resultado
+                for oc_data in datos_enriquecidos['orden_compra'].values():
+                    op_id = oc_data.get('orden_produccion_id')
+                    oc_data['es_auto_generada_para_pedido'] = op_id is not None and op_id in op_ids_linked_to_pedidos
 
 
     def _generar_resumen(self, nodos, aristas, tipo_entidad_inicial, id_entidad_inicial):
@@ -449,7 +457,7 @@ class TrazabilidadModel:
             info['detalle'] = f"Proveedor: {data.get('proveedores', {}).get('nombre', 'N/A')}"
             estado = data.get('estado', 'N/D')
             info['estado'] = estado.replace('_', ' ') if estado else 'N/D'
-            info['es_directa'] = data.get('orden_produccion_id') is not None
+            info['es_directa'] = data.get('es_auto_generada_para_pedido', False)
         elif tipo == 'lote_insumo':
             info['nombre'] = data.get('insumos_catalogo', {}).get('nombre', 'N/A')
             info['detalle'] = f"Lote: {data.get('numero_lote_proveedor', 'N/A')}"
