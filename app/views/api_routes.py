@@ -1,3 +1,4 @@
+import logging
 from flask import Blueprint, jsonify, request
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
@@ -6,6 +7,7 @@ from app.utils.decorators import permission_any_of, permission_required
 
 # Blueprint para endpoints de API interna
 api_bp = Blueprint('api', __name__, url_prefix='/api')
+logger = logging.getLogger(__name__)
 
 @api_bp.route('/usuarios/actividad_totem', methods=['GET'])
 @permission_required(accion='consultar_logs_o_auditoria')
@@ -145,6 +147,26 @@ def buscar_usuario_por_legajo():
         return jsonify(resultado)
     
     return jsonify({'success': False, 'error': resultado.get('error', 'Usuario no encontrado')}), 404
+
+@api_bp.route('/productos/filter', methods=['GET'])
+@permission_required(accion='consultar_catalogo_de_productos')
+def api_filter_productos():
+    """
+    Endpoint de API para el filtrado dinámico de productos.
+    """
+    try:
+        from app.controllers.producto_controller import ProductoController
+        producto_controller = ProductoController()
+        
+        filtros = {k: v for k, v in request.args.items() if v}
+        
+        response, status = producto_controller.obtener_todos_los_productos(filtros)
+        
+        return jsonify(response), status
+            
+    except Exception as e:
+        logger.error(f"Error en api_filter_productos: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 @api_bp.route('/orden_produccion/<int:orden_id>/trazabilidad', methods=['GET'])
 @permission_required(accion='consultar_trazabilidad_completa')
