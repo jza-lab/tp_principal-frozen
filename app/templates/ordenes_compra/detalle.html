@@ -113,7 +113,7 @@
                                             <div class="fw-bold">{{ orden.proveedor_nombre or 'N/A' }}</div>
                                         </div>
                                     </div>
-                                    {% set is_received = orden.estado in ['RECEPCION_INCOMPLETA', 'RECEPCION_COMPLETA', 'EN_CONTROL_CALIDAD', 'CERRADA'] %}
+                                    {% set is_received = orden.estado in ['RECEPCION_INCOMPLETA', 'RECEPCION_COMPLETA'] %}
                                     
                                     <div class="col-12">
                                         <h6 class="text-muted mb-2">Valores Originales</h6>
@@ -241,7 +241,50 @@
                         </div>
                     </div>
                 </div>
-                
+                {% if orden.estado == 'RECEPCION_INCOMPLETA' and orden.resumen_recepcion %}
+                <div class="bg-danger-soft p-3 rounded mb-4 border-top border-danger border-3">
+                    <h5 class="text-danger mb-3"><i class="bi bi-exclamation-octagon-fill me-2"></i>Resumen Detallado de Recepción Incompleta</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-borderless mb-0">
+                            <thead>
+                                <tr class="table-light">
+                                    <th scope="col" class="ps-3">Insumo</th>
+                                    <th scope="col" class="text-end">Solicitado</th>
+                                    <th scope="col" class="text-end">Recibido</th>
+                                    <th scope="col" class="text-end">Aprobado</th>
+                                    <th scope="col" class="text-end">Cuarentena</th>
+                                    <th scope="col" class="text-end">Rechazado</th>
+                                    <th scope="col" class="pe-3">Detalles de Calidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in orden.resumen_recepcion %}
+                                <tr>
+                                    <td class="fw-bold ps-3">{{ item.insumo_nombre }}</td>
+                                    <td class="text-end">{{ item.cantidad_solicitada }}</td>
+                                    <td class="text-end">{{ item.cantidad_recibida }}</td>
+                                    <td class="text-end fw-bold text-success">{{ item.cantidad_aprobada }}</td>
+                                    <td class="text-end fw-bold text-warning">{{ item.cantidad_cuarentena }}</td>
+                                    <td class="text-end fw-bold text-danger">{{ item.cantidad_rechazada }}</td>
+                                    <td class="pe-3">
+                                        {% if item.detalles_qc %}
+                                            {% for qc in item.detalles_qc %}
+                                                <div class="small">
+                                                    <strong class="text-dark">{{ qc.motivo }}:</strong>
+                                                    <span class="text-muted">{{ qc.comentarios or 'Sin comentarios.' }}</span>
+                                                </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-muted small">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
                 <!-- {# --- Bloque 'EN_CONTROL_CALIDAD' obsoleto (comentado) --- #}
                 {% if orden.estado == 'EN_CONTROL_CALIDAD' %}
                 ...

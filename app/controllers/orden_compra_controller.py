@@ -264,6 +264,10 @@ class OrdenCompraController:
             if result.get('success'):
                 orden_data = result['data']
 
+                if orden_data.get('estado') == 'RECEPCION_INCOMPLETA':
+                    resumen_items = self._get_resumen_recepcion(orden_data)
+                    orden_data['resumen_recepcion'] = resumen_items
+
                 # Verificar si existe un reclamo para esta orden
                 reclamo_response, _ = self.reclamo_proveedor_controller.get_reclamo_por_orden(orden_id)
                 orden_data['reclamo_existente'] = reclamo_response.get('success', False) and reclamo_response.get('data') is not None
@@ -291,6 +295,107 @@ class OrdenCompraController:
         except Exception as e:
             logger.error(f"Error en el controlador al obtener la orden {orden_id}: {e}")
             return {'success': False, 'error': str(e)}, 500
+
+    def _get_resumen_recepcion(self, orden_data):
+        from app.models.control_calidad_insumo import ControlCalidadInsumoModel
+        control_calidad_model = ControlCalidadInsumoModel()
+        
+        items_resumen = []
+        documento_ingreso = f"{orden_data.get('codigo_oc')}"
+
+        lotes_asociados_res = self.inventario_controller.inventario_model.find_all(
+            filters={'documento_ingreso': ('ilike', documento_ingreso)}
+        )
+        lotes_asociados = lotes_asociados_res.get('data', []) if lotes_asociados_res.get('success') else []
+
+        qc_asociados_res = control_calidad_model.find_all(
+            filters={'orden_compra_id': orden_data.get('id')}
+        )
+        qc_asociados = qc_asociados_res.get('data', []) if qc_asociados_res.get('success') else []
+        
+        lotes_por_insumo = {}
+        for lote in lotes_asociados:
+            insumo_id = lote.get('id_insumo')
+            if insumo_id not in lotes_por_insumo:
+                lotes_por_insumo[insumo_id] = []
+            lotes_por_insumo[insumo_id].append(lote)
+
+        qc_por_lote = {qc.get('lote_insumo_id'): qc for qc in qc_asociados}
+
+        for item in orden_data.get('items', []):
+            insumo_id = item.get('insumo_id')
+            lotes_del_item = lotes_por_insumo.get(insumo_id, [])
+            
+            cantidad_aprobada = sum(float(l.get('cantidad_actual', 0)) for l in lotes_del_item)
+            cantidad_cuarentena = sum(float(l.get('cantidad_en_cuarentena', 0)) for l in lotes_del_item)
+            
+            total_recibido = float(item.get('cantidad_recibida', 0))
+            cantidad_rechazada = total_recibido - (cantidad_aprobada + cantidad_cuarentena)
+            
+            detalles_qc = []
+            for lote in lotes_del_item:
+                qc = qc_por_lote.get(lote.get('id_lote'))
+                if qc:
+                    detalles_qc.append({
+                        'motivo': qc.get('resultado_inspeccion'),
+                        'comentarios': qc.get('comentarios')
+                    })
+
+            items_resumen.append({
+                'insumo_nombre': item.get('insumo_nombre'),
+                'cantidad_solicitada': item.get('cantidad_solicitada'),
+                'cantidad_recibida': item.get('cantidad_recibida'),
+                'cantidad_aprobada': round(cantidad_aprobada, 2),
+                'cantidad_cuarentena': round(cantidad_cuarentena, 2),
+                'cantidad_rechazada': round(max(0, cantidad_rechazada), 2),
+                'detalles_qc': detalles_qc
+            })
+            
+        return items_resumen
+
+    def _get_detalles_problemas_por_item(self, orden_data):
+        from app.models.control_calidad_insumo import ControlCalidadInsumoModel
+        control_calidad_model = ControlCalidadInsumoModel()
+        
+        problemas_por_item = {}
+        
+        qc_asociados_res = control_calidad_model.find_all(filters={'orden_compra_id': orden_data.get('id')})
+        qc_asociados = qc_asociados_res.get('data', []) if qc_asociados_res.get('success') else []
+        
+        lotes_asociados_res = self.inventario_controller.inventario_model.find_all(
+            filters={'documento_ingreso': ('ilike', f"{orden_data.get('codigo_oc')}")}
+        )
+        lotes_asociados = lotes_asociados_res.get('data', []) if lotes_asociados_res.get('success') else []
+
+        qc_por_lote_id = {qc.get('lote_insumo_id'): qc for qc in qc_asociados}
+        lotes_por_insumo_id = {}
+        for lote in lotes_asociados:
+            insumo_id = lote.get('id_insumo')
+            if insumo_id not in lotes_por_insumo_id:
+                lotes_por_insumo_id[insumo_id] = []
+            lotes_por_insumo_id[insumo_id].append(lote)
+
+        for item in orden_data.get('items', []):
+            insumo_id = item.get('insumo_id')
+            problemas_por_item[insumo_id] = None
+            
+            # Prioridad 1: Fallo de Calidad
+            lotes_del_item = lotes_por_insumo_id.get(insumo_id, [])
+            for lote in lotes_del_item:
+                qc = qc_por_lote_id.get(lote.get('id_lote'))
+                if qc and qc.get('resultado_inspeccion'):
+                    problemas_por_item[insumo_id] = qc.get('resultado_inspeccion')
+                    break 
+            if problemas_por_item[insumo_id]:
+                continue
+
+            # Prioridad 2: Discrepancia de Cantidad
+            solicitada = float(item.get('cantidad_solicitada', 0))
+            recibida = float(item.get('cantidad_recibida', 0))
+            if not math.isclose(solicitada, recibida):
+                problemas_por_item[insumo_id] = "CANTIDAD_INCORRECTA"
+
+        return problemas_por_item
 
     def get_orden_by_codigo(self, codigo_oc):
         try:
