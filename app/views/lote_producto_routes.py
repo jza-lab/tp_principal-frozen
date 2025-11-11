@@ -257,3 +257,22 @@ def editar_lote(id_lote):
     lote = response.get('data')
 
     return render_template('lotes_productos/editar_lote.html', lote=lote)
+
+@lote_producto_bp.route('/<int:lote_id>/marcar-no-apto', methods=['POST'])
+@jwt_required()
+@permission_required(accion='crear_control_de_calidad_por_lote') # Or a more specific permission
+def marcar_no_apto(lote_id):
+    """
+    Marca un lote de producto como 'NO APTO'.
+    """
+    controller = LoteProductoController()
+    usuario_id = get_jwt_identity()
+    
+    response, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id)
+
+    if response.get('success'):
+        flash(response.get('message', 'Lote marcado como No Apto.'), 'success')
+    else:
+        flash(response.get('error', 'Error al procesar la solicitud.'), 'danger')
+
+    return redirect(url_for('lote_producto.detalle_lote', id_lote=lote_id))

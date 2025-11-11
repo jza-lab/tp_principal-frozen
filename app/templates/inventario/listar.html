@@ -156,9 +156,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    {% if 'almacen_consulta_stock' is has_permission %}
                     <button type="submit" class="btn btn-warning">Confirmar Cuarentena</button>
-                    {% endif %}
                 </div>
             </form>
         </div>
@@ -194,6 +192,32 @@
                     <button type="submit" class="btn btn-success">Confirmar Liberación</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmación para Marcar como No Apto -->
+<div class="modal fade" id="modalNoApto" tabindex="-1" aria-labelledby="modalNoAptoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalNoAptoLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Confirmar Acción Crítica</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Lote: <strong id="loteNumeroNoApto"></strong></p>
+                <p>Está a punto de marcar este lote como <strong>"No Apto"</strong>. Esta acción es irreversible.</p>
+                <p>El sistema intentará encontrar un lote de reemplazo si este estaba reservado para una Orden de Producción. Si no se encuentra un reemplazo, la Orden de Producción se marcará como "Pendiente".</p>
+                <hr>
+                <p class="mb-0">¿Está seguro de que desea continuar?</p>
+            </div>
+            <div class="modal-footer">
+                <form id="formNoApto" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Sí, Marcar como No Apto</button>
+                </form>
+            </div>
         </div>
     </div>
 </div>

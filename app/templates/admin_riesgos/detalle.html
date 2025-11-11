@@ -97,6 +97,7 @@
 
                 <!-- Columna Principal de Gestión (Derecha) -->
                 <div class="col-lg-8 col-md-12">
+                    {% from 'admin_riesgos/_resolution_badge.html' import render_resolution_badge %}
                     <form id="form-gestion-riesgo"
                         action="{{ url_for('admin_riesgo.ejecutar_accion_riesgo', codigo_alerta=alerta.codigo) }}"
                         method="POST">
@@ -115,12 +116,15 @@
                                         {% if lotes_insumo %}
                                         <ul class="list-group list-group-flush">
                                             {% for lote in lotes_insumo %}
-                                            <li class="list-group-item">
-                                                <a
-                                                    href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}">{{
-                                                    lote.numero_lote_proveedor }}</a>
-                                                <small class="d-block text-muted">{{ lote.insumos_catalogo.nombre
-                                                    }}</small>
+                                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <a
+                                                        href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}">{{
+                                                        lote.numero_lote_proveedor }}</a>
+                                                    <small class="d-block text-muted">{{ lote.insumos_catalogo.nombre
+                                                        }}</small>
+                                                </div>
+                                                {{ render_resolution_badge(lote) }}
                                             </li>
                                             {% endfor %}
                                         </ul>
@@ -134,19 +138,20 @@
                             <div class="col-md-4 mb-4">
                                 <div class="card h-100">
                                     <div class="card-header">
-                                        <h6 class="mb-0 fw-bold" >Órdenes de Producción</h6>
-                                        
+                                        <h6 class="mb-0 fw-bold">Órdenes de Producción</h6>
+
                                         <span class="fw-bold text-uppercase text-black badge bg-warning "><i
-                                                class="bi bi-shield-lock-fill me-1 "></i>En Cuarentena</span>
+                                                class="bi bi-shield-lock-fill me-1 "></i>En Pausa</span>
                                     </div>
                                     <div class="card-body">
                                         {% set ordenes = alerta.afectados_detalle.ordenes_produccion %}
                                         {% if ordenes %}
                                         <ul class="list-group list-group-flush">
                                             {% for op in ordenes %}
-                                            <li class="list-group-item">
+                                            <li class="list-group-item d-flex justify-content-between align-items-center">
                                                 <a href="{{ url_for('orden_produccion.detalle', id=op.id) }}">{{
                                                     op.codigo }}</a>
+                                                {{ render_resolution_badge(op) }}
                                             </li>
                                             {% endfor %}
                                         </ul>
@@ -162,20 +167,21 @@
                                 <div class="card h-100">
                                     <div class="card-header">
                                         <h6 class="mb-0 fw-bold">Lotes de Producto</h6>
-                                
+
                                         <span class="fw-bold text-uppercase text-black badge bg-warning "><i
                                                 class="bi bi-shield-lock-fill me-1 "></i>En Cuarentena</span>
-                                        
+
                                     </div>
                                     <div class="card-body">
                                         {% set lotes_producto = alerta.afectados_detalle.lotes_producto %}
                                         {% if lotes_producto %}
                                         <ul class="list-group list-group-flush">
                                             {% for lote in lotes_producto %}
-                                            <li class="list-group-item">
+                                            <li class="list-group-item d-flex justify-content-between align-items-center">
                                                 <a
                                                     href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}">{{
                                                     lote.numero_lote }}</a>
+                                                {{ render_resolution_badge(lote) }}
                                             </li>
                                             {% endfor %}
                                         </ul>
@@ -226,12 +232,7 @@
                                                 <td><span class="badge bg-danger">{{ pedido.afectacion_valor_str
                                                         }}</span></td>
                                                 <td>
-                                                    {% if pedido.estado_resolucion == 'resuelto' %}
-                                                    <span class="badge bg-success">{{ pedido.resolucion_aplicada |
-                                                        replace('_', ' ') | title }}</span>
-                                                    {% else %}
-                                                    <span class="badge bg-warning text-dark">Pendiente</span>
-                                                    {% endif %}
+                                                    {{ render_resolution_badge(pedido) }}
                                                 </td>
                                             </tr>
                                             {% endfor %}

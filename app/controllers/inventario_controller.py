@@ -1007,7 +1007,6 @@ class InventarioController(BaseController):
                 except Exception as e_alert:
                     logger.error(f"Error al verificar alertas tras liberar lote de insumo {lote_id}: {e_alert}", exc_info=True)
 
-
                 return self.success_response(message="Cantidad liberada de cuarentena con éxito.")
 
         except Exception as e:
@@ -1230,3 +1229,57 @@ class InventarioController(BaseController):
         except Exception as e:
             logger.error(f"Error en obtener_trazabilidad_lote (manual) para {id_lote}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {e}", 500)
+
+
+    def marcar_lote_como_no_apto(self, lote_id: str, usuario_id: int) -> tuple:
+        """
+        Marca un lote como 'NO APTO', actualiza su estado y maneja las consecuencias.
+        """
+        from app.controllers.control_calidad_insumo_controller import ControlCalidadInsumoController
+        from app.models.alerta_riesgo import AlertaRiesgoModel
+
+        try:
+            lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
+            if not lote_res.get('success') or not lote_res.get('data'):
+                return self.error_response('Lote no encontrado', 404)
+
+            lote = lote_res['data']
+            
+            # Actualizar el estado del lote
+            update_data = {
+                'estado': 'retirado',
+                'cantidad_actual': 0,
+                'cantidad_en_cuarentena': 0
+            }
+            update_result = self.inventario_model.update(lote_id, update_data, 'id_lote')
+            if not update_result.get('success'):
+                return self.error_response(f"Error al actualizar el estado del lote: {update_result.get('error')}", 500)
+
+            # Reutilizar la lógica de rechazo para manejar OPs
+            cc_controller = ControlCalidadInsumoController()
+            cc_controller.manejar_rechazo_cuarentena(lote_id, usuario_id)
+
+            # Registrar el evento en el historial de calidad
+            cc_controller.crear_registro_control_calidad(
+                lote_id=lote_id,
+                usuario_id=usuario_id,
+                decision='NO_APTO',
+                comentarios='Lote marcado como no apto manualmente desde el detalle del lote.'
+            )
+
+            # Actualizar el estado de la alerta de riesgo si existe
+            alerta_model = AlertaRiesgoModel()
+            alertas_asociadas = alerta_model.db.table('alerta_riesgo_afectados').select('alerta_id').eq('tipo_entidad', 'lote_insumo').eq('id_entidad', lote_id).execute().data
+            if alertas_asociadas:
+                alerta_ids = {a['alerta_id'] for a in alertas_asociadas}
+                for alerta_id in alerta_ids:
+                    alerta_model.actualizar_estado_afectados(alerta_id, [lote_id], 'no_apto', 'lote_insumo', usuario_id)
+
+            # Actualizar stock del insumo
+            self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
+
+            return self.success_response(message="Lote marcado como No Apto con éxito.")
+
+        except Exception as e:
+            logger.error(f"Error en marcar_lote_como_no_apto: {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
