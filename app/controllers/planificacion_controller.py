@@ -343,8 +343,28 @@ class PlanificacionController(BaseController):
                     enriched_ordenes_por_dia[dia_iso] = ops_enriquecidas_dia
 
             # --- CRP Data (¡ACTUALIZADO!) ---
-            carga_calculada = self.calcular_carga_capacidad(ops_filtradas_para_semana, mapas_precargados_externos=mapas_precargados) # <--- ¡OPTIMIZADO!
+
+            # 1. Obtenemos la carga "completa" (que puede tener fugas a 30 días)
+            carga_calculada_full = self.calcular_carga_capacidad(ops_filtradas_para_semana, mapas_precargados_externos=mapas_precargados) # <-- ¡RENOMBRADA!
+
+            # 2. Obtenemos la capacidad (que SÍ está limitada a la semana)
             capacidad_disponible = self.obtener_capacidad_disponible([1, 2], inicio_semana, fin_semana)
+
+            # --- ¡INICIO DE LA CORRECCIÓN! ---
+            # Filtramos la carga para que solo incluya los días de esta semana.
+            # Usamos las claves de 'capacidad_disponible' como el filtro maestro.
+
+            dias_de_la_semana_l1 = set(capacidad_disponible.get(1, {}).keys())
+            dias_de_la_semana_l2 = set(capacidad_disponible.get(2, {}).keys())
+
+            # 3. Creamos la carga FILTRADA (esta SÍ usa carga_calculada_full)
+            carga_calculada_filtrada = {
+                1: {fecha: carga for fecha, carga in carga_calculada_full.get(1, {}).items() # <-- Ahora funciona
+                    if fecha in dias_de_la_semana_l1},
+                2: {fecha: carga for fecha, carga in carga_calculada_full.get(2, {}).items() # <-- Ahora funciona
+                    if fecha in dias_de_la_semana_l2}
+            }
+            # --- FIN DE LA CORRECCIÓN --
 
             # --- ¡BLOQUE DE ISSUES (¡ACTUALIZADO!) ---
             # ... (Lógica de combinación de issues sin cambios) ...
@@ -407,7 +427,7 @@ class PlanificacionController(BaseController):
             datos_vista = {
                 'mps_data': mps_data,
                 'ordenes_por_dia': enriched_ordenes_por_dia,
-                'carga_crp': carga_calculada,
+                'carga_crp': carga_calculada_filtrada,
                 'capacidad_crp': capacidad_disponible,
                 'supervisores': supervisores,
                 'operarios': operarios,
