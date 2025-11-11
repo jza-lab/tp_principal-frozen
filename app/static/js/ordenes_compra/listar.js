@@ -20,8 +20,23 @@ document.addEventListener('DOMContentLoaded', function () {
     if (totalCountEl) {
         totalCountEl.textContent = totalOrdenes;
     }
+
+    // Función para actualizar las URLs de las acciones con el filtro de estado actual
+    function updateActionURLs(estado) {
+        const actionForms = document.querySelectorAll('.orden-card form');
+        actionForms.forEach(form => {
+            if (!form.action) return; // Omitir si no hay URL de acción
+            const actionUrl = new URL(form.action, window.location.origin);
+            if (estado) {
+                actionUrl.searchParams.set('estado', estado);
+            } else {
+                actionUrl.searchParams.delete('estado');
+            }
+            form.action = actionUrl.toString();
+        });
+    }
     
-    // Función de filtrado del lado del cliente (solo para búsqueda y estado)
+    // Función de filtrado del lado del cliente
     function applyClientFilters() {
         let visibleCount = 0;
 
@@ -33,7 +48,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 show = false;
             }
 
-            // Filtro por búsqueda de código
+            // Filtro por búsqueda
             if (activeFilters.search) {
                 const codigo = card.dataset.codigo.toLowerCase();
                 const searchTerm = activeFilters.search.toLowerCase();
@@ -42,7 +57,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
 
-            // Mostrar u ocultar
+            // Mostrar u ocultar tarjeta
             card.style.display = show ? '' : 'none';
             if (show) {
                 visibleCount++;
@@ -55,34 +70,36 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         // Mostrar mensaje si no hay resultados
-        const hasResults = visibleCount > 0;
-        if (ordenesContainer) {
-            ordenesContainer.style.display = hasResults ? '' : 'none';
-        }
         if (noResultsMessage) {
+            const hasResults = visibleCount > 0;
+            if (ordenesContainer) {
+                ordenesContainer.style.display = hasResults ? '' : 'none';
+            }
             noResultsMessage.style.display = hasResults ? 'none' : 'flex';
         }
 
-        // Mostrar/ocultar botón de limpiar filtros (solo para filtros de cliente)
+        // Control del botón Limpiar Filtros
+        const urlParams = new URLSearchParams(window.location.search);
         const hasActiveClientFilters = activeFilters.estado || activeFilters.search;
         if (btnClearAll) {
-           // Se muestra si hay cualquier filtro activo, cliente o servidor
-           const urlParams = new URLSearchParams(window.location.search);
-           btnClearAll.style.display = (hasActiveClientFilters || urlParams.has('filtro') || urlParams.has('rango_fecha')) ? 'block' : 'none';
+           btnClearAll.style.display = (hasActiveClientFilters || urlParams.has('filtro') || urlParams.has('rango_fecha') || urlParams.has('estado')) ? 'block' : 'none';
         }
     }
 
-    // Event listeners para botones de estado (filtrado en cliente)
+    // Event listeners para botones de estado
     estadoBtns.forEach(btn => {
         btn.addEventListener('click', function () {
             estadoBtns.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             activeFilters.estado = this.dataset.estado;
+
+            // Actualizar URLs de acción y aplicar filtros
+            updateActionURLs(activeFilters.estado);
             applyClientFilters();
         });
     });
 
-    // Event listener para búsqueda (filtrado en cliente)
+    // Event listener para búsqueda
     if (searchInput) {
         let searchTimeout;
         searchInput.addEventListener('input', function () {
@@ -109,25 +126,23 @@ document.addEventListener('DOMContentLoaded', function () {
                 paramName = 'rango_fecha';
                 paramValue = filter;
             }
-
-            // Limpiar filtros de URL para evitar conflictos
+            
+            // Limpiar otros filtros rápidos para evitar conflictos
             currentUrl.searchParams.delete('filtro');
             currentUrl.searchParams.delete('rango_fecha');
 
             if (!isActive) {
-                // Si no estaba activo, lo activamos y establecemos el parámetro
                 currentUrl.searchParams.set(paramName, paramValue);
             }
-            // Si estaba activo, al limpiarlo arriba ya es suficiente para desactivarlo.
 
             window.location.href = currentUrl.toString();
         });
     });
 
-    // Al cargar la página, marcar como activo el botón de filtro rápido si el parámetro está en la URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const fechaFilter = urlParams.get('rango_fecha');
-    const misOrdenesFilter = urlParams.get('filtro');
+    // Al cargar la página, marcar como activo el botón de filtro rápido
+    const urlParamsOnLoad = new URLSearchParams(window.location.search);
+    const fechaFilter = urlParamsOnLoad.get('rango_fecha');
+    const misOrdenesFilter = urlParamsOnLoad.get('filtro');
 
     quickActionBtns.forEach(btn => {
         const quickFilter = btn.dataset.quickFilter;
@@ -136,14 +151,25 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Limpiar todos los filtros (cliente y servidor)
+    // Limpiar todos los filtros
     if (btnClearAll) {
         btnClearAll.addEventListener('click', function () {
-            // Redirige a la URL base sin parámetros de consulta
             window.location.href = window.location.origin + window.location.pathname;
         });
     }
 
-    // Aplicar filtros de cliente al cargar la página por si el usuario vuelve con el historial
+    // Al cargar, aplicar filtro de estado si está en la URL
+    const estadoFilterFromUrl = urlParamsOnLoad.get('estado');
+    if (estadoFilterFromUrl) {
+        const targetBtn = document.querySelector(`.btn-filter-estado[data-estado="${estadoFilterFromUrl}"]`);
+        if (targetBtn) {
+            targetBtn.click();
+        }
+    } else {
+        // Asegurarse de que las URLs de acción estén limpias si no hay filtro inicial
+        updateActionURLs('');
+    }
+
+    // Aplicar filtros de cliente iniciales
     applyClientFilters();
 });
