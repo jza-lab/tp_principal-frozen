@@ -53,7 +53,7 @@ CANONICAL_PERMISSION_MAP = {
     'crear_orden_de_produccion': ['SUPERVISOR'],
     'aprobar_orden_de_produccion': ['SUPERVISOR'],
     'gestionar_orden_de_produccion': ['SUPERVISOR'], # Editar, cambiar estado, etc.
-    'produccion_ejecucion': ['SUPERVISOR_CALIDAD','OPERARIO','SUPERVISOR'], # Asignar operarios, mover en kanban
+    'produccion_ejecucion': ['SUPERVISOR_CALIDAD','OPERARIO'], # Asignar operarios, mover en kanban
     'produccion_consulta': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'consultar_plan_de_produccion': ['SUPERVISOR', 'GERENTE','SUPERVISOR_CALIDAD'],
     'consultar_kanban_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE','SUPERVISOR_CALIDAD'],
