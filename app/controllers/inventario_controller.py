@@ -1269,12 +1269,11 @@ class InventarioController(BaseController):
 
             # Actualizar el estado de la alerta de riesgo si existe
             alerta_model = AlertaRiesgoModel()
-            alertas_asociadas = alerta_model.db.table('alerta_riesgo_afectados').select('alerta_id').eq('tipo_entidad', 'lote_insumo').eq('id_entidad', lote_id).execute().data
+            alertas_asociadas = alerta_model.db.table('alerta_riesgo_afectados').select('alerta_id').eq('tipo_entidad', 'lote_insumo').eq('id_entidad', str(lote_id)).execute().data
             if alertas_asociadas:
                 alerta_ids = {a['alerta_id'] for a in alertas_asociadas}
                 for alerta_id in alerta_ids:
-                    alerta_model.actualizar_estado_afectados(alerta_id, [lote_id], 'no_apto', 'lote_insumo', usuario_id)
-
+                    alerta_model.actualizar_estado_afectados(alerta_id, [str(lote_id)], 'no_apto', 'lote_insumo', usuario_id)
             # Actualizar stock del insumo
             self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
 
