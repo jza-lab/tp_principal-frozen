@@ -94,8 +94,10 @@ class RiesgoController(BaseController):
         from app.controllers.inventario_controller import InventarioController
         from app.controllers.lote_producto_controller import LoteProductoController
         from app.controllers.orden_produccion_controller import OrdenProduccionController
+        from app.models.inventario import InventarioModel
 
         inventario_controller = InventarioController()
+        inventario_model = InventarioModel()
         lote_producto_controller = LoteProductoController()
         op_controller = OrdenProduccionController()
         
@@ -111,9 +113,9 @@ class RiesgoController(BaseController):
 
             # 2. Poner lotes en cuarentena
             if tipo == 'lote_insumo':
-                lote_info_res = inventario_controller.model.find_by_id(entidad_id, id_field='id_lote')
+                lote_info_res = inventario_model.find_by_id(entidad_id, id_field='id_lote')
                 if lote_info_res.get('success') and lote_info_res.get('data') and len(lote_info_res.get('data')) > 0:
-                    lote_info = lote_info_res.get('data')[0]
+                    lote_info = lote_info_res.get('data')
                     if lote_info.get('cantidad_disponible', 0) <= 0:
                         logger.info(f"Lote de insumo {entidad_id} está agotado. Marcando como resuelto.")
                         self.alerta_riesgo_model.actualizar_estado_afectados(
