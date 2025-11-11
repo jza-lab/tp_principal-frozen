@@ -55,14 +55,7 @@ class ReporteStockController:
                 return {'success': True, 'data': {}}
 
             # 2. Obtener las categorías de todos los productos
-            try:
-                # Se reemplaza la llamada a find_all que no soporta select_columns en este modelo.
-                query = self.producto_model._get_query_builder().select('nombre,categoria')
-                result = query.execute()
-                productos_response = {'success': True, 'data': result.data}
-            except Exception as e:
-                productos_response = {'success': False, 'error': str(e)}
-
+            productos_response = self.producto_model.find_all(select_columns=['nombre', 'categoria'])
             if not productos_response.get('success'):
                 return productos_response
             
@@ -73,7 +66,7 @@ class ReporteStockController:
             for producto in productos_valorizados:
                 nombre = producto['nombre']
                 categoria = categoria_map.get(nombre, 'Sin Categoría')
-                valor = float(producto['valor_total_stock'])
+                valor = float(producto.get('valor_total_stock') or 0)
 
                 if categoria in valor_por_categoria:
                     valor_por_categoria[categoria] += valor
@@ -85,7 +78,9 @@ class ReporteStockController:
 
             return {'success': True, 'data': valor_ordenado}
         except Exception as e:
-            return {'success': False, 'error': str(e)}
+            import traceback
+            traceback.print_exc()
+            return {'success': False, 'error': f"Error inesperado en obtener_valor_stock_por_categoria_producto: {str(e)}"}
 
     def obtener_distribucion_stock_por_estado_producto(self):
         """
@@ -225,10 +220,9 @@ class ReporteStockController:
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
-    def obtener_productos_bajo_stock(self):
+    def obtener_productos_sin_stock(self):
         """
-        Obtiene los productos terminados cuyo stock total es menor o igual a su stock mínimo,
-        o si su stock es cero.
+        Obtiene los productos terminados cuyo stock total es cero.
         """
         try:
             # Obtiene el stock actual de todos los productos que tienen lotes
@@ -244,26 +238,21 @@ class ReporteStockController:
             
             productos = productos_response.get('data', [])
             
-            productos_bajos = []
+            productos_sin_stock = []
             for producto in productos:
                 nombre = producto.get('nombre')
-                stock_minimo = float(producto.get('stock_minimo', 0))
                 
                 # Si un producto no está en el mapa de stock, su stock es 0
                 stock_actual = float(stock_map.get(nombre, 0))
 
-                # Condición de bajo stock:
-                # 1. El stock actual es 0.
-                # 2. El stock mínimo está definido (es > 0) y el stock actual es menor o igual a él.
-                if stock_actual == 0 or (stock_minimo > 0 and stock_actual <= stock_minimo):
-                    productos_bajos.append({
+                # Condición: El stock actual es exactamente 0.
+                if stock_actual == 0:
+                    productos_sin_stock.append({
                         'nombre': nombre,
-                        'stock_actual': stock_actual,
-                        'stock_minimo': stock_minimo,
                         'unidad_medida': producto.get('unidad_medida')
                     })
             
-            return {'success': True, 'data': productos_bajos}
+            return {'success': True, 'data': productos_sin_stock}
 
         except Exception as e:
             return {'success': False, 'error': str(e)}

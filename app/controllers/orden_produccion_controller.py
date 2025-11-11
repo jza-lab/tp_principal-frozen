@@ -155,8 +155,17 @@ class OrdenProduccionController(BaseController):
         """
         Obtiene el detalle de una orden de producción específica.
         """
-        result = self.model.get_one_enriched(orden_id)
-        return result
+        try:
+            result = self.model.get_one_enriched(orden_id)
+            if isinstance(result, dict):
+                return result
+            error_msg = f"Error interno al obtener la OP {orden_id}. El modelo devolvió: {str(result)}"
+            logger.error(error_msg)
+            return {'success': False, 'error': error_msg}
+        except Exception as e:
+            logger.error(f"Excepción en obtener_orden_por_id para OP {orden_id}: {e}", exc_info=True)
+            return {'success': False, 'error': f"Excepción al procesar la solicitud para la OP {orden_id}."}
+
 
     def obtener_desglose_origen(self, orden_id: int) -> Dict:
         """

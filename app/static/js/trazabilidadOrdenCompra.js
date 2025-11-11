@@ -22,15 +22,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }, {});
     }
 
-    function formatearTipo(tipo) {
-        const titulos = {
+    function formatearNombreTipo(tipo) {
+        const nombres = {
             'orden_compra': 'Órdenes de Compra',
             'lote_insumo': 'Lotes de Insumo',
             'orden_produccion': 'Órdenes de Producción',
             'lote_producto': 'Lotes de Producto',
-            'pedido': 'Pedidos de Venta'
+            'pedido': 'Pedidos de Cliente'
         };
-        return titulos[tipo] || tipo.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return nombres[tipo] || tipo.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
 
     // --- Funciones de renderizado ---
@@ -54,30 +54,40 @@ document.addEventListener('DOMContentLoaded', function () {
             resumenDestinoContenedor.innerHTML = '<p class="text-muted">No hay datos de resumen para mostrar.</p>';
             return;
         }
-
-        // Definir el orden lógico del flujo para el resumen de destino
-        const ordenEntidades = ['lote_insumo', 'orden_produccion', 'lote_producto', 'pedido'];
+        
+        const renderizarGrupo = (entidadesAgrupadas) => {
+            let html = '';
+            for (const tipo in entidadesAgrupadas) {
+                html += `<strong class="mt-3 d-block">${formatearNombreTipo(tipo)}:</strong>`;
+                html += '<div class="list-container mt-1" style="max-height: 250px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 5px;">';
+                html += '<ul class="list-group list-group-flush">';
+                html += entidadesAgrupadas[tipo].map(item => {
+                    let badges = '';
+                    if (item.tipo === 'orden_compra') {
+                        badges += `<span class="badge bg-warning text-dark me-1">${item.estado || 'N/D'}</span>`;
+                        if (item.es_directa) {
+                            badges += `<span class="badge bg-info text-dark">Directa</span>`;
+                        }
+                    }
+                    return `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <a href="${urls[item.tipo].replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
+                                <div class="text-muted small">${item.detalle}</div>
+                            </div>
+                            <div>${badges}</div>
+                        </li>`;
+                }).join('');
+                html += '</ul>';
+                html += '</div>';
+            }
+            return html;
+        };
 
         if (resumen.destino.length > 0) {
             const destinoAgrupado = agruparPorTipo(resumen.destino);
             let destinoHtml = '<h5 class="mb-3 border-bottom pb-2"><i class="bi bi-arrow-down-circle-fill text-success me-2"></i>Destino / Hacia adelante</h5>';
-            
-            ordenEntidades.forEach(tipo => {
-                if (destinoAgrupado[tipo]) {
-                    destinoHtml += `<h6>${formatearTipo(tipo)}</h6>`;
-                    destinoHtml += '<ul class="list-group list-group-flush mb-3">';
-                    destinoHtml += destinoAgrupado[tipo].map(item => `
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <div>
-                                <a href="${(urls[item.tipo] || '#').replace('<id>', item.id)}" class="fw-bold text-decoration-none">${item.nombre}</a>
-                                <div class="text-muted small">${item.detalle || ''}</div>
-                            </div>
-                            ${item.cantidad ? `<span class="badge bg-secondary rounded-pill">${item.cantidad}</span>` : ''}
-                        </li>
-                    `).join('');
-                    destinoHtml += '</ul>';
-                }
-            });
+            destinoHtml += renderizarGrupo(destinoAgrupado);
             resumenDestinoContenedor.innerHTML = destinoHtml;
         } else {
             resumenDestinoContenedor.innerHTML = `
@@ -163,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const urls = {
         orden_compra: '/compras/detalle/<id>',
         lote_insumo: '/inventario/lote/<id>',
-        orden_produccion: '/ordenes_produccion/<id>/detalle',
+        orden_produccion: '/ordenes/<id>/detalle',
         lote_producto: '/lotes-productos/<id>/detalle',
         pedido: '/orden-venta/<id>/detalle'
     };

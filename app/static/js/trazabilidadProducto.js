@@ -54,17 +54,61 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const origenHtml = resumen.origen.length ? resumen.origen.map(item => `
-            <li class="list-group-item">
-                <a href="${(urls[item.tipo] || '#').replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
-                <div class="text-muted small">${item.detalle}</div>
-            </li>`).join('') : '<li class="list-group-item text-muted">No hay entidades de origen.</li>';
+        const agruparPorTipo = (items) => {
+            return items.reduce((acc, item) => {
+                if (!acc[item.tipo]) {
+                    acc[item.tipo] = [];
+                }
+                acc[item.tipo].push(item);
+                return acc;
+            }, {});
+        };
+
+        const formatearNombreTipo = (tipo) => {
+            const nombres = {
+                'orden_compra': 'Órdenes de Compra',
+                'lote_insumo': 'Lotes de Insumo',
+                'orden_produccion': 'Órdenes de Producción',
+                'lote_producto': 'Lotes de Producto',
+                'pedido': 'Pedidos de Cliente'
+            };
+            return nombres[tipo] || tipo.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        };
+
+        const renderizarGrupo = (entidadesAgrupadas) => {
+            let html = '';
+            for (const tipo in entidadesAgrupadas) {
+                html += `<strong class="mt-3 d-block">${formatearNombreTipo(tipo)}:</strong>`;
+                html += '<div class="list-container mt-1" style="max-height: 250px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 5px;">';
+                html += '<ul class="list-group list-group-flush">';
+                html += entidadesAgrupadas[tipo].map(item => {
+                    let badges = '';
+                    if (item.tipo === 'orden_compra') {
+                        badges += `<span class="badge bg-warning text-dark me-1">${item.estado || 'N/D'}</span>`;
+                        if (item.es_directa) {
+                            badges += `<span class="badge bg-info text-dark">Directa</span>`;
+                        }
+                    }
+                    return `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <a href="${urls[item.tipo].replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
+                                <div class="text-muted small">${item.detalle}</div>
+                            </div>
+                            <div>${badges}</div>
+                        </li>`;
+                }).join('');
+                html += '</ul>';
+                html += '</div>';
+            }
+            return html;
+        };
         
-        const destinoHtml = resumen.destino.length ? resumen.destino.map(item => `
-            <li class="list-group-item">
-                <a href="${(urls[item.tipo] || '#').replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
-                <div class="text-muted small">${item.detalle}</div>
-            </li>`).join('') : '<li class="list-group-item text-muted">No hay entidades de destino.</li>';
+        const origenAgrupado = agruparPorTipo(resumen.origen);
+        const destinoAgrupado = agruparPorTipo(resumen.destino);
+
+        const origenHtml = Object.keys(origenAgrupado).length ? renderizarGrupo(origenAgrupado) : '<p class="text-muted">No hay entidades de origen.</p>';
+        const destinoHtml = Object.keys(destinoAgrupado).length ? renderizarGrupo(destinoAgrupado) : '<p class="text-muted">No hay entidades de destino.</p>';
 
         resumenContenedor.innerHTML = `
             <div class="card-header"><i class="bi bi-list-ul me-1"></i> Resumen de Trazabilidad</div>
@@ -72,11 +116,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="row">
                     <div class="col-md-6">
                         <h5 class="mb-3 border-bottom pb-2"><i class="bi bi-arrow-up-circle-fill text-primary me-2"></i>Origen (Hacia Atrás)</h5>
-                        <ul class="list-group list-group-flush">${origenHtml}</ul>
+                        ${origenHtml}
                     </div>
                     <div class="col-md-6">
                         <h5 class="mb-3 border-bottom pb-2"><i class="bi bi-arrow-down-circle-fill text-success me-2"></i>Destino (Hacia Adelante)</h5>
-                        <ul class="list-group list-group-flush">${destinoHtml}</ul>
+                        ${destinoHtml}
                     </div>
                 </div>
             </div>`;

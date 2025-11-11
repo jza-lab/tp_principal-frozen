@@ -2,6 +2,7 @@ from uuid import UUID
 
 from flask import url_for
 from app.controllers.base_controller import BaseController
+from app.models.alerta_riesgo import AlertaRiesgoModel
 from app.models.inventario import InventarioModel
 from app.models.insumo import InsumoModel
 from app.controllers.insumo_controller import InsumoController
@@ -810,6 +811,7 @@ class InventarioController(BaseController):
         from app.controllers.usuario_controller import UsuarioController
         from app.models.notificacion import NotificacionModel
         from app.controllers.control_calidad_insumo_controller import ControlCalidadInsumoController
+        from app.models.alerta_riesgo import AlertaRiesgoModel
 
         try:
             lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
@@ -837,11 +839,14 @@ class InventarioController(BaseController):
                     return self.error_response(f"El lote debe estar 'disponible' o en 'cuarentena'. Estado: {estado_actual}", 400)
                 if cantidad <= 0:
                     return self.error_response("La cantidad debe ser un número positivo.", 400)
-                if cantidad > cantidad_actual_disponible:
-                    return self.error_response(f"Cantidad a poner en cuarentena excede el disponible ({cantidad_actual_disponible}).", 400)
 
-                nueva_cantidad_disponible = cantidad_actual_disponible - cantidad
-                nueva_cantidad_cuarentena = cantidad_actual_cuarentena + cantidad
+                cantidad_a_mover = cantidad
+                if cantidad_a_mover > cantidad_actual_disponible:
+                    logger.warning(f"La cantidad de cuarentena solicitada ({cantidad}) excede el disponible ({cantidad_actual_disponible}). Se pondrá en cuarentena todo el disponible.")
+                    cantidad_a_mover = cantidad_actual_disponible
+
+                nueva_cantidad_disponible = cantidad_actual_disponible - cantidad_a_mover
+                nueva_cantidad_cuarentena = cantidad_actual_cuarentena + cantidad_a_mover
 
                 nuevo_estado = 'agotado'
                 if nueva_cantidad_disponible > 0:
@@ -973,6 +978,18 @@ class InventarioController(BaseController):
 
                 # Actualizar el stock consolidado del insumo
                 self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
+                
+                # Disparar la verificación de cierre de alertas
+                try:
+                    alerta_model = AlertaRiesgoModel()
+                    alertas_asociadas = alerta_model.db.table('alerta_riesgo_afectados').select('alerta_id').eq('tipo_entidad', 'lote_insumo').eq('id_entidad', lote_id).execute().data
+                    if alertas_asociadas:
+                        alerta_ids = {a['alerta_id'] for a in alertas_asociadas}
+                        for alerta_id in alerta_ids:
+                            alerta_model.verificar_y_cerrar_alerta(alerta_id)
+                except Exception as e_alert:
+                    logger.error(f"Error al verificar alertas tras liberar lote de insumo {lote_id}: {e_alert}", exc_info=True)
+
 
                 return self.success_response(message="Cantidad liberada de cuarentena con éxito.")
 

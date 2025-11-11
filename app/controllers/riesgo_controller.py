@@ -110,7 +110,7 @@ class RiesgoController(BaseController):
 
             # 3. Pausar Órdenes de Producción no terminadas
             elif tipo == 'orden_produccion':
-                op_res, _ = op_controller.obtener_orden_por_id(entidad_id)
+                op_res= op_controller.obtener_orden_por_id(entidad_id)
                 if op_res.get('success'):
                     op_data = op_res.get('data')
                     if op_data and op_data.get('estado') != 'Completada':
