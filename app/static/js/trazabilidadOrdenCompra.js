@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (item.tipo === 'orden_compra') {
                         badges += `<span class="badge bg-warning text-dark me-1">${item.estado || 'N/D'}</span>`;
                         if (item.es_directa) {
-                            badges += `<span class="badge bg-info text-dark">Directa</span>`;
+                            badges += `<span class="badge bg-info text-dark">Auto-generada</span>`;
                         }
                     }
                     return `

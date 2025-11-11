@@ -8,13 +8,26 @@
 
 {% block app_content %}
 
-<!-- {# --- INICIO MODIFICACIÓN: Modal eliminado --- #}
+{# #}
 {% if orden.orden_produccion_id %}
-<div id="opWarningModal" ...>
-    ... (Todo este bloque de modal fue eliminado) ...
+<div id="opWarningModal" class="modal fade" tabindex="-1" aria-labelledby="opWarningModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title text-dark" id="opWarningModalLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Atención</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="fs-6">Esta Orden de Compra está vinculada a la <strong>Orden de Producción #{{ orden.orden_produccion_id }}</strong>.</p>
+                <p>Revise las fechas de entrega, ya que cualquier demora podría impactar directamente en el plan de producción.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endif %}
-{# --- FIN MODIFICACIÓN --- #} -->
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
@@ -46,19 +59,6 @@
         {% endif %}
     </div>
 </div>
-
-{# --- INICIO MODIFICACIÓN: Nueva Alerta Fija --- #}
-{% if orden.orden_produccion_id %}
-<div class="alert alert-warning d-flex align-items-center" role="alert">
-    <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
-    <div>
-        <strong class="alert-heading">Atención: Orden Vinculada</strong>
-        <p class="mb-0">Esta Orden de Compra está vinculada a la <strong><a href="{{ url_for('orden_produccion.detalle', id=orden.orden_produccion_id) }}" class="alert-link">Orden de Producción #{{ orden.orden_produccion_id }}</a></strong>.
-        Cualquier demora en la entrega podría impactar el plan de producción.</p>
-    </div>
-</div>
-{% endif %}
-{# --- FIN MODIFICACIÓN --- #}
 
 <ul class="nav nav-tabs-custom mb-3" id="loteDetailTab" role="tablist">
     <li class="nav-item" role="presentation">
@@ -306,7 +306,7 @@
                             </div>
                         </form>
                     {% elif orden.paso_recepcion == 1 %}
-                        {# --- PASO 2 RE-ESTILIZADO CON TODOS LOS CAMPOS --- #}
+                        {# --- INICIO DE LA MODIFICACIÓN: PASO 2 RE-ESTILIZADO CON TODOS LOS CAMPOS --- #}
                         <form id="calidadForm" action="{{ url_for('orden_compra.procesar_recepcion', orden_id=orden.id) }}" method="POST" enctype="multipart/form-data">
                             <input type="hidden" name="paso" value="2">
                              {{ csrf_form.csrf_token }}
@@ -384,6 +384,7 @@
                                 </div>
                             </div>
                         </form>
+                        {# --- FIN DE LA MODIFICACIÓN --- #}
                     {% endif %}
                 {% else %}
                 <div class="card mt-4">
@@ -444,7 +445,7 @@
                             Acciones Rápidas
                         </h6>
                     </div>
-                    <div class="card-body">
+                    <div class_=""card-body"">
                         <div class="d-grid gap-2">
                             {% if orden.estado == 'RECEPCION_INCOMPLETA' and not reclamo_existente and has_permission('crear_reclamo_proveedor') %}
                             <a href="{{ url_for('orden_compra.crear_reclamo', orden_id=orden.id) }}" class="btn btn-warning">
@@ -531,6 +532,28 @@
     </div>
 </div>
 
+<div class="modal fade" id="confirmacionRechazoModal" tabindex="-1" aria-labelledby="confirmacionRechazoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="confirmacionRechazoModalLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Confirmar Acción</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Está a punto de rechazar o poner en cuarentena un insumo que estaba reservado para una Orden de Producción.</p>
+                <p class="fw-bold">El sistema intentará encontrar un lote de reemplazo automáticamente.</p>
+                <p>Si no se encuentra un lote de reemplazo disponible, la Orden de Producción cambiará su estado a <span class="badge bg-warning-soft text-warning">PENDIENTE</span> y requerirá atención manual.</p>
+                <hr>
+                <p class="mb-0">¿Está seguro de que desea continuar?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="confirmarRechazoBtn">Sí, Rechazar Insumo</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="confirmacionRecepcionParcialModal" tabindex="-1" aria-labelledby="modalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -566,15 +589,11 @@ document.addEventListener('DOMContentLoaded', function () {
     
     const form = document.getElementById('recepcionForm');
     
-    // --- INICIO MODIFICACIÓN: Se elimina el trigger del modal ---
-    {# 
     var opWarningModal = document.getElementById('opWarningModal');
     if (opWarningModal) {
         var modal = new bootstrap.Modal(opWarningModal);
         modal.show();
     }
-    #}
-    // --- FIN MODIFICACIÓN ---
 
     if (form) {
         {% if orden.estado == 'EN_RECEPCION' and orden.orden_produccion_id %}
@@ -678,7 +697,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return val;
         };
 
-        // --- Lógica de Listeners Diferenciados (CORREGIDA) ---
+        // --- Lógica de Listeners Diferenciados ---
         
         // Si edito CUARENTENA o RECHAZADA, se ajusta APROBADA
         const onProblemaInput = (e) => {
@@ -689,7 +708,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (cuarentenaVal + rechazadaVal > roundedTotal) {
                 if (e.target === cuarentenaInput) {
                     cuarentenaVal = roundedTotal - rechazadaVal;
-                } else { // e.target es rechazadaInput
+                } else {
                     rechazadaVal = roundedTotal - cuarentenaVal;
                 }
                 // Actualizar el valor del input que se estaba editando
@@ -720,12 +739,49 @@ document.addEventListener('DOMContentLoaded', function () {
         cuarentenaInput.addEventListener('input', onProblemaInput);
         rechazadaInput.addEventListener('input', onProblemaInput);
         aprobadaInput.addEventListener('input', onAprobadaInput);
-        // --- FIN LÓGICA CORREGIDA ---
 
         // Correr al inicio
         toggleMotivo();
     });
     // --- FIN MODIFICACIÓN JS ---
+
+    // --- Lógica para el modal de confirmación de rechazo ---
+    const calidadForm = document.getElementById('calidadForm');
+    if (calidadForm) {
+        const rechazoModal = new bootstrap.Modal(document.getElementById('confirmacionRechazoModal'));
+        const confirmarRechazoBtn = document.getElementById('confirmarRechazoBtn');
+
+        calidadForm.addEventListener('submit', function(event) {
+            event.preventDefault(); // Detener el envío del formulario siempre al principio
+
+            let necesitaConfirmacion = false;
+            // Solo necesitamos verificar si la OC está vinculada a una OP
+            {% if orden.orden_produccion_id %}
+                document.querySelectorAll('.item-calidad-row').forEach(row => {
+                    const cuarentenaInput = row.querySelector('.cantidad-cuarentena');
+                    const rechazadaInput = row.querySelector('.cantidad-rechazada');
+                    const cuarentenaVal = parseFloat(cuarentenaInput.value) || 0;
+                    const rechazadaVal = parseFloat(rechazadaInput.value) || 0;
+
+                    if (cuarentenaVal > 0 || rechazadaVal > 0) {
+                        necesitaConfirmacion = true;
+                    }
+                });
+            {% endif %}
+
+            if (necesitaConfirmacion) {
+                rechazoModal.show();
+            } else {
+                // Si no se necesita confirmación, enviar el formulario directamente
+                calidadForm.submit();
+            }
+        });
+
+        confirmarRechazoBtn.addEventListener('click', function() {
+            // Cuando el usuario confirma, ahora sí se envía el formulario
+            calidadForm.submit();
+        });
+    }
 
 
     // --- Lógica para Modal OC Hija (sin cambios) ---

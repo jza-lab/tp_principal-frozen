@@ -232,6 +232,12 @@ class ControlCalidadInsumoController(BaseController):
                 'foto_url': foto_url
             }
             resultado = self.model.create_registro(registro_data)
+            
+            # --- INICIO: Lógica de rechazo ---
+            if decision.upper() == 'RECHAZAR':
+                self.manejar_rechazo_cuarentena(lote_id, usuario_id)
+            # --- FIN: Lógica de rechazo ---
+
             if resultado.get('success'):
                 return self.success_response(data=resultado.get('data'), message="Registro de control de calidad creado con éxito.")
             else:
@@ -239,3 +245,41 @@ class ControlCalidadInsumoController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico al crear registro de control de calidad para el lote {lote_id}: {e}", exc_info=True)
             return self.error_response('Error interno del servidor.', 500)
+
+    def manejar_rechazo_cuarentena(self, lote_rechazado_id: str, usuario_id: int):
+        from app.controllers.orden_produccion_controller import OrdenProduccionController
+        op_controller = OrdenProduccionController()
+        
+        try:
+            # 1. Encontrar qué OPs estaban usando este lote
+            reservas_afectadas = self.inventario_model.reserva_insumo_model.find_all(
+                filters={'lote_inventario_id': lote_rechazado_id}
+            ).get('data', [])
+
+            for reserva in reservas_afectadas:
+                op_id = reserva['orden_produccion_id']
+                insumo_id = reserva['insumo_id']
+                cantidad_necesaria = float(reserva['cantidad_reservada'])
+
+                # 2. Buscar un lote de reemplazo
+                lotes_disponibles = self.inventario_model._obtener_lotes_con_disponibilidad(insumo_id)
+                lote_reemplazo = next((l for l in lotes_disponibles if l['disponibilidad'] >= cantidad_necesaria), None)
+
+                if lote_reemplazo:
+                    # 3. Si se encuentra reemplazo, actualizar la reserva
+                    self.inventario_model.reserva_insumo_model.update(
+                        reserva['id'],
+                        {'lote_inventario_id': lote_reemplazo['id_lote']},
+                        'id'
+                    )
+                    logger.info(f"Lote {lote_rechazado_id} rechazado. OP {op_id} ahora usa el lote de reemplazo {lote_reemplazo['id_lote']}.")
+                else:
+                    # 4. Si no hay reemplazo, poner la OP en PENDIENTE
+                    op_controller.model.update(op_id, {'estado': 'PENDIENTE'}, 'id')
+                    logger.warning(f"Lote {lote_rechazado_id} rechazado. No se encontró reemplazo para la OP {op_id}, que ha sido puesta en 'PENDIENTE'.")
+                    
+                    # También se debe eliminar la reserva original para no dejar inconsistencias
+                    self.inventario_model.reserva_insumo_model.delete(reserva['id'], 'id')
+
+        except Exception as e:
+            logger.error(f"Error al manejar el rechazo del lote {lote_rechazado_id}: {e}", exc_info=True)

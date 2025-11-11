@@ -348,7 +348,8 @@ class TrazabilidadModel:
         if tipo == 'orden_compra':
             info['nombre'] = data.get('codigo_oc', f'OC-{id}')
             info['detalle'] = f"Proveedor: {data.get('proveedores', {}).get('nombre', 'N/A')}"
-            info['estado'] = data.get('estado', 'N/D')
+            estado = data.get('estado', 'N/D')
+            info['estado'] = estado.replace('_', ' ') if estado else 'N/D'
             info['es_directa'] = data.get('orden_produccion_id') is not None
         elif tipo == 'lote_insumo':
             info['nombre'] = data.get('insumos_catalogo', {}).get('nombre', 'N/A')
@@ -361,7 +362,7 @@ class TrazabilidadModel:
             info['detalle'] = f"Lote: {data.get('numero_lote', 'N/A')}"
         elif tipo == 'pedido':
             info['nombre'] = f"Pedido #{id}"
-            info['detalle'] = f"Cliente: {data.get('clientes', {}).get('razon_social', 'N/A')}"
+            info['detalle'] = f"Cliente: {data.get('clientes', {}).get('nombre', 'N/A')}"
         else:
             return None
         return info

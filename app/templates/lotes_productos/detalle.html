@@ -37,6 +37,34 @@
         <a href="{{ url_for('lote_producto.listar_lotes') }}" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i>Ir al Inventario
         </a>
+        {% if lote.estado == 'CUARENTENA' %}
+        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#confirmarNoAptoModal">
+            <i class="bi bi-x-octagon-fill me-1"></i> Marcar como No Apto
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal de Confirmación para Marcar como No Apto -->
+<div class="modal fade" id="confirmarNoAptoModal" tabindex="-1" aria-labelledby="confirmarNoAptoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="confirmarNoAptoModalLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Confirmar Acción Crítica</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Está a punto de marcar este lote de producto como <strong>"No Apto"</strong>. Esta acción es irreversible y el lote no podrá ser utilizado en futuros pedidos.</p>
+                <p class="mb-0">¿Está seguro de que desea continuar?</p>
+            </div>
+            <div class="modal-footer">
+                <form action="{{ url_for('lote_producto.marcar_no_apto', lote_id=lote.id_lote) }}" method="POST">
+                    {{ csrf_form.csrf_token }}
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Sí, Marcar como No Apto</button>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -67,6 +95,7 @@
                 {% if lote.estado == 'CUARENTENA' %}{% set estado_color = 'warning text-dark' %}
                 {% elif lote.estado == 'AGOTADO' or lote.estado == 'VENCIDO' %}{% set estado_color = 'danger' %}
                 {% elif lote.estado == 'RETIRADO' %}{% set estado_color = 'secondary' %}
+                {% elif lote.estado == 'NO APTO' %}{% set estado_color = 'dark' %}
                 {% endif %}
                                <div>
                     {% if lote.en_alerta %}

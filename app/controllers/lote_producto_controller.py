@@ -1012,6 +1012,7 @@ class LoteProductoController(BaseController):
                     alerta_ids = {a['alerta_id'] for a in alertas_asociadas}
                     for alerta_id in alerta_ids:
                         alerta_model.verificar_y_cerrar_alerta(alerta_id)
+                        
             except Exception as e_alert:
                 logger.error(f"Error al verificar alertas tras liberar lote de producto {lote_id}: {e_alert}", exc_info=True)
             
@@ -1185,3 +1186,48 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico en crear_lote_y_reservas_desde_op para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
+    
+    
+    def marcar_lote_como_no_apto(self, lote_id: int, usuario_id: int) -> tuple:
+        """
+        Marca un lote de producto como 'NO APTO', actualiza su estado y las alertas.
+        """
+        try:
+            lote_res = self.model.find_by_id(lote_id, 'id_lote')
+            if not lote_res.get('success') or not lote_res.get('data'):
+                return self.error_response('Lote no encontrado', 404)
+
+            # Actualizar el estado del lote
+            update_data = {
+                'estado': 'NO APTO',
+                'cantidad_actual': 0,
+                'cantidad_en_cuarentena': 0
+            }
+            update_result = self.model.update(lote_id, update_data, 'id_lote')
+            if not update_result.get('success'):
+                return self.error_response(f"Error al actualizar el estado del lote: {update_result.get('error')}", 500)
+
+            # Registrar evento en el historial de calidad (si existe un controlador para ello)
+            try:
+                from app.controllers.control_calidad_producto_controller import ControlCalidadProductoController
+                cc_controller = ControlCalidadProductoController()
+                cc_controller.crear_registro(lote_id, usuario_id, 'NO_APTO', 'Lote marcado como no apto manualmente.')
+            except ImportError:
+                logger.warning("No se encontró ControlCalidadProductoController, no se creará registro de calidad.")
+            except Exception as e_cc:
+                logger.error(f"Error creando registro de calidad para lote de producto {lote_id}: {e_cc}")
+
+
+            # Actualizar el estado de la alerta de riesgo si existe
+            alerta_model = AlertaRiesgoModel()
+            alertas_asociadas = alerta_model.db.table('alerta_riesgo_afectados').select('alerta_id').eq('tipo_entidad', 'lote_producto').eq('id_entidad', lote_id).execute().data
+            if alertas_asociadas:
+                alerta_ids = {a['alerta_id'] for a in alertas_asociadas}
+                for alerta_id in alerta_ids:
+                    alerta_model.actualizar_estado_afectados(alerta_id, [lote_id], 'no_apto', 'lote_producto', usuario_id)
+
+            return self.success_response(message="Lote de producto marcado como No Apto con éxito.")
+
+        except Exception as e:
+            logger.error(f"Error en marcar_lote_como_no_apto (producto): {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
