@@ -122,6 +122,10 @@ class OrdenProduccionController(BaseController):
                     # El estado 'EN ESPERA' implica que se está esperando la llegada de insumos via OC.
                     if estado in ['LISTA PARA PRODUCIR', 'LISTA_PARA_PRODUCIR']:
                         orden['materiales_disponibles'] = True
+                    # --- INICIO DE LA CORRECCIÓN ---
+                    # Normalizar el estado para que coincida con los filtros del frontend
+                    if estado:
+                        orden['estado'] = estado.replace(' ', '_')
                     elif estado == 'EN_ESPERA':
                         orden['materiales_disponibles'] = False
                 # --- FIN LÓGICA DE ENRIQUECIMIENTO ---
