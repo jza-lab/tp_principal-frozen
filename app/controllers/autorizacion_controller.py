@@ -117,7 +117,7 @@ class AutorizacionController(BaseController):
             return {'success': False, 'error': 'El empleado no tiene un turno habitual asignado.'}
 
         try:
-            nombre_turno_habitual = turno_habitual['nombre'].lower()
+            nombre_turno_habitual = turno_habitual.get('nombre', '').lower()
             hora_inicio_autorizada = time.fromisoformat(turno_autorizado_details['hora_inicio'])
             hora_fin_autorizada = time.fromisoformat(turno_autorizado_details['hora_fin'])
 

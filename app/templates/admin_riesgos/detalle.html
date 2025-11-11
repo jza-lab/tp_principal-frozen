@@ -280,6 +280,14 @@
                                             items no afectados</label>
                                     </div>
                                 </div>
+                                {% if alerta.puede_resolver_pedidos_masivamente %}
+                                <hr>
+                                <h6 class="mt-3">Acciones Generales</h6>
+                                <p class="text-muted small">Como todos los lotes fueron aprobados o resueltos sin ser "No Aptos", puede resolver todos los pedidos pendientes de una vez.</p>
+                                <button type="submit" name="accion" value="resolver_pedidos" class="btn btn-success">
+                                    <i class="bi bi-check-circle-fill me-1"></i> Marcar Todos los Pedidos como Resueltos
+                                </button>
+                                {% endif %}
                             </div>
                         </div>
                         {% endif %}

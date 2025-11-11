@@ -75,7 +75,7 @@
 {% block extra_js %}
 <script>
     // Inyectar los datos de los turnos desde el backend para que el script externo los use
-    const TODOS_LOS_TURNOS = "{{ turnos | tojson | safe }}";
+    const TODOS_LOS_TURNOS = {{ turnos | tojson | safe }};
 </script>
 <script src="{{ url_for('static', filename='js/usuarios/formAutorizacion.js') }}"></script>
 {% endblock %}
