@@ -95,9 +95,8 @@ class RiesgoController(BaseController):
         from app.controllers.lote_producto_controller import LoteProductoController
         from app.controllers.orden_produccion_controller import OrdenProduccionController
         from app.models.inventario import InventarioModel
-
+        inventario_model= InventarioModel()
         inventario_controller = InventarioController()
-        inventario_model = InventarioModel()
         lote_producto_controller = LoteProductoController()
         op_controller = OrdenProduccionController()
         
@@ -132,14 +131,6 @@ class RiesgoController(BaseController):
             elif tipo == 'lote_producto':
                 lote_producto_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999)
 
-            # 3. Poner en espera Órdenes de Producción no terminadas
-            elif tipo == 'orden_produccion':
-                op_res = op_controller.obtener_orden_por_id(entidad_id) # Ya devuelve un diccionario
-                if op_res.get('success'):
-                    op_data = op_res.get('data')
-                    if op_data and op_data.get('estado') != 'Completada':
-                        # Cambiar estado a EN ESPERA y marcar en_alerta
-                        op_controller.model.update(entidad_id, {'estado': 'EN ESPERA', 'en_alerta': True}, 'id')
 
         
     def crear_alerta_riesgo(self, datos_json):
@@ -345,7 +336,16 @@ class RiesgoController(BaseController):
                 for afectado in afectados_con_estado if afectado.get('estado') == 'resuelto'
             )
 
-            alerta['puede_resolver_pedidos_masivamente'] = not hay_no_aptos
+            # Lógica mejorada para el botón de resolución masiva
+            entidades_no_pedidos = [
+                a for a in afectados_con_estado if a.get('tipo_entidad') != 'pedido'
+            ]
+            
+            todos_no_pedidos_resueltos = all(
+                a.get('estado') == 'resuelto' for a in entidades_no_pedidos
+            )
+
+            alerta['puede_resolver_pedidos_masivamente'] = todos_no_pedidos_resueltos and not hay_no_aptos
 
             return {"success": True, "data": alerta}, 200
         
@@ -411,6 +411,11 @@ class RiesgoController(BaseController):
             if not alerta_res.get('data'): return ({"success": False, "error": "Alerta no encontrada."}, 404)
             alerta = alerta_res.get('data')[0]
 
+            # Validar si alguno de los lotes de producto sigue en cuarentena
+            lotes_en_cuarentena = self.alerta_riesgo_model.db.table('lotes_productos').select('id_lote').in_('id_lote', lotes_producto_afectados_ids).eq('estado', 'CUARENTENA').execute().data
+            if lotes_en_cuarentena:
+                return ({"success": False, "error": "No se puede resolver el pedido. Uno o más lotes de producto asociados todavía están en cuarentena."}, 400)
+
             afectados_completo = self.trazabilidad_model.obtener_afectados_para_alerta(
                 alerta['origen_tipo_entidad'], 
                 alerta['origen_id_entidad']
@@ -457,6 +462,13 @@ class RiesgoController(BaseController):
             alerta_res = self.alerta_riesgo_model.obtener_por_codigo(codigo_alerta)
             if not alerta_res.get('data'): return ({"success": False, "error": "Alerta no encontrada."}, 404)
             alerta = alerta_res.get('data')[0]
+
+            # Validar si alguno de los lotes de producto sigue en cuarentena
+            afectados_completo = self.trazabilidad_model.obtener_afectados_para_alerta(alerta['origen_tipo_entidad'], alerta['origen_id_entidad'])
+            lotes_producto_afectados_ids = [a['id_entidad'] for a in afectados_completo if a['tipo_entidad'] == 'lote_producto']
+            lotes_en_cuarentena = self.alerta_riesgo_model.db.table('lotes_productos').select('id_lote').in_('id_lote', lotes_producto_afectados_ids).eq('estado', 'CUARENTENA').execute().data
+            if lotes_en_cuarentena:
+                return ({"success": False, "error": "No se puede inhabilitar el pedido. Uno o más lotes de producto asociados todavía están en cuarentena."}, 400)
             
             from app.controllers.pedido_controller import PedidoController
             pedido_controller = PedidoController()

@@ -1,6 +1,7 @@
 # app/controllers/lote_producto_controller.py
 import logging
 from datetime import datetime, date, timedelta
+from flask_jwt_extended import get_jwt_identity
 import pandas as pd
 from io import BytesIO
 from app.controllers.base_controller import BaseController
@@ -1003,15 +1004,21 @@ class LoteProductoController(BaseController):
             result = self.model.update(lote_id, update_data, 'id_lote')
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-
+            usuario_id = get_jwt_identity()
             # Disparar la verificación de cierre de alertas
             try:
                 alerta_model = AlertaRiesgoModel()
-                alertas_asociadas = alerta_model.db.table('alerta_riesgo_afectados').select('alerta_id').eq('tipo_entidad', 'lote_producto').eq('id_entidad', lote_id).execute().data
-                if alertas_asociadas:
-                    alerta_ids = {a['alerta_id'] for a in alertas_asociadas}
+                afectaciones = alerta_model.db.table('alerta_riesgo_afectados').select('alerta_id').eq('tipo_entidad', 'lote_producto').eq('id_entidad', lote_id).eq('estado', 'pendiente').execute().data
+                if afectaciones:
+                    alerta_ids = {a['alerta_id'] for a in afectaciones}
                     for alerta_id in alerta_ids:
-                        alerta_model.verificar_y_cerrar_alerta(alerta_id)
+                       alerta_model.actualizar_estado_afectados(
+                            alerta_id,
+                            [lote_id],
+                            'aprobado_calidad',
+                            'lote_producto',
+                            usuario_id
+                        )
                         
             except Exception as e_alert:
                 logger.error(f"Error al verificar alertas tras liberar lote de producto {lote_id}: {e_alert}", exc_info=True)
@@ -1135,17 +1142,10 @@ class LoteProductoController(BaseController):
         orden_id = orden_produccion_data['id']
 
         try:
-            # --- CORRECCIÓN ---
-            # 1. Verificar si la OP está vinculada a ítems de pedido.
-            # El método find_all_items busca en la tabla 'pedido_items'.
-            # La clave correcta para filtrar es 'orden_produccion_id'.
             items_a_surtir_res = pedido_model.find_all_items(
                 filters={'orden_produccion_id': orden_id}
             )
             items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
-
-            # 2. Decidir el estado inicial del lote (si hay items vinculados, debe ser RESERVADO)
-            # El lote siempre se crea como DISPONIBLE. La reserva se maneja por separado.
             estado_lote_inicial = 'DISPONIBLE'
 
             # 3. Preparar y crear el lote con el estado decidido

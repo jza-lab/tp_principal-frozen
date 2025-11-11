@@ -43,11 +43,6 @@
             class="btn btn-primary {% if not can_edit %}disabled{% endif %}">
             <i class="bi bi-pencil-square me-1"></i>Editar Lote
         </a>
-        {% if lote.estado == 'cuarentena' %}
-        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#confirmarNoAptoModal">
-            <i class="bi bi-x-octagon-fill me-1"></i> Marcar como No Apto
-        </button>
-        {% endif %}
     </div>
 </div>
 

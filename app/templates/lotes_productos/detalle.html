@@ -37,11 +37,6 @@
         <a href="{{ url_for('lote_producto.listar_lotes') }}" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i>Ir al Inventario
         </a>
-        {% if lote.estado == 'CUARENTENA' %}
-        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#confirmarNoAptoModal">
-            <i class="bi bi-x-octagon-fill me-1"></i> Marcar como No Apto
-        </button>
-        {% endif %}
     </div>
 </div>
 

@@ -3,34 +3,72 @@ document.addEventListener('DOMContentLoaded', function () {
     // ===== INICIALIZACIÓN =====
     console.log('📋 Tablero Kanban inicializado');
     
-    // ===== LÓGICA PARA COLAPSO HORIZONTAL DE COLUMNAS =====
-    const columnHeaders = document.querySelectorAll('.column-header');
+    // ===== LÓGICA PARA COLAPSO DE COLUMNAS CON CONTROLES SUPERIORES =====
+    const columnToggles = document.querySelectorAll('.column-toggle-checkbox');
+    const toggleAllColumns = document.getElementById('toggle-all-columns');
+    const columnWrappers = document.querySelectorAll('.kanban-column-wrapper');
 
-    columnHeaders.forEach(header => {
-        header.addEventListener('click', (event) => {
-            // Asegurarse de no colapsar si se hace clic en un botón dentro del header
-            if (event.target.closest('button')) {
-                return;
-            }
-
-            const columnWrapper = header.closest('.kanban-column-wrapper');
-            const icon = header.querySelector('.column-toggle i');
-
-            if (!columnWrapper || !icon) return;
-
-            // Alternar la clase en el contenedor principal de la columna
-            columnWrapper.classList.toggle('kanban-column-compressed');
-
-            // Actualizar el ícono de la flecha
-            if (columnWrapper.classList.contains('kanban-column-compressed')) {
-                icon.classList.remove('bi-chevron-up');
-                icon.classList.add('bi-chevron-down');
+    // Función para actualizar el estado de una columna
+    const updateColumnState = (columnKey, isVisible) => {
+        const columnWrapper = document.querySelector(`.kanban-column-wrapper[data-estado="${columnKey}"]`);
+        if (columnWrapper) {
+            if (isVisible) {
+                columnWrapper.classList.remove('kanban-column-compressed');
             } else {
-                icon.classList.remove('bi-chevron-down');
-                icon.classList.add('bi-chevron-up');
+                columnWrapper.classList.add('kanban-column-compressed');
             }
+        }
+    };
+
+    // Función para guardar el estado en localStorage
+    const saveColumnStates = () => {
+        const states = {};
+        columnToggles.forEach(toggle => {
+            states[toggle.dataset.columnKey] = toggle.checked;
+        });
+        localStorage.setItem('kanbanColumnStates', JSON.stringify(states));
+    };
+
+    // Función para cargar el estado desde localStorage
+    const loadColumnStates = () => {
+        const states = JSON.parse(localStorage.getItem('kanbanColumnStates'));
+        if (states) {
+            columnToggles.forEach(toggle => {
+                const columnKey = toggle.dataset.columnKey;
+                toggle.checked = states[columnKey] !== false; // Por defecto es true
+                updateColumnState(columnKey, toggle.checked);
+            });
+            updateToggleAllState();
+        }
+    };
+
+    // Función para actualizar el estado del checkbox "Todas"
+    const updateToggleAllState = () => {
+        const allChecked = Array.from(columnToggles).every(toggle => toggle.checked);
+        toggleAllColumns.checked = allChecked;
+    };
+
+    // Event listener para los checkboxes individuales
+    columnToggles.forEach(toggle => {
+        toggle.addEventListener('change', () => {
+            updateColumnState(toggle.dataset.columnKey, toggle.checked);
+            saveColumnStates();
+            updateToggleAllState();
         });
     });
+
+    // Event listener para el checkbox "Todas"
+    toggleAllColumns.addEventListener('change', () => {
+        const isChecked = toggleAllColumns.checked;
+        columnToggles.forEach(toggle => {
+            toggle.checked = isChecked;
+            updateColumnState(toggle.dataset.columnKey, isChecked);
+        });
+        saveColumnStates();
+    });
+
+    // Cargar estados al iniciar
+    loadColumnStates();
     
     // ===== FILTROS =====
     const filterButtons = document.querySelectorAll('.filter-btn');
