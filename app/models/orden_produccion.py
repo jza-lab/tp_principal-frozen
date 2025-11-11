@@ -98,6 +98,31 @@ class OrdenProduccionModel(BaseModel):
                         continue # <-- Importante: saltar al siguiente filtro
 
                     # Handle specific date range keys
+                    elif key == 'rango_fecha':
+                        from datetime import datetime, timedelta
+                        hoy = datetime.now()
+                        if value == 'hoy':
+                            inicio_dia = hoy.replace(hour=0, minute=0, second=0, microsecond=0)
+                            fin_dia = hoy.replace(hour=23, minute=59, second=59, microsecond=999999)
+                            query = query.gte('fecha_planificada', inicio_dia.isoformat())
+                            query = query.lte('fecha_planificada', fin_dia.isoformat())
+                        elif value == 'semana':
+                            inicio_semana = hoy - timedelta(days=hoy.weekday())
+                            inicio_semana = inicio_semana.replace(hour=0, minute=0, second=0, microsecond=0)
+                            fin_semana = inicio_semana + timedelta(days=6)
+                            fin_semana = fin_semana.replace(hour=23, minute=59, second=59, microsecond=999999)
+                            query = query.gte('fecha_planificada', inicio_semana.isoformat())
+                            query = query.lte('fecha_planificada', fin_semana.isoformat())
+                        elif value == 'mes':
+                            inicio_mes = hoy.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                            # This logic correctly finds the last day of the current month
+                            next_month = inicio_mes.replace(day=28) + timedelta(days=4)
+                            fin_mes = next_month - timedelta(days=next_month.day)
+                            fin_mes = fin_mes.replace(hour=23, minute=59, second=59, microsecond=999999)
+                            query = query.gte('fecha_planificada', inicio_mes.isoformat())
+                            query = query.lte('fecha_planificada', fin_mes.isoformat())
+                        # 'historico' doesn't apply any date filter, so we just continue
+                        continue
                     elif key == 'fecha_planificada_desde':
                         query = query.gte('fecha_planificada', value)
                         continue # <-- Importante
