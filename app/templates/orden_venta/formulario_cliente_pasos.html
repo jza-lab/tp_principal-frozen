@@ -640,29 +640,36 @@
     document.addEventListener('DOMContentLoaded', function() {
         const itemsContainer = document.getElementById('items-container');
 
-        // Función para inicializar el autocompletado en un campo de búsqueda
-        function initAutocomplete(searchField) {
+        // Función para inicializar el buscador de productos mejorado
+        function initEnhancedSearch(searchField) {
             const productSelect = searchField.closest('td').querySelector('.producto-selector');
             const suggestionsPanel = document.createElement('div');
             suggestionsPanel.classList.add('autocomplete-suggestions');
             searchField.parentNode.insertBefore(suggestionsPanel, searchField.nextSibling);
 
-            searchField.addEventListener('input', () => {
+            const showOrFilterSuggestions = () => {
                 const searchTerm = searchField.value.toLowerCase();
                 suggestionsPanel.innerHTML = '';
-                suggestionsPanel.style.display = 'block';
-
-                if (searchTerm.length === 0) {
+                
+                const options = Array.from(productSelect.options);
+                
+                // Si el campo está vacío, mostramos todo. Si no, filtramos.
+                const filteredOptions = options.filter(option => 
+                    option.value && (searchTerm === '' || option.text.toLowerCase().includes(searchTerm))
+                );
+                
+                // Ocultar panel si no hay nada que mostrar (solo queda el placeholder "seleccione...")
+                if (filteredOptions.length <= 1 && searchTerm !== '') {
                     suggestionsPanel.style.display = 'none';
                     return;
                 }
-
-                const options = Array.from(productSelect.options);
-                const filteredOptions = options.filter(option => 
-                    option.value && option.text.toLowerCase().includes(searchTerm)
-                );
+                
+                suggestionsPanel.style.display = 'block';
 
                 filteredOptions.forEach(option => {
+                    // No mostrar el placeholder en la lista de sugerencias
+                    if (!option.value) return;
+
                     const suggestionItem = document.createElement('div');
                     suggestionItem.textContent = option.text;
                     suggestionItem.dataset.value = option.value;
@@ -675,9 +682,12 @@
                     });
                     suggestionsPanel.appendChild(suggestionItem);
                 });
-            });
+            };
 
-            // Ocultar sugerencias si se hace clic fuera
+            searchField.addEventListener('input', showOrFilterSuggestions);
+            searchField.addEventListener('focus', showOrFilterSuggestions);
+
+            // Ocultar sugerencias si se hace clic fuera del campo de búsqueda y del panel
             document.addEventListener('click', (e) => {
                 if (!searchField.contains(e.target) && !suggestionsPanel.contains(e.target)) {
                     suggestionsPanel.style.display = 'none';
@@ -685,22 +695,16 @@
             });
         }
 
-        // Delegación de eventos para manejar los campos de búsqueda nuevos y existentes
-        itemsContainer.addEventListener('input', function(e) {
-            if (e.target && e.target.classList.contains('producto-search')) {
-                // La lógica de autocompletado ya está manejada por initAutocomplete
-            }
-        });
+        // Inicializar para los campos de búsqueda existentes al cargar la página
+        itemsContainer.querySelectorAll('.producto-search').forEach(initEnhancedSearch);
 
-        // Inicializar autocompletado para los campos de búsqueda existentes
-        itemsContainer.querySelectorAll('.producto-search').forEach(initAutocomplete);
-
-        // Observador para inicializar autocompletado en nuevas filas añadidas
+        // Usar un MutationObserver para inicializar en las nuevas filas que se añadan dinámicamente
         const observer = new MutationObserver(mutations => {
             mutations.forEach(mutation => {
                 mutation.addedNodes.forEach(node => {
+                    // Asegurarse de que el nodo es un elemento (ej. un TR) y contiene el campo de búsqueda
                     if (node.nodeType === 1 && node.querySelector('.producto-search')) {
-                        initAutocomplete(node.querySelector('.producto-search'));
+                        initEnhancedSearch(node.querySelector('.producto-search'));
                     }
                 });
             });
