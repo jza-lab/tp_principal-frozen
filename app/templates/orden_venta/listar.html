@@ -2,19 +2,20 @@
 
 {% block title %}Pedidos de Venta - Sistema Frozen{% endblock %}
 
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/orden_venta/filtros.css') }}">
+{% endblock %}
+
 {% block app_content %}
-<div class="btn-toolbar mb-2">
-    <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2" title="Volver a la página anterior">
-        <i class="bi bi-arrow-left"></i> Volver
-    </a>
-</div>
-<input type="hidden" id="csrf_token" value="{{ csrf_form.csrf_token._value() }}">
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">{{ titulo | default('Pedidos de Venta') }}</h1>
         <p class="text-muted mb-0">Gestión y seguimiento de pedidos de clientes</p>
     </div>
     <div class="btn-toolbar">
+        <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2" title="Volver a la página anterior">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
         {% if has_permission('logistica_gestion_ov') %}
         <a href="{{ url_for('orden_venta.nueva') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i>Crear Nuevo Pedido
@@ -23,41 +24,78 @@
     </div>
 </div>
 
-<div class="card mb-4">
-    <div class="card-body card-filter">
-        <div class="row g-3 align-items-end">
-            <div class="col-12 mb-3">
-                <h5 class="form-label mb-1 text-white">Filtrar por Estado</h5>
-                <p class="text-white small mb-0">{{ pedidos|length }} pedidos encontrados</p>
-            </div>
-            
-            <div class="col-12">
-                {% set current_status = request.args.get('estado') %}
-                <div class="d-flex flex-wrap gap-2 align-items-center">
-                    <a href="{{ url_for('orden_venta.listar', estado='') }}" class="btn btn-sm {% if not current_status %}btn-dark{% else %}btn-secondary{% endif %}">
-                        Todos
-                    </a>
-                    {% for estado_key, estado_nombre in filtros_ui %}
-                        <a href="{{ url_for('orden_venta.listar', estado=estado_key) }}" 
-                           class="btn btn-sm {% if current_status == estado_key %}btn-dark{% else %}btn-secondary{% endif %}">
-                            {{ estado_nombre }}
-                        </a>
-                    {% endfor %}
+<!-- Filtros -->
+<div class="filter-card">
+    <!-- Búsqueda por código -->
+    <div class="filter-section">
+        <label class="filter-label">
+            <i class="bi bi-search me-1"></i>Buscar por Código de Pedido
+        </label>
+        <div class="search-input-wrapper">
+            <i class="bi bi-upc-scan"></i>
+            <input 
+                type="text" 
+                id="searchInput" 
+                class="search-input" 
+                placeholder="Ingrese el código de pedido (ej: PED-884)">
+        </div>
+    </div>
 
-                    {% if current_status == 'LISTO_PARA_ENTREGA' %}
-                    <a href="{{ url_for('despacho.gestion_despachos_vista') }}" class="btn btn-info ms-auto">
-                        <i class="bi bi-truck me-2"></i> Gestionar Envíos y Despachar Pedidos
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
+    <!-- Filtros rápidos -->
+    <div class="filter-section">
+        <label class="filter-label">
+            <i class="bi bi-lightning-fill me-1"></i>Filtros Rápidos
+        </label>
+        <div class="filter-quick-actions">
+            <button type="button" class="btn-quick-action" data-quick-filter="hoy">
+                <i class="bi bi-calendar-day me-1"></i>Hoy
+            </button>
+            <button type="button" class="btn-quick-action" data-quick-filter="ultimos-7">
+                <i class="bi bi-calendar-week me-1"></i>Últimos 7 días
+            </button>
+            <button type="button" class="btn-quick-action" data-quick-filter="ultimos-30">
+                <i class="bi bi-calendar-month me-1"></i>Últimos 30 días
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtro por estado -->
+    <div class="filter-section">
+        <label class="filter-label">
+            <i class="bi bi-funnel-fill me-1"></i>Filtrar por Estado
+        </label>
+        <div class="filter-buttons">
+            <button type="button" class="btn-filter-estado active" data-estado="">
+                <i class="bi bi-grid-3x3-gap-fill"></i>
+                Todos
+            </button>
+            {% for estado_key, estado_nombre in filtros_ui %}
+                <button type="button" class="btn-filter-estado" data-estado="{{ estado_key }}">
+                    <i class="bi bi-tag"></i> <!-- Icono genérico, se puede mejorar -->
+                    {{ estado_nombre }}
+                </button>
+            {% endfor %}
+            <a href="{{ url_for('despacho.gestion_despachos_vista') }}" class="btn btn-info ms-auto" id="btn-gestionar-despachos" style="display: none;">
+                <i class="bi bi-truck me-2"></i> Gestionar Envíos y Despachar Pedidos
+            </a>
         </div>
     </div>
 </div>
 
-<div class="row">
+<!-- Resumen de resultados -->
+<div class="results-info">
+    <div class="results-count">
+        <strong id="visibleCount">{{ pedidos|length }}</strong> de <span id="totalCount">{{ pedidos|length }}</span> pedidos
+    </div>
+    <button type="button" class="btn-clear-filters" id="btnClearAll" style="display: none;">
+        <i class="bi bi-x-circle me-1"></i>Limpiar filtros
+    </button>
+</div>
+
+
+<div class="row" id="pedidos-container">
     {% for pedido in pedidos %}
-    <div class="col-md-4 mb-4">
+    <div class="col-md-4 mb-4" data-estado="{{ pedido.estado }}" data-codigo="PED-{{ pedido.id }}" data-fecha="{{ pedido.fecha_solicitud }}">
         <div class="card h-100 insumo-card {% if pedido.estado in ['CANCELADO', 'COMPLETADO'] %}insumo-inactivo{% endif %}">
             <div class="card-body d-flex flex-column">
                 {# --- Encabezado: Cliente y Estado --- #}
@@ -111,9 +149,10 @@
 
                 <div class="mt-auto"> 
                     <div class="text-end mb-2"> 
-                         <span class="fw-bold fs-5"> {{ pedido.precio_orden | formato_moneda }}</span>
+        <span class="fw-bold fs-5 price-value" data-price="{{ pedido.precio_orden }}">
+            <b>{{ pedido.precio_orden | formato_moneda }}</b>
+        </span>
                     </div>
-
                     <hr class="card-divider my-2">
 
                     {# --- ACCIONES (BOTONES) --- #}
@@ -135,7 +174,7 @@
                               class="confirm-form d-inline" data-title="Confirmar Planificación"
                               data-message="Esta acción creará las Órdenes de Producción necesarias y pondrá el pedido 'En Proceso'. ¿Está seguro?"
                               data-button-type="success">
-                            {{ csrf_form.csrf_token }}
+                            <input type="hidden" name="csrf_token" value="{{ csrf_form.csrf_token._value() }}">
                             <button type="submit" class="btn btn-sm btn-outline-success" title="Planificar y Crear OPs">
                                 <i class="bi bi-play-fill">Planificar y crear OPs</i>
                             </button>
@@ -149,7 +188,7 @@
                             class="confirm-form d-inline" data-title="Confirmar Entrega"
                             data-message="¿Confirma que el cliente ha recibido el pedido?"
                             data-button-type="success">
-                            {{ csrf_form.csrf_token }}
+                            <input type="hidden" name="csrf_token" value="{{ csrf_form.csrf_token._value() }}">
                             <button type="submit" class="btn btn-sm btn-success" title="Marcar como Completado">
                                 <i class="bi bi-check-lg me-1"></i>Completar
                             </button>
@@ -175,10 +214,16 @@
     </div>
     {% endfor %}
 </div>
-
+<!-- Mensaje cuando no hay resultados -->
+<div id="noResultsMessage" class="no-results-message" style="display: none;">
+    <i class="bi bi-search"></i>
+    <h4>No se encontraron pedidos</h4>
+    <p>.</p>
+</div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/orden_venta/listar.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const forms = document.querySelectorAll('.confirm-form');

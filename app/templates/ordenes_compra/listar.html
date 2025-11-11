@@ -98,14 +98,6 @@
                 <i class="bi bi-box-seam"></i>
                 Recepción Completa
             </button>
-            <button type="button" class="btn-filter-estado" data-estado="EN_CONTROL_CALIDAD">
-                <i class="bi bi-clipboard-check"></i>
-                En Control de Calidad
-            </button>
-            <button type="button" class="btn-filter-estado" data-estado="CERRADA">
-                <i class="bi bi-lock-fill"></i>
-                Cerrada
-            </button>
             <button type="button" class="btn-filter-estado" data-estado="RECHAZADA">
                 <i class="bi bi-x-circle"></i>
                 Rechazada
@@ -256,11 +248,11 @@
                 {# --- ESTADO: EN RECEPCION --- #}
                 {% elif orden.estado == 'EN_RECEPCION' %}
                     
-                    {% if has_permission('logistica_recepcion_oc') %}
-                    <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-success"
-                        title="Procesar Mercadería">
-                        <i class="bi bi-box-seam"></i> Procesar
-                    </a>
+                    {% if has_permission('logistica_recepcion_oc') and current_user.rol != 'ADMIN' %}
+                        <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-success"
+                            title="Procesar Mercadería">
+                            <i class="bi bi-box-seam"></i> Procesar
+                        </a>
                     {% endif %}
 
                 {# --- ESTADO: RECEPCION COMPLETA --- #}
@@ -313,12 +305,13 @@
     {% endfor %}
 </div>
 
-<!-- Mensaje cuando no hay resultados -->
+<!-- Mensaje cuando no hay resultados (controlado por JS) -->
+{% if ordenes %}
 <div id="noResultsMessage" class="no-results-message" style="display: none;">
     <i class="bi bi-search"></i>
     <h4>No se encontraron órdenes</h4>
-    <p>No hay órdenes que coincidan con los filtros aplicados</p>
 </div>
+{% endif %}
 
 {% endblock %}
 

@@ -72,7 +72,7 @@
                 
                 {% if reclamo.estado in ['pendiente', 'respondida'] %}
                 <div class="card-footer">
-                    <form action="{{ url_for('reclamo.responder_reclamo_cliente', reclamo_id=reclamo.id) }}" method="POST">
+                    <form id="responder-form" action="{{ url_for('reclamo.responder_reclamo_cliente', reclamo_id=reclamo.id) }}" method="POST">
                         {{ csrf_form.csrf_token }}
                         <div class="mb-3">
                             <label for="mensaje" class="form-label">
@@ -112,7 +112,60 @@ document.addEventListener('DOMContentLoaded', function () {
         chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
-    // Confirmación para el botón de resolver
+    // Manejo del formulario de respuesta con Fetch API
+    const responderForm = document.getElementById('responder-form');
+    if (responderForm) {
+        responderForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const form = e.target;
+            const url = form.action;
+            const mensaje = form.querySelector('#mensaje').value;
+            const csrfToken = form.querySelector('[name=csrf_token]').value;
+            const submitButton = form.querySelector('button[type="submit"]');
+
+            if (!mensaje.trim()) {
+                showNotificationModal('Error', 'El mensaje no puede estar vacío.');
+                return;
+            }
+            
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Enviando...';
+
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ mensaje: mensaje })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotificationModal(
+                        'Respuesta Enviada', 
+                        'Tu mensaje ha sido enviado correctamente. La página se recargará.'
+                    );
+                    // Añadimos el listener para recargar la página una vez que el modal se cierre
+                    document.getElementById('notificationModal').addEventListener('hidden.bs.modal', function () {
+                        window.location.reload();
+                    }, { once: true });
+                } else {
+                    showNotificationModal('Error', data.error || 'No se pudo enviar la respuesta.');
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = 'Enviar Respuesta';
+                }
+            })
+            .catch(error => {
+                console.error('Error en la petición fetch:', error);
+                showNotificationModal('Error de Conexión', 'Ocurrió un error al comunicarse con el servidor.');
+                submitButton.disabled = false;
+                submitButton.innerHTML = 'Enviar Respuesta';
+            });
+        });
+    }
+
+    // Confirmación para el botón de resolver (existente)
     const forms = document.querySelectorAll('.confirm-form');
     forms.forEach(form => {
         form.addEventListener('submit', function (e) {

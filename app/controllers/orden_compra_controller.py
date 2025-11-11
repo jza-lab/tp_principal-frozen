@@ -263,6 +263,10 @@ class OrdenCompraController:
             result = self.model.get_one_with_details(orden_id)
             if result.get('success'):
                 orden_data = result['data']
+
+                # Verificar si existe un reclamo para esta orden
+                reclamo_response, _ = self.reclamo_proveedor_controller.get_reclamo_por_orden(orden_id)
+                orden_data['reclamo_existente'] = reclamo_response.get('success', False) and reclamo_response.get('data') is not None
                 
                 subtotal_original = 0.0
                 if 'items' in orden_data and orden_data['items']:

@@ -116,97 +116,41 @@ class InsumoController(BaseController):
     def obtener_insumos(self, filtros: Optional[Dict] = None) -> tuple:
         """Obtener lista de insumos con filtros, incluyendo filtro por stock bajo."""
         try:
-            # --- INICIO: Recálculo de Stock ---
-            # Se asegura que los valores de stock_actual y stock_total estén actualizados.
             self.inventario_model.calcular_y_actualizar_stock_general()
-            # --- FIN: Recálculo de Stock ---
-
-            # --- INICIO: Disparador automático de OCs ---
             self._revisar_y_generar_ocs_automaticas()
-            # --- FIN: Disparador automático de OCs ---
             
             filtros = filtros or {}
-
             stock_status_filter = filtros.pop('stock_status', None)
 
+            # Primero, obtenemos todos los insumos (o los filtrados por otros criterios)
+            result = self.insumo_model.find_all(filtros)
+            if not result['success']:
+                return self.error_response(result['error'])
+            
+            all_insumos = result['data']
+            final_data = []
+
+            # --- LÓGICA DE FILTRADO LOCALIZADA ---
             if stock_status_filter == 'bajo':
-                # 1. Obtener la lista básica de insumos que están BAJO STOCK
-                consolidado_result = self.inventario_model.obtener_stock_consolidado({'estado_stock': 'BAJO'})
-
-                if not consolidado_result['success']:
-                    return self.error_response(consolidado_result['error'])
-
-                datos_consolidado = consolidado_result['data']
-
-                # Crear un mapa para acceder rápidamente a los datos de stock calculados (stock_actual, stock_min)
-                stock_map = {d['id_insumo']: d for d in datos_consolidado}
-                insumo_ids = list(stock_map.keys())
-
-                if not insumo_ids:
-                    return self.success_response(data=[])
-
-                # 2. Consultar los datos completos del catálogo
-                query = self.insumo_model.db.table(self.insumo_model.get_table_name()).select("*").in_('id_insumo', insumo_ids)
-
-                # Aplicar filtros adicionales de búsqueda y categoría
-                if filtros.get('busqueda'):
-                    search_term = f"%{filtros['busqueda']}%"
-                    query = query.or_(f"nombre.ilike.{search_term},codigo_interno.ilike.{search_term}")
-
-                if filtros.get('categoria'):
-                    query = query.eq('categoria', filtros['categoria'])
-
-                result = query.execute()
-
-                #Convertir los timestamps a objetos datetime antes de fusionar.
-                insumos_completos = self.insumo_model._convert_timestamps(result.data)
-
-                # 3. Fusionar los datos de stock calculados
-                datos_finales = []
-                for insumo_completo in insumos_completos:
-                    stock_data = stock_map.get(insumo_completo['id_insumo'])
-                    if stock_data:
-                        # Forzar conversión a tipos primitivos (float/int)
-                        stock_actual_val = stock_data.get('stock_actual')
-                        stock_min_val = stock_data.get('stock_min')
-
-                        insumo_completo['stock_actual'] = float(stock_actual_val) if stock_actual_val is not None else 0.0
-                        insumo_completo['stock_min'] = int(stock_min_val) if stock_min_val is not None else 0
-                        insumo_completo['estado_stock'] = stock_data.get('estado_stock')
-                        datos_finales.append(insumo_completo)
-
-                datos = datos_finales
-
+                for insumo in all_insumos:
+                    try:
+                        stock_actual = float(insumo.get('stock_actual') or 0.0)
+                        stock_min = float(insumo.get('stock_min') or 0.0)
+                        if stock_min > 0 and stock_actual < stock_min:
+                            final_data.append(insumo)
+                    except (ValueError, TypeError):
+                        # Ignorar insumos con datos de stock no válidos en el filtro
+                        continue
             else:
-                # Lógica existente para obtener todos los insumos con filtros normales
-                # --- CORRECCIÓN: Aplicar filtro de búsqueda 'search' ---
-                search_term = filtros.pop('search', None)
-                
-                result = self.insumo_model.find_all(filtros)
+                # Si no hay filtro de stock, usar todos los datos
+                final_data = all_insumos
 
-                if not result['success']:
-                    return self.error_response(result['error'])
-                
-                datos = result['data']
-
-                if search_term:
-                    search_term_lower = search_term.lower()
-                    datos = [
-                        insumo for insumo in datos
-                        if search_term_lower in insumo.get('nombre', '').lower() or \
-                           search_term_lower in insumo.get('codigo_interno', '').lower()
-                    ]
-                # --- FIN DE LA CORRECCIÓN ---
-
-            # Ordenar la lista: activos primero, luego inactivos
-            sorted_data = sorted(datos, key=lambda x: x.get('activo', False), reverse=True)
-
-            # Serializar y responder
+            sorted_data = sorted(final_data, key=lambda x: x.get('activo', False), reverse=True)
             serialized_data = self.schema.dump(sorted_data, many=True)
             return self.success_response(data=serialized_data)
 
         except Exception as e:
-            logger.error(f"Error obteniendo insumos: {str(e)}")
+            logger.error(f"Error obteniendo insumos (con filtro localizado): {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def obtener_insumo_por_id(self, id_insumo: str) -> tuple:
@@ -397,6 +341,27 @@ class InsumoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error obteniendo insumos con stock: {str(e)}")
+            return self.error_response(f'Error interno: {str(e)}', 500)
+
+    def obtener_sugerencias_insumos(self, query: str) -> tuple:
+        """Obtener una lista de nombres de insumos para sugerencias de autocompletado."""
+        try:
+            if not query or len(query) < 2:
+                return self.success_response(data=[])
+
+            result = self.insumo_model.find_all(
+                filters={'busqueda': query},
+                select_columns=['nombre'],
+                limit=10 
+            )
+
+            if result['success']:
+                nombres = [insumo['nombre'] for insumo in result['data']]
+                return self.success_response(data=nombres)
+            else:
+                return self.error_response(result['error'])
+        except Exception as e:
+            logger.error(f"Error obteniendo sugerencias de insumos: {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def obtener_categorias_distintas(self) -> tuple:

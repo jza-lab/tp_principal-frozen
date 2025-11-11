@@ -71,34 +71,31 @@ def obtener_detalle_reclamo(reclamo_id):
     return render_template('public/reclamo_detalle.html', reclamo=reclamo, csrf_form=FlaskForm())
 
 @reclamo_bp.route('/<int:reclamo_id>/responder', methods=['POST'])
-@jwt_required()
 def responder_reclamo_cliente(reclamo_id):
     """
     Endpoint para que el cliente envíe una respuesta a un reclamo.
     """
-    current_user = get_current_user()
-    cliente_id = current_user.id
+    if 'cliente_id' not in session:
+        return jsonify({"success": False, "error": "Acceso no autorizado"}), 401
+    
+    cliente_id = session['cliente_id']
+    datos_json = request.get_json()
 
-    mensaje = request.form.get('mensaje')
-    if not mensaje:
-        flash('La respuesta no puede estar vacía.', 'error')
-        return redirect(url_for('reclamo.obtener_detalle_reclamo', reclamo_id=reclamo_id))
+    if not datos_json or 'mensaje' not in datos_json:
+        return jsonify({"success": False, "error": "El mensaje no puede estar vacío."}), 400
+    
+    mensaje = datos_json['mensaje']
 
     controller = ReclamoController()
-    # Verificar que el reclamo pertenece al cliente
+    
+    # Verificación de seguridad: el reclamo debe pertenecer al cliente en sesión
     reclamo_resp, _ = controller.obtener_detalle_reclamo(reclamo_id)
     if not reclamo_resp.get('success') or reclamo_resp['data'].get('cliente_id') != cliente_id:
-        flash('No tienes permiso para responder a este reclamo.', 'error')
-        return redirect(url_for('cliente.perfil'))
+        return jsonify({"success": False, "error": "No tienes permiso para responder a este reclamo."}), 403
 
     respuesta, status_code = controller.responder_reclamo_cliente(reclamo_id, cliente_id, mensaje)
 
-    if status_code == 201:
-        flash('Respuesta enviada. El administrador la revisará a la brevedad.', 'success')
-    else:
-        flash(f"Error: {respuesta.get('error', 'No se pudo enviar la respuesta.')}", 'error')
-
-    return redirect(url_for('reclamo.obtener_detalle_reclamo', reclamo_id=reclamo_id))
+    return jsonify(respuesta), status_code
 
 @reclamo_bp.route('/<int:reclamo_id>/resolver', methods=['POST'])
 @jwt_required()

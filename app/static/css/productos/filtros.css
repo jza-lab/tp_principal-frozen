@@ -1,0 +1,64 @@
+/* Contenedor principal de filtros */
+.filter-card {
+    background-color: #fff;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    border: 1px solid #dee2e6;
+}
+
+/* Estilo para los inputs de búsqueda */
+#busqueda-filtro {
+    border-right: 0;
+}
+
+#busqueda-filtro:focus {
+    box-shadow: none;
+    border-color: #ced4da;
+}
+
+#search-icon {
+    background-color: white;
+    border-right: 0;
+}
+
+/* Sugerencias de búsqueda */
+#suggestions-container .suggestion-item {
+    cursor: pointer;
+}
+#suggestions-container .suggestion-item:hover {
+    background-color: #f0f0f0;
+}
+
+/* Estilo para los botones de filtro */
+.filter-card .btn {
+    min-width: 120px;
+}
+.filter-card .btn.active {
+    background-color: #0d6efd;
+    color: white;
+}
+
+/* Contenedor de "pills" de filtros activos */
+#active-filters-container .badge {
+    padding: 0.5em 0.75em;
+    font-size: 0.85rem;
+}
+#active-filters-container .btn-close {
+    font-size: 0.7rem;
+    margin-left: 8px;
+}
+
+/* Dropdown de categorías */
+#category-filter-list {
+    max-height: 250px;
+    overflow-y: auto;
+}
+#category-filter-list .dropdown-item {
+    padding: 0.5rem 1rem;
+}
+#category-filter-list .form-check-label {
+    cursor: pointer;
+    width: 100%;
+}

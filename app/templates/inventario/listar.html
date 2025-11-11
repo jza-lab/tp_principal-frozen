@@ -156,7 +156,9 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    {% if 'almacen_consulta_stock' is has_permission %}
                     <button type="submit" class="btn btn-warning">Confirmar Cuarentena</button>
+                    {% endif %}
                 </div>
             </form>
         </div>

@@ -26,49 +26,47 @@ class InsumoModel(BaseModel):
 
     def find_all(self, filters: Optional[Dict] = None, order_by: str = 'nombre', limit: Optional[int] = None, select_columns: Optional[list] = None) -> Dict:
         """
-        Sobrescribe find_all para manejar la búsqueda de texto y reutilizar la lógica de BaseModel,
-        incluyendo un JOIN con la tabla de proveedores.
+        Sobrescribe find_all para manejar la búsqueda de texto (ilike) y filtros de categoría.
         """
         try:
-            # Copiar filtros para no modificar el original
-            filters_copy = filters.copy() if filters else {}
-            
-            texto_busqueda = filters_copy.pop('busqueda', None)
-            
-            # Construir la consulta base con el JOIN
             query = self.db.table(self.get_table_name()).select('*, proveedor:proveedores(*)')
 
-            # Aplicar filtros restantes (excluyendo 'busqueda')
-            for key, value in filters_copy.items():
-                if isinstance(value, list):
-                    query = query.in_(key, value)
-                else:
-                    query = query.eq(key, value)
-            
-            # Aplicar búsqueda de texto si existe (contra nombre y código)
-            if texto_busqueda:
-                search_term = f"%{texto_busqueda}%"
-                query = query.or_(f"nombre.ilike.{search_term},codigo_interno.ilike.{search_term}")
+            filters_copy = filters.copy() if filters else {}
 
-            # Aplicar orden y límite
-            if order_by:
-                # La sintaxis de Supabase es "columna.orden"
-                parts = order_by.split('.')
-                col = parts[0]
-                asc = len(parts) == 1 or parts[1].lower() == 'asc'
-                query = query.order(col, desc=not asc)
+            texto_busqueda = filters_copy.pop('busqueda', None)
+            proveedor_ids = filters_copy.pop('id_proveedor', [])
+            categorias = filters_copy.pop('categoria', [])
+
+            if isinstance(proveedor_ids, str):
+                proveedor_ids = [proveedor_ids] if proveedor_ids else []
+            if isinstance(categorias, str):
+                categorias = [categorias] if categorias else []
+
+            # Lógica para la búsqueda de texto (funciona como 'ilike' por nombre/código)
+            if texto_busqueda:
+                busqueda_pattern = f"%{texto_busqueda}%"
+                query = query.or_(f"nombre.ilike.{busqueda_pattern},codigo_interno.ilike.{busqueda_pattern}")
+
+            # Lógica para el filtro de categoría (coincidencia exacta)
+            if categorias:
+                query = query.in_('categoria', categorias)
+            
+            if proveedor_ids:
+                query = query.in_('id_proveedor', proveedor_ids)
+
+            # Aplicar cualquier otro filtro remanente (e.g., 'activo')
+            for key, value in filters_copy.items():
+                if value is not None:
+                    query = query.eq(key, value)
+
+            query = query.order(order_by)
+
             if limit:
                 query = query.limit(limit)
 
-            # Ejecutar la consulta
-            response = query.execute()
+            result = query.execute()
 
-            if response.data is not None:
-                # La conversión de timestamps ya la hacemos después
-                return {'success': True, 'data': self._convert_timestamps(response.data)}
-            else:
-                # Manejar el caso donde no hay datos pero la consulta fue exitosa
-                return {'success': True, 'data': []}
+            return {'success': True, 'data': self._convert_timestamps(result.data)}
 
         except Exception as e:
             logger.error(f"Error obteniendo registros de {self.get_table_name()}: {str(e)}")
@@ -205,7 +203,7 @@ class InsumoModel(BaseModel):
 
             # Si se proporciona proveedor_id, filtrar también por proveedor
             if proveedor_id:
-                query = query.eq('proveedor_id', proveedor_id)
+                query = query.eq('id_proveedor', proveedor_id)
 
             response = query.execute()
 

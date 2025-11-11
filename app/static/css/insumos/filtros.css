@@ -1,0 +1,104 @@
+.filter-card {
+    background-color: #343a40;
+    color: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    border: 1px solid #495057;
+}
+
+.input-group .form-control {
+    background-color: #495057;
+    border-color: #6c757d;
+    color: #fff;
+    border-radius: 8px;
+}
+
+.input-group .form-control::placeholder {
+    color: #adb5bd;
+}
+
+.input-group .form-control:focus {
+    background-color: #495057;
+    color: #fff;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.input-group-text {
+    background-color: #495057;
+    border-color: #6c757d;
+    color: #fff;
+    border-radius: 8px 0 0 8px;
+}
+
+.btn-outline-secondary {
+    border-color: #6c757d;
+    color: #ced4da;
+    border-radius: 8px;
+    transition: all 0.2s ease-in-out;
+}
+
+.btn-outline-secondary:hover,
+.btn-outline-secondary.active {
+    background-color: #6c757d;
+    color: #fff;
+}
+
+.dropdown-menu {
+    border-radius: 8px;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    z-index: 1050; /* Z-index alto para estar sobre el contenido */
+}
+
+.btn-outline-danger {
+    border-color: #dc3545;
+    color: #dc3545;
+    border-radius: 8px;
+    transition: all 0.2s ease-in-out;
+}
+
+.btn-outline-danger:hover,
+.btn-outline-danger.active {
+    background-color: #dc3545;
+    color: #fff;
+}
+
+.btn-light {
+    border-radius: 8px;
+}
+
+#active-filters-container .badge {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    border-radius: 20px;
+    background-color: #007bff !important;
+    transition: all 0.2s ease;
+}
+
+#active-filters-container .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+    margin-left: 8px;
+    opacity: 0.7;
+}
+#active-filters-container .btn-close:hover {
+    opacity: 1;
+}
+
+#insumos-count {
+    color: #adb5bd;
+    font-weight: 500;
+}
+
+.card.insumo-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.card.insumo-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.insumo-card-wrapper {
+    transition: opacity 0.3s ease-in-out;
+}

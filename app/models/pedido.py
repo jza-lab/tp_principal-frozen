@@ -2,6 +2,7 @@ from app.models.base_model import BaseModel
 from typing import Dict, Any, List, Optional
 import logging
 from postgrest.exceptions import APIError
+from datetime import date, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +174,20 @@ class PedidoModel(BaseModel):
                 'pedido_items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre))'
             )
             if filtros:
+                # Procesar rango_fecha primero si existe
+                if 'rango_fecha' in filtros:
+                    rango = filtros.pop('rango_fecha') # Eliminar para no procesarlo en el bucle
+                    today = date.today()
+                    if rango == 'hoy':
+                        query = query.eq('fecha_solicitud', today.isoformat())
+                    elif rango == 'ultimos-7':
+                        fecha_desde = today - timedelta(days=7)
+                        query = query.gte('fecha_solicitud', fecha_desde.isoformat())
+                    elif rango == 'ultimos-30':
+                        fecha_desde = today - timedelta(days=30)
+                        query = query.gte('fecha_solicitud', fecha_desde.isoformat())
+
+                # Procesar otros filtros
                 for key, value in filtros.items():
                     if value is not None:
                         if key == 'fecha_desde':
@@ -181,6 +196,7 @@ class PedidoModel(BaseModel):
                             query = query.lte('fecha_solicitud', value)
                         else:
                             query = query.eq(key, value)
+            
             query = query.order("fecha_solicitud", desc=True).order("id", desc=True)
             result = query.execute()
             return {'success': True, 'data': result.data}

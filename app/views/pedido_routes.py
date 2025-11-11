@@ -48,9 +48,14 @@ def _parse_form_data(form_dict):
 def listar():
     """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
     controller = PedidoController()
-    estado = request.args.get('estado')
-    filtros = {'estado': estado} if estado else {}
+    rango_fecha = request.args.get('rango_fecha')
+    
+    # Prepara el diccionario de filtros que se pasará al controlador.
+    filtros = {}
+    if rango_fecha:
+        filtros['rango_fecha'] = rango_fecha
 
+    # El controlador se encargará de la lógica de negocio del filtrado.
     response, _ = controller.obtener_pedidos(filtros)
     pedidos = []
 
@@ -187,7 +192,9 @@ def cancelar(id):
         flash(response.get('message'), 'success')
     else:
         flash(response.get('error'), 'error')
-    return redirect(url_for('orden_venta.detalle', id=id))
+    
+    active_filters = request.form.get('active_filters', '')
+    return redirect(url_for('orden_venta.listar') + active_filters)
 
 @orden_venta_bp.route('/<int:id>/despachar', methods=['GET', 'POST'])
 @jwt_required()
@@ -285,8 +292,9 @@ def completar(id):
         flash(response.get('message'), 'success')
     else:
         flash(response.get('error'), 'error')
-
-    return redirect(url_for('orden_venta.detalle', id=id))
+    
+    active_filters = request.form.get('active_filters', '')
+    return redirect(url_for('orden_venta.listar') + active_filters)
 
 @orden_venta_bp.route('/api/pedidos/<int:id>/despachar', methods=['POST'])
 @jwt_required()
@@ -441,21 +449,24 @@ def generar_factura_html(id):
 def nueva_cliente_pasos():
     """
     Ruta para el formulario de creación de pedidos en dos pasos (vista de cliente).
+    SOLO ACCESIBLE PARA CLIENTES LOGUEADOS.
     """
-    hoy = datetime.now().strftime('%Y-%m-%d')
-    # Verificar si el cliente está logueado y si es nuevo
-    cliente_id = session.get('cliente_id')
-    es_cliente_nuevo = True
-    if cliente_id:
-        cliente_controller = ClienteController()
-        es_cliente_nuevo = not cliente_controller.cliente_tiene_pedidos_previos(cliente_id)
+    # --- FIX: Verificación de sesión de cliente ---
+    if 'cliente_id' not in session:
+        flash('Por favor, inicie sesión para crear un nuevo pedido.', 'info')
+        return redirect(url_for('cliente.login'))
+    # ---------------------------------------------
 
+    hoy = datetime.now().strftime('%Y-%m-%d')
+    cliente_id = session.get('cliente_id') # Ya sabemos que existe
+    
+    cliente_controller = ClienteController()
+    es_cliente_nuevo = not cliente_controller.cliente_tiene_pedidos_previos(cliente_id)
 
     controller = PedidoController()
     response, _ = controller.obtener_datos_para_formulario()
     productos = response.get('data', {}).get('productos', [])
 
-    # Usamos el nuevo template sin includes
     return render_template('orden_venta/formulario_cliente_pasos.html',
                            productos=productos,
                            pedido=None,
