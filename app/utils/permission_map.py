@@ -57,6 +57,9 @@ CANONICAL_PERMISSION_MAP = {
     'produccion_consulta': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'consultar_plan_de_produccion': ['SUPERVISOR', 'GERENTE','SUPERVISOR_CALIDAD'],
     'consultar_kanban_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE','SUPERVISOR_CALIDAD'],
+    'aprobar_plan_de_produccion': ['SUPERVISOR'],
+    'configurar_planificacion': ['SUPERVISOR'],
+    'ejecutar_planificacion_automatica': ['SUPERVISOR'],
 
     # Módulo: Almacén e Inventario
     'gestionar_catalogo_de_productos': ['SUPERVISOR', 'ADMIN', 'GERENTE'],
