@@ -112,9 +112,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const data = await response.json();
 
-            if (data.success && data.data && data.data.codigo) {
-                // Redirigir a la página de detalle de la alerta creada
-                 window.location.href = `/administrar/riesgos/${data.data.codigo}/detalle`;
+            if (data.success && data.redirect_url) {
+                // Redirigir a la URL proporcionada por el backend
+                window.location.href = data.redirect_url;
             } else {
                 throw new Error(data.error || 'La respuesta del servidor no fue la esperada.');
             }
