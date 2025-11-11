@@ -181,7 +181,7 @@ class PlanificacionController(BaseController):
         try:
             fecha_inicio_chequeo = date.today()
 
-            for i in range(7): # Chequear Hoy + 6 días
+            for i in range(15): # Chequear Hoy + 6 días
                 fecha_a_chequear = fecha_inicio_chequeo + timedelta(days=i)
 
                 if not self._es_dia_laborable(fecha_a_chequear):
