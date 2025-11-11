@@ -488,14 +488,13 @@ class PedidoModel(BaseModel):
         if not pedido_ids:
             return {'success': True, 'data': []}
 
-        try:
-
-            query = self.db.table(self.get_table_name()).select('*, vendedor:id_vendedor(nombre, apellido)').in_('id', pedido_ids)
-
-            result = query.execute()
-
+        try:            
+            # La relación 'vendedor:id_vendedor' puede causar un error 400 si no existe en el esquema.
+            # Se hace la consulta básica primero para evitar que un error en una relación opcional
+            # rompa la funcionalidad principal de obtener los pedidos.
+            result = self.db.table(self.get_table_name()).select('*').in_('id', pedido_ids).execute()
+            
             if result.data:
-
                 return {'success': True, 'data': result.data}
             else:
                 return {'success': True, 'data': []}

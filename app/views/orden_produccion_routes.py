@@ -217,10 +217,18 @@ def detalle(id):
     ingredientes = (
         ingredientes_response.get("data", []) if ingredientes_response and isinstance(ingredientes_response, dict) else []
     )
-    pedidos_asociados_resp, status= pedido_controller.obtener_pedidos_por_orden_produccion(id)
-    pedidos_asociados=[]
-    if pedidos_asociados_resp.get('data') and len(pedidos_asociados_resp.get('data'))>0:
-        pedidos_asociados=pedidos_asociados_resp.get('data')
+    pedidos_asociados = []
+    pedidos_asociados_resp, status = pedido_controller.obtener_pedidos_por_orden_produccion(id)
+    if pedidos_asociados_resp.get('success') and pedidos_asociados_resp.get('data'):
+        # Usamos un diccionario para evitar duplicados si una OP está en múltiples items del mismo pedido
+        pedidos_map = {p['id']: p for p in pedidos_asociados_resp.get('data')}
+        pedidos_asociados = list(pedidos_map.values())
+
+    # Si la orden tiene un pedido_id directo (caso de consolidación), añadirlo también
+    if orden.get('pedido_id') and orden.get('pedido_id') not in [p.get('id') for p in pedidos_asociados]:
+        pedido_directo_resp, _ = pedido_controller.obtener_pedido_por_id(orden['pedido_id'])
+        if pedido_directo_resp.get('success'):
+            pedidos_asociados.append(pedido_directo_resp.get('data'))
 
     reserva_insumo_model = ReservaInsumoModel()
     lotes_insumos_reservados_result = reserva_insumo_model.get_by_orden_produccion_id(id)

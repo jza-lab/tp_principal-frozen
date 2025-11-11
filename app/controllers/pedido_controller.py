@@ -878,32 +878,34 @@ class PedidoController(BaseController):
         """
         Verifica los estados de todas las OPs asociadas a un pedido y actualiza el estado del pedido.
         """
-        logger.info(f"Verificando estado de OPs para el pedido {pedido_id}")
         try:
             pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_resp.get('success'):
                 logger.error(f"No se pudo encontrar el pedido {pedido_id} para actualizar estado según OPs.")
                 return
 
+            logger.info(f"Verificando estado de ítems para el pedido {pedido_id}")
             pedido_data = pedido_resp.get('data')
-            items_con_op = [item for item in pedido_data.get('items', []) if item.get('orden_produccion_id')]
+            todos_los_items = pedido_data.get('items', [])
 
-            if not items_con_op:
-                logger.info(f"El pedido {pedido_id} no tiene items con OPs asociadas. No se cambia el estado.")
+            if not todos_los_items:
+                logger.info(f"El pedido {pedido_id} no tiene ítems. No se cambia el estado.")
                 return
 
-            estados_ops = [item.get('op_estado') for item in items_con_op]
+            # Un pedido está listo si TODOS sus ítems están listos.
+            # Un ítem está listo si: su OP está COMPLETADA, o si no tiene OP y su estado es ALISTADO.
+            todos_los_items_listos = all(item.get('op_estado') == 'COMPLETADA' or (not item.get('orden_produccion_id') and item.get('estado') == 'ALISTADO') for item in todos_los_items)
 
-            todas_completadas = all(estado == 'COMPLETADA' for estado in estados_ops)
-            todas_en_proceso_o_mas = all(estado in ['EN_PRODUCCION', 'CONTROL_DE_CALIDAD', 'COMPLETADA'] for estado in estados_ops)
-
-            if todas_completadas:
+            if todos_los_items_listos:
                 self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
                 logger.info(f"Todas las OPs del pedido {pedido_id} están completadas. Pedido actualizado a 'LISTO_PARA_ENTREGA'.")
-            elif todas_en_proceso_o_mas:
-                if pedido_data.get('estado') not in ['EN_PROCESO', 'LISTO_PARA_ENTREGA']:
+            else:
+                # Si no todos están listos, pero al menos uno está en producción, el estado general es EN_PROCESO.
+                algun_item_en_proceso = any(item.get('op_estado') in ['EN_PRODUCCION', 'CONTROL_DE_CALIDAD'] for item in todos_los_items)
+                if algun_item_en_proceso and pedido_data.get('estado') not in ['EN_PROCESO', 'LISTO_PARA_ENTREGA']:
                     self.model.cambiar_estado(pedido_id, 'EN_PROCESO')
-                    logger.info(f"Todas las OPs del pedido {pedido_id} han iniciado. Pedido actualizado a 'EN_PROCESO'.")
+                    logger.info(f"Al menos una OP del pedido {pedido_id} ha iniciado. Pedido actualizado a 'EN_PROCESO'.")
+
 
         except Exception as e:
             logger.error(f"Error actualizando el estado del pedido {pedido_id} según OPs: {e}", exc_info=True)

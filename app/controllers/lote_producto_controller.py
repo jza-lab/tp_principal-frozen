@@ -1145,3 +1145,64 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error contando lotes sin trazabilidad: {str(e)}")
             return 0
+
+    def crear_lote_y_reservas_desde_op(self, orden_produccion_data: Dict, usuario_id: int) -> tuple:
+        """
+        Crea un lote de producto a partir de una OP completada.
+        Si la OP está vinculada a items de pedido, crea el lote como 'RESERVADO'
+        y genera los registros de reserva correspondientes.
+        """
+        from app.models.pedido import PedidoModel
+        pedido_model = PedidoModel()
+        orden_id = orden_produccion_data['id']
+
+        try:
+            # --- CORRECCIÓN ---
+            # 1. Verificar si la OP está vinculada a ítems de pedido.
+            # El método find_all_items busca en la tabla 'pedido_items'.
+            # La clave correcta para filtrar es 'orden_produccion_id'.
+            items_a_surtir_res = pedido_model.find_all_items(
+                filters={'orden_produccion_id': orden_id}
+            )
+            items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
+
+            # 2. Decidir el estado inicial del lote
+            estado_lote_inicial = 'RESERVADO' if items_vinculados else 'DISPONIBLE'
+
+            # 3. Preparar y crear el lote con el estado decidido
+            datos_lote = {
+                'producto_id': orden_produccion_data['producto_id'],
+                'cantidad_inicial': orden_produccion_data['cantidad_planificada'],
+                'orden_produccion_id': orden_id,
+                'fecha_produccion': date.today().isoformat(),
+                'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat(),
+                'estado': estado_lote_inicial
+            }
+            resultado_lote, status_lote = self.crear_lote_desde_formulario(datos_lote, usuario_id=usuario_id)
+            if status_lote >= 400:
+                return self.error_response(f"Fallo al registrar el lote de producto: {resultado_lote.get('error')}", 500)
+
+            lote_creado = resultado_lote['data']
+            message_to_use = f"Lote N° {lote_creado['numero_lote']} creado como '{estado_lote_inicial}'."
+
+            # 4. Si el lote se creó como RESERVADO, crear los registros de reserva
+            if estado_lote_inicial == 'RESERVADO':
+                for item in items_vinculados:
+                    datos_reserva = {
+                        'lote_producto_id': lote_creado['id_lote'],
+                        'pedido_id': item['pedido_id'],
+                        'pedido_item_id': item['id'],
+                        'cantidad_reservada': float(item['cantidad']),
+                        'usuario_reserva_id': usuario_id
+                    }
+                    self.reserva_model.create(
+                        self.reserva_schema.load(datos_reserva)
+                    )
+                logger.info(f"Registros de reserva creados para el lote {lote_creado['numero_lote']}.")
+                message_to_use += " y vinculado a los pedidos correspondientes."
+
+            return self.success_response(data=lote_creado, message=message_to_use)
+
+        except Exception as e:
+            logger.error(f"Error crítico en crear_lote_y_reservas_desde_op para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
