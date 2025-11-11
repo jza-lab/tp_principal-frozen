@@ -276,9 +276,9 @@ class ControlCalidadInsumoController(BaseController):
                 orden_produccion = op_res['data']
                 op_codigo = orden_produccion.get('codigo', f"ID {op_id}")
 
-                if orden_produccion.get('estado') in ['Completada', 'COMPLETADO']:
-                    logger.info(f"Lote {lote_rechazado_id} rechazado. La OP {op_codigo} ya está completada.")
-                    resultados.append(f"La Orden de Producción {op_codigo} no fue modificada porque ya está completada.")
+                if orden_produccion.get('estado') in ['COMPLETADA', 'CONTROL_DE_CALIDAD', 'FINALIZADA', 'CANCELADA','CONSOLIDADA']:
+                    logger.info(f"Lote {lote_rechazado_id} rechazado. La OP {op_codigo} ya está en un estado final ('{orden_produccion.get('estado')}').")
+                    resultados.append(f"La Orden de Producción {op_codigo} no fue modificada porque su estado es '{orden_produccion.get('estado')}'.")
                     # Marcar la OP como resuelta en la alerta
                     alerta_model.actualizar_estado_afectados_por_entidad('orden_produccion', op_id, 'resuelta_completada', usuario_id)
                     continue

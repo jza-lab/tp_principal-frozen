@@ -16,7 +16,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(response => response.ok ? response.json() : Promise.reject('Error de red'))
                 .then(result => {
                     if (result.success && result.data) {
-                        renderTrazabilidad(result.data.resumen, opId);
+                        // Pasamos tanto el resumen como los responsables
+                        renderTrazabilidad(result.data.resumen, result.data.responsables, opId);
                     } else {
                         throw new Error(result.error || 'No se pudieron obtener los datos.');
                     }
@@ -27,9 +28,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    function renderTrazabilidad(resumen, opId) {
+    function renderTrazabilidad(resumen, responsables, opId) {
         const origen = resumen.origen || [];
         const destino = resumen.destino || [];
+        const responsablesData = responsables || {};
 
         const gruposOrigen = origen.reduce((acc, item) => {
             if (!acc[item.tipo]) acc[item.tipo] = [];
@@ -124,6 +126,26 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     </div>
                 </div>
-            </div>`;
+            </div>
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="card">
+                         <div class="card-header bg-info text-black"><i class="bi bi-people-fill me-2"></i> Responsables</div>
+                        <div class="card-body p-3">
+                            <div class="d-flex justify-content-around text-center">
+                                <div>
+                                    <p class="mb-0 text-muted small"><i class="bi bi-person-check-fill me-1"></i>Supervisor de calidad</p>
+                                    <strong>${responsablesData.supervisor_calidad || 'N/A'}</strong>
+                                </div>
+                                <div>
+                                    <p class="mb-0 text-muted small"><i class="bi bi-person-gear me-1"></i>Operario</p>
+                                    <strong>${responsablesData.operario || 'N/A'}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 });

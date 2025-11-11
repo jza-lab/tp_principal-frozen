@@ -1,4 +1,5 @@
 from collections import deque
+from postgrest.exceptions import APIError
 from app.database import Database
 
 class TrazabilidadModel:
@@ -131,7 +132,24 @@ class TrazabilidadModel:
         resumen = self._generar_resumen(nodos_filtrados, aristas_filtradas, tipo_entidad_inicial, id_entidad_inicial)
         diagrama = self._generar_diagrama(nodos_filtrados, aristas_filtradas)
 
-        return {'resumen': resumen, 'diagrama': diagrama}
+        responsables = {'supervisor_calidad': 'N/A', 'operario': 'N/A'}
+        if tipo_entidad_inicial == 'orden_produccion':
+            # La información ya fue enriquecida, solo necesitamos extraerla
+            op_node_key = ('orden_produccion', id_entidad_inicial)
+            if op_node_key in nodos_filtrados and nodos_filtrados[op_node_key].get('data'):
+                op_data = nodos_filtrados[op_node_key]['data']
+                
+                # Extraer supervisor
+                supervisor_data = op_data.get('supervisor')
+                if supervisor_data and isinstance(supervisor_data, dict):
+                    responsables['supervisor_calidad'] = f"{supervisor_data.get('nombre', '')} {supervisor_data.get('apellido', '')}".strip()
+
+                # Extraer operario
+                operario_data = op_data.get('operario')
+                if operario_data and isinstance(operario_data, dict):
+                    responsables['operario'] = f"{operario_data.get('nombre', '')} {operario_data.get('apellido', '')}".strip()
+
+        return {'resumen': resumen, 'diagrama': diagrama, 'responsables': responsables}
 
     def obtener_afectados_para_alerta(self, tipo_entidad_inicial, id_entidad_inicial):
         """
@@ -340,7 +358,7 @@ class TrazabilidadModel:
         mapeo_tablas = {
             'orden_compra': {'tabla': 'ordenes_compra', 'id_col': 'id', 'selects': '*, estado, orden_produccion_id, proveedores:proveedor_id(nombre)'},
             'lote_insumo': {'tabla': 'insumos_inventario', 'id_col': 'id_lote', 'selects': '*, insumos_catalogo:id_insumo(nombre)'},
-            'orden_produccion': {'tabla': 'ordenes_produccion', 'id_col': 'id', 'selects': '*, productos:producto_id(nombre)'},
+            'orden_produccion': {'tabla': 'ordenes_produccion', 'id_col': 'id', 'selects': '*, productos:producto_id(nombre), operario:operario_asignado_id(nombre, apellido), supervisor_calidad:aprobador_calidad_id(nombre, apellido)'},
             'lote_producto': {'tabla': 'lotes_productos', 'id_col': 'id_lote', 'selects': '*, productos:producto_id(nombre)'},
             'pedido': {'tabla': 'pedidos', 'id_col': 'id', 'selects': '*, clientes:clientes(nombre, razon_social)'}
         }
