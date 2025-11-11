@@ -285,7 +285,12 @@ class InventarioModel(BaseModel):
             insumos_existentes_ids = {item['id_insumo'] for item in insumos_existentes_res.data}
 
             # 1. Obtener el stock físico total por insumo desde la tabla de lotes (inventario)
-            stock_fisico_res = self.db.table(self.get_table_name()).select("id_insumo, cantidad_actual").execute()
+            #    sumando únicamente los lotes que representan stock físico real.
+            estados_fisicos = ['disponible', 'reservado', 'cuarentena', 'EN REVISION']
+            stock_fisico_res = (self.db.table(self.get_table_name())
+                                .select("id_insumo, cantidad_actual")
+                                .in_('estado', estados_fisicos)
+                                .execute())
             if not hasattr(stock_fisico_res, 'data'):
                 raise Exception("No se pudo obtener el stock físico de los lotes.")
 
@@ -297,7 +302,10 @@ class InventarioModel(BaseModel):
                     stock_fisico_map[insumo_id] = stock_fisico_map.get(insumo_id, 0.0) + float(lote.get('cantidad_actual', 0))
 
             # 2. Obtener el total de reservas activas por insumo
-            reservas_res = self.db.table('reservas_insumos').select("insumo_id, cantidad_reservada").execute()
+            reservas_res = (self.db.table('reservas_insumos')
+                                .select("insumo_id, cantidad_reservada")
+                                .eq('estado', 'RESERVADO')
+                                .execute())
             if not hasattr(reservas_res, 'data'):
                 raise Exception("No se pudo obtener las reservas de insumos.")
 

@@ -301,7 +301,7 @@ def create_app() -> Flask:
 
     # Registrar filtros directamente en el entorno de Jinja
     from app.utils.template_helpers import format_datetime_art, format_time_filter, format_condicion_iva
-    app.jinja_env.filters['format_datetime'] = _format_datetime_filter
+    app.jinja_env.filters['format_datetime'] = format_datetime_art
     app.jinja_env.filters['formato_moneda'] = _formato_moneda_filter
     app.jinja_env.filters['format_datetime_art'] = format_datetime_art
     app.jinja_env.filters['format_time'] = format_time_filter

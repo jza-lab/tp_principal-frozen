@@ -120,31 +120,37 @@ class InsumoController(BaseController):
             self._revisar_y_generar_ocs_automaticas()
             
             filtros = filtros or {}
-            
             stock_status_filter = filtros.pop('stock_status', None)
 
-            if stock_status_filter == 'bajo':
-                consolidado_result = self.inventario_model.obtener_stock_consolidado({'estado_stock': 'BAJO'})
-                if not consolidado_result['success']:
-                    return self.error_response(consolidado_result['error'])
-                
-                insumo_ids = [d['id_insumo'] for d in consolidado_result['data']]
-                if not insumo_ids:
-                    return self.success_response(data=[])
-
-                filtros['id_insumo'] = insumo_ids
-
+            # Primero, obtenemos todos los insumos (o los filtrados por otros criterios)
             result = self.insumo_model.find_all(filtros)
             if not result['success']:
                 return self.error_response(result['error'])
             
-            datos = result['data']
-            sorted_data = sorted(datos, key=lambda x: x.get('activo', False), reverse=True)
+            all_insumos = result['data']
+            final_data = []
+
+            # --- LÓGICA DE FILTRADO LOCALIZADA ---
+            if stock_status_filter == 'bajo':
+                for insumo in all_insumos:
+                    try:
+                        stock_actual = float(insumo.get('stock_actual') or 0.0)
+                        stock_min = float(insumo.get('stock_min') or 0.0)
+                        if stock_min > 0 and stock_actual < stock_min:
+                            final_data.append(insumo)
+                    except (ValueError, TypeError):
+                        # Ignorar insumos con datos de stock no válidos en el filtro
+                        continue
+            else:
+                # Si no hay filtro de stock, usar todos los datos
+                final_data = all_insumos
+
+            sorted_data = sorted(final_data, key=lambda x: x.get('activo', False), reverse=True)
             serialized_data = self.schema.dump(sorted_data, many=True)
             return self.success_response(data=serialized_data)
 
         except Exception as e:
-            logger.error(f"Error obteniendo insumos: {str(e)}")
+            logger.error(f"Error obteniendo insumos (con filtro localizado): {str(e)}")
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def obtener_insumo_por_id(self, id_insumo: str) -> tuple:

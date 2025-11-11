@@ -106,9 +106,9 @@ def api_stock_productos_valor():
     data = stock_controller.obtener_valor_stock_productos(top_n)
     return jsonify(data)
 
-@reportes_bp.route('/api/stock/productos/bajo_stock')
-def api_stock_productos_bajo_stock():
-    data = stock_controller.obtener_productos_bajo_stock()
+@reportes_bp.route('/api/stock/productos/sin_stock')
+def api_stock_productos_sin_stock():
+    data = stock_controller.obtener_productos_sin_stock()
     return jsonify(data)
 
 @reportes_bp.route('/api/stock/productos/vencimiento')

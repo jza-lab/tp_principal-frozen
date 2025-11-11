@@ -34,44 +34,69 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderizarResumen(resumen) {
         if (!resumen || (!resumen.origen.length && !resumen.destino.length)) {
-            resumenContenedor.innerHTML = '<div class="card mb-4"><div class="card-body"><p class="text-muted">No hay datos de resumen.</p></div></div>';
+            resumenContenedor.innerHTML = '<div class="card mb-4"><div class="card-body"><p class="text-muted">No hay datos de resumen para mostrar.</p></div></div>';
             return;
         }
+        
+        const agruparPorTipo = (items) => {
+            return items.reduce((acc, item) => {
+                if (!acc[item.tipo]) {
+                    acc[item.tipo] = [];
+                }
+                acc[item.tipo].push(item);
+                return acc;
+            }, {});
+        };
 
-        const agruparEntidades = (lista, titulo, subtitulos) => {
-            let html = `<h5 class="mb-3 border-bottom pb-2">${titulo}</h5>`;
-            
-            for (const [tipo, subtitulo] of Object.entries(subtitulos)) {
-                const entidades = lista.filter(item => item.tipo === tipo);
-                html += `<strong>${subtitulo}:</strong>`;
-                const listaHtml = entidades.length ? entidades.map(item => `
-                    <li class="list-group-item">
-                        <a href="${(urls[item.tipo] || '#').replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
-                        <div class="text-muted small">${item.detalle}</div>
-                    </li>`).join('') : '<li class="list-group-item text-muted">N/A</li>';
-                
-                html += `<div class="list-container mt-1 mb-3" style="max-height: 150px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 5px;">
-                            <ul class="list-group list-group-flush">${listaHtml}</ul>
-                         </div>`;
+        const formatearNombreTipo = (tipo) => {
+            const nombres = {
+                'orden_compra': 'Órdenes de Compra',
+                'lote_insumo': 'Lotes de Insumo',
+                'orden_produccion': 'Órdenes de Producción',
+                'lote_producto': 'Lotes de Producto',
+                'pedido': 'Pedidos de Cliente'
+            };
+            return nombres[tipo] || tipo.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        };
+
+        const renderizarGrupo = (entidadesAgrupadas) => {
+            let html = '';
+            for (const tipo in entidadesAgrupadas) {
+                html += `<strong class="mt-3 d-block">${formatearNombreTipo(tipo)}:</strong>`;
+                html += '<div class="list-container mt-1" style="max-height: 250px; overflow-y: auto; border: 1px solid #eee; padding: 5px; border-radius: 5px;">';
+                html += '<ul class="list-group list-group-flush">';
+                html += entidadesAgrupadas[tipo].map(item => {
+                    let badges = '';
+                    if (item.tipo === 'orden_compra') {
+                        badges += `<span class="badge bg-warning text-dark me-1">${item.estado || 'N/D'}</span>`;
+                        if (item.es_directa) {
+                            badges += `<span class="badge bg-info text-dark">Directa</span>`;
+                        }
+                    }
+                    return `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <a href="${urls[item.tipo].replace('<id>', item.id)}" class="fw-bold">${item.nombre}</a>
+                                <div class="text-muted small">${item.detalle}</div>
+                            </div>
+                            <div>${badges}</div>
+                        </li>`;
+                }).join('');
+                html += '</ul>';
+                html += '</div>';
             }
             return html;
         };
 
-        const subtitulosOrigen = {
-            'lote_producto': 'Lotes de Producto',
-            'orden_produccion': 'Órdenes de Producción',
-            'lote_insumo': 'Lotes de Insumo',
-            'orden_compra': 'Órdenes de Compra'
-        };
+        const origenAgrupado = agruparPorTipo(resumen.origen);
 
-        const origenHtml = agruparEntidades(resumen.origen, '<i class="bi bi-arrow-up-circle-fill text-primary me-2"></i>Origen (Hacia Atrás)', subtitulosOrigen);
-        
-        // Para un pedido, el destino está vacío o es él mismo, por lo que no se renderiza.
+        const origenHtml = Object.keys(origenAgrupado).length ? renderizarGrupo(origenAgrupado) : '<p class="text-muted">No hay entidades de origen.</p>';
 
         resumenContenedor.innerHTML = `
         <div class="card mb-4">
             <div class="card-header"><i class="bi bi-list-ul me-1"></i> Resumen de Trazabilidad</div>
             <div class="card-body">
+                <h5 class="mb-3 border-bottom pb-2"><i class="bi bi-arrow-up-circle-fill text-primary me-2"></i>Origen (Hacia Atrás)</h5>
                 ${origenHtml}
             </div>
         </div>`;

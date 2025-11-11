@@ -95,14 +95,15 @@ class BaseModel(ABC):
             logger.error(f"Error al buscar en {self.table_name}: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
-    def find_all(self, filters: Optional[Dict] = None, order_by: str = None, limit: Optional[int] = None, select_columns: Optional[List[str]] = None) -> Dict:
+    def find_all(self, filters: Optional[Dict] = None, order_by: str = None, limit: Optional[int] = None, select_columns: Optional[List[str]] = None, select_query: Optional[str] = None) -> Dict:
         """
         Obtiene todos los registros que coinciden con los filtros, con opciones
         de ordenación y límite.
+        Permite una consulta de selección compleja a través de `select_query`.
         """
         try:
-            # Determinar qué columnas seleccionar
-            columns_to_select = ','.join(select_columns) if select_columns else '*'
+            # Determinar qué columnas seleccionar. `select_query` tiene prioridad.
+            columns_to_select = select_query if select_query else (','.join(select_columns) if select_columns else '*')
             query = self._get_query_builder().select(columns_to_select)
 
             if filters:

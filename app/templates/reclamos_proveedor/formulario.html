@@ -1,0 +1,93 @@
+{% extends 'layouts/app_layout.html' %}
+
+{% block title %}Crear Reclamo para OC {{ orden.codigo_oc }} - Sistema Frozen{% endblock %}
+
+{% block app_content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow-sm">
+                <div class="card-header bg-warning">
+                    <h4 class="mb-0 text-dark"><i class="bi bi-exclamation-triangle-fill me-2"></i>Crear Nuevo Reclamo a Proveedor</h4>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('orden_compra.crear_reclamo', orden_id=orden.id) }}" method="POST">
+                        {{ csrf_form.csrf_token }}
+                        <input type="hidden" name="orden_compra_id" value="{{ orden.id }}">
+                        <input type="hidden" name="proveedor_id" value="{{ orden.proveedor_id }}">
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Orden de Compra</label>
+                                    <input type="text" class="form-control" value="{{ orden.codigo_oc }}" readonly>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Proveedor</label>
+                                    <input type="text" class="form-control" value="{{ orden.proveedor_nombre }}" readonly>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="motivo" class="form-label">Título General del Reclamo</label>
+                            <input type="text" class="form-control" id="motivo" name="motivo" value="Problemas en recepción de OC {{ orden.codigo_oc }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="descripcion_problema" class="form-label">Descripción General</label>
+                            <textarea class="form-control" id="descripcion_problema" name="descripcion_problema" rows="3" required></textarea>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <h5 class="mb-3">Ítems del Reclamo</h5>
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Insumo</th>
+                                        <th class="text-center">Cant. Solicitada</th>
+                                        <th class="text-center">Cant. Recibida</th>
+                                        <th class="text-center" style="width: 15%;">Cant. Reclamada</th>
+                                        <th>Motivo del Reclamo (Ítem)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in orden['items'] %}
+                                        <tr>
+                                            <td>
+                                                {{ item.insumo_nombre }}
+                                                <input type="hidden" name="insumo_id[]" value="{{ item.insumo_id }}">
+                                            </td>
+                                            <td class="text-center">{{ item.cantidad_solicitada }}</td>
+                                            <td class="text-center">{{ item.cantidad_recibida }}</td>
+                                            <td>
+                                                <input type="number" name="cantidad_reclamada[]" class="form-control" value="0" min="0" max="{{ item.cantidad_recibida }}" step="any">
+                                            </td>
+                                            <td>
+                                                <input type="text" name="motivo_item[]" class="form-control">
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-4">
+                            <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-secondary me-2">
+                                <i class="bi bi-x-circle me-1"></i>Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle-fill me-1"></i>Guardar Reclamo
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

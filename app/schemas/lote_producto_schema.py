@@ -6,11 +6,20 @@ class LoteProductoSchema(Schema):
     id_lote = fields.Int(dump_only=True)
     producto_id = fields.Int(required=True)
     numero_lote = fields.Str(required=True, validate=validate.Length(min=1, max=100))
-    cantidad_inicial = fields.Float(required=True, validate=validate.Range(min=0.001))
-    cantidad_actual = fields.Float(required=True, validate=validate.Range(min=0))
+    cantidad_inicial = fields.Float(
+        required=True,
+        validate=validate.Range(min=0.001, max=99999999, error="La cantidad debe ser un número positivo y no exceder 99,999,999.")
+    )
+    cantidad_actual = fields.Float(
+        required=True,
+        validate=validate.Range(min=0, max=99999999, error="La cantidad debe ser un número no negativo y no exceder 99,999,999.")
+    )
     fecha_produccion = fields.Str(required=True)  # Manejar como string
     fecha_vencimiento = fields.Str(allow_none=True)  # Manejar como string
-    costo_produccion_unitario = fields.Float(validate=validate.Range(min=0), allow_none=True)
+    costo_produccion_unitario = fields.Float(
+        validate=validate.Range(min=0, max=99999999.99, error="El costo debe ser un número no negativo y no exceder 99,999,999.99."),
+        allow_none=True
+    )
     estado = fields.Str(validate=validate.OneOf(['DISPONIBLE', 'RESERVADO', 'AGOTADO', 'VENCIDO', 'RETIRADO', 'CUARENTENA', 'RECHAZADO']))
     motivo_cuarentena = fields.Str(allow_none=True, validate=validate.Length(max=255))
     cantidad_en_cuarentena = fields.Float(allow_none=True, validate=validate.Range(min=0))

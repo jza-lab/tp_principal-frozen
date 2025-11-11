@@ -330,34 +330,28 @@ function renderProductosCoberturaChart(data) {
     summaryEl.innerHTML = `El producto con menor cobertura es <strong>${lowestCoverage.name}</strong>, con stock para aproximadamente <strong>${lowestCoverage.value}</strong> días.`;
 }
 
-function renderProductosBajoStockTable(data) {
-    const container = document.getElementById('productos-bajo-stock-table');
-    const summaryEl = document.getElementById('productos-bajo-stock-summary');
+function renderProductosSinStockTable(data) {
+    const container = document.getElementById('productos-sin-stock-table');
+    const summaryEl = document.getElementById('productos-sin-stock-summary');
 
     if (!data || data.length === 0) {
-        container.innerHTML = '<p>No hay productos con bajo stock.</p>';
-        summaryEl.innerHTML = 'Todos los productos se encuentran por encima de su nivel de stock mínimo.';
+        container.innerHTML = '<p>Todos los productos tienen stock.</p>';
+        summaryEl.innerHTML = 'Actualmente no hay productos con stock cero en el inventario.';
         return;
     }
 
-    let tableHtml = '<table class="table table-sm table-hover"><thead><tr><th>Producto</th><th>Stock Actual</th><th>Stock Mínimo</th></tr></thead><tbody>';
+    let tableHtml = '<table class="table table-sm table-hover"><thead><tr><th>Producto</th><th>Unidad</th></tr></thead><tbody>';
     data.forEach(item => {
-        const stockActualDisplay = item.stock_actual > 0
-            ? item.stock_actual
-            : '<span class="text-danger fw-bold">No disponible</span>';
-
         tableHtml += `<tr>
             <td>${item.nombre}</td>
-            <td>${stockActualDisplay}</td>
-            <td>${item.stock_minimo}</td>
+            <td>${item.unidad_medida || 'N/A'}</td>
         </tr>`;
     });
     tableHtml += '</tbody></table>';
     container.innerHTML = tableHtml;
 
     // Summary
-    const zeroStockCount = data.filter(item => item.stock_actual === 0).length;
-    summaryEl.innerHTML = `Hay <strong>${data.length}</strong> productos en estado de bajo stock, de los cuales <strong>${zeroStockCount}</strong> se encuentran agotados.`;
+    summaryEl.innerHTML = `Se han identificado <strong>${data.length}</strong> productos sin stock disponible.`;
 }
 
 
@@ -385,7 +379,7 @@ function renderProductosVencimientoTable(data) {
 
     // Summary
     const closest = data[0];
-    summaryEl.innerHTML = `Se encontraron <strong>${data.length}</strong> lotes próximos a vencer. El más crítico es el lote <strong>${closest.numero_lote}</strong> de <strong>${closest.producto_nombre}</strong>.`;
+    summaryEl.innerHTML = `Se encontraron <strong>${data.length}</strong> lotes próximos a vencer. El más crítico es el lote <strong>${closest.numero_lote}</strong> de <strong>${closest.producto.nombre}</strong>.`;
 }
     // --- DATA FETCHING ---
 
@@ -444,12 +438,12 @@ function renderProductosVencimientoTable(data) {
         const topN = document.getElementById('top-n-productos').value;
 
         const [
-            composicionData, valorData, bajoStockData, vencimientoData,
+            composicionData, valorData, sinStockData, vencimientoData,
             valorCategoriaData, distribucionEstadoData, rotacionData, coberturaData
         ] = await Promise.all([
             fetchData('/reportes/api/stock/productos/composicion'),
             fetchData(`/reportes/api/stock/productos/valor?top_n=${topN}`),
-            fetchData('/reportes/api/stock/productos/bajo_stock'),
+            fetchData('/reportes/api/stock/productos/sin_stock'),
             fetchData('/reportes/api/stock/productos/vencimiento'),
             fetchData('/reportes/api/stock/productos/valor_por_categoria'),
             fetchData('/reportes/api/stock/productos/distribucion_por_estado'),
@@ -466,7 +460,7 @@ function renderProductosVencimientoTable(data) {
 
         renderProductosComposicionChart(composicionData);
         renderProductosValorChart(valorData);
-        renderProductosBajoStockTable(bajoStockData);
+        renderProductosSinStockTable(sinStockData);
         renderProductosVencimientoTable(vencimientoData);
         renderProductosValorCategoriaChart(valorCategoriaData);
         renderProductosDistribucionEstadoChart(distribucionEstadoData);

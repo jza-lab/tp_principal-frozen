@@ -446,6 +446,16 @@
                     </div>
                     <div class="card-body">
                         <div class="d-grid gap-2">
+                            {% if orden.estado == 'RECEPCION_INCOMPLETA' and not reclamo_existente and has_permission('crear_reclamo_proveedor') %}
+                            <a href="{{ url_for('orden_compra.crear_reclamo', orden_id=orden.id) }}" class="btn btn-warning">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>Crear Reclamo al Proveedor
+                            </a>
+                            {% elif reclamo_existente %}
+                            <div class="alert alert-info small">
+                                <i class="bi bi-info-circle-fill me-2"></i>
+                                Ya se ha generado un reclamo para esta orden. Puede verlo en el <a href="{{ url_for('orden_compra.listar_reclamos') }}" class="alert-link">listado de reclamos</a>.
+                            </div>
+                            {% endif %}
                             <button class="btn btn-outline-secondary" disabled>
                                 <i class="bi bi-file-earmark-text me-2"></i>Visualizar factura
                             </button>
@@ -733,6 +743,6 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 {# --- Se elimina 'controlCalidad.js' --- #}
-<script src="https-www.gstatic.com/charts/loader.js"></script>
+<script src="https://www.gstatic.com/charts/loader.js"></script>
 <script src="{{ url_for('static', filename='js/trazabilidadOrdenCompra.js') }}?v=1.1"></script>
 {% endblock %}

@@ -807,9 +807,11 @@ class PedidoController(BaseController):
         """
         Obtiene los datos necesarios para popular los menús desplegables
         en el formulario de creación/edición de pedidos.
+        Filtra para devolver solo los productos ACTIVOS.
         """
         try:
-            productos_result = self.producto_model.find_all(order_by='nombre')
+            # --- FIX: Añadir filtro para obtener solo productos activos ---
+            productos_result = self.producto_model.find_all(filters={'activo': True}, order_by='nombre')
             if productos_result.get('success'):
                 productos = productos_result.get('data', [])
                 return self.success_response(data={'productos': productos})

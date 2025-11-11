@@ -65,10 +65,11 @@ class TrazabilidadModel:
 
             elif tipo_entidad_actual == 'orden_produccion':
                 # Orden de Producción -> Lote de Insumo
-                reservas = self.db.table('reservas_insumos').select('lote_inventario_id, cantidad_reservada').eq('orden_produccion_id', query_id).execute().data or []
-                for r in reservas:
-                     self._agregar_nodo_y_arista(nodos, aristas, 'lote_insumo', str(r['lote_inventario_id']), 'orden_produccion', id_entidad_actual, r['cantidad_reservada'], cola, visitados)
-                
+                if tipo_entidad_inicial in ['orden_produccion', 'lote_producto', 'pedido']:
+                    reservas = self.db.table('reservas_insumos').select('lote_inventario_id, cantidad_reservada').eq('orden_produccion_id', query_id).execute().data or []
+                    for r in reservas:
+                        self._agregar_nodo_y_arista(nodos, aristas, 'lote_insumo', str(r['lote_inventario_id']), 'orden_produccion', id_entidad_actual, r['cantidad_reservada'], cola, visitados)
+                    
                 # Manejo de OCs directamente asociadas a la OP
                 ocs_directas = self.db.table('ordenes_compra').select('id, codigo_oc').eq('orden_produccion_id', query_id).execute().data or []
                 for oc in ocs_directas:
@@ -95,7 +96,8 @@ class TrazabilidadModel:
                 if not id_entidad_actual.startswith('insumo_generico_'):
                     insumo = self.db.table('insumos_inventario').select('documento_ingreso, cantidad_inicial').eq('id_lote', id_entidad_actual).maybe_single().execute().data
                     if insumo and insumo.get('documento_ingreso'):
-                        oc = self.db.table('ordenes_compra').select('id').eq('codigo_oc', insumo['documento_ingreso']).maybe_single().execute().data
+                        oc_res = self.db.table('ordenes_compra').select('id').eq('codigo_oc', insumo['documento_ingreso']).maybe_single().execute()
+                        oc = oc_res.data
                         if oc:
                             self._agregar_nodo_y_arista(nodos, aristas, 'orden_compra', str(oc['id']), 'lote_insumo', id_entidad_actual, insumo['cantidad_inicial'], cola, visitados)
                         else: # Si el código no corresponde a ninguna OC
@@ -106,7 +108,8 @@ class TrazabilidadModel:
             # --- HACIA ADELANTE (Downstream) ---
             if tipo_entidad_actual == 'orden_compra':
                 # Orden de Compra -> Lote de Insumo
-                oc = self.db.table('ordenes_compra').select('codigo_oc').eq('id', query_id).maybe_single().execute().data
+                if tipo_entidad_inicial not in ['lote_insumo', 'orden_produccion', 'lote_producto', 'pedido']:
+                    oc = self.db.table('ordenes_compra').select('codigo_oc').eq('id', query_id).maybe_single().execute().data
                 if oc and oc.get('codigo_oc'):
                     insumos = self.db.table('insumos_inventario').select('id_lote, cantidad_inicial').eq('documento_ingreso', oc['codigo_oc']).execute().data or []
                     for i in insumos:
@@ -255,7 +258,7 @@ class TrazabilidadModel:
 
         # Mapeo de configuración para cada tipo de entidad
         mapeo_tablas = {
-            'orden_compra': {'tabla': 'ordenes_compra', 'id_col': 'id', 'selects': '*, proveedores:proveedor_id(nombre)'},
+            'orden_compra': {'tabla': 'ordenes_compra', 'id_col': 'id', 'selects': '*, estado, orden_produccion_id, proveedores:proveedor_id(nombre)'},
             'lote_insumo': {'tabla': 'insumos_inventario', 'id_col': 'id_lote', 'selects': '*, insumos_catalogo:id_insumo(nombre)'},
             'orden_produccion': {'tabla': 'ordenes_produccion', 'id_col': 'id', 'selects': '*, productos:producto_id(nombre)'},
             'lote_producto': {'tabla': 'lotes_productos', 'id_col': 'id_lote', 'selects': '*, productos:producto_id(nombre)'},
@@ -321,9 +324,16 @@ class TrazabilidadModel:
                     visitados_resumen.add(destino)
                     cola_resumen.append(destino)
         
-        # Eliminar duplicados
-        resumen['origen'] = [dict(t) for t in {tuple(d.items()) for d in resumen['origen']}]
-        resumen['destino'] = [dict(t) for t in {tuple(d.items()) for d in resumen['destino']}]
+        # Eliminar duplicados y ordenar
+        # Usamos una función lambda para convertir los diccionarios a tuplas de items, que son hasheables
+        resumen['origen'] = sorted(
+            [dict(t) for t in {tuple(d.items()) for d in resumen['origen']}],
+            key=lambda x: x['tipo']
+        )
+        resumen['destino'] = sorted(
+            [dict(t) for t in {tuple(d.items()) for d in resumen['destino']}],
+            key=lambda x: x['tipo']
+        )
 
         return resumen
 
@@ -338,6 +348,8 @@ class TrazabilidadModel:
         if tipo == 'orden_compra':
             info['nombre'] = data.get('codigo_oc', f'OC-{id}')
             info['detalle'] = f"Proveedor: {data.get('proveedores', {}).get('nombre', 'N/A')}"
+            info['estado'] = data.get('estado', 'N/D')
+            info['es_directa'] = data.get('orden_produccion_id') is not None
         elif tipo == 'lote_insumo':
             info['nombre'] = data.get('insumos_catalogo', {}).get('nombre', 'N/A')
             info['detalle'] = f"Lote: {data.get('numero_lote_proveedor', 'N/A')}"
