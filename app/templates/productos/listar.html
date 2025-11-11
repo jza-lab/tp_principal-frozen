@@ -2,9 +2,6 @@
 
 {% block title %}Productos - Sistema Frozen{% endblock %}
 
-{% block extra_css %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/productos/filtros.css') }}">
-{% endblock %}
 
 {% block app_content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
@@ -25,26 +22,43 @@
 </div>
 
 <!-- Filtros -->
-<div class="filter-card">
-    <div class="row g-3">
-        <div class="col-lg-9 col-md-12 position-relative">
-             <div class="input-group">
-                <span class="input-group-text" id="search-icon"><i class="bi bi-search"></i></span>
-                <input type="text" id="busqueda-filtro" class="form-control" placeholder="Buscar por nombre o código..." aria-label="Buscar" aria-describedby="search-icon" autocomplete="off">
+<div class="card mb-4">
+    <div class="card-body card-filter">
+        <form id="filter-form" method="get" action="{{ url_for('productos.obtener_productos') }}">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="busqueda" class="form-label">Buscar</label>
+                    <input type="text" name="busqueda" id="busqueda" class="form-control"
+                        placeholder="Nombre o código..." value="{{ request.args.get('busqueda', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="categoria" class="form-label">Filtrar por Categoría</label>
+                    <select name="categoria" id="categoria" class="form-select">
+                        <option value="">Todas las categorías</option>
+                        {% for cat in categorias %}
+                        <option value="{{ cat }}" {% if request.args.get('categoria')==cat %}selected{% endif %}>
+                            {{ cat }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 align-self-end">
+                    <button type="submit" class="btn btn-outline-secondary w-100">
+                        <i class="bi bi-search"></i> Buscar
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small text-end">
+                        <p>{{ productos|length }} productos encontrados</p>
+                    </div>
+                </div>
             </div>
-            <div id="suggestions-container" class="list-group position-absolute w-100" style="z-index: 1051; top: 100%;"></div>
-        </div>
-        <div class="col-lg-3 col-md-12">
-            <div class="text-muted small text-end">
-                <p id="productos-count" class="mb-0">{{ productos|length }} productos encontrados</p>
-            </div>
-        </div>
+        </form>
     </div>
 </div>
 
-
-<!-- Tarjetas de Productos -->
-<div class="row" id="productos-grid">
+<!-- Tarjetas de Insumos -->
+<div class="row" id="product-cards-container">
     {% for producto in productos %}
     <div class="col-lg-4 col-md-6 mb-4">
         <div class="card h-100 producto-card {% if not producto.activo %}insumo-inactivo{% endif %}">
@@ -103,7 +117,7 @@
         </div>
     </div>
     {% else %}
-    <div class="col-12" id="no-results-message">
+    <div class="col-12">
         <div class="text-center text-muted py-5">
             <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
             <h4>No se encontraron productos</h4>
@@ -112,31 +126,75 @@
     </div>
     {% endfor %}
 </div>
-
-<template id="producto-card-template">
-    <div class="col-lg-4 col-md-6 mb-4">
-        <div class="card h-100 producto-card">
-            <div class="card-body d-flex flex-column">
-                <h5 class="card-title producto-nombre"></h5>
-                <div class="card-secondary-details mb-3">
-                    <span><i class="bi bi-tag-fill"></i> <span class="producto-categoria"></span></span>
-                    <span><i class="bi bi-upc-scan"></i> <code><span class="producto-codigo"></span></code></span>
-                    <span><i class="bi bi-rulers"></i><span class="producto-unidad"></span></span>
-                    <span><i class="bi bi-currency-dollar"></i> <span class="producto-precio"></span></span>
-                </div>
-                <div class="mt-auto">
-                    <hr class="card-divider">
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</template>
-
 <script src="{{ url_for('static', filename='js/productos/scriptEliminarProducto.js') }}"></script>
 <script src="{{ url_for('static', filename='js/productos/habilitarProducto.js') }}"></script>
 <script src="{{ url_for('static', filename='js/productos/recargarPrecioProducto.js') }}"></script>
-<script src="{{ url_for('static', filename='js/productos/filtros.js') }}"></script>
 
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const searchInput = document.getElementById('busqueda');
+        const productContainer = document.getElementById('product-cards-container');
+        const categoriaSelect = document.getElementById('categoria');
+        const filterForm = document.getElementById('filter-form');
+
+        function fetchProducts() {
+            const searchValue = searchInput.value;
+            const categoriaValue = categoriaSelect.value;
+            const url = new URL("{{ url_for('productos.buscar_productos_api') }}", window.location.origin);
+            url.searchParams.append('busqueda', searchValue);
+            if (categoriaValue) {
+                url.searchParams.append('categoria', categoriaValue);
+            }
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    productContainer.innerHTML = ''; // Limpiar contenedor
+                    if (data.length > 0) {
+                        data.forEach(producto => {
+                            const card = `
+                                <div class="col-lg-4 col-md-6 mb-4">
+                                    <div class="card h-100 producto-card ${!producto.activo ? 'insumo-inactivo' : ''}">
+                                        <div class="card-body d-flex flex-column">
+                                            <h5 class="card-title">${producto.nombre} ${!producto.activo ? '<span class="badge bg-secondary">Inactivo</span>' : ''}</h5>
+                                            <div class="card-secondary-details mb-3">
+                                                <span><i class="bi bi-tag-fill"></i> ${producto.categoria}</span>
+                                                <span><i class="bi bi-upc-scan"></i> <code>${producto.codigo}</code></span>
+                                                <span><i class="bi bi-rulers"></i>${producto.unidad_medida}</span>
+                                                <span><i class="bi bi-currency-dollar"></i> ${producto.precio_unitario.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}</span>
+                                            </div>
+                                            <div class="mt-auto">
+                                                <hr class="card-divider">
+                                                <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                                                    ${producto.activo ? `
+                                                        <a onClick="recargarPrecioProducto('${producto.id}')" class="btn btn-sm btn-outline-primary" title="Actualizar precio"><i class="bi bi-arrow-repeat"></i></a>
+                                                        <a href="/catalogo/actualizar/${producto.id}" class="btn btn-sm btn-outline-primary" title="Modificar producto"><i class="bi bi-pencil"></i></a>
+                                                        <a href="/catalogo/${producto.id}" class="btn btn-sm btn-outline-primary" title="Detalle"><i class="bi bi-eye"></i></a>
+                                                        <a class="btn btn-sm btn-outline-danger" title="Inhabilitar producto" onClick="eliminarProducto('${producto.id}')"><i class="bi bi-slash-circle"></i> Inhabilitar</a>
+                                                    ` : `
+                                                        <a class="btn btn-sm btn-outline-success" title="Habilitar producto" onClick="habilitarProducto('${producto.id}')"><i class="bi bi-check-circle"></i> Habilitar</a>
+                                                    `}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>`;
+                            productContainer.innerHTML += card;
+                        });
+                    } else {
+                        productContainer.innerHTML = '<div class="col-12"><div class="text-center text-muted py-5"><i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i><h4>No se encontraron productos</h4><p>Intenta con otros filtros.</p></div></div>';
+                    }
+                });
+        }
+
+        searchInput.addEventListener('input', fetchProducts);
+        categoriaSelect.addEventListener('change', fetchProducts);
+
+        // Prevenir el envío tradicional del formulario
+        filterForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            fetchProducts();
+        });
+    });
+</script>
 {% endblock %}
