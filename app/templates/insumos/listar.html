@@ -2,6 +2,9 @@
 
 {% block title %}Insumos - Sistema Frozen{% endblock %}
 
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/insumos/filtros.css') }}">
+{% endblock %}
 
 {% block app_content %}
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
@@ -20,61 +23,87 @@
 </div>
 
 <!-- Filtros -->
-<div class="card mb-4">
-    <div class="card-body card-filter">
-        <form id="filter-form" method="get" action="{{ url_for('insumos_api.obtener_insumos') }}">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label for="busqueda" class="form-label">Buscar</label>
-                    <input type="text" name="busqueda" id="busqueda" class="form-control"
-                        placeholder="Nombre o código..." value="{{ request.args.get('busqueda', '') }}">
-                </div>
-                <div class="col-md-3">
-                    <label for="categoria" class="form-label">Filtrar por Categoría</label>
-                    <select name="categoria" id="categoria" class="form-select">
-                        <option value="">Todas las categorías</option>
-                        {% for cat in categorias %}
-                        <option value="{{ cat }}" {% if request.args.get('categoria')==cat %}selected{% endif %}>
-                            {{ cat }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="col-md-5 align-self-end">
-                    <div class="d-flex gap-4">
-                        <button type="submit" class="btn btn-sm flex-fill btn-light">
-                            <i class="bi bi-search"></i> Buscar
+<div class="filter-card">
+    <!-- Controles de Filtro -->
+    <div class="row g-3">
+        <!-- Barra de Búsqueda -->
+        <div class="col-lg-5 col-md-12 position-relative">
+             <div class="input-group">
+                <span class="input-group-text" id="search-icon"><i class="bi bi-search"></i></span>
+                <input type="text" id="busqueda-filtro" class="form-control" placeholder="Buscar por nombre o código..." aria-label="Buscar" aria-describedby="search-icon" autocomplete="off">
+            </div>
+            <div id="suggestions-container" class="list-group position-absolute w-100" style="z-index: 1051; top: 100%;"></div>
+        </div>
+            <!-- Botones y Dropdown -->
+            <div class="col-lg-7 col-md-12">
+                <div class="d-flex flex-wrap gap-2 justify-content-start justify-content-lg-end">
+                    <!-- Dropdown de Proveedores -->
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="proveedor-dropdown" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
+                            <i class="bi bi-truck"></i> Proveedores
                         </button>
-
-                        {% set is_bajo = request.args.get('stock_status') == 'bajo' %}
-                        {% set current_busqueda = request.args.get('busqueda', '') %}
-                        {% set current_categoria = request.args.get('categoria', '') %}
-
-                        <a href="{{ url_for('insumos_api.obtener_insumos', busqueda=current_busqueda, categoria=current_categoria, stock_status='' if is_bajo else 'bajo') }}"
-                            class="btn btn-sm flex-fill btn-{{ 'outline-danger' if is_bajo else 'danger' }}">
-                            <i class="bi bi-exclamation-triangle me-1"></i> Stock Bajo
-                        </a>
-
-                        <a href="{{ url_for('insumos_api.obtener_insumos') }}" class="btn btn-sm flex-fill btn-light">
-                            <i class="bi bi-x-circle me-1"></i> Limpiar Filtros
-                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="proveedor-dropdown" id="proveedor-filter-list">
+                             {% for prov in proveedores %}
+                            <li>
+                                <div class="dropdown-item">
+                                    <input class="form-check-input proveedor-checkbox" type="checkbox" value="{{ prov.id }}" id="prov-{{ prov.id }}">
+                                    <label class="form-check-label" for="prov-{{ prov.id }}">{{ prov.nombre }}</label>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
                     </div>
-                </div>
-                <div class="text-muted small">
-                    <p>{{ insumos|length }} insumos encontrados</p>
+                    <!-- Dropdown de Categorías -->
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
+                            <i class="bi bi-tag"></i> Categorías
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="dropdownMenuButton" id="category-filter-list">
+                            {% for cat in categorias %}
+                            <li>
+                                <div class="dropdown-item">
+                                    <div class="form-check">
+                                        <input class="form-check-input category-checkbox" type="checkbox" value="{{ cat }}" id="cat-{{ loop.index }}">
+                                        <label class="form-check-label" for="cat-{{ loop.index }}">
+                                            {{ cat }}
+                                        </label>
+                                    </div>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <!-- Botón de Stock Bajo -->
+                    <button id="stock-bajo-btn" type="button" class="btn btn-outline-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Stock Bajo
+                    </button>
+
+                    <!-- Botón de Limpiar Filtros -->
+                    <button id="limpiar-filtros-btn" type="button" class="btn btn-light" style="display: none;">
+                        <i class="bi bi-x-circle"></i> Limpiar Filtros
+                    </button>
                 </div>
             </div>
+        </div>
+
+        <!-- Filtros Activos (Pills) y Contador -->
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div id="active-filters-container" class="d-flex flex-wrap gap-2">
+                <!-- Las 'pills' de filtros activos se insertarán aquí -->
+            </div>
+            <div class="text-muted small">
+                <p id="insumos-count" class="mb-0">{{ insumos|length }} insumos encontrados</p>
+            </div>
+        </div>
     </div>
-    </form>
-</div>
 </div>
 
 
 <!-- Tarjetas de Insumos -->
-<div class="row">
+<div class="row" id="insumos-grid">
     {% for insumo in insumos %}
-    <div class="col-md-4 mb-4">
+    <div class="col-md-4 mb-4 insumo-card-wrapper">
         <div class="card h-100 insumo-card {% if not insumo.activo %}insumo-inactivo{% endif %}">
             <div class="card-body d-flex flex-column">
                 <h5 class="card-title d-flex justify-content-between align-items-center">
@@ -102,7 +131,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-3 stock-info">
                         <div>
                             <span class="stock-label">Stock</span>
-                            <span class="stock-value 
+                            <span class="stock-value
                                 {% if insumo.stock_actual is not none and insumo.stock_actual < insumo.stock_min or insumo.stock_actual is none %}
                                     badge text-bg-danger fw-normal py-1 fs-6
                                 {% elif insumo.stock_actual is not none and insumo.stock_actual >= insumo.stock_min %}
@@ -113,9 +142,6 @@
                                 {{ insumo.stock_total if insumo.stock_total is not none else '0.0' }}
                             </span>
                             <span class="stock-min text-muted">/ Min: {{ insumo.stock_min }}</span>
-                        </div>
-                        <div>
-
                         </div>
                     </div>
 
@@ -147,7 +173,7 @@
         </div>
     </div>
     {% else %}
-    <div class="col-12">
+    <div class="col-12" id="no-results-message">
         <div class="text-center text-muted py-5">
             <i class="bi bi-inbox fs-1 d-block mb-2 opacity-50"></i>
             <h4>No se encontraron insumos</h4>
@@ -156,20 +182,42 @@
     </div>
     {% endfor %}
 </div>
+
+<!-- Template para la tarjeta de insumo (para JS) -->
+<template id="insumo-card-template">
+    <div class="col-md-4 mb-4 insumo-card-wrapper">
+        <div class="card h-100 insumo-card">
+            <div class="card-body d-flex flex-column">
+                <h5 class="card-title d-flex justify-content-between align-items-center">
+                    <span class="insumo-nombre"></span>
+                    <span class="insumo-es-critico-badge"></span>
+                </h5>
+                <div class="card-secondary-details mb-3">
+                    <span><i class="bi bi-tag-fill"></i> <span class="insumo-categoria"></span></span>
+                    <span><i class="bi bi-upc-scan"></i> <code><span class="insumo-codigo"></span></code></span>
+                    <span><i class="bi bi-rulers"></i> <span class="insumo-unidad"></span></span>
+                    <span><i class="bi bi-currency-dollar"></i> <span class="insumo-precio"></span></span>
+                    <span><i class="bi bi-box"></i> <span class="insumo-proveedor"></span></span>
+                </div>
+                <div class="mt-auto">
+                    <hr class="card-divider">
+                    <div class="d-flex justify-content-between align-items-center mb-3 stock-info">
+                        <div>
+                            <span class="stock-label">Stock</span>
+                            <span class="stock-value"></span>
+                            <span class="stock-min text-muted"></span>
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end action-buttons">
+                        <!-- Los botones se generan en JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
 <script src="{{ url_for('static', filename='js/insumos/scriptEliminarInsumo.js') }}"></script>
 <script src="{{ url_for('static', filename='js/insumos/habilitarInsumo.js') }}"></script>
-<script src="{{ url_for('static', filename='js/insumos/insumo_stock.js') }}"></script>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const filterForm = document.getElementById('filter-form');
-        const categoriaSelect = document.getElementById('categoria');
-
-        if (categoriaSelect) {
-            categoriaSelect.addEventListener('change', function () {
-                filterForm.submit();
-            });
-        }
-    });
-</script>
+<script src="{{ url_for('static', filename='js/insumos/filtros.js') }}"></script>
 {% endblock %}

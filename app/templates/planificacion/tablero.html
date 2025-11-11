@@ -160,6 +160,12 @@
                                     data-sug-fecha-jit='{{ issue.sugerencias_jit.sugerencia_fecha_inicio_jit | default("") }}'>
                                     <i class="bi bi-calendar-range me-1"></i> Re-Planificar
                                 </button>
+                                {# --- ¡NUEVO BOTÓN 2: ACEPTAR! --- #}
+                                    <button class="btn btn-sm btn-outline-success w-100 btn-aceptar-issue" 
+                                            data-issue-id='{{ issue.id }}' 
+                                            title="Aceptar este retraso y archivar el aviso">
+                                        <i class="bi bi-check-lg me-1"></i> Aceptar
+                                    </button>
                             </td>
                         </tr>
                         {% endfor %}

@@ -48,9 +48,14 @@ def _parse_form_data(form_dict):
 def listar():
     """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
     controller = PedidoController()
-    estado = request.args.get('estado')
-    filtros = {'estado': estado} if estado else {}
+    rango_fecha = request.args.get('rango_fecha')
+    
+    # Prepara el diccionario de filtros que se pasará al controlador.
+    filtros = {}
+    if rango_fecha:
+        filtros['rango_fecha'] = rango_fecha
 
+    # El controlador se encargará de la lógica de negocio del filtrado.
     response, _ = controller.obtener_pedidos(filtros)
     pedidos = []
 
@@ -187,7 +192,9 @@ def cancelar(id):
         flash(response.get('message'), 'success')
     else:
         flash(response.get('error'), 'error')
-    return redirect(url_for('orden_venta.detalle', id=id))
+    
+    active_filters = request.form.get('active_filters', '')
+    return redirect(url_for('orden_venta.listar') + active_filters)
 
 @orden_venta_bp.route('/<int:id>/despachar', methods=['GET', 'POST'])
 @jwt_required()
@@ -285,8 +292,9 @@ def completar(id):
         flash(response.get('message'), 'success')
     else:
         flash(response.get('error'), 'error')
-
-    return redirect(url_for('orden_venta.detalle', id=id))
+    
+    active_filters = request.form.get('active_filters', '')
+    return redirect(url_for('orden_venta.listar') + active_filters)
 
 @orden_venta_bp.route('/api/pedidos/<int:id>/despachar', methods=['POST'])
 @jwt_required()

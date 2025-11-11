@@ -10,6 +10,7 @@ window.addEventListener('pageshow', function(event) {
 // --- ¡NUEVO! Variable para el modal de carga ---
 let globalLoadingModal = null;
 
+let popoverList = [];
 
 /**
  * Mueve una OP a un nuevo estado (usada por Kanban).
@@ -303,12 +304,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // --- INICIALIZAR POPOVERS ---
             const popoverTriggerList = document.querySelectorAll('[data-bs-toggle="popover"]');
-            const popoverList = [...popoverTriggerList].map(popoverTriggerEl => {
+            
+            // ¡MODIFICADO! Asegúrate de que 'popoverList' NO tenga 'const' o 'let'
+            // para que llene la variable global.
+            popoverList = [...popoverTriggerList].map(popoverTriggerEl => {
                 return new bootstrap.Popover(popoverTriggerEl, {
-                     sanitize: false
+                     sanitize: false,
+                     trigger: 'click' // <-- ¡MODIFICADO! Vuelve a 'click'
                 });
             });
             // --------------------------
+
+            // --- ¡NUEVA SOLUCIÓN PARA SCROLL! ---
+            // Añadir un listener al scroll de la ventana
+            window.addEventListener('scroll', () => {
+                // Iterar sobre todas las instancias de popover que creamos
+                popoverList.forEach(popover => {
+                    popover.hide(); // Ocultar cada popover
+                });
+            }, true); // 'true' captura el evento más rápido (fase de captura)
+            // --- FIN NUEVA SOLUCIÓN ---
         
         } // --- Fin del if(planificador) ---
 
@@ -782,7 +797,7 @@ document.addEventListener('click', async function(e) {
     // --- FIN DE LA CORRECION ---
 
     // --- ¡NUEVO! BOTÓN MARCAR ISSUE COMO VISTO (EN OFFVCANVAS) ---
-    const btnMarcarVisto = e.target.closest('.btn-marcar-visto');
+    const btnMarcarVisto = e.target.closest('.btn-marcar-visto, .btn-aceptar-issue');
     if (btnMarcarVisto) {
         const issueId = btnMarcarVisto.dataset.issueId;
         const originalButtonText = btnMarcarVisto.innerHTML;
@@ -801,11 +816,21 @@ document.addEventListener('click', async function(e) {
             const result = await response.json();
             
             if (result.success) {
-                // Ocultar el item de la lista (más rápido que recargar)
-                btnMarcarVisto.closest('.list-group-item').style.opacity = '0';
-                setTimeout(() => {
-                    btnMarcarVisto.closest('.list-group-item').style.display = 'none';
-                }, 300); // Esperar a que termine la animación de fade-out
+                // --- INICIO DE LA CORRECCIÓN ---
+                // Buscar el contenedor padre, ya sea en la lista o en la tabla
+                const elementoAHide = btnMarcarVisto.closest('.list-group-item, tr'); 
+                
+                if (elementoAHide) {
+                    // Ocultar el elemento (más rápido que recargar)
+                    elementoAHide.style.opacity = '0';
+                    setTimeout(() => {
+                        elementoAHide.style.display = 'none';
+                    }, 300); // Esperar a que termine la animación de fade-out
+                } else {
+                    // Fallback si no encuentra nada (raro), simplemente recarga
+                    window.location.reload();
+                }
+                // --- FIN DE LA CORRECCIÓN ---
 
             } else {
                 showFeedbackModal('Error', result.error || 'No se pudo archivar el aviso.', 'error');
@@ -820,3 +845,34 @@ document.addEventListener('click', async function(e) {
     // --- FIN DEL NUEVO BLOQUE ---
 
 }); // Fin addEventListener 'click' en 'document'
+
+// --- ¡NUEVO LISTENER GLOBAL PARA CERRAR POPOVERS AL HACER CLICK AFUERA! ---
+document.addEventListener('click', function (e) {
+    // Si la lista de popovers está vacía, no hacer nada
+    if (popoverList.length === 0) return;
+
+    // Comprobar si el click fue EN un trigger de popover
+    // (un trigger es la card en la que hiciste clic)
+    const clickedOnTrigger = e.target.closest('[data-bs-toggle="popover"]');
+    
+    // Si se hizo click en un trigger, la lógica 'click' de Bootstrap se encarga.
+    // (Esto permite que el trigger abra/cierre el popover)
+    if (clickedOnTrigger) {
+        return;
+    }
+
+    // Comprobar si el click fue DENTRO de un popover
+    // (ej. en el botón "Re-planificar" de adentro del popover)
+    const clickedInPopover = e.target.closest('.popover');
+
+    // Si se hizo click dentro de un popover, no lo cerramos.
+    if (clickedInPopover) {
+        return;
+    }
+
+    // Si el click fue AFUERA de un trigger Y AFUERA de un popover,
+    // cerramos todos los popovers que estén abiertos.
+    popoverList.forEach(popover => {
+        popover.hide();
+    });
+});
