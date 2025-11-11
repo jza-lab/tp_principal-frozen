@@ -140,7 +140,7 @@ class TrazabilidadModel:
                 op_data = nodos_filtrados[op_node_key]['data']
                 
                 # Extraer supervisor
-                supervisor_data = op_data.get('supervisor')
+                supervisor_data = op_data.get('supervisor_calidad')
                 if supervisor_data and isinstance(supervisor_data, dict):
                     responsables['supervisor_calidad'] = f"{supervisor_data.get('nombre', '')} {supervisor_data.get('apellido', '')}".strip()
 
