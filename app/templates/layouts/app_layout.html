@@ -83,10 +83,10 @@
                             <hr class="dropdown-divider">
                         </li>
                         {% endif %}
-
+                        {% if 'consultar_alertas_riesgo' is has_permission %}
                         <li><a class="dropdown-item {% if request.endpoint == 'reportes.stock' %}active{% endif %}"
                                 href="{{ url_for('reportes.stock') }}"><i class="fas fa-chart-pie me-2"></i> Reportes de Stock</a></li>
-
+                        {% endif %}
                     </ul>
                 </li>
                 {% endif %}
@@ -111,7 +111,7 @@
                                 href="{{ url_for('productos.obtener_productos') }}"><i class="bi bi-bag-fill me-2"></i>
                                 Productos</a></li>
                         {% endif %}
-                        {% if 'logistica_gestion_ov' is has_permission or current_user.roles.codigo == 'GERENTE' %}
+                        {% if 'logistica_gestion_ov' is has_permission or current_user.roles.codigo == 'GERENTE' or current_user.roles.codigo == 'VENDEDOR' %}
                         <li>
                             <hr class="dropdown-divider">
                         </li>
@@ -144,7 +144,7 @@
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownProduccion">
                         {% if 'consultar_plan_de_produccion' is has_permission and current_user.roles.codigo !=
-                        'OPERARIO' %}
+                        'OPERARIO' and current_user.roles.codigo != 'SUPERVISOR_CALIDAD' %}
                         <li><a class="dropdown-item {% if request.endpoint == 'planificacion.index' %}active{% endif %}"
                                 href="{{ url_for('planificacion.index') }}"><i class="bi bi-calendar-check me-2"></i>
                                 Planificación</a></li>
@@ -155,7 +155,7 @@
                             <hr class="dropdown-divider">
                         </li>
                         {% endif %}
-                        {% if 'produccion_ejecucion' is has_permission %}
+                        {% if 'produccion_ejecucion' is has_permission or current_user.roles.codigo == 'SUPERVISOR' or current_user.roles.codigo == 'SUPERVISOR_CALIDAD' %}
                         <li><a class="dropdown-item {% if request.endpoint == 'orden_produccion.listar' %}active{% endif %}"
                                 href="{{ url_for('orden_produccion.listar') }}"><i
                                     class="fas fa-clipboard-list me-2"></i> Ordenes de Producción</a></li>
@@ -165,7 +165,7 @@
                                 href="{{ url_for('produccion_kanban.tablero_produccion') }}"><i
                                     class="bi bi-kanban me-2"></i> Producción de Hoy</a></li>
                         {% endif %}
-                                                {% if 'consultar_plan_de_produccion' is has_permission %}
+                                                {% if 'consultar_plan_de_produccion' is has_permission and 'consultar_alertas_riesgo' is has_permission %}
                                                 <li><a class="dropdown-item {% if request.endpoint == 'reportes.produccion' %}active{% endif %}"
                                 href="{{ url_for('reportes.produccion') }}"><i class="fas fa-chart-line me-2"></i>
                                 Reportes de produccion</a>
@@ -263,12 +263,14 @@
                             </a>
                         </li>
                         {% endif %}
+                            {% if 'consultar_alertas_riesgo' is has_permission %}
                             <li>
                             <a class="dropdown-item {% if request.endpoint.startswith('riesgos') or request.endpoint.startswith('admin_riesgos') %}active{% endif %}"
                                 href="{{ url_for('riesgos.listar_alertas_page') }}">
                                 <i class="bi bi-exclamation-triangle-fill me-2"></i> Alertas de Riesgo
                             </a>
-                        </li>
+                            </li>
+                        {% endif %}
                         {% if can_gestionar_consultas and not is_dev %}
                         <li>
                             <hr class="dropdown-divider">
@@ -295,12 +297,14 @@
                         <li>
                             <hr class="dropdown-divider">
                         </li>
+                        {% if current_user.roles.codigo != 'RRHH' %}
                         <li>
                             <a class="dropdown-item {% if request.endpoint == 'registros.listar_registros' %}active{% endif %}"
                                 href="{{ url_for('registros.listar_registros') }}">
                                 <i class="bi bi-archive-fill me-2"></i> Registros
                             </a>
                         </li>
+                        {% endif %}
                         {% endif %}
                     </ul>
                 </li>
