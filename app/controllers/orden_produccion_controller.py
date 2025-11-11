@@ -265,6 +265,79 @@ class OrdenProduccionController(BaseController):
             except Exception as e:
                 return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
+    def verificar_y_actualizar_op_especifica(self, orden_produccion_id: int) -> Dict:
+        """
+        Verifica una orden de producción específica por su ID.
+        Si la OP está 'EN ESPERA' y su stock ya está disponible (porque sus OCs se completaron),
+        la pasa a 'LISTA PARA PRODUCIR'.
+        """
+        logger.info(f"Iniciando verificación específica para OP ID: {orden_produccion_id}.")
+        try:
+            # 1. Obtener la orden específica
+            orden_res = self.model.find_by_id(orden_produccion_id)
+            if not orden_res.get('success') or not orden_res.get('data'):
+                msg = f"No se encontró la OP con ID {orden_produccion_id} para la verificación."
+                logger.warning(msg)
+                return {'success': False, 'error': msg}
+
+            orden = orden_res['data']
+
+            # Solo actuar si está 'EN ESPERA'
+            if orden.get('estado') != 'EN ESPERA':
+                msg = f"La OP {orden_produccion_id} no está 'EN ESPERA' (estado actual: {orden.get('estado')}). No se requiere acción."
+                logger.info(msg)
+                return {'success': True, 'message': msg}
+
+            # 2. Verificar stock (la lógica de OCs ya se cumplió si llegamos aquí)
+            logger.debug(f"Verificando stock para OP {orden_produccion_id}...")
+            verificacion_result = self.inventario_controller.verificar_stock_para_op(orden)
+
+            if not verificacion_result.get('success'):
+                error_msg = f"Fallo la verificación de stock para OP {orden_produccion_id}: {verificacion_result.get('error')}"
+                logger.warning(error_msg)
+                return {'success': False, 'error': error_msg}
+
+            insumos_faltantes = verificacion_result['data']['insumos_faltantes']
+
+            # 3. Si no hay faltantes, proceder a reservar y cambiar estado
+            if not insumos_faltantes:
+                logger.info(f"Stock completo encontrado para OP {orden_produccion_id}. Procediendo a reservar...")
+                
+                usuario_creador_id = orden.get('usuario_creador_id')
+                if not usuario_creador_id:
+                    error_msg = f"La OP {orden_produccion_id} no tiene un usuario creador. No se puede reservar el stock."
+                    logger.error(error_msg)
+                    return {'success': False, 'error': error_msg}
+
+                # Reservar el stock
+                reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden, usuario_creador_id)
+                if not reserva_result.get('success'):
+                    error_msg = f"Stock disponible para OP {orden_produccion_id}, pero la reserva falló: {reserva_result.get('error')}"
+                    logger.error(error_msg)
+                    return {'success': False, 'error': error_msg}
+                
+                # Cambiar el estado
+                nuevo_estado = 'LISTA PARA PRODUCIR'
+                cambio_estado_result = self.model.cambiar_estado(orden_produccion_id, nuevo_estado)
+
+                if cambio_estado_result.get('success'):
+                    msg = f"Éxito: La OP {orden_produccion_id} ha sido actualizada a '{nuevo_estado}'."
+                    logger.info(msg)
+                    return {'success': True, 'message': msg}
+                else:
+                    error_msg = f"Fallo al cambiar el estado de la OP {orden_produccion_id}: {cambio_estado_result.get('error')}"
+                    logger.error(error_msg)
+                    return {'success': False, 'error': error_msg}
+            else:
+                # Esto no debería pasar si la lógica de la OC funcionó bien, pero es una salvaguarda.
+                msg = f"Stock aún insuficiente para OP {orden_produccion_id} después de la recepción de OC. Verificación manual requerida."
+                logger.warning(msg)
+                return {'success': False, 'error': msg}
+
+        except Exception as e:
+            logger.error(f"Error inesperado procesando la OP {orden_produccion_id} en la verificación específica: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
     def verificar_y_actualizar_ordenes_en_espera(self) -> Dict:
         """
         Verifica todas las órdenes 'EN ESPERA'.

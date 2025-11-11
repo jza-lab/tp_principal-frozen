@@ -892,8 +892,15 @@ class OrdenCompraController:
                             else:
                                 logger.error(f"Error al intentar cerrar la OC Padre ID: {id_padre}. Error: {padre_update_result.get('error')}")
 
-                    if orden_actual.get('orden_produccion_id'):
-                         orden_produccion_controller.verificar_y_actualizar_ordenes_en_espera()
+                    id_op_vinculada = orden_actual.get('orden_produccion_id')
+                    if id_op_vinculada:
+                        # Si la OC está vinculada, se verifica SÓLO esa OP específica.
+                        logger.info(f"La OC {orden_actual.get('codigo_oc')} está vinculada a la OP {id_op_vinculada}. Verificando estado de esa OP.")
+                        orden_produccion_controller.verificar_y_actualizar_op_especifica(id_op_vinculada)
+                    else:
+                        # Si la OC es manual, se ejecuta la verificación general para todas las OPs en espera.
+                        logger.info(f"La OC {orden_actual.get('codigo_oc')} es manual. Verificando todas las OPs en espera de insumos.")
+                        orden_produccion_controller.verificar_y_actualizar_ordenes_en_espera()
                     
                     return {'success': True, 'message': f'Escenario Exitoso: Recepción completada y {lotes_creados} lotes creados y reservados.'}
                 # --- FIN LÓGICA PASO 2 ---
