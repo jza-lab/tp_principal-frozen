@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', function () {
     let activeFilters = {
         busqueda: '',
         categorias: [],
+        proveedores: [],
         stock_status: ''
     };
     let suggestionsDebounceTimer;
@@ -13,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const searchInput = document.getElementById('busqueda-filtro');
     const suggestionsContainer = document.getElementById('suggestions-container');
     const categoryCheckboxes = document.querySelectorAll('.category-checkbox');
+    const proveedorCheckboxes = document.querySelectorAll('.proveedor-checkbox');
     const stockBajoBtn = document.getElementById('stock-bajo-btn');
     const limpiarFiltrosBtn = document.getElementById('limpiar-filtros-btn');
     const activeFiltersContainer = document.getElementById('active-filters-container');
@@ -73,6 +75,20 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    proveedorCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', () => {
+            const proveedorId = checkbox.value;
+            if (checkbox.checked) {
+                if (!activeFilters.proveedores.includes(proveedorId)) {
+                    activeFilters.proveedores.push(proveedorId);
+                }
+            } else {
+                activeFilters.proveedores = activeFilters.proveedores.filter(id => id !== proveedorId);
+            }
+            fetchInsumos();
+        });
+    });
+
     stockBajoBtn.addEventListener('click', () => {
         if (activeFilters.stock_status === 'bajo') {
             activeFilters.stock_status = '';
@@ -86,11 +102,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     limpiarFiltrosBtn.addEventListener('click', () => {
         // Reset state
-        activeFilters = { busqueda: '', categorias: [], stock_status: '' };
+        activeFilters = { busqueda: '', categorias: [], proveedores: [], stock_status: '' };
 
         // Reset UI
         searchInput.value = '';
         categoryCheckboxes.forEach(cb => cb.checked = false);
+        proveedorCheckboxes.forEach(cb => cb.checked = false);
         stockBajoBtn.classList.remove('active');
 
         fetchInsumos();
@@ -110,6 +127,10 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (type === 'categoria') {
                 activeFilters.categorias = activeFilters.categorias.filter(c => c !== value);
                 const checkbox = document.querySelector(`.category-checkbox[value="${value}"]`);
+                if (checkbox) checkbox.checked = false;
+            } else if (type === 'proveedor') {
+                activeFilters.proveedores = activeFilters.proveedores.filter(id => id !== value);
+                const checkbox = document.querySelector(`.proveedor-checkbox[value="${value}"]`);
                 if (checkbox) checkbox.checked = false;
             }
             fetchInsumos();
@@ -155,7 +176,10 @@ document.addEventListener('DOMContentLoaded', function () {
             params.append('stock_status', activeFilters.stock_status);
         }
         activeFilters.categorias.forEach(cat => {
-            params.append('categorias', cat);
+            params.append('categoria', cat);
+        });
+        activeFilters.proveedores.forEach(id => {
+            params.append('id_proveedor', id);
         });
 
         const url = `/api/insumos/filter?${params.toString()}`;
@@ -217,6 +241,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         activeFilters.categorias.forEach(cat => {
             activeFiltersContainer.appendChild(createPill('categoria', cat, `Cat: ${cat}`));
+            hasFilters = true;
+        });
+        activeFilters.proveedores.forEach(provId => {
+            const checkbox = document.querySelector(`.proveedor-checkbox[value="${provId}"]`);
+            const provName = checkbox ? checkbox.nextElementSibling.textContent : provId;
+            activeFiltersContainer.appendChild(createPill('proveedor', provId, `Prov: ${provName}`));
             hasFilters = true;
         });
 

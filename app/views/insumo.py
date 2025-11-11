@@ -52,14 +52,23 @@ def crear_insumo():
 def obtener_insumos():
     try:
         insumo_controller = InsumoController()
+        proveedor_controller = ProveedorController()
+
         filtros = {k: v for k, v in request.args.items() if v is not None and v != ""}
         response, status = insumo_controller.obtener_insumos(filtros)
         insumos = response.get("data", [])
+        
         categorias_response, _ = insumo_controller.obtener_categorias_distintas()
         categorias = categorias_response.get("data", [])
+        
+        proveedores_resp, _ = proveedor_controller.obtener_proveedores_activos()
+        proveedores = proveedores_resp.get("data", [])
 
         return render_template(
-            "insumos/listar.html", insumos=insumos, categorias=categorias
+            "insumos/listar.html", 
+            insumos=insumos, 
+            categorias=categorias,
+            proveedores=proveedores
         )
 
     except Exception as e:
@@ -301,8 +310,8 @@ def api_filter_insumos():
         filtros = {
             'busqueda': request.args.get('busqueda', None),
             'stock_status': request.args.get('stock_status', None),
-            # getlist para recibir múltiples valores para 'categorias'
-            'categorias': request.args.getlist('categorias') 
+            'categoria': request.args.getlist('categoria'),
+            'id_proveedor': request.args.getlist('id_proveedor')
         }
         
         # Limpiar filtros nulos o vacíos
