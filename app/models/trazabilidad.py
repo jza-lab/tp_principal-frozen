@@ -73,20 +73,11 @@ class TrazabilidadModel:
                 # Manejo de OCs directamente asociadas a la OP
                 ocs_directas = self.db.table('ordenes_compra').select('id, codigo_oc').eq('orden_produccion_id', query_id).execute().data or []
                 for oc in ocs_directas:
-                    id_oc_str = str(oc['id'])
-                    # Asegurarse de que el nodo de la OC exista antes de crear aristas hacia él.
-                    self._agregar_nodo(nodos, 'orden_compra', id_oc_str)
-                    
-                    # Crear un nodo "puente" genérico para el insumo
-                    id_insumo_generico = f"insumo_generico_{id_oc_str}"
-                    self._agregar_nodo(nodos, 'lote_insumo', id_insumo_generico, {'numero_lote_proveedor': 'Insumo Genérico', 'insumos_catalogo': {'nombre': 'Genérico'}}, es_generico=True)
-                    
-                    self._agregar_arista(aristas, 'orden_compra', id_oc_str, 'lote_insumo', id_insumo_generico, '')
-                    self._agregar_arista(aristas, 'lote_insumo', id_insumo_generico, 'orden_produccion', id_entidad_actual, '')
-                    
-                    if ('orden_compra', id_oc_str) not in visitados:
-                        cola.append(('orden_compra', id_oc_str))
-                        visitados.add(('orden_compra', id_oc_str))
+                    self._agregar_nodo_y_arista(nodos, aristas, 
+                                              'orden_compra', str(oc['id']), 
+                                              'orden_produccion', id_entidad_actual, 
+                                              0,
+                                              cola, visitados)
 
 
             elif tipo_entidad_actual == 'lote_insumo':
@@ -160,6 +151,114 @@ class TrazabilidadModel:
         diagrama = self._generar_diagrama(nodos_filtrados, aristas_filtradas)
 
         return {'resumen': resumen, 'diagrama': diagrama}
+
+    def obtener_afectados_para_alerta(self, tipo_entidad_inicial, id_entidad_inicial):
+        """
+        Realiza una trazabilidad direccional estricta para identificar únicamente
+        las entidades afectadas por una alerta de riesgo, evitando la "reflexión"
+        en puntos de unión como las órdenes de compra.
+        """
+        nodos = {}
+        id_entidad_inicial = str(id_entidad_inicial)
+        self._agregar_nodo(nodos, tipo_entidad_inicial, id_entidad_inicial)
+        
+        cola = deque([(tipo_entidad_inicial, id_entidad_inicial)])
+        visitados = set([(tipo_entidad_inicial, id_entidad_inicial)])
+
+        # Determinar la dirección de la trazabilidad basada en el origen
+        trace_upstream = tipo_entidad_inicial in ['pedido', 'lote_producto', 'orden_produccion']
+        trace_downstream = tipo_entidad_inicial in ['orden_compra', 'lote_insumo', 'orden_produccion']
+
+        while cola:
+            tipo_actual, id_actual = cola.popleft()
+            
+            # --- HACIA ATRÁS (Upstream) ---
+            if trace_upstream:
+                if tipo_actual == 'pedido':
+                    reservas = self.db.table('reservas_productos').select('lote_producto_id').eq('pedido_id', int(id_actual)).execute().data or []
+                    for r in reservas:
+                        if ('lote_producto', str(r['lote_producto_id'])) not in visitados:
+                            self._agregar_nodo(nodos, 'lote_producto', str(r['lote_producto_id']))
+                            cola.append(('lote_producto', str(r['lote_producto_id'])))
+                            visitados.add(('lote_producto', str(r['lote_producto_id'])))
+
+                elif tipo_actual == 'lote_producto':
+                    lote = self.db.table('lotes_productos').select('orden_produccion_id').eq('id_lote', int(id_actual)).maybe_single().execute().data
+                    if lote and lote.get('orden_produccion_id'):
+                        op_id = str(lote['orden_produccion_id'])
+                        if ('orden_produccion', op_id) not in visitados:
+                            self._agregar_nodo(nodos, 'orden_produccion', op_id)
+                            cola.append(('orden_produccion', op_id))
+                            visitados.add(('orden_produccion', op_id))
+
+                elif tipo_actual == 'orden_produccion':
+                    reservas = self.db.table('reservas_insumos').select('lote_inventario_id').eq('orden_produccion_id', int(id_actual)).execute().data or []
+                    for r in reservas:
+                        if ('lote_insumo', str(r['lote_inventario_id'])) not in visitados:
+                            self._agregar_nodo(nodos, 'lote_insumo', str(r['lote_inventario_id']))
+                            cola.append(('lote_insumo', str(r['lote_inventario_id'])))
+                            visitados.add(('lote_insumo', str(r['lote_inventario_id'])))
+
+                elif tipo_actual == 'lote_insumo':
+                    insumo = self.db.table('insumos_inventario').select('documento_ingreso').eq('id_lote', id_actual).maybe_single().execute().data
+                    if insumo and insumo.get('documento_ingreso'):
+                        oc_res = self.db.table('ordenes_compra').select('id').eq('codigo_oc', insumo['documento_ingreso']).maybe_single().execute().data
+                        if oc_res:
+                            oc_id = str(oc_res['id'])
+                            if ('orden_compra', oc_id) not in visitados:
+                                self._agregar_nodo(nodos, 'orden_compra', oc_id)
+                                cola.append(('orden_compra', oc_id))
+                                visitados.add(('orden_compra', oc_id))
+
+            # --- HACIA ADELANTE (Downstream) ---
+            if trace_downstream:
+                if tipo_actual == 'orden_compra':
+                    # ¡IMPORTANTE! Aquí detenemos la reflexión. Solo trazamos hacia adelante si el origen fue la OC.
+                    if tipo_entidad_inicial == 'orden_compra':
+                        oc = self.db.table('ordenes_compra').select('codigo_oc').eq('id', int(id_actual)).maybe_single().execute().data
+                        if oc and oc.get('codigo_oc'):
+                            insumos = self.db.table('insumos_inventario').select('id_lote').eq('documento_ingreso', oc['codigo_oc']).execute().data or []
+                            for i in insumos:
+                                if ('lote_insumo', str(i['id_lote'])) not in visitados:
+                                    self._agregar_nodo(nodos, 'lote_insumo', str(i['id_lote']))
+                                    cola.append(('lote_insumo', str(i['id_lote'])))
+                                    visitados.add(('lote_insumo', str(i['id_lote'])))
+
+                elif tipo_actual == 'lote_insumo':
+                    reservas = self.db.table('reservas_insumos').select('orden_produccion_id').eq('lote_inventario_id', id_actual).execute().data or []
+                    for r in reservas:
+                        if ('orden_produccion', str(r['orden_produccion_id'])) not in visitados:
+                            self._agregar_nodo(nodos, 'orden_produccion', str(r['orden_produccion_id']))
+                            cola.append(('orden_produccion', str(r['orden_produccion_id'])))
+                            visitados.add(('orden_produccion', str(r['orden_produccion_id'])))
+                
+                elif tipo_actual == 'orden_produccion':
+                    lotes = self.db.table('lotes_productos').select('id_lote').eq('orden_produccion_id', int(id_actual)).execute().data or []
+                    for l in lotes:
+                        if ('lote_producto', str(l['id_lote'])) not in visitados:
+                            self._agregar_nodo(nodos, 'lote_producto', str(l['id_lote']))
+                            cola.append(('lote_producto', str(l['id_lote'])))
+                            visitados.add(('lote_producto', str(l['id_lote'])))
+
+                elif tipo_actual == 'lote_producto':
+                    reservas = self.db.table('reservas_productos').select('pedido_id').eq('lote_producto_id', int(id_actual)).execute().data or []
+                    for r in reservas:
+                        if ('pedido', str(r['pedido_id'])) not in visitados:
+                            self._agregar_nodo(nodos, 'pedido', str(r['pedido_id']))
+                            cola.append(('pedido', str(r['pedido_id'])))
+                            visitados.add(('pedido', str(r['pedido_id'])))
+
+        # Formatear la salida
+        resultado_formateado = []
+        for tipo, id_str in nodos.keys():
+            if tipo in ['pedido', 'orden_produccion', 'lote_producto', 'orden_compra']:
+                try: id_entidad = int(id_str)
+                except (ValueError, TypeError): continue
+            else:
+                id_entidad = id_str
+            resultado_formateado.append({'tipo_entidad': tipo, 'id_entidad': id_entidad})
+            
+        return resultado_formateado
 
     # --- MÉTODOS AUXILIARES ---
 

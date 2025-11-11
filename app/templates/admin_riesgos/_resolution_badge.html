@@ -7,7 +7,7 @@
     {% set badge_text = 'Pendiente' %}
     {% set tooltip_text = '' %}
 
-    {% if estado == 'resuelto' %}
+    {% if estado == 'resuelto' or resolucion == 'agotado' %}
         {% if resolucion == 'apto' %}
             {% set badge_class = 'bg-success' %}
             {% set badge_text = 'Apto' %}
@@ -20,6 +20,9 @@
         {% elif resolucion == 'inhabilitado' %}
             {% set badge_class = 'bg-secondary' %}
             {% set badge_text = 'Inhabilitado' %}
+        {% elif resolucion == 'agotado' %}
+            {% set badge_class = 'bg-dark' %}
+            {% set badge_text = 'Agotado' %}
         {% else %}
             {% set badge_class = 'bg-info' %}
             {% set badge_text = resolucion | replace('_', ' ') | title if resolucion else 'Resuelto' %}

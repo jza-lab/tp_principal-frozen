@@ -98,9 +98,9 @@ class NotaCreditoController(BaseController):
         Obtiene los detalles de todas las NC generadas por una alerta específica.
         """
         try:
-            ncs_res = self.model.find_by('alerta_riesgo_id', alerta_id)
+            ncs_res = self.model.find_all({'alerta_origen_id': alerta_id})
             if not ncs_res.get('success') or not ncs_res.get('data'):
-                return {"success": False, "error": "No se encontraron notas de crédito para esta alerta."}, 404
+                return {"success": True, "data": []} # Devuelve éxito con lista vacía si no hay NCs
             
             ncs_data = ncs_res.get('data', [])
             for nc in ncs_data:
@@ -116,10 +116,10 @@ class NotaCreditoController(BaseController):
                     } for item in items
                 ]
             
-            return {"success": True, "data": ncs_data}, 200
+            return {"success": True, "data": ncs_data}
         except Exception as e:
             logger.error(f"Error al obtener detalle de NCs por alerta {alerta_id}: {e}", exc_info=True)
-            return {"success": False, "error": "Error interno del servidor."}, 500
+            return {"success": False, "error": "Error interno del servidor."}
 
     def obtener_detalles_para_pdf(self, nc_id):
         """
