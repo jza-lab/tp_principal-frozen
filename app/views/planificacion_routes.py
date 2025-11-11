@@ -6,6 +6,7 @@ from app.controllers.usuario_controller import UsuarioController
 from datetime import date, timedelta, datetime
 from app.utils.decorators import permission_required
 from app import csrf
+import os
 
 planificacion_bp = Blueprint('planificacion', __name__, url_prefix='/planificacion')
 logger = logging.getLogger(__name__)
@@ -165,8 +166,8 @@ def confirmar_aprobacion_api():
     return jsonify(response), status_code
 
 @planificacion_bp.route('/forzar_auto_planificacion', methods=['POST'])
-##@jwt_required()
-##@permission_required(accion='ejecutar_planificacion_automatica')
+@jwt_required()
+@permission_required(accion='ejecutar_planificacion_automatica')
 def forzar_planificacion():
     usuario_id = get_jwt_identity()
     controller = PlanificacionController()
@@ -189,8 +190,8 @@ def validar_fecha_requerida_api():
     return jsonify(response), status_code
 
 @planificacion_bp.route('/configuracion', methods=['GET'])
-#@jwt_required()
-#@permission_required(accion='configurar_planificacion')
+@jwt_required()
+@permission_required(accion='configurar_planificacion')
 def configuracion_lineas():
     """Muestra la página de configuración de líneas, bloqueos y parámetros generales."""
     from app.controllers.configuracion_controller import ConfiguracionController, TOLERANCIA_SOBREPRODUCCION_PORCENTAJE, DEFAULT_TOLERANCIA_SOBREPRODUCCION
@@ -222,8 +223,8 @@ def configuracion_lineas():
     return render_template('planificacion/configuracion.html', **contexto)
 
 @planificacion_bp.route('/configuracion/guardar-linea', methods=['POST'])
-##@jwt_required()
-# @permission_required(accion='configurar_planificacion')
+@jwt_required()
+@permission_required(accion='configurar_planificacion')
 def guardar_configuracion_linea():
     """Guarda los cambios de eficiencia/utilización de una línea."""
     data = request.form
@@ -239,8 +240,8 @@ def guardar_configuracion_linea():
 
 
 @planificacion_bp.route('/configuracion/agregar-bloqueo', methods=['POST'])
-##@jwt_required()
-# @permission_required(accion='configurar_planificacion')
+@jwt_required()
+@permission_required(accion='configurar_planificacion')
 def agregar_bloqueo_capacidad():
     """Agrega un nuevo bloqueo de mantenimiento."""
     data = request.form
@@ -255,8 +256,8 @@ def agregar_bloqueo_capacidad():
     return redirect(url_for('planificacion.configuracion_lineas'))
 
 @planificacion_bp.route('/configuracion/eliminar-bloqueo/<int:bloqueo_id>', methods=['POST'])
-##@jwt_required()
-# @permission_required(accion='configurar_planificacion')
+@jwt_required()
+@permission_required(accion='configurar_planificacion')
 def eliminar_bloqueo_capacidad(bloqueo_id):
     """Elimina un bloqueo de mantenimiento."""
     controller = PlanificacionController()
@@ -270,8 +271,8 @@ def eliminar_bloqueo_capacidad(bloqueo_id):
     return redirect(url_for('planificacion.configuracion_lineas'))
 
 @planificacion_bp.route('/configuracion/guardar-produccion', methods=['POST'])
-#@jwt_required()
-#@permission_required(accion='configurar_planificacion')
+@jwt_required()
+@permission_required(accion='configurar_planificacion')
 def guardar_configuracion_produccion():
     """
     Guarda los parámetros generales de producción, como la tolerancia de sobreproducción.
@@ -303,8 +304,8 @@ def guardar_configuracion_produccion():
 
 # --- ¡¡¡INICIO DE LA NUEVA RUTA!!! ---
 @planificacion_bp.route('/api/resolver-issue/<int:issue_id>', methods=['POST'])
-##@jwt_required()
-##@permission_required(accion='consultar_plan_de_produccion') # Puedes usar un permiso más genérico
+@jwt_required()
+@permission_required(accion='consultar_plan_de_produccion') # Puedes usar un permiso más genérico
 def resolver_issue_api(issue_id):
     """
     API Endpoint para marcar un issue como 'RESUELTO'.
@@ -321,8 +322,8 @@ def resolver_issue_api(issue_id):
 # En planificacion_routes.py
 
 @planificacion_bp.route('/api/ejecutar-adaptacion', methods=['POST'])
-##@jwt_required(optional=True) # Hacer JWT opcional
-##@permission_required(accion='ejecutar_planificacion_automatica', optional=True) # Hacer permiso opcional
+@jwt_required(optional=True) # Hacer JWT opcional
+@permission_required(accion='ejecutar_planificacion_automatica') # Hacer permiso opcional
 def ejecutar_adaptacion_api():
     """
     API Endpoint para ejecutar la tarea de planificación adaptativa (7 días).
