@@ -5,6 +5,7 @@ from app.controllers.usuario_controller import UsuarioController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
+from app.controllers.reclamo_proveedor_controller import ReclamoProveedorController
 from app.utils.decorators import permission_required, permission_any_of
 from datetime import datetime
 # --- MODIFICACIÓN: Se re-importa ESTADOS_INSPECCION ---
@@ -101,6 +102,7 @@ from flask_wtf import FlaskForm
 @permission_required(accion='consultar_ordenes_de_compra')
 def detalle(id):
     orden_controller = OrdenCompraController()
+    reclamo_controller = ReclamoProveedorController()
     csrf_form = FlaskForm()
 
     response_data, status_code = orden_controller.get_orden(id)
@@ -110,13 +112,16 @@ def detalle(id):
 
     orden = response_data.get("data")
     
-    # La lógica para calcular los totales originales ahora está centralizada en el OrdenCompraController.
-    # La plantilla recibe directamente los campos `subtotal_original`, `iva_original` y `total_original`.
+    # Verificar si ya existe un reclamo para esta orden
+    reclamo_existente = None
+    reclamo_resp, _ = reclamo_controller.get_reclamo_por_orden(id)
+    if reclamo_resp.get("success") and reclamo_resp.get("data"):
+        reclamo_existente = reclamo_resp.get("data")
 
     return render_template(
         "ordenes_compra/detalle.html", 
         orden=orden,
-        # --- MODIFICACIÓN: Se re-añade ESTADOS_INSPECCION ---
+        reclamo_existente=reclamo_existente,
         estados_inspeccion=ESTADOS_INSPECCION,
         csrf_form=csrf_form
     )
@@ -249,11 +254,10 @@ def procesar_recepcion(orden_id):
     orden_produccion_controller = OrdenProduccionController()
     usuario_id = get_jwt_identity()
     
-    # --- MODIFICACIÓN: Se pasa request.files para manejar la foto ---
     resultado = controller.procesar_recepcion(
         orden_id, 
         request.form, 
-        request.files, # <--- AÑADIDO
+        request.files,
         usuario_id, 
         orden_produccion_controller
     )
@@ -298,3 +302,59 @@ def crear_oc_hija(id_padre):
     else:
         flash(f"Error al crear OC hija: {resultado.get('error', 'Error desconocido')}", "error")
         return redirect(url_for("orden_compra.detalle", id=id_padre))
+
+@orden_compra_bp.route("/<int:orden_id>/reclamo/nuevo", methods=["GET", "POST"])
+@jwt_required()
+@permission_required(accion='crear_reclamo_proveedor')
+def crear_reclamo(orden_id):
+    orden_controller = OrdenCompraController()
+    reclamo_controller = ReclamoProveedorController()
+    
+    orden_response, _ = orden_controller.get_orden(orden_id)
+    if not orden_response.get("success"):
+        flash("Orden de compra no encontrada.", "error")
+        return redirect(url_for("orden_compra.listar"))
+    
+    orden = orden_response.get("data")
+
+    if request.method == "POST":
+        titulo = request.form.get('titulo')
+        descripcion = request.form.get('descripcion')
+        
+        data_reclamo = {
+            'orden_compra_id': orden_id,
+            'proveedor_id': orden.get('proveedor', {}).get('id'),
+            'titulo': titulo,
+            'descripcion': descripcion
+        }
+        
+        resultado, status_code = reclamo_controller.crear_reclamo(data_reclamo)
+        
+        if status_code == 200 and resultado.get("success"):
+            flash("Reclamo al proveedor creado exitosamente.", "success")
+            return redirect(url_for("orden_compra.detalle", id=orden_id))
+        else:
+            error_msg = resultado.get('error', 'Error desconocido')
+            if isinstance(error_msg, dict):
+                formatted_errors = "; ".join([f"{key}: {', '.join(value)}" for key, value in error_msg.items()])
+                flash(f"Error de validación: {formatted_errors}", "error")
+            else:
+                flash(f"Error al crear el reclamo: {error_msg}", "error")
+
+    return render_template("reclamos_proveedor/formulario.html", orden=orden)
+
+@orden_compra_bp.route("/reclamos")
+@jwt_required()
+@permission_required(accion='consultar_ordenes_de_compra')
+def listar_reclamos():
+    controller = ReclamoProveedorController()
+    response, _ = controller.get_all_reclamos()
+    reclamos = []
+    if response and response.get("success"):
+        reclamos = response.get("data", [])  # <-- Esto es correcto, extraes la lista
+    elif response:
+        flash(response.get("error", "Error al cargar los reclamos."), "error")
+    else:
+        flash("Error desconocido al cargar los reclamos.", "error")
+        
+    return render_template("reclamos_proveedor/listar.html", reclamos=reclamos) # <-- Pasas la lista

@@ -48,9 +48,12 @@
                         <li>
                             <hr class="dropdown-divider">
                         </li>
-                        <li><a class="dropdown-item {% if request.endpoint.startswith('orden_compra') %}active{% endif %}"
-                                href="{{ url_for('orden_compra.listar') }}"><i class="bi bi-truck me-2"></i> Compras
-                                (Ordenes)</a></li>
+                        <li><a class="dropdown-item {% if request.endpoint == 'orden_compra.listar' %}active{% endif %}"
+                                href="{{ url_for('orden_compra.listar') }}"><i class="bi bi-truck me-2"></i> Compras (Ordenes)</a>
+                        </li>
+                        <li><a class="dropdown-item {% if request.endpoint == 'orden_compra.listar_reclamos' %}active{% endif %}"
+                                href="{{ url_for('orden_compra.listar_reclamos') }}"><i class="bi bi-exclamation-diamond me-2"></i> Reclamos a Proveedores</a>
+                        </li>
                         {% endif %}
                         {% if 'almacen_consulta_stock' is has_permission and current_user.roles.codigo != 'VENDEDOR' %}
                         <li>

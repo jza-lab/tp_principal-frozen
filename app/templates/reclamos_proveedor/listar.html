@@ -1,0 +1,52 @@
+x{% extends 'layouts/app_layout.html' %}
+
+{% block title %}Reclamos a Proveedores - Sistema Frozen{% endblock %}
+
+{% block app_content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+        <h1 class="h2">Reclamos a Proveedores</h1>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col">ID Reclamo</th>
+                            <th scope="col">Orden de Compra</th>
+                            <th scope="col">Proveedor</th>
+                            <th scope="col">Título</th>
+                            <th scope="col">Estado</th>
+                            <th scope="col">Fecha Creación</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for reclamo in reclamos %}
+                        <tr>
+                            <td>{{ reclamo.id }}</td>
+                            <td>
+                                <a href="{{ url_for('orden_compra.detalle', id=reclamo.orden_compra_id) }}">
+                                    {{ reclamo.orden.codigo_oc if reclamo.orden else 'N/A' }}
+                                </a>
+                            </td>
+                            <td>{{ reclamo.proveedor.nombre if reclamo.proveedor else 'N/A' }}</td>
+                            <td>{{ reclamo.motivo }}</td>
+                            <td>
+                                <span class="badge bg-primary">{{ reclamo.estado }}</span>
+                            </td>
+                            <td>{{ reclamo.created_at.strftime('%Y-%m-%d %H:%M') if reclamo.created_at else 'N/A' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-4">No se encontraron reclamos.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
