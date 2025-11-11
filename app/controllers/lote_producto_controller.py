@@ -1166,8 +1166,9 @@ class LoteProductoController(BaseController):
             )
             items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
 
-            # 2. Decidir el estado inicial del lote
-            estado_lote_inicial = 'RESERVADO' if items_vinculados else 'DISPONIBLE'
+            # 2. Decidir el estado inicial del lote (si hay items vinculados, debe ser RESERVADO)
+            # El lote siempre se crea como DISPONIBLE. La reserva se maneja por separado.
+            estado_lote_inicial = 'DISPONIBLE'
 
             # 3. Preparar y crear el lote con el estado decidido
             datos_lote = {
@@ -1185,15 +1186,16 @@ class LoteProductoController(BaseController):
             lote_creado = resultado_lote['data']
             message_to_use = f"Lote N° {lote_creado['numero_lote']} creado como '{estado_lote_inicial}'."
 
-            # 4. Si el lote se creó como RESERVADO, crear los registros de reserva
-            if estado_lote_inicial == 'RESERVADO':
+            # 4. Si hay items vinculados, crear los registros de reserva
+            if items_vinculados:
                 for item in items_vinculados:
                     datos_reserva = {
                         'lote_producto_id': lote_creado['id_lote'],
                         'pedido_id': item['pedido_id'],
                         'pedido_item_id': item['id'],
                         'cantidad_reservada': float(item['cantidad']),
-                        'usuario_reserva_id': usuario_id
+                        'usuario_reserva_id': usuario_id,
+                        'estado': 'RESERVADO' # Estado de la reserva, no del lote
                     }
                     self.reserva_model.create(
                         self.reserva_schema.load(datos_reserva)
