@@ -108,7 +108,7 @@ def nuevo_lote():
                            today=today)
 
 @inventario_view_bp.route('/lote/<id_lote>')
-@permission_required(accion='consultar_stock')
+@permission_required(accion='almacen_consulta_stock')
 def detalle_lote(id_lote):
     """
     Muestra la página de detalle para un lote específico.
@@ -139,7 +139,7 @@ def detalle_lote(id_lote):
 
 @inventario_view_bp.route('/lote/<id_lote>/cuarentena', methods=['POST'])
 @jwt_required()
-@permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
+@permission_required(accion='almacen_consulta_stock') # O el permiso que corresponda
 def poner_en_cuarentena(id_lote):
     controller = InventarioController()
     try:
@@ -170,8 +170,8 @@ def poner_en_cuarentena(id_lote):
 
 
 @inventario_view_bp.route('/lote/<id_lote>/liberar', methods=['POST'])
-##@jwt_required()
-##@permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
+@jwt_required()
+@permission_required(accion='almacen_consulta_stock') # O el permiso que corresponda
 def liberar_cuarentena(id_lote):
     controller = InventarioController()
     try:
@@ -191,8 +191,8 @@ def liberar_cuarentena(id_lote):
 
 
 @inventario_view_bp.route('/lote/<id_lote>/editar', methods=['GET', 'POST'])
-##@jwt_required()
-##@permission_required(accion='almacen_gestion_stock') # O el permiso que corresponda
+@jwt_required()
+@permission_required(accion='almacen_consulta_stock') # O el permiso que corresponda
 def editar_lote(id_lote):
     
     """
