@@ -5,7 +5,12 @@ from app.schemas.alerta_riesgo_schema import AlertaRiesgoSchema
 from app.controllers.nota_credito_controller import NotaCreditoController
 from marshmallow import ValidationError
 from flask import flash, url_for
+from app.services.email_service import send_email
+from app.models.usuario import UsuarioModel
+from app.models.rol import RoleModel
 import logging
+import os
+
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +78,8 @@ class RiesgoController(BaseController):
                 self.alerta_riesgo_model.asociar_afectados(nueva_alerta['id'], afectados)
                 # Procesar efectos secundarios después de crear la alerta
                 self._procesar_efectos_secundarios_alerta(afectados, f"Alerta {nueva_alerta['codigo']}", usuario_id)
+            
+            self._enviar_notificaciones_alerta(nueva_alerta)
 
 
             return {"success": True, "data": nueva_alerta}, 201
@@ -108,13 +115,14 @@ class RiesgoController(BaseController):
             elif tipo == 'lote_producto':
                 lote_producto_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999)
 
-            # 3. Pausar Órdenes de Producción no terminadas
+            # 3. Poner en espera Órdenes de Producción no terminadas
             elif tipo == 'orden_produccion':
-                op_res= op_controller.obtener_orden_por_id(entidad_id)
+                op_res = op_controller.obtener_orden_por_id(entidad_id) # Ya devuelve un diccionario
                 if op_res.get('success'):
                     op_data = op_res.get('data')
                     if op_data and op_data.get('estado') != 'Completada':
-                        op_controller.cambiar_estado_orden(entidad_id, "PAUSADA")
+                        # Cambiar estado a EN ESPERA y marcar en_alerta
+                        op_controller.model.update(entidad_id, {'estado': 'EN ESPERA', 'en_alerta': True}, 'id')
 
         
     def crear_alerta_riesgo(self, datos_json):
@@ -561,3 +569,47 @@ class RiesgoController(BaseController):
         except Exception as e:
             logger.error(f"Error en contactar_clientes_afectados para alerta {codigo_alerta}: {e}", exc_info=True)
             return {"success": False, "error": "Error interno del servidor al procesar la solicitud."}, 500
+
+    def _enviar_notificaciones_alerta(self, nueva_alerta):
+        try:
+            codigo_alerta = nueva_alerta.get('codigo')
+            base_url = os.getenv("APP_BASE_URL", "http://localhost:5000")
+            url_alerta = f"{base_url}/administrar/riesgos/{codigo_alerta}/detalle"
+            
+            mensaje = (
+                f"<b>Nueva Alerta de Riesgo Creada</b>\n\n"
+                f"<b>Código:</b> {codigo_alerta}\n"
+                f"<b>Motivo:</b> {nueva_alerta.get('motivo')}\n"
+                f"<b>Origen:</b> {nueva_alerta.get('origen_tipo_entidad')} ID: {nueva_alerta.get('origen_id_entidad')}\n\n"
+                f"Puede ver los detalles en el siguiente enlace:\n"
+                f"<a href='{url_alerta}'>Ver Alerta</a>"
+            )
+            asunto = f"Nueva Alerta de Riesgo Creada: {codigo_alerta}"
+
+            # Enviar por Email al supervisor de calidad
+            rol_model = RoleModel()
+            rol_calidad_res = rol_model.find_by_codigo('CALIDAD')
+            if not rol_calidad_res.get('success'):
+                logger.error("No se encontró el rol 'CALIDAD' para enviar notificaciones por email.")
+                return
+
+            rol_calidad = rol_calidad_res.get('data')
+            
+            usuario_model = UsuarioModel()
+            usuarios_calidad_res = usuario_model.find_all({'role_id': rol_calidad['id']})
+            
+            if not usuarios_calidad_res.get('success') or not usuarios_calidad_res.get('data'):
+                logger.warning("No se encontraron usuarios con el rol 'CALIDAD' para notificar.")
+                return
+
+            for usuario in usuarios_calidad_res.get('data'):
+                email_destinatario = usuario.get('email')
+                if email_destinatario:
+                    try:
+                        send_email(email_destinatario, asunto, mensaje, is_html=True)
+                        logger.info(f"Notificación de alerta {codigo_alerta} enviada a {email_destinatario}")
+                    except Exception as e:
+                        logger.error(f"No se pudo enviar email de notificación a {email_destinatario}: {e}")
+
+        except Exception as e:
+            logger.error(f"Error general en _enviar_notificaciones_alerta para {nueva_alerta.get('codigo')}: {e}", exc_info=True)

@@ -846,8 +846,10 @@ class InventarioController(BaseController):
 
             # Path 2: Cuarentena de una cantidad específica (lote con stock)
             else:
-                if estado_actual not in ['disponible', 'cuarentena']:
-                    return self.error_response(f"El lote debe estar 'disponible' o en 'cuarentena'. Estado: {estado_actual}", 400)
+                if estado_actual == 'cuarentena':
+                    return self.error_response("El lote ya se encuentra en cuarentena.", 400)
+                if estado_actual not in ['disponible', 'reservado']:
+                    return self.error_response(f"El lote debe estar 'disponible' o 'reservado'. Estado actual: {estado_actual}", 400)
                 if cantidad <= 0:
                     return self.error_response("La cantidad debe ser un número positivo.", 400)
 
@@ -970,8 +972,12 @@ class InventarioController(BaseController):
                 nuevo_motivo = lote.get('motivo_cuarentena')
 
                 if nueva_cantidad_cuarentena <= 0:
-                    nuevo_motivo = None # Limpiar motivo si ya no queda nada en cuarentena
-                    if nueva_cantidad_disponible > 0:
+                    nuevo_motivo = None # Limpiar motivo
+                    # Verificar si el lote estaba reservado antes de la cuarentena
+                    reservas_existentes = self.reserva_insumo_model.find_all(filters={'lote_inventario_id': lote_id}).get('data', [])
+                    if reservas_existentes:
+                        nuevo_estado = 'reservado'
+                    elif nueva_cantidad_disponible > 0:
                         nuevo_estado = 'disponible'
                     else:
                         nuevo_estado = 'agotado'
