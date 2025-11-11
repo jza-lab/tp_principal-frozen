@@ -306,7 +306,15 @@ class RiesgoController(BaseController):
             if alerta['estado'] in ['Resuelta', 'Cerrada']:
                 ncs_asociadas_res = self.nota_credito_controller.obtener_detalle_nc_por_alerta(alerta['id'])
                 alerta['notas_de_credito'] = ncs_asociadas_res.get('data', [])
+                        # Lógica para el botón de resolución masiva
             
+            hay_no_aptos = any(
+                afectado.get('resolucion_aplicada') == 'no_apto'
+                for afectado in afectados_con_estado if afectado.get('estado') == 'resuelto'
+            )
+
+            alerta['puede_resolver_pedidos_masivamente'] = not hay_no_aptos
+
             return {"success": True, "data": alerta}, 200
         
         except Exception as e:
@@ -317,7 +325,9 @@ class RiesgoController(BaseController):
         accion = form_data.get("accion")
         acciones = {
             "nota_credito": self._ejecutar_nota_de_credito,
-            "inhabilitar_pedido": self._ejecutar_inhabilitar_pedidos
+            "inhabilitar_pedido": self._ejecutar_inhabilitar_pedidos,
+            "inhabilitar_pedido": self._ejecutar_inhabilitar_pedidos,
+            "resolver_pedidos": self._ejecutar_resolver_pedidos
         }
 
         if accion in acciones:
@@ -327,6 +337,37 @@ class RiesgoController(BaseController):
         return ({"success": False, "error": "Acción no válida."}, 400)
         
 
+    def _ejecutar_resolver_pedidos(self, codigo_alerta, form_data, usuario_id):
+        """
+        Marca todos los pedidos pendientes de una alerta como resueltos.
+        Esta acción solo debe ser posible si no hay lotes 'no aptos'.
+        """
+        try:
+            alerta_res = self.alerta_riesgo_model.find_all({'codigo': codigo_alerta}, limit=1)
+            if not alerta_res.get('data'): return ({"success": False, "error": "Alerta no encontrada."}, 404)
+            alerta = alerta_res.get('data')[0]
+
+            afectados_pendientes = self.alerta_riesgo_model.db.table('alerta_riesgo_afectados').select('id_entidad').eq('alerta_id', alerta['id']).eq('tipo_entidad', 'pedido').eq('estado', 'pendiente').execute().data
+            
+            if not afectados_pendientes:
+                return ({"success": True, "message": "No había pedidos pendientes para resolver."}, 200)
+
+            pedido_ids_a_resolver = [p['id_entidad'] for p in afectados_pendientes]
+
+            self.alerta_riesgo_model.actualizar_estado_afectados(
+                alerta['id'], 
+                pedido_ids_a_resolver, 
+                'resuelto_automaticamente', 
+                'pedido', 
+                usuario_id
+            )
+
+            return ({"success": True, "message": f"Se marcaron {len(pedido_ids_a_resolver)} pedidos como resueltos."}, 200)
+
+        except Exception as e:
+            logger.error(f"Error en _ejecutar_resolver_pedidos: {e}", exc_info=True)
+            return ({"success": False, "error": "Error interno al resolver pedidos."}, 500)
+        
     def _ejecutar_nota_de_credito(self, codigo_alerta, form_data, usuario_id):
         pedidos_seleccionados = form_data.getlist("pedido_ids")
         recrear_pedido = form_data.get("recrear_pedido") == "on"

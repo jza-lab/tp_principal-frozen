@@ -204,6 +204,26 @@ class AlertaRiesgoModel(BaseModel):
             logger.error(f"Error verificando si la entidad {tipo_entidad}:{id_entidad} está en otras alertas: {e}", exc_info=True)
             return True # Ser precavido: si hay un error, asumir que sí está en alerta para no quitar el flag por error.
 
+    def actualizar_estado_afectados_por_entidad(self, tipo_entidad: str, id_entidad, resolucion: str, usuario_id: int):
+        """
+        Actualiza el estado de una entidad específica en TODAS las alertas en las que aparece.
+        """
+        try:
+            update_data = {
+                'estado': 'resuelto',
+                'resolucion_aplicada': resolucion,
+                'id_usuario_resolucion': usuario_id
+            }
+            self.db.table('alerta_riesgo_afectados').update(update_data).eq('tipo_entidad', tipo_entidad).eq('id_entidad', str(id_entidad)).execute()
+            
+            # Después de actualizar, verificar si alguna de las alertas afectadas puede cerrarse.
+            self.verificar_y_cerrar_alerta_por_entidad_resuelta(tipo_entidad, id_entidad)
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error en actualizar_estado_afectados_por_entidad para {tipo_entidad}:{id_entidad}: {e}", exc_info=True)
+
 
     def obtener_afectados_con_estado(self, alerta_id):
         return self.db.table('alerta_riesgo_afectados').select(
