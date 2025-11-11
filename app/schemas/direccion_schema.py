@@ -26,7 +26,7 @@ class DireccionSchema(Schema):
     )
     
     codigo_postal = fields.Str(
-        allow_none=True,
+        required=True,
         validate=Regexp(
             r'(^\d{4}$)|(^[A-Z]\d{4}[A-Z]{3}$)',
             error="El código postal debe tener 4 dígitos o el formato CPA (ej: C1234ABC)."
