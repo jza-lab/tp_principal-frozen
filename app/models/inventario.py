@@ -1,8 +1,10 @@
 from app.models.base_model import BaseModel
 from typing import Dict, List, Optional
+from decimal import Decimal 
 from datetime import date, datetime, timedelta
 import logging
 from uuid import UUID
+import math  # <-- CORRECCIÓN 1: Importar math
 
 logger = logging.getLogger(__name__)
 
@@ -323,11 +325,21 @@ class InventarioModel(BaseModel):
             for insumo_id in todos_los_insumos_con_movimiento:
                 fisico = stock_fisico_map.get(insumo_id, 0.0)
                 reservado = reservas_map.get(insumo_id, 0.0)
-                disponible = fisico - reservado
+                
+                # --- INICIO DE LA CORRECCIÓN 2 ---
+                disponible_calculado = fisico - reservado
+
+                # Si el número es 'casi cero', forzarlo a 0.0
+                if math.isclose(disponible_calculado, 0, abs_tol=1e-9):
+                    disponible = 0.0
+                else:
+                    # Opcional: redondear a 4 decimales por seguridad
+                    disponible = round(disponible_calculado, 4)
+                # --- FIN DE LA CORRECCIÓN 2 ---
 
                 updates.append({
                     'id_insumo': insumo_id,
-                    'stock_actual': disponible,
+                    'stock_actual': disponible, # <-- Se guarda el valor corregido
                     'stock_total': fisico # stock_total representa el físico
                 })
 
