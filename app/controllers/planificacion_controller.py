@@ -2536,7 +2536,8 @@ class PlanificacionController(BaseController):
                     if es_retraso_agravado:
                         # --- ¡INICIO DE LA CORRECCIÓN! ---
                         # 3. Actualizar el mensaje para que muestre la fecha de fin
-                        mensaje_issue = f"¡RETRASO AGRAVADO! Movida por falta de capacidad. Terminará el {fecha_fin_estimada_simulada.isoformat()} (Meta: {fecha_meta.isoformat()})"
+                        meta_str = f"(Meta: {fecha_meta.isoformat()})" if fecha_meta else "(Sin Fecha Meta)"
+                        mensaje_issue = f"¡RETRASO AGRAVADO! Movida por falta de capacidad. Terminará el {fecha_fin_estimada_simulada.isoformat()} {meta_str}"
                         # --- FIN DE LA CORRECCIÓN! ---
 
                         tipo_error_final = 'SOBRECARGA_INMINENTE'
