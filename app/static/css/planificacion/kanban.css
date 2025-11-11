@@ -113,13 +113,13 @@
 
 .filter-btn {
     padding: 8px 16px;
-    border: 2px solid #e5e7eb;
-    background: white;
+    border: 1px solid #4b5563;
+    background: #374151;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s;
     font-size: 13px;
-    color: #4b5563;
+    color: white;
     font-weight: 600;
     display: flex;
     align-items: center;
@@ -127,9 +127,8 @@
 }
 
 .filter-btn:hover {
-    border-color: #3b82f6;
-    color: #3b82f6;
-    background: #eff6ff;
+    border-color: #4f5a69;
+    background: #4f5a69;
 }
 
 .filter-btn.active {
@@ -772,17 +771,17 @@
     transition: all 0.3s ease-in-out;
 }
 
-.columna-colapsada {
+.kanban-column-wrapper.kanban-column-compressed {
     min-width: 60px !important;
     flex-grow: 0;
 }
 
-.columna-colapsada .kanban-column {
+.kanban-column-wrapper.kanban-column-compressed .kanban-column {
     border-color: transparent;
     background: none;
 }
 
-.columna-colapsada .column-header {
+.kanban-column-wrapper.kanban-column-compressed .column-header {
     writing-mode: vertical-rl;
     transform: rotate(180deg);
     text-align: left;
@@ -795,17 +794,17 @@
     padding: 18px 10px; /* Ajuste de padding para vertical */
 }
 
-.columna-colapsada .kanban-title-text {
+.kanban-column-wrapper.kanban-column-compressed .kanban-title-text {
     padding-bottom: 15px; /* Más espacio para el título */
 }
 
-.columna-colapsada .column-toggle {
+.kanban-column-wrapper.kanban-column-compressed .column-toggle {
     transform: rotate(90deg); /* Gira la flecha para que apunte correctamente */
     align-self: flex-start;
 }
 
-.columna-colapsada .column-count-badge,
-.columna-colapsada .kanban-cards,
-.columna-colapsada .line-status-indicator {
+.kanban-column-wrapper.kanban-column-compressed .column-count-badge,
+.kanban-column-wrapper.kanban-column-compressed .kanban-cards,
+.kanban-column-wrapper.kanban-column-compressed .line-status-indicator {
     display: none;
 }

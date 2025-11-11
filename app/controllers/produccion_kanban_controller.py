@@ -548,45 +548,8 @@ class ProduccionKanbanController(BaseController):
             # Manejo de la subida de la imagen
             foto_url = self._subir_foto_y_obtener_url(foto_file, op_id)
 
-            # Crear lote
-            lote_data = {
-                'producto_id': orden_produccion.get('producto_id'),
-                'cantidad_inicial': cantidad_producida,
-                'cantidad_actual': cantidad_aceptada,
-                'cantidad_en_cuarentena': cantidad_cuarentena,
-                'orden_produccion_id': op_id,
-                'pedido_id': orden_produccion.get('pedido_id') 
-            }
-            
-            # Verificar si la OP está vinculada a algún item de pedido.
-            from app.models.pedido import PedidoModel
-            pedido_model = PedidoModel()
-            items_vinculados_res = pedido_model.find_all_items(filters={'orden_produccion_id': op_id})
-            op_tiene_pedido_asociado = (items_vinculados_res.get('success') and bool(items_vinculados_res.get('data'))) or bool(orden_produccion.get('pedido_id'))
-
-            if cantidad_cuarentena == cantidad_producida:
-                lote_estado = 'CUARENTENA'
-            elif cantidad_rechazada == cantidad_producida:
-                lote_estado = 'RECHAZADO'
-            else:
-                # --- CORRECCIÓN ---
-                # El lote siempre se crea como DISPONIBLE, incluso si es para un pedido.
-                # La reserva en la tabla `reservas_productos` es la que establece la trazabilidad.
-                lote_estado = 'DISPONIBLE'
-            # --- FIN DE LA CORRECCIÓN ---
-            lote_data['estado'] = lote_estado
-            
-            lote_res, _ = self.lote_producto_controller.crear_lote_desde_formulario(lote_data, usuario_id)
-
-            if not lote_res.get('success'):
-                return self.error_response(f"Error al crear el lote: {lote_res.get('error')}", 500)
-            
-            lote_creado = lote_res['data']
-            lote_id = lote_creado.get('id_lote')
-
-            # Crear registro de CC con los nuevos campos
             cc_data = {
-                'lote_producto_id': lote_id,
+                'lote_producto_id': None, # No tenemos el ID del lote todavía
                 'usuario_supervisor_id': usuario_id,
                 'decision_final': decision,
                 'orden_produccion_id': op_id,
@@ -594,13 +557,11 @@ class ProduccionKanbanController(BaseController):
                 'resultado_inspeccion': resultado_inspeccion,
                 'foto_url': foto_url
             }
-            # Usar el método del controlador en lugar del modelo directamente
             cc_res, _ = self.control_calidad_producto_controller.crear_registro_control_calidad(cc_data)
             if not cc_res.get('success'):
-                 # Si falla, registrar el error y continuar, ya que el lote ya se creó.
-                 logger.error(f"El lote {lote_id} fue creado, pero falló la creación del registro de C.C.: {cc_res.get('error')}")
-
-
+                 # Si falla, solo registramos el error. La lógica principal (cambiar estado OP) debe continuar.
+                 logger.error(f"Falló la creación del registro de C.C. para la OP {op_id}: {cc_res.get('error')}")
+            # --- FIN DE LA CORRECCIÓN ---
 
             # Actualizar OP
             nuevo_estado_op = 'COMPLETADA'
@@ -609,6 +570,7 @@ class ProduccionKanbanController(BaseController):
             
             # Usar el método completo 'cambiar_estado_orden' en lugar de 'cambiar_estado_orden_simple'.
             # Esto asegura que se ejecute la lógica post-cambio, como la actualización del estado del pedido de venta asociado.
+            # ¡Y ahora también la creación del lote y sus reservas!
             self.orden_produccion_controller.cambiar_estado_orden(op_id, nuevo_estado_op, usuario_id)
 
             return self.success_response(message="Decisión de calidad procesada exitosamente.")

@@ -234,3 +234,22 @@ def api_trazabilidad_lote(id_lote):
     controller = InventarioController()
     response, status_code = controller.obtener_trazabilidad_lote(id_lote)
     return jsonify(response), status_code
+
+@inventario_view_bp.route('/lote/<lote_id>/marcar-no-apto', methods=['POST','PUT'])
+@jwt_required()
+@permission_required('realizar_control_de_calidad_insumos')
+def marcar_no_apto(lote_id):
+    """
+    Marca un lote de insumo como 'NO APTO' y maneja las consecuencias.
+    """
+    controller = InventarioController()
+    usuario_id = get_jwt_identity()
+    
+    response, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id)
+
+    if response.get('success'):
+        flash(response.get('message', 'Lote marcado como No Apto.'), 'success')
+    else:
+        flash(response.get('error', 'Error al procesar la solicitud.'), 'danger')
+
+    return redirect(url_for('inventario_view.detalle_lote', id_lote=lote_id))

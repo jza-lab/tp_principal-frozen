@@ -1,0 +1,41 @@
+{% macro render_resolution_badge(entidad) %}
+    {% set estado = entidad.estado_resolucion %}
+    {% set resolucion = entidad.resolucion_aplicada %}
+    {% set resolutor = entidad.resolutor_info %}
+
+    {% set badge_class = 'bg-warning text-dark' %}
+    {% set badge_text = 'Pendiente' %}
+    {% set tooltip_text = '' %}
+
+    {% if estado == 'resuelto' %}
+        {% if resolucion == 'apto' %}
+            {% set badge_class = 'bg-success' %}
+            {% set badge_text = 'Apto' %}
+        {% elif resolucion == 'no_apto' %}
+            {% set badge_class = 'bg-danger' %}
+            {% set badge_text = 'No Apto' %}
+        {% elif resolucion == 'nota_credito' %}
+            {% set badge_class = 'bg-primary' %}
+            {% set badge_text = 'Nota de Crédito' %}
+        {% elif resolucion == 'inhabilitado' %}
+            {% set badge_class = 'bg-secondary' %}
+            {% set badge_text = 'Inhabilitado' %}
+        {% else %}
+            {% set badge_class = 'bg-info' %}
+            {% set badge_text = resolucion | replace('_', ' ') | title if resolucion else 'Resuelto' %}
+        {% endif %}
+        
+        {% if resolutor %}
+            {% set tooltip_text = 'Resuelto por: ' ~ resolutor.nombre_completo %}
+        {% else %}
+            {% set tooltip_text = 'Resuelto' %}
+        {% endif %}
+    {% endif %}
+
+    <span class="badge {{ badge_class }}" 
+          data-bs-toggle="tooltip" 
+          data-bs-placement="top" 
+          title="{{ tooltip_text }}">
+        {{ badge_text }}
+    </span>
+{% endmacro %}

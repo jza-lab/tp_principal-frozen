@@ -19,10 +19,10 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!columnWrapper || !icon) return;
 
             // Alternar la clase en el contenedor principal de la columna
-            columnWrapper.classList.toggle('columna-colapsada');
+            columnWrapper.classList.toggle('kanban-column-compressed');
 
             // Actualizar el ícono de la flecha
-            if (columnWrapper.classList.contains('columna-colapsada')) {
+            if (columnWrapper.classList.contains('kanban-column-compressed')) {
                 icon.classList.remove('bi-chevron-up');
                 icon.classList.add('bi-chevron-down');
             } else {

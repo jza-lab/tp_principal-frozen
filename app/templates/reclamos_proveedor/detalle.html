@@ -82,6 +82,7 @@
                 <div class="card-body">
                     {% if reclamo.estado == 'ABIERTO' %}
                         <form action="{{ url_for('orden_compra.cerrar_reclamo', reclamo_id=reclamo.id) }}" method="POST">
+                            {{ csrf_form.csrf_token }}
                             <div class="mb-3">
                                 <label for="comentario_cierre" class="form-label">Comentario de Cierre</label>
                                 <textarea name="comentario_cierre" id="comentario_cierre" class="form-control" rows="3" required></textarea>

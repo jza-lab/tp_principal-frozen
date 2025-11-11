@@ -316,6 +316,22 @@ def crear_reclamo(orden_id):
         return redirect(url_for("orden_compra.listar"))
     
     orden = orden_response.get("data")
+    
+    problemas_por_item = {}
+    motivo_principal = None
+    if request.method == "GET":
+        problemas_por_item = orden_controller._get_detalles_problemas_por_item(orden)
+        # Determinar el motivo principal (el primer problema encontrado que no sea de cantidad)
+        for motivo in problemas_por_item.values():
+            if motivo and motivo != "CANTIDAD_INCORRECTA":
+                motivo_principal = motivo
+                break
+        # Si no se encontró un motivo de calidad, tomar el primero que exista
+        if not motivo_principal:
+             for motivo in problemas_por_item.values():
+                if motivo:
+                    motivo_principal = motivo
+                    break
 
     if request.method == "POST":
         resultado, status_code = reclamo_controller.crear_reclamo_con_items(request.form)
@@ -331,7 +347,12 @@ def crear_reclamo(orden_id):
             else:
                 flash(f"Error al crear el reclamo: {error_msg}", "error")
 
-    return render_template("reclamos_proveedor/formulario.html", orden=orden)
+    return render_template(
+        "reclamos_proveedor/formulario.html",
+        orden=orden,
+        problemas_por_item=problemas_por_item,
+        motivo_principal=motivo_principal
+    )
 
 @orden_compra_bp.route("/reclamos")
 @jwt_required()

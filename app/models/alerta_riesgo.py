@@ -204,8 +204,59 @@ class AlertaRiesgoModel(BaseModel):
             logger.error(f"Error verificando si la entidad {tipo_entidad}:{id_entidad} está en otras alertas: {e}", exc_info=True)
             return True # Ser precavido: si hay un error, asumir que sí está en alerta para no quitar el flag por error.
 
+    def actualizar_estado_afectados_por_entidad(self, tipo_entidad: str, id_entidad, resolucion: str, usuario_id: int):
+        """
+        Actualiza el estado de una entidad específica en TODAS las alertas en las que aparece.
+        """
+        try:
+            update_data = {
+                'estado': 'resuelto',
+                'resolucion_aplicada': resolucion,
+                'id_usuario_resolucion': usuario_id
+            }
+            self.db.table('alerta_riesgo_afectados').update(update_data).eq('tipo_entidad', tipo_entidad).eq('id_entidad', str(id_entidad)).execute()
+            
+            # Después de actualizar, verificar si alguna de las alertas afectadas puede cerrarse.
+            self.verificar_y_cerrar_alerta_por_entidad_resuelta(tipo_entidad, id_entidad)
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error en actualizar_estado_afectados_por_entidad para {tipo_entidad}:{id_entidad}: {e}", exc_info=True)
+
 
     def obtener_afectados_con_estado(self, alerta_id):
         return self.db.table('alerta_riesgo_afectados').select(
             '*'
         ).eq('alerta_id', alerta_id).execute().data
+
+    def verificar_y_cerrar_alerta_por_entidad_resuelta(self, tipo_entidad, id_entidad):
+        """
+        Cuando una entidad (ej. un lote) se resuelve (sale de cuarentena), esta
+        función busca todas las alertas en las que estaba involucrada y verifica
+        si alguna de ellas puede cerrarse.
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            # 1. Encontrar todas las filas de 'afectados' para esta entidad
+            afectaciones = self.db.table('alerta_riesgo_afectados') \
+                .select('alerta_id') \
+                .eq('tipo_entidad', tipo_entidad) \
+                .eq('id_entidad', str(id_entidad)) \
+                .execute().data
+            
+            if not afectaciones:
+                logger.info(f"La entidad {tipo_entidad}:{id_entidad} no está afectada por ninguna alerta. No se hace nada.")
+                return
+
+            # 2. Iterar sobre cada alerta encontrada y verificar si se puede cerrar
+            alerta_ids = {a['alerta_id'] for a in afectaciones} # Usar un set para evitar duplicados
+            logger.info(f"La entidad {tipo_entidad}:{id_entidad} está en {len(alerta_ids)} alerta(s). Verificando si alguna puede cerrarse...")
+            
+            for alerta_id in alerta_ids:
+                self.verificar_y_cerrar_alerta(alerta_id)
+
+        except Exception as e:
+            logger.error(f"Error en verificar_y_cerrar_alerta_por_entidad_resuelta para {tipo_entidad}:{id_entidad}: {e}", exc_info=True)
