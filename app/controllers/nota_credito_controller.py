@@ -135,7 +135,7 @@ class NotaCreditoController(BaseController):
             
             # Necesitamos más detalles del cliente y pedido
             pedido_info = self.pedido_model.find_by_id(nc_data['pedido_origen_id']).get('data', {})
-            cliente_info = self.db.table('clientes').select('razon_social, cuit').eq('id', nc_data['cliente_id']).single().execute().data or {}
+            cliente_info = self.model.db.table('clientes').select('razon_social, cuit').eq('id', nc_data['cliente_id']).single().execute().data or {}
 
             nc_data['pedido_codigo'] = pedido_info.get('codigo', 'N/A')
             nc_data['cliente_razon_social'] = cliente_info.get('razon_social', 'N/A')

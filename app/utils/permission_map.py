@@ -44,7 +44,7 @@ CANONICAL_PERMISSION_MAP = {
     'admin_actualizar_precios_excel': ['ADMIN'],
 
     # Módulo: Comercial (Ventas y Clientes)
-    'logistica_gestion_ov': [], # Permiso para que Vendedor gestione Órdenes de Venta
+    'logistica_gestion_ov': ['VENDEDOR'], # Permiso para que Vendedor gestione Órdenes de Venta
     'planificar_ov': ['VENDEDOR', 'SUPERVISOR', 'GERENTE'],
     'gestionar_clientes': ['VENDEDOR'],
     'finanzas_ver_precios_costos': ['SUPERVISOR', 'GERENTE'],
@@ -65,7 +65,7 @@ CANONICAL_PERMISSION_MAP = {
     'gestionar_catalogo_de_productos': ['SUPERVISOR', 'ADMIN', 'GERENTE'],
     'gestionar_catalogo_insumos': ['SUPERVISOR', 'ADMIN'], # Crear, editar, inhabilitar insumos
     'gestionar_inventario': ['SUPERVISOR'], # Registrar ingresos y egresos de stock
-    'gestionar_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'], # Crear y gestionar lotes de productos
+    'gestionar_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Crear y gestionar lotes de productos
     'almacen_consulta_stock': [ 'VENDEDOR', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'realizar_control_de_calidad_insumos': ['SUPERVISOR_CALIDAD'],
     'registrar_ingreso_de_materia_prima': ['ADMIN'],
@@ -102,6 +102,7 @@ CANONICAL_PERMISSION_MAP = {
     'configurar_alertas': ['SUPERVISOR', 'IT', 'GERENTE'],
     'gestionar_reclamos': ['ADMIN', 'VENDEDOR', 'GERENTE'],
     'crear_reclamo_proveedor': ['SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
+    'consultar_alertas_riesgo': ['ADMIN','GERENTE', 'SUPERVISOR', 'VENDEDOR'],
     
     
     

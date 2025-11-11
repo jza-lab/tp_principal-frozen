@@ -766,6 +766,7 @@
     align-items: center;
     gap: 4px;
     border: 1px solid #fb923c;
+}
 /* ===== ESTILOS PARA COLAPSO HORIZONTAL ===== */
 .kanban-column-wrapper {
     transition: all 0.3s ease-in-out;
@@ -782,29 +783,74 @@
 }
 
 .kanban-column-wrapper.kanban-column-compressed .column-header {
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-    text-align: left;
     height: 100%;
     cursor: pointer;
     border-radius: 12px;
     border: 2px solid #e5e7eb;
     background: #f9fafb;
-    justify-content: space-between; /* Alinea título y flecha */
-    padding: 18px 10px; /* Ajuste de padding para vertical */
+    padding: 18px 10px;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
 }
 
 .kanban-column-wrapper.kanban-column-compressed .kanban-title-text {
-    padding-bottom: 15px; /* Más espacio para el título */
+   writing-mode: vertical-rl;
+   transform: rotate(180deg);
+   padding: 0;
+   text-align: left;
 }
 
 .kanban-column-wrapper.kanban-column-compressed .column-toggle {
-    transform: rotate(90deg); /* Gira la flecha para que apunte correctamente */
-    align-self: flex-start;
+    display: none;
 }
 
-.kanban-column-wrapper.kanban-column-compressed .column-count-badge,
+.kanban-column-wrapper.kanban-column-compressed .column-count-badge {
+    display: inline-block;
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
 .kanban-column-wrapper.kanban-column-compressed .kanban-cards,
 .kanban-column-wrapper.kanban-column-compressed .line-status-indicator {
     display: none;
+}
+.kanban-column-wrapper:not(.kanban-column-compressed) {
+    min-width: 380px !important;
+    flex-grow: 1;
+}
+
+/* ===== CONTROLES DEL TABLERO ===== */
+.board-controls {
+    background: white;
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+
+.control-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 20px;
+}
+
+.control-label {
+    font-weight: 700;
+    color: #374151;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.column-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 20px;
 }
