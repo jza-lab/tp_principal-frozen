@@ -1154,7 +1154,7 @@ class LoteProductoController(BaseController):
                 'cantidad_inicial': orden_produccion_data['cantidad_planificada'],
                 'orden_produccion_id': orden_id,
                 'fecha_produccion': date.today().isoformat(),
-                'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat(),
+                'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat(), # <-- Fecha de vencimiento
                 'estado': estado_lote_inicial
             }
             resultado_lote, status_lote = self.crear_lote_desde_formulario(datos_lote, usuario_id=usuario_id)
