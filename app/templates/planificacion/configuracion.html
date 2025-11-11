@@ -32,21 +32,26 @@
                         <div class="col-md-4">
                             <label class="form-label">Capacidad Estándar</label>
                             <div class="input-group">
-                                <input type="number" class="form-control" name="capacidad_std" value="{{ linea.tiempo_disponible_std_dia | round(0) }}" step="1">
+                                <input type="number" class="form-control" name="capacidad_std" 
+                                       value="{{ linea.tiempo_disponible_std_dia | round(0) }}" 
+                                       step="1" 
+                                       min="0" 
+                                       max="960"
+                                       required> {# <-- ¡AÑADIR ESTO! #}
                                 <span class="input-group-text">min/día</span>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Eficiencia (%)</label>
                             <div class="input-group">
-                                <input type="number" class="form-control" name="eficiencia" value="{{ (linea.eficiencia * 100) | round(0) }}" min="0" max="100" step="1">
+                                <input type="number" class="form-control" name="eficiencia" value="{{ (linea.eficiencia * 100) | round(0) }}" min="0" max="100" step="1" required> {# <-- ¡AÑADIR ESTO! #}
                                 <span class="input-group-text">%</span>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Utilización (%)</label>
                             <div class="input-group">
-                                <input type="number" class="form-control" name="utilizacion" value="{{ (linea.utilizacion * 100) | round(0) }}" min="0" max="100" step="1">
+                                <input type="number" class="form-control" name="utilizacion" value="{{ (linea.utilizacion * 100) | round(0) }}" min="0" max="100" step="1" required> {# <-- ¡AÑADIR ESTO! #}
                                 <span class="input-group-text">%</span>
                             </div>
                         </div>
@@ -172,7 +177,8 @@
                                        name="tolerancia_sobreproduccion_porcentaje" 
                                        value="{{ configuracion.TOLERANCIA_SOBREPRODUCCION_PORCENTAJE | default(0) }}" 
                                        min="0" max="100" step="1"
-                                       oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                                       oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                                       required>
                                 <span class="input-group-text">%</span>
                             </div>
                             <small class="form-text text-muted">
