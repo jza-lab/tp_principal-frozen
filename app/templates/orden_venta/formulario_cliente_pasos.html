@@ -658,8 +658,8 @@
                     option.value && (searchTerm === '' || option.text.toLowerCase().includes(searchTerm))
                 );
                 
-                // Ocultar panel si no hay nada que mostrar (solo queda el placeholder "seleccione...")
-                if (filteredOptions.length <= 1 && searchTerm !== '') {
+                // --- FIX: Ocultar el panel solo si NO HAY resultados ---
+                if (filteredOptions.length === 0 && searchTerm !== '') {
                     suggestionsPanel.style.display = 'none';
                     return;
                 }
