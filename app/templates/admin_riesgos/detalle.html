@@ -5,11 +5,18 @@
 {% block app_content %}
 <div class="container-fluid mt-4 px-1 px-md-3">
     <div class="card">
-        <div class="card-header bg-danger text-black">
+        <div class="card-header bg-danger text-black d-flex justify-content-between align-items-center">
             <h4 class="mb-0">
                 <i class="bi bi-exclamation-triangle-fill me-2"></i>
                 Gestión de Alerta de Riesgo: {{ alerta.codigo }}
             </h4>
+            <div>
+                {% if alerta.estado == 'Pendiente' %}
+                <button type="button" class="btn btn-sm btn-light" id="btn-resolver-alerta">
+                    <i class="bi bi-shield-check me-1"></i> Marcar como Resuelta
+                </button>
+                {% endif %}
+            </div>
         </div>
         <div class="card-body">
             <p class="card-text">
@@ -220,7 +227,7 @@
                                                 class="{% if pedido.estado_resolucion == 'resuelto' %}table-light text-muted{% endif %}">
                                                 <td>
                                                     <input type="checkbox" name="pedido_ids" value="{{ pedido.id }}"
-                                                        class="pedido-checkbox" {% if
+                                                        class="pedido-checkbox" {% if alerta.estado != 'Pendiente' or
                                                         pedido.estado_resolucion=='resuelto' %}disabled{% endif %}>
                                                 </td>
                                                 <td><a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}">#{{
@@ -242,7 +249,7 @@
                                 {% else %}
                                 <p class="text-muted small">No hay pedidos afectados.</p>
                                 {% endif %}
-                                {% if pedidos %}
+                                {% if alerta.estado == 'Pendiente' and pedidos %}
                                 <div class="d-flex justify-content-end mt-3">
                                     <button type="button" class="btn btn-info" data-bs-toggle="modal"
                                         data-bs-target="#modalContactarClientes">
@@ -253,8 +260,8 @@
                             </div>
                         </div>
 
-                        <!-- Sección de Acciones (solo si la alerta está pendiente) -->
-                        {% if alerta.estado == 'Pendiente' %}
+                        <!-- Sección de Acciones (solo si la alerta está pendiente y hay pedidos) -->
+                        {% if alerta.estado == 'Pendiente' and pedidos %}
                         <div class="card">
                             <div class="card-header">
                                 <h5><i class="bi bi-lightning-charge me-2"></i>Acciones de Respuesta</h5>
@@ -618,5 +625,47 @@
         }
     });
 </script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const btnResolver = document.getElementById('btn-resolver-alerta');
+        if (btnResolver) {
+            btnResolver.addEventListener('click', function() {
+                showConfirmationModal(
+                    'Confirmar Resolución',
+                    '¿Está seguro de que desea marcar esta alerta como resuelta? Esta acción forzará la resolución de todos los items pendientes y el estado "Alertado" será removido de todas las entidades (si no están afectadas por otra alerta activa). Esta acción no se puede deshacer.',
+                    function() {
+                        // Si el usuario confirma, enviar la solicitud POST
+                        const url = "{{ url_for('admin_riesgo.resolver_alerta_riesgo_manualmente', codigo_alerta=alerta.codigo) }}";
+                        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
 
+                        fetch(url, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': csrfToken
+                            },
+                            body: JSON.stringify({}) // Cuerpo vacío ya que la acción no necesita datos
+                        })
+                        .then(response => {
+                            // La respuesta de un redirect es opaca, simplemente recargamos la página
+                            if (response.ok || response.redirected) {
+                                window.location.reload();
+                            } else {
+                                // Si hay un error, intentamos mostrarlo
+                                return response.json().then(data => {
+                                    showNotificationModal('Error', data.error || 'No se pudo resolver la alerta.', 'error');
+                                });
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error en la petición fetch:', error);
+                            showNotificationModal('Error', 'Error de conexión. Por favor, intente de nuevo.', 'error');
+                        });
+                    },
+                    'warning'
+                );
+            });
+        }
+    });
+</script>
 {% endblock %}

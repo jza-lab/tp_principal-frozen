@@ -24,7 +24,7 @@ class RiesgoController(BaseController):
 
     def previsualizar_riesgo(self, tipo_entidad, id_entidad):
         try:
-            afectados = self.trazabilidad_model.obtener_lista_afectados(tipo_entidad, id_entidad)
+            afectados = self.trazabilidad_model.obtener_afectados_para_alerta(tipo_entidad, id_entidad)
             
             if not afectados:
                 return {"success": True, "data": {"afectados_detalle": {}}}, 200
@@ -50,7 +50,7 @@ class RiesgoController(BaseController):
             if not tipo_entidad or not id_entidad or not motivo:
                 return {"success": False, "error": "tipo_entidad, id_entidad y motivo son requeridos."}, 400
             
-            afectados = self.trazabilidad_model.obtener_lista_afectados(tipo_entidad, id_entidad)
+            afectados = self.trazabilidad_model.obtener_afectados_para_alerta(tipo_entidad, id_entidad)
             
             count_res = self.alerta_riesgo_model.db.table(self.alerta_riesgo_model.get_table_name()).select('count', count='exact').execute()
             count = count_res.count
@@ -77,7 +77,7 @@ class RiesgoController(BaseController):
             if afectados:
                 self.alerta_riesgo_model.asociar_afectados(nueva_alerta['id'], afectados)
                 # Procesar efectos secundarios después de crear la alerta
-                self._procesar_efectos_secundarios_alerta(afectados, f"Alerta {nueva_alerta['codigo']}", usuario_id)
+                self._procesar_efectos_secundarios_alerta(nueva_alerta, afectados, f"Alerta {nueva_alerta['codigo']}", usuario_id)
             
             self._enviar_notificaciones_alerta(nueva_alerta)
 
@@ -90,7 +90,7 @@ class RiesgoController(BaseController):
             logger.error(f"Error al crear alerta de riesgo: {e}", exc_info=True)
             return {"success": False, "error": f"Error interno: {str(e)}"}, 500
 
-    def _procesar_efectos_secundarios_alerta(self, afectados, motivo_log, usuario_id):
+    def _procesar_efectos_secundarios_alerta(self, alerta, afectados, motivo_log, usuario_id):
         from app.controllers.inventario_controller import InventarioController
         from app.controllers.lote_producto_controller import LoteProductoController
         from app.controllers.orden_produccion_controller import OrdenProduccionController
@@ -111,7 +111,22 @@ class RiesgoController(BaseController):
 
             # 2. Poner lotes en cuarentena
             if tipo == 'lote_insumo':
-                inventario_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999, usuario_id)
+                lote_info_res = inventario_controller.model.find_by_id(entidad_id, id_field='id_lote')
+                if lote_info_res.get('success') and lote_info_res.get('data') and len(lote_info_res.get('data')) > 0:
+                    lote_info = lote_info_res.get('data')[0]
+                    if lote_info.get('cantidad_disponible', 0) <= 0:
+                        logger.info(f"Lote de insumo {entidad_id} está agotado. Marcando como resuelto.")
+                        self.alerta_riesgo_model.actualizar_estado_afectados(
+                            alerta['id'], 
+                            [entidad_id], 
+                            'agotado', 
+                            'lote_insumo', 
+                            usuario_id
+                        )
+                    else:
+                        inventario_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999, usuario_id)
+                else:
+                     inventario_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999, usuario_id)
             elif tipo == 'lote_producto':
                 lote_producto_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999)
 
@@ -138,7 +153,7 @@ class RiesgoController(BaseController):
             if not tipo_entidad or not id_entidad or not motivo:
                 return {"success": False, "error": "tipo_entidad, id_entidad y motivo son requeridos."}, 400
             
-            afectados = self.trazabilidad_model.obtener_lista_afectados(tipo_entidad, id_entidad)
+            afectados = self.trazabilidad_model.obtener_afectados_para_alerta(tipo_entidad, id_entidad)
             
             count_res = self.alerta_riesgo_model.db.table(self.alerta_riesgo_model.get_table_name()).select('count').execute()
             count = count_res.data[0]['count'] if count_res and count_res.data else 0
@@ -212,14 +227,29 @@ class RiesgoController(BaseController):
             afectados_detalle = self.alerta_riesgo_model.obtener_afectados_detalle_para_previsualizacion(afectados_con_estado)
 
             # Enriquecer los detalles con el estado de resolución
-            estado_map = {f"{a['tipo_entidad']}-{a['id_entidad']}": (a['estado'], a['resolucion_aplicada']) for a in afectados_con_estado}
+            estado_map = {f"{a['tipo_entidad']}-{a['id_entidad']}": (a['estado'], a.get('resolucion_aplicada')) for a in afectados_con_estado}
             
-            for tipo_entidad, lista_entidades in afectados_detalle.items():
-                id_field = 'id' if tipo_entidad == 'pedidos' else 'id_lote'
-                if tipo_entidad == 'ordenes_produccion': id_field = 'id'
+            map_plural_a_singular = {
+                'lotes_insumo': 'lote_insumo',
+                'ordenes_produccion': 'orden_produccion',
+                'lotes_producto': 'lote_producto',
+                'pedidos': 'pedido'
+            }
+
+            for tipo_entidad_plural, lista_entidades in afectados_detalle.items():
+                tipo_entidad_singular = map_plural_a_singular.get(tipo_entidad_plural)
+                if not tipo_entidad_singular:
+                    logger.warning(f"No se encontró mapeo para el tipo de entidad plural: {tipo_entidad_plural}")
+                    continue
+
+                id_field = 'id_lote' if 'lote' in tipo_entidad_singular else 'id'
 
                 for entidad in lista_entidades:
-                    key = f"{tipo_entidad.rstrip('es').replace('_', ' ')}-{entidad[id_field]}"
+                    entidad_id = entidad.get(id_field)
+                    if not entidad_id:
+                        continue
+                        
+                    key = f"{tipo_entidad_singular}-{entidad_id}"
                     estado, resolucion = estado_map.get(key, ('pendiente', None))
                     entidad['estado_resolucion'] = estado
                     entidad['resolucion_aplicada'] = resolucion
@@ -230,7 +260,7 @@ class RiesgoController(BaseController):
             if 'pedidos' in afectados_detalle:
                 from app.controllers.pedido_controller import PedidoController
                 pedido_controller = PedidoController()
-                afectados_trazabilidad_completa = self.trazabilidad_model.obtener_lista_afectados(
+                afectados_trazabilidad_completa = self.trazabilidad_model.obtener_afectados_para_alerta(
                     alerta['origen_tipo_entidad'], 
                     alerta['origen_id_entidad']
                 )
@@ -379,7 +409,7 @@ class RiesgoController(BaseController):
             if not alerta_res.get('data'): return ({"success": False, "error": "Alerta no encontrada."}, 404)
             alerta = alerta_res.get('data')[0]
 
-            afectados_completo = self.trazabilidad_model.obtener_lista_afectados(
+            afectados_completo = self.trazabilidad_model.obtener_afectados_para_alerta(
                 alerta['origen_tipo_entidad'], 
                 alerta['origen_id_entidad']
             )
@@ -654,3 +684,40 @@ class RiesgoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error general en _enviar_notificaciones_alerta para {nueva_alerta.get('codigo')}: {e}", exc_info=True)
+
+    def resolver_alerta_manualmente(self, codigo_alerta, usuario_id):
+        try:
+            alerta_res = self.alerta_riesgo_model.find_all({'codigo': codigo_alerta}, limit=1)
+            if not alerta_res.get('success') or not alerta_res.get('data'):
+                return {"success": False, "error": "Alerta no encontrada."}, 404
+            alerta = alerta_res.get('data')[0]
+
+            if alerta['estado'] != 'Pendiente':
+                return {"success": False, "error": f"La alerta ya está en estado '{alerta['estado']}'."}, 400
+
+            # Cambiar el estado principal de la alerta
+            self.alerta_riesgo_model.update(alerta['id'], {'estado': 'Resuelta'})
+            
+            # Marcar todos los afectados como resueltos si aún están pendientes
+            self.alerta_riesgo_model.db.table('alerta_riesgo_afectados').update({
+                'estado': 'resuelto',
+                'resolucion_aplicada': 'resuelta_manualmente',
+                'id_usuario_resolucion': usuario_id
+            }).eq('alerta_id', alerta['id']).eq('estado', 'pendiente').execute()
+
+            # Quitar el flag 'en_alerta' de todas las entidades afectadas
+            afectados = self.alerta_riesgo_model.obtener_afectados(alerta['id'])
+            for afectado in afectados:
+                sigue_en_alerta = self.alerta_riesgo_model.entidad_esta_en_otras_alertas_activas(
+                    afectado['tipo_entidad'], 
+                    afectado['id_entidad'],
+                    alerta['id']
+                )
+                if not sigue_en_alerta:
+                    self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(afectado['tipo_entidad'], afectado['id_entidad'], False)
+
+            return {"success": True, "message": "La alerta ha sido marcada como resuelta manualmente."}, 200
+
+        except Exception as e:
+            logger.error(f"Error al resolver alerta manualmente: {e}", exc_info=True)
+            return {"success": False, "error": "Error interno del servidor."}, 500

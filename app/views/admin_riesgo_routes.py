@@ -127,6 +127,11 @@ def api_crear_alerta_riesgo():
     usuario_id = get_jwt_identity()
     controller = RiesgoController()
     resultado, status_code = controller.crear_alerta_riesgo_con_usuario(request.json, usuario_id)
+    
+    if status_code == 201:
+        alerta_codigo = resultado.get('data', {}).get('codigo')
+        resultado['redirect_url'] = url_for('admin_riesgo.detalle_alerta_riesgo', codigo_alerta=alerta_codigo)
+        
     return jsonify(resultado), status_code
 
 @riesgos_bp.route('/api/subir_evidencia', methods=['POST'])
@@ -152,3 +157,21 @@ def api_subir_evidencia():
     resultado, status_code = controller.upload_file(file, 'evidencias_riesgos', unique_filename)
 
     return jsonify(resultado), status_code
+
+@admin_riesgo_bp.route('/<string:codigo_alerta>/resolver', methods=['POST'])
+@jwt_required(locations=["cookies"])
+@permission_required('admin_riesgos')
+def resolver_alerta_riesgo_manualmente(codigo_alerta):
+    from app.controllers.riesgo_controller import RiesgoController
+    from flask_jwt_extended import get_jwt_identity
+
+    controller = RiesgoController()
+    usuario_id = get_jwt_identity()
+    resultado, status_code = controller.resolver_alerta_manualmente(codigo_alerta, usuario_id)
+
+    if resultado.get('success'):
+        flash(resultado.get('message', 'Alerta marcada como resuelta.'), 'success')
+    else:
+        flash(resultado.get('error', 'No se pudo resolver la alerta.'), 'danger')
+        
+    return redirect(url_for('admin_riesgo.detalle_alerta_riesgo', codigo_alerta=codigo_alerta))
