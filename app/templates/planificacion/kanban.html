@@ -341,18 +341,21 @@
                             {# ====== BOTONES DE ACCIÓN ====== #}
                             <div class="card-actions">
                                 {% if estado_key == 'LISTA_PARA_PRODUCIR' %}
-                                    <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}" 
-                                       class="btn-action btn-action-primary">
-                                        <i class="bi bi-play-fill"></i>
-                                        <span>Iniciar Trabajo</span>
-                                    </a>
+                                    {% if 'produccion_ejecucion' is has_permission %}
+                                        <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}" 
+                                           class="btn-action btn-action-primary">
+                                            <i class="bi bi-play-fill"></i>
+                                            <span>Iniciar Trabajo</span>
+                                        </a>
+                                    {% endif %}
                                 {% elif estado_key == 'EN_PROCESO' %}
                                     <a href="{{ url_for('produccion_kanban.foco_produccion', op_id=orden.id) }}"
                                        class="btn-action btn-action-success">
                                         <i class="bi bi-eye-fill"></i>
                                         <span>Ver Foco</span>
                                     </a>
-                                {% elif estado_key == 'CONTROL_DE_CALIDAD' %}
+                                {% endif %}
+                                {% if estado_key == 'CONTROL_DE_CALIDAD' %}
                                     <button class="btn-action btn-action-primary btn-procesar-calidad" data-op-id="{{ orden.id }}">
                                         <i class="bi bi-clipboard2-check"></i>
                                         <span>Procesar Calidad</span>

@@ -223,6 +223,7 @@
             </div>
 
             {# Botones de Acción Principales #}
+            {% if 'produccion_ejecucion' is has_permission %}
             <div class="action-buttons">
                 <button class="btn btn-action btn-reportar" id="btn-reportar-avance" data-bs-toggle="modal" data-bs-target="#modalReportarAvance">
                     <i class="bi bi-clipboard-check-fill"></i>
@@ -233,6 +234,7 @@
                     <span>Pausar Trabajo</span>
                 </button>
             </div>
+            {% endif %}
 
         </div>
 
