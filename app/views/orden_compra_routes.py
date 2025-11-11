@@ -351,10 +351,19 @@ def listar_reclamos():
     response, _ = controller.get_all_reclamos()
     reclamos = []
     if response and response.get("success"):
-        reclamos = response.get("data", [])  # <-- Esto es correcto, extraes la lista
+        reclamos_data = response.get("data", [])
+        for reclamo in reclamos_data:
+            if reclamo.get('created_at'):
+                # Asegurarse de que el formato coincida con lo que devuelve la BD
+                try:
+                    reclamo['created_at'] = datetime.fromisoformat(reclamo['created_at'])
+                except (ValueError, TypeError):
+                    # Si falla, simplemente lo dejamos como string para no romper la app
+                    pass
+        reclamos = reclamos_data
     elif response:
         flash(response.get("error", "Error al cargar los reclamos."), "error")
     else:
         flash("Error desconocido al cargar los reclamos.", "error")
         
-    return render_template("reclamos_proveedor/listar.html", reclamos=reclamos) # <-- Pasas la lista
+    return render_template("reclamos_proveedor/listar.html", reclamos=reclamos)

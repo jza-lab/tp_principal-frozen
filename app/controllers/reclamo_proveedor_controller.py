@@ -83,7 +83,7 @@ class ReclamoProveedorController(BaseController):
                 proveedor_id_creado = reclamo_creado.get('proveedor_id')
                 
                 # 6. Enviar email (si se puede)
-                proveedor_resp, _ = self.proveedor_controller.obtener_proveedor_por_id(proveedor_id_creado)
+                proveedor_resp, _ = self.proveedor_controller.obtener_proveedor(proveedor_id_creado)
                 
                 if proveedor_resp.get('success'):
                     proveedor = proveedor_resp.get('data')
@@ -121,10 +121,10 @@ class ReclamoProveedorController(BaseController):
     def get_all_reclamos(self):
         try:
             enriched_query = "*, proveedor:proveedores(nombre), orden:ordenes_compra(codigo_oc)"
-            reclamos = self.model.find_all(select=enriched_query, order_by={'created_at': 'desc'})
+            response = self.model.find_all(select_query=enriched_query, order_by='created_at.desc')
             
-            if reclamos:
-                return self.success_response(reclamos)
+            if response.get('success'):
+                return self.success_response(response['data'])
             
             return self.success_response([], "No se encontraron reclamos.")
         except Exception as e:
@@ -135,9 +135,12 @@ class ReclamoProveedorController(BaseController):
         try:
             # Asegurarnos que el ID sea int
             int_orden_id = int(orden_id)
-            result = self.model.find_all(filters={'orden_compra_id': int_orden_id}, limit=1)
-            if result:
-                return self.success_response(result[0])
+            response = self.model.find_all(filters={'orden_compra_id': int_orden_id}, limit=1)
+            
+            if response.get('success') and response.get('data'):
+                # find_all devuelve una lista, tomamos el primer elemento
+                return self.success_response(response['data'][0])
+                
             return self.success_response(None, "No existe reclamo para esta orden.")
         except (ValueError, TypeError):
             return self.error_response(f"El ID de orden '{orden_id}' no es válido.", 400)
