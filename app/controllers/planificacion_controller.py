@@ -2249,7 +2249,7 @@ class PlanificacionController(BaseController):
         try:
             # 1. Buscar issue existente PENDIENTE
             existing_issue_resp = self.issue_planificacion_model.find_all(
-                filters={'orden_produccion_id': op_id, 'estado': 'PENDIENTE'},
+                filters={'orden_produccion_id': op_id}, # <-- ¡CORREGIDO!
                 limit=1
             )
 
@@ -2471,17 +2471,31 @@ class PlanificacionController(BaseController):
 
             if not linea in [1, 2]: continue
 
-            carga_op = float(self._calcular_carga_op(op))
+            # --- INICIO DE LA CORRECCIÓN ESTRUCTURAL ---
 
-            if carga_op <= capacidad_restante_map[linea]:
-                capacidad_restante_map[linea] -= carga_op
-                logger.info(f"[PlanAdaptativa] OK: OP {op_codigo} (Carga: {carga_op:.0f} min) cabe en L{linea} (Restante: {capacidad_restante_map[linea]:.0f} min).")
+            # 1. Obtenemos la capacidad diaria CONFIGURABLE de la línea
+            cap_diaria_linea = self._obtener_capacidad_diaria_estandar(linea)
+
+            # 2. Calculamos la carga total de la OP
+            carga_op_total = float(self._calcular_carga_op(op))
+
+            # 3. Calculamos la carga que esta OP consumirá el PRIMER DÍA
+            carga_del_primer_dia = min(carga_op_total, cap_diaria_linea)
+
+            # 4. Comparamos la carga del PRIMER DÍA con la capacidad restante de HOY
+            if carga_del_primer_dia <= capacidad_restante_map[linea]:
+                # OK, cabe. Restamos solo la carga de este día
+                capacidad_restante_map[linea] -= carga_del_primer_dia
+                logger.info(f"[PlanAdaptativa] OK: OP {op_codigo} (Carga Día 1: {carga_del_primer_dia:.0f} min) cabe en L{linea} (Restante: {capacidad_restante_map[linea]:.0f} min).")
+
             else:
-                logger.warning(f"[PlanAdaptativa] ¡CONFLICTO! OP {op_codigo} (Carga: {carga_op:.0f} min) NO cabe en L{linea} (Restante: {capacidad_restante_map[linea]:.0f} min).")
+                # CONFLICTO: No cabe ni siquiera el primer día.
+                logger.warning(f"[PlanAdaptativa] ¡CONFLICTO! OP {op_codigo} (Carga Día 1: {carga_del_primer_dia:.0f} min) NO cabe en L{linea} (Restante: {capacidad_restante_map[linea]:.0f} min).")
 
+                # Iniciar la replanificación
                 fecha_manana = fecha + timedelta(days=1)
                 simulacion_result = self._simular_asignacion_carga(
-                    carga_total_op=carga_op,
+                    carga_total_op=carga_op_total,
                     linea_propuesta=linea,
                     fecha_inicio_busqueda=fecha_manana,
                     op_id_a_excluir=op_id,
@@ -2490,46 +2504,103 @@ class PlanificacionController(BaseController):
 
                 if simulacion_result['success']:
                     nueva_fecha_inicio = simulacion_result['fecha_inicio_real']
+
+                    # --- ¡INICIO DE LA CORRECCIÓN! ---
+                    # 1. Obtener la FECHA DE FIN de la simulación
+                    fecha_fin_estimada_simulada = simulacion_result['fecha_fin_estimada']
+                    # --- FIN DE LA CORRECCIÓN! ---
+
                     self.orden_produccion_controller.model.update(op_id, {'fecha_inicio_planificada': nueva_fecha_inicio.isoformat()}, 'id')
 
-                    mensaje_issue = f"Movida del {fecha_iso} al {nueva_fecha_inicio.isoformat()} por falta de capacidad (ej. ausentismo o bloqueo)."
-                    snapshot_datos = {'motivo': 'REPLAN_AUTO_AUSENCIA', 'fecha_original': fecha_iso, 'fecha_nueva': nueva_fecha_inicio.isoformat()}
+                    # --- INICIO DE LA MEJORA (Lógica de Retraso) ---
 
-                    # --- ¡MODIFICADO! ---
-                    nuevo_issue = self._crear_o_actualizar_issue(op_id, 'REPLAN_AUTO_AUSENCIA', mensaje_issue, snapshot_datos)
+                    op_completa_resp = self.orden_produccion_controller.obtener_orden_por_id(op_id)
+                    op_completa = op_completa_resp.get('data', op)
+
+                    fecha_meta_str = op_completa.get('fecha_meta')
+                    fecha_meta = None
+                    es_retraso_agravado = False
+
+                    if fecha_meta_str:
+                        try:
+                            fecha_meta = date.fromisoformat(fecha_meta_str.split('T')[0].split(' ')[0])
+
+                            # --- ¡INICIO DE LA CORRECCIÓN! ---
+                            # 2. Comparar la FECHA DE FIN contra la FECHA META
+                            if fecha_fin_estimada_simulada > fecha_meta:
+                            # --- FIN DE LA CORRECCIÓN! ---
+                                es_retraso_agravado = True
+                        except ValueError:
+                            pass
+
+                    if es_retraso_agravado:
+                        # --- ¡INICIO DE LA CORRECCIÓN! ---
+                        # 3. Actualizar el mensaje para que muestre la fecha de fin
+                        mensaje_issue = f"¡RETRASO AGRAVADO! Movida por falta de capacidad. Terminará el {fecha_fin_estimada_simulada.isoformat()} (Meta: {fecha_meta.isoformat()})"
+                        # --- FIN DE LA CORRECCIÓN! ---
+
+                        tipo_error_final = 'SOBRECARGA_INMINENTE'
+                        snapshot_datos = {'motivo': 'REPLAN_AUTO_AUSENCIA', 'fecha_original': fecha_iso, 'fecha_nueva': nueva_fecha_inicio.isoformat(), 'fecha_meta': fecha_meta.isoformat()}
+                    else:
+                        mensaje_issue = f"Movida del {fecha_iso} al {nueva_fecha_inicio.isoformat()} por falta de capacidad (ej. ausentismo o bloqueo)."
+                        tipo_error_final = 'REPLAN_AUTO_AUSENCIA'
+                        snapshot_datos = {'motivo': 'REPLAN_AUTO_AUSENCIA', 'fecha_original': fecha_iso, 'fecha_nueva': nueva_fecha_inicio.isoformat()}
+
+                    nuevo_issue = self._crear_o_actualizar_issue(op_id, tipo_error_final, mensaje_issue, snapshot_datos)
+                    # --- FIN DE LA MEJORA ---
+
                     if nuevo_issue:
-                        # Añadir datos de la OP para el enriquecimiento
-                        nuevo_issue['op_codigo'] = op.get('codigo')
-                        nuevo_issue['op_producto_nombre'] = op.get('producto_nombre')
-                        # --- INICIO DE LA CORRECCIÓN ---
-                        nuevo_issue['cantidad_planificada'] = op.get('cantidad_planificada') # NO 'op_cantidad'
-                        # --- FIN DE LA CORRECCIÓN ---
-                        nuevo_issue['op_fecha_meta'] = op.get('fecha_meta')
-                        nuevo_issue['receta_id'] = op.get('receta_id')
+                        # Enriquecer 'nuevo_issue' con los datos de op_completa
+                        nuevo_issue['op_codigo'] = op_completa.get('codigo')
+                        nuevo_issue['op_producto_nombre'] = op_completa.get('producto_nombre')
+                        nuevo_issue['cantidad_planificada'] = op_completa.get('cantidad_planificada')
+                        nuevo_issue['op_fecha_meta'] = op_completa.get('fecha_meta')
+                        nuevo_issue['receta_id'] = op_completa.get('receta_id')
                         issues_generados_en_run.append(nuevo_issue)
-                    # --- FIN MODIFICACIÓN ---
 
                     logger.info(f"[PlanAdaptativa] ¡MOVIDA! {mensaje_issue}")
+                    # Actualizar el mapa de carga futura para la siguiente iteración del bucle
                     carga_actual_map_futura.setdefault(linea, {})[nueva_fecha_inicio.isoformat()] = \
-                        carga_actual_map_futura.get(linea, {}).get(nueva_fecha_inicio.isoformat(), 0.0) + carga_op
+                        carga_actual_map_futura.get(linea, {}).get(nueva_fecha_inicio.isoformat(), 0.0) + carga_op_total
+
                 else:
+                    # Falló la simulación (no hay espacio en 30 días)
                     mensaje_issue = f"OP {op_codigo} no cabe hoy ({fecha_iso}) y NO se encontró espacio en los próximos 30 días."
                     logger.error(f"[PlanAdaptativa] ¡ERROR CRÍTICO! {mensaje_issue}")
 
-                    # --- ¡MODIFICADO! ---
                     nuevo_issue = self._crear_o_actualizar_issue(op_id, 'SOBRECARGA_INMINENTE', mensaje_issue, {})
                     if nuevo_issue:
-                        # Añadir datos de la OP para el enriquecimiento
-                        nuevo_issue['op_codigo'] = op.get('codigo')
+                        # ... (enriquecer 'nuevo_issue' con op_codigo, etc.) ...
+                        nuevo_issue['op_codigo'] = op.get('codigo') # Usar 'op' ligera como fallback
                         nuevo_issue['op_producto_nombre'] = op.get('producto_nombre')
                         nuevo_issue['op_cantidad'] = op.get('cantidad_planificada')
                         nuevo_issue['op_fecha_meta'] = op.get('fecha_meta')
                         nuevo_issue['receta_id'] = op.get('receta_id')
                         issues_generados_en_run.append(nuevo_issue)
-                    # --- FIN MODIFICACIÓN ---
+
+            # --- FIN DE LA CORRECCIÓN ESTRUCTURAL ---
 
         logger.info(f"[PlanAdaptativa] Verificación de {fecha.isoformat()} finalizada.")
         return issues_generados_en_run # <-- ¡Devolver la lista!
+
+    def _obtener_capacidad_diaria_estandar(self, linea_id: int) -> float:
+        """
+        Obtiene la capacidad neta estándar de un día para una línea (fallback a 480).
+        """
+        try:
+            ct_resp = self.centro_trabajo_model.find_by_id(linea_id, 'id') #
+            if ct_resp.get('success'):
+                ct_data = ct_resp.get('data', {})
+                # LEE TUS VALORES CONFIGURABLES
+                cap_std = Decimal(ct_data.get('tiempo_disponible_std_dia', 480)) #
+                eficiencia = Decimal(ct_data.get('eficiencia', 1.0)) #
+                utilizacion = Decimal(ct_data.get('utilizacion', 1.0)) #
+
+                cap_neta = float(cap_std * eficiencia * utilizacion)
+                return cap_neta if cap_neta > 0 else 480.0
+        except Exception:
+            pass # Fallback
+        return 480.0
 
     def _get_feriados_ar(self, years: List[int]) -> dict:
         """
