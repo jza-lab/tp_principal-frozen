@@ -8,27 +8,6 @@
 
 {% block app_content %}
 
-{# #}
-{% if orden.orden_produccion_id %}
-<div id="opWarningModal" class="modal fade" tabindex="-1" aria-labelledby="opWarningModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-warning">
-                <h5 class="modal-title text-dark" id="opWarningModalLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Atención</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p class="fs-6">Esta Orden de Compra está vinculada a la <strong>Orden de Producción #{{ orden.orden_produccion_id }}</strong>.</p>
-                <p>Revise las fechas de entrega, ya que cualquier demora podría impactar directamente en el plan de producción.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Entendido</button>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">
@@ -59,6 +38,14 @@
         {% endif %}
     </div>
 </div>
+
+{% if orden.orden_produccion_id %}
+<div id="opWarningAlert" class="alert alert-warning alert-dismissible fade" role="alert">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    Esta Orden de Compra está vinculada a la <strong>Orden de Producción #{{ orden.orden_produccion_id }}</strong>. Revise las fechas de entrega, ya que cualquier demora podría impactar directamente en el plan de producción.
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endif %}
 
 <ul class="nav nav-tabs-custom mb-3" id="loteDetailTab" role="tablist">
     <li class="nav-item" role="presentation">
@@ -589,10 +576,12 @@ document.addEventListener('DOMContentLoaded', function () {
     
     const form = document.getElementById('recepcionForm');
     
-    var opWarningModal = document.getElementById('opWarningModal');
-    if (opWarningModal) {
-        var modal = new bootstrap.Modal(opWarningModal);
-        modal.show();
+    // Animación para la alerta de OP vinculada
+    var opWarningAlert = document.getElementById('opWarningAlert');
+    if (opWarningAlert) {
+        setTimeout(function() {
+            opWarningAlert.classList.add('show');
+        }, 150); // Pequeño delay para asegurar que la página se renderice primero
     }
 
     if (form) {
