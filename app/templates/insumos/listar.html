@@ -37,6 +37,22 @@
             <!-- Botones y Dropdown -->
             <div class="col-lg-7 col-md-12">
                 <div class="d-flex flex-wrap gap-2 justify-content-start justify-content-lg-end">
+                    <!-- Dropdown de Proveedores -->
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="proveedor-dropdown" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
+                            <i class="bi bi-truck"></i> Proveedores
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="proveedor-dropdown" id="proveedor-filter-list">
+                             {% for prov in proveedores %}
+                            <li>
+                                <div class="dropdown-item">
+                                    <input class="form-check-input proveedor-checkbox" type="checkbox" value="{{ prov.id }}" id="prov-{{ prov.id }}">
+                                    <label class="form-check-label" for="prov-{{ prov.id }}">{{ prov.nombre }}</label>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
                     <!-- Dropdown de Categorías -->
                     <div class="dropdown">
                         <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
