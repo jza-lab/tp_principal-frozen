@@ -1,0 +1,107 @@
+{% extends 'layouts/app_layout.html' %}
+
+{% block title %}Detalle de Reclamo #{{ reclamo.id }} - Sistema Frozen{% endblock %}
+
+{% block app_content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
+        <div>
+            <h1 class="h2 mb-1">Detalle de Reclamo #{{ reclamo.id }}</h1>
+            <p class="text-muted mb-0">Asociado a la Orden de Compra: 
+                <a href="{{ url_for('orden_compra.detalle', id=reclamo.orden_compra_id) }}">
+                    <code>{{ reclamo.orden.codigo_oc if reclamo.orden else 'N/A' }}</code>
+                </a>
+            </p>
+        </div>
+        <div class="btn-toolbar">
+            <a href="{{ url_for('orden_compra.listar_reclamos') }}" class="btn btn-outline-secondary me-2">
+                <i class="bi bi-arrow-left me-1"></i>Volver al Listado
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Información General del Reclamo</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Proveedor:</strong> {{ reclamo.proveedor.nombre if reclamo.proveedor else 'N/A' }}</p>
+                            <p><strong>Estado:</strong> <span class="badge bg-warning text-dark">{{ reclamo.estado }}</span></p>
+                            <p><strong>Fecha de Creación:</strong> {{ reclamo.created_at.strftime('%d/%m/%Y %H:%M') if reclamo.created_at else 'N/A' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Motivo General:</strong> {{ reclamo.motivo }}</p>
+                            <p><strong>Descripción:</strong> {{ reclamo.descripcion_problema }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5>Ítems Reclamados</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Insumo</th>
+                                    <th class="text-end">Cantidad Reclamada</th>
+                                    <th>Motivo Específico</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in reclamo['items'] %}
+                                <tr>
+                                    <td>{{ item.insumo.nombre if item.insumo else 'Insumo no encontrado' }}</td>
+                                    <td class="text-end">{{ item.cantidad_reclamada }}</td>
+                                    <td>{{ item.motivo or 'N/A' }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted">No se detallaron ítems en este reclamo.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">Acciones</h6>
+                </div>
+                <div class="card-body">
+                    {% if reclamo.estado == 'ABIERTO' %}
+                        <form action="{{ url_for('orden_compra.cerrar_reclamo', reclamo_id=reclamo.id) }}" method="POST">
+                            <div class="mb-3">
+                                <label for="comentario_cierre" class="form-label">Comentario de Cierre</label>
+                                <textarea name="comentario_cierre" id="comentario_cierre" class="form-control" rows="3" required></textarea>
+                            </div>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-circle-fill me-1"></i>Cerrar Reclamo
+                                </button>
+                            </div>
+                        </form>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <p class="mb-1"><strong>Reclamo Cerrado</strong></p>
+                            <p class="small mb-1"><strong>Fecha de Cierre:</strong> {{ reclamo.fecha_cierre.strftime('%d/%m/%Y %H:%M') if reclamo.fecha_cierre else 'N/A' }}</p>
+                            <p class="small mb-0"><strong>Comentario:</strong> {{ reclamo.comentario_cierre or 'N/A' }}</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

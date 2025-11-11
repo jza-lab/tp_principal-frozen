@@ -140,7 +140,10 @@ class ConsultaController(BaseController):
         return result.get('data'), None
 
     def obtener_consultas_por_cliente(self, cliente_id):
-        return self.model.find_all(filters={'cliente_id': cliente_id})
+        return self.model.find_all(
+            filters={'cliente_id': cliente_id},
+            select_query='*'
+        )
 
     def obtener_conteo_consultas_pendientes(self):
         response = self.model.find_all(

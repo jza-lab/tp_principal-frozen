@@ -318,17 +318,7 @@ def crear_reclamo(orden_id):
     orden = orden_response.get("data")
 
     if request.method == "POST":
-        titulo = request.form.get('titulo')
-        descripcion = request.form.get('descripcion')
-        
-        data_reclamo = {
-            'orden_compra_id': orden_id,
-            'proveedor_id': orden.get('proveedor', {}).get('id'),
-            'titulo': titulo,
-            'descripcion': descripcion
-        }
-        
-        resultado, status_code = reclamo_controller.crear_reclamo(data_reclamo)
+        resultado, status_code = reclamo_controller.crear_reclamo_con_items(request.form)
         
         if status_code == 200 and resultado.get("success"):
             flash("Reclamo al proveedor creado exitosamente.", "success")
@@ -367,3 +357,43 @@ def listar_reclamos():
         flash("Error desconocido al cargar los reclamos.", "error")
         
     return render_template("reclamos_proveedor/listar.html", reclamos=reclamos)
+
+@orden_compra_bp.route("/reclamos/<int:reclamo_id>")
+@jwt_required()
+@permission_required(accion='consultar_ordenes_de_compra')
+def detalle_reclamo(reclamo_id):
+    controller = ReclamoProveedorController()
+    response, _ = controller.get_reclamo_with_details(reclamo_id)
+
+    if not response.get("success"):
+        flash(response.get("error", "Reclamo no encontrado."), "error")
+        return redirect(url_for("orden_compra.listar_reclamos"))
+
+    reclamo = response.get("data")
+    # Convertir fechas a objetos datetime para la plantilla
+    if reclamo.get('created_at'):
+        reclamo['created_at'] = datetime.fromisoformat(reclamo['created_at'])
+    if reclamo.get('fecha_cierre'):
+        reclamo['fecha_cierre'] = datetime.fromisoformat(reclamo['fecha_cierre'])
+
+    return render_template("reclamos_proveedor/detalle.html", reclamo=reclamo)
+
+@orden_compra_bp.route("/reclamos/<int:reclamo_id>/cerrar", methods=["POST"])
+@jwt_required()
+@permission_required(accion='crear_reclamo_proveedor') # O un permiso más específico si existe
+def cerrar_reclamo(reclamo_id):
+    controller = ReclamoProveedorController()
+    comentario = request.form.get('comentario_cierre')
+
+    if not comentario:
+        flash("El comentario de cierre es obligatorio.", "error")
+        return redirect(url_for("orden_compra.detalle_reclamo", reclamo_id=reclamo_id))
+
+    response, _ = controller.cerrar_reclamo(reclamo_id, comentario)
+
+    if response.get("success"):
+        flash("El reclamo ha sido cerrado exitosamente.", "success")
+    else:
+        flash(response.get("error", "Error al cerrar el reclamo."), "error")
+    
+    return redirect(url_for("orden_compra.detalle_reclamo", reclamo_id=reclamo_id))

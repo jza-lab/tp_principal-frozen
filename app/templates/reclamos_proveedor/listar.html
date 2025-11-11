@@ -20,6 +20,7 @@ x{% extends 'layouts/app_layout.html' %}
                             <th scope="col">Título</th>
                             <th scope="col">Estado</th>
                             <th scope="col">Fecha Creación</th>
+                            <th scope="col">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -37,6 +38,11 @@ x{% extends 'layouts/app_layout.html' %}
                                 <span class="badge bg-primary">{{ reclamo.estado }}</span>
                             </td>
                             <td>{{ reclamo.created_at.strftime('%Y-%m-%d %H:%M') if reclamo.created_at else 'N/A' }}</td>
+                            <td>
+                                <a href="{{ url_for('orden_compra.detalle_reclamo', reclamo_id=reclamo.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye-fill me-1"></i> Ver Detalle
+                                </a>
+                            </td>
                         </tr>
                         {% else %}
                         <tr>
