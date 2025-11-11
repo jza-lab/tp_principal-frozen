@@ -1113,11 +1113,19 @@ class LoteProductoController(BaseController):
             return self.success_response(result['data'], "Lote actualizado con éxito")
 
         except ValidationError as e:
-            # Ahora esto captura AMBOS errores: el del schema y el que lanzamos manualmente
-            msg = e.messages if isinstance(e.messages, str) else str(e.messages)
-            logger.warning(f"Error de validación al actualizar lote {lote_id}: {msg}")
-            # Devolvemos un error limpio
-            return self.error_response(f"Error de validación: {msg}", 422)
+            logger.warning(f"Error de validación al actualizar lote {lote_id}: {e.messages}")
+            
+            # Formatear el diccionario de errores en una lista HTML
+            error_list = '<ul class="list-unstyled mb-0">'
+            if isinstance(e.messages, dict):
+                for field, messages in e.messages.items():
+                    for message in messages:
+                        error_list += f"<li>{message}</li>"
+            else:
+                error_list += f"<li>{e.messages}</li>"
+            error_list += '</ul>'
+
+            return self.error_response(error_list, 422)
         except Exception as e:
             logger.error(f"Error en actualizar_lote_desde_formulario: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
