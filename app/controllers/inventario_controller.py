@@ -229,8 +229,9 @@ class InventarioController(BaseController):
         Disponibilidad = Cantidad Física - Cantidad Reservada.
         """
         # 1. Obtener todos los lotes activos (físicamente existentes)
+        estados_fisicos = ['disponible', 'reservado', 'cuarentena', 'EN REVISION']
         lotes_activos_res = self.inventario_model.find_all(
-            filters={'id_insumo': insumo_id, 'estado': ('not.in', ['agotado', 'retirado'])},
+            filters={'id_insumo': insumo_id, 'estado': ('in', estados_fisicos)},
             order_by='f_ingreso.asc'
         )
         if not lotes_activos_res.get('success'):
@@ -242,7 +243,12 @@ class InventarioController(BaseController):
 
         # 2. Obtener todas las reservas para esos lotes
         lote_ids = [lote['id_lote'] for lote in lotes_activos]
-        reservas_res = self.reserva_insumo_model.find_all(filters={'lote_inventario_id': ('in', lote_ids)})
+        reservas_res = self.reserva_insumo_model.find_all(
+            filters={
+                'lote_inventario_id': ('in', lote_ids),
+                'estado': 'RESERVADO'
+            }
+        )
 
         reservas_por_lote = {}
         if reservas_res.get('success'):
@@ -702,6 +708,11 @@ class InventarioController(BaseController):
             resultado_final = []
             for insumo in insumos_del_catalogo:
                 insumo_id = insumo['id_insumo']
+                lotes_de_insumo = lotes_por_insumo.get(insumo_id, [])
+
+                # Recalcular el stock físico total directamente desde los lotes obtenidos
+                stock_fisico_calculado = sum(float(lote.get('cantidad_actual', 0)) for lote in lotes_de_insumo)
+
 
                 # Crear la estructura de datos para la vista
                 datos_insumo_para_vista = {
@@ -710,11 +721,11 @@ class InventarioController(BaseController):
                     'insumo_categoria': insumo.get('categoria', 'Sin categoría'),
                     'insumo_unidad_medida': insumo.get('unidad_medida', ''),
                     'stock_actual': float(insumo.get('stock_actual') or 0),
-                    'stock_total': float(insumo.get('stock_total') or 0),
-                    'lotes': lotes_por_insumo.get(insumo_id, []) # Adjuntar lotes (puede ser una lista vacía)
+                    'stock_total': stock_fisico_calculado, # Usar el valor recién calculado
+                    'lotes': lotes_de_insumo # Adjuntar lotes
                 }
 
-                # Calcular el estado general
+                # Calcular el estado general basado en el stock disponible (actual)
                 if datos_insumo_para_vista['stock_actual'] > 0:
                     datos_insumo_para_vista['estado_general'] = 'Disponible'
                 else:

@@ -110,7 +110,7 @@
                                 {% else %}
                                     text-muted
                                 {% endif %}" id="stock-value-{{ insumo.id_insumo }}">
-                                {{ insumo.stock_actual if insumo.stock_actual is not none else '0.0' }}
+                                {{ insumo.stock_total if insumo.stock_total is not none else '0.0' }}
                             </span>
                             <span class="stock-min text-muted">/ Min: {{ insumo.stock_min }}</span>
                         </div>
