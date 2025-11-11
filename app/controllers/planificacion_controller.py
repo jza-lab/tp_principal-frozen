@@ -1671,7 +1671,16 @@ class PlanificacionController(BaseController):
 
         if not grupos_a_planificar:
             logger.info("[AutoPlan] No se encontraron OPs pendientes (limpias de issues) en el horizonte.")
-            return {'ops_planificadas': [], 'ops_con_oc': [], 'errores': []}
+            # --- INICIO DE LA CORRECCIÓN ---
+            # Devolver el resumen completo con los totales en 0
+            return {
+                'ops_planificadas': [],
+                'ops_con_oc': [],
+                'errores': [],
+                'total_planificadas': 0,
+                'total_oc_generadas': 0,
+                'total_errores': 0
+            }
 
         # ... (Contadores y bucle 'for', sin cambios) ...
         ops_planificadas_exitosamente = []
