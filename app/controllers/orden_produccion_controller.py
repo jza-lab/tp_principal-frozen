@@ -547,13 +547,12 @@ class OrdenProduccionController(BaseController):
 
             update_data = {}
             if nuevo_estado == 'COMPLETADA':
-                usuario_id_actual = get_jwt_identity()
-                self.model.update(orden_id, {'supervisor_calidad_id': usuario_id_actual}, 'id')
                 if not estado_actual or estado_actual.strip() != 'CONTROL_DE_CALIDAD':
                     return self.error_response("La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
 
-                if usuario_id:
-                    update_data['aprobador_calidad_id'] = usuario_id
+                # Asignar el aprobador de calidad usando el ID del usuario actual.
+                usuario_id_actual = get_jwt_identity()
+                update_data['aprobador_calidad_id'] = usuario_id_actual
 
                 # Lógica de creación de lote y reservas centralizada
                 lote_result, lote_status = self.lote_producto_controller.crear_lote_y_reservas_desde_op(
