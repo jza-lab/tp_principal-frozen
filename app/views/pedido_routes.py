@@ -449,21 +449,24 @@ def generar_factura_html(id):
 def nueva_cliente_pasos():
     """
     Ruta para el formulario de creación de pedidos en dos pasos (vista de cliente).
+    SOLO ACCESIBLE PARA CLIENTES LOGUEADOS.
     """
-    hoy = datetime.now().strftime('%Y-%m-%d')
-    # Verificar si el cliente está logueado y si es nuevo
-    cliente_id = session.get('cliente_id')
-    es_cliente_nuevo = True
-    if cliente_id:
-        cliente_controller = ClienteController()
-        es_cliente_nuevo = not cliente_controller.cliente_tiene_pedidos_previos(cliente_id)
+    # --- FIX: Verificación de sesión de cliente ---
+    if 'cliente_id' not in session:
+        flash('Por favor, inicie sesión para crear un nuevo pedido.', 'info')
+        return redirect(url_for('cliente.login'))
+    # ---------------------------------------------
 
+    hoy = datetime.now().strftime('%Y-%m-%d')
+    cliente_id = session.get('cliente_id') # Ya sabemos que existe
+    
+    cliente_controller = ClienteController()
+    es_cliente_nuevo = not cliente_controller.cliente_tiene_pedidos_previos(cliente_id)
 
     controller = PedidoController()
     response, _ = controller.obtener_datos_para_formulario()
     productos = response.get('data', {}).get('productos', [])
 
-    # Usamos el nuevo template sin includes
     return render_template('orden_venta/formulario_cliente_pasos.html',
                            productos=productos,
                            pedido=None,

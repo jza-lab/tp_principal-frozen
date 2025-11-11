@@ -65,9 +65,11 @@
             </td>
 
             <td>
+                {% if 'almacen_consulta_stock' is has_permission %}
                 <a href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                     <i class="bi bi-eye"></i>
                 </a>
+                {% endif %}
 
                 {% if lote.estado not in ['agotado', 'retirado', 'cuarentena'] %}
                 <a href="{{ url_for('inventario_view.editar_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-secondary"
@@ -76,6 +78,7 @@
                 </a>
                 {% endif %}
 
+                {% if 'realizar_control_de_calidad_insumos' is has_permission %}
                 {% if lote.estado != 'cuarentena' or lote.cantidad_en_cuarentena == 0 %}
                 <button type="button" class="btn btn-sm btn-outline-warning"
                         title="Poner en Cuarentena"
@@ -87,6 +90,7 @@
                         data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
                     <i class="bi bi-shield-lock"></i>
                 </button>
+                {% endif %}
                 {% endif %}
                 
                 {% if lote.estado == 'cuarentena' or 0 < lote.cantidad_en_cuarentena %}

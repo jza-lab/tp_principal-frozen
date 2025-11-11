@@ -44,7 +44,7 @@ CANONICAL_PERMISSION_MAP = {
     'admin_actualizar_precios_excel': ['ADMIN'],
 
     # Módulo: Comercial (Ventas y Clientes)
-    'logistica_gestion_ov': ['VENDEDOR'], # Permiso para que Vendedor gestione Órdenes de Venta
+    'logistica_gestion_ov': [], # Permiso para que Vendedor gestione Órdenes de Venta
     'planificar_ov': ['VENDEDOR', 'SUPERVISOR', 'GERENTE'],
     'gestionar_clientes': ['VENDEDOR'],
     'finanzas_ver_precios_costos': ['SUPERVISOR', 'GERENTE'],
@@ -55,15 +55,16 @@ CANONICAL_PERMISSION_MAP = {
     'gestionar_orden_de_produccion': ['SUPERVISOR'], # Editar, cambiar estado, etc.
     'produccion_ejecucion': ['SUPERVISOR_CALIDAD','OPERARIO','SUPERVISOR'], # Asignar operarios, mover en kanban
     'produccion_consulta': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
-    'consultar_plan_de_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE','SUPERVISOR_CALIDAD'],
+    'consultar_plan_de_produccion': ['SUPERVISOR', 'GERENTE','SUPERVISOR_CALIDAD'],
     'consultar_kanban_produccion': ['OPERARIO', 'SUPERVISOR', 'GERENTE','SUPERVISOR_CALIDAD'],
 
     # Módulo: Almacén e Inventario
     'gestionar_catalogo_de_productos': ['SUPERVISOR', 'ADMIN', 'GERENTE'],
     'gestionar_catalogo_insumos': ['SUPERVISOR', 'ADMIN'], # Crear, editar, inhabilitar insumos
     'gestionar_inventario': ['SUPERVISOR'], # Registrar ingresos y egresos de stock
-    'gestionar_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Crear y gestionar lotes de productos
+    'gestionar_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD', 'GERENTE'], # Crear y gestionar lotes de productos
     'almacen_consulta_stock': [ 'VENDEDOR', 'SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
+    'realizar_control_de_calidad_insumos': ['SUPERVISOR_CALIDAD'],
     'registrar_ingreso_de_materia_prima': ['ADMIN'],
     'almacen_ver_registrar': ['VENDEDOR', 'SUPERVISOR'],
     'almacen_ver_insumos': ['OPERARIO', 'SUPERVISOR', 'GERENTE'],
@@ -78,7 +79,7 @@ CANONICAL_PERMISSION_MAP = {
 
     # Módulo: Órdenes de Compra (OC) y Logística
     'crear_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
-    'consultar_ordenes_de_compra': ['SUPERVISOR_CALIDAD','SUPERVISOR', 'ADMIN', 'GERENTE', 'VENDEDOR'],
+    'consultar_ordenes_de_compra': ['SUPERVISOR_CALIDAD','SUPERVISOR', 'ADMIN', 'GERENTE'],
     'realizar_control_de_calidad_insumos': ['SUPERVISOR_CALIDAD'],
     'editar_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
     'aprobar_orden_de_compra': ['SUPERVISOR','GERENTE'],

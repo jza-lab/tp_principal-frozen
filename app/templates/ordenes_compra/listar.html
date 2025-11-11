@@ -248,11 +248,11 @@
                 {# --- ESTADO: EN RECEPCION --- #}
                 {% elif orden.estado == 'EN_RECEPCION' %}
                     
-                    {% if has_permission('logistica_recepcion_oc') %}
-                    <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-success"
-                        title="Procesar Mercadería">
-                        <i class="bi bi-box-seam"></i> Procesar
-                    </a>
+                    {% if has_permission('logistica_recepcion_oc') and current_user.rol != 'ADMIN' %}
+                        <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-success"
+                            title="Procesar Mercadería">
+                            <i class="bi bi-box-seam"></i> Procesar
+                        </a>
                     {% endif %}
 
                 {# --- ESTADO: RECEPCION COMPLETA --- #}

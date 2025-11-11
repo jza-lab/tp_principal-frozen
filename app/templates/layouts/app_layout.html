@@ -22,13 +22,14 @@
                 {% set is_dev = current_user and current_user.roles and current_user.roles.codigo == 'IT' %}
 
                 {# Lógica de permisos para el menú de Logística #}
+                {% set is_vendedor = current_user and current_user.roles and current_user.roles.codigo == 'VENDEDOR' %}
                 {% set can_ver_insumos = 'almacen_ver_insumos' is has_permission %}
                 {% set can_ver_compras = 'consultar_ordenes_de_compra' is has_permission %}
                 {% set can_ver_inventario = 'almacen_consulta_stock' is has_permission %}
                 {% set can_ver_reservas = 'consultar_trazabilidad_completa' is has_permission %}
                 {% set can_actualizar_precios = 'finanzas_ver_precios_costos' is has_permission %}
-                {% set can_access_logistica_dropdown = can_ver_insumos or can_ver_compras or can_ver_inventario or
-                can_ver_reservas or can_actualizar_precios %}
+                {% set can_access_logistica_dropdown = (can_ver_insumos or can_ver_compras or can_ver_inventario or
+                can_ver_reservas or can_actualizar_precios) and not is_vendedor %}
 
                 {% if can_access_logistica_dropdown and not is_operario and current_user and current_user.roles.codigo
                 != 'RRHH' %}
@@ -118,7 +119,7 @@
                                 href="{{ url_for('orden_venta.listar') }}"><i class="bi bi-currency-dollar me-2"></i>
                                 Ventas (Ordenes)</a></li>
                         {% endif %}
-                        {% if 'gestionar_lotes' is has_permission or current_user.roles.codigo == 'VENDEDOR' %}
+                        {% if 'gestionar_lotes' is has_permission or current_user.roles.codigo == 'VENDEDOR' or current_user.roles.codigo == 'GERENTE' %}
                         <li>
                             <hr class="dropdown-divider">
                         </li>
@@ -159,15 +160,17 @@
                                 href="{{ url_for('orden_produccion.listar') }}"><i
                                     class="fas fa-clipboard-list me-2"></i> Ordenes de Producción</a></li>
                         {% endif %}
-                        {% if 'consultar_plan_de_produccion' is has_permission %}
+                        {% if 'consultar_kanban_produccion' is has_permission %}
                         <li><a class="dropdown-item {% if request.endpoint == 'produccion_kanban.tablero_produccion' %}active{% endif %}"
                                 href="{{ url_for('produccion_kanban.tablero_produccion') }}"><i
                                     class="bi bi-kanban me-2"></i> Producción de Hoy</a></li>
                         {% endif %}
+                                                {% if 'consultar_plan_de_produccion' is has_permission %}
                                                 <li><a class="dropdown-item {% if request.endpoint == 'reportes.produccion' %}active{% endif %}"
                                 href="{{ url_for('reportes.produccion') }}"><i class="fas fa-chart-line me-2"></i>
                                 Reportes de produccion</a>
                             </li>
+                            {% endif %}
                     </ul>
                 </li>
                 {% endif %}
