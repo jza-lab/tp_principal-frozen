@@ -1199,7 +1199,7 @@ class LoteProductoController(BaseController):
 
             # Actualizar el estado del lote
             update_data = {
-                'estado': 'NO APTO',
+                'estado': 'retirado',
                 'cantidad_actual': 0,
                 'cantidad_en_cuarentena': 0
             }

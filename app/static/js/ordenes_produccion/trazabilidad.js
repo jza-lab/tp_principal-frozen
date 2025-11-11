@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="row">
                 <div class="col-lg-6 mb-4 mb-lg-0">
                     <div class="card h-100">
-                        <div class="card-header bg-primary text-white"><i class="bi bi-arrow-up-circle-fill me-2"></i> Origen (Hacia Atrás)</div>
+                        <div class="card-header bg-primary text-black"><i class="bi bi-arrow-up-circle-fill me-2"></i> Origen (Hacia Atrás)</div>
                         <div class="card-body" style="max-height: 400px; overflow-y: auto;">
                             ${origenHtml}
                         </div>
@@ -118,7 +118,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 <div class="col-lg-6">
                     <div class="card h-100">
-                        <div class="card-header bg-success text-white"><i class="bi bi-arrow-down-circle-fill me-2"></i> Destino (Hacia Adelante)</div>
+                        <div class="card-header bg-success text-black"><i class="bi bi-arrow-down-circle-fill me-2"></i> Destino (Hacia Adelante)</div>
                          <div class="card-body" style="max-height: 400px; overflow-y: auto;">
                             ${destinoHtml}
                         </div>

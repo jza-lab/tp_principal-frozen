@@ -33,12 +33,12 @@
 
                         <div class="mb-3">
                             <label for="motivo" class="form-label">Título General del Reclamo</label>
-                            <input type="text" class="form-control" id="motivo" name="motivo" value="Problemas en recepción de {{ orden.codigo_oc }}" required>
+                            <input type="text" class="form-control" id="motivo" name="motivo" value="{{ motivo_principal or 'Problemas en recepción de ' ~ orden.codigo_oc }}" required>
                         </div>
 
                         <div class="mb-3">
                             <label for="descripcion_problema" class="form-label">Descripción General</label>
-                            <textarea class="form-control" id="descripcion_problema" name="descripcion_problema" rows="3" required></textarea>
+                            <textarea class="form-control" id="descripcion_problema" name="descripcion_problema" rows="3" required>{% if motivo_principal %}Se detectó un problema de '{{ motivo_principal }}' durante la recepción de la OC. Por favor, revisar los ítems adjuntos.{% endif %}</textarea>
                         </div>
 
                         <hr class="my-4">
@@ -68,7 +68,7 @@
                                                 <input type="number" name="cantidad_reclamada[]" class="form-control" value="0" min="0" max="{{ item.cantidad_recibida }}" step="any">
                                             </td>
                                             <td>
-                                                <input type="text" name="motivo_item[]" class="form-control">
+                                                <input type="text" name="motivo_item[]" class="form-control" value="{{ problemas_por_item.get(item.insumo_id) or '' }}">
                                             </td>
                                         </tr>
                                     {% endfor %}

@@ -1237,6 +1237,7 @@ class InventarioController(BaseController):
         """
         from app.controllers.control_calidad_insumo_controller import ControlCalidadInsumoController
         from app.models.alerta_riesgo import AlertaRiesgoModel
+        from flask import flash
 
         try:
             lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
@@ -1257,24 +1258,21 @@ class InventarioController(BaseController):
 
             # Reutilizar la lógica de rechazo para manejar OPs
             cc_controller = ControlCalidadInsumoController()
-            cc_controller.manejar_rechazo_cuarentena(lote_id, usuario_id)
-
+            resultados_op = cc_controller.manejar_rechazo_cuarentena(lote_id, usuario_id)
+            for msg in resultados_op:
+                flash(msg, 'info')
             # Registrar el evento en el historial de calidad
             cc_controller.crear_registro_control_calidad(
                 lote_id=lote_id,
                 usuario_id=usuario_id,
                 decision='NO_APTO',
-                comentarios='Lote marcado como no apto manualmente desde el detalle del lote.'
+                comentarios='Lote marcado como no apto manualmente.'
             )
 
             # Actualizar el estado de la alerta de riesgo si existe
             alerta_model = AlertaRiesgoModel()
-            alertas_asociadas = alerta_model.db.table('alerta_riesgo_afectados').select('alerta_id').eq('tipo_entidad', 'lote_insumo').eq('id_entidad', str(lote_id)).execute().data
-            if alertas_asociadas:
-                alerta_ids = {a['alerta_id'] for a in alertas_asociadas}
-                for alerta_id in alerta_ids:
-                    alerta_model.actualizar_estado_afectados(alerta_id, [str(lote_id)], 'no_apto', 'lote_insumo', usuario_id)
-            # Actualizar stock del insumo
+            alerta_model.actualizar_estado_afectados_por_entidad('lote_insumo', lote_id, 'no_apto', usuario_id)
+
             self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
 
             return self.success_response(message="Lote marcado como No Apto con éxito.")
